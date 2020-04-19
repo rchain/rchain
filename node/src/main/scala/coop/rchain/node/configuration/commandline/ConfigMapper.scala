@@ -8,7 +8,6 @@ import scala.concurrent.duration.{FiniteDuration, _}
 
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.PeerNode
-import coop.rchain.node.configuration.hocon._
 
 import com.typesafe.config._
 import org.rogach.scallop.ScallopOption
@@ -19,107 +18,101 @@ object ConfigMapper {
     val map      = mutable.Map[String, Any]()
     val addToMap = AddScallopOptionToMap(map)
 
-    {
-      import GrpcServer._
-      val add = addToMap(Key)
-      add(keys.Host, options.grpcHost)
-      add(keys.PortExternal, options.grpcPort)
-      add(keys.PortInternal, options.grpcPortInternal)
-      add(keys.MaxMessageSize, options.grpcMaxMessageSize)
-    }
-
     if (options.subcommand.contains(options.run)) {
       val run = options.run
+      val add = addToMap()
+      add("standalone", run.standalone)
+      add("protocol-server.network-id", run.networkId)
+      add("protocol-server.dynamic-ip", run.dynamicIp)
+      add("protocol-server.no-upnp", run.noUpnp)
+      add("protocol-server.host", run.host)
+      add("protocol-server.port", run.protocolPort)
+      add("protocol-server.use-random-ports", run.useRandomPorts)
+      add("protocol-server.allow-private-addresses", run.allowPrivateAddresses)
+      add(
+        "protocol-server.grpc-max-receive-message-length",
+        run.protocolGrpcMaxReceiveMessageLength
+      )
+      add(
+        "protocol-server.grpc-max-receive-stream-message-length",
+        run.protocolGrpcMaxReceiveStreamMessageLength
+      )
+      add("protocol-server.max-message-consumers", run.protocolMaxMessageConsumers)
 
-      {
-        import Server._
-        val add = addToMap(Key)
-        add(keys.NetworkId, run.network)
-        add(keys.Host, run.host)
-        add(keys.HostDynamic, run.dynamicHostAddress)
-        add(keys.Upnp, run.noUpnp.map(kp(false)))
-        add(keys.Port, run.port)
-        add(keys.PortHttp, run.httpPort)
-        add(keys.PortKademlia, run.kademliaPort)
-        add(keys.UseRandomPorts, run.useRandomPorts)
-        add(keys.SendTimeout, run.defaultTimeout.map(_.millis))
-        add(keys.Standalone, run.standalone)
-        add(keys.Bootstrap, run.bootstrap)
-        add(keys.DataDir, run.dataDir)
-        add(keys.StoreSize, run.casperBlockStoreSize)
-        add(keys.DagStorageSize, run.casperBlockDagStorageSize)
-        add(keys.MapSize, run.mapSize)
-        add(keys.MaxConnections, run.maxNumOfConnections)
-        add(keys.AllowPrivateAddresses, run.allowPrivateAddresses)
-        add(keys.MaxMessageSize, run.maxMessageSize)
-        add(keys.MaxStreamMessageSize, run.maxStreamMessageSize)
-        add(keys.PacketChunkSize, run.packetChunkSize)
-        add(keys.MessageConsumers, run.messageConsumers)
-        add(keys.FaultToleranceThreshold, run.faultToleranceThreshold)
-        add(keys.SynchronyConstraintThreshold, run.synchronyConstraintThreshold)
-        add(keys.HeightConstraintThreshold, run.heightConstraintThreshold)
-        add(keys.Reporting, run.reporting)
-        add(keys.ApiMaxBlocksLimit, run.apiMaxBlocksLimit)
-      }
+      add("peers-discovery.port", run.discoveryPort)
+      add("peers-discovery.lookup-interval", run.discoveryLookupInterval)
+      add("peers-discovery.cleanup-interval", run.discoveryCleanupInterval)
+      add("peers-discovery.heartbeat-batch-size", run.discoveryHeartbeatBatchSize)
+      add("peers-discovery.init-wait-loop-interval", run.discoveryInitWaitLoopInterval)
 
-      {
-        import RoundRobinDispatcher._
-        val add = addToMap(Key)
-        add(keys.MaxPeerQueueSize, run.maxPeerQueueSize)
-        add(keys.GiveUpAfterSkipped, run.giveUpAfterSkipped)
-        add(keys.DropPeerAfterRetries, run.dropPeerAfterRetries)
-      }
+      add("protocol-client.bootstrap", run.bootstrap)
+      add("protocol-client.network-timeout", run.networkTimeout)
+      add("protocol-client.batch-max-connections", run.protocolMaxConnections)
+      add(
+        "protocol-client.grpc-max-receive-message-length",
+        run.protocolGrpcMaxReceiveMessageLength
+      )
+      add("protocol-client.grpc-stream-chunk-size", run.protocolGrpcStreamChunkSize)
 
-      {
-        import Tls._
-        val add = addToMap(Key)
-        add(keys.Certificate, run.certificate)
-        add(keys.Key, run.key)
-        add(keys.SecureRandomNonBlocking, run.secureRandomNonBlocking)
-      }
+      add("storage.data-dir", run.dataDir)
+      add("storage.lmdb-map-size-rspace", run.lmdbMapSizeRspace)
+      add("storage.lmdb-map-size-deploystore", run.lmdbMapSizeDeploystore)
+      add("storage.lmdb-map-size-blockdagstore", run.lmdbMapSizeBlockdagstore)
+      add("storage.lmdb-map-size-blockstore", run.lmdbMapSizeBlockstore)
 
-      {
-        import Kamon._
-        val add = addToMap(Key)
-        add(keys.Prometheus, run.prometheus)
-        add(keys.Influxdb, run.influxdb)
-        add(keys.InfluxdbUdp, run.influxdbUdp)
-        add(keys.Zipkin, run.zipkin)
-        add(keys.Sigar, run.sigar)
-      }
+      add("casper.shard-name", run.shardName)
+      add("casper.fault-tolerance-threshold", run.faultToleranceThreshold)
+      add("casper.finalization-rate", run.finalizationRate)
+      add("casper.max-number-of-parents", run.maxNumberOfParents)
+      add("casper.max-parent-depth", run.maxParentDepth)
+      add("casper.synchrony-constraint-threshold", run.synchronyConstraintThreshold)
+      add("casper.height-constraint-threshold", run.heightConstraintThreshold)
+      add("casper.validator-public-key", run.validatorPublicKey)
+      add("casper.validator-private-key", run.validatorPrivateKey)
+      add("casper.validator-private-key-path", run.validatorPrivateKeyPath)
+      add("casper.casper-loop-interval", run.casperLoopInterval)
+      add("casper.requested-blocks-timeout", run.requestedBlocksTimeout)
+      add("casper.fork-choice-stale-threshold", run.forkChoiceStaleThreshold)
+      add("casper.fork-choice-check-if-stale-interval", run.forkChoiceCheckIfStaleInterval)
+      add("casper.round-robin-dispatcher.max-peer-queue-size", run.frrdMaxPeerQueueSize)
+      add("casper.round-robin-dispatcher.give-up-after-skipped", run.frrdGiveUpAfterSkipped)
+      add("casper.round-robin-dispatcher.drop-peer-after-retries", run.frrdDropPeerAfterRetries)
+      add("casper.genesis-block-data.bonds-file", run.bondsFile)
+      add("casper.genesis-block-data.wallets-file", run.walletsFile)
+      add("casper.genesis-block-data.bond-minimum", run.bondMinimum)
+      add("casper.genesis-block-data.bond-maximum", run.bondMaximum)
+      add("casper.genesis-block-data.epoch-length", run.epochLength)
+      add("casper.genesis-block-data.quarantine-length", run.quarantineLength)
+      add("casper.genesis-block-data.number-of-active-validators", run.numberOfActiveValidators)
+      add("casper.genesis-block-data.deploy-timestamp", run.deployTimestamp)
 
-      {
-        import Casper._
-        val add = addToMap(Key)
-        add(keys.ValidatorPublicKey, run.validatorPublicKey)
-        add(keys.ValidatorPrivateKey, run.validatorPrivateKey)
-        add(keys.ValidatorPrivateKeyPath, run.validatorPrivateKeyPath)
-        add(keys.BondsFile, run.bondsFile)
-        add(keys.KnownValidatorsFile, run.knownValidators)
-        add(keys.Validators, run.numValidators)
-        add(keys.WalletsFile, run.walletsFile)
-        add(keys.BondMinimum, run.minimumBond)
-        add(keys.BondMaximum, run.maximumBond)
-        add(keys.EpochLength, run.epochLength)
-        add(keys.QuarantineLength, run.quarantineLength)
-        add(keys.NumberOfActiveValidators, run.numberOfActiveValidators)
-        add(keys.CasperLoopInterval, run.casperLoopInterval)
-        add(keys.RequestedBlocksTimeout, run.requestedBlocksTimeout)
-        add(keys.RequiredSignatures, run.requiredSigs)
-        add(keys.Shard, run.shardId)
-        add(keys.GenesisValidator, run.genesisValidator)
-        add(keys.GenesisApproveInterval, run.interval)
-        add(keys.GenesisApproveDuration, run.duration)
-        add(keys.DeployTimestamp, run.deployTimestamp)
-        add(keys.FinalizationRate, run.finalizationRate)
-        add(keys.MaxNumberOfParents, run.maxNumberOfParents)
-        add(keys.MaxParentDepth, run.maxParentDepth)
-        add(keys.forkChoiceStaleThreshold, run.forkChoiceStaleThreshold)
-        add(keys.forkChoiceCheckIfStaleInterval, run.forkChoiceCheckIfStaleInterval)
-      }
+      add("casper.genesis-ceremony.required-signatures", run.requiredSignatures)
+      add("casper.genesis-ceremony.genesis-validator-mode", run.genesisValidator)
+      add("casper.genesis-ceremony.approve-interval", run.approveInterval)
+      add("casper.genesis-ceremony.approve-duration", run.approveDuration) //TODO remove
+      add("casper.genesis-ceremony.autogen-shard-size", run.autogenShardSize)
+
+      add("api-server.port-grpc-external", run.apiPortGrpcExternal)
+      add("api-server.port-grpc-internal", run.apiPortGrpcInternal)
+      add("api-server.grpc-max-receive-message-length", run.apiGrpcMaxReceiveMessageLength)
+      add("api-server.host", run.apiHost)
+      add("api-server.port-http", run.apiPortHttp)
+      add("api-server.enable-reporting", run.apiEnableReporting)
+      add("api-server.max-blocks-limit", run.apiMaxBlocksLimit)
+
+      add("tls.key-path", run.tlsKeyPath)
+      add("tls.certificate-path", run.tlsCertificatePath)
+      add("tls.secure-random-non-blocking", run.tlsSecureRandomNonBlocking)
+
+      add("metrics.prometheus", run.prometheus)
+      add("metrics.influxdb", run.influxdb)
+      add("metrics.influxdb-udp", run.influxdbUdp)
+      add("metrics.zipkin", run.zipkin)
+      add("metrics.sigar", run.sigar)
+      //TODO remove
+      //add(keys.KnownValidatorsFile, run.knownValidators
     }
-
-    ConfigFactory.parseMap(map.asJava, "command line options")
+    ConfigFactory.parseMap(map.asJava)
   }
 
   private trait OptionConverter[A] {
@@ -145,12 +138,12 @@ object ConfigMapper {
     def apply(map: mutable.Map[String, Any]): AddToMap = new AddToMap(map)
 
     final class AddToMap(map: mutable.Map[String, Any]) {
-      def apply(prefix: String): AddWithPrefix = new AddWithPrefix(prefix)
+      def apply(): AddWithPrefix = new AddWithPrefix()
 
       @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-      final class AddWithPrefix(prefix: String) {
+      final class AddWithPrefix() {
         def apply[A: OptionConverter](key: String, opt: ScallopOption[A]): Unit =
-          opt.foreach(a => map += s"$prefix.$key" -> OptionConverter[A].toConfigValue(a))
+          opt.foreach(a => map += s"$key" -> OptionConverter[A].toConfigValue(a))
       }
     }
   }

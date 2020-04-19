@@ -21,9 +21,9 @@ object Converter {
           PeerNode
             .fromAddress(uri)
             .map(u => Right(Some(u)))
-            .getOrElse(Left("can't parse the rnode bootstrap address"))
+            .getOrElse(Left("Can not parse the bootstrap address"))
         case Nil => Right(None)
-        case _   => Left("provide the rnode bootstrap address")
+        case _   => Left("Please specify the bootstrap address")
       }
 
     val argType: ArgType.V = ArgType.SINGLE
@@ -73,7 +73,9 @@ object Converter {
           case (_, duration :: Nil) :: Nil =>
             val finiteDuration = Some(Duration(duration)).collect { case f: FiniteDuration => f }
             finiteDuration.fold[Either[String, Option[FiniteDuration]]](
-              Left("Expected finite duration.")
+              Left(
+                s" '${duration}': finite duration is expected, e.g. 20 seconds, 4 minutes, etc.)."
+              )
             )(fd => Right(Some(fd)))
           case Nil => Right(None)
           case _   => Left("Provide a duration.")
@@ -84,14 +86,6 @@ object Converter {
 }
 
 object Options {
-  object ports {
-    val DefaultPort: Int             = 40400
-    val DefaultGrpcPort: Int         = 40401
-    val DefaultGrpcPortInternal: Int = 40402
-    val DefaultHttpPort: Int         = 40403
-    val DefaultKademliaPort: Int     = 40404
-  }
-
   import shapeless.tag.@@
 
   sealed trait FlagTag
@@ -109,208 +103,251 @@ object Options {
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
   import Converter._
   import Options.Flag
-  import Options.ports._
+  val width = 120
 
-  version(s"RChain Node ${BuildInfo.version}")
+  version(
+    s"RChain node | gRPC client \nversion ${BuildInfo.version} (${BuildInfo.gitHeadCommit.getOrElse("commit # unknown")})"
+  )
   printedName = "rchain"
+  helpWidth(width)
+
+  banner("""
+           |Usage: rnode [OPTION]... [SUBCOMMAND] [OPTION]...
+           |
+           |Options:
+           |""".stripMargin)
+
+  val grpcHost = opt[String](
+    short = 'h',
+    default = Some("localhost"),
+    descr = s"Remote gRPC host for client calls. Defaults to localhost."
+  )
+
+  val grpcPort = opt[Int](
+    short = 'p',
+    default = Some(40401),
+    descr = s"Remote gRPC host for client calls. Defaults to 40401."
+  )
+
+  val grpcMaxMessageSize = opt[Int](
+    short = 's',
+    default = Some(16 * 1024 * 1024),
+    descr = s"Max inbound gRPC message size for client calls. Defaults to 16M."
+  )
 
   val profile = opt[String](
     name = "profile",
-    descr = "Which predefined set of defaults to use: default or docker."
+    descr = "Predefined set of defaults to use: default or docker."
   )
 
-  val configFile = opt[Path](descr = "Path to the configuration file.")
+  val run = new Subcommand(
+    "run"
+  ) {
+    descr(
+      "Start RNode server. For defaults see " +
+        "https://github.com/rchain/rchain/blob/dev/node/src/main/resources/reference.conf\n"
+    )
+    helpWidth(width)
 
-  val grpcPort =
-    opt[Int](descr = s"Port used for external gRPC API. Defaults to $DefaultGrpcPort")
+    val configFile = opt[Path](
+      short = 'c',
+      descr = "Path to the configuration file for RNode server. For the reference see " +
+        "https://github.com/rchain/rchain/blob/dev/node/src/main/resources/reference.conf"
+    )
 
-  val grpcPortInternal =
-    opt[Int](descr = s"Port used for internal gRPC API. Defaults to $DefaultGrpcPortInternal")
+    val threadPoolSize = opt[Int](
+      descr = "Number of threads allocated for main scheduler.",
+      hidden = true
+    )
 
-  val grpcHost =
-    opt[String](descr = "Hostname or IP of node on which gRPC service is running.")
+    val standalone = opt[Flag](
+      short = 's',
+      descr = "Start a stand-alone node."
+    )
 
-  val grpcMaxMessageSize =
-    opt[Int](descr = "Maximum size of message that can be sent via gRPC API")
+    val bootstrap = opt[PeerNode](
+      short = 'b',
+      descr = "Address of RNode to bootstrap from when connecting to a network."
+    )
 
-  val run = new Subcommand("run") {
+    val networkId = opt[String](
+      descr = "ID of the RChain network to connect to."
+    )
 
-    val dynamicHostAddress = opt[Flag](descr = "Host IP address changes dynamically")
+    val noUpnp = opt[Flag](
+      descr = "Use this flag to disable UPnP."
+    )
 
-    val noUpnp = opt[Flag](descr = "Use this flag to disable UpNp.")
+    val dynamicIp = opt[Flag](
+      descr = "Host IP address changes dynamically."
+    )
 
-    val defaultTimeout =
-      opt[Int](descr = "Default timeout for roundtrip connections. Default 1 second.")
+    val autogenShardSize = opt[Int](
+      descr = "If node has to create genesis block but no bonds file is provided, bonds file with a list of" +
+        "random public keys is generated + private keys corresponding to that keys are stored" +
+        "in `<genesis-path>/<public_key>.sk`" +
+        "This param specifies number of validator identites to generate."
+    )
 
-    val certificate =
-      opt[Path](
-        short = 'c',
-        descr = "Path to node's X.509 certificate file, that is being used for identification"
-      )
-
-    val key =
-      opt[Path](
-        short = 'k',
-        descr = "Path to node's private key PEM file, that is being used for TLS communication"
-      )
-
-    val secureRandomNonBlocking =
-      opt[Flag](descr = "Use a non blocking secure random instance")
-
-    val network =
-      opt[String](descr = "ID of the RChain network")
-
-    val port =
-      opt[Int](short = 'p', descr = s"Network port to use. Defaults to $DefaultPort")
-
-    val httpPort =
-      opt[Int](descr = s"HTTP port (prometheus, version, status). Defaults to $DefaultHttpPort")
-
-    val kademliaPort =
-      opt[Int](
-        descr =
-          s"Kademlia port used for node discovery based on Kademlia algorithm. Defaults to $DefaultKademliaPort"
-      )
+    val host = opt[String](
+      descr = "Address to bind RChain Protocol server."
+    )
 
     val useRandomPorts = opt[Boolean](
       descr = "Use random ports in case RChain Protocol port and/or Kademlia port are not free."
     )
 
-    val numValidators = opt[Int](descr = "Number of validators at genesis.")
-    val bondsFile = opt[String](
-      descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
-        "which defines the bond amounts for each validator at genesis. " +
-        "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
-        "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
-    )
-    val knownValidators = opt[String](
-      descr = "Plain text file listing the public keys of validators known to the user (one per line). " +
-        "Signatures from these validators are required in order to accept a block which starts the local" +
-        "node's view of the blockDAG."
-    )
-    val walletsFile = opt[String](
-      descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
-        "which defines the Rev wallets that exist at genesis. " +
-        "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
-        "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
-        "is the amount of Rev in the wallet."
-    )
-    val minimumBond = opt[Long](
-      descr = "Minimum bond accepted by the PoS contract in the genesis block."
-    )
-    val maximumBond = opt[Long](
-      descr = "Maximum bond accepted by the PoS contract in the genesis block."
+    val allowPrivateAddresses = opt[Flag](
+      descr = "Allow connections to peers with private network addresses."
     )
 
-    val epochLength = opt[Int](descr = "the length of the validation epoch in blocks")
+    val networkTimeout = opt[FiniteDuration](
+      descr = "Default timeout for network calls."
+    )
 
-    val quarantineLength = opt[Int](descr = "the length of the quarantine time in blocks")
+    val discoveryPort = opt[Int](
+      descr = s"Port used for node discovery based on Kademlia algorithm. Defaults to 40400"
+    )
 
-    val numberOfActiveValidators = opt[Int](descr = "the number of the active validators")
+    val discoveryLookupInterval = opt[FiniteDuration](
+      descr = s"Peer discovery interval"
+    )
 
-    val casperLoopInterval = opt[Int](
+    val discoveryCleanupInterval = opt[FiniteDuration](
+      descr = s"Peer discovery interval"
+    )
+
+    val discoveryInitWaitLoopInterval = opt[FiniteDuration](
+      descr = s"Check for first connection loop interval"
+    )
+
+    val discoveryHeartbeatBatchSize = opt[Int](
+      descr = s"Peer discovery interval"
+    )
+
+    val protocolPort = opt[Int](
+      short = 'p',
+      descr = s"gRPC port serving Rchain Protocol messages. Defaults to 40404"
+    )
+
+    val protocolGrpcMaxReceiveMessageLength = opt[Long](
+      descr = "Maximum message size for gRPC transport server."
+    )
+
+    val protocolGrpcMaxReceiveStreamMessageLength = opt[Long](
       descr =
-        "the interval of the casper loop to maintain requested blocks and missing dependent blocks"
+        "Maximum size of messages that can be received via transport layer streams. This limits block size."
     )
 
-    val requestedBlocksTimeout = opt[Int](descr = "the timeout of the requested blocks")
+    val protocolGrpcStreamChunkSize = opt[Int](
+      descr = "Chunk size for streaming packets between nodes"
+    )
 
-    val bootstrap =
-      opt[PeerNode](
-        short = 'b',
-        descr = "Bootstrap rnode address for initial seed."
-      )
+    val protocolMaxConnections = opt[Int](
+      descr = "Number of connected peers picked randomly for broadcasting and streaming"
+    )
 
-    val standalone =
-      opt[Flag](short = 's', descr = "Start a stand-alone node (no bootstrapping).")
+    val protocolMaxMessageConsumers = opt[Int](
+      descr = "Number of incoming message consumers"
+    )
 
-    val prometheus =
-      opt[Flag](descr = "Enable the Prometheus metrics reporter")
+    val tlsKeyPath = opt[Path](
+      short = 'k',
+      descr = "Path to private key for TLS. Elliptic curve secp256r1 key in PEM format is supported. " +
+        "If file does not exist, new key will be generated."
+    )
 
-    val influxdb =
-      opt[Flag](descr = "Enable the InfluxDB metrics reporter")
+    val tlsCertificatePath = opt[Path](
+      descr = "Path to X.509 certificate for TLS. If file does not exist, certificate will be " +
+        "generated from PEM key located at `tlsKeyPath`."
+    )
 
-    val influxdbUdp =
-      opt[Flag](descr = "Enable the InfluxDB UDP metrics reporter")
+    val tlsSecureRandomNonBlocking = opt[Flag](
+      descr = "Use a non blocking secure random instance"
+    )
 
-    val zipkin =
-      opt[Flag](descr = "Enable the Zipkin span reporter")
+    val apiHost = opt[String](
+      descr = "Address to bind API servers."
+    )
 
-    val sigar =
-      opt[Flag](descr = "Enable Sigar host system metrics")
+    val apiPortGrpcExternal = opt[Int](
+      short = 'e',
+      descr = s"Port for external gRPC API. Defaults to 40401"
+    )
 
-    val requiredSigs =
-      opt[Int](
-        descr =
-          "Number of signatures from trusted validators required to creating an approved genesis block."
-      )
+    val apiPortGrpcInternal = opt[Int](
+      short = 'i',
+      descr = s"Port for internal gRPC API. Defaults to 40402"
+    )
 
-    val deployTimestamp =
-      opt[Long](
-        descr = "Timestamp for the deploys."
-      )
+    val apiGrpcMaxReceiveMessageLength = opt[Int](
+      descr = "Maximum message size for gRPC API server. This limits deploy size."
+    )
 
-    val duration =
-      opt[FiniteDuration](
-        short = 'd',
-        descr =
-          "Time window in which BlockApproval messages will be accumulated before checking conditions."
-      )
+    val apiPortHttp = opt[Int](
+      short = 'h',
+      descr = s"Port for HTTP services. Defaults to 40403"
+    )
 
-    val interval =
-      opt[FiniteDuration](
-        short = 'i',
-        descr = "Interval at which condition for creating ApprovedBlock will be checked."
-      )
+    val apiMaxBlocksLimit = opt[Int](
+      descr = "The max block numbers you can aquire from api",
+      validate = _ >= 0
+    )
 
-    val genesisValidator =
-      opt[Flag](descr = "Start a node as a genesis validator.")
+    val apiEnableReporting = opt[Flag](
+      descr = "Use this flag to enable reporting endpoints."
+    )
 
-    val host = opt[String](descr = "Hostname or IP of this node.")
+    val dataDir = opt[Path](
+      required = false,
+      descr = "Path to data directory. Defaults to $HOME/.rnode"
+    )
 
-    val dataDir =
-      opt[Path](required = false, descr = "Path to data directory. Defaults to $HOME/.rnode")
+    val lmdbMapSizeRspace = opt[Long](
+      required = false,
+      descr = "Map size (in bytes) for RSpace"
+    )
 
-    val mapSize = opt[Long](required = false, descr = "Map size (in bytes)")
+    val lmdbMapSizeBlockdagstore = opt[Long](
+      required = false,
+      descr = "Map size (in bytes) for blockDAG store index"
+    )
 
-    val maxNumOfConnections =
-      opt[Int](descr = "Number of connected peers picked randomly for broadcasting and streaming")
+    val lmdbMapSizeBlockstore = opt[Long](
+      required = false,
+      descr = "Map size (in bytes) for block store index"
+    )
 
-    val allowPrivateAddresses =
-      opt[Flag](descr = "Allow connections to peers with private network addresses")
+    val lmdbMapSizeDeploystore = opt[Long](
+      required = false,
+      descr = "Map size (in bytes) for deploy storage"
+    )
 
-    val maxMessageSize =
-      opt[Int](descr = "Maximum size of message that can be received via transport layer")
+    /*val casperLatestMessagesDataPath = opt[Path](
+      required = false,
+      descr = "Path to latest messages data file"
+    )
 
-    val maxStreamMessageSize =
-      opt[Long](descr = "Maximum size of messages that can be received via transport layer streams")
+    val casperLatestMessagesCrcPath = opt[Path](
+      required = false,
+      descr = "Path to latest messages crc file"
+    )*/
 
-    val packetChunkSize =
-      opt[Int](descr = "Chunk size for streaming packets between nodes")
+    val shardName = opt[String](
+      descr = "Name of the shard this node is connected to."
+    )
 
-    val messageConsumers =
-      opt[Int](descr = "Number of incoming message consumers. Defaults to number of CPU cores")
-
-    val threadPoolSize =
-      opt[Int](descr = "Maximum number of threads used by rnode", hidden = true)
-
-    val casperBlockStoreSize =
-      opt[Long](required = false, descr = "Casper BlockStore map size (in bytes)")
-
-    val casperBlockDagStorageSize =
-      opt[Long](required = false, descr = "Casper BlockDagStorage map size (in bytes)")
-
-    val casperLatestMessagesDataPath =
-      opt[Path](required = false, descr = "Path to latest messages data file")
-
-    val casperLatestMessagesCrcPath =
-      opt[Path](required = false, descr = "Path to latest messages crc file")
+    val faultToleranceThreshold = opt[Float](
+      descr = "Float value representing that the node tolerates up " +
+        "to fault-tolerance-threshold fraction of the total weight to equivocate."
+    )
 
     val validatorPublicKey = opt[String](
       descr = "Base16 encoding of the public key to use for signing a proposed blocks. " +
         "Can be inferred from the private key for some signature algorithms."
     )
 
+    // We should not encourage exposing private keys in such way, so this param is hidden
     val validatorPrivateKey = opt[String](
       descr = "Base16 encoding of the private key to use for signing a proposed blocks. " +
         "It is not recommended to use in production since private key could be revealed through the process table",
@@ -321,13 +358,35 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Path to the base16 encoded private key to use for signing a proposed blocks."
     )
 
-    val shardId = opt[String](
-      descr = "Identifier of the shard this node is connected to."
+    val casperLoopInterval = opt[FiniteDuration](
+      descr =
+        "Interval for the casper loop to maintain requested blocks and missing dependent blocks"
     )
 
-    val faultToleranceThreshold = opt[Float](
-      descr = "Float value representing that the node tolerates up " +
-        "to fault-tolerance-threshold fraction of the total weight to equivocate."
+    val requestedBlocksTimeout = opt[FiniteDuration](
+      descr = "Timeout for blocks requests"
+    )
+
+    val finalizationRate = opt[Int](
+      descr = "Finalization is called every `n` blocks."
+    )
+
+    val maxNumberOfParents = opt[Int](
+      descr = "Maximum number of block parents."
+    )
+
+    val maxParentDepth = opt[Int](
+      descr = "Maximum depth of block parents."
+    )
+
+    val forkChoiceStaleThreshold = opt[FiniteDuration](
+      descr =
+        "Node will request for fork choice tips if the latest FCT is more then " +
+          "forkChoiceStaleThreshold old. Default 5 min."
+    )
+
+    val forkChoiceCheckIfStaleInterval = opt[FiniteDuration](
+      descr = "Interval for check if fork choice tip is stale. Default 1 min."
     )
 
     val synchronyConstraintThreshold = opt[Float](
@@ -341,60 +400,111 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "allowed to propose."
     )
 
-    val maxPeerQueueSize = opt[Int](
+    val frrdMaxPeerQueueSize = opt[Int](
       descr = "Fair round robin dispatcher individual peer packet queue size. " +
         "Packets will get dropped by the dispatcher when the queue is full.",
       validate = _ > 0
     )
 
-    val giveUpAfterSkipped = opt[Int](
+    val frrdGiveUpAfterSkipped = opt[Int](
       descr = "Fair round robin dispatcher give up and try next peer after skipped packets. " +
         "Skipped packets are buffered in other peers packet queues.",
       validate = _ >= 0
     )
 
-    val dropPeerAfterRetries = opt[Int](
+    val frrdDropPeerAfterRetries = opt[Int](
       descr = "Fair round robin dispatcher drop inactive peer after round robin rounds. " +
         "After giving up several times the peer gets dropped from the queue.",
       validate = _ >= 0
     )
 
-    val reporting = opt[Flag](descr = "Use this flag to enable reporting endpoints.")
-
-    val finalizationRate = opt[Int](
-      descr = "Block finalization is triggered after adding every 'n' blocks. " +
-        "Use this option to configure this 'n'."
+    val bondsFile = opt[String](
+      descr = "Plain text file consisting of lines of the form `<pk> <stake>`, " +
+        "which defines the bond amounts for each validator at genesis. " +
+        "<pk> is the public key (in base-16 encoding) identifying the validator and <stake>" +
+        "is the amount of Rev they have bonded (an integer). Note: this overrides the --num-validators option."
     )
 
-    val maxNumberOfParents = opt[Int](
-      descr = "Maximum number of block parents."
+    val walletsFile = opt[String](
+      descr = "Plain text file consisting of lines of the form `<algorithm> <pk> <revBalance>`, " +
+        "which defines the Rev wallets that exist at genesis. " +
+        "<algorithm> is the algorithm used to verify signatures when using the wallet (one of ed25519 or secp256k1)," +
+        "<pk> is the public key (in base-16 encoding) identifying the wallet and <revBalance>" +
+        "is the amount of Rev in the wallet."
     )
 
-    val maxParentDepth = opt[Int](
-      descr = "Maximum depth of block parents."
+    val bondMinimum = opt[Long](
+      descr = "Minimum bond accepted by the PoS contract in the genesis block."
     )
 
-    val forkChoiceStaleThreshold =
-      opt[FiniteDuration](
-        descr =
-          "Node will request for fork choice tips if the latest FCT is more then " +
-            "forkChoiceStaleThreshold old. Default 10 min."
-      )
-
-    val forkChoiceCheckIfStaleInterval =
-      opt[FiniteDuration](
-        descr = "Interval for check if fork choice tip is stale. Default 11 min."
-      )
-
-    val apiMaxBlocksLimit = opt[Int](
-      descr = "The max block numbers you can aquire from api",
-      validate = _ >= 0
+    val bondMaximum = opt[Long](
+      descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
+
+    val epochLength = opt[Int](
+      descr = "the length of the validation epoch in blocks"
+    )
+
+    val quarantineLength = opt[Int](
+      descr = "the length of the quarantine time in blocks"
+    )
+
+    val numberOfActiveValidators = opt[Int](
+      descr = "the number of the active validators"
+    )
+
+    val requiredSignatures = opt[Int](
+      descr =
+        "Number of signatures from bonded validators required for Ceremony Master to approve the genesis block."
+    )
+
+    val approveInterval = opt[FiniteDuration](
+      descr = "Each `approve-interval` Ceremony Master (CM) checks if it have gathered enough signatures to approve" +
+        "the genesis block. If positive, CM broadcasts Approved Block, if negative - broadcast Unapproved Block " +
+        "one more time and keeps waiting for approvals."
+    )
+
+    //TODO remove
+    val approveDuration = opt[FiniteDuration](
+      descr =
+        "Time window in which BlockApproval messages will be accumulated before checking conditions."
+    )
+
+    val genesisValidator = opt[Flag](
+      descr = "Start a node as a genesis validator."
+    )
+
+    val prometheus = opt[Flag](
+      descr = "Enable the Prometheus metrics reporter"
+    )
+
+    val influxdb = opt[Flag](
+      descr = "Enable the InfluxDB metrics reporter"
+    )
+
+    val influxdbUdp = opt[Flag](
+      descr = "Enable the InfluxDB UDP metrics reporter"
+    )
+
+    val zipkin = opt[Flag](
+      descr = "Enable the Zipkin span reporter"
+    )
+
+    val sigar = opt[Flag](
+      descr = "Enable Sigar host system metrics"
+    )
+
+    // TODO remove
+    val deployTimestamp = opt[Long](
+      descr = "Timestamp for the deploys."
+    )
+
   }
   addSubcommand(run)
 
   val keygen = new Subcommand("keygen") {
     descr("Generate a public/private key pair.")
+    helpWidth(width)
 
     val algorithm = opt[String](
       descr = "Algorithm to be used for key generation. Must be one of ed25519 or secp256k1.",
@@ -418,6 +528,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "View properties of the last finalized block known by Casper on an existing running node."
     )
+    helpWidth(width)
   }
   addSubcommand(lastFinalizedBlock)
 
@@ -425,7 +536,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Check if the given block has been finalized by Casper on an existing running node."
     )
-
+    helpWidth(width)
     val hash = trailArg[String](
       descr = "The hash value of the block to check",
       required = true
@@ -434,14 +545,18 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   addSubcommand(isFinalized)
 
   val repl = new Subcommand("repl") {
-    descr("Starts a thin client, that will connect to existing node. See grpcHost and grpcPort.")
+    descr(
+      "Starts a thin client, that will connect to existing node. See gRPCHost and gRPCPort."
+    )
+    helpWidth(width)
   }
   addSubcommand(repl)
 
   val eval = new Subcommand("eval") {
     descr(
-      "Starts a thin client that will evaluate rholang in file on a existing running node. See grpcHost and grpcPort."
+      "Starts a thin client that will evaluate rholang in file on a existing running node. See gRPCHost and gRPCPort."
     )
+    helpWidth(width)
 
     val fileNames               = trailArg[List[String]](required = true)(stringListConverter)
     val printUnmatchedSendsOnly = opt[Boolean](required = false)
@@ -463,14 +578,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "The deploy will be packaged and sent as a block to the network depending " +
         "on the configuration of the Casper instance."
     )
+    helpWidth(width)
 
-    val phloLimit =
-      opt[Long](
-        descr =
-          "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
-        validate = _ > 0,
-        required = true
-      )
+    val phloLimit = opt[Long](
+      descr =
+        "The amount of phlo to use for the transaction (unused phlo is refunded). Must be positive integer.",
+      validate = _ > 0,
+      required = true
+    )
 
     val phloPrice = opt[Long](
       descr = "The price of phlo for this transaction in units dust/phlo. Must be positive integer.",
@@ -485,7 +600,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val privateKey = opt[PrivateKey](
-      descr = "The deployer's ed25519 private key encoded as Base16.",
+      descr = "The deployer's secp256k1 private key encoded as Base16.",
       required = false,
       hidden = true
     )(
@@ -509,6 +624,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       "View properties of a block known by Casper on an existing running node." +
         "Output includes: parent hashes, storage contents of the tuplespace."
     )
+    helpWidth(width)
+
     val hash =
       trailArg[String](name = "hash", required = true, descr = "the hash value of the block")
   }
@@ -518,12 +635,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "View list of blocks in the current Casper view on an existing running node."
     )
-    val depth =
-      opt[Int](
-        name = "depth",
-        validate = _ > 0,
-        descr = "lists blocks to the given depth in terms of block height"
-      )
+    helpWidth(width)
+
+    val depth = opt[Int](
+      name = "depth",
+      validate = _ > 0,
+      descr = "lists blocks to the given depth in terms of block height"
+    )
 
   }
   addSubcommand(showBlocks)
@@ -532,16 +650,16 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "DAG in DOT format"
     )
-    val depth =
-      opt[Int](
-        name = "depth",
-        descr = "depth in terms of block height"
-      )
-    val showJustificationLines =
-      opt[Boolean](
-        name = "showJustificationlines",
-        descr = "if justification lines should be shown"
-      )
+    helpWidth(width)
+
+    val depth = opt[Int](
+      name = "depth",
+      descr = "depth in terms of block height"
+    )
+    val showJustificationLines = opt[Boolean](
+      name = "showJustificationlines",
+      descr = "if justification lines should be shown"
+    )
   }
   addSubcommand(visualizeBlocks)
 
@@ -549,6 +667,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Machine Verifiable Dag"
     )
+    helpWidth(width)
   }
   addSubcommand(machineVerifiableDag)
 
@@ -556,14 +675,14 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       implicit conv: ValueConverter[List[String] => R]
   ) = new Subcommand(name) {
     descr(desc)
+    helpWidth(width)
 
-    val typeOfName =
-      opt[List[String] => R](
-        required = true,
-        descr = "Type of the specified name",
-        name = "type",
-        short = 't'
-      )
+    val typeOfName = opt[List[String] => R](
+      required = true,
+      descr = "Type of the specified name",
+      name = "type",
+      short = 't'
+    )
 
     val content =
       opt[List[String]](required = true, descr = "Rholang name", name = "content", short = 'c')
@@ -588,6 +707,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Searches for a block containing the deploy with provided id."
     )
+    helpWidth(width)
+
     val deployId = opt[Array[Byte]](
       descr = "Id of the deploy.",
       required = true
@@ -599,6 +720,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr(
       "Force Casper (on an existing running node) to propose a block based on its accumulated deploys."
     )
+    helpWidth(width)
 
     val printUnmatchedSends = opt[Boolean](required = false)
   }
@@ -613,6 +735,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         .flatMap(validateLength(Ed25519.keyLength))
         .map(PublicKey.apply)
     )
+    helpWidth(width)
   }
   addSubcommand(bondStatus)
 
