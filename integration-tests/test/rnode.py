@@ -76,6 +76,10 @@ rnode_default_launcher_args = [
     # detected" message.
     '-no-version-check',
 ]
+rnode_default_client_options = [
+    # Make client calls on internal port which expose all APIs
+    '--grpc-port=40402',
+]
 
 class Node:
     def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
@@ -112,7 +116,8 @@ class Node:
 
     def get_rnode_address(self) -> str:
         log_content = self.logs()
-        regex = "Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$".format(name=self.container.name)
+        regex = "Listening for traffic on (rnode://.+@{name}\\?protocol=\\d+&discovery=\\d+)\\.$"\
+            .format(name=self.container.name)
         match = re.search(regex, log_content, re.MULTILINE | re.DOTALL)
         if match is None:
             raise RNodeAddressNotFoundError(regex)
@@ -124,7 +129,8 @@ class Node:
 
     def get_connected_peers_metric_value(self) -> str:
         try:
-            return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | grep ^rchain_comm_rp_connect_peers\\ ')
+            return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | '
+                                              'grep ^rchain_comm_rp_connect_peers\\ ')
         except NonZeroExitCodeError as e:
             if e.exit_code == 1:
                 return ''
@@ -202,14 +208,18 @@ class Node:
         return output
 
     def rnode_command(self, *node_args: str, stderr: bool = True) -> str:
-        return self.shell_out(rnode_binary, *rnode_default_launcher_args, *node_args, stderr=stderr)
+        return self.shell_out(rnode_binary, *rnode_default_client_options,
+                              *rnode_default_launcher_args, *node_args, stderr=stderr)
 
     def eval(self, rho_file_path: str) -> str:
         return self.rnode_command('eval', rho_file_path)
 
-    def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+    def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
+               phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         try:
-            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()), '--phlo-limit={}'.format(phlo_limit), '--phlo-price={}'.format(phlo_price), rho_file_path, stderr=False)
+            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()),
+                                        '--phlo-limit={}'.format(phlo_limit), '--phlo-price={}'.format(phlo_price),
+                                        rho_file_path, stderr=False)
             deploy_id = extract_deploy_id_from_deploy_output(output)
             return deploy_id
         except NonZeroExitCodeError as e:
@@ -227,9 +237,12 @@ class Node:
     def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
         return parse_mvdag_str(self.get_mvdag())
 
-    def deploy_string(self, rholang_code: str, private_key: str, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+    def deploy_string(self, rholang_code: str, private_key: str, phlo_limit:int = DEFAULT_PHLO_LIMIT,
+                      phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         quoted_rholang = shlex.quote(rholang_code)
-        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} deploy --private-key={private_key} --phlo-limit={phlo_limit} --phlo-price={phlo_price} /tmp/deploy_string.rho'.format(
+        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} '
+                                                'deploy --private-key={private_key} --phlo-limit={phlo_limit} '
+                                                '--phlo-price={phlo_price} /tmp/deploy_string.rho'.format(
             rnode_binary=rnode_binary,
             quoted_rholang=quoted_rholang,
             private_key=private_key,
@@ -265,7 +278,9 @@ class Node:
         output = self.shell_out(
             'sh',
             '-c',
-            'echo {quoted_rholang_code} | {rnode_binary} repl'.format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary),
+            'echo {quoted_rholang_code} | {rnode_binary} {rnode_default_client_options} repl'
+                .format(quoted_rholang_code=quoted_rholang_code,rnode_binary=rnode_binary,
+                        rnode_default_client_options=" ".join(rnode_default_client_options)),
             stderr=stderr,
         )
         return output
@@ -277,13 +292,16 @@ class Node:
         return self.shell_out('cat', '/opt/docker/bond_{}.rho'.format(public_key))
 
     __timestamp_rx = "\\d\\d:\\d\\d:\\d\\d\\.\\d\\d\\d"
-    __log_message_rx = re.compile("^{timestamp_rx} (.*?)(?={timestamp_rx})".format(timestamp_rx=__timestamp_rx), re.MULTILINE | re.DOTALL)
+    __log_message_rx = re.compile("^{timestamp_rx} (.*?)(?={timestamp_rx})"
+                                  .format(timestamp_rx=__timestamp_rx), re.MULTILINE | re.DOTALL)
 
     def log_lines(self) -> List[str]:
         log_content = self.logs()
         return Node.__log_message_rx.split(log_content)
 
-    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT, phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+    def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str,
+                                          private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
+                                          phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -298,7 +316,8 @@ class Node:
         """
         shutil.copyfile(rho_file_path, os.path.join(self.local_deploy_dir, os.path.basename(rho_file_path)))
         container_contract_file_path = os.path.join(self.remote_deploy_dir, os.path.basename(rho_file_path))
-        substitute_rules = ';'.join([r's/{}/{}/g'.format(key.replace(r'/', r'\/'), value.replace(r'/', r'\/')) for key, value in substitute_dict.items()])
+        substitute_rules = ';'.join([r's/{}/{}/g'.format(key.replace(r'/', r'\/'), value.replace(r'/', r'\/'))
+                                     for key, value in substitute_dict.items()])
         self.shell_out(
             'sed',
             '-i',
@@ -344,7 +363,8 @@ class DeployThread(threading.Thread):
             self.node.propose()
 
 
-def make_container_command(container_command: str, container_command_flags: AbstractSet, container_command_options: Dict) -> str:
+def make_container_command(container_command: str, container_command_flags: AbstractSet,
+                           container_command_options: Dict) -> str:
     opts = ['{} {}'.format(option, argument) for option, argument in container_command_options.items()]
     flags = ' '.join(container_command_flags)
     result = '{} {} {}'.format(container_command, flags, ' '.join(opts))
@@ -456,14 +476,14 @@ def make_bootstrap_node(
     ])
 
     container_command_options = {
-        "--port":                           40400,
+        "--protocol-port":                           40400,
         "--validator-private-key":          private_key.to_hex(),
         "--validator-public-key":           private_key.get_public_key().to_hex(),
         "--host":                           container_name,
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
-        "--max-peer-queue-size":            max_peer_queue_size,
-        "--give-up-after-skipped":          give_up_after_skipped,
-        "--drop-peer-after-retries":        drop_peer_after_retries,
+        "--frrd-max-peer-queue-size":            max_peer_queue_size,
+        "--frrd-give-up-after-skipped":          give_up_after_skipped,
+        "--frrd-drop-peer-after-retries":        drop_peer_after_retries,
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
         "--quarantine-length":              quarantine_length
@@ -553,9 +573,9 @@ def make_peer(
         "--validator-public-key":           private_key.get_public_key().to_hex(),
         "--host":                           name,
         "--synchrony-constraint-threshold": synchrony_constraint_threshold,
-        "--max-peer-queue-size":            max_peer_queue_size,
-        "--give-up-after-skipped":          give_up_after_skipped,
-        "--drop-peer-after-retries":        drop_peer_after_retries,
+        "--frrd-max-peer-queue-size":            max_peer_queue_size,
+        "--frrd-give-up-after-skipped":          give_up_after_skipped,
+        "--frrd-drop-peer-after-retries":        drop_peer_after_retries,
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
         "--quarantine-length":              quarantine_length
