@@ -1,7 +1,7 @@
 package coop.rchain.casper.genesis
 
 import java.io.PrintWriter
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 import cats.implicits._
 import cats.effect.Sync
@@ -16,8 +16,6 @@ import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.PathOps.RichPath
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
-import java.nio.file.Path
-
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
@@ -83,7 +81,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
               "Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
             )
           ) should be(1)
-        } yield log.infos.count(_.contains("Created validator")) should be(numValidators)
+        } yield log.infos.count(_.contains("Created validator")) should be(autogenShardSize)
     }
   )
 
@@ -213,18 +211,18 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 }
 
 object GenesisTest {
-  val storageSize     = 1024L * 1024 * 1024
-  def storageLocation = Files.createTempDirectory(s"casper-genesis-test-runtime-")
-  def genesisPath     = Files.createTempDirectory(s"casper-genesis-test-")
-  val numValidators   = 5
-  val rchainShardId   = "rchain"
+  val storageSize      = 1024L * 1024 * 1024
+  def storageLocation  = Files.createTempDirectory(s"casper-genesis-test-runtime-")
+  def genesisPath      = Files.createTempDirectory(s"casper-genesis-test-")
+  val autogenShardSize = 5
+  val rchainShardId    = "rchain"
 
   implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
   implicit val log          = new LogStub[Task]
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
-      numValidators: Int = numValidators,
+      autogenShardSize: Int = autogenShardSize,
       maybeVaultsPath: Option[String] = None,
       minimumBond: Long = 1L,
       maximumBond: Long = Long.MaxValue,
@@ -245,7 +243,7 @@ object GenesisTest {
       bonds <- BondsParser.parse[Task](
                 maybeBondsPath,
                 genesisPath.resolve("bonds.txt"),
-                numValidators,
+                autogenShardSize,
                 genesisPath
               )
       validators = bonds.toSeq.map(Validator.tupled)

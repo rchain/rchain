@@ -67,7 +67,7 @@ object Configuration {
     //implicit val hint = ProductHint[NodeConf](allowUnknownKeys = false)
     // Custom reader for PeerNode type
     implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
-      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).getOrElse(null))
+      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).right.get)
     )
     // Make Long values support size-in-bytes format, e.g. 16M
     implicit val myIntReader = ConfigReader.fromString[Long](

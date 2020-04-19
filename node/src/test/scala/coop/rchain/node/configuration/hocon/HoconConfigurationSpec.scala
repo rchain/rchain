@@ -2,264 +2,153 @@ package coop.rchain.node.configuration.hocon
 
 import java.nio.file.Paths
 
-import scala.concurrent.duration._
-
-import coop.rchain.casper.CasperConf
-import coop.rchain.comm.PeerNode
-import coop.rchain.node.configuration
-
 import com.typesafe.config.ConfigFactory
+
+import scala.concurrent.duration._
+import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
+import coop.rchain.comm.PeerNode
+import coop.rchain.comm.transport.TlsConf
+import coop.rchain.node.configuration.{
+  ApiServer,
+  Metrics,
+  NodeConf,
+  PeersDiscovery,
+  ProtocolClient,
+  ProtocolServer,
+  Storage
+}
 import org.scalatest.{FunSuite, Matchers}
+import pureconfig.{ConfigReader, ConfigSource, ConvertHelpers}
+import pureconfig.generic.ProductHint
+import pureconfig.generic.auto._
 
 class HoconConfigurationSpec extends FunSuite with Matchers {
 
-  test("Parse server section") {
-    val conf =
-      """
-      |rnode {
-      |  server {
-      |    network-id = "testnet"
-      |    host = 1.2.3.4
-      |    host-dynamic = true
-      |    upnp = false
-      |    port = 40400
-      |    port-http = 40403
-      |    port-kademlia = 40404
-      |    use-random-ports = true
-      |    send-timeout = 2 seconds
-      |    standalone = true
-      |    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
-      |    data-dir = /root/.rnode
-      |    store-size = 1G
-      |    dag-storage-size = 512M
-      |    map-size = 1G
-      |    max-connections = 500
-      |    allow-private-addresses = true
-      |    max-message-size = 256K
-      |    max-stream-message-size = 200M
-      |    packet-chunk-size = 64K
-      |    message-consumers = 8
-      |    fault-tolerance-threshold = 0.2
-      |    synchrony-constraint-threshold = 0.3333333333333333
-      |    height-constraint-threshold = 100
-      |    reporting = false
-      |    api-max-blocks-limit = 50
-      |  }
-      |}
-    """.stripMargin
+  test("Parse default config") {
+    val defaultConfig = ConfigSource
+      .resources("defaults.conf")
+      .withFallback(
+        ConfigSource.string(
+          s"default-data-dir = /var/lib/rnode"
+        )
+      )
 
-    val expectedServer =
-      configuration.Server(
+    // Custom reader for PeerNode type is required
+    implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
+      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).getOrElse(null))
+    )
+    // Make Int values support size-in-bytes format, e.g. 16MB
+    implicit val myIntReader = ConfigReader.fromString[Long](
+      ConvertHelpers.catchReadError(s => ConfigFactory.parseString(s"v = $s").getBytes("v"))
+    )
+    val config = defaultConfig.load[NodeConf].right.get
+
+    val expectedConfig = NodeConf(
+      standalone = false,
+      protocolServer = ProtocolServer(
         networkId = "testnet",
-        host = Some("1.2.3.4"),
+        host = None,
+        allowPrivateAddresses = false,
+        useRandomPorts = false,
+        dynamicIp = false,
+        noUpnp = false,
         port = 40400,
-        httpPort = 40403,
-        kademliaPort = 40404,
-        useRandomPorts = true,
-        dynamicHostAddress = true,
-        noUpnp = true,
-        defaultTimeout = 2.seconds,
+        grpcMaxReceiveMessageLength = 262144,
+        grpcMaxReceiveStreamMessageLength = 268435456,
+        maxMessageConsumers = 400
+      ),
+      protocolClient = ProtocolClient(
+        networkId = "testnet",
         bootstrap = PeerNode
           .fromAddress(
             "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
           )
           .right
           .get,
-        standalone = true,
-        dataDir = Paths.get("/root/.rnode"),
-        mapSize = 1024 * 1024 * 1024,
-        storeSize = 1024 * 1024 * 1024,
-        dagStorageSize = 512 * 1024 * 1024,
-        maxNumOfConnections = 500,
-        allowPrivateAddresses = true,
-        maxMessageSize = 256 * 1024,
-        maxStreamMessageSize = 200 * 1024 * 1024,
-        packetChunkSize = 64 * 1024,
-        messageConsumers = 8,
-        faultToleranceThreshold = 0.2f,
-        synchronyConstraintThreshold = 0.3333333333333333d,
-        heightConstraintThreshold = 100L,
-        reporting = false,
-        apiMaxBlocksLimit = 50
-      )
-
-    val server = Server.fromConfig(ConfigFactory.parseString(conf))
-    server shouldEqual expectedServer
-  }
-
-  test("Parse round-robin-dispatcher section") {
-    val conf =
-      """
-        |rnode {
-        |  server {
-        |    round-robin-dispatcher {
-        |      max-peer-queue-size = 10
-        |      give-up-after-skipped = 20
-        |      drop-peer-after-retries = 30
-        |    }
-        |  }
-        |}
-      """.stripMargin
-
-    val expectedRoundRobinDispatcher =
-      configuration.RoundRobinDispatcher(
-        maxPeerQueueSize = 10,
-        giveUpAfterSkipped = 20,
-        dropPeerAfterRetries = 30
-      )
-
-    val roundRobinDispatcher = RoundRobinDispatcher.fromConfig(ConfigFactory.parseString(conf))
-    roundRobinDispatcher shouldEqual expectedRoundRobinDispatcher
-  }
-
-  test("Parse tls section") {
-    val conf =
-      """
-      |rnode {
-      |  server {
-      |    tls {
-      |      certificate = /root/node.certificate.pem
-      |      key = /root/node.key.pem
-      |      secure-random-non-blocking = true
-      |    }
-      |  }
-      |}
-      """.stripMargin
-
-    val expectedTls =
-      configuration.Tls(
-        certificate = Paths.get("/root/node.certificate.pem"),
-        key = Paths.get("/root/node.key.pem"),
+        batchMaxConnections = 20,
+        networkTimeout = 5.seconds,
+        grpcMaxReceiveMessageLength = 262144,
+        grpcStreamChunkSize = 262144
+      ),
+      peersDiscovery = PeersDiscovery(
+        port = 40404,
+        lookupInterval = 20.seconds,
+        cleanupInterval = 20.minutes,
+        heartbeatBatchSize = 100,
+        initWaitLoopInterval = 1.second
+      ),
+      apiServer = ApiServer(
+        host = None,
+        portGrpcExternal = 40401,
+        portGrpcInternal = 40402,
+        grpcMaxReceiveMessageLength = 16777216,
+        portHttp = 40403,
+        maxBlocksLimit = 50,
+        enableReporting = false
+      ),
+      storage = Storage(
+        dataDir = Paths.get("/var/lib/rnode"),
+        lmdbMapSizeRspace = 10995116277760L,
+        lmdbMapSizeBlockdagstore = 8589934592L,
+        lmdbMapSizeBlockstore = 8589934592L,
+        lmdbMapSizeDeploystore = 1073741824L
+      ),
+      tls = TlsConf(
+        certificatePath = Paths.get("/var/lib/rnode/node.certificate.pem"),
+        keyPath = Paths.get("/var/lib/rnode/node.key.pem"),
+        secureRandomNonBlocking = false,
         customCertificateLocation = false,
-        customKeyLocation = false,
-        secureRandomNonBlocking = true
+        customKeyLocation = false
+      ),
+      casper = CasperConf(
+        faultToleranceThreshold = 0,
+        validatorPublicKey = None,
+        validatorPrivateKey = None,
+        validatorPrivateKeyPath = None,
+        shardName = "root",
+        parentShardId = "/",
+        casperLoopInterval = 30.seconds,
+        requestedBlocksTimeout = 240.seconds,
+        finalizationRate = 1,
+        maxNumberOfParents = 2147483647,
+        maxParentDepth = Some(2147483647),
+        forkChoiceStaleThreshold = 10.minutes,
+        forkChoiceCheckIfStaleInterval = 11.minutes,
+        synchronyConstraintThreshold = 0.67,
+        heightConstraintThreshold = 1000,
+        roundRobinDispatcher = RoundRobinDispatcher(
+          maxPeerQueueSize = 100,
+          giveUpAfterSkipped = 0,
+          dropPeerAfterRetries = 0
+        ),
+        genesisBlockData = GenesisBlockData(
+          genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
+          bondsFile = Some("/var/lib/rnode/genesis/bonds.txt"),
+          walletsFile = Some("/var/lib/rnode/genesis/wallets.txt"),
+          bondMaximum = 9223372036854775807L,
+          bondMinimum = 1,
+          epochLength = 10000,
+          quarantineLength = 50000,
+          numberOfActiveValidators = 100,
+          deployTimestamp = None
+        ),
+        genesisCeremony = GenesisCeremonyConf(
+          requiredSignatures = 0,
+          approveDuration = 5.minutes,
+          approveInterval = 5.minute,
+          autogenShardSize = 5,
+          genesisValidatorMode = false,
+          ceremonyMasterMode = false
+        )
+      ),
+      metrics = Metrics(
+        prometheus = false,
+        influxdb = false,
+        influxdbUdp = false,
+        zipkin = false,
+        sigar = false
       )
-
-    val tls = Tls.fromConfig(ConfigFactory.parseString(conf))
-    tls shouldEqual expectedTls
-  }
-
-  test("Parse metrics section") {
-    val conf =
-      """
-        |rnode {
-        |  server {
-        |    metrics {
-        |      prometheus = true
-        |      influxdb = true
-        |      influxdb-udp = true
-        |      zipkin = true
-        |      sigar = true
-        |    }
-        |  }
-        |}
-      """.stripMargin
-
-    val expectedKamon =
-      configuration.Kamon(
-        prometheus = true,
-        influxDb = true,
-        influxDbUdp = true,
-        zipkin = true,
-        sigar = true
-      )
-
-    val kamon = Kamon.fromConfig(ConfigFactory.parseString(conf))
-    kamon shouldEqual expectedKamon
-  }
-
-  test("Parse grpc section") {
-    val conf =
-      """
-        |rnode {
-        |  grpc {
-        |    host = localhost
-        |    port-external = 40401
-        |    port-internal = 40402
-        |    max-message-size = 4M
-        |  }
-        |}
-      """.stripMargin
-
-    val expectedGrpc =
-      configuration.GrpcServer(
-        host = "localhost",
-        portExternal = 40401,
-        portInternal = 40402,
-        maxMessageSize = 4 * 1024 * 1024
-      )
-
-    val grpc = GrpcServer.fromConfig(ConfigFactory.parseString(conf))
-    grpc shouldEqual expectedGrpc
-  }
-
-  test("Parse casper section") {
-    val conf =
-      """
-        |rnode {
-        |  casper {
-        |    validator-public-key = 111111111111
-        |    validator-private-key = 222222222222
-        |    validator-private-key-path = /root/pk.pem
-        |    bonds-file = /root/bonds.txt
-        |    known-validators-file = /root/validators.txt
-        |    validators = 5
-        |    wallets-file = /root/wallet.txt
-        |    bond-minimum = 1
-        |    bond-maximum = 9223372036854775807
-        |    epoch-length = 10000
-        |    quarantine-length = 50000
-        |    number-of-active-validators = 100
-        |    casper-loop-interval = 30
-        |    requested-blocks-timeout = 240
-        |    required-signatures = 0
-        |    shard = rchain
-        |    genesis-validator = true
-        |    genesis-approve-interval = 5 seconds
-        |    genesis-approve-duration = 5 minutes
-        |    genesis-path = /root/.rnode/genesis
-        |    deploy-timestamp = 333
-        |    finalization-rate = 4
-        |    max-number-of-parents = 1
-        |    fork-choice-stale-threshold = 3h
-        |    fork-choice-check-if-stale-interval = 3h
-        |    max-parent-depth = 7
-        |    api-max-blocks-limit = 50
-        |  }
-        |}
-      """.stripMargin
-
-    val expectedCasper =
-      CasperConf(
-        publicKeyBase16 = Some("111111111111"),
-        privateKey = Some(Right(Paths.get("/root/pk.pem"))),
-        bondsFile = Some("/root/bonds.txt"),
-        knownValidatorsFile = Some("/root/validators.txt"),
-        numValidators = 5,
-        genesisPath = Paths.get("/root/.rnode/genesis"),
-        walletsFile = Some("/root/wallet.txt"),
-        minimumBond = 1L,
-        maximumBond = Long.MaxValue,
-        epochLength = 10000,
-        quarantineLength = 50000,
-        numberOfActiveValidators = 100,
-        casperLoopInterval = 30,
-        requestedBlocksTimeout = 240,
-        requiredSigs = 0,
-        shardId = "rchain",
-        createGenesis = false,
-        approveGenesis = true,
-        approveGenesisInterval = 5.seconds,
-        approveGenesisDuration = 5.minutes,
-        deployTimestamp = Some(333),
-        finalizationRate = 4,
-        maxNumberOfParents = 1,
-        forkChoiceStaleThreshold = 3.hour,
-        forkChoiceCheckIfStaleInterval = 3.hour,
-        maxParentDepthOpt = Some(7)
-      )
-
-    val casper = Casper.fromConfig(ConfigFactory.parseString(conf))
-    casper shouldEqual expectedCasper
+    )
+    config shouldEqual expectedConfig
   }
 }
