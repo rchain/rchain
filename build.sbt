@@ -265,7 +265,8 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
-        circeGenericExtras
+        circeGenericExtras,
+        pureconfig
       ),
     PB.targets in Compile := Seq(
       PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
