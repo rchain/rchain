@@ -36,7 +36,7 @@ if [[ "${TRAVIS_BRANCH}" == "master"  || \
 
     # If first node set rnode cmd so it acts as bootstrap server
     if [[ $i == 1 ]]; then
-      rnode_cmd="rnode --port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352 > /var/log/rnode.log 2>&1 &"
+      rnode_cmd="rnode --protocol-port 30304 --standalone --name 0f365f1016a54747b384b386b8e85352 > /var/log/rnode.log 2>&1 &"
     else
       rnode_cmd="rnode --bootstrap rnode://0f365f1016a54747b384b386b8e85352@10.1.1.2:30304 > /var/log/rnode.log 2>&1 &"
     fi
