@@ -2,66 +2,82 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
-import scala.concurrent.duration.FiniteDuration
+import com.typesafe.config.Config
 
+import scala.concurrent.duration.FiniteDuration
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.casper.CasperConf
+import coop.rchain.comm.transport.TlsConf
+import coop.rchain.node.configuration.Configuration.Profile
+import pureconfig._
+import pureconfig.generic.auto._
 
-final case class Server(
+final case class NodeConf(
+    standalone: Boolean,
+    protocolServer: ProtocolServer,
+    protocolClient: ProtocolClient,
+    peersDiscovery: PeersDiscovery,
+    apiServer: ApiServer,
+    tls: TlsConf,
+    storage: Storage,
+    casper: CasperConf,
+    metrics: Metrics
+)
+
+final case class ProtocolServer(
     networkId: String,
     host: Option[String],
-    port: Int,
-    httpPort: Int,
-    kademliaPort: Int,
-    useRandomPorts: Boolean,
-    dynamicHostAddress: Boolean,
-    noUpnp: Boolean,
-    defaultTimeout: FiniteDuration,
-    bootstrap: PeerNode,
-    standalone: Boolean,
-    dataDir: Path,
-    mapSize: Long,
-    storeSize: Long,
-    dagStorageSize: Long,
-    maxNumOfConnections: Int,
     allowPrivateAddresses: Boolean,
-    maxMessageSize: Int,
-    maxStreamMessageSize: Long,
-    packetChunkSize: Int,
-    messageConsumers: Int,
-    faultToleranceThreshold: Float,
-    synchronyConstraintThreshold: Double,
-    heightConstraintThreshold: Long,
-    reporting: Boolean,
-    apiMaxBlocksLimit: Int
+    useRandomPorts: Boolean,
+    dynamicIp: Boolean,
+    noUpnp: Boolean,
+    port: Int,
+    grpcMaxReceiveMessageLength: Long,
+    grpcMaxReceiveStreamMessageLength: Long,
+    maxMessageConsumers: Int
 )
 
-final case class RoundRobinDispatcher(
-    maxPeerQueueSize: Int,
-    giveUpAfterSkipped: Int,
-    dropPeerAfterRetries: Int
+final case class ProtocolClient(
+    networkId: String,
+    bootstrap: PeerNode,
+    batchMaxConnections: Int,
+    networkTimeout: FiniteDuration,
+    grpcMaxReceiveMessageLength: Long,
+    grpcStreamChunkSize: Long
 )
 
-final case class GrpcServer(
-    host: String,
-    portExternal: Int,
-    portInternal: Int,
-    maxMessageSize: Int
+final case class PeersDiscovery(
+    port: Int,
+    lookupInterval: FiniteDuration,
+    cleanupInterval: FiniteDuration,
+    heartbeatBatchSize: Int,
+    initWaitLoopInterval: FiniteDuration
 )
 
-final case class Tls(
-    certificate: Path,
-    key: Path,
-    customCertificateLocation: Boolean,
-    customKeyLocation: Boolean,
-    secureRandomNonBlocking: Boolean
+final case class ApiServer(
+    host: Option[String],
+    portGrpcExternal: Int,
+    portGrpcInternal: Int,
+    grpcMaxReceiveMessageLength: Long,
+    portHttp: Int,
+    maxBlocksLimit: Int,
+    enableReporting: Boolean
 )
 
-final case class Kamon(
+final case class Storage(
+    dataDir: Path,
+    lmdbMapSizeRspace: Long,
+    lmdbMapSizeBlockdagstore: Long,
+    lmdbMapSizeBlockstore: Long,
+    lmdbMapSizeDeploystore: Long
+)
+
+final case class Metrics(
     prometheus: Boolean,
-    influxDb: Boolean,
-    influxDbUdp: Boolean,
+    influxdb: Boolean,
+    influxdbUdp: Boolean,
     zipkin: Boolean,
     sigar: Boolean
 )
