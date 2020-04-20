@@ -33,7 +33,7 @@ object Configuration {
     */
   def build(options: commandline.Options): (NodeConf, Config) = {
     val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
-    val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1())
+    val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1)
     val configFile = options.run.configFile
       .getOrElse(
         dataDir.resolve("rnode.conf")
@@ -92,13 +92,13 @@ object Configuration {
     (nodeConf, kamonConf)
   }
 
-  final case class Profile(name: String, dataDir: (() => Path, String))
+  final case class Profile(name: String, dataDir: (Path, String))
 
   private val dockerProfile =
     Profile(
       "docker",
       dataDir = (
-        () => Paths.get("/var/lib/rnode"),
+        Paths.get("/var/lib/rnode"),
         "Defaults to /var/lib/rnode"
       )
     )
@@ -107,7 +107,7 @@ object Configuration {
     Profile(
       "default",
       dataDir = (
-        () => Paths.get(sys.props("user.home"), ".rnode"),
+        Paths.get(sys.props("user.home"), ".rnode"),
         "Defaults to $HOME/.rnode"
       )
     )

@@ -400,7 +400,7 @@ object Main {
       options.profile.getOrElse("default"),
       Configuration.profiles.get("default").get
     )
-    val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1())
+    val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1)
     val configPath = options.run.configFile
       .getOrElse(
         dataDir.resolve("rnode.conf")
