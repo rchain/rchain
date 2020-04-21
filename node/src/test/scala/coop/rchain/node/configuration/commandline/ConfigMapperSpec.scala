@@ -127,6 +127,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       .get
 
     val expectedConfig = NodeConf(
+      defaultDataDir = "/var/lib/rnode",
       standalone = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",

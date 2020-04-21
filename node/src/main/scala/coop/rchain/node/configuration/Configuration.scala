@@ -4,17 +4,8 @@ import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
 
-import collection.JavaConverters._
-import scala.util.Try
-import coop.rchain.blockstorage.FileLMDBIndexBlockStore
-import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.comm.PeerNode
 import coop.rchain.node.configuration.commandline.ConfigMapper
-import coop.rchain.node.diagnostics.{BatchInfluxDBReporter, UdpInfluxDBReporter}
-import kamon.Kamon
-import kamon.system.SystemMetrics
-import kamon.zipkin.ZipkinReporter
-import monix.eval.Task
 import pureconfig._
 import pureconfig.generic.ProductHint
 import pureconfig.generic.auto._
@@ -29,7 +20,8 @@ object Configuration {
     * If config file is provided as part of CLI options, it shall be parsed and merged
     * with CLI options having higher priority.
     * @param options CLI options
-    * @return Configuration instance
+    * @return RNode configuration instance
+    * @return Kamon configuration instance
     */
   def build(options: commandline.Options): (NodeConf, Config) = {
     val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
@@ -63,8 +55,8 @@ object Configuration {
         )
       )
 
-    // Throw an error is unknown keys found
-    //implicit val hint = ProductHint[NodeConf](allowUnknownKeys = false)
+    // Throw an error if unknown keys found
+    implicit val hint = ProductHint[NodeConf](allowUnknownKeys = false)
     // Custom reader for PeerNode type
     implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
       ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).right.get)
@@ -81,13 +73,23 @@ object Configuration {
 
     nodeConfE match {
       case Left(t) =>
-        System.err.println(s"Can't build the configuration: ${t}")
+        System.err.println(
+          s"Can't build the configuration: ${t.toList.foldLeft("") {
+            _ + "\n" + _
+          }}"
+        )
         System.exit(1)
       case _ =>
     }
     val nodeConf = nodeConfE.right.get
 
-    val kamonConf = ConfigFactory.parseString(mergedConf.at("kamon").value().right.get.render())
+    val kamonConfigFile = dataDir.resolve("kamon.conf").toFile
+    val kamonDefaultConfig =
+      if (kamonConfigFile.exists())
+        ConfigFactory.parseFile(kamonConfigFile)
+      else
+        ConfigFactory.empty()
+    val kamonConf = kamonDefaultConfig.withFallback(ConfigFactory.load("kamon.conf"))
 
     (nodeConf, kamonConf)
   }

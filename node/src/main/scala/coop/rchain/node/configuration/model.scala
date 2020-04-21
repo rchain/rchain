@@ -23,7 +23,10 @@ final case class NodeConf(
     tls: TlsConf,
     storage: Storage,
     casper: CasperConf,
-    metrics: Metrics
+    metrics: Metrics,
+    // This field is dynamic and computer according to profile and is not used in client code
+    // But it is required in the model to enable strict configuration check for unknown keys
+    defaultDataDir: String
 )
 
 final case class ProtocolServer(
