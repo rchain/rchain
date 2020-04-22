@@ -129,7 +129,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr = s"Remote gRPC host for client calls. Defaults to 40401."
   )
 
-  val grpcMaxMessageSize = opt[Int](
+  val grpcMaxRecvMessageSize = opt[Int](
     short = 's',
     default = Some(16 * 1024 * 1024),
     descr = s"Max inbound gRPC message size for client calls. Defaults to 16M."
@@ -230,11 +230,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = s"gRPC port serving Rchain Protocol messages. Defaults to 40404"
     )
 
-    val protocolGrpcMaxReceiveMessageLength = opt[Long](
+    val protocolGrpcMaxRecvMessageSize = opt[Long](
       descr = "Maximum message size for gRPC transport server."
     )
 
-    val protocolGrpcMaxReceiveStreamMessageLength = opt[Long](
+    val protocolGrpcMaxRecvStreamMessageSize = opt[Long](
       descr =
         "Maximum size of messages that can be received via transport layer streams. This limits block size."
     )
@@ -280,7 +280,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = s"Port for internal gRPC API. Defaults to 40402"
     )
 
-    val apiGrpcMaxReceiveMessageLength = opt[Int](
+    val apiGrpcMaxRecvMessageSize = opt[Int](
       descr = "Maximum message size for gRPC API server. This limits deploy size."
     )
 

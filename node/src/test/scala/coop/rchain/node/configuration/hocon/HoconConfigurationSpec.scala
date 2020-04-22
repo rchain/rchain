@@ -54,8 +54,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         dynamicIp = false,
         noUpnp = false,
         port = 40400,
-        grpcMaxReceiveMessageLength = 262144,
-        grpcMaxReceiveStreamMessageLength = 268435456,
+        grpcMaxRecvMessageSize = 262144,
+        grpcMaxRecvStreamMessageSize = 268435456,
         maxMessageConsumers = 400
       ),
       protocolClient = ProtocolClient(
@@ -68,7 +68,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           .get,
         batchMaxConnections = 20,
         networkTimeout = 5.seconds,
-        grpcMaxReceiveMessageLength = 262144,
+        grpcMaxRecvMessageSize = 262144,
         grpcStreamChunkSize = 262144
       ),
       peersDiscovery = PeersDiscovery(
@@ -82,7 +82,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         host = "0.0.0.0",
         portGrpcExternal = 40401,
         portGrpcInternal = 40402,
-        grpcMaxReceiveMessageLength = 16777216,
+        grpcMaxRecvMessageSize = 16777216,
         portHttp = 40403,
         maxBlocksLimit = 50,
         enableReporting = false

@@ -37,8 +37,8 @@ final case class ProtocolServer(
     dynamicIp: Boolean,
     noUpnp: Boolean,
     port: Int,
-    grpcMaxReceiveMessageLength: Long,
-    grpcMaxReceiveStreamMessageLength: Long,
+    grpcMaxRecvMessageSize: Long,
+    grpcMaxRecvStreamMessageSize: Long,
     maxMessageConsumers: Int
 )
 
@@ -47,7 +47,7 @@ final case class ProtocolClient(
     bootstrap: PeerNode,
     batchMaxConnections: Int,
     networkTimeout: FiniteDuration,
-    grpcMaxReceiveMessageLength: Long,
+    grpcMaxRecvMessageSize: Long,
     grpcStreamChunkSize: Long
 )
 
@@ -63,7 +63,7 @@ final case class ApiServer(
     host: String,
     portGrpcExternal: Int,
     portGrpcInternal: Int,
-    grpcMaxReceiveMessageLength: Long,
+    grpcMaxRecvMessageSize: Long,
     portHttp: Int,
     maxBlocksLimit: Int,
     enableReporting: Boolean

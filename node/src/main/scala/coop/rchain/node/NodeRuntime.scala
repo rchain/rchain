@@ -127,7 +127,7 @@ class NodeRuntime private[node] (
                     nodeConf.protocolClient.networkId,
                     nodeConf.tls.certificatePath,
                     nodeConf.tls.keyPath,
-                    nodeConf.protocolClient.grpcMaxReceiveMessageLength.toInt,
+                    nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
                     nodeConf.protocolClient.grpcStreamChunkSize.toInt,
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
@@ -552,8 +552,8 @@ class NodeRuntime private[node] (
                               nodeConf.protocolServer.port,
                               nodeConf.tls.certificatePath,
                               nodeConf.tls.keyPath,
-                              nodeConf.protocolServer.grpcMaxReceiveMessageLength.toInt,
-                              nodeConf.protocolServer.grpcMaxReceiveStreamMessageLength,
+                              nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
+                              nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
                               nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
                               nodeConf.protocolServer.maxMessageConsumers
                             )(grpcScheduler, rPConfAsk, log, metrics)
@@ -566,7 +566,7 @@ class NodeRuntime private[node] (
                               nodeConf.apiServer.portGrpcExternal,
                               grpcScheduler,
                               apiServers.deploy,
-                              nodeConf.apiServer.grpcMaxReceiveMessageLength.toInt
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
                             )
       internalApiServer <- api
                             .acquireInternalServer(
@@ -576,7 +576,7 @@ class NodeRuntime private[node] (
                               apiServers.repl,
                               apiServers.deploy,
                               apiServers.propose,
-                              nodeConf.apiServer.grpcMaxReceiveMessageLength.toInt
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
                             )
 
       prometheusReporter = new NewPrometheusReporter()

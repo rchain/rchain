@@ -114,19 +114,19 @@ object Main {
       new GrpcReplClient(
         options.grpcHost(),
         options.grpcPort(),
-        options.grpcMaxMessageSize()
+        options.grpcMaxRecvMessageSize()
       )
     implicit val deployServiceClient: GrpcDeployService =
       new GrpcDeployService(
         options.grpcHost(),
         options.grpcPort(),
-        options.grpcMaxMessageSize()
+        options.grpcMaxRecvMessageSize()
       )
     implicit val proposeServiceClient: GrpcProposeService =
       new GrpcProposeService(
         options.grpcHost(),
         options.grpcPort(),
-        options.grpcMaxMessageSize()
+        options.grpcMaxRecvMessageSize()
       )
 
     implicit val time: Time[Task] = effects.time

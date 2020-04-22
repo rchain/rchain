@@ -43,8 +43,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--discovery-heartbeat-batch-size 111111",
         "--discovery-init-wait-loop-interval 111111seconds",
         "--protocol-port 111111",
-        "--protocol-grpc-max-receive-message-length 111111",
-        "--protocol-grpc-max-receive-stream-message-length 111111",
+        "--protocol-grpc-max-recv-message-size 111111",
+        "--protocol-grpc-max-recv-stream-message-size 111111",
         "--protocol-grpc-stream-chunk-size 111111",
         "--protocol-max-connections 111111",
         "--protocol-max-message-consumers 111111",
@@ -56,7 +56,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--api-port-grpc-external 111111",
         "--api-port-grpc-internal 111111",
         "--api-port-http 111111",
-        "--api-grpc-max-receive-message-length 111111",
+        "--api-grpc-max-recv-message-size 111111",
         "--api-max-blocks-limit 111111",
         "--api-enable-reporting",
         "--data-dir /var/lib/rnode",
@@ -137,8 +137,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         dynamicIp = true,
         noUpnp = true,
         port = 111111,
-        grpcMaxReceiveMessageLength = 111111,
-        grpcMaxReceiveStreamMessageLength = 111111,
+        grpcMaxRecvMessageSize = 111111,
+        grpcMaxRecvStreamMessageSize = 111111,
         maxMessageConsumers = 111111
       ),
       protocolClient = ProtocolClient(
@@ -151,7 +151,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           .get,
         batchMaxConnections = 111111,
         networkTimeout = 111111.seconds,
-        grpcMaxReceiveMessageLength = 111111,
+        grpcMaxRecvMessageSize = 111111,
         grpcStreamChunkSize = 111111
       ),
       peersDiscovery = PeersDiscovery(
@@ -166,7 +166,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         portGrpcExternal = 111111,
         portGrpcInternal = 111111,
         portHttp = 111111,
-        grpcMaxReceiveMessageLength = 111111,
+        grpcMaxRecvMessageSize = 111111,
         maxBlocksLimit = 111111,
         enableReporting = true
       ),

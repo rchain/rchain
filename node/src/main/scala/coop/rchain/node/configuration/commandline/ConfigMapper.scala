@@ -30,12 +30,12 @@ object ConfigMapper {
       add("protocol-server.use-random-ports", run.useRandomPorts)
       add("protocol-server.allow-private-addresses", run.allowPrivateAddresses)
       add(
-        "protocol-server.grpc-max-receive-message-length",
-        run.protocolGrpcMaxReceiveMessageLength
+        "protocol-server.grpc-max-recv-message-size",
+        run.protocolGrpcMaxRecvMessageSize
       )
       add(
-        "protocol-server.grpc-max-receive-stream-message-length",
-        run.protocolGrpcMaxReceiveStreamMessageLength
+        "protocol-server.grpc-max-recv-stream-message-size",
+        run.protocolGrpcMaxRecvStreamMessageSize
       )
       add("protocol-server.max-message-consumers", run.protocolMaxMessageConsumers)
 
@@ -49,8 +49,8 @@ object ConfigMapper {
       add("protocol-client.network-timeout", run.networkTimeout)
       add("protocol-client.batch-max-connections", run.protocolMaxConnections)
       add(
-        "protocol-client.grpc-max-receive-message-length",
-        run.protocolGrpcMaxReceiveMessageLength
+        "protocol-client.grpc-max-recv-message-size",
+        run.protocolGrpcMaxRecvMessageSize
       )
       add("protocol-client.grpc-stream-chunk-size", run.protocolGrpcStreamChunkSize)
 
@@ -94,7 +94,7 @@ object ConfigMapper {
 
       add("api-server.port-grpc-external", run.apiPortGrpcExternal)
       add("api-server.port-grpc-internal", run.apiPortGrpcInternal)
-      add("api-server.grpc-max-receive-message-length", run.apiGrpcMaxReceiveMessageLength)
+      add("api-server.grpc-max-recv-message-size", run.apiGrpcMaxRecvMessageSize)
       add("api-server.host", run.apiHost)
       add("api-server.port-http", run.apiPortHttp)
       add("api-server.enable-reporting", run.apiEnableReporting)
