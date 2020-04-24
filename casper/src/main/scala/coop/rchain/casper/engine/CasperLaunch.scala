@@ -57,7 +57,7 @@ object CasperLaunch {
 
     private def connectToExistingNetwork(approvedBlock: ApprovedBlock): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         genesis     = approvedBlock.candidate.block
         casper <- MultiParentCasper
                    .hashSetCasper[F](
@@ -86,7 +86,7 @@ object CasperLaunch {
                   conf.genesisBlockData.genesisDataDir
                 )
 
-        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         vaults <- VaultParser.parse(
                    conf.genesisBlockData.walletsFile
                      .map(Paths.get(_))
@@ -111,7 +111,7 @@ object CasperLaunch {
 
     private def initBootstrap(): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         abp <- ApproveBlockProtocol
                 .of[F](
                   conf.genesisBlockData.bondsFile,
@@ -144,7 +144,7 @@ object CasperLaunch {
 
     private def connectAndQueryApprovedBlock(): F[Unit] =
       for {
-        validatorId <- ValidatorIdentity.fromPrivateKey[F](conf)
+        validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         _ <- Engine.transitionToInitializing(
               conf.shardName,
               conf.finalizationRate,

@@ -5,7 +5,15 @@ import java.nio.file.Paths
 import scala.concurrent.duration._
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.node.configuration.{ApiServer, Metrics, NodeConf, PeersDiscovery, ProtocolClient, ProtocolServer, Storage}
+import coop.rchain.node.configuration.{
+  ApiServer,
+  Metrics,
+  NodeConf,
+  PeersDiscovery,
+  ProtocolClient,
+  ProtocolServer,
+  Storage
+}
 import com.typesafe.config.ConfigFactory
 import coop.rchain.comm.transport.TlsConf
 import org.scalatest.{FunSuite, Matchers}
