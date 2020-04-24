@@ -4,16 +4,8 @@ import java.nio.file.Paths
 
 import scala.concurrent.duration._
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
-import coop.rchain.comm.PeerNode
-import coop.rchain.node.configuration.{
-  ApiServer,
-  Metrics,
-  NodeConf,
-  PeersDiscovery,
-  ProtocolClient,
-  ProtocolServer,
-  Storage
-}
+import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.node.configuration.{ApiServer, Metrics, NodeConf, PeersDiscovery, ProtocolClient, ProtocolServer, Storage}
 import com.typesafe.config.ConfigFactory
 import coop.rchain.comm.transport.TlsConf
 import org.scalatest.{FunSuite, Matchers}
@@ -112,9 +104,13 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       )
 
     // Custom reader for PeerNode type
-    implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
-      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).right.get)
+    def commErrToThrow(commErr: CommError) =
+      new Exception(CommError.errorMessage(commErr))
+
+    implicit val peerNodeReader = ConfigReader.fromStringTry[PeerNode](
+      PeerNode.fromAddress(_).left.map(commErrToThrow).toTry
     )
+
     // Make Long values support size-in-bytes format, e.g. 16M
     implicit val myIntReader = ConfigReader.fromString[Long](
       ConvertHelpers.catchReadError(s => ConfigFactory.parseString(s"v = $s").getBytes("v"))

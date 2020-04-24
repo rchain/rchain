@@ -24,8 +24,9 @@ final case class NodeConf(
     storage: Storage,
     casper: CasperConf,
     metrics: Metrics,
-    // This field is dynamic and computer according to profile and is not used in client code
-    // But it is required in the model to enable strict configuration check for unknown keys
+    // This field is dynamic and computed according to profile and is not used in client code.
+    // But it is required in the model because it is used as a reference in HOCON configuration, and
+    // Pureconfig throws an error when finds unknown key.
     defaultDataDir: String
 )
 

@@ -6,17 +6,9 @@ import com.typesafe.config.ConfigFactory
 
 import scala.concurrent.duration._
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.transport.TlsConf
-import coop.rchain.node.configuration.{
-  ApiServer,
-  Metrics,
-  NodeConf,
-  PeersDiscovery,
-  ProtocolClient,
-  ProtocolServer,
-  Storage
-}
+import coop.rchain.node.configuration.{ApiServer, Metrics, NodeConf, PeersDiscovery, ProtocolClient, ProtocolServer, Storage}
 import org.scalatest.{FunSuite, Matchers}
 import pureconfig.{ConfigReader, ConfigSource, ConvertHelpers}
 import pureconfig.generic.ProductHint
@@ -34,9 +26,13 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
       )
 
     // Custom reader for PeerNode type is required
-    implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
-      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).getOrElse(null))
+    def commErrToThrow(commErr: CommError) =
+      new Exception(CommError.errorMessage(commErr))
+
+    implicit val peerNodeReader = ConfigReader.fromStringTry[PeerNode](
+      PeerNode.fromAddress(_).left.map(commErrToThrow).toTry
     )
+
     // Make Int values support size-in-bytes format, e.g. 16MB
     implicit val myIntReader = ConfigReader.fromString[Long](
       ConvertHelpers.catchReadError(s => ConfigFactory.parseString(s"v = $s").getBytes("v"))

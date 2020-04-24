@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import java.io.File
 import java.nio.file.Path
 
 import cats.implicits._
@@ -10,6 +11,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
+import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
 import coop.rchain.node.web.VersionInfo
@@ -74,7 +76,7 @@ object Main {
       console: ConsoleIO[Task]
   ): Unit = {
     // Create merged configuration from CLI options and config file
-    val (nodeConf, kamonConf) = Configuration.build(options)
+    val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
     // This system variable is used in Logger config file `node/src/main/resources/logback.xml`
     val _ = System.setProperty("rnode.data.dir", nodeConf.storage.dataDir.toString)
 
@@ -90,7 +92,7 @@ object Main {
           confWithPorts   <- checkPorts(nodeConf)
           confWithDecrypt <- loadPrivateKeyFromFile(confWithPorts)
           _               <- log.info(VersionInfo.get)
-          _               <- logConfiguration(confWithDecrypt, options)
+          _               <- logConfiguration(confWithDecrypt, profile, configFile, options)
           runtime         <- NodeRuntime(confWithDecrypt, kamonConf)
           _               <- runtime.main.run(NodeCallCtx.init)
         } yield ()
@@ -191,9 +193,8 @@ object Main {
     options.subcommand match {
       case Some(options.eval) =>
         Eval(options.eval.fileNames(), options.eval.printUnmatchedSendsOnly())
-      case Some(options.repl)   => Repl
+      case Some(options.repl) => Repl
       case Some(options.deploy) =>
-        //TODO: change the defaults before main net
         import options.deploy._
         Deploy(
           phloLimit(),
@@ -395,29 +396,24 @@ object Main {
     } yield kademliaPortConf
   }
 
-  private def logConfiguration(conf: NodeConf, options: commandline.Options): Task[Unit] = {
-    val profile = Configuration.profiles.getOrElse(
-      options.profile.getOrElse("default"),
-      Configuration.profiles.get("default").get
-    )
-    val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1)
-    val configPath = options.run.configFile
-      .getOrElse(
-        dataDir.resolve("rnode.conf")
-      )
-
+  private def logConfiguration(
+      conf: NodeConf,
+      profile: Profile,
+      configFile: Option[File],
+      options: commandline.Options
+  ): Task[Unit] =
     Task
       .sequence(
         Seq(
           log.info(s"Starting with profile ${profile.name}"),
-          log.info(s"Using configuration file: ${configPath}"),
-          if (!configPath.toFile.exists()) log.warn("Configuration file not found!")
-          else Task.unit,
+          if (configFile.isEmpty)
+            log.warn("No configuration file found, using defaults")
+          else
+            log.info(s"Using configuration file: ${configFile.get.getAbsolutePath}"),
           log.info(s"Running on network: ${conf.protocolServer.networkId}")
         )
       )
       .void
-  }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   private def consoleIO: ConsoleIO[Task] = {

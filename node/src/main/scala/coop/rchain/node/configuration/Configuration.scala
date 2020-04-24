@@ -1,10 +1,10 @@
 package coop.rchain.node.configuration
 
+import java.io.File
 import java.nio.file.{Path, Paths}
 
 import com.typesafe.config.{Config, ConfigFactory}
-
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration.commandline.ConfigMapper
 import pureconfig._
 import pureconfig.generic.ProductHint
@@ -21,16 +21,22 @@ object Configuration {
     * with CLI options having higher priority.
     * @param options CLI options
     * @return RNode configuration instance
+    * @return Profile used to create RNode configuration
+    * @return Config file used to create RNode configuration
     * @return Kamon configuration instance
     */
-  def build(options: commandline.Options): (NodeConf, Config) = {
+  def build(options: commandline.Options): (NodeConf, Profile, Option[File], Config) = {
     val profile = options.profile.toOption.flatMap(profiles.get).getOrElse(defaultProfile)
     val dataDir = options.run.dataDir.getOrElse(profile.dataDir._1)
-    val configFile = options.run.configFile
+    val configFilePath = options.run.configFile
       .getOrElse(
         dataDir.resolve("rnode.conf")
       )
-      .toFile
+    val configFile: Option[File] =
+      if (configFilePath.toFile.exists())
+        Some(configFilePath.toFile)
+      else
+        None
 
     /**
       * Target Configuration is a merge of 3 sources according to the following priority, highest to lowers
@@ -43,8 +49,8 @@ object Configuration {
       ConfigMapper.fromOptions(options)
     )
     val fileConfig =
-      if (configFile.exists())
-        ConfigSource.file(configFile)
+      if (configFile.nonEmpty)
+        ConfigSource.file(configFile.get)
       else
         ConfigSource.empty
     val defaultConfig = ConfigSource
@@ -58,9 +64,13 @@ object Configuration {
     // Throw an error if unknown keys found
     implicit val hint = ProductHint[NodeConf](allowUnknownKeys = false)
     // Custom reader for PeerNode type
-    implicit val PeerNodeReader = ConfigReader.fromString[PeerNode](
-      ConvertHelpers.catchReadError(s => PeerNode.fromAddress(s).right.get)
+    def commErrToThrow(commErr: CommError) =
+      new Exception(CommError.errorMessage(commErr))
+
+    implicit val peerNodeReader = ConfigReader.fromStringTry[PeerNode](
+      PeerNode.fromAddress(_).left.map(commErrToThrow).toTry
     )
+
     // Make Long values support size-in-bytes format, e.g. 16M
     implicit val myIntReader = ConfigReader.fromString[Long](
       ConvertHelpers.catchReadError(s => ConfigFactory.parseString(s"v = $s").getBytes("v"))
@@ -91,7 +101,7 @@ object Configuration {
         ConfigFactory.empty()
     val kamonConf = kamonDefaultConfig.withFallback(ConfigFactory.load("kamon.conf"))
 
-    (nodeConf, kamonConf)
+    (nodeConf, profile, configFile, kamonConf)
   }
 
   final case class Profile(name: String, dataDir: (Path, String))

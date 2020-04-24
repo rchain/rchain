@@ -103,6 +103,7 @@ object Options {
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
   import Converter._
   import Options.Flag
+  // This is max number of chars in line for help message
   val width = 120
 
   version(
@@ -322,16 +323,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = false,
       descr = "Map size (in bytes) for deploy storage"
     )
-
-    /*val casperLatestMessagesDataPath = opt[Path](
-      required = false,
-      descr = "Path to latest messages data file"
-    )
-
-    val casperLatestMessagesCrcPath = opt[Path](
-      required = false,
-      descr = "Path to latest messages crc file"
-    )*/
 
     val shardName = opt[String](
       descr = "Name of the shard this node is connected to."
