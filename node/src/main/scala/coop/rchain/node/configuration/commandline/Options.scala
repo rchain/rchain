@@ -104,6 +104,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   import Converter._
   import Options.Flag
   // This is max number of chars in line for help message
+  // Default width is 80 and it does not look good, lines are too short.
   val width = 120
 
   version(

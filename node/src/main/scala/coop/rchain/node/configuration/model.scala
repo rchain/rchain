@@ -24,9 +24,13 @@ final case class NodeConf(
     storage: Storage,
     casper: CasperConf,
     metrics: Metrics,
-    // This field is dynamic and computed according to profile and is not used in client code.
-    // But it is required in the model because it is used as a reference in HOCON configuration, and
-    // Pureconfig throws an error when finds unknown key.
+    // This field is dynamic and computed according to profile and is not used directly in client code.
+    // But it is required in the model because of how Pureconfig works and how config file is structured (there are
+    // references to this key in `defaults.conf`).
+    // This `default-data-dir` is initialized from profile provided through CLI and added to default config.
+    // So its in HOCON notation that should be loaded into `NodeConf` case class.
+    // As we need loader to throw an error when unknown HOCON key is met - this field should also
+    // be present in the model.
     defaultDataDir: String
 )
 
