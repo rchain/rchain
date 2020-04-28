@@ -1075,6 +1075,31 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
     result.toIterable should contain theSameElementsAs expectedResult
   }
 
+  "eval of bytesToHex" should "transform byte array to hex string (not the rholang term)" in {
+    val splitRand    = rand.splitByte(0)
+    val base16Repr   = "0123456789abcdef"
+    val testBytes    = ByteString.copyFrom(Base16.decode(base16Repr).get)
+    val proc: Par    = GByteArray(testBytes)
+    val toStringCall = EMethod("bytesToHex", proc, List[Par]())
+    def wrapWithSend(p: Par): Par =
+      Send(GString("result"), List[Par](p), persistent = false, BitSet())
+    val result = withTestSpace {
+      case TestFixture(space, reducer) =>
+        val env         = Env[Par]()
+        val task        = reducer.eval(wrapWithSend(toStringCall))(env, splitRand)
+        val inspectTask = task >> space.toMap
+        Await.result(inspectTask.runToFuture, 3.seconds)
+    }
+
+    val channel: Par = GString("result")
+    val expectedResult = mapData(
+      Map(
+        channel -> ((Seq(Expr(GString(base16Repr))), splitRand))
+      )
+    )
+    result.toIterable should contain theSameElementsAs expectedResult
+  }
+
   "eval of `toUtf8Bytes`" should "transform string to UTF-8 byte array (not the rholang term)" in {
     val splitRand       = rand.splitByte(0)
     val testString      = "testing testing"

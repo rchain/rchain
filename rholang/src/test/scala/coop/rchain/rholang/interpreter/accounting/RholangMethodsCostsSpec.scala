@@ -173,6 +173,32 @@ class RholangMethodsCostsSpec
     }
   }
 
+  "bytesToHex" when {
+    "called on byte array" should {
+      "charge proportionally to the length of the bytes" in {
+        val byteArrays = Table[Array[Byte]](
+          ("Bytes"),
+          Array.ofDim[Byte](1),
+          Array.ofDim[Byte](3),
+          Array.ofDim[Byte](7),
+          Array.ofDim[Byte](10)
+        )
+        val base     = Array.ofDim[Byte](1)
+        val baseCost = bytesToHexCost(base)
+        forAll(byteArrays) { bytes =>
+          val decodedBytes = GByteArray(ByteString.copyFrom(bytes))
+          val method       = methodCall("bytesToHex", decodedBytes, List.empty)
+          val factor       = bytes.length.toDouble / base.length
+          testProportional(
+            baseCost,
+            factor,
+            method
+          )
+        }
+      }
+    }
+  }
+
   "toUtf8Bytes" when {
     "called on String" should {
       "charge proportionally to the length of the String" in {

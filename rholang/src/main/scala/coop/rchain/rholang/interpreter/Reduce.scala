@@ -896,6 +896,35 @@ class DebruijnInterpreter[M[_], F[_]](
       }
   }
 
+  private[this] val bytesToHex: Method = new Method() {
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      if (args.nonEmpty)
+        MethodArgumentNumberMismatch("bytesToHex", 0, args.length).raiseError[M, Par]
+      else {
+        p.singleExpr() match {
+          case Some(Expr(GByteArray(bytes))) =>
+            for {
+              _ <- charge[M](bytesToHexCost(bytes.toByteArray()))
+              res <- {
+                Try(Base16.encode(bytes.toByteArray())).fold(
+                  th =>
+                    ReduceError(
+                      s"Error: exception was thrown when encoding input byte array to hexadecimal string: ${th.getMessage}"
+                    ).raiseError[M, Par],
+                  str => (Expr(GString(str)): Par).pure[M]
+                )
+              }
+            } yield res
+          case Some(Expr(other)) =>
+            MethodNotDefined("bytesToHex", other.typ).raiseError[M, Par]
+          case None =>
+            ReduceError("Error: Method can only be called on singular expressions.")
+              .raiseError[M, Par]
+        }
+      }
+  }
+
   private[this] val toUtf8Bytes: Method = new Method() {
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
@@ -1396,6 +1425,7 @@ class DebruijnInterpreter[M[_], F[_]](
       "nth"         -> nth,
       "toByteArray" -> toByteArray,
       "hexToBytes"  -> hexToBytes,
+      "bytesToHex"  -> bytesToHex,
       "toUtf8Bytes" -> toUtf8Bytes,
       "union"       -> union,
       "diff"        -> diff,
