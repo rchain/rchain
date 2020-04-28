@@ -89,10 +89,10 @@ def create_node(node, add_cmdline):
         '--deploy-timestamp', ctx.deploy_timestamp,
         '--bonds-file', '/tmp/bonds.txt',
         '--wallets-file', '/tmp/wallets.txt',
-        '--required-sigs', ctx.required_sigs,
+        '--required-signatures', ctx.required_sigs,
         '--no-upnp',
         '--host', node.fqdn,
-        '--port', PORT,
+        '--protocol-port', PORT,
     ]
     cmdline = [ str(arg) for arg in common_cmdline + add_cmdline ]
     c = dockercli.containers.run(ctx.args.image,
@@ -113,8 +113,8 @@ def create_node(node, add_cmdline):
 def create_bootstrap_node(ctx):
     return create_node(ctx.bootstrap, [
         '--standalone',
-        '--duration', ctx.approval_duration,
-        '--interval', ctx.approval_interval,
+        '--approve-duration', ctx.approval_duration,
+        '--approve-interval', ctx.approval_interval,
     ])
 
 def create_validator_node(node):

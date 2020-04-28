@@ -90,7 +90,7 @@ parser.add_argument(
 # Genesis block approval parameters
 # https://rchain.atlassian.net/wiki/spaces/CORE/pages/485556483/Initializing+the+Blockchain+--+Protocol+for+generating+the+Genesis+block
 parser.add_argument(
-        '--required-sigs',
+        '--required-signatures',
         type = check_in_range(min = 1),
         default = 8)
 parser.add_argument(

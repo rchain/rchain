@@ -1,22 +1,24 @@
 package coop.rchain.node
 
-import cats.effect.Concurrent
+import java.net.InetSocketAddress
 
+import cats.effect.Concurrent
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.node.model.repl._
 import coop.rchain.shared._
-
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
+import io.netty.channel.local.LocalAddress
 import monix.eval.Task
 import monix.execution.Scheduler
 
 package object api {
 
   def acquireInternalServer(
+      host: String,
       port: Int,
       grpcExecutor: Scheduler,
       replGrpcService: ReplGrpcMonix.Repl,
@@ -26,7 +28,7 @@ package object api {
   ): Task[Server[Task]] =
     GrpcServer[Task](
       NettyServerBuilder
-        .forPort(port)
+        .forAddress(new InetSocketAddress(host, port))
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(
@@ -45,6 +47,7 @@ package object api {
     )
 
   def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
+      host: String,
       port: Int,
       grpcExecutor: Scheduler,
       deployGrpcService: DeployServiceV1GrpcMonix.DeployService,
@@ -52,7 +55,7 @@ package object api {
   ): F[Server[F]] =
     GrpcServer[F](
       NettyServerBuilder
-        .forPort(port)
+        .forAddress(new InetSocketAddress(host, port))
         .executor(grpcExecutor)
         .maxMessageSize(maxMessageSize)
         .addService(

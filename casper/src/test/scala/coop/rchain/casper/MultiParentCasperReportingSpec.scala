@@ -17,7 +17,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
 
   val genesis = buildGenesis()
 
-  "ReportingCasper" should "behave the same way as MultiParentCasper" in effectTest {
+  "ReportingCasper" should "behave the same way as MultiParentCasper" ignore effectTest {
     val correctRholang =
       """ for(@a <- @"1"){ Nil } | @"1"!("x") """
     TestNode.standaloneEff(genesis).use { node =>

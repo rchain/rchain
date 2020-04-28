@@ -50,7 +50,7 @@ object BondsParser {
   def parse[F[_]: Sync: Log: RaiseIOError](
       maybeBondsPath: Option[String],
       defaultBondsPath: Path,
-      numValidators: Int,
+      autogenShardShize: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] =
     maybeBondsPath match {
@@ -65,15 +65,15 @@ object BondsParser {
           Log[F].info(s"Using default file $defaultBondsPath") >> parse(defaultBondsPath),
           Log[F].warn(
             s"Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
-          ) >> newValidators[F](numValidators, genesisPath)
+          ) >> newValidators[F](autogenShardShize, genesisPath)
         )
     }
 
   private def newValidators[F[_]: Monad: Sync: Log](
-      numValidators: Int,
+      autogenShardSize: Int,
       genesisPath: Path
   ): F[Map[PublicKey, Long]] = {
-    val keys         = Vector.fill(numValidators)(Secp256k1.newKeyPair)
+    val keys         = Vector.fill(autogenShardSize)(Secp256k1.newKeyPair)
     val (_, pubKeys) = keys.unzip
     val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
     val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile

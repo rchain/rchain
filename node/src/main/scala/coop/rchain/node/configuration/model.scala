@@ -2,66 +2,90 @@ package coop.rchain.node.configuration
 
 import java.nio.file.Path
 
-import scala.concurrent.duration.FiniteDuration
+import com.typesafe.config.Config
 
+import scala.concurrent.duration.FiniteDuration
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.casper.CasperConf
+import coop.rchain.comm.transport.TlsConf
+import coop.rchain.node.configuration.Configuration.Profile
+import pureconfig._
+import pureconfig.generic.auto._
 
-final case class Server(
+final case class NodeConf(
+    standalone: Boolean,
+    protocolServer: ProtocolServer,
+    protocolClient: ProtocolClient,
+    peersDiscovery: PeersDiscovery,
+    apiServer: ApiServer,
+    tls: TlsConf,
+    storage: Storage,
+    casper: CasperConf,
+    metrics: Metrics,
+    // This field is dynamic and computed according to profile and is not used directly in client code.
+    // But it is required in the model because of how Pureconfig works and how config file is structured (there are
+    // references to this key in `defaults.conf`).
+    // This `default-data-dir` is initialized from profile provided through CLI and added to default config.
+    // So its in HOCON notation that should be loaded into `NodeConf` case class.
+    // As we need loader to throw an error when unknown HOCON key is met - this field should also
+    // be present in the model.
+    defaultDataDir: String
+)
+
+final case class ProtocolServer(
     networkId: String,
     host: Option[String],
-    port: Int,
-    httpPort: Int,
-    kademliaPort: Int,
-    useRandomPorts: Boolean,
-    dynamicHostAddress: Boolean,
-    noUpnp: Boolean,
-    defaultTimeout: FiniteDuration,
-    bootstrap: PeerNode,
-    standalone: Boolean,
-    dataDir: Path,
-    mapSize: Long,
-    storeSize: Long,
-    dagStorageSize: Long,
-    maxNumOfConnections: Int,
     allowPrivateAddresses: Boolean,
-    maxMessageSize: Int,
-    maxStreamMessageSize: Long,
-    packetChunkSize: Int,
-    messageConsumers: Int,
-    faultToleranceThreshold: Float,
-    synchronyConstraintThreshold: Double,
-    heightConstraintThreshold: Long,
-    reporting: Boolean,
-    apiMaxBlocksLimit: Int
+    useRandomPorts: Boolean,
+    dynamicIp: Boolean,
+    noUpnp: Boolean,
+    port: Int,
+    grpcMaxRecvMessageSize: Long,
+    grpcMaxRecvStreamMessageSize: Long,
+    maxMessageConsumers: Int
 )
 
-final case class RoundRobinDispatcher(
-    maxPeerQueueSize: Int,
-    giveUpAfterSkipped: Int,
-    dropPeerAfterRetries: Int
+final case class ProtocolClient(
+    networkId: String,
+    bootstrap: PeerNode,
+    batchMaxConnections: Int,
+    networkTimeout: FiniteDuration,
+    grpcMaxRecvMessageSize: Long,
+    grpcStreamChunkSize: Long
 )
 
-final case class GrpcServer(
+final case class PeersDiscovery(
+    port: Int,
+    lookupInterval: FiniteDuration,
+    cleanupInterval: FiniteDuration,
+    heartbeatBatchSize: Int,
+    initWaitLoopInterval: FiniteDuration
+)
+
+final case class ApiServer(
     host: String,
-    portExternal: Int,
-    portInternal: Int,
-    maxMessageSize: Int
+    portGrpcExternal: Int,
+    portGrpcInternal: Int,
+    grpcMaxRecvMessageSize: Long,
+    portHttp: Int,
+    maxBlocksLimit: Int,
+    enableReporting: Boolean
 )
 
-final case class Tls(
-    certificate: Path,
-    key: Path,
-    customCertificateLocation: Boolean,
-    customKeyLocation: Boolean,
-    secureRandomNonBlocking: Boolean
+final case class Storage(
+    dataDir: Path,
+    lmdbMapSizeRspace: Long,
+    lmdbMapSizeBlockdagstore: Long,
+    lmdbMapSizeBlockstore: Long,
+    lmdbMapSizeDeploystore: Long
 )
 
-final case class Kamon(
+final case class Metrics(
     prometheus: Boolean,
-    influxDb: Boolean,
-    influxDbUdp: Boolean,
+    influxdb: Boolean,
+    influxdbUdp: Boolean,
     zipkin: Boolean,
     sigar: Boolean
 )

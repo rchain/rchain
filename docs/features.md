@@ -105,7 +105,7 @@
 ##### test: test/test_genesis_ceremony.py::test_successful_genesis_ceremony 
 ##### steps:
 
-* `ceremonyMaster` is instatantied with flags `--required-sigs 2 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
+* `ceremonyMaster` is instatantied with flags `--required-signatures 2 --approve-duration 5min --approve-interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
 * `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `readOnlyA`(read-only) joins p2p
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
@@ -121,7 +121,7 @@
 #### A NOT successful genesis ceremony (not enough sigs)
 ##### steps:
 
-* `ceremonyMaster` is instatantied with flags `--required-sigs 3 --duration 5min --interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
+* `ceremonyMaster` is instatantied with flags `--required-signatures 3 --approve-duration 5min --approve-interval 10sec --bonds-file <holds two nodes validatorA and validatorB`.
 * `validatorA` and `validatorB` joins p2p, both pointing to `ceremonyMaster` as bootstrap
 * `ceremonyMaster` sends `UnapprovedBlock` to `validatorA` and `validatorB`
 * `validatorA` and `validatorB` receives `UnapprovedBlock`

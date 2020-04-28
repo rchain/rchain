@@ -34,14 +34,14 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     """
     bootstrap_cli_options = {
         '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
-        '--duration':           '5min',
-        '--interval':           '10sec',
+        '--required-signatures':      '2',
+        '--approve-duration':           '5min',
+        '--approve-interval':           '10sec',
     }
     peers_cli_flags = set(['--genesis-validator'])
     peers_cli_options = {
         '--deploy-timestamp':   '1',
-        '--required-sigs':      '2',
+        '--required-signatures':      '2',
     }
     peers_keypairs = [
         VALIDATOR_A_KEYPAIR,

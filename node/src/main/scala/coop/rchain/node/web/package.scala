@@ -18,6 +18,7 @@ import org.http4s.server.middleware.CORS
 package object web {
   def aquireHttpServer(
       reporting: Boolean,
+      host: String = "0.0.0.0",
       httpPort: Int,
       prometheusReporter: NewPrometheusReporter,
       reportingCasper: ReportingCasper[TaskEnv],
@@ -54,7 +55,7 @@ package object web {
         Map.empty
       allRoutes = baseRoutes ++ extraRoutes
       httpServerFiber <- BlazeServerBuilder[Task]
-                          .bindHttp(httpPort, "0.0.0.0")
+                          .bindHttp(httpPort, host)
                           .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
                           .resource
                           .use(_ => Task.never[Unit])

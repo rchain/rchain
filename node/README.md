@@ -158,10 +158,10 @@ This command will run the node in interpreter mode and will make a directory on 
 
 ### 3.1. Host and Port
 
-The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable TCP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--port` options:
+The system attempts to find a gateway device with Universal Plug-and-Play enabled. If that fails, the system tries to guess a good IP address and a reasonable TCP port that other nodes can use to communicate with this one. If it does not guess a usable pair, they may be specified on the command line using the `--host` and `--protocol-port` options:
 
 ```
---host 1.2.3.4 --port 40400
+--host 1.2.3.4 --protocol-port 40400
 ```
 
 By default it uses TCP port 40400. This is also how more than one node may be run on a single machine: just pick different

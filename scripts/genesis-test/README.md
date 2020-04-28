@@ -11,7 +11,7 @@ Scripts to setup and test genesis in Docker containers.
 
 1. Generate a random *setup*:
     ```
-    ./generate-setup --validator-count 2 --required-sigs 2 --wallet-count 5 > setup-small.yaml
+    ./generate-setup --validator-count 2 --required-signatures 2 --wallet-count 5 > setup-small.yaml
     ```
    Pass `--help` switch to learn about more options. The setup generated in last step may look like:
     ```

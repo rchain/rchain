@@ -11,6 +11,7 @@ import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.mtl._
 import cats.tagless.implicits._
+import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
@@ -39,8 +40,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api._
-import coop.rchain.node.configuration.Configuration
-import coop.rchain.node.diagnostics._
+import coop.rchain.node.configuration.{Configuration, NodeConf}
+import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
@@ -59,7 +60,8 @@ import org.lmdbjava.Env
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class NodeRuntime private[node] (
-    conf: Configuration,
+    nodeConf: NodeConf,
+    kamonConf: Config,
     id: NodeIdentifier,
     scheduler: Scheduler
 )(
@@ -75,14 +77,14 @@ class NodeRuntime private[node] (
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   /** Configuration */
-  private val blockstorePath           = conf.server.dataDir.resolve("blockstore")
-  private val dagStoragePath           = conf.server.dataDir.resolve("dagstorage")
-  private val deployStoragePath        = conf.server.dataDir.resolve("deploystorage")
-  private val lastFinalizedStoragePath = conf.server.dataDir.resolve("last-finalized-block")
-  private val storagePath              = conf.server.dataDir.resolve("rspace")
-  private val casperStoragePath        = storagePath.resolve("casper")
-  private val storageSize              = conf.server.mapSize
-  private val defaultTimeout           = conf.server.defaultTimeout // TODO remove
+  private val dataDir                  = nodeConf.storage.dataDir
+  private val blockstorePath           = dataDir.resolve("blockstore")
+  private val blockdagStoragePath      = dataDir.resolve("dagstorage")
+  private val deployStoragePath        = dataDir.resolve("deploystorage")
+  private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
+  private val rspacePath               = dataDir.resolve("rspace")
+  private val casperStoragePath        = rspacePath.resolve("casper")
+  private val storageSize              = nodeConf.storage.lmdbMapSizeRspace
 
   implicit class RichTask[A](t: Task[A]) {
     def toReaderT: TaskEnv[A] =
@@ -100,10 +102,10 @@ class NodeRuntime private[node] (
     // 1. fetch local peer node
     local <- WhoAmI
               .fetchLocalPeerNode[Task](
-                conf.server.host,
-                conf.server.port,
-                conf.server.kademliaPort,
-                conf.server.noUpnp,
+                nodeConf.protocolServer.host,
+                nodeConf.protocolServer.port,
+                nodeConf.peersDiscovery.port,
+                nodeConf.protocolServer.noUpnp,
                 id
               )
               .toReaderT
@@ -111,7 +113,7 @@ class NodeRuntime private[node] (
     // 3. create instances of typeclasses
     metrics       = diagnostics.effects.metrics[Task]
     time          = effects.time[Task]
-    commTmpFolder = conf.server.dataDir.resolve("tmp").resolve("comm")
+    commTmpFolder = nodeConf.storage.dataDir.resolve("tmp").resolve("comm")
     _ <- commTmpFolder.toFile
           .exists()
           .fold(
@@ -121,16 +123,17 @@ class NodeRuntime private[node] (
           .toReaderT
     transport <- effects
                   .transportClient(
-                    conf.server.networkId,
-                    conf.tls.certificate,
-                    conf.tls.key,
-                    conf.server.maxMessageSize,
-                    conf.server.packetChunkSize,
+                    //TODO refactor to accept ProtocolClient, tls and storage configs
+                    nodeConf.protocolClient.networkId,
+                    nodeConf.tls.certificatePath,
+                    nodeConf.tls.keyPath,
+                    nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
+                    nodeConf.protocolClient.grpcStreamChunkSize.toInt,
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toReaderT
     rpConnections   <- effects.rpConnections[Task].toReaderT
-    initPeer        = if (conf.server.standalone) None else Some(conf.server.bootstrap)
+    initPeer        = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
     peerNode        = rpConf(local, initPeer)
     rpConfState     = effects.rpConfState[Task](peerNode)
     peerNodeAsk     = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
@@ -147,11 +150,10 @@ class NodeRuntime private[node] (
       requestedBlocks
     )
 
-    defaultTimeout = conf.server.defaultTimeout
     kademliaRPC = effects.kademliaRPC(
-      conf.server.networkId,
-      defaultTimeout,
-      conf.server.allowPrivateAddresses
+      nodeConf.protocolServer.networkId,
+      nodeConf.protocolClient.networkTimeout,
+      nodeConf.protocolServer.allowPrivateAddresses
     )(
       grpcScheduler,
       peerNodeAsk,
@@ -162,36 +164,36 @@ class NodeRuntime private[node] (
     nodeDiscovery = effects.nodeDiscovery(id)(Monad[Task], kademliaStore, kademliaRPC)
 
     /**
-      * We need to come up with a consistent way with folder creation. Some layers create folder on their own (if not available),
-      * others (like blockstore) relay on the structure being created for them (and will fail if it does not exist). For now
-      * this small fix should suffice, but we should unify this.
+      * We need to come up with a consistent way with folder creation. Some layers create folder on their own
+      * (if not available), others (like blockstore) relay on the structure being created for them (and will fail
+      * if it does not exist). For now this small fix should suffice, but we should unify this.
       */
-    _             <- mkDirs(conf.server.dataDir).toReaderT
+    _             <- mkDirs(dataDir).toReaderT
     _             <- mkDirs(blockstorePath).toReaderT
-    _             <- mkDirs(dagStoragePath).toReaderT
-    blockstoreEnv = Context.env(blockstorePath, 8L * 1024L * 1024L * 1024L)
+    _             <- mkDirs(blockdagStoragePath).toReaderT
+    blockstoreEnv = Context.env(blockstorePath, nodeConf.storage.lmdbMapSizeBlockstore)
     dagConfig = BlockDagFileStorage.Config(
-      latestMessagesLogPath = dagStoragePath.resolve("latestMessagesLogPath"),
-      latestMessagesCrcPath = dagStoragePath.resolve("latestMessagesCrcPath"),
-      blockMetadataLogPath = dagStoragePath.resolve("blockMetadataLogPath"),
-      blockMetadataCrcPath = dagStoragePath.resolve("blockMetadataCrcPath"),
-      equivocationsTrackerLogPath = dagStoragePath.resolve("equivocationsTrackerLogPath"),
-      equivocationsTrackerCrcPath = dagStoragePath.resolve("equivocationsTrackerCrcPath"),
-      invalidBlocksLogPath = dagStoragePath.resolve("invalidBlocksLogPath"),
-      invalidBlocksCrcPath = dagStoragePath.resolve("invalidBlocksCrcPath"),
-      blockHashesByDeployLogPath = dagStoragePath.resolve("blockHashesByDeployLogPath"),
-      blockHashesByDeployCrcPath = dagStoragePath.resolve("blockHashesByDeployCrcPath"),
-      checkpointsDirPath = dagStoragePath.resolve("checkpointsDirPath"),
-      blockNumberIndexPath = dagStoragePath.resolve("blockNumberIndexPath"),
-      mapSize = 8L * 1024L * 1024L * 1024L,
+      latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
+      latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
+      blockMetadataLogPath = blockdagStoragePath.resolve("blockMetadataLogPath"),
+      blockMetadataCrcPath = blockdagStoragePath.resolve("blockMetadataCrcPath"),
+      equivocationsTrackerLogPath = blockdagStoragePath.resolve("equivocationsTrackerLogPath"),
+      equivocationsTrackerCrcPath = blockdagStoragePath.resolve("equivocationsTrackerCrcPath"),
+      invalidBlocksLogPath = blockdagStoragePath.resolve("invalidBlocksLogPath"),
+      invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
+      blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
+      blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
+      checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
+      blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
+      mapSize = nodeConf.storage.lmdbMapSizeBlockdagstore,
       latestMessagesLogMaxSizeFactor = 10
     )
     deployStorageConfig = LMDBDeployStorage.Config(
       storagePath = deployStoragePath,
-      mapSize = 1024L * 1024L * 1024L
+      mapSize = nodeConf.storage.lmdbMapSizeDeploystore
     )
     casperConfig = RuntimeConf(casperStoragePath, storageSize)
-    cliConfig    = RuntimeConf(storagePath, 800L * 1024L * 1024L) // 800MB for cli
+    cliConfig    = RuntimeConf(rspacePath, 800L * 1024L * 1024L) // 800MB for cli
 
     rpConfAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, RPConf](rpConfAsk)
     rpConfStateEnv = effects.readerTMonadState[Task, NodeCallCtx, RPConf](
@@ -220,7 +222,7 @@ class NodeRuntime private[node] (
                rpConfStateEnv,
                commUtilEnv,
                requestedBlocksEnv,
-               conf,
+               nodeConf,
                dagConfig,
                blockstoreEnv,
                casperConfig,
@@ -294,18 +296,14 @@ class NodeRuntime private[node] (
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
-  private val rpClearConnConf = ClearConnectionsConf(
-    numOfConnectionsPinged = 10
-  ) // TODO read from conf
-
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(
       local,
-      conf.server.networkId,
+      nodeConf.protocolClient.networkId,
       bootstrapNode,
-      defaultTimeout,
-      conf.server.maxNumOfConnections,
-      rpClearConnConf
+      nodeConf.protocolClient.networkTimeout,
+      nodeConf.protocolClient.batchMaxConnections,
+      ClearConnectionsConf(nodeConf.peersDiscovery.heartbeatBatchSize)
     )
 
   // TODO this should use existing algebra
@@ -344,17 +342,20 @@ class NodeRuntime private[node] (
   ): TaskEnv[Unit] = {
 
     val info: TaskEnv[Unit] =
-      if (conf.server.standalone) Log[TaskEnv].info(s"Starting stand-alone node.")
-      else Log[TaskEnv].info(s"Starting node that will bootstrap from ${conf.server.bootstrap}")
+      if (nodeConf.standalone) Log[TaskEnv].info(s"Starting stand-alone node.")
+      else
+        Log[TaskEnv].info(
+          s"Starting node that will bootstrap from ${nodeConf.protocolClient.bootstrap}"
+        )
 
     val dynamicIpCheck: TaskEnv[Unit] =
-      if (conf.server.dynamicHostAddress)
+      if (nodeConf.protocolServer.dynamicIp)
         for {
           local <- peerNodeAsk.ask
           newLocal <- WhoAmI
                        .checkLocalPeerNode[TaskEnv](
-                         conf.server.port,
-                         conf.server.kademliaPort,
+                         nodeConf.protocolServer.port,
+                         nodeConf.peersDiscovery.port,
                          local
                        )
           _ <- newLocal.fold(Task.unit.toReaderT) { pn =>
@@ -404,18 +405,18 @@ class NodeRuntime private[node] (
       _ <- servers.externalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
-            s"External API server started at $host:${servers.externalApiServer.port}"
+            s"External API server started at ${nodeConf.apiServer.host}:${servers.externalApiServer.port}"
           )
       _ <- servers.internalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
-            s"Internal API server started at $host:${servers.internalApiServer.port}"
+            s"Internal API server started at ${nodeConf.apiServer.host}:${servers.internalApiServer.port}"
           )
       _ <- servers.kademliaRPCServer.start.toReaderT
 
       // HTTP server is started immediately on `acquireServers`
       _ <- Log[TaskEnv].info(
-            s"HTTP API server started at $host:${conf.server.httpPort}"
+            s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
           )
 
       _ <- Log[TaskEnv].info(
@@ -443,7 +444,7 @@ class NodeRuntime private[node] (
             .executeOn(loopScheduler)
             .start
             .toReaderT
-      _ <- if (conf.server.standalone) ().pure[TaskEnv]
+      _ <- if (nodeConf.standalone) ().pure[TaskEnv]
           else Log[TaskEnv].info(s"Waiting for first connection.") >> waitForFirstConnection
       _ <- Concurrent[TaskEnv].start(engineInit)
       _ <- Task
@@ -535,8 +536,8 @@ class NodeRuntime private[node] (
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
-                              conf.server.networkId,
-                              conf.server.kademliaPort,
+                              nodeConf.protocolServer.networkId,
+                              nodeConf.peersDiscovery.port,
                               KademliaHandleRPC.handlePing[Task],
                               KademliaHandleRPC.handleLookup[Task]
                             )(grpcScheduler)
@@ -544,50 +545,57 @@ class NodeRuntime private[node] (
       transportServer <- Task
                           .delay(
                             GrpcTransportServer.acquireServer(
-                              conf.server.networkId,
-                              conf.server.port,
-                              conf.tls.certificate,
-                              conf.tls.key,
-                              conf.server.maxMessageSize,
-                              conf.server.maxStreamMessageSize,
-                              conf.server.dataDir.resolve("tmp").resolve("comm"),
-                              conf.server.messageConsumers
+                              //conf.protocolServer
+                              //conf.tls
+                              //conf.storage
+                              nodeConf.protocolServer.networkId,
+                              nodeConf.protocolServer.port,
+                              nodeConf.tls.certificatePath,
+                              nodeConf.tls.keyPath,
+                              nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
+                              nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
+                              nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
+                              nodeConf.protocolServer.maxMessageConsumers
                             )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
       externalApiServer <- api
                             .acquireExternalServer[Task](
-                              conf.grpcServer.portExternal,
+                              //conf.apiServer
+                              nodeConf.apiServer.host,
+                              nodeConf.apiServer.portGrpcExternal,
                               grpcScheduler,
                               apiServers.deploy,
-                              conf.grpcServer.maxMessageSize
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
                             )
       internalApiServer <- api
                             .acquireInternalServer(
-                              conf.grpcServer.portInternal,
+                              nodeConf.apiServer.host,
+                              nodeConf.apiServer.portGrpcInternal,
                               grpcScheduler,
                               apiServers.repl,
                               apiServers.deploy,
                               apiServers.propose,
-                              conf.grpcServer.maxMessageSize
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
                             )
 
       prometheusReporter = new NewPrometheusReporter()
       httpServerFiber = aquireHttpServer(
-        conf.server.reporting,
-        conf.server.httpPort,
+        nodeConf.apiServer.enableReporting,
+        nodeConf.apiServer.host,
+        nodeConf.apiServer.portHttp,
         prometheusReporter,
         reportingCasper,
         webApi
       )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
-            Kamon.reconfigure(conf.underlying.withFallback(Kamon.config()))
-            if (conf.kamon.influxDb) Kamon.addReporter(new BatchInfluxDBReporter())
-            if (conf.kamon.influxDbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
-            if (conf.kamon.prometheus) Kamon.addReporter(prometheusReporter)
-            if (conf.kamon.zipkin) Kamon.addReporter(new ZipkinReporter())
-            if (conf.kamon.sigar) SystemMetrics.startCollecting()
+            Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
+            if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
+            if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
+            if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
+            if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
+            if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
           }
     } yield Servers(
       kademliaRPCServer,
@@ -622,11 +630,12 @@ object NodeRuntime {
   )
 
   def apply(
-      conf: Configuration
+      nodeConf: NodeConf,
+      kamonConf: Config
   )(implicit scheduler: Scheduler, log: Log[Task], eventLog: EventLog[Task]): Task[NodeRuntime] =
     for {
-      id      <- NodeEnvironment.create(conf)
-      runtime <- Task.delay(new NodeRuntime(conf, id, scheduler))
+      id      <- NodeEnvironment.create(nodeConf)
+      runtime <- Task.delay(new NodeRuntime(nodeConf, kamonConf, id, scheduler))
     } yield runtime
 
   trait Cleanup[F[_]] {
@@ -656,7 +665,7 @@ object NodeRuntime {
       rpConfState: MonadState[F, RPConf],
       commUtil: CommUtil[F],
       requestedBlocks: Running.RequestedBlocks[F],
-      conf: Configuration,
+      conf: NodeConf,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer],
       casperConf: RuntimeConf,
@@ -692,8 +701,9 @@ object NodeRuntime {
                        Metrics[F]
                      )
                      .map(_.right.get) // TODO handle errors
-      span = if (conf.kamon.zipkin)
-        diagnostics.effects.span(conf.server.networkId, conf.server.host.getOrElse("-"))
+      span = if (conf.metrics.zipkin)
+        diagnostics.effects
+          .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
       blockDagStorage                       <- BlockDagFileStorage.create[F](dagConfig)
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
@@ -704,7 +714,7 @@ object NodeRuntime {
         SafetyOracle.cliqueOracle[F]
       }
       lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
-        conf.server.faultToleranceThreshold
+        conf.casper.faultToleranceThreshold
       )(
         Sync[F],
         Log[F],
@@ -715,12 +725,12 @@ object NodeRuntime {
         deployStorage
       )
       synchronyConstraintChecker = SynchronyConstraintChecker[F](
-        conf.server.synchronyConstraintThreshold
+        conf.casper.synchronyConstraintThreshold
       )(Sync[F], blockStore, Log[F])
       lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[F](
-        conf.server.heightConstraintThreshold
+        conf.casper.heightConstraintThreshold
       )(Sync[F], lastFinalizedStorage, blockStore, Log[F])
-      estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepthOpt)(
+      estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)(
         Sync[F],
         Log[F],
         Metrics[F],
@@ -743,7 +753,7 @@ object NodeRuntime {
           sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
           (space, replay, hr) = sarAndHR
           runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
-          reporter = if (conf.server.reporting)
+          reporter = if (conf.apiServer.enableReporting)
             ReportingCasper.rhoReporter(hr)
           else
             ReportingCasper.noop
@@ -799,7 +809,12 @@ object NodeRuntime {
       }*/
       blockApiLock <- Semaphore[F](1)
       apiServers = NodeRuntime
-        .acquireAPIServers[F](evalRuntime, blockApiLock, scheduler, conf.server.apiMaxBlocksLimit)(
+        .acquireAPIServers[F](
+          evalRuntime,
+          blockApiLock,
+          scheduler,
+          conf.apiServer.maxBlocksLimit
+        )(
           blockStore,
           oracle,
           Concurrent[F],
@@ -824,7 +839,7 @@ object NodeRuntime {
               Time[F],
               Metrics[F]
             )
-        _ <- Time[F].sleep(conf.casper.casperLoopInterval.seconds)
+        _ <- Time[F].sleep(conf.casper.casperLoopInterval)
       } yield ()
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
@@ -844,7 +859,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl[F](conf.server.apiMaxBlocksLimit)
+        new WebApiImpl[F](conf.apiServer.maxBlocksLimit)
       }
     } yield (
       blockStore,

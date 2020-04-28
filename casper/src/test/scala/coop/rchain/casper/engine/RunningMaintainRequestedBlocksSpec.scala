@@ -20,9 +20,9 @@ import org.scalatest._
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
-  val hash             = ByteString.copyFrom("hash", "UTF-8")
-  implicit val metrics = new Metrics.MetricsNOP[Coeval]
-  val timeout: Int     = 240
+  val hash                    = ByteString.copyFrom("hash", "UTF-8")
+  implicit val metrics        = new Metrics.MetricsNOP[Coeval]
+  val timeout: FiniteDuration = 240.seconds
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -171,7 +171,7 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 
-  private def timedOut: Long    = time.clock - (2 * timeout.seconds.toMillis)
+  private def timedOut: Long    = time.clock - (2 * timeout.toMillis)
   private def notTimedOut: Long = time.clock - 1
 
 }

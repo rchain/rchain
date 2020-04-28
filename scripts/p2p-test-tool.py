@@ -28,7 +28,7 @@ parser.add_argument("-b", "--boot",
 parser.add_argument("--bootstrap-command",
                     dest='bootstrap_command',
                     type=str,
-                    default="run --port 40400 --standalone",
+                    default="run --protocol-port 40400 --standalone",
                     help="bootstrap container run command")
 parser.add_argument("-c", "--cpuset-cpus",
                     dest='cpuset_cpus',
