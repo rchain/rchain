@@ -60,7 +60,7 @@ import coop.rchain.rholang.interpreter.{
   RhoType,
   Runtime
 }
-import coop.rchain.rspace.ReportingRspace.{ReportingEvent}
+import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{
   Blake2b256Hash,
@@ -74,7 +74,11 @@ import monix.execution.atomic.AtomicAny
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
+
 import scala.concurrent.ExecutionContext
+import coop.rchain.metrics.MetricsSemaphore
+
+import scala.collection.concurrent.TrieMap
 
 sealed trait ReportError
 final case class ReportBlockNotFound(hash: BlockHash)    extends ReportError
@@ -105,6 +109,9 @@ object ReportingCasper {
       val codecK                                                     = serializeTaggedContinuation.toCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
       val store                                                      = ReportMemStore.store[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+      implicit val source                                            = Metrics.Source(CasperMetricsSource, "report-replay")
+
+      val blockLockMap = TrieMap[BlockHash, Tuple2[MetricsSemaphore[F], Boolean]]()
 
       private def replayGetReport(
           block: BlockMessage
@@ -156,7 +163,7 @@ object ReportingCasper {
                    }
         } yield result
 
-      override def trace(
+      private def traceBlock(
           hash: BlockHash
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
@@ -194,6 +201,24 @@ object ReportingCasper {
                                        } yield cached.asRight[ReportError]
                                    }
                        } yield outcome
+                   }
+        } yield result
+
+      override def trace(
+          hash: BlockHash
+      ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
+        for {
+          semaphore    <- MetricsSemaphore.single
+          lockWithDone = blockLockMap.getOrElseUpdate(hash, Tuple2(semaphore, false))
+          result <- if (lockWithDone._2) {
+                     traceBlock(hash)
+                   } else {
+                     lockWithDone._1.withPermit[Either[ReportError, List[
+                       (ProcessedDeploy, Seq[Seq[ReportingEvent]])
+                     ]]](for {
+                       re <- traceBlock(hash)
+                       _  = blockLockMap.update(hash, Tuple2(lockWithDone._1, true))
+                     } yield re)
                    }
         } yield result
 
