@@ -26,8 +26,9 @@ object KeyUtil {
       pk: PublicKey,
       sigAlgorithm: SignaturesAlg,
       password: String,
-      privateKeyPath: Path,
-      publicKeyPath: Path
+      privateKeyPemPath: Path,
+      publicKeyPemPath: Path,
+      publicKeyHexPath: Path
   ): Task[Unit] = {
     // Equivalent of using
     // 1. `openssl ec -in key.pem -out privateKey.pem -aes256`
@@ -63,8 +64,9 @@ object KeyUtil {
       publicPemGenerator      = new JcaMiscPEMGenerator(publicKey)
       priPemObj               = privatePemGenerator.generate()
       pubPemObj               = publicPemGenerator.generate()
-      _                       <- writePem(privateKeyPath, priPemObj)
-      _                       <- writePem(publicKeyPath, pubPemObj)
+      _                       <- writePem(privateKeyPemPath, priPemObj)
+      _                       <- writePem(publicKeyPemPath, pubPemObj)
+      _                       <- writeKey(publicKeyHexPath, Base16.encode(pk.bytes) + "\n")
     } yield ()
   }
   private def writePem(path: Path, pemObject: PemObject) =
@@ -74,5 +76,13 @@ object KeyUtil {
       )(writer => Task.delay(writer.close()))
       .use { writer =>
         Task.delay(writer.writeObject(pemObject))
+      }
+  private def writeKey(path: Path, key: String) =
+    Resource
+      .make(
+        Task.delay(new FileWriter(path.toFile))
+      )(writer => Task.delay(writer.close()))
+      .use { writer =>
+        Task.delay(writer.write(key))
       }
 }
