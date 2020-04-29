@@ -132,8 +132,7 @@ object CasperLaunch {
         // TODO track fiber
         _ <- Concurrent[F].start(
               GenesisCeremonyMaster
-                .approveBlockInterval[F](
-                  conf.genesisCeremony.approveInterval,
+                .waitingForApprovedBlockLoop[F](
                   conf.shardName,
                   conf.finalizationRate,
                   validatorId

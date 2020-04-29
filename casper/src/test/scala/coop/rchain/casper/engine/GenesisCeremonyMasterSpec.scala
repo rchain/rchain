@@ -48,8 +48,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         _  <- EngineCell[Task].set(new GenesisCeremonyMaster[Task](abp))
         c1 = abp.run().startAndForget.runToFuture
         c2 = GenesisCeremonyMaster
-          .approveBlockInterval[Task](
-            interval,
+          .waitingForApprovedBlockLoop[Task](
             shardId,
             finalizationRate,
             Some(validatorId)
@@ -74,7 +73,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         lastApprovedBlock <- LastApprovedBlock[Task].get
         _                 = assert(lastApprovedBlock.isDefined)
         _                 <- EngineCell[Task].read >>= (_.handle(local, blockApproval))
-        head              = transportLayer.requests(1)
+        head              = transportLayer.requests(0)
         proto             = ApprovedBlockProto.parseFrom(head.msg.message.packet.get.content.toByteArray)
         _ = assert(
           ApprovedBlock

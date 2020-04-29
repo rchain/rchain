@@ -187,9 +187,17 @@ object ApproveBlockProtocol {
       trustedValidators.contains(a.sig.publicKey)
 
     def run(): F[Unit] =
-      Log[F].info("Start execution of ApprovedBlockProtocol") >>
-        internalRun() >>
-        Log[F].info("Finished execution of ApprovedBlockProtocol")
+      Log[F].info(
+        s"Starting execution of ApprovedBlockProtocol. " +
+          s"Waiting for $requiredSigs approvals from genesis validators."
+      ) >> {
+        if (requiredSigs > 0)
+          internalRun()
+        else
+          Log[F].info("Self-approving genesis block.") >>
+            completeGenesisCeremoy(Set.empty[Signature]) >>
+            Log[F].info("Finished execution of ApprovedBlockProtocol")
+      }
 
     private def internalRun(): F[Unit] =
       for {
@@ -211,10 +219,7 @@ object ApproveBlockProtocol {
 
     private def completeIf(time: Long, signatures: Set[Signature]): F[Unit] =
       if ((time >= start + duration.toMillis && signatures.size >= requiredSigs) || requiredSigs == 0) {
-        for {
-          _ <- LastApprovedBlock[F].set(ApprovedBlock(candidate, signatures.toList))
-          _ <- sendApprovedBlock
-        } yield ()
+        completeGenesisCeremoy(signatures)
       } else
         Log[F].info(
           s"Failed to meet approval conditions. " +
@@ -222,6 +227,12 @@ object ApproveBlockProtocol {
             s"Duration ${time - start} ms of ${duration.toMillis} ms minimum. " +
             s"Continue broadcasting UnapprovedBlock..."
         ) >> internalRun()
+
+    private def completeGenesisCeremoy(signatures: Set[Signature]): F[Unit] =
+      for {
+        _ <- LastApprovedBlock[F].set(ApprovedBlock(candidate, signatures.toList))
+        _ <- sendApprovedBlock
+      } yield ()
 
     private def sendApprovedBlock: F[Unit] =
       for {

@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration._
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.Applicative
@@ -39,18 +39,18 @@ class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RP
 
 object GenesisCeremonyMaster {
   import Engine._
-  def approveBlockInterval[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
-      interval: FiniteDuration,
+  def waitingForApprovedBlockLoop[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity]
   ): F[Unit] =
     for {
-      _                  <- Time[F].sleep(interval)
+      // This loop sleep can be short as it does not do anything except checking if there is last approved block available
+      _                  <- Time[F].sleep(2.seconds)
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 approveBlockInterval[F](interval, shardId, finalizationRate, validatorId)
+                 waitingForApprovedBlockLoop[F](shardId, finalizationRate, validatorId)
                case Some(approvedBlock) =>
                  val genesis = approvedBlock.candidate.block
                  for {
