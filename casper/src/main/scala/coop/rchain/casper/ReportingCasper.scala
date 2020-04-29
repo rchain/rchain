@@ -102,7 +102,7 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: Sync: ContextShift: Monad: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
+  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       historyRepository: RhoHistoryRepository[F]
   )(implicit scheduler: ExecutionContext) =
     new ReportingCasper[F] {
@@ -149,7 +149,7 @@ object ReportingCasper {
                      case Left(replayError) =>
                        Log[F].info(
                          s"Relay ${PrettyPrinter.buildStringNoLimit(block.blockHash)} error ${replayError} from reporting"
-                       ) >> Sync[F].delay(
+                       ) >> Concurrent[F].delay(
                          ReportReplayError(replayError)
                            .asLeft[List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
                        )
@@ -171,7 +171,7 @@ object ReportingCasper {
           _          <- Log[F].info(s"trace block ${maybeBlock}")
           result <- maybeBlock match {
                      case None =>
-                       Sync[F].delay(
+                       Concurrent[F].delay(
                          ReportBlockNotFound(hash)
                            .asLeft[List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
                        )
