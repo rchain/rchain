@@ -21,7 +21,7 @@ import coop.rchain.rspace.ReportingRspace.{
 }
 import monix.execution.atomic.AtomicAny
 import coop.rchain.shared.SyncVarOps._
-
+import scodec.Codec
 import scala.concurrent.{ExecutionContext, SyncVar}
 
 /**
@@ -37,7 +37,7 @@ import scala.concurrent.{ExecutionContext, SyncVar}
   * people get the comm event data from replay.
   */
 object ReportingRspace {
-  trait ReportingEvent
+  sealed trait ReportingEvent
 
   final case class ReportingProduce[C, A](channel: C, data: A) extends ReportingEvent
   final case class ReportingConsume[C, P, K](

@@ -43,6 +43,7 @@ package object api {
             .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
+        .compressorRegistry(null)
         .build
     )
 
@@ -62,6 +63,7 @@ package object api {
           DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
         )
+        .compressorRegistry(null)
         .addService(ProtoReflectionService.newInstance())
         .build
     )
