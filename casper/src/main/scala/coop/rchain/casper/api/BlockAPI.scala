@@ -521,40 +521,66 @@ object BlockAPI {
           .asRight[Error]
     }
 
-  def getBlock[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
+  def getBlock[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore: Span](
       hash: String
   ): F[ApiErr[BlockInfo]] = Span[F].trace(GetBlockSource) {
 
     val errorMessage =
       "Could not get block, casper instance was not available yet."
 
+    // TODO: we should refactor BlockApi with applicative errors for better classification
+    //  of errors and to overcome nesting when validating data.
+    final case class BlockRetrievalError(message: String) extends Exception
+
     def casperResponse(
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[BlockInfo]] =
       for {
-        dag        <- MultiParentCasper[F].blockDag
-        maybeBlock <- getBlockFromStore[F](hash)
-        blockInfo <- maybeBlock match {
-                      case Some(block) => {
-                        val blockAdded = dag.contains(block.blockHash)
-                        blockAdded.ifM(
-                          getFullBlockInfo[F](block).map(_.asRight[Error]),
+        // Add constraint on the length of searched hash to prevent to many block results
+        // which can cause severe CPU load.
+        _ <- BlockRetrievalError(s"Input hash value must be at least 6 characters: $hash")
+              .raiseError[F, ApiErr[BlockInfo]]
+              .whenA(hash.length < 6)
+        // Check if hash string is in Base16 encoding and convert to ByteString
+        hashByteString <- Base16
+                           .decode(hash)
+                           .map(ByteString.copyFrom)
+                           .liftTo[F](
+                             BlockRetrievalError(
+                               s"Input hash value is not valid hex string: $hash"
+                             )
+                           )
+        // Check if hash is complete and not just the prefix in which case
+        // we can use `get` directly and not iterate over the whole block hash index.
+        getBlock  = BlockStore[F].get(hashByteString)
+        findBlock = getBlockFromStore[F](hash)
+        blockF    = if (hash.length == 64) getBlock else findBlock
+        // Get block form the block store
+        block <- blockF >>= (_.liftTo[F](
+                  BlockRetrievalError(s"Error: Failure to find block with hash: $hash")
+                ))
+        // Check if the block is added to the dag and convert it to block info
+        dag <- MultiParentCasper[F].blockDag
+        blockInfo <- dag
+                      .contains(block.blockHash)
+                      .ifM(
+                        getFullBlockInfo[F](block),
+                        BlockRetrievalError(
                           s"Error: Block with hash $hash received but not added yet"
-                            .asLeft[BlockInfo]
-                            .pure[F]
-                        )
-                      }
-                      case None =>
-                        s"Error: Failure to find block with hash $hash"
-                          .asLeft[BlockInfo]
-                          .pure[F]
-                    }
-      } yield blockInfo
+                        ).raiseError[F, BlockInfo]
+                      )
+      } yield blockInfo.asRight
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockInfo]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-    ))
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[BlockInfo]](
+        casperResponse(_)
+          .handleError {
+            // Convert error message from BlockRetrievalError
+            case BlockRetrievalError(errorMessage) => errorMessage.asLeft[BlockInfo]
+          },
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
   }
 
   private def getBlockInfo[A, F[_]: Monad: SafetyOracle: BlockStore](
