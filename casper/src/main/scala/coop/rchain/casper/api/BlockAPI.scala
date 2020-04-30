@@ -479,7 +479,7 @@ object BlockAPI {
                                         ByteString.copyFrom(Base16.unsafeDecode(hash))
                                       )
                        mayberesult = createBlockReportResponse(reportResult)
-                       block       <- getBlockFromStore[F](hash)
+                       block       <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
                        lightBlock  <- block.traverse(getLightBlockInfo[F](_))
 
                        res = mayberesult.map(BlockEventInfo(lightBlock, _))
