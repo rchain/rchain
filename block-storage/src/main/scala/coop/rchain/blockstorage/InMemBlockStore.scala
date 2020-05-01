@@ -27,7 +27,7 @@ class InMemBlockStore[F[_]] private ()(
       state <- refF.get
     } yield state.get(blockHash) >>= (bmp => BlockMessage.from(bmp).toOption)
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
+  override def find(p: BlockHash => Boolean, n: Int): F[Seq[(BlockHash, BlockMessage)]] =
     for {
       _     <- metricsF.incrementCounter("find")
       state <- refF.get
