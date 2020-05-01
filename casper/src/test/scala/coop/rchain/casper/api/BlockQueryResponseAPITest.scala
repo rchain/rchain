@@ -37,8 +37,10 @@ class BlockQueryResponseAPITest
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-query-response-api-test")
 
-  val secondBlockQuery = "1234"
-  val badTestHashQuery = "No such a hash"
+  val secondBlockQuery = "123456"
+  val toShortQuery     = "12345"
+  val badTestHashQuery = "1234acd"
+  val invalidHexQuery  = "No such a hash"
 
   val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
   val version           = 1L
@@ -170,7 +172,55 @@ class BlockQueryResponseAPITest
         _ = inside(blockQueryResponse) {
           case Left(msg) =>
             msg should be(
-              s"Error: Failure to find block with hash $badTestHashQuery"
+              s"Error: Failure to find block with hash: $badTestHashQuery"
+            )
+        }
+      } yield ()
+  }
+
+  it should "return error when hash is invalid hex string" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        effects                                  <- emptyEffects(blockStore, blockDagStorage)
+        spanEff                                  = NoopSpan[Task]()
+        (logEff, engineCell, cliqueOracleEffect) = effects
+        hash                                     = invalidHexQuery
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
+                               Sync[Task],
+                               engineCell,
+                               logEff,
+                               cliqueOracleEffect,
+                               blockStore,
+                               spanEff
+                             )
+        _ = inside(blockQueryResponse) {
+          case Left(msg) =>
+            msg should be(
+              s"Input hash value is not valid hex string: $invalidHexQuery"
+            )
+        }
+      } yield ()
+  }
+
+  it should "return error when hash is to short" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      for {
+        effects                                  <- emptyEffects(blockStore, blockDagStorage)
+        spanEff                                  = NoopSpan[Task]()
+        (logEff, engineCell, cliqueOracleEffect) = effects
+        hash                                     = toShortQuery
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
+                               Sync[Task],
+                               engineCell,
+                               logEff,
+                               cliqueOracleEffect,
+                               blockStore,
+                               spanEff
+                             )
+        _ = inside(blockQueryResponse) {
+          case Left(msg) =>
+            msg should be(
+              s"Input hash value must be at least 6 characters: $toShortQuery"
             )
         }
       } yield ()
