@@ -153,7 +153,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   /** ReportingCasper would reset(empty) the report data in every createCheckpoint.
     *
     */
-  override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
+  override def createCheckpoint(): F[Checkpoint] = syncF.defer {
     val historyRepository = historyRepositoryAtom.get()
     for {
       _ <- createNewHotStore(historyRepository)(serializeK.toCodec)
