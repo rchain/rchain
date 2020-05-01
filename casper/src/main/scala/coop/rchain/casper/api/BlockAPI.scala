@@ -557,7 +557,7 @@ object BlockAPI {
       hash: String
   ): F[Option[BlockMessage]] =
     for {
-      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash))
+      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash), 1)
     } yield findResult.headOption match {
       case Some((_, block)) => Some(block)
       case None             => none[BlockMessage]
