@@ -123,23 +123,23 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
       } yield maybeBlockMessageProto >>= (bmp => BlockMessage.from(bmp).toOption)
     )
 
-  override def find(p: BlockHash => Boolean): F[Seq[(BlockHash, BlockMessage)]] =
-    lock.withPermit(
-      for {
-        filteredIndex <- index.iterate { iterator =>
-                          iterator
-                            .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
-                            .withFilter { case (key, _) => p(key) }
-                            .map { case (key, value) => (key, IndexEntry.load(value)) }
-                            .toList
-                        }
-        result <- filteredIndex.flatTraverse {
-                   case (blockHash, indexEntry) =>
-                     readBlockMessage(indexEntry)
-                       .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
-                 }
-      } yield result
-    )
+  override def find(p: BlockHash => Boolean, n: Int): F[Seq[(BlockHash, BlockMessage)]] =
+    for {
+      filteredIndex <- index.iterate { iterator =>
+                        iterator
+                          .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                          .withFilter { case (key, _) => p(key) }
+                          .map { case (key, value) => (key, IndexEntry.load(value)) }
+                          // Return only the first n result / stop iteration
+                          .take(n)
+                          .toList
+                      }
+      result <- lock.withPermit(filteredIndex.flatTraverse {
+                 case (blockHash, indexEntry) =>
+                   readBlockMessage(indexEntry)
+                     .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
+               })
+    } yield result
 
   override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     lock.withPermit(
