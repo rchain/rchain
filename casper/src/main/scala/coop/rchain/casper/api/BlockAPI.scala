@@ -592,11 +592,11 @@ object BlockAPI {
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
-      normalizedFaultTolerance <- SafetyOracle[F]
-                                   .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
-      initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
-      faultTolerance = normalizedFaultTolerance - initialFault
-      blockInfo      <- constructor(block, faultTolerance)
+//      normalizedFaultTolerance <- SafetyOracle[F]
+//                                   .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
+//      initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
+//      faultTolerance = normalizedFaultTolerance - initialFault
+      blockInfo <- constructor(block, -1.0.toFloat)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
