@@ -52,6 +52,7 @@ message ContinuationAtNameQuery {
 message VisualizeDagQuery {
   int32 depth                 = 1;
   bool showJustificationLines = 2;
+  int32 startBlockNumber      = 3;
 }
 
 message MachineVerifyQuery {
