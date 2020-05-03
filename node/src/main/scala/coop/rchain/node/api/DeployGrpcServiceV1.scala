@@ -99,8 +99,9 @@ object DeployGrpcServiceV1 {
         implicit val ser: GraphSerializer[Effect]             = new ListSerializer[Effect]
         val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).value.toList
 
-        val depth  = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
-        val config = GraphConfig(request.showJustificationLines)
+        val depth            = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
+        val config           = GraphConfig(request.showJustificationLines)
+        val startBlockNumber = request.startBlockNumber
 
         Observable
           .fromTask(
@@ -109,6 +110,7 @@ object DeployGrpcServiceV1 {
                 .visualizeDag[F, Effect, List[String]](
                   depth,
                   apiMaxBlocksLimit,
+                  startBlockNumber,
                   (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
                   serialize
                 )

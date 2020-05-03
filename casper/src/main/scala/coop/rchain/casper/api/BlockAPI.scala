@@ -368,16 +368,32 @@ object BlockAPI {
   ](
       depth: Int,
       maxDepthLimit: Int,
+      startBlockNumber: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
       serialize: G[Graphz[G]] => R
-  ): F[ApiErr[R]] =
-    toposortDag[F, R](depth, maxDepthLimit) {
-      case (casper, topoSort) =>
-        for {
-          lfb   <- casper.lastFinalizedBlock
-          graph <- visualizer(topoSort, PrettyPrinter.buildString(lfb.blockHash))
-        } yield serialize(graph).asRight[Error]
-    }
+  ): F[ApiErr[R]] = {
+    val errorMessage = "visual dag failed"
+    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
+      for {
+        dag <- MultiParentCasper[F].blockDag
+        // the default startBlockNumber is 0
+        // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
+        startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
+                        else Sync[F].delay(startBlockNumber.toLong)
+        topoSortDag <- dag.topoSort(
+                        startBlockNum - depth,
+                        Some(startBlockNum)
+                      )
+        lfb   <- casper.lastFinalizedBlock
+        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+      } yield serialize(graph).asRight[Error]
+    EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
+      casperResponse(_),
+      Log[F]
+        .warn(errorMessage)
+        .as(s"Error: $errorMessage".asLeft)
+    ))
+  }
 
   def machineVerifiableDag[
       F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore
