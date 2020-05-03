@@ -1,6 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -201,11 +202,14 @@ object Running {
         )
     )
 
-  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
+  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks: BlockStore](
+      peer: PeerNode,
+      b: BlockMessage
+  )(
       repeatedCasperMessage: BlockHash => F[Boolean],
       casperAdd: BlockMessage => F[ValidBlockProcessing]
   ): F[Unit] =
-    repeatedCasperMessage(b.blockHash)
+    (repeatedCasperMessage(b.blockHash) ||^ BlockStore[F].contains(b.blockHash))
       .ifM(
         Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
         Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
@@ -345,7 +349,7 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
               }
             }
       } yield ()
-    } >> processUnfinishedParentsAndAddBlock(b)
+    } >> processUnfinishedParentsAndAddBlock(b.blockHash)
   }
 
   /**
@@ -353,26 +357,34 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
     * @param b block
     * @return Result of block processing
     */
-  private def processUnfinishedParentsAndAddBlock(b: BlockMessage): F[ValidBlockProcessing] =
-    processUnfinishedParents(b) >> casper.addBlock(b)
+  private def processUnfinishedParentsAndAddBlock(b: BlockHash): F[ValidBlockProcessing] =
+    processUnfinishedParents(b) >> BlockStore[F].get(b).map(_.get) >>= casper.addBlock
+
+  val blockCounter = Ref.unsafe(0)
 
   /**
     * Adds parents that are in block store but not in DAG yet
     * @param b block
     * @return F[Unit]
     */
-  private def processUnfinishedParents(b: BlockMessage): F[Unit] = {
+  private def processUnfinishedParents(hash: BlockHash): F[Unit] = {
     import cats.instances.list._
     for {
+      counter <- blockCounter.modify(c => (c + 1, c + 1))
       // Parents that are in block store but not in DAG yet and not being currently handled
+      b <- BlockStore[F].get(hash).map(_.get)
+      _ <- Log[F].info(
+            s"Unfinished blocks counter ${counter} #${b.body.state.blockNumber} ${PrettyPrinter.buildString(hash)}"
+          )
       unfinishedParents <- b.header.parentsHashList.traverse { hash =>
                             for {
                               block <- repeatedCasperMessage(hash)
                                         .ifM(none[BlockMessage].pure[F], BlockStore[F].get(hash))
-                            } yield block
+                            } yield block.map(_.blockHash)
                           }
       // Try to add block to DAG. We don't care of results, just make an attempt.
       _ <- unfinishedParents.flatten.traverse_(processUnfinishedParentsAndAddBlock)
+      _ <- blockCounter.update(_ - 1)
     } yield ()
   }
 
