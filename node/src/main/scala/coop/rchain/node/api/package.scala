@@ -1,6 +1,7 @@
 package coop.rchain.node
 
 import java.net.InetSocketAddress
+import java.util.concurrent.TimeUnit
 
 import cats.effect.Concurrent
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
@@ -11,11 +12,11 @@ import coop.rchain.node.model.repl._
 import coop.rchain.shared._
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
-import io.netty.channel.local.LocalAddress
 import monix.eval.Task
 import monix.execution.Scheduler
 
 package object api {
+  val PermitKeepAliveTime = 3L // seconds
 
   def acquireInternalServer(
       host: String,
@@ -43,6 +44,8 @@ package object api {
             .bindService(deployGrpcService, grpcExecutor)
         )
         .addService(ProtoReflectionService.newInstance())
+        .permitKeepAliveTime(PermitKeepAliveTime, TimeUnit.SECONDS)
+        .permitKeepAliveWithoutCalls(true)
         .compressorRegistry(null)
         .build
     )
@@ -63,6 +66,8 @@ package object api {
           DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
         )
+        .permitKeepAliveTime(PermitKeepAliveTime, TimeUnit.SECONDS)
+        .permitKeepAliveWithoutCalls(true)
         .compressorRegistry(null)
         .addService(ProtoReflectionService.newInstance())
         .build
