@@ -89,6 +89,7 @@ object WebApiRoutes {
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]
     // Encoders
     implicit val stringEncoder     = jsonEncoderOf[F, String]
+    implicit val booleanEncode     = jsonEncoderOf[F, Boolean]
     implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]
     implicit val blockInfoEncoder  = jsonEncoderOf[F, BlockInfo]
     implicit val lightBlockEncoder = jsonEncoderOf[F, LightBlockInfo]
@@ -145,6 +146,9 @@ object WebApiRoutes {
 
       case GET -> Root / "deploy" / deployId =>
         webApi.findDeploy(deployId).handle
+
+      case GET -> Root / "is-finalized" / hash =>
+        webApi.isFinalized(hash).handle
     }
   }
 
