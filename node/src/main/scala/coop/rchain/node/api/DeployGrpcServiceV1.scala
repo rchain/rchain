@@ -157,7 +157,7 @@ object DeployGrpcServiceV1 {
       def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         defer(
           BlockAPI
-            .getListeningNameDataResponse[F](request.depth, request.name.get)
+            .getListeningNameDataResponse[F](request.depth, request.name.get, apiMaxBlocksLimit)
         ) { r =>
           import ListeningNameDataResponse.Message
           import ListeningNameDataResponse.Message._
@@ -173,7 +173,11 @@ object DeployGrpcServiceV1 {
       ): Task[ContinuationAtNameResponse] =
         defer(
           BlockAPI
-            .getListeningNameContinuationResponse[F](request.depth, request.names)
+            .getListeningNameContinuationResponse[F](
+              request.depth,
+              request.names,
+              apiMaxBlocksLimit
+            )
         ) { r =>
           import ContinuationAtNameResponse.Message
           import ContinuationAtNameResponse.Message._
