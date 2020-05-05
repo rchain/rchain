@@ -74,7 +74,7 @@ object WebApi {
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
       BlockAPI
-        .getListeningNameDataResponse(req.depth, toPar(req))
+        .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit)
         .flatMap(_.liftToBlockApiErr)
         .map(toDataResponse)
 
