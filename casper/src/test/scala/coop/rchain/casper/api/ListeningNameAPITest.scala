@@ -31,7 +31,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse1 <- BlockAPI
                                    .getListeningNameDataResponse[Effect](
                                      Int.MaxValue,
-                                     listeningName
+                                     listeningName,
+                                     Int.MaxValue
                                    )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -65,7 +66,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
         listeningNameResponse1 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
-                                   listeningName
+                                   listeningName,
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -81,7 +83,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
         listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
-                                   listeningName
+                                   listeningName,
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>
@@ -104,7 +107,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
         listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
-                                   listeningName
+                                   listeningName,
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse3) {
           case Right((blockResults, l)) =>
@@ -133,13 +137,18 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             l should be(7)
         }
         listeningNameResponse3UntilDepth <- BlockAPI
-                                             .getListeningNameDataResponse[Effect](1, listeningName)
+                                             .getListeningNameDataResponse[Effect](
+                                               1,
+                                               listeningName,
+                                               Int.MaxValue
+                                             )
         _ = inside(listeningNameResponse3UntilDepth) {
           case Right((_, l)) => l should be(1)
         }
         listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                               2,
-                                              listeningName
+                                              listeningName,
+                                              Int.MaxValue
                                             )
         _ = inside(listeningNameResponse3UntilDepth2) {
           case Right((_, l)) => l should be(2)
@@ -171,7 +180,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         )
         listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,
-                                   listeningNamesShuffled1
+                                   listeningNamesShuffled1,
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -187,7 +197,8 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         )
         listeningNameResponse2 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,
-                                   listeningNamesShuffled2
+                                   listeningNamesShuffled2,
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>
