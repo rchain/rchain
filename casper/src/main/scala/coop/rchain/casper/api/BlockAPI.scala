@@ -153,7 +153,8 @@ object BlockAPI {
 
   def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
-      listeningName: Par
+      listeningName: Par,
+      maxBlocksLimit: Int
   ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
 
     val errorMessage = "Could not get listening name data, casper instance was not available yet."
@@ -175,17 +176,23 @@ object BlockAPI {
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[DataWithBlockInfo], Int)]](
-      casperResponse(_),
-      Log[F]
-        .warn(errorMessage)
-        .as(s"Error: $errorMessage".asLeft)
-    ))
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningName depth ${depth} exceed the max limit ${maxBlocksLimit}"
+        .asLeft[(Seq[DataWithBlockInfo], Int)]
+        .pure[F]
+    else
+      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[DataWithBlockInfo], Int)]](
+        casperResponse(_),
+        Log[F]
+          .warn(errorMessage)
+          .as(s"Error: $errorMessage".asLeft)
+      ))
   }
 
   def getListeningNameContinuationResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
-      listeningNames: Seq[Par]
+      listeningNames: Seq[Par],
+      maxBlocksLimit: Int
   ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
     val errorMessage =
       "Could not get listening names continuation, casper instance was not available yet."
@@ -207,12 +214,17 @@ object BlockAPI {
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
-    EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]](
-      casperResponse(_),
-      Log[F]
-        .warn(errorMessage)
-        .as(s"Error: $errorMessage".asLeft)
-    ))
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningNameContinuation depth ${depth} exceed the max limit ${maxBlocksLimit}"
+        .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
+        .pure[F]
+    else
+      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]](
+        casperResponse(_),
+        Log[F]
+          .warn(errorMessage)
+          .as(s"Error: $errorMessage".asLeft)
+      ))
   }
 
   private def getMainChainFromTip[F[_]: Sync: Log: SafetyOracle: BlockStore](depth: Int)(
