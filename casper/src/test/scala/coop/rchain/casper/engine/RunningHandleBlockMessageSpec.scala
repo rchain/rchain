@@ -38,7 +38,22 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
         val requestedBefore          = Map(hash -> Requested(timestamp = 0))
         implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
         // when
-        Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockInDag).apply()
+        Running
+          .handleBlockMessage[Coeval](sender, bm)(alwaysNo, alwaysNo, blockInDag)
+          .apply()
+        // then
+        requestedBlocks.read.apply().size should be(0)
+      }
+
+      it("should remove entry from requested blocks once block ended up in block store") {
+        // given
+        val sender                   = peerNode("peer", 40400)
+        val requestedBefore          = Map(hash -> Requested(timestamp = 0))
+        implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
+        // when
+        Running
+          .handleBlockMessage[Coeval](sender, bm)(alwaysNo, alwaysYes, blockNotInDag)
+          .apply()
         // then
         requestedBlocks.read.apply().size should be(0)
       }
@@ -49,10 +64,13 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
         val requestedBefore          = Map(hash -> Requested(timestamp = 0))
         implicit val requestedBlocks = initRequestedBlocks(init = requestedBefore)
         // when
-        Running.handleBlockMessage[Coeval](sender, bm)(alwaysDoesntContain, blockNotInDag).apply()
+        Running
+          .handleBlockMessage[Coeval](sender, bm)(alwaysNo, alwaysNo, blockNotInDag)
+          .apply()
         // then
         requestedBlocks.read.apply().size should be(1)
       }
+
     }
   }
 
@@ -74,7 +92,8 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
     Cell.unsafe[Coeval, Map[BlockHash, Running.Requested]](init)
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
-  private def alwaysDoesntContain: BlockHash => Coeval[Boolean]    = kp(false.pure[Coeval])
+  private def alwaysYes: BlockHash => Coeval[Boolean]              = kp(true.pure[Coeval])
+  private def alwaysNo: BlockHash => Coeval[Boolean]               = kp(false.pure[Coeval])
   private def blockInDag: BlockMessage => Coeval[ValidBlockProcessing] =
     kp(ValidBlock.Valid.asRight.pure[Coeval])
   private def blockNotInDag: BlockMessage => Coeval[ValidBlockProcessing] =

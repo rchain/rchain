@@ -202,16 +202,19 @@ object Running {
         )
     )
 
-  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks: BlockStore](
+  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](
       peer: PeerNode,
       b: BlockMessage
   )(
       repeatedCasperMessage: BlockHash => F[Boolean],
+      isInBlockStore: BlockHash => F[Boolean],
       casperAdd: BlockMessage => F[ValidBlockProcessing]
-  ): F[Unit] =
-    (repeatedCasperMessage(b.blockHash) ||^ BlockStore[F].contains(b.blockHash))
+  ): F[Unit] = {
+    val alreadyInStore = isInBlockStore(b.blockHash)
+    (repeatedCasperMessage(b.blockHash) ||^ alreadyInStore)
       .ifM(
-        Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
+        Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again.") >>
+          alreadyInStore.ifM(RequestedBlocks.remove(b.blockHash), ().pure[F]),
         Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
             status =>
               Applicative[F].whenA(BlockStatus.isInDag(status.merge))(
@@ -219,6 +222,7 @@ object Running {
               )
           )
       )
+  }
 
   def handleBlockHashMessage[F[_]: Monad: Log: ConnectionsCell: TransportLayer: Time: RPConfAsk: RequestedBlocks](
       peer: PeerNode,
@@ -393,7 +397,8 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
     case blockHash: BlockHashMessage =>
       handleBlockHashMessage(peer, blockHash)(repeatedCasperMessage)
-    case b: BlockMessage      => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
+    case b: BlockMessage =>
+      handleBlockMessage(peer, b)(repeatedCasperMessage, BlockStore[F].contains, casperAdd(peer))
     case br: BlockRequest     => handleBlockRequest(peer, br)
     case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.contains)
     case hb: HasBlock         => handleHasBlock(peer, hb)(repeatedCasperMessage)
