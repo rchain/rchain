@@ -20,7 +20,7 @@ import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
 
-final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log: BlockStore](
+final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
     lock: Semaphore[F],
     latestMessagesRef: Ref[F, Map[Validator, BlockHash]],
     childMapRef: Ref[F, Map[BlockHash, Set[BlockHash]]],
@@ -176,7 +176,7 @@ object InMemBlockDagStorage {
   implicit private val InMemBlockDagStorageMetricsSource: Source =
     Metrics.Source(BlockStorageMetricsSource, "in-mem")
 
-  def create[F[_]: Concurrent: Sync: Log: BlockStore: Metrics]: F[InMemBlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Sync: Log: Metrics]: F[InMemBlockDagStorage[F]] =
     for {
       lock                    <- MetricsSemaphore.single[F]
       latestMessagesRef       <- Ref.of[F, Map[Validator, BlockHash]](Map.empty)
