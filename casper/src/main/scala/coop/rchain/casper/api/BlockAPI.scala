@@ -537,8 +537,13 @@ object BlockAPI {
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
-      normalizedFaultTolerance <- SafetyOracle[F]
-                                   .normalizedFaultTolerance(dag, block.blockHash) // TODO: Warn about parent block finalization
+      // TODO this is temporary solution to not calculate fault tolerance for old blocks which is costly
+      oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
+      normalizedFaultTolerance <- oldBlock.ifM(
+                                   1f.pure[F],
+                                   SafetyOracle[F]
+                                     .normalizedFaultTolerance(dag, block.blockHash)
+                                 ) // TODO: Warn about parent block finalization
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
       blockInfo      <- constructor(block, faultTolerance)
