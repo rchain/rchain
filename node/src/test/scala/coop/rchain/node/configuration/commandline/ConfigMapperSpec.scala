@@ -59,6 +59,12 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--api-grpc-max-recv-message-size 111111",
         "--api-max-blocks-limit 111111",
         "--api-enable-reporting",
+        "--api-keep-alive-time 111111seconds",
+        "--api-keep-alive-timeout 111111seconds",
+        "--api-permit-keep-alive-time 111111seconds",
+        "--api-max-connection-idle 111111seconds",
+        "--api-max-connection-age 111111seconds",
+        "--api-max-connection-age-grace 111111seconds",
         "--data-dir /var/lib/rnode",
         "--lmdb-map-size-rspace 111111",
         "--lmdb-map-size-blockdagstore 111111",
@@ -172,7 +178,13 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         portHttp = 111111,
         grpcMaxRecvMessageSize = 111111,
         maxBlocksLimit = 111111,
-        enableReporting = true
+        enableReporting = true,
+        keepAliveTime = 111111L.seconds,
+        keepAliveTimeout = 111111L.seconds,
+        permitKeepAliveTime = 111111L.seconds,
+        maxConnectionAge = 111111L.seconds,
+        maxConnectionIdle = 111111L.seconds,
+        maxConnectionAgeGrace = 111111L.seconds
       ),
       storage = Storage(
         dataDir = Paths.get("/var/lib/rnode"),

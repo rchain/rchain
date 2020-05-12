@@ -89,7 +89,13 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         grpcMaxRecvMessageSize = 16777216,
         portHttp = 40403,
         maxBlocksLimit = 50,
-        enableReporting = false
+        enableReporting = false,
+        keepAliveTime = 2.hours,
+        keepAliveTimeout = 20.seconds,
+        permitKeepAliveTime = 5.minutes,
+        maxConnectionAge = 1.hours,
+        maxConnectionIdle = 1.hours,
+        maxConnectionAgeGrace = 1.hours
       ),
       storage = Storage(
         dataDir = Paths.get("/var/lib/rnode"),

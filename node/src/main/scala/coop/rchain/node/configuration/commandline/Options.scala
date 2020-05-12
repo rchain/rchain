@@ -300,6 +300,35 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Use this flag to enable reporting endpoints."
     )
 
+    val apiKeepAliveTime = opt[FiniteDuration](
+      descr = "Sets a custom keepalive time, the delay time for sending next keepalive ping"
+    )
+
+    val apiKeepAliveTimeout = opt[FiniteDuration](
+      descr = "Sets a custom keepalive timeout, the timeout for keepalive ping requests"
+    )
+
+    val apiPermitKeepAliveTime = opt[FiniteDuration](
+      descr = "The most aggressive keep-alive time clients are permitted to configure.The server would close" +
+        "the connection if clients exceeding this rate "
+    )
+
+    val apiMaxConnectionIdle = opt[FiniteDuration](
+      descr =
+        "Sets a custom max connection idle time, connection being idle for longer than which will be gracefully terminated"
+    )
+
+    val apiMaxConnectionAge = opt[FiniteDuration](
+      descr =
+        "Sets a custom max connection age, connection lasting longer than which will be gracefully terminated"
+    )
+
+    val apiMaxConnectionAgeGrace = opt[FiniteDuration](
+      descr = "Sets a custom grace time for the graceful connection termination. Once the max connection age" +
+        " is reached, RPCs have the grace time to complete. RPCs that do not complete in time will be" +
+        " cancelled, allowing the connection to terminate"
+    )
+
     val dataDir = opt[Path](
       required = false,
       descr = "Path to data directory. Defaults to $HOME/.rnode"
