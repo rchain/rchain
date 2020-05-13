@@ -598,7 +598,8 @@ class NodeRuntime private[node] (
         nodeConf.apiServer.portHttp,
         prometheusReporter,
         reportingCasper,
-        webApi
+        webApi,
+        nodeConf.apiServer.maxConnectionIdle
       )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
