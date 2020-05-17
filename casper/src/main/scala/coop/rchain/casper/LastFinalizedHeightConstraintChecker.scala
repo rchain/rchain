@@ -1,12 +1,13 @@
 package coop.rchain.casper
 
 import cats.effect.Sync
-import cats.syntax.flatMap._
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
 import cats.syntax.functor._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.Validator.Validator

@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -196,7 +197,7 @@ object BlockCreator {
    * any latest message not from a bonded validator will not change the
    * final fork-choice.
    */
-  private def computeJustifications[F[_]: Monad](
+  private def computeJustifications[F[_]: Sync](
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage]
   ): F[Seq[Justification]] = {

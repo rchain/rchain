@@ -204,16 +204,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
-    def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
-      latestMessagesMap.get(validator).flatTraverse(lookup)
+
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
-    def latestMessages: F[Map[Validator, BlockMetadata]] =
-      latestMessagesMap.toList
-        .traverse {
-          case (validator, hash) => lookup(hash).map(validator -> _.get)
-        }
-        .map(_.toMap)
+
     def invalidBlocks: F[Set[BlockMetadata]] =
       invalidBlocksSet.pure[F]
   }

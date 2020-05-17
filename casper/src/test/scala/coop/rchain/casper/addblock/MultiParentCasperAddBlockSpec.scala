@@ -3,6 +3,7 @@ package coop.rchain.casper.addblock
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._

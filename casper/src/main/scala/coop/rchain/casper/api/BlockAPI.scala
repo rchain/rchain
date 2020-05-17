@@ -1,43 +1,37 @@
 package coop.rchain.casper.api
 
-import scala.collection.immutable
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._
-import EngineCell._
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.DeployError._
+import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.rholang.{ReplayFailure, RuntimeManager, Tools}
+import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
-import coop.rchain.models.{BindPattern, BlockMetadata, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.casper.ReportingCasper
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rspace.{ReportingRspace, ReportingTransformer, StableHashProvider}
+import coop.rchain.rspace.ReportingRspace.ReportingEvent
+import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
-import com.google.protobuf.ByteString
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.signatures.Signed
-import coop.rchain.rspace.ReportingRspace.{
-  ReportingComm,
-  ReportingConsume,
-  ReportingEvent,
-  ReportingProduce
-}
-import coop.rchain.casper.ReportingProtoTransformer
+
+import scala.collection.immutable
 
 object BlockAPI {
   type Error     = String

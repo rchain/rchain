@@ -9,6 +9,7 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.implicits._
@@ -468,7 +469,7 @@ object ProtoUtil {
         List.empty[BlockMetadata].pure
     }
 
-  def invalidLatestMessages[F[_]: Monad](
+  def invalidLatestMessages[F[_]: Sync](
       dag: BlockDagRepresentation[F]
   ): F[Map[Validator, BlockHash]] =
     dag.latestMessages.flatMap(

@@ -29,17 +29,16 @@ trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
+  def latestMessageHash(validator: Validator): F[Option[BlockHash]]
+  def latestMessageHashes: F[Map[Validator, BlockHash]]
+  def invalidBlocks: F[Set[BlockMetadata]]
+  // For BlockAPI
+  def latestBlockNumber: F[Long]
   def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]]
   def topoSort(
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
-  def latestBlockNumber: F[Long]
-  def latestMessageHash(validator: Validator): F[Option[BlockHash]]
-  def latestMessage(validator: Validator): F[Option[BlockMetadata]]
-  def latestMessageHashes: F[Map[Validator, BlockHash]]
-  def latestMessages: F[Map[Validator, BlockMetadata]]
-  def invalidBlocks: F[Set[BlockMetadata]]
 }
 
 trait EquivocationsTracker[F[_]] {
