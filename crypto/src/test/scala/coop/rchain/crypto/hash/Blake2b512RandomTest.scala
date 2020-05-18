@@ -270,9 +270,9 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
   "A merge with many children" should "group by 255's until a single internal node is reached." in {
     val builder      = Vector.newBuilder[Blake2b512Random]
     val b2RandomBase = Blake2b512Random(emptyMsg)
-    for (i <- 0 until 20) {
+    for (i <- 0 until (20, 5)) {
       val splitOnce = b2RandomBase.splitByte(i.toByte)
-      for (j <- 0 until 255) {
+      for (j <- 0 until (255, 5)) {
         val splitTwice = splitOnce.splitByte(j.toByte)
         for (k <- 0 until 255) {
           val splitThrice = splitTwice.splitByte(k.toByte)
@@ -284,10 +284,10 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     val res1   = merged.next()
     val res2   = merged.next()
     Base16.encode(res1) should be(
-      "1af9db74651a8aa5e667311151d6b556939d0eb478980cce2ebd0b2cbc7183a8"
+      "ceff4f6065e6b508b46f4c7b687c3b67eb3bcdcbb52a4ad098e481876b745156"
     )
     Base16.encode(res2) should be(
-      "e6015287968435ef7b9656daf52083619aeb237db24bf09b2f878575d616572a"
+      "d30832a104feffed4502542768e8f3b05d12593ba29aacdc086c4d1db405e4e6"
     )
   }
 }
