@@ -73,17 +73,19 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         startBlockNumber: Long,
         maybeEndBlockNumber: Option[Long]
     ): F[Vector[Vector[BlockHash]]] = {
-      val endBlockNumber = maybeEndBlockNumber.getOrElse(getMaxHeight)
-      if (startBlockNumber >= 0 && startBlockNumber <= endBlockNumber) {
+      val maxNumber   = getMaxHeight
+      val startNumber = Math.max(0, startBlockNumber)
+      val endNumber   = maybeEndBlockNumber.map(Math.min(maxNumber, _)).getOrElse(maxNumber)
+      if (startNumber >= 0 && startNumber <= endNumber) {
         Sync[F].delay(
           heightMap
-            .filterKeys(h => h >= startBlockNumber && h <= endBlockNumber)
+            .filterKeys(h => h >= startNumber && h <= endNumber)
             .map { case (_, v) => v.toVector }
             .toVector
         )
       } else {
         Sync[F].raiseError(
-          TopoSortFragmentParameterError(startBlockNumber, endBlockNumber)
+          TopoSortFragmentParameterError(startNumber, endNumber)
         )
       }
     }
