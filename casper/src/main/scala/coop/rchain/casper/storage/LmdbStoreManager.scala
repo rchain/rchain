@@ -127,5 +127,12 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
       // Complete deferred object
       _ <- envDefer.complete(env)
     } yield ()
-      _   <- Log[F].debug(s"Shutdown LMDB environment: $dirPath")
+
+  override def shutdown: F[Unit] =
+    for {
+      // Close LMDB environment
+      st  <- varState.get
+      env <- st.envDefer.get
+      _   <- Sync[F].delay(env.close())
+    } yield ()
 }

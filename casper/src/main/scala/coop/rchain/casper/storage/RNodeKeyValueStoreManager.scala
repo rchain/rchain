@@ -54,4 +54,13 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
       manager <- LmdbStoreManager(dirPath.resolve(name))
       _       <- defer.complete(manager)
     } yield ()
+
+  override def shutdown: F[Unit] = {
+    import cats.instances.vector._
+    for {
+      st <- managersState.get
+      // Shutdown all store managers
+      _ <- st.envs.values.toVector.traverse_(_.get.flatMap(_.shutdown))
+    } yield ()
+  }
 }
