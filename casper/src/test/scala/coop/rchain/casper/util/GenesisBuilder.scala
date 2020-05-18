@@ -3,12 +3,12 @@ package coop.rchain.casper.util
 import java.nio.file.{Files, Path}
 
 import cats.implicits._
-import coop.rchain.blockstorage.dag.BlockDagFileStorage
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -118,9 +118,12 @@ object GenesisBuilder {
       _             <- blockStore.put(genesis.blockHash, genesis)
 
       blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
-      blockDagStorage <- BlockDagFileStorage.create[Task](
-                          makeBlockDagFileStorageConfig(blockDagDir)
-                        )
+
+      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir)
+      blockDagStorage <- {
+        implicit val kvm = storeManager
+        BlockDagKeyValueStorage.create[Task]
+      }
       _ <- blockDagStorage.insert(genesis, genesis, invalid = false)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, storageDirectory)).unsafeRunSync
   }

@@ -10,7 +10,7 @@ import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.storage
+import coop.rchain.rholang.interpreter.storage.serializePar
 import coop.rchain.shared.ByteArrayOps._
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.scalatestcontrib._
@@ -26,8 +26,7 @@ class MultiParentCasperMergeSpec
   import RSpaceUtil._
   import coop.rchain.casper.util.GenesisBuilder._
 
-  implicit val timeEff                      = new LogicalTime[Effect]
-  implicit val serializePar: Serialize[Par] = storage.serializePar
+  implicit val timeEff = new LogicalTime[Effect]
 
   val genesis = buildGenesis()
 
