@@ -99,6 +99,12 @@ object ConfigMapper {
       add("api-server.port-http", run.apiPortHttp)
       add("api-server.enable-reporting", run.apiEnableReporting)
       add("api-server.max-blocks-limit", run.apiMaxBlocksLimit)
+      add("api-server.keep-alive-time", run.apiKeepAliveTime)
+      add("api-server.keep-alive-timeout", run.apiKeepAliveTimeout)
+      add("api-server.permit-keep-alive-time", run.apiPermitKeepAliveTime)
+      add("api-server.max-connection-idle", run.apiMaxConnectionIdle)
+      add("api-server.max-connection-age", run.apiMaxConnectionAge)
+      add("api-server.max-connection-age-grace", run.apiMaxConnectionAgeGrace)
 
       add("tls.key-path", run.tlsKeyPath)
       add("tls.certificate-path", run.tlsCertificatePath)

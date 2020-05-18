@@ -15,6 +15,8 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.CORS
 
+import scala.concurrent.duration.FiniteDuration
+
 package object web {
   def aquireHttpServer(
       reporting: Boolean,
@@ -22,7 +24,8 @@ package object web {
       httpPort: Int,
       prometheusReporter: NewPrometheusReporter,
       reportingCasper: ReportingCasper[TaskEnv],
-      webApiRoutes: WebApi[TaskEnv]
+      webApiRoutes: WebApi[TaskEnv],
+      connectionIdleTimeout: FiniteDuration
   )(
       implicit
       nodeDiscovery: NodeDiscovery[Task],
@@ -57,6 +60,7 @@ package object web {
       httpServerFiber <- BlazeServerBuilder[Task]
                           .bindHttp(httpPort, host)
                           .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
+                          .withIdleTimeout(connectionIdleTimeout)
                           .resource
                           .use(_ => Task.never[Unit])
     } yield httpServerFiber

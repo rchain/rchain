@@ -71,7 +71,13 @@ final case class ApiServer(
     grpcMaxRecvMessageSize: Long,
     portHttp: Int,
     maxBlocksLimit: Int,
-    enableReporting: Boolean
+    enableReporting: Boolean,
+    keepAliveTime: FiniteDuration,
+    keepAliveTimeout: FiniteDuration,
+    permitKeepAliveTime: FiniteDuration,
+    maxConnectionIdle: FiniteDuration,
+    maxConnectionAge: FiniteDuration,
+    maxConnectionAgeGrace: FiniteDuration
 )
 
 final case class Storage(

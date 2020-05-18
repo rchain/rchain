@@ -566,7 +566,13 @@ class NodeRuntime private[node] (
                               nodeConf.apiServer.portGrpcExternal,
                               grpcScheduler,
                               apiServers.deploy,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                              nodeConf.apiServer.keepAliveTime,
+                              nodeConf.apiServer.keepAliveTimeout,
+                              nodeConf.apiServer.permitKeepAliveTime,
+                              nodeConf.apiServer.maxConnectionIdle,
+                              nodeConf.apiServer.maxConnectionAge,
+                              nodeConf.apiServer.maxConnectionAgeGrace
                             )
       internalApiServer <- api
                             .acquireInternalServer(
@@ -576,7 +582,13 @@ class NodeRuntime private[node] (
                               apiServers.repl,
                               apiServers.deploy,
                               apiServers.propose,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt
+                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                              nodeConf.apiServer.keepAliveTime,
+                              nodeConf.apiServer.keepAliveTimeout,
+                              nodeConf.apiServer.permitKeepAliveTime,
+                              nodeConf.apiServer.maxConnectionIdle,
+                              nodeConf.apiServer.maxConnectionAge,
+                              nodeConf.apiServer.maxConnectionAgeGrace
                             )
 
       prometheusReporter = new NewPrometheusReporter()
@@ -586,7 +598,8 @@ class NodeRuntime private[node] (
         nodeConf.apiServer.portHttp,
         prometheusReporter,
         reportingCasper,
-        webApi
+        webApi,
+        nodeConf.apiServer.maxConnectionIdle
       )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
