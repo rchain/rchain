@@ -25,11 +25,19 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
       maxEnvSize: Long = 100L * 1024L * 1024L * 1024L
   )
 
-  private val reportingEnvConfig = LmdbEnvConfig("reporting")
+  // Config name is used as a subfolder for LMDB files
+  private val dagStorageEnvConfig = LmdbEnvConfig(name = "dagstorage")
+  private val reportingEnvConfig  = LmdbEnvConfig(name = "reporting")
 
   // Database name to store instance name mapping (subfolder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
   private val dbInstanceMapping: Map[String, LmdbEnvConfig] = Map[String, LmdbEnvConfig](
+    // Block storage
+    ("block-metadata", dagStorageEnvConfig),
+    ("equivocation-tracker", dagStorageEnvConfig),
+    ("latest-messages", dagStorageEnvConfig),
+    ("invalid-blocks", dagStorageEnvConfig),
+    ("deploy-index", dagStorageEnvConfig),
     // Reporting (trace) cache
     ("reporting-cache", reportingEnvConfig)
   )

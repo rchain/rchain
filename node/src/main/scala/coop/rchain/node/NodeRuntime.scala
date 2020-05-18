@@ -13,8 +13,8 @@ import cats.mtl._
 import cats.tagless.implicits._
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.{ReportingCasper, _}
@@ -54,6 +54,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
+import coop.rchain.store.KeyValueStoreManager
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -678,7 +679,8 @@ object NodeRuntime {
   def cleanup[F[_]: Sync: Log](
       runtime: Runtime[F],
       casperRuntime: Runtime[F],
-      deployStorageCleanup: F[Unit]
+      deployStorageCleanup: F[Unit],
+      casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
     new Cleanup[F] {
       override def close(): F[Unit] =
@@ -687,6 +689,8 @@ object NodeRuntime {
           _ <- runtime.close()
           _ <- Log[F].info("Shutting down Casper runtime ...")
           _ <- casperRuntime.close()
+          _ <- Log[F].info("Shutting down Casper store manager ...")
+          _ <- casperStoreManager.shutdown
           _ <- Log[F].info("Shutting down deploy storage ...")
           _ <- deployStorageCleanup
         } yield ()
@@ -712,7 +716,7 @@ object NodeRuntime {
   ): F[
     (
         BlockStore[F],
-        BlockDagFileStorage[F],
+        BlockDagStorage[F],
         Cleanup[F],
         PacketHandler[F],
         APIServers,
@@ -740,8 +744,13 @@ object NodeRuntime {
           .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
       // Key-value store manager / manages LMDB databases
-      casperStoreManager                    <- RNodeKeyValueStoreManager(conf.storage.dataDir)
-      blockDagStorage                       <- BlockDagFileStorage.create[F](dagConfig)
+      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+      // TODO: remove `dagConfig`, it's not used anymore (after migration)
+      // blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
+      blockDagStorage <- {
+        implicit val kvm = casperStoreManager
+        BlockDagKeyValueStorage.create[F]
+      }
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
@@ -899,8 +908,13 @@ object NodeRuntime {
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
-      engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(evalRuntime, casperRuntime, deployStorageCleanup)
+      engineInit = engineCell.read >>= (_.init)
+      runtimeCleanup = NodeRuntime.cleanup(
+        evalRuntime,
+        casperRuntime,
+        deployStorageCleanup,
+        casperStoreManager
+      )
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span
