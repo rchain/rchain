@@ -1,8 +1,6 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
-import scala.collection.immutable.HashMap
-import coop.rchain.casper.protocol.Bond
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.casper.Estimator
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{
@@ -10,12 +8,13 @@ import coop.rchain.casper.helper.{
   BlockGenerator,
   UnlimitedParentsEstimatorFixture
 }
+import coop.rchain.casper.protocol.Bond
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import com.google.protobuf.ByteString
-import coop.rchain.shared.Log
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
+
+import scala.collection.immutable.HashMap
 
 class EstimatorTest
     extends FlatSpec

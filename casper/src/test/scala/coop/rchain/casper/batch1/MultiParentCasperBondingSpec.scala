@@ -1,4 +1,4 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch1
 
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 

@@ -1,7 +1,8 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
-import coop.rchain.casper.engine._, EngineCell._
-import cats._, cats.data._, cats.implicits._
+import cats._
+import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol.CasperMessage
 import coop.rchain.comm.PeerNode
 

@@ -5,13 +5,14 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine.Engine
-import coop.rchain.casper.{EngineWithCasper, SafetyOracle}
+import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Cell, Log}
