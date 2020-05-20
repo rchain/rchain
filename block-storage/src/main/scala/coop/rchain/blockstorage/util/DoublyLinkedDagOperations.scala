@@ -1,4 +1,4 @@
-package coop.rchain.casper.util
+package coop.rchain.blockstorage.util
 
 import coop.rchain.models.BlockHash.BlockHash
 
@@ -64,7 +64,7 @@ object DoublyLinkedDagOperations {
     val parentToChildAdjacencyList: Map[A, Set[A]] = dag.parentToChildAdjacencyList
     val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList
     assert(!childToParentAdjacencyList.contains(element))
-    assert(!parentToChildAdjacencyList.values.toSet.contains(element))
+    assert(!parentToChildAdjacencyList.valuesIterator.flatten.contains(element))
     val maybeChildren = parentToChildAdjacencyList.get(element)
     val initAcc       = (childToParentAdjacencyList, Set.empty[A])
     val (updatedChildToParentAdjacencyList, newDependencyFree) = maybeChildren match {

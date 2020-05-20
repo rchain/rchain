@@ -25,6 +25,11 @@ import coop.rchain.shared._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.blockstorage.util.{
+  BlockDependencyDag,
+  DoublyLinkedDag,
+  DoublyLinkedDagOperations
+}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 

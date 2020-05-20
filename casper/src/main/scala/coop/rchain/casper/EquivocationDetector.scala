@@ -8,7 +8,8 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, Eq
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.blockstorage.util.DoublyLinkedDag
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
