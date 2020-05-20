@@ -1,10 +1,11 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagStorage, IndexedBlockDagStorage}
+import coop.rchain.casper.EstimatorHelper
 import coop.rchain.casper.EstimatorHelper.conflicts
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.protocol._

@@ -1,13 +1,13 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch1
 
+import coop.rchain.casper.ReportingCasper
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.models.BlockHash._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib.effectTest
-import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspectors {
 

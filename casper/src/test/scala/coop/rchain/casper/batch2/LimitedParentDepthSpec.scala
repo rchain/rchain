@@ -1,7 +1,7 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
-import cats.syntax.traverse._
 import cats.instances.list._
+import cats.syntax.traverse._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
