@@ -1,10 +1,9 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch1
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.casper.{MultiParentCasper, NoNewDeploys}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global

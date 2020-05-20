@@ -1,37 +1,38 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
 import java.nio.file.Files
 
-import scala.collection.immutable.HashMap
 import cats.Monad
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{
   BlockDagStorageFixture,
   BlockGenerator,
   UnlimitedParentsEstimatorFixture
 }
-import coop.rchain.casper.helper.BlockGenerator._
-import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.casper.{InvalidBlock, ValidBlock, Validate}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.metrics._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
-import com.google.protobuf.ByteString
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+
+import scala.collection.immutable.HashMap
 
 class ValidateTest
     extends FlatSpec

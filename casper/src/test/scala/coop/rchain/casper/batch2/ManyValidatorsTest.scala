@@ -1,30 +1,29 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch2
 
 import cats.Monad
 import cats.effect.{Resource, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine._
-import EngineCell._
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.api.BlockAPI
+import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.casper.{Estimator, SafetyOracle}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.shared.{Cell, Time}
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import monix.execution.schedulers.CanBlock
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.immutable.HashMap
 import scala.concurrent.duration._
 import scala.util.Random
-import monix.execution.Scheduler.Implicits.global
 
 class ManyValidatorsTest
     extends FlatSpec

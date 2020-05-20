@@ -13,6 +13,7 @@ import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
