@@ -65,21 +65,29 @@ object BlockCreator {
     spanF.trace(CreateBlockMetricsSource) {
       import cats.instances.list._
       for {
-        tipHashes             <- Estimator[F].tips(dag, genesis)
-        _ <- Log[F].info(s"Creating block with tip hashes ${tipHashes.map(PrettyPrinter.buildString)}")
-        _                     <- spanF.mark("after-estimator")
-        parentMetadatas       <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
-        _ <- Log[F].info(s"Creating block with parents ${parentMetadatas.map(b => PrettyPrinter.buildString(b.blockHash))}")
+        tipHashes <- Estimator[F].tips(dag, genesis)
+        _ <- Log[F].info(
+              s"Creating block with tip hashes ${tipHashes.map(PrettyPrinter.buildString)}"
+            )
+        _               <- spanF.mark("after-estimator")
+        parentMetadatas <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
+        _ <- Log[F].info(
+              s"Creating block with parents ${parentMetadatas.map(b => PrettyPrinter.buildString(b.blockHash))}"
+            )
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
-        _ <- Log[F].info(s"Creating block with maxBlockNumber ${maxBlockNumber}")
+        _                     <- Log[F].info(s"Creating block with maxBlockNumber ${maxBlockNumber}")
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
-        deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-        latestMessageOpt      <- dag.latestMessage(sender)
-        seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
-        _ <- Log[F].info(s"Creating block with seqNum ${seqNum}")
+        slashedValidators     <- ProtoUtil.slashedInvalidValidators(dag)
+        invalidLatestMessagesExcludeSlashed = invalidLatestMessages.filter(
+          v => !slashedValidators.contains(v._1)
+        )
+        deploys          <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        sender           = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        _                <- Log[F].info(s"Creating block with seqNum ${seqNum}")
         // TODO: Add `slashingDeploys` to DeployStorage
-        slashingDeploys = invalidLatestMessages.values.toList.map(
+        slashingDeploys = invalidLatestMessagesExcludeSlashed.values.toList.map(
           invalidBlockHash =>
             // TODO: Do something useful with the result of "slash".
             SlashDeploy(
@@ -100,7 +108,6 @@ object BlockCreator {
         isActive = parents
           .traverse(b => isActiveValidator(b, runtimeManager, validatorIdentity))
           .map(_.forall(identity))
-        _ <- Log[F].info(s"Check isActive:${isActive} for creating block")
         justifications   <- computeJustifications(dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks

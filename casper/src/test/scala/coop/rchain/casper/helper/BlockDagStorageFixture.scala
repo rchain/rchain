@@ -134,6 +134,8 @@ object BlockDagStorageTestFixture {
         blockDagStorageDir.resolve("invalid-blocks-crc"),
         blockDagStorageDir.resolve("block-hashes-by-deploy-data"),
         blockDagStorageDir.resolve("block-hashes-by-deploy-crc"),
+        blockDagStorageDir.resolve("slashed-invalid-validator-data"),
+        blockDagStorageDir.resolve("slashed-invalid-validator-crc"),
         blockDagStorageDir.resolve("checkpoints"),
         blockDagStorageDir.resolve("block-number-index"),
         mapSize

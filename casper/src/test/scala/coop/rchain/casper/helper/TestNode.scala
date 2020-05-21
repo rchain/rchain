@@ -438,6 +438,8 @@ object TestNode {
       blockDagDir.resolve("invalid-blocks-crc"),
       blockDagDir.resolve("block-hashes-by-deploy-data"),
       blockDagDir.resolve("block-hashes-by-deploy-crc"),
+      blockDagDir.resolve("slashed-invalid-validator-data"),
+      blockDagDir.resolve("slashed-invalid-validator-crc"),
       blockDagDir.resolve("checkpoints"),
       blockDagDir.resolve("block-number-index"),
       mapSize

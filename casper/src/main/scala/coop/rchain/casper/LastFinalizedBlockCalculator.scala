@@ -2,10 +2,12 @@ package coop.rchain.casper
 
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.CasperState.CasperStateCell
+import coop.rchain.casper.protocol.SlashSystemDeployData
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.ListContrib
 import coop.rchain.models.BlockHash.BlockHash
@@ -23,7 +25,9 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) >> run(
+                              removeDeploysInFinalizedBlock(finalizedChild) >> putSlashedInvalidValidator(
+                                finalizedChild
+                              ) >> run(
                                 dag,
                                 finalizedChild
                               )
@@ -42,6 +46,25 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
             s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
               .buildString(finalizedChildHash)}."
           )
+    } yield ()
+
+  private def putSlashedInvalidValidator(finalizedChildHash: BlockHash): F[Unit] =
+    for {
+      block <- ProtoUtil.getBlock(finalizedChildHash)
+      _ = block.body.systemDeploys.traverse(
+        p =>
+          p.systemDeploy match {
+            case SlashSystemDeployData(_, pk) =>
+              for {
+                _ <- Log[F].info(
+                      s"Record slashed validator on ${PrettyPrinter.buildStringNoLimit(finalizedChildHash)} " +
+                        s"for ${PrettyPrinter.buildStringNoLimit(pk.bytes)}"
+                    )
+                _ <- BlockDagStorage[F].recordSlasedValidator(ByteString.copyFrom(pk.bytes))
+              } yield ()
+            case _ => ().pure[F]
+          }
+      )
     } yield ()
 
   /*

@@ -116,6 +116,11 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         _          <- dagStorage.close()
       } yield result
     }
+  private def defaultSlashedInvalidValidatorCrc(dagDataDir: Path): Path =
+    dagDataDir.resolve("slashed-invalid-validator-checksum")
+
+  private def defaultSlashedInvalidValidatorLog(dagDataDir: Path): Path =
+    dagDataDir.resolve("slashed-invalid-validator-data")
 
   private def defaultLatestMessagesLog(dagDataDir: Path): Path =
     dagDataDir.resolve("latest-messsages-data")
@@ -171,6 +176,8 @@ class BlockDagFileStorageTest extends BlockDagStorageTest {
         defaultInvalidBlocksCrc(dagDataDir),
         defaultBlockHasesByDeploy(dagDataDir),
         defaultBlockHasesByDeployCrc(dagDataDir),
+        defaultSlashedInvalidValidatorLog(dagDataDir),
+        defaultSlashedInvalidValidatorCrc(dagDataDir),
         defaultCheckpointsDir(dagDataDir),
         defaultBlockNumberIndex(dagDataDir),
         100L * 1024L * 1024L * 4096L,

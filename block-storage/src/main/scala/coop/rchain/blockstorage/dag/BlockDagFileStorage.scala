@@ -16,6 +16,7 @@ import coop.rchain.blockstorage.dag.DeployPersistentIndex._
 import coop.rchain.blockstorage.dag.EquivocationTrackerPersistentIndex._
 import coop.rchain.blockstorage.dag.InvalidBlocksPersistentIndex._
 import coop.rchain.blockstorage.dag.LatestMessagesPersistentIndex._
+import coop.rchain.blockstorage.dag.SlashedMessagePersistentIndex._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.blockstorage.util.byteOps._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
@@ -50,6 +51,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     deployIndex: PersistentDeployIndex[F],
     invalidBlocksIndex: PersistentInvalidBlocksIndex[F],
     equivocationTrackerIndex: PersistentEquivocationTrackerIndex[F],
+    slashedInvalidValidatorIndex: SlashedMessagePersistentIndex[F],
     state: MonadState[F, BlockDagFileStorageState[F]]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagFileStorage.getClass)
@@ -80,6 +82,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSortVector: Vector[Vector[BlockHash]],
       blockHashesByDeploy: Map[DeployId, BlockHash],
       invalidBlocksSet: Set[BlockMetadata],
+      slashedInvalidValidatorsSet: Set[Validator],
       sortOffset: Long
   ) extends BlockDagRepresentation[F] {
     private def findAndAccessCheckpoint[R](
@@ -216,6 +219,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         .map(_.toMap)
     def invalidBlocks: F[Set[BlockMetadata]] =
       invalidBlocksSet.pure[F]
+    def slashedInvalidValidators: F[Set[Validator]] = slashedInvalidValidatorsSet.pure[F]
   }
 
   private object FileEquivocationsTracker extends EquivocationsTracker[F] {
@@ -271,13 +275,14 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   private def representation: F[BlockDagRepresentation[F]] =
     for {
-      latestMessages      <- latestMessagesIndex.data
-      childMap            <- blockMetadataIndex.childMapData
-      blockMetadataMap    <- blockMetadataIndex.blockMetadataData
-      topoSort            <- blockMetadataIndex.topoSortData
-      blockHashesByDeploy <- deployIndex.data
-      invalidBlocks       <- invalidBlocksIndex.data.map(_.keySet)
-      sortOffset          <- getSortOffset
+      latestMessages           <- latestMessagesIndex.data
+      childMap                 <- blockMetadataIndex.childMapData
+      blockMetadataMap         <- blockMetadataIndex.blockMetadataData
+      topoSort                 <- blockMetadataIndex.topoSortData
+      blockHashesByDeploy      <- deployIndex.data
+      invalidBlocks            <- invalidBlocksIndex.data.map(_.keySet)
+      slashedInvalidValidators <- slashedInvalidValidatorIndex.data.map(_.keySet)
+      sortOffset               <- getSortOffset
     } yield FileDagRepresentation(
       latestMessages,
       childMap,
@@ -285,6 +290,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSort,
       blockHashesByDeploy,
       invalidBlocks,
+      slashedInvalidValidators,
       sortOffset
     )
 
@@ -361,8 +367,15 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         _ <- deployIndex.close
         _ <- invalidBlocksIndex.close
         _ <- blockNumberIndex.close
+        _ <- slashedInvalidValidatorIndex.close
       } yield ()
     )
+
+  def recordSlasedValidator(validator: Validator): F[Unit] = lock.withPermit(
+    for {
+      _ <- slashedInvalidValidatorIndex.add(validator, ())
+    } yield ()
+  )
 }
 
 object BlockDagFileStorage {
@@ -384,6 +397,8 @@ object BlockDagFileStorage {
       invalidBlocksCrcPath: Path,
       blockHashesByDeployLogPath: Path,
       blockHashesByDeployCrcPath: Path,
+      slashedInvalidValidatorLogPath: Path,
+      slashedInvalidValidatorCrcPath: Path,
       checkpointsDirPath: Path,
       blockNumberIndexPath: Path,
       mapSize: Long,
@@ -486,6 +501,10 @@ object BlockDagFileStorage {
                       config.blockHashesByDeployLogPath,
                       config.blockHashesByDeployCrcPath
                     )
+      slashedInvalidValidatorIndex <- SlashedMessagePersistentIndex.load[F](
+                                       config.slashedInvalidValidatorLogPath,
+                                       config.slashedInvalidValidatorCrcPath
+                                     )
       sortedCheckpoints <- loadCheckpoints(config.checkpointsDirPath)
       state = BlockDagFileStorageState(
         sortOffset = sortedCheckpoints.lastOption.map(_.end).getOrElse(0L),
@@ -499,6 +518,7 @@ object BlockDagFileStorage {
       deployIndex,
       invalidBlocksIndex,
       equivocationTrackerIndex,
+      slashedInvalidValidatorIndex,
       new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
     )
   }

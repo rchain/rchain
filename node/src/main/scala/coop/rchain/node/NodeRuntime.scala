@@ -183,6 +183,8 @@ class NodeRuntime private[node] (
       invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
       blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
       blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
+      slashedInvalidValidatorLogPath = blockdagStoragePath.resolve("slashedInvalidValidatorLogPath"),
+      slashedInvalidValidatorCrcPath = blockdagStoragePath.resolve("slashedInvalidValidatorCrcPath"),
       checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
       blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
       mapSize = nodeConf.storage.lmdbMapSizeBlockdagstore,

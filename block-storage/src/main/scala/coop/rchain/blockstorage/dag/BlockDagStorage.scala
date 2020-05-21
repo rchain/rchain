@@ -17,6 +17,7 @@ trait BlockDagStorage[F[_]] {
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
   def close(): F[Unit]
+  def recordSlasedValidator(validator: Validator): F[Unit]
 }
 
 object BlockDagStorage {
@@ -40,6 +41,7 @@ trait BlockDagRepresentation[F[_]] {
   def latestMessageHashes: F[Map[Validator, BlockHash]]
   def latestMessages: F[Map[Validator, BlockMetadata]]
   def invalidBlocks: F[Set[BlockMetadata]]
+  def slashedInvalidValidators: F[Set[Validator]]
 }
 
 trait EquivocationsTracker[F[_]] {

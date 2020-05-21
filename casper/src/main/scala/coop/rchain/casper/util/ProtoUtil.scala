@@ -487,4 +487,8 @@ object ProtoUtil {
         case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
       }
     }
+
+  def slashedInvalidValidators[F[_]: Monad](
+      dag: BlockDagRepresentation[F]
+  ): F[Set[Validator]] = dag.slashedInvalidValidators
 }

@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.models.Validator.Validator
 
 final class IndexedBlockDagStorage[F[_]: Monad](
     lock: Semaphore[F],
@@ -68,6 +69,9 @@ final class IndexedBlockDagStorage[F[_]: Monad](
   def checkpoint(): F[Unit] = underlying.checkpoint()
 
   def close(): F[Unit] = underlying.close()
+
+  def recordSlasedValidator(validator: Validator): F[Unit] =
+    underlying.recordSlasedValidator(validator)
 
   def lookupById(id: Int): F[Option[BlockMessage]] =
     idToBlocksRef.get.map(_.get(id.toLong))
