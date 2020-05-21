@@ -153,6 +153,8 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
         startBlockNumber: Long,
         endBlockNumber: Long
     ): TaskEnv[List[LightBlockInfo]] = ???
+
+    override def isFinalized(hash: String): TaskEnv[Boolean] = ???
   }
 
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {
