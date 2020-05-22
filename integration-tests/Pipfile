@@ -16,7 +16,7 @@ ecdsa = "*"
 cryptography = "*"
 eth-hash = "*"
 pycryptodome = "*"
-pyrchain = {git = "https://github.com/rchain/pyrchain.git"}
+pyrchain = "==0.3.7"
 requests = "*"
 
 [dev-packages]
