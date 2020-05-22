@@ -23,7 +23,7 @@ env:
   # However, setting this value too low or leaving it at default value, 25% on
   # OpenJDK 11, makes some unit tests occasionally fail on OutOfMemoryError on
   # GitHub runners which have only 7GB of RAM.
-  _JAVA_OPTIONS: -XX:MaxRAMPercentage=60.0 -XX:MaxDirectMemorySize=128M
+  _JAVA_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:MaxDirectMemorySize=128M
 
 jobs:
 
