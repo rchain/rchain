@@ -1,20 +1,21 @@
-package coop.rchain.casper
+package coop.rchain.casper.batch1
 
-import scala.util.Random._
-import cats.{Applicative, Functor, Monad}
 import cats.implicits._
+import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.casper.helper.TestNode._
+import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.scalatestcontrib.{assert, fail, succeed, _}
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.exceptions.TestFailedException
+import org.scalactic.source
 import org.scalatest.Assertion
-import org.scalactic._
+import org.scalatest.exceptions.TestFailedException
+
+import scala.util.Random.shuffle
 
 trait MergeabilityRules {
 

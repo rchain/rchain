@@ -16,6 +16,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.rholang._
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
