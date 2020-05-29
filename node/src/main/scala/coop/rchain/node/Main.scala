@@ -387,6 +387,7 @@ object Main {
     for {
       portsAvailability <- List(
                             ("http", conf.apiServer.portHttp),
+                            ("admin http", conf.apiServer.portAdminHttp),
                             ("grpc server external", conf.apiServer.portGrpcExternal),
                             ("grpc server internal", conf.apiServer.portGrpcInternal)
                           ).traverse { _.traverse(isLocalPortAvailable) }

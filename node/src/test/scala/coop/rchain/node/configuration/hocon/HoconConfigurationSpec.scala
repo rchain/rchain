@@ -88,6 +88,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         portGrpcInternal = 40402,
         grpcMaxRecvMessageSize = 16777216,
         portHttp = 40403,
+        portAdminHttp = 40405,
         maxBlocksLimit = 50,
         enableReporting = false,
         keepAliveTime = 2.hours,

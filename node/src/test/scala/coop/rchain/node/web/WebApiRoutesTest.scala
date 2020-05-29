@@ -16,6 +16,8 @@ import coop.rchain.node.NodeRuntime.TaskEnv
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
+import coop.rchain.node.api.AdminWebApi
+import coop.rchain.node.api.AdminWebApi._
 import io.circe.Decoder.Result
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -158,6 +160,10 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
     override def isFinalized(hash: String): TaskEnv[Boolean] = ???
   }
 
+  def genAdminWebApi: AdminWebApi[TaskEnv] = new AdminWebApi[TaskEnv] {
+    override def propose: TaskEnv[String] = Task.delay("").toReaderT
+  }
+
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {
     override def apply(c: HCursor): Result[ByteString] =
       if (c.value.isString)
@@ -185,6 +191,9 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
 
   val api   = genWebApi
   val route = WebApiRoutes.service[Task, TaskEnv](api)
+
+  val adminApi   = genAdminWebApi
+  val adminRoute = AdminWebApiRoutes.service[Task, TaskEnv](adminApi)
 
   "GET getBlock" should "detailed block info" in {
     val resp     = route.run(Request[Task](method = Method.GET, uri = Uri(path = "block/" + blockHash)))
@@ -328,6 +337,18 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
     for {
       res <- act_resp
       _   = res.status should be(Status.BadRequest)
+    } yield ()
+  }
+
+  "POST propose" should "return 200" in {
+    val resp =
+      adminRoute.run(
+        Request[Task](method = Method.POST, uri = Uri(path = "propose"))
+      )
+    val act_resp = resp.value.runSyncUnsafe()
+    for {
+      res <- act_resp
+      _   = res.status should be(Status.Ok)
     } yield ()
   }
 }

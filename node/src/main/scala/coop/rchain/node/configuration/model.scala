@@ -70,6 +70,7 @@ final case class ApiServer(
     portGrpcInternal: Int,
     grpcMaxRecvMessageSize: Long,
     portHttp: Int,
+    portAdminHttp: Int,
     maxBlocksLimit: Int,
     enableReporting: Boolean,
     keepAliveTime: FiniteDuration,
