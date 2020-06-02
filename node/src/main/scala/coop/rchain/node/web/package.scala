@@ -57,7 +57,7 @@ package object web {
       else
         Map.empty
       allRoutes = baseRoutes ++ extraRoutes
-      httpServerFiber <- BlazeServerBuilder[Task]
+      httpServerFiber <- BlazeServerBuilder[Task](scheduler)
                           .bindHttp(httpPort, host)
                           .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
                           .withIdleTimeout(connectionIdleTimeout)

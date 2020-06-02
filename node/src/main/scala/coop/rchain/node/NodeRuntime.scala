@@ -600,7 +600,7 @@ class NodeRuntime private[node] (
         reportingCasper,
         webApi,
         nodeConf.apiServer.maxConnectionIdle
-      )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s)
+      )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s, log)
       httpFiber <- httpServerFiber.start
       _ <- Task.delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
