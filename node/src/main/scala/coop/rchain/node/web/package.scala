@@ -8,6 +8,7 @@ import coop.rchain.node.NodeRuntime.TaskEnv
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.diagnostics.NewPrometheusReporter
 import coop.rchain.node.effects.EventConsumer
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.http4s.implicits._
@@ -33,7 +34,8 @@ package object web {
       concurrent: Concurrent[Task],
       rPConfAsk: RPConfAsk[Task],
       consumer: EventConsumer[Task],
-      scheduler: Scheduler
+      scheduler: Scheduler,
+      log: Log[Task]
   ): Task[Unit] =
     for {
       event <- EventsInfo.service[Task]
