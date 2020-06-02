@@ -17,12 +17,7 @@ object BlockMetadataStore {
   def apply[F[_]: Sync: Log](
       blockMetadataStore: KeyValueTypedStore[F, BlockHash, BlockMetadata]
   ): F[BlockMetadataStore[F]] =
-//    implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
     for {
-      // Migrating data from previous metadata index
-//      result <- BlockMetadataPersistentIndex.read(Paths.get("index_path"))
-//      (oldMetadaatMap, _, _) = result
-//      _ <- blockMetadataStore.put(oldMetadaatMap.toSeq)
       blockMetadataMap <- blockMetadataStore.toMap
       dagState         = recreateInMemoryState(blockMetadataMap)
     } yield new BlockMetadataStore[F](

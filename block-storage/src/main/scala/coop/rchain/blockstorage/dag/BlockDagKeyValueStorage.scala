@@ -22,7 +22,6 @@ import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import scodec.Codec
-import scodec.bits.ByteVector
 
 import scala.collection.immutable.SortedMap
 
@@ -200,15 +199,21 @@ object BlockDagKeyValueStorage {
   implicit private val BlockDagKeyValueStorage_FromFileMetricsSource: Source =
     Metrics.Source(BlockStorageMetricsSource, "dag-key-value-store")
 
-//  implicit private val logSource = LogSource(BlockDagKeyValueStorage.getClass)
+  private final case class DagStores[F[_]](
+      metadata: BlockMetadataStore[F],
+      metadataDb: KeyValueTypedStore[F, BlockHash, BlockMetadata],
+      equivocations: EquivocationTrackerStore[F],
+      equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
+      latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
+      invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
+  )
 
-  def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[BlockDagStorage[F]] = {
-
+  private def createStores[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics] = {
     def createDB[K, V](name: String, kCodec: Codec[K], vCodec: Codec[V]) =
       KeyValueStoreManager[F].database(name).map(_.toTypedStore(kCodec, vCodec))
 
     for {
-      lock <- MetricsSemaphore.single[F]
       // Block metadata map
       blockMetadataDb <- createDB[BlockHash, BlockMetadata](
                           "block-metadata",
@@ -241,14 +246,83 @@ object BlockDagKeyValueStorage {
                         codecDeployId,
                         codecBlockHash
                       )
-    } yield new BlockDagKeyValueStorage[F](
-      lock,
-      latestMessagesDb,
+    } yield DagStores(
       blockMetadataStore,
-      deployIndexDb,
+      blockMetadataDb,
+      equivocationTrackerIndex,
+      equivocationTrackerDb,
+      latestMessagesDb,
       invalidBlocksDb,
-      equivocationTrackerIndex
+      deployIndexDb
     )
   }
+
+  def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[BlockDagStorage[F]] =
+    for {
+      lock   <- MetricsSemaphore.single[F]
+      stores <- createStores
+    } yield new BlockDagKeyValueStorage[F](
+      lock,
+      stores.latestMessages,
+      stores.metadata,
+      stores.deploys,
+      stores.invalidBlocks,
+      stores.equivocations
+    )
+
+  def importFromFileStorage[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics](
+      config: BlockDagFileStorage.Config
+  ): F[Unit] =
+    for {
+      _ <- Log[F].warn(s"Starting DAG file storage migration, loading existing data.")
+
+      // Load old DAG file storage
+      oldStores <- BlockDagFileStorage.createStores(config)
+      // Old indexes
+      (_, oldLatestMessages, oldMetadata, oldDeploys, oldInvalidBlocks, oldEquivocations) = oldStores
+
+      _ <- Log[F].warn(s"Create new DAG storage.")
+
+      // Create new stores
+      stores <- createStores
+
+      _ <- Log[F].warn(s"Migrate metadata index.")
+
+      // Migrate metadata index
+      oldMetadataMap <- oldMetadata.blockMetadataData
+      _              <- stores.metadataDb.put(oldMetadataMap.toSeq)
+
+      _ <- Log[F].warn(s"Migrate latest messages index.")
+
+      // Migrate latest messages index
+      oldLatestMessages <- oldLatestMessages.data
+      _                 <- stores.latestMessages.put(oldLatestMessages.toSeq)
+
+      _ <- Log[F].warn(s"Migrate invalid blocks index.")
+
+      // Migrate invalid blocks index
+      oldInvalidBlocksRaw  <- oldInvalidBlocks.data
+      oldInvalidBlocksData = oldInvalidBlocksRaw.keys.map(b => (b.blockHash, b)).toSeq
+      _                    <- stores.invalidBlocks.put(oldInvalidBlocksData)
+
+      _ <- Log[F].warn(s"Migrate equivocations tracker index.")
+
+      // Migrate equivocation tracker index
+      oldEquivocationsRaw <- oldEquivocations.data
+      oldEquivocationsData = oldEquivocationsRaw
+        .map(
+          x => ((x.equivocator, x.equivocationBaseBlockSeqNum), x.equivocationDetectedBlockHashes)
+        )
+        .toSeq
+      _ <- stores.equivocationsDb.put(oldEquivocationsData)
+
+      _ <- Log[F].warn(s"Migrate deploys index.")
+
+      // Migrate deploys index
+      oldDeploysData <- oldDeploys.data
+      _              <- stores.deploys.put(oldDeploysData.toSeq)
+
+      _ <- Log[F].warn(s"DAG storage migration successful.")
+    } yield ()
 
 }

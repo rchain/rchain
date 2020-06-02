@@ -497,4 +497,38 @@ object BlockDagFileStorage {
     )
   }
 
+  def createStores[F[_]: Concurrent: Sync: Log: Metrics](config: Config) = {
+    implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
+    for {
+      blockNumberIndex <- loadBlockNumberIndexLmdbStore(config)
+      latestMessagesIndex <- LatestMessagesPersistentIndex.load[F](
+                              config.latestMessagesLogPath,
+                              config.latestMessagesCrcPath
+                            )
+      blockMetadataIndex <- BlockMetadataPersistentIndex.load[F](
+                             config.blockMetadataLogPath,
+                             config.blockMetadataCrcPath
+                           )
+      equivocationTrackerIndex <- EquivocationTrackerPersistentIndex.load[F](
+                                   config.equivocationsTrackerLogPath,
+                                   config.equivocationsTrackerCrcPath
+                                 )
+      invalidBlocksIndex <- InvalidBlocksPersistentIndex.load[F](
+                             config.invalidBlocksLogPath,
+                             config.invalidBlocksCrcPath
+                           )
+      deployIndex <- DeployPersistentIndex.load[F](
+                      config.blockHashesByDeployLogPath,
+                      config.blockHashesByDeployCrcPath
+                    )
+    } yield (
+      blockNumberIndex,
+      latestMessagesIndex,
+      blockMetadataIndex,
+      deployIndex,
+      invalidBlocksIndex,
+      equivocationTrackerIndex
+    )
+  }
+
 }

@@ -293,7 +293,6 @@ class NodeRuntime private[node] (
       nodeDiscoveryEnv,
       rpConnections,
       rpConnectionsEnv,
-      blockDagStorage,
       blockStore,
       packetHandler,
       eventLogEnv,
@@ -341,7 +340,6 @@ class NodeRuntime private[node] (
       nodeDiscovery: NodeDiscovery[TaskEnv],
       rpConnections: ConnectionsCell[Task],
       rpConnectionsEnv: ConnectionsCell[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
       blockStore: BlockStore[TaskEnv],
       packetHandler: PacketHandler[TaskEnv],
       eventLog: EventLog[TaskEnv],
@@ -408,7 +406,7 @@ class NodeRuntime private[node] (
                   rpConfAsk,
                   consumer
                 ).toReaderT
-      _ <- addShutdownHook(servers, runtimeCleanup)
+      _ <- addShutdownHook(servers, runtimeCleanup, blockStore)
       _ <- servers.externalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
@@ -472,23 +470,19 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv]
-  )(
-      implicit blockStore: BlockStore[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
-      log: Log[TaskEnv]
-  ): TaskEnv[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).as(()).toReaderT
+      runtimeCleanup: Cleanup[TaskEnv],
+      blockStore: BlockStore[TaskEnv]
+  )(implicit log: Log[TaskEnv]): TaskEnv[Unit] =
+    Task
+      .delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore)))
+      .as(())
+      .toReaderT
 
   def clearResources(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv]
-  )(
-      implicit
-      blockStore: BlockStore[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
-      log: Log[TaskEnv]
-  ): Unit =
+      runtimeCleanup: Cleanup[TaskEnv],
+      blockStore: BlockStore[TaskEnv]
+  )(implicit log: Log[TaskEnv]): Unit =
     (for {
       _ <- Log[TaskEnv].info("Shutting down API servers...")
       _ <- servers.externalApiServer.stop.toReaderT
@@ -501,8 +495,6 @@ class NodeRuntime private[node] (
       _ <- Task.delay(Kamon.stopAllReporters()).toReaderT
       _ <- servers.httpServer.cancel.attempt.toReaderT
       _ <- runtimeCleanup.close()
-      _ <- Log[TaskEnv].info("Bringing DagStorage down ...")
-      _ <- blockDagStorage.close()
       _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- Log[TaskEnv].info("Goodbye.")
@@ -745,11 +737,17 @@ object NodeRuntime {
       else Span.noop[F]
       // Key-value store manager / manages LMDB databases
       casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
-      // TODO: remove `dagConfig`, it's not used anymore (after migration)
-      // blockDagStorage <- BlockDagFileStorage.create[F](dagConfig)
       blockDagStorage <- {
         implicit val kvm = casperStoreManager
-        BlockDagKeyValueStorage.create[F]
+        for {
+          // Check if migration from DAG file storage to LMDB should be executed
+          blockMetadataDb  <- casperStoreManager.database("block-metadata")
+          dagStrageIsEmpty <- blockMetadataDb.iterate(_.isEmpty.pure[F])
+          // TODO: remove `dagConfig`, it's not used anymore (after migration)
+          _ <- BlockDagKeyValueStorage.importFromFileStorage(dagConfig).whenA(dagStrageIsEmpty)
+          // Create DAG store
+          dagStorage <- BlockDagKeyValueStorage.create[F]
+        } yield dagStorage
       }
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
