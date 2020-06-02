@@ -58,13 +58,15 @@ object Validate {
         if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
       } yield publicKey).toSet
 
+    val logMsg = signatories.isEmpty match {
+      case true => s"ApprovedBlock is self-signed by ceremony master."
+      case false =>
+        s"ApprovedBlock is signed by: ${signatories
+          .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
+          .mkString(", ")}"
+    }
     for {
-      _ <- Log[F]
-            .info(
-              s"Block already signed by: ${signatories
-                .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
-                .mkString(", ")}"
-            )
+      _ <- Log[F].info(logMsg)
 
       result <- if (signatories.size >= requiredSignatures)
                  true.pure
