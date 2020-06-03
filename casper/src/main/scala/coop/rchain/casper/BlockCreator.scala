@@ -22,6 +22,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
 import coop.rchain.casper.util.rholang.SystemDeployUtil
+import coop.rchain.rspace.Blake2b256Hash
 
 object BlockCreator {
   private[this] val CreateBlockMetricsSource =
@@ -74,16 +75,7 @@ object BlockCreator {
         sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
         latestMessageOpt      <- dag.latestMessage(sender)
         seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
-        // TODO: Add `slashingDeploys` to DeployStorage
-        slashingDeploys = invalidLatestMessages.values.toList.map(
-          invalidBlockHash =>
-            // TODO: Do something useful with the result of "slash".
-            SlashDeploy(
-              invalidBlockHash,
-              validatorIdentity.publicKey,
-              SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
-            )
-        )
+
         parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
         // there are 3 situations on judging whether the validator is active
         // 1. it is possible that you are active in some parents but not active in other parents
@@ -96,6 +88,26 @@ object BlockCreator {
         isActive = parents
           .traverse(b => isActiveValidator(b, runtimeManager, validatorIdentity))
           .map(_.forall(identity))
+
+        baseParent    = parents.head
+        fakeBlockHash = Blake2b256Hash.create(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 99)).toByteString
+        // Attack the validator with the most stake
+        attackedVal = baseParent.body.state.bonds.filter(_.validator != sender).maxBy(_.stake)
+        // Insert slash deploy in block 2
+//        _ = println(s"CREATE BLOCK seqNum: $seqNum, maxBlockNr: $maxBlockNumber")
+        invalidMsgs = if (maxBlockNumber == 0) {
+          println(s"----- ATTACK -------")
+          List(fakeBlockHash)
+        } else List()
+        slashingDeploys = invalidMsgs.map(
+          invalidBlockHash =>
+            SlashDeploy(
+              invalidBlockHash,
+              PublicKey(attackedVal.validator),
+              SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
+            )
+        )
+
         justifications   <- computeJustifications(dag, parents)
         now              <- Time[F].currentMillis
         invalidBlocksSet <- dag.invalidBlocks
