@@ -30,9 +30,6 @@ object WebApiRoutes {
       def getErrorMsg(ex: Throwable) = if (ex.getMessage == null) ex.toString else ex.getMessage
       def handleResponseError =
         res
-          .onError {
-            case ex: Throwable => Log[F].error("HTTP API response error", ex)
-          }
           .handleErrorWith {
             // The place where all API errors are handled
             // TODO: introduce error codes
@@ -41,7 +38,9 @@ object WebApiRoutes {
               BadRequest(s"${getErrorMsg(err).take(250)}...".asJson)
             // Errors from BlockAPI
             case err: BlockApiException => BadRequest(getErrorMsg(err).asJson)
-            case err: Throwable         => BadRequest(getErrorMsg(err).asJson)
+            case err: Throwable         =>
+              // Logging only unanticipated errors, not related to Block API or input parsing (user errors)
+              Log[F].error("HTTP API response error", err) *> BadRequest(getErrorMsg(err).asJson)
           }
     }
 
