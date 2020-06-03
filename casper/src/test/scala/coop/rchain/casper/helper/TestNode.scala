@@ -220,7 +220,7 @@ class TestNode[F[_]](
 
   def shutoff() = transportLayerEff.clear(local)
 
-  def visualizeDag(): F[String] = {
+  def visualizeDag(startBlockNumber: Int): F[String] = {
 
     type G[A] = State[StringBuffer, A]
     import cats.mtl.implicits._
@@ -232,6 +232,7 @@ class TestNode[F[_]](
     val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, G, String](
       Int.MaxValue,
       apiMaxBlocksLimit,
+      startBlockNumber,
       (ts, lfb) =>
         GraphzGenerator.dagAsCluster[F, G](
           ts,
@@ -247,9 +248,9 @@ class TestNode[F[_]](
     * Prints a uri on stdout that, when clicked, visualizes the current dag state using ttps://dreampuf.github.io.
     * The dag's shape is passed as Graphviz's dot source code, encoded in the URI's hash.
     */
-  def printVisualizeDagUrl(): F[Unit] =
+  def printVisualizeDagUrl(startBlockNumber: Int): F[Unit] =
     for {
-      dot <- visualizeDag()
+      dot <- visualizeDag(startBlockNumber)
       // Java's URLEncode encodes ' ' as '+' instead of '%20', see https://stackoverflow.com/a/5330239/52142
       urlEncoded = URLEncoder.encode(dot, "UTF-8").replaceAll("\\+", "%20")
       _ <- Sync[F].delay {
