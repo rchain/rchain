@@ -37,7 +37,7 @@ import org.lmdbjava.{Env, EnvFlags}
 import scala.ref.WeakReference
 import scala.util.matching.Regex
 
-private final case class BlockDagFileStorageState[F[_]: Sync](
+private final case class BlockDagFileStorageState(
     sortOffset: Long,
     checkpoints: List[Checkpoint]
 )
@@ -50,7 +50,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     deployIndex: PersistentDeployIndex[F],
     invalidBlocksIndex: PersistentInvalidBlocksIndex[F],
     equivocationTrackerIndex: PersistentEquivocationTrackerIndex[F],
-    state: MonadState[F, BlockDagFileStorageState[F]]
+    state: MonadState[F, BlockDagFileStorageState]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagFileStorage.getClass)
 
@@ -499,7 +499,7 @@ object BlockDagFileStorage {
       deployIndex,
       invalidBlocksIndex,
       equivocationTrackerIndex,
-      new AtomicMonadState[F, BlockDagFileStorageState[F]](AtomicAny(state))
+      new AtomicMonadState[F, BlockDagFileStorageState](AtomicAny(state))
     )
   }
 

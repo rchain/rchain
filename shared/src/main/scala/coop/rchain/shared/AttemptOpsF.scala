@@ -6,10 +6,12 @@ import scodec.{Attempt, Err}
 
 object AttemptOpsF {
 
-  val ex: Err ⇒ Exception = err => new Exception(err.toString)
-  implicit class RichAttempt[F[_]: Sync, T](a: Attempt[T]) {
+  // Exception in case of failure
+  def ex(err: Err) = new Exception(err.toString)
 
-    def get: F[T] =
+  implicit class RichAttempt[T](a: Attempt[T]) {
+    // Get result or applicative error if failure
+    def get[F[_]](implicit f: Sync[F]): F[T] =
       a match {
         case Attempt.Successful(res) =>
           Applicative[F].pure(res)
