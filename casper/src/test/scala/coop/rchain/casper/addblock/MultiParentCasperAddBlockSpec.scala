@@ -515,6 +515,60 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
+  it should "not slash valid validator" in effectTest {
+    def pretty(x: ByteString) = PrettyPrinter.buildString(x)
+    def showBond(b: Bond)     = s"${pretty(b.validator)} (${b.stake})"
+    def prettyBlock(prefix: String, b: BlockMessage) =
+      s"$prefix #${b.body.state.blockNumber}, ${pretty(b.blockHash)}, sender: ${pretty(b.sender)}"
+    TestNode.networkEff(genesis, networkSize = 3).use {
+      case node0 +: node1 +: node2 +: Seq() =>
+        for {
+          // Initial bonds
+          n0_bonds1 <- node0.runtimeManager
+                        .computeBonds(ProtoUtil.postStateHash(node0.genesis))
+          _ = println(s"N0: ${n0_bonds1.map(showBond)}")
+
+          // N0 Block 1
+          deployData1 <- ConstructDeploy.basicDeployData[Effect](0)
+          n0_b1       <- node0.propagateBlock(deployData1)(node1, node2)
+          _           = println(prettyBlock("N0 B1", n0_b1))
+
+          // Bonds after attack
+          n0_bonds1 <- node0.runtimeManager
+                        .computeBonds(ProtoUtil.postStateHash(n0_b1))
+          _ = println(s"N0: ${n0_bonds1.map(showBond)}")
+
+          // N1 Block 1
+          n1_d1 <- ConstructDeploy.basicDeployData[Effect](2)
+          n1_b1 <- node1.propagateBlock(n1_d1)(node0, node2)
+          _     = println(prettyBlock("N1 B1", n1_b1))
+
+          // N2 Block 1
+          n2_d1 <- ConstructDeploy.basicDeployData[Effect](3)
+          n2_b1 <- node2.propagateBlock(n2_d1)(node0, node1)
+          _     = println(prettyBlock("N2 B1", n2_b1))
+
+          // LFB
+          n0_lfb <- node0.casperEff.lastFinalizedBlock
+          _      = println(prettyBlock("N0 LFB", n0_lfb))
+
+          n1_lfb <- node1.casperEff.lastFinalizedBlock
+          _      = println(prettyBlock("N1 LFB", n1_lfb))
+
+          n2_lfb <- node1.casperEff.lastFinalizedBlock
+          _      = println(prettyBlock("N2 LFB", n2_lfb))
+
+          // N1 Bonds LFB
+          n1_bonds1 <- node1.runtimeManager.computeBonds(ProtoUtil.postStateHash(n1_lfb))
+          _         = println(s"N1: ${n1_bonds1.map(showBond)}")
+
+          // N2 Bonds LFB
+          n2_bonds1 <- node1.runtimeManager.computeBonds(ProtoUtil.postStateHash(n2_lfb))
+          _         = println(s"N1: ${n2_bonds1.map(showBond)}")
+        } yield ()
+    }
+  }
+
   private def buildBlockWithInvalidJustification(
       nodes: IndexedSeq[TestNode[Effect]],
       deploys: immutable.IndexedSeq[ProcessedDeploy],
