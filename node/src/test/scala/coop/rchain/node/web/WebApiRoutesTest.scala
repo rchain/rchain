@@ -15,6 +15,7 @@ import coop.rchain.casper.protocol.{BlockInfo, BondInfo, DeployData, DeployInfo,
 import coop.rchain.node.NodeRuntime.TaskEnv
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
+import coop.rchain.shared.Log
 import io.circe.Decoder.Result
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -180,6 +181,7 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   implicit val decodePrepareResponse: Decoder[PrepareResponse]   = deriveDecoder[PrepareResponse]
   implicit val encodePrepareRequest: Encoder[PrepareRequest]     = deriveEncoder[PrepareRequest]
   implicit val et                                                = NodeRuntime.envToTask
+  implicit val log                                               = new Log.NOPLog[Task]
 
   val api   = genWebApi
   val route = WebApiRoutes.service[Task, TaskEnv](api)
