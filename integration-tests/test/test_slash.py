@@ -37,6 +37,12 @@ def generate_block_hash() -> bytes:
     blake.update(b'evil')
     return blake.digest()
 
+def is_exist_slash_deploy(block: BlockMessage) -> bool:
+    exist_slash_deploy = False
+    for systemDeploy in block.body.systemDeploys:
+        if systemDeploy.systemDeploy.WhichOneof("systemDeploy") == "slashSystemDeploy":
+            exist_slash_deploy = True
+    return exist_slash_deploy
 
 @contextmanager
 def three_nodes_network_with_node_client(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, validator_bonds_dict: Dict[PrivateKey, int] = None) -> Generator[Tuple[TestingContext, Node, Node, Node, NodeClient], None, None]:
@@ -374,3 +380,55 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         slashed_block_info = validator2.show_block_parsed(slashed_blockhash)
         bonds_validators = slashed_block_info.bonds
         assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
+
+
+@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+def test_node_working_right_after_slashing(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
+    """
+    Slash a validator which proposes an invalid block contains invalid block hash
+
+    1. v1 proposes a valid block b1
+    2. v1 proposes an invalid block b2 with invalid block hash and send it to v2
+    3. v2 records b2 as invalid block (InvalidBlockHash)
+    4. v2 proposes a new block which slashes v1
+    5. v2 should propose normally
+    """
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+        contract = '/opt/docker/examples/tut-hello.rho'
+
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        blockhash = validator1.propose()
+
+        wait_for_node_sees_block(context, validator2, blockhash)
+
+        block_info = validator1.show_block_parsed(blockhash)
+
+        block_msg = client.block_request(block_info.block_hash, validator1)
+        evil_block_hash = generate_block_hash()
+
+        block_msg.blockHash = evil_block_hash
+        block_msg.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(evil_block_hash)
+        block_msg.header.timestamp = int(time.time()*1000)
+
+        client.send_block(block_msg, validator2)
+
+        record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
+        wait_for_log_match(context, validator2, record_invalid)
+
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+
+        slashed_block_hash = validator2.propose()
+
+        # this block should contain slash system deploy
+        block_info = validator2.show_block_parsed(slashed_block_hash)
+        bonds_validators = block_info.bonds
+        assert bonds_validators[BONDED_VALIDATOR_KEY_1.get_public_key().to_hex()] == 0
+        slash_block = client.block_request(block_info.block_hash, validator2)
+        assert is_exist_slash_deploy(slash_block), "systemDeploy does not contain slash system deploy"
+
+        # this new block should not contain slash deploy
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        new_block_hash = validator2.propose()
+        new_block_info = validator2.show_block_parsed(new_block_hash)
+        normal_block = client.block_request(new_block_info.block_hash, validator2)
+        assert not is_exist_slash_deploy(normal_block), "slashing deploy should only apply once"
