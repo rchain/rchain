@@ -23,6 +23,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Running.Requested
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
@@ -37,6 +38,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api._
@@ -718,6 +720,8 @@ object NodeRuntime {
         diagnostics.effects
           .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
+      // Key-value store manager / manages LMDB databases
+      casperStoreManager                    <- RNodeKeyValueStoreManager(conf.storage.dataDir)
       blockDagStorage                       <- BlockDagFileStorage.create[F](dagConfig)
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
@@ -766,10 +770,21 @@ object NodeRuntime {
           sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
           (space, replay, hr) = sarAndHR
           runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
-          reporter = if (conf.apiServer.enableReporting)
-            ReportingCasper.rhoReporter(hr)
-          else
-            ReportingCasper.noop
+          reporter <- if (conf.apiServer.enableReporting) {
+                       import coop.rchain.rholang.interpreter.storage._
+                       implicit val kvm = casperStoreManager
+                       for {
+                         reportingCache <- ReportMemStore
+                                            .store[
+                                              F,
+                                              Par,
+                                              BindPattern,
+                                              ListParWithRandom,
+                                              TaggedContinuation
+                                            ]
+                       } yield ReportingCasper.rhoReporter(hr, reportingCache)
+                     } else
+                       ReportingCasper.noop.pure[F]
         } yield (runtime, reporter)
       }
       (casperRuntime, reportingCasper) = casperRuntimeAndReporter
