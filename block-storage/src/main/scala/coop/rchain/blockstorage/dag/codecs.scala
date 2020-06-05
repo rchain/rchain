@@ -35,4 +35,6 @@ object codecs {
     byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).right.get,
     signedDeployData => ByteVector(DeployData.toProto(signedDeployData).toByteArray)
   )
+
+  val codecByteString = xmapToByteString(variableSizeBytes(uint8, bytes))
 }
