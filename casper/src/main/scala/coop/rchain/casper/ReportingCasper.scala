@@ -103,15 +103,15 @@ object ReportingCasper {
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
-      historyRepository: RhoHistoryRepository[F]
-  )(implicit scheduler: ExecutionContext) =
+      historyRepository: RhoHistoryRepository[F],
+      store: ReportMemStore[F]
+  )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       val codecK                                                     = serializeTaggedContinuation.toCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
-      val store                                                      = ReportMemStore.store[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
       implicit val source                                            = Metrics.Source(CasperMetricsSource, "report-replay")
 
-      val blockLockMap = TrieMap[BlockHash, Tuple2[MetricsSemaphore[F], Boolean]]()
+      val blockLockMap = TrieMap[BlockHash, (MetricsSemaphore[F], Boolean)]()
 
       private def replayGetReport(
           block: BlockMessage
@@ -134,12 +134,10 @@ object ReportingCasper {
           )
           runtime <- ReportingRuntime
                       .createWithEmptyCost[F](reporting, Seq.empty)
-          manager <- fromRuntime(runtime)
-          dag     <- BlockDagStorage[F].getRepresentation
-          genesis <- BlockStore[F].getApprovedBlock
-          isGenesis = genesis
-            .map(a => block.blockHash == a.candidate.block.blockHash)
-            .getOrElse(false)
+          manager          <- fromRuntime(runtime)
+          dag              <- BlockDagStorage[F].getRepresentation
+          genesis          <- BlockStore[F].getApprovedBlock
+          isGenesis        = genesis.exists(a => block.blockHash == a.candidate.block.blockHash)
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks = invalidBlocksSet
             .map(block => (block.blockHash, block.sender))
@@ -209,7 +207,7 @@ object ReportingCasper {
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
           semaphore    <- MetricsSemaphore.single
-          lockWithDone = blockLockMap.getOrElseUpdate(hash, Tuple2(semaphore, false))
+          lockWithDone = blockLockMap.getOrElseUpdate(hash, (semaphore, false))
           result <- if (lockWithDone._2) {
                      traceBlock(hash)
                    } else {
@@ -217,7 +215,7 @@ object ReportingCasper {
                        (ProcessedDeploy, Seq[Seq[ReportingEvent]])
                      ]]](for {
                        re <- traceBlock(hash)
-                       _  = blockLockMap.update(hash, Tuple2(lockWithDone._1, true))
+                       _  = blockLockMap.update(hash, (lockWithDone._1, true))
                      } yield re)
                    }
         } yield result
