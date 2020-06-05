@@ -12,12 +12,21 @@ import enumeratum.{Enum, EnumEntry}
 import org.lmdbjava.{DbiFlags, Env, EnvFlags}
 
 object LmdbStoreManager {
-  def apply[F[_]: Concurrent: Log](dirPath: Path): F[KeyValueStoreManager[F]] =
-    Deferred[F, Env[ByteBuffer]] map (LmdbStoreManagerImpl(dirPath, _))
+  def apply[F[_]: Concurrent: Log](dirPath: Path, maxEnvSize: Long): F[KeyValueStoreManager[F]] =
+    Deferred[F, Env[ByteBuffer]] map (LmdbStoreManagerImpl(dirPath, maxEnvSize, _))
 }
 
+/**
+  * Wrapper around LMDB environment which can hold multiple databases.
+  *
+  * @param dirPath directory where LMDB files are stored.
+  * @param maxEnvSize maximum LMDB environment (file) size.
+  * @param envDefer deferred object for LMDB environment in use.
+  * @return LMDB store manager.
+  */
 private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
     dirPath: Path,
+    maxEnvSize: Long,
     envDefer: Deferred[F, Env[ByteBuffer]]
 ) extends KeyValueStoreManager[F] {
 
@@ -113,7 +122,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
       env <- Sync[F].delay(
               Env
                 .create()
-                .setMapSize(10L * 1024L * 1024L * 1024L)
+                .setMapSize(maxEnvSize)
                 .setMaxDbs(20)
                 // Maximum parallel readers
                 .setMaxReaders(2048)
