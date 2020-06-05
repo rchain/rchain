@@ -778,16 +778,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] = {
     // Create a deploy with newly created private key
     val (privKey, _) = Secp256k1.newKeyPair
+
+    // Creates signed deploy
     val deploy = ConstructDeploy.sourceDeploy(
       term,
       timestamp = System.currentTimeMillis,
-      phloLimit = Long.MaxValue,
+      // Hardcoded phlogiston limit / 1 REV if phloPrice=1
+      phloLimit = 100 * 1000 * 1000,
       sec = privKey
     )
+
     // Create return channel as first private name created in deploy term
     val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     import coop.rchain.models.rholang.implicits._
     val returnName: Par = GPrivate(ByteString.copyFrom(rand.next()))
+
     // Execute deploy on top of specified block hash
     captureResultsWithErrors(hash, deploy, returnName)
   }
