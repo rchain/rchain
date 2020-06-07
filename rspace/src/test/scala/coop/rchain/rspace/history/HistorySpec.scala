@@ -2,11 +2,12 @@ package coop.rchain.rspace.history
 
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
-
+import org.scalacheck.{Gen}
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import TestData._
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.crypto.codec.Base16
 import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
@@ -14,6 +15,12 @@ import cats.implicits._
 import scala.util.Random
 
 class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+
+  // Empty                     root
+  //                            |
+  //          insert           Skip
+  //        ============>       |
+  //                           Leaf
   "first leaf in trie" should "create a Skip -> Leaf" in withEmptyTrie { emptyHistory =>
     val data = insert(_zeros) :: Nil
     for {
@@ -27,6 +34,14 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  // EmptyTrie                                                   root
+  //                                                              |
+  //                                                            Skip
+  //                    insert with same prefix                   |
+  //                  ========================>              PointerBlock
+  //                                                            / | \
+  //                                                           /  |  \
+  //                                                       Leaf  Leaf  Leaf
   "leafs under same prefix" should "live in one pointer block" in withEmptyTrie { emptyHistory =>
     val data = List.range(0, 10).map(zerosAnd).map(k => InsertAction(k, randomBlake))
     for {
@@ -43,6 +58,11 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  //          root                          root ---> EmptyTrie
+  //           |
+  //          Skip
+  //           |        Delete(Leaf)
+  //          Leaf    ===============>
   "deletion of a leaf" should "result in empty store" in withEmptyTrie { emptyHistory =>
     val insertions = insert(_zeros) :: Nil
     val deletions  = delete(_zeros) :: Nil
@@ -56,6 +76,15 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  //          root                                                 root
+  //           |                                                    |
+  //          Skip                                                 Skip
+  //           |                                                    |
+  //       PointerBlock                                            Leaf
+  //        /       \
+  //     Skip       Skip
+  //       |          |       delete one of the leaf
+  //     Leaf       Leaf     =========================>
   "deletion of a leaf" should "collapse two skips" in withEmptyTrie { emptyHistory =>
     val inserts   = insert(_zeros) :: insert(_zerosOnes) :: Nil
     val deletions = delete(_zeros) :: Nil
@@ -71,6 +100,13 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  //        first                                      historyOne                                   historyTwo
+  //                         insert key1 with value1                  insert key1 with value2
+  //   root-> EmptyTrie    ===========================>  root    ===============================>   root
+  //                                                      |                                           |
+  //                                                     Skip                                       Skip
+  //                                                      |                                           |
+  //                                                     Leaf(value1)                               Leaf(value2)
   "update of a leaf" should "not change past history" in withEmptyTrie { emptyHistory =>
     val insertOne = insert(_zeros) :: Nil
     val insertTwo = insert(_zeros) :: Nil
@@ -86,6 +122,52 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       _                = leafOnePre shouldBe leafOnePre
       _                = leafOnePre should not be leafTwo
       _                = leafOnePost should not be leafTwo
+    } yield ()
+  }
+
+  //              root                                                                      root
+  //               |                                                                          |
+  //              Skip                                                                      Skip
+  //               |               delete Leaf1                                               |
+  //           PointerBlock       then insert one alone with Leaf3                      PointerBlock
+  //           /       \         ==================================>                    /         \
+  //        Skip       Skip                                                           Skip       Skip
+  //           |          |                                                             |          |
+  //        Leaf1       Leaf2                                                         Leaf3       Leaf2
+
+  "delete collapsed a branch then insert" should "work fine" in withEmptyTrie { emptyHistory =>
+    val inserts =
+      insert(hexKey("000100")) ::
+        insert(hexKey("000220")) ::
+        Nil
+    val insertsTwo =
+      delete(hexKey("000100")) ::
+        insert(hexKey("000110")) ::
+        Nil
+
+    for {
+      historyOne                    <- emptyHistory.process(inserts)
+      keyOne                        <- historyOne.find(inserts(0).key)
+      keyTwo                        <- historyOne.find(inserts(1).key)
+      historyTwo                    <- historyOne.process(insertsTwo)
+      keyOneNotExist                <- historyTwo.find(insertsTwo(0).key)
+      newInsert                     <- historyTwo.find(insertsTwo(1).key)
+      keyTwoAfterProcess            <- historyTwo.find(inserts(1).key)
+      (_, p1)                       = keyOne
+      (keyTwoValue, p2)             = keyTwo
+      (keyTwoAfterProcessValue, p3) = keyTwoAfterProcess
+      (_, p4)                       = newInsert
+      (keyOneNotExistEmpty, _)      = keyOneNotExist
+      _                             = keyTwoAfterProcessValue shouldBe keyTwoValue
+      _                             = keyOneNotExistEmpty shouldBe a[EmptyPointer.type]
+      _                             = skipShouldHaveAffix(p1.head, List(0, 0))
+      _                             = skipShouldHaveAffix(p2.head, List(0, 0))
+      _                             = skipShouldHaveAffix(p3.head, List(0, 0))
+      _                             = skipShouldHaveAffix(p1.last, List(0, 0))
+      _                             = skipShouldHaveAffix(p2.last, List(2, 0))
+      _                             = skipShouldHaveAffix(p3.last, List(2, 0))
+      _                             = skipShouldHaveAffix(p4.head, List(0, 0))
+      _                             = skipShouldHaveAffix(p4.last, List(1, 0))
     } yield ()
   }
 
@@ -115,6 +197,8 @@ object TestData {
     val b = s.toCharArray.toList.map(_.asDigit).map(_.toByte)
     a ++ b
   }
+
+  def hexKey(s: String) = Base16.unsafeDecode(s).toList
 
   def randomBlake: Blake2b256Hash =
     Blake2b256Hash.create(Random.alphanumeric.take(32).map(_.toByte).toArray)
