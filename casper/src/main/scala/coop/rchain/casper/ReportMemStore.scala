@@ -43,8 +43,8 @@ class ReportMemStoreImpl[F[_]: Sync](
 
   override def put(hash: ByteString, data: Seq[Seq[ReportingEvent]]): F[Unit] =
     for {
-      encoded <- Sync[F].delay(coder.encode(data).get)
-      _       <- encoded.map(b => store.put(hash, b))
+      encoded <- coder.encode(data).get
+      _       <- store.put(hash, encoded)
     } yield ()
 }
 
