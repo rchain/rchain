@@ -6,6 +6,7 @@ import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.node.NodeRuntime.TaskEnv
 import coop.rchain.node.api.WebApi
+import coop.rchain.node.api.AdminWebApi
 import coop.rchain.node.diagnostics.NewPrometheusReporter
 import coop.rchain.node.effects.EventConsumer
 import coop.rchain.shared.Log
@@ -66,4 +67,31 @@ package object web {
                           .resource
                           .use(_ => Task.never[Unit])
     } yield httpServerFiber
+
+  def aquireAdminHttpServer(
+      host: String = "0.0.0.0",
+      httpPort: Int,
+      adminWebApiRoutes: AdminWebApi[TaskEnv],
+      connectionIdleTimeout: FiniteDuration
+  )(
+      implicit
+      concurrent: Concurrent[Task],
+      consumer: EventConsumer[Task],
+      scheduler: Scheduler
+  ): Task[Unit] =
+    for {
+      event <- EventsInfo.service[Task]
+      baseRoutes = Map(
+        "/api" -> CORS({
+          implicit val et = NodeRuntime.envToTask
+          AdminWebApiRoutes.service[Task, TaskEnv](adminWebApiRoutes)
+        })
+      )
+      adminHttpServerFiber <- BlazeServerBuilder[Task](scheduler)
+                               .bindHttp(httpPort, host)
+                               .withHttpApp(Router(baseRoutes.toList: _*).orNotFound)
+                               .withIdleTimeout(connectionIdleTimeout)
+                               .resource
+                               .use(_ => Task.never[Unit])
+    } yield adminHttpServerFiber
 }

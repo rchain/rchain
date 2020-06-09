@@ -97,6 +97,7 @@ object ConfigMapper {
       add("api-server.grpc-max-recv-message-size", run.apiGrpcMaxRecvMessageSize)
       add("api-server.host", run.apiHost)
       add("api-server.port-http", run.apiPortHttp)
+      add("api-server.port-admin-http", run.apiPortAdminHttp)
       add("api-server.enable-reporting", run.apiEnableReporting)
       add("api-server.max-blocks-limit", run.apiMaxBlocksLimit)
       add("api-server.keep-alive-time", run.apiKeepAliveTime)

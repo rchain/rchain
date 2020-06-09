@@ -39,6 +39,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
+import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.{Configuration, NodeConf}
 import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
@@ -257,7 +258,8 @@ class NodeRuntime private[node] (
       engineInit,
       casperLaunch,
       reportingCasper,
-      webApi
+      webApi,
+      adminWebApi
     ) = result
 
     // 4. launch casper
@@ -271,7 +273,8 @@ class NodeRuntime private[node] (
       engineInit,
       runtimeCleanup,
       reportingCasper,
-      webApi
+      webApi,
+      adminWebApi
     )(
       logEnv,
       timeEnv,
@@ -317,7 +320,8 @@ class NodeRuntime private[node] (
       engineInit: EngineInit[TaskEnv],
       runtimeCleanup: Cleanup[TaskEnv],
       reportingCasper: ReportingCasper[TaskEnv],
-      webApi: WebApi[TaskEnv]
+      webApi: WebApi[TaskEnv],
+      adminWebApi: AdminWebApi[TaskEnv]
   )(
       implicit
       logEnv: Log[TaskEnv],
@@ -392,7 +396,7 @@ class NodeRuntime private[node] (
       _     <- info
       local <- peerNodeAsk.ask
       host  = local.endpoint.host
-      servers <- acquireServers(apiServers, reportingCasper, webApi)(
+      servers <- acquireServers(apiServers, reportingCasper, webApi, adminWebApi)(
                   kademliaStore,
                   nodeDiscoveryTask,
                   rpConnections,
@@ -417,6 +421,10 @@ class NodeRuntime private[node] (
       // HTTP server is started immediately on `acquireServers`
       _ <- Log[TaskEnv].info(
             s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
+          )
+
+      _ <- Log[TaskEnv].info(
+            s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
           )
 
       _ <- Log[TaskEnv].info(
@@ -515,13 +523,15 @@ class NodeRuntime private[node] (
       transportServer: TransportServer,
       externalApiServer: Server[Task],
       internalApiServer: Server[Task],
-      httpServer: Fiber[Task, Unit]
+      httpServer: Fiber[Task, Unit],
+      adminHttpServer: Fiber[Task, Unit]
   )
 
   def acquireServers(
       apiServers: APIServers,
       reportingCasper: ReportingCasper[TaskEnv],
-      webApi: WebApi[TaskEnv]
+      webApi: WebApi[TaskEnv],
+      adminWebApi: AdminWebApi[TaskEnv]
   )(
       implicit
       kademliaStore: KademliaStore[Task],
@@ -602,6 +612,13 @@ class NodeRuntime private[node] (
         nodeConf.apiServer.maxConnectionIdle
       )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s, log)
       httpFiber <- httpServerFiber.start
+      adminHttpServerFiber = aquireAdminHttpServer(
+        nodeConf.apiServer.host,
+        nodeConf.apiServer.portAdminHttp,
+        adminWebApi,
+        nodeConf.apiServer.maxConnectionIdle
+      )(concurrent, consumer, s)
+      adminHttpFiber <- adminHttpServerFiber.start
       _ <- Task.delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
             if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
@@ -615,7 +632,8 @@ class NodeRuntime private[node] (
       transportServer,
       externalApiServer,
       internalApiServer,
-      httpFiber
+      httpFiber,
+      adminHttpFiber
     )
   }
 }
@@ -701,7 +719,8 @@ object NodeRuntime {
         EngineInit[F],
         CasperLaunch[F],
         ReportingCasper[F],
-        WebApi[F]
+        WebApi[F],
+        AdminWebApi[F]
     )
   ] =
     for {
@@ -874,6 +893,15 @@ object NodeRuntime {
         implicit val bs = blockStore
         new WebApiImpl[F](conf.apiServer.maxBlocksLimit)
       }
+      adminWebApi = {
+        implicit val ec     = engineCell
+        implicit val sp     = span
+        implicit val or     = oracle
+        implicit val bs     = blockStore
+        implicit val sc     = synchronyConstraintChecker
+        implicit val lfhscc = lastFinalizedHeightConstraintChecker
+        new AdminWebApiImpl[F](conf.apiServer.maxBlocksLimit, blockApiLock)
+      }
     } yield (
       blockStore,
       blockDagStorage,
@@ -885,7 +913,8 @@ object NodeRuntime {
       engineInit,
       casperLaunch,
       reportingCasper,
-      webApi
+      webApi,
+      adminWebApi
     )
 
   final case class APIServers(

@@ -140,6 +140,7 @@ rnode {
     port = 40400
     port-http = 40403
     port-kademlia = 40404
+    port-admin-http = 40405
     send-timeout = 2 seconds
     standalone = false
     bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"

@@ -291,6 +291,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = s"Port for HTTP services. Defaults to 40403"
     )
 
+    val apiPortAdminHttp = opt[Int](
+      short = 'a',
+      descr = s"Port for admin HTTP services. Defaults to 40405"
+    )
+
     val apiMaxBlocksLimit = opt[Int](
       descr = "The max block numbers you can aquire from api",
       validate = _ >= 0
