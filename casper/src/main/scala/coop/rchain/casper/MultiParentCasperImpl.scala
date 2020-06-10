@@ -276,7 +276,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
-                  case Right(None)    => Left(BlockStatus.invalidTransaction)
+                  case Right(None) =>
+                    val isOwnBlock = PublicKey(b.sender).some == validatorId.map(_.publicKey)
+                    if (!isOwnBlock) Left(BlockStatus.invalidTransaction)
+                    else
+                      // Prevent validator to slash itself for invalid block
+                      Left(
+                        BlockStatus.exception(
+                          new Exception("Validation of own block failed, adding block canceled.")
+                        )
+                      )
                 }
             )
         _      <- EitherT.liftF(Span[F].mark("transactions-validated"))
