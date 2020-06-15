@@ -19,11 +19,19 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     dirPath: Path
 ) extends KeyValueStoreManager[F] {
 
+  private case class LmdbEnvConfig(
+      name: String,
+      // Max LMDB environment (file) size
+      maxEnvSize: Long = 100L * 1024L * 1024L * 1024L
+  )
+
+  private val reportingEnvConfig = LmdbEnvConfig("reporting")
+
   // Database name to store instance name mapping (subfolder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
-  val dbInstanceMapping: Map[String, String] = Map[String, String](
-    // Block store
-    ("block-metadata", "dagstorage")
+  private val dbInstanceMapping: Map[String, LmdbEnvConfig] = Map[String, LmdbEnvConfig](
+    // Reporting (trace) cache
+    ("reporting-cache", reportingEnvConfig)
   )
 
   private case class StoreState(
@@ -38,20 +46,20 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
       // Find DB ref / first time create deferred object
       newDefer <- Deferred[F, KeyValueStoreManager[F]]
       action <- managersState.modify { st =>
-                 val manName        = dbInstanceMapping(dbName)
-                 val (isNew, defer) = st.envs.get(manName).fold((true, newDefer))((false, _))
-                 val newSt          = st.copy(envs = st.envs.updated(manName, defer))
-                 (newSt, (isNew, defer, manName))
+                 val cfg @ LmdbEnvConfig(manName, _) = dbInstanceMapping(dbName)
+                 val (isNew, defer)                  = st.envs.get(manName).fold((true, newDefer))((false, _))
+                 val newSt                           = st.copy(envs = st.envs.updated(manName, defer))
+                 (newSt, (isNew, defer, cfg))
                }
-      (isNew, defer, manName) = action
-      _                       <- createLmdbManger(manName, defer).whenA(isNew)
-      manager                 <- defer.get
-      database                <- manager.database(dbName)
+      (isNew, defer, manCfg) = action
+      _                      <- createLmdbManger(manCfg, defer).whenA(isNew)
+      manager                <- defer.get
+      database               <- manager.database(dbName)
     } yield database
 
-  private def createLmdbManger(name: String, defer: Deferred[F, KeyValueStoreManager[F]]) =
+  private def createLmdbManger(config: LmdbEnvConfig, defer: Deferred[F, KeyValueStoreManager[F]]) =
     for {
-      manager <- LmdbStoreManager(dirPath.resolve(name))
+      manager <- LmdbStoreManager(dirPath.resolve(config.name), config.maxEnvSize)
       _       <- defer.complete(manager)
     } yield ()
 

@@ -31,7 +31,7 @@ class LmdbKeyValueStoreSpec
 
   def withSut[F[_]: Concurrent: Log](f: KeyValueStoreSut[F] => F[Unit]) =
     for {
-      kvm <- LmdbStoreManager[F](tempPath.resolve(Random.nextString(32)))
+      kvm <- LmdbStoreManager[F](tempPath.resolve(Random.nextString(32)), 1024 * 1024 * 1024)
       sut = {
         implicit val kvm_ = kvm
         new KeyValueStoreSut[F]
