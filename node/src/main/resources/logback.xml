@@ -12,7 +12,7 @@
     </filter>
     <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
     <encoder>
-      <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+      <pattern>%d{HH:mm:ss.SSS} [%highlight(%-5level{5})] [%cyan(%-20.20thread{20})] [%cyan(%-29.29logger{29})] - %msg%n </pattern>
     </encoder>
   </appender>
 
@@ -20,7 +20,7 @@
     <file>${rnode.data.dir}/rnode.log</file>
     <append>true</append>
     <encoder>
-      <pattern>%d{ISO8601, UTC} [%thread] %-5level %logger - %msg%n</pattern>
+      <pattern>%d{ISO8601, UTC} [%highlight(%-5level{5})] [%cyan(%-20.20thread{30})] [%cyan(%-29.29logger{29})]- %msg%n </pattern>
     </encoder>
   </appender>
 
