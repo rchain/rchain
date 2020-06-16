@@ -45,7 +45,7 @@ class LogsContainMessage:
 
 class NodeStarted(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'coop.rchain.node.NodeRuntime - Listening for traffic on rnode')
+        super().__init__(node, 'Listening for traffic on rnode')
 
 
 class RunningStateEntered(LogsContainMessage):
@@ -60,17 +60,17 @@ class ApprovedBlockReceived(LogsContainMessage):
 
 class SentUnapprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Broadcasting UnapprovedBlock')
+        super().__init__(node, 'Broadcasting UnapprovedBlock')
 
 
 class BlockApproval(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Received block approval from')
+        super().__init__(node, 'Received block approval from')
 
 
 class SentApprovedBlock(LogsContainMessage):
     def __init__(self, node: 'Node') -> None:
-        super().__init__(node, 'c.r.c.e.ApproveBlockProtocol$ApproveBlockProtocolImpl - Sending ApprovedBlock')
+        super().__init__(node, 'Sending ApprovedBlock')
 
 
 class LogsReMatch:
