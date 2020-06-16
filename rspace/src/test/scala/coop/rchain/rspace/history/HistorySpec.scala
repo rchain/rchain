@@ -12,6 +12,7 @@ import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
 
+import scala.collection.concurrent.TrieMap
 import scala.util.Random
 
 class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
@@ -137,12 +138,12 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
   "delete collapsed a branch then insert" should "work fine" in withEmptyTrie { emptyHistory =>
     val inserts =
-      insert(hexKey("000100")) ::
-        insert(hexKey("000220")) ::
+      insert(hexKey("0000010000")) ::
+        insert(hexKey("0000020200")) ::
         Nil
     val insertsTwo =
-      delete(hexKey("000100")) ::
-        insert(hexKey("000110")) ::
+      delete(hexKey("0000010000")) ::
+        insert(hexKey("0000010100")) ::
         Nil
 
     for {
@@ -171,6 +172,62 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
     } yield ()
   }
 
+  // TODO https://github.com/rchain/rchain/pull/2950#discussion_r453490235
+  // put this test into somewhere else because it runs for more than 10 mins.
+  "randomly insert or delete" should "return the correct result" ignore withEmptyTrie {
+    (emptyHistory) =>
+      val sizeInserts = 10000
+      val sizeDeletes = 3000
+      val state       = TrieMap[KeyPath, Blake2b256Hash]()
+      val inserts     = generateRandomInsert(0)
+      for {
+
+        _ <- (1 to 10).toList.foldLeftM[
+              Task,
+              (
+                  History[Task],
+                  List[InsertAction],
+                  TrieMap[KeyPath, Blake2b256Hash]
+              )
+            ](emptyHistory, inserts, state) {
+              case ((history, inserts, state), _) =>
+                for {
+                  newInserts <- Task.delay(generateRandomInsert(sizeInserts))
+                  newDeletes <- Task.delay(
+                                 generateRandomDeleteFromInsert(sizeDeletes, inserts) ++
+                                   generateRandomDelete(sizeDeletes)
+                               )
+                  actions    <- Task.delay(newInserts ++ newDeletes)
+                  _          = println(s"process ${actions.size}")
+                  newHistory <- history.process(actions)
+                  newState   = updateState(state, actions)
+                  _          = println(s" The new state size is ${newState.size}")
+                  _ <- newState.toList.traverse {
+                        case (k, _) =>
+                          for {
+                            re <- newHistory.find(k)
+                            _ = re._1 match {
+                              case LeafPointer(_) => succeed
+                              case _              => fail("Can not get value")
+                            }
+                          } yield ()
+                      }
+                  _ <- newDeletes.traverse(
+                        d =>
+                          for {
+                            re <- newHistory.find(d.key)
+                            _ = re._1 match {
+                              case EmptyPointer => succeed
+                              case _            => fail("got empty pointer after remove")
+                            }
+                          } yield ()
+                      )
+
+                } yield (newHistory, newInserts, newState)
+            }
+      } yield ()
+  }
+
   protected def withEmptyTrie(f: History[Task] => Task[Unit]): Unit = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
@@ -182,6 +239,23 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       case Skip(affix, _) => affix.toSeq.toList shouldBe bytes
       case p              => fail("unknown trie prefix" + p)
     }
+
+  def randomKey(size: Int) = List.fill(size)((Random.nextInt(256) - 128).toByte)
+
+  def generateRandomInsert(size: Int) = List.fill(size)(insert(randomKey(32)))
+  def generateRandomDelete(size: Int) = List.fill(size)(delete(randomKey(32)))
+  def generateRandomDeleteFromInsert(size: Int, inserts: List[InsertAction]) =
+    Random.shuffle(inserts).take(size).map(i => delete(i.key))
+
+  def updateState(state: TrieMap[KeyPath, Blake2b256Hash], actions: List[HistoryAction]) = {
+    actions.map {
+      case InsertAction(key, hash) => state.put(key, hash)
+      case DeleteAction(key)       => state.remove(key)
+    }
+
+    state
+  }
+
 }
 
 object TestData {
