@@ -1,6 +1,6 @@
 # RChain
 
-[![Build Status](https://drone.rchain-dev.tk/api/badges/rchain/rchain/status.svg)](https://drone.rchain-dev.tk/rchain/rchain)
+[![Build Status](https://github.com/rchain/rchain/workflows/CI/badge.svg)](https://github.com/rchain/rchain/actions?query=workflow%3ACI+branch%3Astaging)
 [![codecov](https://codecov.io/gh/rchain/rchain/branch/master/graph/badge.svg)](https://codecov.io/gh/rchain/rchain)
 
 The open-source RChain project is building a decentralized, economic,
