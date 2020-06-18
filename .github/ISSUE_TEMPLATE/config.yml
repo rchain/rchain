@@ -3,6 +3,6 @@ contact_links:
   - name: Propose RChain platform improvement (RCHIP)
     url: https://github.com/rchain/rchip-proposals/issues
     about: For RChain platform feature requests, you can consider open an issue on RChain Improvement Proposals repository
-  - name: Report security bug
-    url: https://developer.rchain.coop
-    about: Please report security related bugs here
+  # - name: Report security bug
+  #   url: https://developer.rchain.coop
+  #   about: Please report security related bugs here
