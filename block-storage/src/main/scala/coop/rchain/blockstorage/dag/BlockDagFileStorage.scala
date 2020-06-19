@@ -204,16 +204,10 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
-    def latestMessage(validator: Validator): F[Option[BlockMetadata]] =
-      latestMessagesMap.get(validator).flatTraverse(lookup)
+
     def latestMessageHashes: F[Map[Validator, BlockHash]] =
       latestMessagesMap.pure[F]
-    def latestMessages: F[Map[Validator, BlockMetadata]] =
-      latestMessagesMap.toList
-        .traverse {
-          case (validator, hash) => lookup(hash).map(validator -> _.get)
-        }
-        .map(_.toMap)
+
     def invalidBlocks: F[Set[BlockMetadata]] =
       invalidBlocksSet.pure[F]
   }
@@ -500,6 +494,40 @@ object BlockDagFileStorage {
       invalidBlocksIndex,
       equivocationTrackerIndex,
       new AtomicMonadState[F, BlockDagFileStorageState](AtomicAny(state))
+    )
+  }
+
+  def createStores[F[_]: Concurrent: Sync: Log: Metrics](config: Config) = {
+    implicit val raiseIOError: RaiseIOError[F] = IOError.raiseIOErrorThroughSync[F]
+    for {
+      blockNumberIndex <- loadBlockNumberIndexLmdbStore(config)
+      latestMessagesIndex <- LatestMessagesPersistentIndex.load[F](
+                              config.latestMessagesLogPath,
+                              config.latestMessagesCrcPath
+                            )
+      blockMetadataIndex <- BlockMetadataPersistentIndex.load[F](
+                             config.blockMetadataLogPath,
+                             config.blockMetadataCrcPath
+                           )
+      equivocationTrackerIndex <- EquivocationTrackerPersistentIndex.load[F](
+                                   config.equivocationsTrackerLogPath,
+                                   config.equivocationsTrackerCrcPath
+                                 )
+      invalidBlocksIndex <- InvalidBlocksPersistentIndex.load[F](
+                             config.invalidBlocksLogPath,
+                             config.invalidBlocksCrcPath
+                           )
+      deployIndex <- DeployPersistentIndex.load[F](
+                      config.blockHashesByDeployLogPath,
+                      config.blockHashesByDeployCrcPath
+                    )
+    } yield (
+      blockNumberIndex,
+      latestMessagesIndex,
+      blockMetadataIndex,
+      deployIndex,
+      invalidBlocksIndex,
+      equivocationTrackerIndex
     )
   }
 

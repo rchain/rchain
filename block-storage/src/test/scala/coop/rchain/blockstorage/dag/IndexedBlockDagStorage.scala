@@ -1,17 +1,16 @@
 package coop.rchain.blockstorage.dag
 
-import cats.Monad
-import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStorageMetricsSource
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 
-final class IndexedBlockDagStorage[F[_]: Monad](
+final class IndexedBlockDagStorage[F[_]: Sync](
     lock: Semaphore[F],
     underlying: BlockDagStorage[F],
     idToBlocksRef: Ref[F, Map[Long, BlockMessage]],

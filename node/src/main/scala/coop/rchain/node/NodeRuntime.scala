@@ -13,8 +13,8 @@ import cats.mtl._
 import cats.tagless.implicits._
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.{InMemDeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.{ReportingCasper, _}
@@ -54,6 +54,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
+import coop.rchain.store.KeyValueStoreManager
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -292,7 +293,6 @@ class NodeRuntime private[node] (
       nodeDiscoveryEnv,
       rpConnections,
       rpConnectionsEnv,
-      blockDagStorage,
       blockStore,
       packetHandler,
       eventLogEnv,
@@ -340,7 +340,6 @@ class NodeRuntime private[node] (
       nodeDiscovery: NodeDiscovery[TaskEnv],
       rpConnections: ConnectionsCell[Task],
       rpConnectionsEnv: ConnectionsCell[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
       blockStore: BlockStore[TaskEnv],
       packetHandler: PacketHandler[TaskEnv],
       eventLog: EventLog[TaskEnv],
@@ -407,7 +406,7 @@ class NodeRuntime private[node] (
                   rpConfAsk,
                   consumer
                 ).toReaderT
-      _ <- addShutdownHook(servers, runtimeCleanup)
+      _ <- addShutdownHook(servers, runtimeCleanup, blockStore)
       _ <- servers.externalApiServer.start.toReaderT
 
       _ <- Log[TaskEnv].info(
@@ -471,23 +470,19 @@ class NodeRuntime private[node] (
 
   def addShutdownHook(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv]
-  )(
-      implicit blockStore: BlockStore[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
-      log: Log[TaskEnv]
-  ): TaskEnv[Unit] =
-    Task.delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).as(()).toReaderT
+      runtimeCleanup: Cleanup[TaskEnv],
+      blockStore: BlockStore[TaskEnv]
+  )(implicit log: Log[TaskEnv]): TaskEnv[Unit] =
+    Task
+      .delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore)))
+      .as(())
+      .toReaderT
 
   def clearResources(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv]
-  )(
-      implicit
-      blockStore: BlockStore[TaskEnv],
-      blockDagStorage: BlockDagStorage[TaskEnv],
-      log: Log[TaskEnv]
-  ): Unit =
+      runtimeCleanup: Cleanup[TaskEnv],
+      blockStore: BlockStore[TaskEnv]
+  )(implicit log: Log[TaskEnv]): Unit =
     (for {
       _ <- Log[TaskEnv].info("Shutting down API servers...")
       _ <- servers.externalApiServer.stop.toReaderT
@@ -500,8 +495,6 @@ class NodeRuntime private[node] (
       _ <- Task.delay(Kamon.stopAllReporters()).toReaderT
       _ <- servers.httpServer.cancel.attempt.toReaderT
       _ <- runtimeCleanup.close()
-      _ <- Log[TaskEnv].info("Bringing DagStorage down ...")
-      _ <- blockDagStorage.close()
       _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- Log[TaskEnv].info("Goodbye.")
@@ -678,7 +671,8 @@ object NodeRuntime {
   def cleanup[F[_]: Sync: Log](
       runtime: Runtime[F],
       casperRuntime: Runtime[F],
-      deployStorageCleanup: F[Unit]
+      deployStorageCleanup: F[Unit],
+      casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
     new Cleanup[F] {
       override def close(): F[Unit] =
@@ -687,6 +681,8 @@ object NodeRuntime {
           _ <- runtime.close()
           _ <- Log[F].info("Shutting down Casper runtime ...")
           _ <- casperRuntime.close()
+          _ <- Log[F].info("Shutting down Casper store manager ...")
+          _ <- casperStoreManager.shutdown
           _ <- Log[F].info("Shutting down deploy storage ...")
           _ <- deployStorageCleanup
         } yield ()
@@ -712,7 +708,7 @@ object NodeRuntime {
   ): F[
     (
         BlockStore[F],
-        BlockDagFileStorage[F],
+        BlockDagStorage[F],
         Cleanup[F],
         PacketHandler[F],
         APIServers,
@@ -740,8 +736,19 @@ object NodeRuntime {
           .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
       // Key-value store manager / manages LMDB databases
-      casperStoreManager                    <- RNodeKeyValueStoreManager(conf.storage.dataDir)
-      blockDagStorage                       <- BlockDagFileStorage.create[F](dagConfig)
+      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+      blockDagStorage <- {
+        implicit val kvm = casperStoreManager
+        for {
+          // Check if migration from DAG file storage to LMDB should be executed
+          blockMetadataDb  <- casperStoreManager.database("block-metadata")
+          dagStrageIsEmpty <- blockMetadataDb.iterate(_.isEmpty.pure[F])
+          // TODO: remove `dagConfig`, it's not used anymore (after migration)
+          _ <- BlockDagKeyValueStorage.importFromFileStorage(dagConfig).whenA(dagStrageIsEmpty)
+          // Create DAG store
+          dagStorage <- BlockDagKeyValueStorage.create[F]
+        } yield dagStorage
+      }
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
@@ -899,8 +906,13 @@ object NodeRuntime {
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
         } yield ()
       }
-      engineInit     = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(evalRuntime, casperRuntime, deployStorageCleanup)
+      engineInit = engineCell.read >>= (_.init)
+      runtimeCleanup = NodeRuntime.cleanup(
+        evalRuntime,
+        casperRuntime,
+        deployStorageCleanup,
+        casperStoreManager
+      )
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span

@@ -3,14 +3,14 @@ package coop.rchain.casper.util.rholang
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.Parallel
+import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.helper.TestNode.makeBlockDagFileStorageConfig
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
@@ -67,13 +67,13 @@ object Resources {
   def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
       path: Path
   ): Resource[F, BlockDagStorage[F]] =
-    Resource
-      .make(
-        BlockDagFileStorage
-          .create[F](makeBlockDagFileStorageConfig(path))
-          .widen
-      )(_.close())
-      .widen
+    Resource.liftF(for {
+      storeManager <- RNodeKeyValueStoreManager[F](path)
+      blockDagStorage <- {
+        implicit val kvm = storeManager
+        BlockDagKeyValueStorage.create[F]
+      }
+    } yield blockDagStorage)
 
   def mkDeployStorageAt[F[_]: Sync](path: Path): Resource[F, DeployStorage[F]] =
     LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, BlockDagStorageTestFixture.mapSize))

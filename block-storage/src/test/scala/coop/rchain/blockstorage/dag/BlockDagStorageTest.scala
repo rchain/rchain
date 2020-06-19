@@ -7,6 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.LatestMessagesLogIsCorrupted
 import coop.rchain.blockstorage.dag.codecs._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
 import coop.rchain.casper.protocol._

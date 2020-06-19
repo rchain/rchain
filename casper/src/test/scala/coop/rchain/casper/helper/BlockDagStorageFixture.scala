@@ -8,8 +8,13 @@ import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.functor._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.dag.{
+  BlockDagKeyValueStorage,
+  BlockDagStorage,
+  IndexedBlockDagStorage
+}
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -35,9 +40,13 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     implicit val log     = Log.log[Task]
 
     val resource = for {
-      paths                  <- Resources.copyStorage[Task](context.storageDirectory)
-      blockStore             <- Resources.mkBlockStoreAt[Task](paths.blockStoreDir)
-      blockDagStorage        <- Resources.mkBlockDagStorageAt[Task](paths.blockDagDir)
+      paths        <- Resources.copyStorage[Task](context.storageDirectory)
+      blockStore   <- Resources.mkBlockStoreAt[Task](paths.blockStoreDir)
+      storeManager <- Resource.liftF(RNodeKeyValueStoreManager[Task](paths.blockDagDir))
+      blockDagStorage <- Resource.liftF({
+                          implicit val kvm = storeManager
+                          BlockDagKeyValueStorage.create[Task]
+                        })
       indexedBlockDagStorage <- Resource.liftF(IndexedBlockDagStorage.create[Task](blockDagStorage))
       runtime                <- Resources.mkRuntimeManagerAt[Task](paths.rspaceDir)()
     } yield (blockStore, indexedBlockDagStorage, runtime)
@@ -122,23 +131,13 @@ object BlockDagStorageTestFixture {
       implicit log: Log[Task],
       metrics: Metrics[Task]
   ): Task[BlockDagStorage[Task]] =
-    BlockDagFileStorage.create[Task](
-      BlockDagFileStorage.Config(
-        blockDagStorageDir.resolve("latest-messages-data"),
-        blockDagStorageDir.resolve("latest-messages-crc"),
-        blockDagStorageDir.resolve("block-metadata-data"),
-        blockDagStorageDir.resolve("block-metadata-crc"),
-        blockDagStorageDir.resolve("equivocations-tracker-data"),
-        blockDagStorageDir.resolve("equivocations-tracker-crc"),
-        blockDagStorageDir.resolve("invalid-blocks-data"),
-        blockDagStorageDir.resolve("invalid-blocks-crc"),
-        blockDagStorageDir.resolve("block-hashes-by-deploy-data"),
-        blockDagStorageDir.resolve("block-hashes-by-deploy-crc"),
-        blockDagStorageDir.resolve("checkpoints"),
-        blockDagStorageDir.resolve("block-number-index"),
-        mapSize
-      )
-    )
+    for {
+      storeManager <- RNodeKeyValueStoreManager[Task](blockDagStorageDir)
+      blockDagStorage <- {
+        implicit val kvm = storeManager
+        BlockDagKeyValueStorage.create[Task]
+      }
+    } yield blockDagStorage
 
   def createDirectories[F[_]: Concurrent]: Resource[F, (Path, Path)] =
     Resource.make[F, (Path, Path)] {

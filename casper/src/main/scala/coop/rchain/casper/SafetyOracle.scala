@@ -3,11 +3,12 @@ package coop.rchain.casper
 import cats.Monad
 import cats.syntax.all._
 import cats.instances.list._
-
 import coop.rchain.catscontrib._
 import Catscontrib._
 import cats.data.OptionT
+import cats.effect.Sync
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, DagOperations, ProtoUtil}
@@ -57,7 +58,7 @@ object SafetyOracle extends SafetyOracleInstances {
 }
 
 sealed abstract class SafetyOracleInstances {
-  def cliqueOracle[F[_]: Monad: Log: Metrics: Span]: SafetyOracle[F] =
+  def cliqueOracle[F[_]: Sync: Log: Metrics: Span]: SafetyOracle[F] =
     new SafetyOracle[F] {
       private val SafetyOracleMetricsSource: Metrics.Source =
         Metrics.Source(CasperMetricsSource, "safety-oracle")
