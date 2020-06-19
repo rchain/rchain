@@ -27,7 +27,7 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
 
   private def readConfiguration(config: Config): Settings = {
     import scala.collection.JavaConverters._
-    val influxConfig = config.getConfig("rnode.influxdb")
+    val influxConfig = config.getConfig("kamon.influxdb")
     val address =
       new InetSocketAddress(influxConfig.getString("hostname"), influxConfig.getInt("port"))
     val maxPacketSize  = influxConfig.getBytes("max-packet-size")
