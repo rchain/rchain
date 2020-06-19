@@ -1,6 +1,6 @@
 ---
 name: Report a bug
-about: Create a bug report to help us improve RNode software
+about: Create a bug report to help us improve RChain platform
 labels: bug
 ---
 

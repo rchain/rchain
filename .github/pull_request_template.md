@@ -2,10 +2,6 @@
 <!-- What this PR does, and why it's needed -->
 
 
-### GitHub issue:
-<!-- Create it if there isn't one already. -->
-
-
 ### Notes
 <!-- Optional. Add any notes on caveats, approaches you tried that didn't work, or anything else. -->
 
