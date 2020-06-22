@@ -2,9 +2,7 @@ package coop.rchain.casper.storage
 
 import java.nio.ByteBuffer
 
-import cats.effect.ExitCase.{Canceled, Completed, Error}
 import cats.effect.Sync
-import cats.effect.syntax.all._
 import cats.syntax.all._
 import coop.rchain.shared.Resources.withResource
 import coop.rchain.store.KeyValueStore
@@ -17,37 +15,6 @@ final case class DbEnv[F[_]](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer], done: F
 final case class LmdbKeyValueStore[F[_]: Sync](
     getEnvDbi: F[DbEnv[F]]
 ) extends KeyValueStore[F] {
-
-  private def withReadTxn[T](op: (Txn[ByteBuffer], Dbi[ByteBuffer]) => F[T]): F[T] =
-    for {
-      // Acquire current LMDB environment and DBI interface
-      dbEnv <- getEnvDbi
-      // "Done" must be called to mark finished operation with the environment/dbi
-      DbEnv(env, dbi, done) = dbEnv
-      // Create read transaction
-      txnF = Sync[F].delay(env.txnRead)
-      // Execute database operation, commit at the end
-      result <- txnF.bracketCase(
-                 txn =>
-                   for {
-                     // Execute DB operation within transaction
-                     res <- op(txn, dbi)
-                     // Commit transaction (read and write)
-                     _ <- Sync[F].delay(txn.commit())
-                   } yield res
-               ) {
-                 case (txn, Completed) =>
-                   // Close transaction when execution is successful.
-                   Sync[F].delay(txn.close()) *> done
-                 case (txn, Error(_)) =>
-                   // Close transaction on error.
-                   Sync[F].delay(txn.close()) *> done
-                 case (_, Canceled) =>
-                   // When execution is canceled, closing transaction throws NotReadyException
-                   //  in bracket `use` function which is not visible in bracket `release` (?).
-                   done
-               }
-    } yield result
 
   // Ensures transaction is used only on one thread.
   // > A write Transaction may only be used from the thread it was created on.
@@ -82,15 +49,16 @@ final case class LmdbKeyValueStore[F[_]: Sync](
       _ <- done
     } yield result
 
+  def withReadTxn[T](f: (Txn[ByteBuffer], Dbi[ByteBuffer]) => T): F[T] =
+    withTxnSingleThread(isWrite = false)(f)
+
   def withWriteTxn[T](f: (Txn[ByteBuffer], Dbi[ByteBuffer]) => T): F[T] =
     withTxnSingleThread(isWrite = true)(f)
 
   // GET
   override def get[T](keys: Seq[ByteBuffer], fromBuffer: ByteBuffer => T): F[Seq[Option[T]]] =
-    withReadTxn { (txn, dbi) =>
-      Sync[F].delay {
-        keys.map(x => Option(dbi.get(txn, x)).map(fromBuffer))
-      }
+    withTxnSingleThread(isWrite = false) { (txn, dbi) =>
+      keys.map(x => Option(dbi.get(txn, x)).map(fromBuffer))
     }
 
   // PUT
@@ -109,7 +77,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
     }
 
   // ITERATE
-  override def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => F[T]): F[T] =
+  override def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => T): F[T] =
     withReadTxn { (txn, dbi) =>
       withResource(dbi.iterate(txn)) { iterator =>
         import scala.collection.JavaConverters._

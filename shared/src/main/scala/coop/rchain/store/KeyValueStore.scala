@@ -9,5 +9,5 @@ trait KeyValueStore[F[_]] {
 
   def delete(keys: Seq[ByteBuffer]): F[Int]
 
-  def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => F[T]): F[T]
+  def iterate[T](f: Iterator[(ByteBuffer, ByteBuffer)] => T): F[T]
 }
