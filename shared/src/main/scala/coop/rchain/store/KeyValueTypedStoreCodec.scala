@@ -81,7 +81,7 @@ class KeyValueTypedStoreCodec[F[_]: Sync, K, V](
   override def toMap: F[Map[K, V]] =
     for {
       valuesBytes <- store.iterate(
-                      _.map { case (k, v) => (BitVector(k), BitVector(v)) }.toVector.pure[F]
+                      _.map { case (k, v) => (BitVector(k), BitVector(v)) }.toVector
                     )
       values <- valuesBytes.traverse {
                  case (k, v) =>
