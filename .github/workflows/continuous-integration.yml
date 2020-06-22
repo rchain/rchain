@@ -15,7 +15,7 @@ on:
     branches:
       - dev
       - 'feature/**'
-    
+
 env:
   # This is read by every new JVM. Every JVM thinks it can use up to 80% of
   # total memory available to the system (used or unused). This may not be
@@ -23,7 +23,7 @@ env:
   # However, setting this value too low or leaving it at default value, 25% on
   # OpenJDK 11, makes some unit tests occasionally fail on OutOfMemoryError on
   # GitHub runners which have only 7GB of RAM.
-  _JAVA_OPTIONS: -XX:MaxRAMPercentage=65.0 -XX:MaxDirectMemorySize=128M
+  _JAVA_OPTIONS: -XX:MaxRAMPercentage=80.0 -XX:MaxDirectMemorySize=128M
 
 jobs:
 
@@ -216,7 +216,7 @@ jobs:
 
 
   # Get RNode Docker image and run integration tests.
-  # 
+  #
   # These steps are run directly on runner's host (note there's no container key
   # in the job configuration). That is because bind mounting in container runner
   # is broken[1] and we need to mount host's /tmp onto container's /tmp (see
@@ -267,6 +267,9 @@ jobs:
       # We don't use $CACHE_ROOT in host because it may not be (it is not)
       # writeable by host runner unprivileged account. See note above.
       HOST_CACHE_ROOT: /tmp/rchain-build-cache
+      # In integration tests multiple RNode instances are created so memory
+      # limit in lower to prevent sporadic crashes.
+      _JAVA_OPTIONS: -XX:MaxRAMPercentage=35.0
     steps:
       - name: Clone Repository
         uses: actions/checkout@v1
@@ -382,57 +385,29 @@ jobs:
           docker push "$image_name:latest"
 
 
-  # Upload built packages to https://build.rchain-dev.tk.
+  # GitHub (create) release and packages
   release_packages:
     name: Release Packages
     needs:
       - run_unit_tests
       - run_integration_tests
       - build_packages
-    if: "false && github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/staging')"
+    if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
     runs-on: ubuntu-latest
-    container:
-      image: rchain/buildenv
-      options: --privileged # Needed for gcsfuse
     steps:
       - name: Load Packages
         uses: actions/download-artifact@v1
         with:
           name: artifacts-packages
-
-      - name: Publish Packages
-        env:
-          SERVICE_ACCOUNT_KEY: ${{ secrets.SERVICE_ACCOUNT_KEY }}
-          UPLOAD_BUCKET: ${{ secrets.UPLOAD_BUCKET }}
-        shell: bash
-        run: |
-          set -eu -o pipefail
-
-          for var in SERVICE_ACCOUNT_KEY UPLOAD_BUCKET; do
-              if [[ ! -v $var || -z ${!var} ]]; then
-                  echo "Required variable $var is not set." >&2
-                  exit 1
-              fi
-          done
-
-          version=$(cat artifacts-packages/version.txt)
-          dest_dir=release/$version
-
-          if [[ $GITHUB_REF == refs/heads/* ]]; then
-              dest_dir=staging/$version
-          fi
-
-          GOOGLE_APPLICATION_CREDENTIALS=$HOME/service_account_key.json
-          touch $GOOGLE_APPLICATION_CREDENTIALS
-          chmod 600 $_
-          builtin echo "$SERVICE_ACCOUNT_KEY" >$_
-          export GOOGLE_APPLICATION_CREDENTIALS
-
-          mkdir /tmp/upload
-          gcsfuse $UPLOAD_BUCKET /tmp/upload
-
-          mkdir -p /tmp/upload/$dest_dir
-          cp -av artifacts-packages/* /tmp/upload/$dest_dir/
+      - name: Update release and release artifacts
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: artifacts-packages/*
+          prerelease: true
+          draft: true
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          token: ${{ secrets.GITHUB_TOKEN }}
 
 
   # The following is for Bors to work. It's copied almost verbatim from
@@ -453,7 +428,7 @@ jobs:
 
   bors_try_success:
     name: bors build finished
-    needs: 
+    needs:
       - run_unit_tests
       - run_integration_tests
     if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && success()"
@@ -463,7 +438,7 @@ jobs:
 
   bors_try_failure:
     name: bors build finished
-    needs: 
+    needs:
       - run_unit_tests
       - run_integration_tests
     if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && !success()"
@@ -476,7 +451,7 @@ jobs:
 
   bors_merge_success:
     name: bors build finished
-    needs: 
+    needs:
       - release_docker_image
       #- release_packages
     if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && success()"
@@ -486,7 +461,7 @@ jobs:
 
   bors_merge_failure:
     name: bors build finished
-    needs: 
+    needs:
       - release_docker_image
       #- release_packages
     if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && !success()"
