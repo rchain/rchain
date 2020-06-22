@@ -198,6 +198,13 @@ object DeployGrpcServiceV1 {
           FindDeployResponse(r.fold[Message](Error, BlockInfo))
         }
 
+      def getDeploy(request: FindDeployQuery): Task[GetDeployResponse] =
+        defer(BlockAPI.getDeploy[F](request.deployId)) { r =>
+          import GetDeployResponse.Message
+          import GetDeployResponse.Message._
+          GetDeployResponse(r.fold[Message](Error, DeployWithBlockInfo))
+        }
+
       def previewPrivateNames(request: PrivateNamePreviewQuery): Task[PrivateNamePreviewResponse] =
         defer(
           BlockAPI

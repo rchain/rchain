@@ -282,27 +282,31 @@ class BlockQueryResponseAPITest
         (logEff, casperRef, cliqueOracleEffect) = effects
         targetDeploy                            = randomDeploys.head
         deployId                                = targetDeploy.deploy.sig
-        blockQueryResponse <- BlockAPI.getDeploy[Task](deployId)(
-                               Sync[Task],
-                               casperRef,
-                               logEff,
-                               cliqueOracleEffect,
-                               blockStore
-                             )
-        _ = inside(blockQueryResponse) {
+        getDeployResponse <- BlockAPI.getDeploy[Task](deployId)(
+                              Sync[Task],
+                              casperRef,
+                              logEff,
+                              cliqueOracleEffect,
+                              blockStore
+                            )
+        _ = inside(getDeployResponse) {
           case Right(deployInfo) =>
-            deployInfo.sigAlgorithm should be(targetDeploy.deploy.sigAlgorithm.name)
-            deployInfo.sig should be(PrettyPrinter.buildStringNoLimit(targetDeploy.deploy.sig))
-            deployInfo.cost should be(targetDeploy.cost.cost)
-            deployInfo.term should be(targetDeploy.deploy.data.term)
-            deployInfo.timestamp should be(targetDeploy.deploy.data.timestamp)
-            deployInfo.phloLimit should be(targetDeploy.deploy.data.phloLimit)
-            deployInfo.phloPrice should be(targetDeploy.deploy.data.phloPrice)
-            deployInfo.validAfterBlockNumber should be(
+            deployInfo.deploy.get.sigAlgorithm should be(targetDeploy.deploy.sigAlgorithm.name)
+            deployInfo.deploy.get.sig should be(
+              PrettyPrinter.buildStringNoLimit(targetDeploy.deploy.sig)
+            )
+            deployInfo.deploy.get.cost should be(targetDeploy.cost.cost)
+            deployInfo.deploy.get.term should be(targetDeploy.deploy.data.term)
+            deployInfo.deploy.get.timestamp should be(targetDeploy.deploy.data.timestamp)
+            deployInfo.deploy.get.phloLimit should be(targetDeploy.deploy.data.phloLimit)
+            deployInfo.deploy.get.phloPrice should be(targetDeploy.deploy.data.phloPrice)
+            deployInfo.deploy.get.validAfterBlockNumber should be(
               targetDeploy.deploy.data.validAfterBlockNumber
             )
-            deployInfo.errored should be(targetDeploy.isFailed)
-            deployInfo.systemDeployError should be(targetDeploy.systemDeployError.getOrElse(""))
+            deployInfo.deploy.get.errored should be(targetDeploy.isFailed)
+            deployInfo.deploy.get.systemDeployError should be(
+              targetDeploy.systemDeployError.getOrElse("")
+            )
         }
       } yield ()
   }

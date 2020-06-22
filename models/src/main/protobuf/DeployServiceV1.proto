@@ -44,6 +44,8 @@ service DeployService {
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.
   rpc findDeploy(FindDeployQuery) returns (FindDeployResponse) {}
+  // Get a deployinfo with block info
+  rpc getDeploy(FindDeployQuery) returns (GetDeployResponse) {}
   // Preview new top-level unforgeable names (for example, to compute signatures over them).
   rpc previewPrivateNames(PrivateNamePreviewQuery) returns (PrivateNamePreviewResponse) {}
   // Get details about a particular block.
@@ -146,6 +148,14 @@ message FindDeployResponse {
   oneof message {
     ServiceError error        = 1;
     LightBlockInfo blockInfo  = 2;
+  }
+}
+
+// getDeploy
+message GetDeployResponse {
+  oneof message {
+    ServiceError error        = 1;
+    DeployWithBlockInfo deployWithBlockInfo  = 2;
   }
 }
 

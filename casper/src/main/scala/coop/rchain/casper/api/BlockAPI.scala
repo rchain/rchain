@@ -15,7 +15,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
@@ -30,6 +29,7 @@ import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
+import coop.rchain.crypto.PublicKey
 
 import scala.collection.immutable
 
@@ -511,8 +511,8 @@ object BlockAPI {
       _.withCasper[ApiErr[LightBlockInfo]](
         implicit casper =>
           for {
-            maybeBlock     <- findBlockByDeployId(id)
-            response       <- maybeBlock.traverse(getLightBlockInfo[F])
+            maybeBlock <- findBlockByDeployId(id)
+            response   <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
             s"Couldn't find block containing deploy with id: ${PrettyPrinter
               .buildStringNoLimit(id)}".asLeft[LightBlockInfo]

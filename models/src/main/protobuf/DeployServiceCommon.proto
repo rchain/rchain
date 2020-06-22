@@ -142,6 +142,11 @@ message BlockInfo {
   repeated DeployInfo deploys = 2;
 }
 
+message DeployWithBlockInfo {
+  DeployInfo deploy = 1;
+  LightBlockInfo blockInfo = 2;
+}
+
 message DataWithBlockInfo {
   repeated Par postBlockData = 1;
   LightBlockInfo block = 2;
