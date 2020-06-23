@@ -5,6 +5,7 @@ import cats.syntax.all._
 import cats.~>
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.protocol.DeployWithBlockInfo
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
@@ -92,15 +93,16 @@ object WebApiRoutes {
 
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]
     // Encoders
-    implicit val stringEncoder     = jsonEncoderOf[F, String]
-    implicit val booleanEncode     = jsonEncoderOf[F, Boolean]
-    implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]
-    implicit val blockInfoEncoder  = jsonEncoderOf[F, BlockInfo]
-    implicit val lightBlockEncoder = jsonEncoderOf[F, LightBlockInfo]
-    implicit val lightBlockListEnc = jsonEncoderOf[F, List[LightBlockInfo]]
-    implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
-    implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
-    implicit val explRespEncoder   = jsonEncoderOf[F, ExploratoryDeployResponse]
+    implicit val stringEncoder              = jsonEncoderOf[F, String]
+    implicit val booleanEncode              = jsonEncoderOf[F, Boolean]
+    implicit val apiStatusEncoder           = jsonEncoderOf[F, ApiStatus]
+    implicit val blockInfoEncoder           = jsonEncoderOf[F, BlockInfo]
+    implicit val lightBlockEncoder          = jsonEncoderOf[F, LightBlockInfo]
+    implicit val lightBlockListEnc          = jsonEncoderOf[F, List[LightBlockInfo]]
+    implicit val dataRespEncoder            = jsonEncoderOf[F, DataResponse]
+    implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
+    implicit val explRespEncoder            = jsonEncoderOf[F, ExploratoryDeployResponse]
+    implicit val DeployWithBlockInfoEncoder = jsonEncoderOf[F, DeployWithBlockInfo]
     // Decoders
     implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
     implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
@@ -158,6 +160,9 @@ object WebApiRoutes {
 
       case GET -> Root / "deploy" / deployId =>
         webApi.findDeploy(deployId).handle
+
+      case GET -> Root / "v2" / "deploy" / deployId =>
+        webApi.getDeploy(deployId).handle
 
       case GET -> Root / "is-finalized" / hash =>
         webApi.isFinalized(hash).handle

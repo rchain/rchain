@@ -116,3 +116,9 @@ class HttpClient():
         rep = requests.get(deploy_url)
         _check_reponse(rep)
         return rep.json()
+
+    def get_deploy_v2(self, deploy_id: str) -> Dict:
+        deploy_url = self.url + "/v2/deploy/{}".format(deploy_id)
+        rep = requests.get(deploy_url)
+        _check_reponse(rep)
+        return rep.json()

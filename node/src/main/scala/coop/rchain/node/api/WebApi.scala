@@ -8,7 +8,13 @@ import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
 import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
+import coop.rchain.casper.protocol.{
+  BlockInfo,
+  DataWithBlockInfo,
+  DeployData,
+  DeployWithBlockInfo,
+  LightBlockInfo
+}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
@@ -45,6 +51,8 @@ trait WebApi[F[_]] {
       blockHash: Option[String],
       usePreStateHash: Boolean
   ): F[ExploratoryDeployResponse]
+
+  def getDeploy(deployId: String): F[DeployWithBlockInfo]
 
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
@@ -107,6 +115,11 @@ object WebApi {
         .exploratoryDeploy(term, blockHash, usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
         .map(toExploratoryResponse)
+
+    def getDeploy(deployId: String): F[DeployWithBlockInfo] =
+      BlockAPI
+        .getDeploy(toByteString(deployId))
+        .flatMap(_.liftToBlockApiErr)
 
     def status: F[ApiStatus] =
       ApiStatus(

@@ -55,3 +55,6 @@ def test_web_api(node_with_blocks: Tuple[Node, List[str], List[str]]) -> None :
     ret = client.deploy("@2!(1)", 100000, 1, 5, STANDALONE_KEY)
     assert ret is not None
 
+    deploy = client.get_deploy_v2(deploy_hash[0])
+    assert "deploy" in deploy
+    assert "blockInfo" in deploy
