@@ -40,7 +40,11 @@ trait WebApi[F[_]] {
 
   def findDeploy(deployId: String): F[LightBlockInfo]
 
-  def exploratoryDeploy(term: String): F[ExploratoryDeployResponse]
+  def exploratoryDeploy(
+      term: String,
+      blockHash: Option[String],
+      usePreStateHash: Boolean
+  ): F[ExploratoryDeployResponse]
 
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
@@ -94,9 +98,13 @@ object WebApi {
         .findDeploy[F](toByteString(deployId))
         .flatMap(_.liftToBlockApiErr)
 
-    def exploratoryDeploy(term: String): F[ExploratoryDeployResponse] =
+    def exploratoryDeploy(
+        term: String,
+        blockHash: Option[String],
+        usePreStateHash: Boolean
+    ): F[ExploratoryDeployResponse] =
       BlockAPI
-        .exploratoryDeploy(term)
+        .exploratoryDeploy(term, blockHash, usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
         .map(toExploratoryResponse)
 
@@ -145,6 +153,12 @@ object WebApi {
       deployer: String,
       signature: String,
       sigAlgorithm: String
+  )
+
+  final case class ExploreDeployRequest(
+      term: String,
+      blockHash: String,
+      usePreStateHash: Boolean
   )
 
   final case class DataRequest(

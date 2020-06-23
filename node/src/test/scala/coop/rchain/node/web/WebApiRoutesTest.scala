@@ -151,7 +151,12 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
       Task.delay(lightBlock).toReaderT
 
     // TODO: https://rchain.atlassian.net/browse/RCHAIN-4018
-    override def exploratoryDeploy(term: String): TaskEnv[ExploratoryDeployResponse] = ???
+    override def exploratoryDeploy(
+        term: String,
+        blockHash: Option[String],
+        usePreStateHash: Boolean
+    ): TaskEnv[ExploratoryDeployResponse] = ???
+
     override def getBlocksByHeights(
         startBlockNumber: Long,
         endBlockNumber: Long

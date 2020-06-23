@@ -43,6 +43,10 @@ object BlockAPI {
 
   val reportTransformer = new ReportingProtoTransformer()
 
+  // TODO: we should refactor BlockApi with applicative errors for better classification
+  //  of errors and to overcome nesting when validating data.
+  final case class BlockRetrievalError(message: String) extends Exception
+
   def deploy[F[_]: Sync: EngineCell: Log: Span](
       d: Signed[DeployData]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
@@ -550,10 +554,6 @@ object BlockAPI {
     val errorMessage =
       "Could not get block, casper instance was not available yet."
 
-    // TODO: we should refactor BlockApi with applicative errors for better classification
-    //  of errors and to overcome nesting when validating data.
-    final case class BlockRetrievalError(message: String) extends Exception
-
     def casperResponse(
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[BlockInfo]] =
@@ -575,7 +575,7 @@ object BlockAPI {
         // Check if hash is complete and not just the prefix in which case
         // we can use `get` directly and not iterate over the whole block hash index.
         getBlock  = BlockStore[F].get(hashByteString)
-        findBlock = getBlockFromStore[F](hash)
+        findBlock = findBlockFromStore[F](hash)
         blockF    = if (hash.length == 64) getBlock else findBlock
         // Get block form the block store
         block <- blockF >>= (_.liftTo[F](
@@ -676,7 +676,9 @@ object BlockAPI {
       faultTolerance = faultTolerance
     ).pure[F]
 
-  def getBlockFromStore[F[_]: Monad: BlockStore](
+  // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
+  // Trying to use BlockStore.get as much as possible would more be preferred
+  private def findBlockFromStore[F[_]: Monad: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
     for {
@@ -809,8 +811,18 @@ object BlockAPI {
     )
   }
 
-  def exploratoryDeploy[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore](
-      term: String
+  /**
+    * Explore the data or continuation in the tuple space for specific blockHash
+    *
+    * @param term: the term you want to explore in the request. Be sure the first new should be `return`
+    * @param blockHash: the block hash you want to explore
+    * @param usePreStateHash: Each block has preStateHash and postStateHash. If usePreStateHash is true, the explore
+    *                       would try to execute on preState.
+    * */
+  def exploratoryDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+      term: String,
+      blockHash: Option[String] = none,
+      usePreStateHash: Boolean = false
   ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
     val errorMessage =
       "Could not execute exploratory deploy, casper instance was not available yet."
@@ -826,12 +838,35 @@ object BlockAPI {
                            .pure[F]
                        case None =>
                          for {
-                           lastFinalizedBlock <- casper.lastFinalizedBlock
-                           runtimeManager     <- casper.getRuntimeManager
-                           postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
-                           res                <- runtimeManager.playExploratoryDeploy(term, postStateHash)
-                           lightBlockInfo     <- getLightBlockInfo[F](lastFinalizedBlock)
-                         } yield (res, lightBlockInfo).asRight[Error]
+                           targetBlock <- if (blockHash.isEmpty)
+                                           casper.lastFinalizedBlock.map(_.some)
+                                         else
+                                           for {
+                                             hashByteString <- Base16
+                                                                .decode(blockHash.getOrElse(""))
+                                                                .map(ByteString.copyFrom)
+                                                                .liftTo[F](
+                                                                  BlockRetrievalError(
+                                                                    s"Input hash value is not valid hex string: $blockHash"
+                                                                  )
+                                                                )
+                                             block <- BlockStore[F].get(hashByteString)
+                                           } yield block
+                           res <- targetBlock.traverse(b => {
+                                   val postStateHash =
+                                     if (usePreStateHash) ProtoUtil.preStateHash(b)
+                                     else ProtoUtil.postStateHash(b)
+                                   for {
+                                     runtimeManager <- casper.getRuntimeManager
+                                     res <- runtimeManager
+                                             .playExploratoryDeploy(term, postStateHash)
+                                     lightBlockInfo <- getLightBlockInfo[F](b)
+                                   } yield (res, lightBlockInfo)
+                                 })
+
+                         } yield res.fold(
+                           s"Can not find block ${blockHash}".asLeft[(Seq[Par], LightBlockInfo)]
+                         )(_.asRight[Error])
                      }
           } yield result,
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
