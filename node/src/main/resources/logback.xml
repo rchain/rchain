@@ -20,7 +20,7 @@
     <file>${rnode.data.dir}/rnode.log</file>
     <append>true</append>
     <encoder>
-      <pattern>%d{ISO8601, UTC} [%highlight(%-5level{5})] [%cyan(%-20.20thread{30})] [%cyan(%-29.29logger{29})]- %msg%n </pattern>
+      <pattern>%d{ISO8601, UTC} [%-5level{5}] [%-20.20thread{30}] [%-29.29logger{29}]- %msg%n </pattern>
     </encoder>
   </appender>
 
