@@ -4,6 +4,7 @@ import os
 import queue
 import shlex
 import string
+import time
 import shutil
 import logging
 from logging import (Logger)
@@ -20,6 +21,10 @@ from typing import (
     AbstractSet,
     Set
 )
+from dataclasses import dataclass
+import requests
+from rchain.client import RClient, RClientException
+from rchain.pb.DeployServiceCommon_pb2 import LightBlockInfo, BlockInfo
 from rchain.crypto import PrivateKey
 from rchain.certificate import get_node_id_raw
 from rchain.const import DEFAULT_PHLO_LIMIT, DEFAULT_PHLO_PRICE
@@ -37,7 +42,8 @@ from .common import (
     GetBlockError,
     ParsingError,
     SynchronyConstraintError,
-    NotAnActiveValidatorError
+    NotAnActiveValidatorError,
+    ValidatorNotContainsLatestMes
 )
 from .wait import (
     wait_for_node_started,
@@ -50,14 +56,9 @@ from .error import(
 )
 
 from .utils import (
-    extract_block_count_from_show_blocks,
-    parse_show_block_output,
-    parse_show_blocks_output,
-    extract_block_hash_from_propose_output,
-    extract_deploy_id_from_deploy_output,
     parse_mvdag_str,
-    BlockInfo,
-    LightBlockInfo
+    ISLINUX,
+    get_free_tcp_port
 )
 
 DEFAULT_IMAGE = os.environ.get("DEFAULT_IMAGE", "rchain-integration-tests:latest")
@@ -81,8 +82,18 @@ rnode_default_client_options = [
     '--grpc-port=40402',
 ]
 
+default_http_port = 40403
+default_internal_grpc_port = 40402
+default_external_grpc_port = 40401
+
+@dataclass
+class PortMapping:
+    http: int
+    external_grpc: int
+    internal_grpc: int
+
 class Node:
-    def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str) -> None:
+    def __init__(self, *, container: Container, deploy_dir: str, command_timeout: int, network: str, ports: Optional[PortMapping]) -> None:
         self.container = container
         self.local_deploy_dir = deploy_dir
         self.remote_deploy_dir = rnode_deploy_dir
@@ -97,6 +108,7 @@ class Node:
         )
         self.background_logging.setDaemon(True)
         self.background_logging.start()
+        self.ports = ports
 
     def __repr__(self) -> str:
         return '<Node(name={})>'.format(repr(self.name))
@@ -106,6 +118,9 @@ class Node:
 
     def get_node_pem_key(self) -> bytes:
         return self.shell_out("cat", rnode_key_path).encode('utf8')
+
+    def view_file(self, path: str) -> str:
+        return self.shell_out("cat", path)
 
     def get_node_id_raw(self) -> bytes:
         key = load_pem_private_key(self.get_node_pem_key(), None, default_backend())
@@ -125,12 +140,18 @@ class Node:
         return address
 
     def get_metrics(self) -> str:
-        return self.shell_out('curl', '-s', 'http://localhost:40403/metrics')
+        resp = requests.get("http://{}:{}/metrics".format(self.get_self_host(), self.get_http_port()))
+        return resp.content.decode('utf8')
 
     def get_connected_peers_metric_value(self) -> str:
         try:
-            return self.shell_out('sh', '-c', 'curl -s http://localhost:40403/metrics | '
-                                              'grep ^rchain_comm_rp_connect_peers\\ ')
+            resp = requests.get("http://{}:{}/metrics".format(self.get_self_host(), self.get_http_port()))
+            result = ''
+            for line in resp.content.decode('utf8').splitlines():
+                if line.startswith("rchain_comm_rp_connect_peers"):
+                    result = line
+                    break
+            return result
         except NonZeroExitCodeError as e:
             if e.exit_code == 1:
                 return ''
@@ -142,35 +163,49 @@ class Node:
         assert network_config is not None
         return network_config['IPAddress']
 
+    def get_self_host(self) -> str:
+        if ISLINUX:
+            return self.get_peer_node_ip(self.network)
+        return 'localhost'
+
+    def get_http_port(self) -> int:
+        if ISLINUX:
+            return default_http_port
+        assert self.ports
+        return self.ports.http
+
+    def get_external_grpc_port(self) -> int:
+        if ISLINUX:
+            return default_external_grpc_port
+        assert self.ports
+        return self.ports.external_grpc
+
+    def get_internal_grpc_port(self) -> int:
+        if ISLINUX:
+            return default_internal_grpc_port
+        assert self.ports
+        return self.ports.internal_grpc
+
     def cleanup(self) -> None:
         self.container.remove(force=True, v=True)
         self.terminate_background_logging_event.set()
         self.background_logging.join()
 
-    def show_blocks_with_depth(self, depth: int) -> str:
-        return self.rnode_command('show-blocks', '--depth', str(depth), stderr=False)
-
-    def show_block(self, hash: str) -> str:
-        return self.rnode_command('show-block', hash, stderr=False)
-
     def get_blocks_count(self, depth: int) -> int:
-        show_blocks_output = self.show_blocks_with_depth(depth)
-        return extract_block_count_from_show_blocks(show_blocks_output)
+        show_blocks = self.get_blocks(depth)
+        return len(show_blocks)
 
-    def show_blocks_parsed(self, depth: int) -> List[LightBlockInfo]:
-        show_blocks_output = self.show_blocks_with_depth(depth)
-        return parse_show_blocks_output(show_blocks_output)
+    def get_blocks(self, depth: int) -> List[LightBlockInfo]:
+        with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+            return client.show_blocks(depth)
 
-    def show_block_parsed(self, hash: str) -> BlockInfo:
-        show_block_output = self.show_block(hash)
-        block_info = parse_show_block_output(show_block_output)
-        return block_info
-
-    def get_block(self, block_hash: str) -> str:
-        try:
-            return self.rnode_command('show-block', block_hash, stderr=False)
-        except NonZeroExitCodeError as e:
-            raise GetBlockError(command=e.command, exit_code=e.exit_code, output=e.output)
+    def get_block(self, hash: str) -> BlockInfo:
+        with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+            try:
+                return client.show_block(hash)
+            except RClientException as e:
+                message = e.args[0]
+                raise GetBlockError(('show-block',), 1, message)
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr: bool = True) -> Tuple[int, str]:
@@ -215,16 +250,15 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-               phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0) -> str:
         try:
-            output = self.rnode_command('deploy', '--private-key={}'.format(private_key.to_hex()),
-                                        '--phlo-limit={}'.format(phlo_limit), '--phlo-price={}'.format(phlo_price),
-                                        rho_file_path, stderr=False)
-            deploy_id = extract_deploy_id_from_deploy_output(output)
-            return deploy_id
-        except NonZeroExitCodeError as e:
-            if "Parsing error" in e.output:
-                raise ParsingError(command=e.command, exit_code=e.exit_code, output=e.output)
+            now_time = int(time.time()*1000)
+            with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+                return client.deploy(private_key, self.view_file(rho_file_path), phlo_price, phlo_limit, valid_after_block_no, now_time)
+        except RClientException as e:
+            message = e.args[0]
+            if "Parsing error" in message:
+                raise ParsingError(command=("propose", ), exit_code=1, output=message)
             # TODO out of phlogiston error
             raise e
 
@@ -237,41 +271,40 @@ class Node:
     def get_parsed_mvdag(self) -> Dict[str, Set[str]]:
         return parse_mvdag_str(self.get_mvdag())
 
-    def deploy_string(self, rholang_code: str, private_key: str, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-                      phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
-        quoted_rholang = shlex.quote(rholang_code)
-        deploy_out = self.shell_out('sh', '-c', 'echo {quoted_rholang} >/tmp/deploy_string.rho && {rnode_binary} '
-                                                'deploy --private-key={private_key} --phlo-limit={phlo_limit} '
-                                                '--phlo-price={phlo_price} /tmp/deploy_string.rho'.format(
-            rnode_binary=rnode_binary,
-            quoted_rholang=quoted_rholang,
-            private_key=private_key,
-            phlo_limit=phlo_limit,
-            phlo_price=phlo_price
-        ), stderr=False)
-        return extract_deploy_id_from_deploy_output(deploy_out)
+    def deploy_string(self, rholang_code: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
+                      phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int = 0) -> str:
+        try:
+            now_time = int(time.time()*1000)
+            with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+                return client.deploy(private_key, rholang_code, phlo_price, phlo_limit, valid_after_block_no, now_time)
+        except RClientException as e:
+            message = e.args[0]
+            if "Parsing error" in message:
+                raise ParsingError(command=("propose", ), exit_code=1, output=message)
+            # TODO out of phlogiston error
+            raise e
 
     def find_deploy(self, deploy_id: str) -> LightBlockInfo:
-        output = self.rnode_command("find-deploy", "--deploy-id", deploy_id, stderr=False)
-        block_info = parse_show_blocks_output(output)
-        return block_info[0]
+        with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+            return client.find_deploy(deploy_id)
 
     def propose(self) -> str:
         try:
-            output = self.rnode_command('propose', stderr=False)
-            block_hash = extract_block_hash_from_propose_output(output)
-            return block_hash
-        except NonZeroExitCodeError as e:
-            if "Must wait for more blocks from other validators" in e.output:
-                raise SynchronyConstraintError(command=e.command, exit_code=e.exit_code, output=e.output)
-            if "ReadOnlyMode" in e.output:
-                raise NotAnActiveValidatorError(command=e.command, exit_code=e.exit_code, output=e.output)
+            with RClient(self.get_self_host(), self.get_internal_grpc_port()) as client:
+                return client.propose()
+        except RClientException as e:
+            message = e.args[0]
+            if "Must wait for more blocks from other validators" in message:
+                raise SynchronyConstraintError(command=('propose',), exit_code=1, output=message)
+            if "ReadOnlyMode" in message:
+                raise NotAnActiveValidatorError(command=('propose',), exit_code=1, output=message)
+            if "Validator does not have a latest message" in message:
+                raise ValidatorNotContainsLatestMes(command=('propose',), exit_code=1, output=message)
             raise e
 
     def last_finalized_block(self) -> BlockInfo:
-        output = self.rnode_command('last-finalized-block', stderr=False)
-        block_info = parse_show_block_output(output)
-        return block_info
+        with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
+            return client.last_finalized_block()
 
     def repl(self, rholang_code: str, stderr: bool = False) -> str:
         quoted_rholang_code = shlex.quote(rholang_code)
@@ -371,7 +404,7 @@ def make_container_command(container_command: str, container_command_flags: Abst
     return result
 
 
-def make_node(
+def make_node( # pylint: disable=too-many-locals
     *,
     docker_client: DockerClient,
     name: str,
@@ -419,6 +452,15 @@ def make_node(
     else:
         all_volumes = volumes
 
+    if ISLINUX:
+        ports = None
+        port_map = None
+    else:
+        port_map = PortMapping(http=get_free_tcp_port(), external_grpc=get_free_tcp_port(), internal_grpc=get_free_tcp_port())
+        ports = {default_http_port: port_map.http,
+                 default_external_grpc_port: port_map.external_grpc,
+                 default_internal_grpc_port: port_map.internal_grpc}
+
     logging.info('STARTING %s %s', name, command)
     container = docker_client.containers.run(
         image,
@@ -431,6 +473,7 @@ def make_node(
         command=command,
         hostname=name,
         environment=env,
+        ports=ports
     )
 
     node = Node(
@@ -438,6 +481,7 @@ def make_node(
         deploy_dir=deploy_dir,
         command_timeout=command_timeout,
         network=network,
+        ports=port_map
     )
 
     return node

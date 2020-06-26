@@ -1,5 +1,4 @@
 import logging
-import socket
 from concurrent import futures
 from contextlib import contextmanager
 from queue import Queue, Empty
@@ -29,7 +28,7 @@ from rchain.pb.routing_pb2_grpc import (
 )
 from docker import DockerClient
 
-from .utils import get_node_ip_of_network
+from .utils import get_node_ip_of_network, get_free_tcp_port
 from .rnode import Node as RNode
 from .common import TestingContext
 
@@ -55,17 +54,6 @@ def get_node_id_raw(key: _EllipticCurvePrivateKey) -> bytes:
 def get_node_id_str(key: _EllipticCurvePrivateKey) -> str:
     raw_id = get_node_id_raw(key)
     return raw_id.hex()
-
-
-def get_free_tcp_port() -> int:
-    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        tcp.bind(('', 0))
-        _, port = tcp.getsockname()
-    finally:
-        tcp.close()
-    return port
-
 
 
 class TransportServer(TransportLayerServicer):

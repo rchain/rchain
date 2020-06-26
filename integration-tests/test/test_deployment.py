@@ -29,9 +29,9 @@ def test_deploy_with_not_enough_phlo(command_line_options: CommandLineOptions, r
         # deploy with not enough phlo
         bootstrap_node.deploy(contract, BOOTSTRAP_NODE_KEYS, phlo_limit=1000, phlo_price=1)
         block_hash = bootstrap_node.propose()
-        block_info = bootstrap_node.show_block_parsed(block_hash)
+        block_info = bootstrap_node.get_block(block_hash)
         deploy = block_info.deploys[0]
-        assert deploy.error == 'true'
+        assert deploy.errored
 
 
 @pytest.mark.xfail

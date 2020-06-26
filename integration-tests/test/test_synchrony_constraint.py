@@ -66,13 +66,15 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
         bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
         bootstrap_node.propose()
         bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
-        bootstrap_node.propose()
+        b1 = bootstrap_node.propose()
         #--
 
         #-- validator_1 can propose when validator_2 propose block
+        wait_for_node_sees_block(context, bonded_validator_1, b1)
         bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
-        bonded_validator_1.propose()
+        b2 = bonded_validator_1.propose()
 
+        wait_for_node_sees_block(context, bonded_validator_3, b2)
         bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
         block_hash_2 = bonded_validator_3.propose()
 

@@ -175,7 +175,7 @@ class BlockFinalized:
         return '<{}({})>'.format(self.__class__.__name__, args)
 
     def is_satisfied(self) -> bool:
-        return self.node.last_finalized_block().block_hash.startswith(self.block_hash_prefix)
+        return self.node.last_finalized_block().blockInfo.blockHash.startswith(self.block_hash_prefix)
 
 
 def wait_using_wall_clock_time(predicate: PredicateProtocol, timeout: int) -> None:

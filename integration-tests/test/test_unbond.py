@@ -3,6 +3,7 @@ import pytest
 from docker.client import DockerClient
 
 from rchain.crypto import PrivateKey
+from rchain.pb.DeployServiceCommon_pb2 import BlockInfo
 from . import conftest
 from .common import (
     CommandLineOptions,
@@ -17,7 +18,6 @@ from .wait import (
 )
 
 from .test_wallets import get_vault_balance
-from .utils import BlockInfo
 
 BOOTSTRAP_KEY = PrivateKey.from_hex("b2527b00340a83e302beae2a8daf6d654e8e57541acfa261cc1b5635eb16aa15")
 VALIDATOR_KEY_1 = PrivateKey.from_hex("9a801debae8bb97fe54c99389cafa576c60612503348578125b65ab182ff5850")
@@ -77,7 +77,7 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         # block number 1
         validator_1.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
         b1 = validator_1.propose()
-        block1_info = validator_1.show_block_parsed(b1)
+        block1_info = validator_1.get_block(b1)
         # rewards amount are distributed by the bonds amount
         rewards_of_v1 += get_total_cost_from_block(
             block1_info) * validator_1_initial_bonding_amount // total_bond_amount
@@ -91,7 +91,7 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         b2 = validator_1.deploy_contract_with_substitution(substitute_dict={},
                                                            rho_file_path="resources/wallets/unbond.rho",
                                                            private_key=VALIDATOR_KEY_1)
-        block2_info = validator_1.show_block_parsed(b2)
+        block2_info = validator_1.get_block(b2)
         rewards_of_v1 += get_total_cost_from_block(
             block2_info) * validator_1_initial_bonding_amount // total_bond_amount
 
@@ -99,7 +99,7 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         # close block happen after all deploys process
         validator_1.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
         b3 = validator_1.propose()
-        block3_info = validator_1.show_block_parsed(b3)
+        block3_info = validator_1.get_block(b3)
         rewards_of_v1 += get_total_cost_from_block(
             block3_info) * validator_1_initial_bonding_amount // total_bond_amount
 

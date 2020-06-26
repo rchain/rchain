@@ -65,6 +65,9 @@ class SynchronyConstraintError(NonZeroExitCodeError):
 class NotAnActiveValidatorError(NonZeroExitCodeError):
     pass
 
+class ValidatorNotContainsLatestMes(NonZeroExitCodeError):
+    pass
+
 class WaitTimeoutError(Exception):
     def __init__(self, predicate: 'PredicateProtocol', timeout: int) -> None:
         super().__init__()

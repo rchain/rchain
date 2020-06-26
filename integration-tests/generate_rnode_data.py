@@ -94,18 +94,18 @@ def generate_rnode_data() -> None:
         assert validator_a.get_blocks_count(2) == 1
         assert validator_b.get_blocks_count(2) == 1
 
-        ceremony_master_blocks = ceremony_master.show_blocks_parsed(2)
+        ceremony_master_blocks = ceremony_master.get_blocks(2)
         assert len(ceremony_master_blocks) == 1
         ceremony_master_genesis_block = ceremony_master_blocks[0]
         assert ceremony_master_genesis_block['mainParentHash'] == ''
 
-        validator_a_blocks = validator_a.show_blocks_parsed(2)
+        validator_a_blocks = validator_a.get_blocks(2)
         assert len(validator_a_blocks) == 1
         validator_a_genesis_block = validator_a_blocks[0]
         assert validator_a_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
         assert validator_a_genesis_block['mainParentHash'] == ''
 
-        validator_b_blocks = validator_b.show_blocks_parsed(2)
+        validator_b_blocks = validator_b.get_blocks(2)
         assert len(validator_b_blocks) == 1
         validator_b_genesis_block = validator_b_blocks[0]
         assert validator_b_genesis_block['blockHash'] == ceremony_master_genesis_block['blockHash']
