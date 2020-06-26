@@ -809,7 +809,7 @@ class RholangMethodsCostsSpec
     }
   }
   def withReducer[R](
-      f: DebruijnInterpreter[Task, Task.Par] => Task[R]
+      f: DebruijnInterpreter[Task] => Task[R]
   )(implicit cost: _cost[Task]): R = {
 
     val test = for {

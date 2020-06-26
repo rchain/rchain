@@ -66,7 +66,7 @@ object RholangAndScalaDispatcher {
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M, F](tuplespace, dispatcher, urnMap)
+      new DebruijnInterpreter[M](tuplespace, dispatcher, urnMap)
 
     (dispatcher, reducer)
   }
