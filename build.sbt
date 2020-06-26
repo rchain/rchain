@@ -162,6 +162,7 @@ lazy val casper = (project in file("casper"))
       catsCore,
       catsMtl,
       monix,
+      fs2Core,
       scalacheck % "slowcooker"
     )
   )
@@ -171,7 +172,7 @@ lazy val casper = (project in file("casper"))
     shared       % "compile->compile;test->test",
     graphz,
     crypto,
-    models   % "compile->compile;test->test",
+    models % "compile->compile;test->test",
     rspace,
     rholang % "compile->compile;test->test"
   )
