@@ -53,9 +53,14 @@ object Main {
     })
     implicit val console: ConsoleIO[Task] = consoleIO
 
+    // Ensure terminal is restored on exit
+    sys.addShutdownHook {
+      console.close.unsafeRunSync
+    }
+
     // Parse CLI options
     val options = commandline.Options(args)
-    if (options.subcommand == Some(options.run))
+    if (options.subcommand.contains(options.run))
       // Start the node
       startNode(options)
     //or
@@ -183,7 +188,6 @@ object Main {
         proposeServiceClient.close()
         replServiceClient.close()
         deployServiceClient.close()
-        console.close.unsafeRunSync(scheduler)
       }
     ) >> program
   }
