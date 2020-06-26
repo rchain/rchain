@@ -11,7 +11,14 @@ import org.scalatest._
 import coop.rchain.crypto.codec._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.node.NodeRuntime
-import coop.rchain.casper.protocol.{BlockInfo, BondInfo, DeployData, DeployInfo, LightBlockInfo}
+import coop.rchain.casper.protocol.{
+  BlockInfo,
+  BondInfo,
+  DeployData,
+  DeployInfo,
+  JustificationInfo,
+  LightBlockInfo
+}
 import coop.rchain.node.NodeRuntime.TaskEnv
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
@@ -175,7 +182,9 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
         )
       else Left(DecodingFailure("error", List[CursorOp]()))
   }
-  implicit val decodeBondInfo: Decoder[BondInfo]                 = deriveDecoder[BondInfo]
+  implicit val decodeBondInfo: Decoder[BondInfo] = deriveDecoder[BondInfo]
+  implicit val decodeJustificationInfo: Decoder[JustificationInfo] =
+    deriveDecoder[JustificationInfo]
   implicit val decodeLightBlockInfo: Decoder[LightBlockInfo]     = deriveDecoder[LightBlockInfo]
   implicit val decodeDeployInfo: Decoder[DeployInfo]             = deriveDecoder[DeployInfo]
   implicit val decodeBlockInfo: Decoder[BlockInfo]               = deriveDecoder[BlockInfo]

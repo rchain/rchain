@@ -84,6 +84,11 @@ message BondInfo{
   int64  stake = 2;
 }
 
+message JustificationInfo{
+  string validator = 1;
+  string latestBlockHash = 2;
+}
+
 message DeployInfo{
   string deployer     = 1;
   string term         = 2;
@@ -125,6 +130,8 @@ message LightBlockInfo {
   string blockSize = 17;
   int32 deployCount = 18;
   float faultTolerance = 19;
+
+  repeated JustificationInfo justifications = 20;
 }
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation

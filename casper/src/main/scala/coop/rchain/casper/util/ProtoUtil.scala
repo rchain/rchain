@@ -239,6 +239,12 @@ object ProtoUtil {
     case (acc, b) => math.max(acc, b.blockNum)
   }
 
+  def justificationsToJustificationInfos(justification: Justification) =
+    JustificationInfo(
+      PrettyPrinter.buildStringNoLimit(justification.validator),
+      PrettyPrinter.buildStringNoLimit(justification.latestBlockHash)
+    )
+
   def toJustification(
       latestMessages: collection.Map[Validator, BlockMetadata]
   ): Seq[Justification] =

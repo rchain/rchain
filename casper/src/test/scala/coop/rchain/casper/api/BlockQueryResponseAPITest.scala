@@ -151,6 +151,9 @@ class BlockQueryResponseAPITest
                 b.blockSize should be(secondBlock.toProto.serializedSize.toString)
                 b.deployCount should be(secondBlock.body.deploys.length)
                 b.faultTolerance should be(faultTolerance)
+                b.justifications should be(
+                  secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+                )
               case None => assert(false)
             }
         }
@@ -265,6 +268,9 @@ class BlockQueryResponseAPITest
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.deployCount should be(secondBlock.body.deploys.length)
             blockInfo.faultTolerance should be(faultTolerance)
+            blockInfo.justifications should be(
+              secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+            )
         }
       } yield ()
   }

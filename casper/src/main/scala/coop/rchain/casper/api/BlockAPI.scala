@@ -673,7 +673,8 @@ object BlockAPI {
       bonds = block.body.state.bonds.map(ProtoUtil.bondToBondInfo),
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
-      faultTolerance = faultTolerance
+      faultTolerance = faultTolerance,
+      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos)
     ).pure[F]
 
   def getBlockFromStore[F[_]: Monad: BlockStore](
