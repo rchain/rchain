@@ -7,12 +7,11 @@ import cats.tagless.autoFunctorK
 import cats.{Applicative, Monad}
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
-import coop.rchain.casper.engine.Running.RequestedBlocks
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.comm.rp.ProtocolHelper.{packet, protocol}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared._
@@ -49,7 +48,7 @@ object CommUtil {
 
   def apply[F[_]](implicit ev: CommUtil[F]): CommUtil[F] = ev
 
-  def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: RequestedBlocks: Log: Time]
+  def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: Log: Time]
       : CommUtil[F] =
     new CommUtil[F] {
 
