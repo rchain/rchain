@@ -507,7 +507,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       )
       _ <- (missingDeps ++ depsInBuffer).traverse(casperBuffer.addRelation(_, b.blockHash))
       _ <- Log[F].info(
-            s"${PrettyPrinter.buildString(b.blockHash)} missing dependencies. " +
+            s"Block ${PrettyPrinter.buildString(b, short = true)} missing dependencies. " +
               s"Fetching: ${PrettyPrinter.buildString(missingDeps)}. " +
               s"Already in CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
               s"Already in DAG: ${PrettyPrinter.buildString(depsInDag)}."

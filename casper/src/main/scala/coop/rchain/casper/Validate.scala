@@ -50,7 +50,7 @@ object Validate {
 
     val requiredSignatures = approvedBlock.candidate.requiredSigs
 
-    val signatories =
+    val signatures =
       (for {
         signature <- approvedBlock.sigs
         verifySig <- signatureVerifiers.get(signature.algorithm)
@@ -58,26 +58,23 @@ object Validate {
         if verifySig(candidateBytesDigest, signature.sig.toByteArray, publicKey.toByteArray)
       } yield publicKey).toSet
 
-    val logMsg = signatories.isEmpty match {
+    val logMsg = signatures.isEmpty match {
       case true => s"ApprovedBlock is self-signed by ceremony master."
       case false =>
-        s"ApprovedBlock is signed by: ${signatories
+        s"ApprovedBlock is signed by: ${signatures
           .map(x => "<" + Base16.encode(x.toByteArray).substring(0, 10) + "...>")
           .mkString(", ")}"
     }
+
     for {
-      _ <- Log[F].info(logMsg)
-
-      result <- if (signatories.size >= requiredSignatures)
-                 true.pure
-               else
-                 Log[F]
-                   .warn(
-                     "Received invalid ApprovedBlock message not containing enough valid signatures."
-                   )
-                   .as(false)
-    } yield result
-
+      _          <- Log[F].info(logMsg)
+      enoughSigs = (signatures.size >= requiredSignatures)
+      _ <- Log[F]
+            .warn(
+              "Received invalid ApprovedBlock message not containing enough valid signatures."
+            )
+            .whenA(!enoughSigs)
+    } yield enoughSigs
   }
 
   def blockSignature[F[_]: Applicative: Log](b: BlockMessage): F[Boolean] =
@@ -208,15 +205,9 @@ object Validate {
       parentsPresent <- ProtoUtil.parentHashes(block).forallM(p => dag.contains(p))
       justificationsPresent <- block.justifications
                                 .forallM(j => dag.contains(j.latestBlockHash))
-      result <- if (parentsPresent && justificationsPresent) {
-                 BlockStatus.valid.asRight[BlockError].pure[F]
-               } else {
-                 for {
-                   _ <- Log[F].debug(
-                         s"Fetching missing dependencies for ${PrettyPrinter.buildString(block.blockHash)}."
-                       )
-                 } yield BlockStatus.missingBlocks.asLeft[ValidBlock]
-               }
+      result = if (parentsPresent && justificationsPresent) {
+        BlockStatus.valid.asRight[BlockError]
+      } else BlockStatus.missingBlocks.asLeft[ValidBlock]
     } yield result
   }
 

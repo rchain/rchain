@@ -1,57 +1,42 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Semaphore
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.casper._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.PeerNode
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.shared.{Log, Time}
+import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
 object Running {
 
-  implicit private[this] val BlockRequesterMetricsSource =
-    Metrics.Source(CasperMetricsSource, "block-requester")
+  implicit val MetricsSource: Metrics.Source =
+    Metrics.Source(CasperMetricsSource, "running")
 
-  final case class Requested(
-      timestamp: Long,
-      peers: Set[PeerNode] = Set.empty,
-      received: Boolean = false,
-      waitingList: List[PeerNode] = List.empty
-  )
+  trait CasperMessageStatus
+  final case object BlockIsInDag            extends CasperMessageStatus
+  final case object BlockIsInCasperBuffer   extends CasperMessageStatus
+  final case object BlockIsWaitingForCasper extends CasperMessageStatus
+  final case object DoNotIgnore             extends CasperMessageStatus
 
-  type RequestedBlocks[F[_]] = Cell[F, Map[BlockHash, Requested]]
-  object RequestedBlocks {
-    def apply[F[_]: RequestedBlocks]: RequestedBlocks[F] = implicitly[RequestedBlocks[F]]
-    def put[F[_]: RequestedBlocks](hash: BlockHash, requested: Requested) =
-      RequestedBlocks[F].modify(_ + (hash -> requested))
-    def remove[F[_]: RequestedBlocks](hash: BlockHash) = RequestedBlocks[F].modify(_ - hash)
-    def get[F[_]: RequestedBlocks](hash: BlockHash)    = RequestedBlocks[F].reads(_.get(hash))
-    def contains[F[_]: RequestedBlocks](hash: BlockHash) =
-      RequestedBlocks[F].reads(_.contains(hash))
-  }
-
-  private def requestForBlock[F[_]: Monad: TransportLayer: RPConfAsk](
-      peer: PeerNode,
-      hash: BlockHash
-  ) = TransportLayer[F].sendToPeer(peer, ToPacket(BlockRequestProto(hash)))
-
-  private def requestForNewBlock[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time](
-      peer: PeerNode,
-      blockHash: BlockHash
-  ) = requestForBlock(peer, blockHash) >> addNewEntry(blockHash, Some(peer))
+  final case class IgnoreCasperMessageStatus(doIgnore: Boolean, status: CasperMessageStatus)
 
   /**
     * As we introduced synchrony constraint - there might be situation when node is stuck.
@@ -68,18 +53,17 @@ object Running {
       _ <- engine.withCasper(
             casper => {
               for {
-                tip   <- MultiParentCasper.forkChoiceTip[F](casper)
-                tipts = tip.header.timestamp
-                _ <- Time[F].currentMillis
-                      .map(_ - tipts > delayThreshold.toMillis)
-                      .ifM(
-                        Log[F].info(
-                          "Updating fork choice tips as current FCT " +
-                            s"is more then ${delayThreshold.toString} old. " +
-                            s"Might be network is faulty."
-                        ) >> CommUtil[F].sendForkChoiceTipRequest,
-                        ().pure
-                      )
+                tip          <- MultiParentCasper.forkChoiceTip[F](casper)
+                tipTimestamp = tip.header.timestamp
+                now          <- Time[F].currentMillis
+                expired      = (now - tipTimestamp) > delayThreshold.toMillis
+                requestWithLog = Log[F].info(
+                  "Updating fork choice tips as current FCT " +
+                    s"is more then ${delayThreshold.toString} old. " +
+                    s"Might be network is faulty."
+                ) >> CommUtil[F].sendForkChoiceTipRequest
+
+                _ <- (requestWithLog).whenA(expired)
               } yield ()
             },
             ().pure[F]
@@ -87,181 +71,201 @@ object Running {
     } yield ()
 
   /**
-    * This method should be called periodically to maintain liveness of the protocol
-    * and keep the requested blocks list clean.
-    * See spec RunningMaintainRequestedBlocksSpec for more details
+    * Peer sent the block
+    *
+    * @param blockMessage BlockMessage
+    * @param peer Sender of the message
+    * @param ignoreMessageF Defines when to ignore message.
+    * @param validateBlockF Defines basic block validation before persisting.
+    * @param casperAddF Function that sends block to Casper for inserting in the DAG
+    * @param lockMap       BlockMessage is a heavy message, so excessive processing
+    *                      of duplicate BlockMessages should be discouraged. This is map of Semaphore to block hash.
+    * @return
     */
-  def maintainRequestedBlocks[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time: Metrics](
-      timeout: FiniteDuration
+  def handleBlockMessage[F[_]: Concurrent: TransportLayer: BlockRetriever: BlockStore: Metrics: Log](
+      blockMessage: BlockMessage,
+      peer: PeerNode
+  )(
+      ignoreMessageF: BlockHash => F[IgnoreCasperMessageStatus],
+      validateBlockF: (BlockMessage, PeerNode) => F[Boolean],
+      casperAddF: BlockHash => F[Unit],
+      lockMap: TrieMap[BlockHash, Semaphore[F]]
   ): F[Unit] = {
+    val logIncoming = Log[F].info(
+      s"Incoming BlockMessage ${PrettyPrinter.buildString(blockMessage, short = true)} " +
+        s"from ${peer.endpoint.host}. Number of hashes currently handled is ${lockMap.size}."
+    )
+    val blockStr = PrettyPrinter.buildString(blockMessage, short = true)
+    def logIgnore(s: CasperMessageStatus) = Log[F].info(
+      s"Ignoring BlockMessage ${blockStr} because of ${s}."
+    )
+    val logAlreadyInStore = Log[F].info(
+      s"Block ${blockStr} is available in BlockStore. Sending to Casper."
+    )
+    val logOkSaved = Log[F].info(
+      s"Block ${blockStr} is good. Saved to BlockStore. Sending to Casper."
+    )
+    val logBadDropped = Log[F].warn(
+      s"Ignoring BlockMessage ${blockStr} because its malformed or not of our interest."
+    )
+    val hasBlock   = BlockStore[F].contains(blockMessage.blockHash)
+    val ackReceive = BlockRetriever[F].ackReceive(blockMessage.blockHash)
+    val saveBlock  = BlockStore[F].put(blockMessage)
 
-    def toMap(list: List[(BlockHash, Option[Requested])]): Map[BlockHash, Requested] = {
-      val filtered = list.flatMap {
-        case (hash, Some(r)) => List((hash -> r))
-        case (_, None)       => List.empty
+    for {
+      _         <- logIncoming
+      semaphore <- MetricsSemaphore.single
+      hashLock  = lockMap.getOrElseUpdate(blockMessage.blockHash, semaphore)
+      proceed <- hashLock.withPermit {
+                  ignoreMessageF(blockMessage.blockHash)
+                    .flatMap(r => {
+                      if (r.doIgnore) {
+                        logIgnore(r.status) >> false.pure[F]
+                      } else {
+                        hasBlock.ifM(
+                          logAlreadyInStore >> ackReceive >> true.pure[F],
+                          validateBlockF(blockMessage, peer).ifM(
+                            saveBlock >> logOkSaved >> ackReceive >> true
+                              .pure[F],
+                            logBadDropped >> false.pure[F]
+                          )
+                        )
+                      }
+                    })
+                }
+      _ <- lockMap.remove(blockMessage.blockHash).pure[F]
+      _ <- if (proceed) casperAddF(blockMessage.blockHash) else ().pure[F]
+    } yield ()
+  }
+
+  /**
+    * Peer broadcasted block hash.
+    */
+  def handleBlockHashMessage[F[_]: Monad: BlockRetriever: Log](
+      peer: PeerNode,
+      bhm: BlockHashMessage
+  )(
+      ignoreMessageF: BlockHash => F[IgnoreCasperMessageStatus]
+  ): F[Unit] = {
+    val h = bhm.blockHash
+    def logIgnore(s: CasperMessageStatus) = Log[F].debug(
+      s"Ignoring ${PrettyPrinter.buildString(h)} hash broadcast with status: ${s}"
+    )
+    val logSuccess = Log[F].debug(
+      s"Incoming BlockHashMessage ${PrettyPrinter.buildString(h)} " +
+        s"from ${peer.endpoint.host}"
+    )
+    val processHash =
+      BlockRetriever[F].admitHash(h, peer.some, BlockRetriever.HashBroadcastRecieved)
+
+    ignoreMessageF(h).flatMap(r => {
+      if (r.doIgnore) {
+        logIgnore(r.status)
+      } else {
+        logSuccess >> processHash
       }
-      Map(filtered: _*)
-    }
-
-    def tryRerequest(hash: BlockHash, requested: Requested): F[(BlockHash, Option[Requested])] =
-      requested.waitingList match {
-        case nextPeer :: waitingListTail =>
-          def modifiedRequested(ts: Long) = requested.copy(
-            timestamp = ts,
-            waitingList = waitingListTail,
-            peers = requested.peers + nextPeer
-          )
-          for {
-            _ <- Log[F].debug(
-                  s"Request ${PrettyPrinter.buildString(hash)} from ${nextPeer} " +
-                    s"remain waiting ${waitingListTail.mkString(",")}"
-                )
-            _  <- requestForBlock(nextPeer, hash)
-            ts <- Time[F].currentMillis
-          } yield hash -> Option(modifiedRequested(ts))
-        case _ =>
-          val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)} " +
-            s"from ${requested.peers.mkString(",")}. Removing the request from the requested blocks list. " +
-            s"Casper will have to re-request the block."
-          Metrics[F].incrementCounter("block-retrieve-failed") >>
-            Log[F].warn(warnMessage).as(hash -> none[Requested])
-      }
-
-    import cats.instances.list._
-    RequestedBlocks[F].flatModify(requests => {
-      requests.keys.toList
-        .traverse(hash => {
-          val requested = requests(hash)
-          for {
-            received <- requested.received.pure[F]
-            expired  <- Time[F].currentMillis.map(_ - requested.timestamp > timeout.toMillis)
-            rerequest <- if (expired && !received)
-                          tryRerequest(hash, requested)
-                        else
-                          (hash -> Option(requested)).pure[F]
-          } yield rerequest
-        })
-        .map(list => toMap(list))
     })
   }
 
-  def addNewEntry[F[_]: Monad: Log: Running.RequestedBlocks: Time](
-      hash: BlockHash,
-      peer: Option[PeerNode] = None
-  ): F[Unit] =
-    Log[F].info(s"Creating new entry for the ${PrettyPrinter.buildString(hash)} request") >> Time[F].currentMillis >>= (
-        ts => RequestedBlocks.put(hash, Requested(timestamp = ts, peers = peer.toSet))
-    )
-
-  def handleHasBlock[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Time: Log](
+  /**
+    * Peer says it has particular block.
+    */
+  def handleHasBlockMessage[F[_]: Monad: BlockRetriever: Log](
       peer: PeerNode,
       hb: HasBlock
   )(
-      repeatedCasperMessage: BlockHash => F[Boolean]
+      ignoreMessageF: BlockHash => F[IgnoreCasperMessageStatus]
   ): F[Unit] = {
-
-    val hashStr = PrettyPrinter.buildString(hb.hash)
-
-    def addToWaitingList(requested: Requested): F[Unit] =
-      Log[F].info(s"Adding $peer to waiting list of $hashStr request") >> RequestedBlocks.put(
-        hb.hash,
-        requested.copy(waitingList = requested.waitingList ++ List(peer))
-      )
-
-    val logIntro = s"Received confirmation from $peer that it has block $hashStr."
-    Log[F].info(logIntro) >> repeatedCasperMessage(hb.hash).ifM(
-      Applicative[F].unit,
-      RequestedBlocks.get(hb.hash) >>= (_.fold(requestForNewBlock(peer, hb.hash))(
-        req =>
-          if (req.peers.isEmpty) requestForNewBlock(peer, hb.hash)
-          else addToWaitingList(req)
-      ))
+    val h = hb.hash
+    def logIgnore(s: CasperMessageStatus) = Log[F].debug(
+      s"Ignoring ${PrettyPrinter.buildString(h)} HasBlockMessage with status: ${s}"
     )
+    val logProcess = Log[F].debug(
+      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(h)} from ${peer.endpoint.host}"
+    )
+    val processHash =
+      BlockRetriever[F].admitHash(h, peer.some, BlockRetriever.HasBlockMessageReceived)
+
+    ignoreMessageF(h).flatMap(r => {
+      if (r.doIgnore) {
+        logIgnore(r.status)
+      } else {
+        logProcess >> processHash
+      }
+    })
   }
 
-  def handleHasBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk](
-      peer: PeerNode,
-      hbr: HasBlockRequest
-  )(blockLookup: BlockHash => F[Boolean]): F[Unit] =
-    blockLookup(hbr.hash).flatMap(
-      present =>
-        Applicative[F].whenA(present)(
-          TransportLayer[F].sendToPeer(peer, HasBlockProto(hbr.hash))
-        )
-    )
-
-  def handleBlockMessage[F[_]: Monad: Log: RequestedBlocks](peer: PeerNode, b: BlockMessage)(
-      repeatedCasperMessage: BlockHash => F[Boolean],
-      casperAdd: BlockMessage => F[ValidBlockProcessing]
-  ): F[Unit] =
-    repeatedCasperMessage(b.blockHash)
-      .ifM(
-        Log[F].info(s"Received block ${PrettyPrinter.buildString(b.blockHash)} again."),
-        Log[F].info(s"Received ${PrettyPrinter.buildString(b)}.") >> casperAdd(b) >>= (
-            status =>
-              Applicative[F].whenA(BlockStatus.isInDag(status.merge))(
-                RequestedBlocks.remove(b.blockHash)
-              )
-          )
-      )
-
-  def handleBlockHashMessage[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time](
-      peer: PeerNode,
-      blockHashMessage: BlockHashMessage
-  )(repeatedCasperMessage: BlockHash => F[Boolean]): F[Unit] =
-    repeatedCasperMessage(blockHashMessage.blockHash)
-      .ifM(
-        Log[F]
-          .info(
-            s"Received block hash ${PrettyPrinter.buildString(blockHashMessage.blockHash)} again."
-          ),
-        Log[F].info(
-          s"Received block hash ${PrettyPrinter.buildString(blockHashMessage.blockHash)}. Requesting ..."
-        ) >> requestForNewBlock(peer, blockHashMessage.blockHash)
-      )
-
+  /**
+    * Peer asks for particular block
+    */
   def handleBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode,
       br: BlockRequest
-  ): F[Unit] =
-    for {
-      maybeBlock <- BlockStore[F].get(br.hash)
-      logIntro   = s"Received request for block ${PrettyPrinter.buildString(br.hash)} from $peer."
-      _ <- maybeBlock match {
-            case None => Log[F].info(logIntro + "No response given since block not found.")
-            case Some(block) =>
-              TransportLayer[F].streamToPeer(peer, ToPacket(block.toProto)) >> Log[F].info(
-                logIntro + "Response sent."
-              )
-          }
-    } yield ()
+  ): F[Unit] = {
+    val getBlock = BlockStore[F].get(br.hash).flatMap(_.get.pure[F])
+    val logSuccess = Log[F].info(
+      s"Received request for block ${PrettyPrinter.buildString(br.hash)} " +
+        s"from $peer. Response sent."
+    )
+    val logError = Log[F].info(
+      s"Received request for block ${PrettyPrinter.buildString(br.hash)} " +
+        s"from $peer. No response given since block not found."
+    )
+    def sendResponse(block: BlockMessage) =
+      TransportLayer[F].streamToPeer(peer, block.toProto)
+    val hasBlock = BlockStore[F].contains(br.hash)
 
-  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
+    hasBlock.ifM(
+      logSuccess >> getBlock >>= sendResponse,
+      logError
+    )
+  }
+
+  /**
+    * Peer asks if this node has particular block
+    */
+  def handleHasBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk](
       peer: PeerNode,
-      fctr: ForkChoiceTipRequest.type
-  )(casper: MultiParentCasper[F]): F[Unit] =
-    Log[F].info(s"Received ForkChoiceTipRequest from $peer") >> MultiParentCasper.forkChoiceTip(
-      casper
-    ) >>= (
-        tip =>
-          Log[F].info(
-            s"Streaming block ${PrettyPrinter.buildString(tip.blockHash)} to $peer"
-          ) >> TransportLayer[F].streamToPeer(peer, ToPacket(tip.toProto))
-      )
+      hbr: HasBlockRequest
+  )(blockLookup: BlockHash => F[Boolean]): F[Unit] = {
+    val hasBlock  = blockLookup(hbr.hash)
+    val sendBlock = TransportLayer[F].sendToPeer(peer, HasBlockProto(hbr.hash))
 
+    hasBlock.ifM(sendBlock, ().pure[F])
+  }
+
+  /**
+    * Peer asks for fork-choice tip
+    */
+  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
+      peer: PeerNode
+  )(casper: MultiParentCasper[F]): F[Unit] = {
+    val logRequestedTip = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
+    def logStreamingBlock(block: BlockMessage) =
+      Log[F].info(
+        s"Streaming block ${PrettyPrinter.buildString(block.blockHash)} to ${peer.endpoint.host}"
+      )
+    val getTip = MultiParentCasper.forkChoiceTip(casper)
+    def streamToPears(tip: BlockMessage) =
+      logStreamingBlock(tip) >> TransportLayer[F].streamToPeer(peer, ToPacket(tip.toProto))
+
+    logRequestedTip >> getTip >>= streamToPears
+  }
+
+  /**
+    * Peer asks for ApprovedBlock
+    */
   def handleApprovedBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
       peer: PeerNode,
-      br: ApprovedBlockRequest,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from $peer") >> TransportLayer[F].streamToPeer(
-      peer,
-      ToPacket(approvedBlock.toProto)
-    ) >> Log[F].info(s"ApprovedBlock sent to $peer")
+    Log[F].info(s"Received ApprovedBlockRequest from ${peer.endpoint.host}") >>
+      TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
+      Log[F].info(s"ApprovedBlock sent to ${peer.endpoint.host}")
 
 }
 
-class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: Time: Running.RequestedBlocks](
+class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever: TransportLayer: CommUtil: ConnectionsCell: RPConfAsk: Log: Time: Metrics](
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
@@ -274,110 +278,143 @@ class Running[F[_]: Sync: BlockStore: CommUtil: TransportLayer: ConnectionsCell:
   private val noop = F.unit
 
   /**
-    * Message that relates to a block (e.g. block message or block hash broadcast message) shall be considered
-    * as repeated and dropped if corresponding block is marked as received in RequestedBlocks or already added to DAG.
+    * Message that relates to a block A (e.g. block message or block hash broadcast message) shall be considered
+    * as repeated and ignored if block A is
+    * 1. marked as received in BlocksRetriever and pending adding to CasperBuffer or
+    * 2. added do CasperBuffer and pending adding to DAG or
+    * 3. already added to DAG.
     * Otherwise - that is a new message and shall be processed normal way.
     *
-    * RequestedBlocks is a part of Casper loop maintaining liveness of the protocol.
-    * It keeping records of blocks being requested and re-request them on schedule if failed first time.
-    * It is expected to get lots of duplicate messages from different peers, so check for duplicate is required.
-    * Processing of duplicate blocks puts load on Casper and highly discouraged.
-    *
-    * When block is received from some peer first time - it is
-    * - marked as `received` in RequestedBlocks,
-    * - added to the block store and
-    * - sent to Casper.
-    * Block is being kept in RequestedBlocks until it is added to the DAG so we can detect duplicates.
-    *
-    * If either RequestedBlocks shows that block was received (but not yet added to Casper)
-    * or block was already added by Casper (so removed from RequestedBlocks) - related message
-    * considered as repeated.
-    *
     * @param hash Block hash
-    * @return If message is repeated
+    * @return If message should be ignored
     */
-  private def repeatedCasperMessage(hash: BlockHash): F[Boolean] =
-    RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received) ||^ casper.contains(hash)
+  private def ignoreCasperMessage(hash: BlockHash): F[IgnoreCasperMessageStatus] =
+    BlockRetriever[F]
+      .received(hash)
+      .ifM(
+        IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
+        CasperBufferStorage[F]
+          .contains(hash)
+          .ifM(
+            IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer).pure[F],
+            casper.blockDag.flatMap(
+              _.contains(hash)
+                .ifM(
+                  IgnoreCasperMessageStatus(doIgnore = true, BlockIsInDag).pure[F],
+                  IgnoreCasperMessageStatus(doIgnore = false, DoNotIgnore).pure[F]
+                )
+            )
+          )
+      )
 
   /**
-    * Wrapper for Casper add block.
-    * @param peer originator of the block
-    * @param b block
-    * @return block processing result
+    * Basic block validation before saving block in Blockstore. The intention here is to prevent saving
+    * bad and useless blocks. So the check is if block is well formed and of interest for this particular node.
+    * Should not catch any slashable offences - such blocks should be persisted and processed by Casper.
+    * @param b BlockMessage
+    * @param peer peer from which BlockMessage came from
+    * @return if block is suitable for this node
     */
-  private def casperAdd(peer: PeerNode)(b: BlockMessage): F[ValidBlockProcessing] = {
-    import cats.instances.option._
-
-    // Save block in block store immediately
-    BlockStore[F].put(b) >>
-      validatorId.traverse_ { id =>
-        val self = ByteString.copyFrom(id.publicKey.bytes)
-        F.whenA(b.sender == self)(
-          Log[F].warn(
-            s"There is another node $peer proposing using the same private key as you. Or did you restart your node?"
-          )
-        )
-      } >> {
-      for {
-        maybeReq <- RequestedBlocks.get(b.blockHash)
-        _ <- maybeReq match {
-              // There might be blocks that are not maintained by RequestedBlocks, e.g. genesis ceremony messages
-              case None =>
-                Log[F].info(
-                  s"Block ${PrettyPrinter.buildString(b.blockHash)} is not present in RequestedBlocks."
-                )
-              case Some(requested) => {
-                // Make Casper loop aware that the block has been received
-                RequestedBlocks.put(b.blockHash, requested.copy(received = true)) >>
-                  Log[F].info(
-                    s"Block ${PrettyPrinter.buildString(b.blockHash)} marked as received."
+  private def blockIsOk(
+      b: BlockMessage,
+      peer: PeerNode
+  ): F[Boolean] =
+    withCasper(
+      casper =>
+        for {
+          _ <- validatorId match {
+                case None => ().pure[F]
+                case Some(id) =>
+                  F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
+                    Log[F].warn(
+                      s"There is another node $peer proposing using the same private key as you. " +
+                        s"Or did you restart your node?"
+                    )
                   )
               }
-            }
-      } yield ()
-    } >> processUnfinishedParentsAndAddBlock(b)
-  }
+          lastFinalizedStateBlock = approvedBlock.candidate.block
+          // TODO might be more checks can/should be applied here
+          validShard   = lastFinalizedStateBlock.shardId.equalsIgnoreCase(b.shardId)
+          validFormat  <- Validate.formatOfFields(b)
+          validSig     <- Validate.blockSignature(b)
+          validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
+          // TODO 50 is hardcoded value expirationThreshold from MultiParentCasperImpl. Move to conf
+          oldBlock = (ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(
+            lastFinalizedStateBlock
+          ) - 50).pure[F]
+          approvedBlockStateComplete = casper.approvedBlockStateComplete
+          notAnIgnorableOldBlock     <- oldBlock.not ||^ (oldBlock &&^ approvedBlockStateComplete.not)
+          _ <- Log[F]
+                .warn(
+                  s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${lastFinalizedStateBlock.shardId}]."
+                )
+                .unlessA(validShard)
+          _ <- Log[F]
+                .warn(
+                  s"Block is bad: ill formed."
+                )
+                .unlessA(validFormat)
+          _ <- Log[F]
+                .warn(
+                  s"Block is bad: wrong signature."
+                )
+                .unlessA(validSig)
+          _ <- Log[F]
+                .warn(
+                  s"Block is bad: wrong version."
+                )
+                .unlessA(validVersion)
+          _ <- Log[F]
+                .warn(
+                  s"Block is not needed: more then 50 blocks behind last finalised state."
+                )
+                .unlessA(notAnIgnorableOldBlock)
+
+          isValid = validShard && validFormat && validSig && validVersion && notAnIgnorableOldBlock
+        } yield isValid,
+      Log[F].info("Casper is not ready, rejecting all blocks until it is ready.") >> false.pure[F]
+    )
 
   /**
-    * Add parents that are already in block store and then block itself
-    * @param b block
+    * Sends block to from BlockStore to Casper for inserting to the DAG.
+    * @param bh block hash
     * @return Result of block processing
     */
-  private def processUnfinishedParentsAndAddBlock(b: BlockMessage): F[ValidBlockProcessing] =
-    processUnfinishedParents(b) >> casper.addBlock(b)
-
-  /**
-    * Adds parents that are in block store but not in DAG yet
-    * @param b block
-    * @return F[Unit]
-    */
-  private def processUnfinishedParents(b: BlockMessage): F[Unit] = {
-    import cats.instances.list._
-    for {
-      // Parents that are in block store but not in DAG yet and not being currently handled
-      unfinishedParents <- b.header.parentsHashList.traverse { hash =>
-                            for {
-                              block <- repeatedCasperMessage(hash)
-                                        .ifM(none[BlockMessage].pure[F], BlockStore[F].get(hash))
-                            } yield block
-                          }
-      // Try to add block to DAG. We don't care of results, just make an attempt.
-      _ <- unfinishedParents.flatten.traverse_(processUnfinishedParentsAndAddBlock)
-    } yield ()
-  }
+  private def sendBlockFromStoreToCasper(bh: BlockHash): F[Unit] =
+    casper.addBlockFromStore(bh) >>= (
+        // At this stage block should be in CasperBuffer, or even in the DAG.
+        // It might wait for dependencies so not added to DAG, but there is no point to rerequest it again
+        status =>
+          BlockRetriever[F].ackInCasper(bh) >> Log[F].info(
+            s"Block ${PrettyPrinter.buildString(bh)} adding finished with status: $status. " +
+              s"BlockRetriever is informed that block consumed by Casper."
+          )
+      )
 
   override def init: F[Unit] = theInit
 
+  private[this] val hashHandlerLock = TrieMap.empty[BlockHash, Semaphore[F]]
+
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case blockHash: BlockHashMessage =>
-      handleBlockHashMessage(peer, blockHash)(repeatedCasperMessage)
-    case b: BlockMessage      => handleBlockMessage(peer, b)(repeatedCasperMessage, casperAdd(peer))
-    case br: BlockRequest     => handleBlockRequest(peer, br)
-    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.contains)
-    case hb: HasBlock         => handleHasBlock(peer, hb)(repeatedCasperMessage)
+    case h: BlockHashMessage =>
+      handleBlockHashMessage(peer, h)(
+        ignoreCasperMessage
+      )
+    case b: BlockMessage =>
+      handleBlockMessage(b, peer)(
+        ignoreCasperMessage,
+        blockIsOk,
+        sendBlockFromStoreToCasper,
+        hashHandlerLock
+      )
+    case br: BlockRequest => handleBlockRequest(peer, br)
+    // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
+    // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
+    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
+    case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
     case _: ForkChoiceTipRequest.type =>
-      handleForkChoiceTipRequest(peer, ForkChoiceTipRequest)(casper)
-    case abr: ApprovedBlockRequest    => handleApprovedBlockRequest(peer, abr, approvedBlock)
+      handleForkChoiceTipRequest(peer)(casper)
+    case _: ApprovedBlockRequest      => handleApprovedBlockRequest(peer, approvedBlock)
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
     case _                            => noop
   }

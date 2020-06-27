@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.tagless.autoFunctorK
 import cats.{Applicative, Monad}
 import coop.rchain.casper._
+import coop.rchain.comm.syntax._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, PeerNode}
@@ -35,8 +36,8 @@ trait CommUtil[F[_]] {
       messageTypeName: String // Only for log message / should be removed with CommUtil refactor
   ): F[Unit]
 
-  // Send request for the block to all peers
-  def sendBlockRequest(hash: BlockHash): F[Unit]
+  // Reqest for BlockMessage
+  def requestForBlock(peer: PeerNode, hash: BlockHash): F[Unit]
 }
 
 object CommUtil {
@@ -48,8 +49,7 @@ object CommUtil {
 
   def apply[F[_]](implicit ev: CommUtil[F]): CommUtil[F] = ev
 
-  def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: Log: Time]
-      : CommUtil[F] =
+  def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: Log: Time]: CommUtil[F] =
     new CommUtil[F] {
 
       def sendToPeers(message: Packet): F[Unit] =
@@ -92,20 +92,13 @@ object CommUtil {
         }
       }
 
-      def sendBlockRequest(hash: BlockHash): F[Unit] =
-        // TODO: Running is depending on CommUtil, it should't be used here
-        Running
-          .RequestedBlocks[F]
-          .read
-          .flatMap(
-            requested =>
-              Applicative[F].unlessA(requested.contains(hash))(
-                Running.addNewEntry(hash) >> sendToPeers(ToPacket(HasBlockRequestProto(hash))) >>
-                  Log[F]
-                    .info(s"Requested missing block ${PrettyPrinter.buildString(hash)} from peers")
-              )
-          )
-
+      def requestForBlock(
+          peer: PeerNode,
+          hash: BlockHash
+      ): F[Unit] =
+        Log[F].debug(
+          s"Requesting ${PrettyPrinter.buildString(hash)} from ${peer.endpoint.host}. "
+        ) >> TransportLayer[F].sendToPeer(peer, ToPacket(BlockRequestProto(hash)))
     }
 }
 
@@ -130,6 +123,9 @@ final class CommUtilOps[F[_]](
   )(implicit m: Monad[F], log: Log[F]): F[Unit] =
     sendToPeers(BlockHashMessageProto(hash, blockCreator)) >>
       Log[F].info(s"Sent hash ${PrettyPrinter.buildString(hash)} to peers")
+
+  def broadcastHasBlockRequest(hash: BlockHash): F[Unit] =
+    sendToPeers(HasBlockRequestProto(hash))
 
   def sendForkChoiceTipRequest(implicit m: Monad[F], log: Log[F]): F[Unit] =
     sendToPeers(ForkChoiceTipRequest.toProto) >>
