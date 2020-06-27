@@ -22,7 +22,7 @@ trait BlockDagStorage[F[_]] {
 object BlockDagStorage {
   type DeployId = ByteString
 
-  def apply[F[_]](implicit B: BlockDagStorage[F]): BlockDagStorage[F] = B
+  def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
 
 trait BlockDagRepresentation[F[_]] {
