@@ -13,7 +13,7 @@ import scodec.bits.BitVector
 object StoreFactory {
   def keyValueStore[F[_]: Sync: KeyValueStoreManager](dbName: String): F[Store[F]] =
     for {
-      kvStore <- KeyValueStoreManager[F].database(dbName)
+      kvStore <- KeyValueStoreManager[F].store(dbName)
       store   = kvStore
     } yield new Store[F] {
 

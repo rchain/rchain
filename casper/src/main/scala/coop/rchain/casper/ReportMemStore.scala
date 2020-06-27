@@ -112,9 +112,7 @@ object ReportMemStore {
     val seqEventCodec  = codecSeq[Seq[ReportingEvent]](codec)
 
     for {
-      db <- kvm.database("reporting-cache")
-      keyValueStore = db
-        .toTypedStore[ByteString, BitVector](codecs.codecByteString, scodec.codecs.bits)
-    } yield new ReportMemStoreImpl[F](keyValueStore, seqEventCodec)
+      db <- kvm.database("reporting-cache", codecs.codecByteString, scodec.codecs.bits)
+    } yield new ReportMemStoreImpl[F](db, seqEventCodec)
   }
 }

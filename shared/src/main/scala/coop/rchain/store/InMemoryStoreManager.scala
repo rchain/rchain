@@ -11,7 +11,7 @@ final case class InMemoryStoreManager[F[_]: Sync]() extends KeyValueStoreManager
   val state = TrieMap[String, InMemoryKeyValueStore[F]]()
 
   // Creates new database for each unique database name
-  override def database(name: String): F[KeyValueStore[F]] =
+  override def store(name: String): F[KeyValueStore[F]] =
     Sync[F].delay(state.getOrElseUpdate(name, InMemoryKeyValueStore[F]))
 
   override def shutdown: F[Unit] = ().pure

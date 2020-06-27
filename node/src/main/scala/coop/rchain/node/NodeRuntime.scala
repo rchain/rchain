@@ -43,7 +43,7 @@ import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api._
-import coop.rchain.node.configuration.{Configuration, NodeConf}
+import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
@@ -740,7 +740,7 @@ object NodeRuntime {
         implicit val kvm = casperStoreManager
         for {
           // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- casperStoreManager.database("block-metadata")
+          blockMetadataDb   <- casperStoreManager.store("block-metadata")
           dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
           oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
           shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists

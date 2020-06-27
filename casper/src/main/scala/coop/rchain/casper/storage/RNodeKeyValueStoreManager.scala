@@ -49,7 +49,7 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
   private val managersState = Ref.unsafe(StoreState(Map.empty))
 
   // Creates database uniquely defined by the name
-  override def database(dbName: String): F[KeyValueStore[F]] =
+  override def store(dbName: String): F[KeyValueStore[F]] =
     for {
       // Find DB ref / first time create deferred object
       newDefer <- Deferred[F, KeyValueStoreManager[F]]
@@ -62,7 +62,7 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
       (isNew, defer, manCfg) = action
       _                      <- createLmdbManger(manCfg, defer).whenA(isNew)
       manager                <- defer.get
-      database               <- manager.database(dbName)
+      database               <- manager.store(dbName)
     } yield database
 
   private def createLmdbManger(config: LmdbEnvConfig, defer: Deferred[F, KeyValueStoreManager[F]]) =

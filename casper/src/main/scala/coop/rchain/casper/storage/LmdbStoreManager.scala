@@ -52,7 +52,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
   // Internal manager state for LMDB databases and environments
   private val varState = Ref.unsafe(DbState(EnvClosed, 0, envDefer))
 
-  override def database(dbName: String): F[KeyValueStore[F]] =
+  override def store(dbName: String): F[KeyValueStore[F]] =
     Sync[F].delay(new LmdbKeyValueStore[F](getCurrentEnv(dbName)))
 
   private def getCurrentEnv(dbName: String): F[DbEnv[F]] =
