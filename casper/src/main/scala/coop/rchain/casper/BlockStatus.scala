@@ -4,6 +4,7 @@ sealed trait BlockStatus
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
   def processing: BlockError               = BlockError.Processing
+  def casperIsBusy: BlockError             = BlockError.CasperIsBusy
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
   def admissibleEquivocation: BlockError   = InvalidBlock.AdmissibleEquivocation
   def ignorableEquivocation: BlockError    = InvalidBlock.IgnorableEquivocation
@@ -45,6 +46,7 @@ object ValidBlock {
 sealed trait BlockError extends BlockStatus
 object BlockError {
   case object Processing                         extends BlockError
+  case object CasperIsBusy                       extends BlockError
   final case class BlockException(ex: Throwable) extends BlockError
 }
 

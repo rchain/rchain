@@ -718,6 +718,8 @@ object BlockAPI {
           "No action taken since other thread is already processing the block."
             .asLeft[String]
             .pure[F]
+        case BlockError.CasperIsBusy =>
+          s"Casper put block in the queue: $status".asLeft[String].pure[F]
       }
       .merge
 

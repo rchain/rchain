@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.syntax.bracket
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -15,6 +16,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.catscontrib.BooleanF._
+import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
@@ -25,12 +27,13 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
-    genesis: BlockMessage,
+    approvedBlock: BlockMessage,
     postGenesisStateHash: StateHash,
     shardId: String,
     finalizationRate: Int,
@@ -45,7 +48,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private[this] val syncF                   = Sync[F]
-  private[this] val noop                    = syncF.unit
 
   //TODO: Extract hardcoded version and expirationThreshold
   private val version             = 1L
@@ -56,113 +58,215 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
 
-  def getGenesis: F[BlockMessage] = genesis.pure[F]
+  def getVersion: F[Long] = version.pure[F]
+
+  //TODO rename to getApprovedBlock
+  def getGenesis: F[BlockMessage] = approvedBlock.pure[F]
 
   def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
-  def addBlock(b: BlockMessage): F[ValidBlockProcessing] = {
-
-    def logAlreadyProcessed: F[ValidBlockProcessing] =
-      Log[F]
-        .info(
-          s"Block ${PrettyPrinter.buildString(b.blockHash)} has already been processed by another thread."
+  // Later this should replace addBlock, but for now one more method created, or there are too many tests to fix
+  def addBlockFromStore(
+      blockHash: BlockHash,
+      allowAddFromBuffer: Boolean
+  ): F[ValidBlockProcessing] = {
+    def returnSafetyRangeNotFilled: F[ValidBlockProcessing] =
+      BlockStatus
+        .exception(
+          new Exception("Not enough blocks past ApprovedBlock received.")
         )
-        .as(BlockStatus.processing.asLeft)
+        .asLeft[ValidBlock]
+        .pure[F]
 
-    def add: F[ValidBlockProcessing] = spanF.trace(AddBlockMetricsSource) {
-      for {
-        _      <- spanF.mark("block-store-put")
-        dag    <- blockDag
-        status <- internalAddBlock(b, dag)
-        _      <- spanF.mark("block-added-status")
-      } yield status
-    }
-
-    import cats.instances.either._
     for {
-      // Save block in block store before waiting for blockProcessingLock
-      // This is called inside block message handler as well, but required here in case block is not received from peer
-      // but proposed by node itself.
-      _ <- BlockStore[F].contains(b.blockHash).ifM(().pure[F], BlockStore[F].put(b))
-      _ <- Log[F].info(
-            s"Block ${PrettyPrinter.buildString(b.blockHash)} asks for blockProcessingLock."
-          )
-      // ATM Casper is allowed to add only one block at a time
-      status <- blockProcessingLock.withPermit {
-                 val exists = for {
-                   _ <- Log[F].info(
-                         s"Block ${PrettyPrinter.buildString(b.blockHash)} " +
-                           s"got blockProcessingLock."
-                       )
-                   dag         <- blockDag
-                   cst         <- state.read
-                   dagContains <- dag.contains(b.blockHash)
-                 } yield dagContains || cst.blockBuffer.contains(b.blockHash)
+      blockAvailable <- BlockStore[F].get(blockHash)
+      returnNoBlockInStore = BlockStatus
+        .exception(
+          new Exception("Casper tries to add block that is not present in BlockStore")
+        )
+        .asLeft[ValidBlock]
+        .pure[F]
 
-                 exists.ifM(logAlreadyProcessed, add)
+      result <- blockAvailable match {
+                 case None =>
+                   returnNoBlockInStore
+                 case Some(b) =>
+                   for {
+                     dag                   <- blockDag
+                     missingDepCheckResult <- Validate.missingBlocks(b, dag)
+                     dagMissingBlockDependencies = missingDepCheckResult equals Left(
+                       InvalidBlock.MissingBlocks
+                     )
+
+                     isReadyApprovedBlockChild = isApprovedBlockChild(b) &&^ approvedBlockStateComplete
+                     blockIsReady              <- ~^(dagMissingBlockDependencies.pure[F]) ||^ isReadyApprovedBlockChild
+
+                     _ <- fetchMissingDependencies(b).whenA(dagMissingBlockDependencies)
+                     r <- if (blockIsReady) addBlock(b, allowAddFromBuffer)
+                         else {
+                           isApprovedBlockChild(b).flatMap(
+                             c =>
+                               if (c) returnSafetyRangeNotFilled
+                               else missingDepCheckResult.pure[F]
+                           )
+                         }
+                   } yield r
                }
-      _ <- status.traverse_ { _ =>
-            metricsF.setGauge("block-height", blockNumber(b))(AddBlockMetricsSource) >>
-              EventPublisher[F].publish(MultiParentCasperImpl.addedEvent(b))
+    } yield result
+  }
+
+  override def approvedBlockStateComplete: F[Boolean] = {
+    import cats.instances.list._
+    for {
+      approvedBlock  <- getGenesis
+      abHasLowHeight = ProtoUtil.blockNumber(approvedBlock) < expirationThreshold
+
+      // active validators as per approved block state
+      abValidators = approvedBlock.body.state.bonds.filter(_.stake > 0).map(_.validator)
+
+      cbPendants       <- casperBuffer.getPendants
+      cbPendantsStored <- cbPendants.toList.filterA(BlockStore[F].contains)
+      cbPendantsBlocks <- cbPendantsStored.map(BlockStore[F].getUnsafe).sequence
+
+      enoughBlocksAreInBuffer = abValidators.foldLeft(true)((acc, validator) => {
+        val pendantFromValidator = cbPendantsBlocks.find(b => b.sender.equals(validator))
+        val enoughBlocksAreInBufferForValidator = pendantFromValidator.exists(
+          p =>
+            ProtoUtil.blockNumber(p) <= ProtoUtil.blockNumber(approvedBlock) - expirationThreshold
+        )
+        acc && enoughBlocksAreInBufferForValidator
+      })
+
+      bufferFilled = abHasLowHeight || enoughBlocksAreInBuffer
+    } yield bufferFilled
+  }
+
+  private def isApprovedBlockChild(blockMessage: BlockMessage): F[Boolean] =
+    blockMessage.header.parentsHashList.contains(approvedBlock.blockHash).pure[F]
+
+  /**
+    * Add block to Casper
+    *
+    * @param b                  Block
+    * @param allowAddFromBuffer If block is in CaspeBuffer, try to add it instead of reporting already processed.
+    *                           This is required for continuing syncing after node restart
+    */
+  def addBlock(b: BlockMessage, allowAddFromBuffer: Boolean): F[ValidBlockProcessing] =
+    for {
+      // Save block in block store
+      // This is required for some unit tests to pass
+      // TODO remove this and rewrite failing tests
+      _ <- BlockStore[F].contains(b.blockHash).ifM(().pure[F], BlockStore[F].put(b))
+      // We force Casper to be single threaded. More investigations needed to allow it be multi threaded.
+      addResult <- Sync[F].bracket(blockProcessingLock.tryAcquire) {
+                    case true =>
+                      Log[F].info(
+                        s"Block ${PrettyPrinter.buildString(b, short = true)} got blockProcessingLock."
+                      ) >>
+                        addBlockInLock(b, allowAddFromBuffer)
+                    case false =>
+                      Log[F]
+                        .info(
+                          s"Block ${PrettyPrinter.buildString(b, short = true)} " +
+                            s"processing deferred as Casper is busy."
+                        )
+                        .as(BlockStatus.casperIsBusy.asLeft[ValidBlock])
+                  } {
+                    case true =>
+                      blockProcessingLock.release >>
+                        Log[F].info(
+                          s"Block ${PrettyPrinter.buildString(b, short = true)} released blockProcessingLock."
+                        )
+                    case false =>
+                      ().pure[F]
+                  }
+      _ <- addResult match {
+            case Right(_) => {
+              for {
+                _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
+                _ <- metricsF.setGauge("block-height", blockNumber(b))(
+                      AddBlockMetricsSource
+                    )
+              } yield ()
+            }
+            case Left(InvalidBlock.AdmissibleEquivocation) =>
+              CommUtil[F].sendBlockHash(b.blockHash, b.sender)
+            case _ => ().pure[F]
           }
-    } yield status
+      _                <- casperBuffer.remove(b.blockHash)
+      depFreeBlockHash <- getNextReadyBlock
+      // Trigger next block addition or return if no dependency free blocks
+      _ <- if (depFreeBlockHash.isDefined)
+            addBlockFromStore(depFreeBlockHash.get, allowAddFromBuffer = true)
+          else addResult.pure[F]
+    } yield addResult
+
+  private def addBlockInLock(
+      b: BlockMessage,
+      allowAddFromBuffer: Boolean
+  ): F[ValidBlockProcessing] = {
+    for {
+      dag <- blockDag
+      ignore <- ((!allowAddFromBuffer).pure[F] &&^ bufferContains(b.blockHash)) ||^
+                 dagContains(b.blockHash)
+
+      result <- if (ignore) {
+                 Log[F]
+                   .info(
+                     s"Block ${PrettyPrinter.buildString(b, short = true)} " +
+                       s"has already been processed."
+                   )
+                   .as(BlockStatus.processing.asLeft[ValidBlock])
+               } else {
+                 for {
+                   validSender <- Validate.blockSenderHasWeight(b, approvedBlock, dag)
+                   resultWithUpdDag <- if (!validSender)
+                                        // TODO What's the scenario when this can happen?
+                                        (BlockStatus.invalidSender.asLeft[ValidBlock], dag).pure
+                                      else attemptAdd(b, dag)
+                   (result, updatedDag) = resultWithUpdDag
+                   tipHashes            <- estimator(updatedDag)
+                   _                    <- Span[F].mark("after-estimator")
+                   tipHash              = tipHashes.head
+                   _ <- Log[F].info(
+                         s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}."
+                       )
+                 } yield result
+               }
+    } yield result
   }.timer("add-block-time")
 
   private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
     lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
 
-  private def internalAddBlock(
-      b: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[ValidBlockProcessing] =
+  /**
+    * Check if there are blocks in CasperBuffer available with all dependencies met.
+    * @return First from the set of available blocks
+    */
+  private def getNextReadyBlock: F[Option[BlockHash]] = {
+    import cats.instances.list._
     for {
-      _            <- Span[F].mark("internal-add-block")
-      validFormat  <- Validate.formatOfFields(b)
-      validSig     <- Validate.blockSignature(b)
-      validSender  <- Validate.blockSenderHasWeight(b, genesis, dag)
-      validVersion <- Validate.version(b, version)
-      attemptResult <- if (!validFormat) (BlockStatus.invalidFormat.asLeft[ValidBlock], dag).pure
-                      else if (!validSig)
-                        (BlockStatus.invalidSignature.asLeft[ValidBlock], dag).pure
-                      else if (!validSender)
-                        (BlockStatus.invalidSender.asLeft[ValidBlock], dag).pure
-                      else if (!validVersion)
-                        (BlockStatus.invalidVersion.asLeft[ValidBlock], dag).pure
-                      else attemptAdd(b, dag)
-      (attempt, updatedDag) = attemptResult
-      _ <- attempt match {
-            case Left(InvalidBlock.MissingBlocks) => noop
-            case _ =>
-              Cell[F, CasperState].modify { s =>
-                s.copy(
-                  blockBuffer = s.blockBuffer - b.blockHash,
-                  dependencyDag = DoublyLinkedDagOperations.remove(s.dependencyDag, b.blockHash)
-                )
-              }
-          }
-      _ <- Span[F].mark("attempt-result")
-      _ <- attempt match {
-            case Left(ib: InvalidBlock) if !InvalidBlock.isSlashable(ib) => noop
-            case Left(bs) if !BlockStatus.isInDag(bs)                    => noop
-            case _ =>
-              reAttemptBuffer(updatedDag) // reAttempt for any status that resulted in the adding of the block into the view
-          }
-      _         <- Span[F].mark("reattempted-buffer")
-      tipHashes <- estimator(updatedDag)
-      _         <- Span[F].mark("after-estimator")
-      tipHash   = tipHashes.head
-      _         <- Log[F].info(s"New fork-choice tip is block ${PrettyPrinter.buildString(tipHash)}.")
-    } yield attempt
+      pendants       <- CasperBufferStorage[F].getPendants
+      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains)
+      depFreePendants <- pendantsStored.filterA { pendant =>
+                          for {
+                            pendantBlock   <- BlockStore[F].get(pendant)
+                            justifications = pendantBlock.get.justifications
+                            // If even one of justifications is not in DAG - block is not dependency free
+                            missingDep <- justifications
+                                           .map(_.latestBlockHash)
+                                           .existsM(dagContains(_).not)
+                          } yield !missingDep
+                        }
+      _ <- Log[F].info(s"Blocks ready to be added: ${PrettyPrinter.buildString(depFreePendants)}.")
+    } yield if (depFreePendants.nonEmpty) depFreePendants.head.some else None
+  }
 
-  def contains(
-      hash: BlockHash
-  ): F[Boolean] =
-    for {
-      dag            <- blockDag
-      dagContains    <- dag.contains(hash)
-      state          <- Cell[F, CasperState].read
-      bufferContains = state.blockBuffer.contains(hash)
-    } yield (dagContains || bufferContains)
+  def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
+
+  def bufferContains(hash: BlockHash): F[Boolean] = casperBuffer.contains(hash)
+
+  def contains(hash: BlockHash): F[Boolean] = bufferContains(hash) ||^ dagContains(hash)
 
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
     import cats.instances.either._
@@ -183,7 +287,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield deploy.sig
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    Estimator[F].tips(dag, genesis)
+    Estimator[F].tips(dag, approvedBlock)
 
   def createBlock: F[CreateBlockStatus] = spanF.trace(CreateBlockMetricsSource) {
     (validatorId match {
@@ -193,7 +297,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             BlockCreator
               .createBlock(
                 dag,
-                genesis,
+                approvedBlock,
                 validatorIdentity,
                 shardId,
                 version,
@@ -203,9 +307,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
           }
           .flatMap {
             case c: Created =>
-              EventPublisher[F]
-                .publish(MultiParentCasperImpl.createdEvent(c))
-                .as[CreateBlockStatus](c)
+              spanF.mark("block-store-put") >>
+                BlockStore[F].put(c.block) >>
+                EventPublisher[F]
+                  .publish(MultiParentCasperImpl.createdEvent(c))
+                  .as[CreateBlockStatus](c)
             case o: CreateBlockStatus => o.pure
           }
       case None => CreateBlockStatus.readOnlyMode.pure
@@ -215,7 +321,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def lastFinalizedBlock: F[BlockMessage] =
     for {
       dag                    <- blockDag
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(genesis)
+      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(approvedBlock)
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
       _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
@@ -254,7 +360,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
-        _ <- EitherT(Validate.blockSummary(b, genesis, dag, shardId, expirationThreshold))
+        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, expirationThreshold))
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
@@ -274,21 +380,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                       )
                 }
             )
-        _      <- EitherT.liftF(Span[F].mark("transactions-validated"))
-        _      <- EitherT(Validate.bondsCache(b, runtimeManager))
-        _      <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
-        _      <- EitherT(Validate.neglectedInvalidBlock(b, dag))
-        _      <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
-        _      <- EitherT(EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, dag, genesis))
+        _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
+        _ <- EitherT(Validate.bondsCache(b, runtimeManager))
+        _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
+        _ <- EitherT(Validate.neglectedInvalidBlock(b, dag))
+        _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
+        _ <- EitherT(
+              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, dag, approvedBlock)
+            )
         _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
-        state  <- EitherT.liftF(Cell[F, CasperState].read)
-        status <- EitherT(EquivocationDetector.checkEquivocations(state.dependencyDag, b, dag))
+        depDag <- EitherT.liftF(casperBuffer.toDoublyLinkedDag)
+        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
     for {
       _          <- Span[F].mark("attempt-add")
-      _          <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b.blockHash)} to DAG.")
+      _          <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b, true)} to DAG.")
       status     <- validationStatus.value
       updatedDag <- addEffects(status, b, dag)
       _          <- Span[F].mark("effects-added")
@@ -305,19 +413,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       .map { _ =>
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
-          updatedDag <- BlockDagStorage[F].insert(block, genesis, invalid = false)
-          _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
+          updatedDag <- BlockDagStorage[F].insert(block, approvedBlock, invalid = false)
           _ <- Log[F].info(
-                s"Added ${PrettyPrinter.buildString(block.blockHash)}"
+                s"Added ${PrettyPrinter.buildString(block, true)}"
               )
           _ <- updateLastFinalizedBlock(block)
         } yield updatedDag
       }
       .leftMap {
-        case InvalidBlock.MissingBlocks =>
-          Cell[F, CasperState].modify { s =>
-            s.copy(blockBuffer = s.blockBuffer + block.blockHash)
-          } >> fetchMissingDependencies(block) >> dag.pure
+        case InvalidBlock.MissingBlocks => dag.pure
 
         case InvalidBlock.AdmissibleEquivocation =>
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -343,7 +447,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             // We can only treat admissible equivocations as invalid blocks if
             // casper is single threaded.
             updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)
-            _          <- CommUtil[F].sendBlockHash(block.blockHash, block.sender)
           } yield updatedDag
 
         case InvalidBlock.IgnorableEquivocation =>
@@ -387,23 +490,34 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[Unit] = {
     import cats.instances.list._
     for {
-      dag                 <- blockDag
-      missingDependencies <- dependenciesHashesOf(b).filterA(dag.lookup(_).map(_.isEmpty))
-      missingUnseenDependencies <- missingDependencies.filterA(
-                                    blockHash => ~^(BlockStore[F].contains(blockHash))
-                                  )
-      _ <- missingDependencies.traverse(addDependencyToDag(_, b))
-      _ <- missingUnseenDependencies.traverse(CommUtil[F].sendBlockRequest)
+      // Request blocks that are not in DAG, CasperBuffer
+      allDeps      <- dependenciesHashesOf(b).pure[F]
+      depsInDag    <- allDeps.filterA(dagContains)
+      depsInBuffer <- allDeps.filterA(bufferContains)
+      // In addition, we have to check equivocation tracker, as admissible equivocations are not stored in DAG
+      equivocationHashes <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+                             tracker.equivocationRecords.map { equivocations =>
+                               equivocations.flatMap(_.equivocationDetectedBlockHashes)
+                             }
+                           }
+      depsInEqTracker = allDeps.filter(equivocationHashes.contains)
+
+      missingDeps = allDeps filterNot (
+          d => depsInDag.contains(d) || depsInBuffer.contains(d) || depsInEqTracker.contains(d)
+      )
+      _ <- (missingDeps ++ depsInBuffer).traverse(casperBuffer.addRelation(_, b.blockHash))
+      _ <- Log[F].info(
+            s"${PrettyPrinter.buildString(b.blockHash)} missing dependencies. " +
+              s"Fetching: ${PrettyPrinter.buildString(missingDeps)}. " +
+              s"Already in CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
+              s"Already in DAG: ${PrettyPrinter.buildString(depsInDag)}."
+          )
+      _ <- missingDeps.traverse(
+            BlockRetriever[F]
+              .admitHash(_, admitHashReason = BlockRetriever.MissingDependencyRequested)
+          )
     } yield ()
   }
-
-  private def addDependencyToDag(hash: BlockHash, childBlock: BlockMessage): F[Unit] =
-    Cell[F, CasperState].modify(
-      s =>
-        s.copy(
-          dependencyDag = DoublyLinkedDagOperations.add(s.dependencyDag, hash, childBlock.blockHash)
-        )
-    )
 
   // TODO: Slash block for status except InvalidUnslashableBlock
   private def handleInvalidBlockEffect(
@@ -412,65 +526,27 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[BlockDagRepresentation[F]] =
     Log[F].warn(
       s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-    ) >> BlockDagStorage[F].insert(block, genesis, invalid = true)
-
-  private def reAttemptBuffer(
-      dag: BlockDagRepresentation[F]
-  ): F[Unit] = {
-    import cats.instances.list._
-    type Attempt = (BlockMessage, (ValidBlockProcessing, BlockDagRepresentation[F]))
-    for {
-      _                    <- Span[F].mark("reattempt-buffer")
-      state                <- Cell[F, CasperState].read
-      dependencyFree       = state.dependencyDag.dependencyFree
-      dependencyFreeBlocks = state.blockBuffer.intersect(dependencyFree).toList
-      attemptsWithDag <- dependencyFreeBlocks.foldM((List.empty[Attempt], dag)) {
-                          case ((attempts, updatedDag), blockHash) =>
-                            for {
-                              maybeBlock <- BlockStore[F].get(blockHash)
-                              b <- syncF.fromOption(
-                                    maybeBlock,
-                                    new RuntimeException(
-                                      s"Could not find a block for hash $blockHash in the blockstore. Exiting..."
-                                    )
-                                  )
-                              status <- attemptAdd(b, updatedDag)
-                            } yield ((b, status) :: attempts, status._2)
-                        }
-      (attempts, updatedDag) = attemptsWithDag
-      _ <- syncF.whenA(attempts.nonEmpty) {
-            val addedBlocks = attempts.collect {
-              case (bm, (status, _)) if BlockStatus.isInDag(status.merge) => bm.blockHash
-            }
-            for {
-              _ <- removeAdded(state.dependencyDag, addedBlocks)
-              _ <- Span[F].mark("added-removed")
-              _ <- reAttemptBuffer(updatedDag)
-            } yield ()
-          }
-    } yield ()
-  }
-
-  private def removeAdded(
-      blockBufferDependencyDag: DoublyLinkedDag[BlockHash],
-      addedBlocks: List[ByteString]
-  ): F[Unit] = Cell[F, CasperState].modify { s =>
-    s.copy(
-      blockBuffer = s.blockBuffer -- addedBlocks,
-      dependencyDag = addedBlocks.foldLeft(blockBufferDependencyDag) {
-        case (acc, addedBlock) =>
-          DoublyLinkedDagOperations.remove(acc, addedBlock)
-      }
-    )
-  }
+    ) >> BlockDagStorage[F].insert(block, approvedBlock, invalid = true)
 
   def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 
   def fetchDependencies: F[Unit] = {
     import cats.instances.list._
     for {
-      s <- Cell[F, CasperState].read
-      _ <- s.dependencyDag.dependencyFree.toList.traverse(CommUtil[F].sendBlockRequest)
+      pendants       <- casperBuffer.getPendants
+      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
+      _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
+            pendantsUnseen.toList.traverse(
+              dependency =>
+                Log[F]
+                  .debug(
+                    s"Sending dependency ${PrettyPrinter.buildString(dependency)} to BlockRetriever"
+                  ) >>
+                  BlockRetriever[F].admitHash(
+                    dependency,
+                    admitHashReason = BlockRetriever.MissingDependencyRequested
+                  )
+            )
     } yield ()
   }
 }

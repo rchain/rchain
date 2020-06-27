@@ -3,13 +3,13 @@ package coop.rchain.casper
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.engine.Running
+import coop.rchain.casper.engine.{BlockRetriever, Running}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -47,13 +47,26 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def addBlock(b: BlockMessage): F[ValidBlockProcessing]
+  def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
+  def addBlock(b: BlockMessage, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
   def contains(hash: BlockHash): F[Boolean]
+  def dagContains(hash: BlockHash): F[Boolean]
+  def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
   def createBlock: F[CreateBlockStatus]
   def getGenesis: F[BlockMessage]
   def getValidator: F[Option[PublicKey]]
+  def getVersion: F[Long]
+
+  /**
+    * Approved Block extends notion of Genesis Block - its the block that meets Last Finalized State.
+    * To be able to start building on top of the Approved Block, node have to have some additional information
+    * from the network.
+    *
+    * @return if node has all necessary information accompanying ApprovedBlock
+    */
+  def approvedBlockStateComplete: F[Boolean]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -86,7 +99,7 @@ sealed abstract class MultiParentCasperInstances {
     Metrics.Source(CasperMetricsSource, "casper")
   private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
       genesis: BlockMessage,
       shardId: String,
