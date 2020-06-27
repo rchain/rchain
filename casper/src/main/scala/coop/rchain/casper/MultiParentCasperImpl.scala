@@ -7,7 +7,6 @@ import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
@@ -23,32 +22,13 @@ import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.blockstorage.util.{
-  BlockDependencyDag,
-  DoublyLinkedDag,
-  DoublyLinkedDagOperations
-}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
-/**
-  Encapsulates mutable state of the MultiParentCasperImpl
-
-  @param blockBuffer - holds hashes of blocks that were received but were not added because DAG does not have their parents yet
-  @param dependencyDag - dependency dag for block buffer // TODO they should be one structure
-  */
-final case class CasperState(
-    blockBuffer: Set[BlockHash] = Set.empty[BlockHash],
-    dependencyDag: DoublyLinkedDag[BlockHash] = BlockDependencyDag.empty
-)
-
-object CasperState {
-  type CasperStateCell[F[_]] = Cell[F, CasperState]
-}
-
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
     genesis: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -56,7 +36,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     finalizationRate: Int,
     blockProcessingLock: Semaphore[F]
 )(
-    implicit state: CasperStateCell[F],
+    implicit casperBuffer: CasperBufferStorage[F],
     metricsF: Metrics[F],
     spanF: Span[F],
     runtimeManager: RuntimeManager[F]

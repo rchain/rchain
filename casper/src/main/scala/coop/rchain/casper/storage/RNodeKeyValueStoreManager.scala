@@ -26,8 +26,9 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
   )
 
   // Config name is used as a subfolder for LMDB files
-  private val dagStorageEnvConfig = LmdbEnvConfig(name = "dagstorage")
-  private val reportingEnvConfig  = LmdbEnvConfig(name = "reporting")
+  private val dagStorageEnvConfig  = LmdbEnvConfig(name = "dagstorage")
+  private val reportingEnvConfig   = LmdbEnvConfig(name = "reporting")
+  private val caserBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
 
   // Database name to store instance name mapping (subfolder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
@@ -39,7 +40,9 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     ("invalid-blocks", dagStorageEnvConfig),
     ("deploy-index", dagStorageEnvConfig),
     // Reporting (trace) cache
-    ("reporting-cache", reportingEnvConfig)
+    ("reporting-cache", reportingEnvConfig),
+    // CasperBuffer
+    ("parents-map", caserBufferEnvConfig)
   )
 
   private case class StoreState(

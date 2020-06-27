@@ -123,9 +123,7 @@ sealed abstract class MultiParentCasperInstances {
                                  } yield postGenesisStateHash
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
-        casperState         <- Cell.mvarCell[F, CasperState](CasperState())
       } yield {
-        implicit val state = casperState
         new MultiParentCasperImpl(
           validatorId,
           genesis,

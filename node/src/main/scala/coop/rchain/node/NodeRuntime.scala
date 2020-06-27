@@ -750,6 +750,10 @@ object NodeRuntime {
           dagStorage <- BlockDagKeyValueStorage.create[F]
         } yield dagStorage
       }
+      casperBufferStorage <- {
+        implicit val kvm = casperStoreManager
+        CasperBufferKeyValueStorage.create[F]
+      }
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
@@ -844,8 +848,9 @@ object NodeRuntime {
         implicit val cu     = commUtil
         implicit val es     = estimator
         implicit val ds     = deployStorage
+        implicit val cbs    = casperBufferStorage
 
-        CasperLaunch.of(conf.casper)
+        CasperLaunch.of[F](conf.casper)
       }
       packetHandler = {
         implicit val ec = engineCell
