@@ -81,17 +81,6 @@ object ProtoUtil {
     } yield mainChain
   }
 
-  def getBlockMetadata[F[_]: Sync](
-      hash: BlockHash,
-      dag: BlockDagRepresentation[F]
-  ): F[BlockMetadata] =
-    dag.lookup(hash) >>= (
-      Sync[F].fromOption(
-        _,
-        new Exception(s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}")
-      )
-    )
-
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications.find(_.validator == block.sender)
 
@@ -197,7 +186,7 @@ object ProtoUtil {
       dag: BlockDagRepresentation[F]
   ): F[List[BlockMetadata]] = {
     import cats.instances.list._
-    b.parents.traverse(getBlockMetadata(_, dag))
+    b.parents.traverse(dag.lookupUnsafe)
   }
 
   def getParentMetadatasAboveBlockNumber[F[_]: Sync](

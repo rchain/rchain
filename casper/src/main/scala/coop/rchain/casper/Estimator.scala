@@ -6,6 +6,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
@@ -79,8 +80,8 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
         val mainHash +: secondaryHashes = rankedLatestHashes
 
         for {
-          maxBlockNumber   <- ProtoUtil.getBlockMetadata[F](mainHash, dag).map(_.blockNum)
-          secondaryParents <- secondaryHashes.traverse(ProtoUtil.getBlockMetadata[F](_, dag))
+          maxBlockNumber   <- dag.lookupUnsafe(mainHash).map(_.blockNum)
+          secondaryParents <- secondaryHashes.traverse(dag.lookupUnsafe)
           shallowParents = secondaryParents.filter(
             p => maxBlockNumber - p.blockNum <= maxParentDepth
           )
