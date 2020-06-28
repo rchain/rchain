@@ -5,13 +5,14 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
-import coop.rchain.shared.Log
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.trace._
+import coop.rchain.shared.Log
 
 import scala.collection.BitSet
 
@@ -31,7 +32,7 @@ object EstimatorHelper {
         conflicts[F](_, b, dag).map(b => !b)
 
       for {
-        blocks <- blockHashes.toList.traverse(hash => ProtoUtil.getBlockMetadata[F](hash, dag))
+        blocks <- blockHashes.toList.traverse(dag.lookupUnsafe)
         result <- blocks
                    .foldM(List.empty[BlockMetadata]) {
                      case (acc, b) =>
@@ -46,7 +47,7 @@ object EstimatorHelper {
       } yield result
     }
 
-  private[casper] def conflicts[F[_]: Monad: Log: BlockStore](
+  private[casper] def conflicts[F[_]: Sync: Log: BlockStore](
       b1: BlockMetadata,
       b2: BlockMetadata,
       dag: BlockDagRepresentation[F]
@@ -94,7 +95,7 @@ object EstimatorHelper {
     val conflictPerChannel = b1Ops
       .map {
         case (channel, v) =>
-          (channel, channelConflicts(v, b2Ops.get(channel).getOrElse(Set.empty)))
+          (channel, channelConflicts(v, b2Ops.getOrElse(channel, Set.empty)))
       }
     conflictPerChannel
       .filter { case (_, conflicts) => conflicts }
@@ -115,14 +116,13 @@ object EstimatorHelper {
       comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
     }.toSet
 
-  private[this] def extractBlockEvents[F[_]: Monad: BlockStore](
+  private[this] def extractBlockEvents[F[_]: Sync: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
   ): F[BlockEvents] =
     for {
-      maybeAncestors <- blockAncestorsMeta.traverse(
-                         blockAncestorMeta => BlockStore[F].get(blockAncestorMeta.blockHash)
-                       )
-      ancestors = maybeAncestors.flatten
+      ancestors <- blockAncestorsMeta.traverse(
+                    blockAncestorMeta => BlockStore[F].getUnsafe(blockAncestorMeta.blockHash)
+                  )
       ancestorEvents = ancestors
         .flatMap(_.body.deploys.flatMap(_.deployLog))
         .map(EventConverter.toRspaceEvent)
