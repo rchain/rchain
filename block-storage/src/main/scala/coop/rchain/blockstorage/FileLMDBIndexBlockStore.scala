@@ -3,12 +3,11 @@ package coop.rchain.blockstorage
 import java.nio.ByteBuffer
 import java.nio.file._
 
-import cats.Monad
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.mtl.MonadState
-
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.FileLMDBIndexBlockStore.Checkpoint
 import coop.rchain.blockstorage.StorageError.StorageErr
@@ -22,18 +21,16 @@ import coop.rchain.casper.protocol.{
   BlockMessageProto
 }
 import coop.rchain.lmdb.LMDBStore
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.ByteStringOps._
-import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{AtomicMonadState, Log}
-
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._
-import scala.util.matching.Regex
 
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
-import coop.rchain.metrics.Metrics.Source
+import scala.util.matching.Regex
 
 private final case class FileLMDBIndexBlockStoreState[F[_]: Sync](
     blockMessageRandomAccessFile: RandomAccessIO[F],
@@ -140,6 +137,11 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                      .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
                })
     } yield result
+
+  // Default implementation will use `get` to load the whole block so
+  //  this is optimization to only look at the index.
+  override def contains(blockHash: BlockHash)(implicit ap: Applicative[F]): F[Boolean] =
+    index.get(blockHash.toDirectByteBuffer).map(_.nonEmpty)
 
   override def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     lock.withPermit(

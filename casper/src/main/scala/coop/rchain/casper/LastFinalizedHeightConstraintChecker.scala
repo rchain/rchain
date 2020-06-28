@@ -9,11 +9,10 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
-final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: BlockStore: Log](
+final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: Log](
     heightConstraintThreshold: Long
 ) {
   def check(
@@ -23,11 +22,11 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
   ): F[Boolean] =
     for {
       lastFinalizedBlockHash <- LastFinalizedStorage[F].get(genesis)
-      lastFinalizedBlock     <- ProtoUtil.getBlock[F](lastFinalizedBlockHash)
+      lastFinalizedBlock     <- dag.lookupUnsafe(lastFinalizedBlockHash)
       latestMessageOpt       <- dag.latestMessage(validator)
       result <- latestMessageOpt match {
                  case Some(latestMessage) =>
-                   val latestFinalizedHeight = lastFinalizedBlock.body.state.blockNumber
+                   val latestFinalizedHeight = lastFinalizedBlock.blockNum
                    val heightDifference      = latestMessage.blockNum - latestFinalizedHeight
                    Log[F].info(
                      s"Latest message is $heightDifference blocks ahead of the last finalized block"
