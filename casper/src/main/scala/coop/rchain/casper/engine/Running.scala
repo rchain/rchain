@@ -6,13 +6,12 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.protocol
-import coop.rchain.comm.transport.{Blob, TransportLayer}
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -44,22 +43,12 @@ object Running {
       RequestedBlocks[F].reads(_.contains(hash))
   }
 
-  private def sendToPeer[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode)(packet: Packet) =
-    RPConfAsk[F].ask
-      .map(conf => protocol(conf.local, conf.networkId).withPacket(packet))
-      .flatMap(msg => TransportLayer[F].send(peer, msg))
-
-  private def streamToPeer[F[_]: Monad: RPConfAsk: TransportLayer](peer: PeerNode)(packet: Packet) =
-    RPConfAsk[F].ask
-      .map(conf => Blob(conf.local, packet))
-      .flatMap(blob => TransportLayer[F].stream(peer, blob))
-
-  private def requestForBlock[F[_]: Monad: RPConfAsk: TransportLayer: RequestedBlocks](
+  private def requestForBlock[F[_]: Monad: TransportLayer: RPConfAsk](
       peer: PeerNode,
       hash: BlockHash
-  ) = sendToPeer(peer)(ToPacket(BlockRequestProto(hash)))
+  ) = TransportLayer[F].sendToPeer(peer, ToPacket(BlockRequestProto(hash)))
 
-  private def requestForNewBlock[F[_]: Monad: RPConfAsk: TransportLayer: RequestedBlocks: Log: Time](
+  private def requestForNewBlock[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time](
       peer: PeerNode,
       blockHash: BlockHash
   ) = requestForBlock(peer, blockHash) >> addNewEntry(blockHash, Some(peer))
@@ -102,7 +91,7 @@ object Running {
     * and keep the requested blocks list clean.
     * See spec RunningMaintainRequestedBlocksSpec for more details
     */
-  def maintainRequestedBlocks[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Log: Time: Metrics](
+  def maintainRequestedBlocks[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time: Metrics](
       timeout: FiniteDuration
   ): F[Unit] = {
 
@@ -164,7 +153,7 @@ object Running {
         ts => RequestedBlocks.put(hash, Requested(timestamp = ts, peers = peer.toSet))
     )
 
-  def handleHasBlock[F[_]: Monad: RPConfAsk: RequestedBlocks: TransportLayer: Time: Log](
+  def handleHasBlock[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Time: Log](
       peer: PeerNode,
       hb: HasBlock
   )(
@@ -190,14 +179,14 @@ object Running {
     )
   }
 
-  def handleHasBlockRequest[F[_]: Monad: RPConfAsk: TransportLayer](
+  def handleHasBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk](
       peer: PeerNode,
       hbr: HasBlockRequest
   )(blockLookup: BlockHash => F[Boolean]): F[Unit] =
     blockLookup(hbr.hash).flatMap(
       present =>
         Applicative[F].whenA(present)(
-          sendToPeer(peer)(ToPacket(HasBlockProto(hbr.hash)))
+          TransportLayer[F].sendToPeer(peer, HasBlockProto(hbr.hash))
         )
     )
 
@@ -216,7 +205,7 @@ object Running {
           )
       )
 
-  def handleBlockHashMessage[F[_]: Monad: Log: ConnectionsCell: TransportLayer: Time: RPConfAsk: RequestedBlocks](
+  def handleBlockHashMessage[F[_]: Monad: TransportLayer: RPConfAsk: RequestedBlocks: Log: Time](
       peer: PeerNode,
       blockHashMessage: BlockHashMessage
   )(repeatedCasperMessage: BlockHash => F[Boolean]): F[Unit] =
@@ -231,7 +220,7 @@ object Running {
         ) >> requestForNewBlock(peer, blockHashMessage.blockHash)
       )
 
-  def handleBlockRequest[F[_]: Monad: RPConfAsk: BlockStore: Log: TransportLayer](
+  def handleBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode,
       br: BlockRequest
   ): F[Unit] =
@@ -241,13 +230,13 @@ object Running {
       _ <- maybeBlock match {
             case None => Log[F].info(logIntro + "No response given since block not found.")
             case Some(block) =>
-              streamToPeer(peer)(ToPacket(block.toProto)) >> Log[F].info(
+              TransportLayer[F].streamToPeer(peer, ToPacket(block.toProto)) >> Log[F].info(
                 logIntro + "Response sent."
               )
           }
     } yield ()
 
-  def handleForkChoiceTipRequest[F[_]: Sync: RPConfAsk: Log: TransportLayer: BlockStore](
+  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode,
       fctr: ForkChoiceTipRequest.type
   )(casper: MultiParentCasper[F]): F[Unit] =
@@ -257,15 +246,16 @@ object Running {
         tip =>
           Log[F].info(
             s"Streaming block ${PrettyPrinter.buildString(tip.blockHash)} to $peer"
-          ) >> streamToPeer(peer)(ToPacket(tip.toProto))
+          ) >> TransportLayer[F].streamToPeer(peer, ToPacket(tip.toProto))
       )
 
-  def handleApprovedBlockRequest[F[_]: Monad: RPConfAsk: Log: TransportLayer](
+  def handleApprovedBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
       peer: PeerNode,
       br: ApprovedBlockRequest,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from $peer") >> streamToPeer(peer)(
+    Log[F].info(s"Received ApprovedBlockRequest from $peer") >> TransportLayer[F].streamToPeer(
+      peer,
       ToPacket(approvedBlock.toProto)
     ) >> Log[F].info(s"ApprovedBlock sent to $peer")
 

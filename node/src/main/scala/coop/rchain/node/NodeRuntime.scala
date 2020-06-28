@@ -145,13 +145,12 @@ class NodeRuntime private[node] (
     requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty).toReaderT
     commUtil = CommUtil.of[Task](
       Concurrent[Task],
-      log,
-      time,
-      metrics,
       transport,
-      rpConnections,
       rpConfAsk,
-      requestedBlocks
+      rpConnections,
+      requestedBlocks,
+      log,
+      time
     )
 
     kademliaRPC = effects.kademliaRPC(
@@ -886,9 +885,9 @@ object NodeRuntime {
         _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
         _ <- Running.maintainRequestedBlocks[F](conf.casper.requestedBlocksTimeout)(
               Monad[F],
+              TransportLayer[F],
               rpConfAsk,
               requestedBlocks,
-              TransportLayer[F],
               Log[F],
               Time[F],
               Metrics[F]
