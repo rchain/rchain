@@ -1,19 +1,11 @@
 package coop.rchain.blockstorage
 
 import cats.Applicative
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.models.BlockHash.BlockHash
 
-import scala.language.higherKinds
-
 trait BlockStore[F[_]] {
-  def put(blockMessage: BlockMessage): F[Unit] =
-    put((blockMessage.blockHash, blockMessage))
-
-  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
-    put((blockHash, blockMessage))
-
   def get(blockHash: BlockHash): F[Option[BlockMessage]]
 
   /**
@@ -25,9 +17,6 @@ trait BlockStore[F[_]] {
   def find(p: BlockHash => Boolean, n: Int = 10000): F[Seq[(BlockHash, BlockMessage)]]
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit]
-
-  def apply(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[BlockMessage] =
-    get(blockHash).map(_.get)
 
   def contains(blockHash: BlockHash)(implicit applicativeF: Applicative[F]): F[Boolean] =
     get(blockHash).map(_.isDefined)
@@ -41,9 +30,16 @@ trait BlockStore[F[_]] {
   def clear(): F[Unit]
 
   def close(): F[Unit]
+
+  // Defaults
+
+  def put(blockMessage: BlockMessage): F[Unit] =
+    put((blockMessage.blockHash, blockMessage))
+
+  def put(blockHash: BlockHash, blockMessage: BlockMessage): F[Unit] =
+    put((blockHash, blockMessage))
 }
 
 object BlockStore {
-
-  def apply[F[_]](implicit ev: BlockStore[F]): BlockStore[F] = ev
+  def apply[F[_]](implicit instance: BlockStore[F]): BlockStore[F] = instance
 }
