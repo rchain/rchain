@@ -7,12 +7,12 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.PublicKey
@@ -241,7 +241,7 @@ object BlockAPI {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.getBlock[F](tipHash)
+      tip       <- BlockStore[F].getUnsafe(tipHash)
       mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
     } yield mainChain
 
@@ -349,7 +349,7 @@ object BlockAPI {
                    .foldM(List.empty[LightBlockInfo]) {
                      case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
                        for {
-                         blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.getBlock[F])
+                         blocksAtHeight <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
                          blockInfosAtHeight <- blocksAtHeight.traverse(
                                                 getLightBlockInfo[F]
                                               )
@@ -411,7 +411,7 @@ object BlockAPI {
     toposortDag[F, String](depth, maxDepthLimit) {
       case (_, topoSort) =>
         val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-          ProtoUtil.getBlock[F](blockHash) map (_.header.parentsHashList)
+          BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
         }
 
         MachineVerifiableDag[F](topoSort, fetchParents)
@@ -430,7 +430,7 @@ object BlockAPI {
           .foldM(List.empty[LightBlockInfo]) {
             case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
               for {
-                blocksAtHeight <- blockHashesAtHeight.traverse(ProtoUtil.getBlock[F])
+                blocksAtHeight <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
                 blockInfosAtHeight <- blocksAtHeight.traverse(
                                        getLightBlockInfo[F]
                                      )
@@ -452,7 +452,7 @@ object BlockAPI {
         dag        <- MultiParentCasper[F].blockDag
         tipHashes  <- MultiParentCasper[F].estimator(dag)
         tipHash    = tipHashes.head
-        tip        <- ProtoUtil.getBlock[F](tipHash)
+        tip        <- BlockStore[F].getUnsafe(tipHash)
         mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
         blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
       } yield blockInfos
@@ -475,7 +475,7 @@ object BlockAPI {
           for {
             dag            <- casper.blockDag
             maybeBlockHash <- dag.lookupByDeployId(id)
-            maybeBlock     <- maybeBlockHash.traverse(ProtoUtil.getBlock[F])
+            maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
             response       <- maybeBlock.traverse(getLightBlockInfo[F])
           } yield response.fold(
             s"Couldn't find block containing deploy with id: ${PrettyPrinter

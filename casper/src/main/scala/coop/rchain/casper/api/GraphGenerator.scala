@@ -1,19 +1,15 @@
 package coop.rchain.casper.api
 
+import cats.{Monad, _}
+import cats.effect.Sync
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.graphz._
-import coop.rchain.shared.Log
-
-import cats.Monad
-import cats.effect.Sync
-import cats._, cats.data._, cats.implicits._
-import cats.mtl._
-import cats.mtl.implicits._
+import coop.rchain.casper.syntax._
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.ski._
+import coop.rchain.graphz._
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Log
 
 final case class ValidatorBlock(
     blockHash: String,
@@ -105,7 +101,7 @@ object GraphzGenerator {
       blockHashes: Vector[BlockHash]
   ): F[DagInfo[G]] =
     for {
-      blocks    <- blockHashes.traverse(ProtoUtil.getBlock[F])
+      blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
       timeEntry = blocks.head.body.state.blockNumber
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)

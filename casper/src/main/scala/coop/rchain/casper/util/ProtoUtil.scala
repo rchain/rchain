@@ -63,7 +63,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- getBlock(mainParentHash)
+                        updatedEstimate <- BlockStore[F].getUnsafe(mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta.toInt
                         mainChain <- if (newDepth <= 0) {
@@ -80,12 +80,6 @@ object ProtoUtil {
                   }
     } yield mainChain
   }
-
-  def getBlock[F[_]: Sync: BlockStore](hash: BlockHash): F[BlockMessage] =
-    BlockStore[F].get(hash) >>= (Sync[F].fromOption(
-      _,
-      new Exception(s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}")
-    ))
 
   def getBlockMetadata[F[_]: Sync](
       hash: BlockHash,
@@ -195,7 +189,7 @@ object ProtoUtil {
 
   def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
     import cats.instances.list._
-    parentHashes(b).traverse(getBlock[F])
+    parentHashes(b).traverse(BlockStore[F].getUnsafe)
   }
 
   def getParentsMetadata[F[_]: Sync](

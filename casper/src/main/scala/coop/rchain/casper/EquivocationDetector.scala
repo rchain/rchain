@@ -7,6 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{DagOperations, DoublyLinkedDag, ProtoUtil}
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.models.BlockHash.BlockHash
@@ -222,7 +223,7 @@ object EquivocationDetector {
       true.pure[F]
     } else {
       for {
-        justificationBlock <- ProtoUtil.getBlock[F](justificationBlockHash)
+        justificationBlock <- BlockStore[F].getUnsafe(justificationBlockHash)
         equivocationDetected <- isEquivocationDetectableThroughChildren[F](
                                  blockDag,
                                  equivocationRecord,
@@ -299,7 +300,7 @@ object EquivocationDetector {
       maybeLatestEquivocatingValidatorBlockHash match {
         case Some(blockHash) =>
           for {
-            latestEquivocatingValidatorBlock <- ProtoUtil.getBlock[F](blockHash)
+            latestEquivocatingValidatorBlock <- BlockStore[F].getUnsafe(blockHash)
             updatedEquivocationChildren <- if (latestEquivocatingValidatorBlock.seqNum > equivocationBaseBlockSeqNum) {
                                             addEquivocationChild[F](
                                               blockDag,
@@ -332,7 +333,7 @@ object EquivocationDetector {
     ).flatMap {
       case Some(equivocationChildHash) =>
         for {
-          equivocationChild <- ProtoUtil.getBlock[F](equivocationChildHash)
+          equivocationChild <- BlockStore[F].getUnsafe(equivocationChildHash)
         } yield equivocationChildren + equivocationChild
       case None =>
         throw new Exception(

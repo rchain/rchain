@@ -251,7 +251,7 @@ object Validate {
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- ProtoUtil.getBlock(
+                                           block <- BlockStore[F].getUnsafe(
                                                      blockMetadata.blockHash
                                                    )
                                            blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
@@ -264,7 +264,7 @@ object Validate {
                      .traverse(
                        duplicatedBlockMetadata => {
                          for {
-                           duplicatedBlock <- ProtoUtil.getBlock(
+                           duplicatedBlock <- BlockStore[F].getUnsafe(
                                                duplicatedBlockMetadata.blockHash
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
@@ -300,8 +300,8 @@ object Validate {
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- ProtoUtil.parentHashes(b).foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
-                                  ProtoUtil
-                                    .getBlock(parentHash)
+                                  BlockStore[F]
+                                    .getUnsafe(parentHash)
                                     .map(parent => {
                                       val timestamp = parent.header.timestamp
                                       math.max(latestTimestamp, timestamp)
@@ -541,7 +541,7 @@ object Validate {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
-      mainParent       <- ProtoUtil.getBlock(mainParentHash)
+      mainParent       <- BlockStore[F].getUnsafe(mainParentHash)
       bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  BlockStatus.valid.asRight[BlockError].pure

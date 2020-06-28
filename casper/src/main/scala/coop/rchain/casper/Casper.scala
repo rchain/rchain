@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.Running
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -76,7 +77,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
       dag       <- casper.blockDag
       tipHashes <- casper.estimator(dag)
       tipHash   = tipHashes.head
-      tip       <- ProtoUtil.getBlock(tipHash)
+      tip       <- BlockStore[F].getUnsafe(tipHash)
     } yield tip
 }
 

@@ -96,7 +96,7 @@ object BlockCreator {
               SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
             )
         )
-        parents <- parentMetadatas.toList.traverse(p => ProtoUtil.getBlock(p.blockHash))
+        parents <- parentMetadatas.toList.traverse(p => BlockStore[F].getUnsafe(p.blockHash))
         // there are 3 situations on judging whether the validator is active
         // 1. it is possible that you are active in some parents but not active in other parents
         // 2. all of the parents are in active state
@@ -179,7 +179,7 @@ object BlockCreator {
                  )
                  .foldLeftF(validDeploys) { (deploys, blockMetadata) =>
                    for {
-                     block        <- ProtoUtil.getBlock(blockMetadata.blockHash)
+                     block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
                      blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
                    } yield deploys -- blockDeploys
                  }
