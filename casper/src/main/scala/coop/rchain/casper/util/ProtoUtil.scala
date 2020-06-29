@@ -258,7 +258,7 @@ object ProtoUtil {
                             .getOrElse(
                               Sync[F].raiseError(
                                 new RuntimeException(
-                                  s"Could not find a block for $hash in the DAG storage"
+                                  s"Could not find a block for ${PrettyPrinter.buildString(hash)} in the DAG storage"
                                 )
                               )
                             )
