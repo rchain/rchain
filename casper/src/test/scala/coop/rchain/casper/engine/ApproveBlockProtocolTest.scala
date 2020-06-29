@@ -343,9 +343,7 @@ object ApproveBlockProtocolTest {
     implicit val ctx             = monix.execution.Scheduler.Implicits.global
     implicit val connectionsCell = Cell.mvarCell[Task, Connections](List(src)).unsafeRunSync
     implicit val lab             = LastApprovedBlock.unsafe[Task](None)
-    implicit val requestedBlocks =
-      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
-    implicit val commUtil = CommUtil.of[Task]
+    implicit val commUtil        = CommUtil.of[Task]
 
     val genesis = buildGenesis(
       buildGenesisParameters(

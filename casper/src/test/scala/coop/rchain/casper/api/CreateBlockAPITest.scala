@@ -234,8 +234,8 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
 private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: MultiParentCasper[F])
     extends MultiParentCasper[F] {
 
-  def addBlock(b: BlockMessage): F[ValidBlockProcessing]              = underlying.addBlock(b)
-  def contains(blockHash: BlockHash): F[Boolean]                      = underlying.contains(blockHash)
+  def addBlock(b: BlockMessage, allowAddFromBuffer: Boolean): F[ValidBlockProcessing] =
+    underlying.addBlock(b)
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = underlying.deploy(d)
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     underlying.estimator(dag)
@@ -245,14 +245,21 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[BlockMessage]     = underlying.lastFinalizedBlock
   def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
+  def approvedBlockStateComplete: F[Boolean]  = underlying.approvedBlockStateComplete
 
   def getGenesis: F[BlockMessage]        = underlying.getGenesis
   def getValidator: F[Option[PublicKey]] = underlying.getValidator
-
   override def createBlock: F[CreateBlockStatus] =
     for {
       result <- underlying.createBlock
       _      <- implicitly[Time[F]].sleep(5.seconds)
     } yield result
-
+  override def addBlockFromStore(
+      b: BlockHash,
+      allowAddFromBuffer: Boolean
+  ): F[ValidBlockProcessing]                               = underlying.addBlockFromStore(b, allowAddFromBuffer)
+  override def contains(hash: BlockHash): F[Boolean]       = underlying.contains(hash)
+  override def dagContains(hash: BlockHash): F[Boolean]    = underlying.dagContains(hash)
+  override def bufferContains(hash: BlockHash): F[Boolean] = underlying.bufferContains(hash)
+  override def getVersion: F[Long]                         = underlying.getVersion
 }

@@ -28,7 +28,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
     )(expected: BlockMessage)(implicit file: sourcecode.File, line: sourcecode.Line) =
       for {
         lastFinalizedBlock <- node.casperEff.lastFinalizedBlock
-        state              <- node.casperState.read
+        //state              = node.casperBufferStorage
       } yield {
         withClue(s"Assertion failed at ${file.value}:${line.value}:\n\n") {
           lastFinalizedBlock shouldBe expected

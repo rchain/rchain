@@ -7,6 +7,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
@@ -74,6 +75,17 @@ object Resources {
         BlockDagKeyValueStorage.create[F]
       }
     } yield blockDagStorage)
+
+  def mkCasperBuferStorate[F[_]: Concurrent: Sync: Log: Metrics](
+      path: Path
+  ): Resource[F, CasperBufferStorage[F]] =
+    Resource.liftF(for {
+      storeManager <- RNodeKeyValueStoreManager[F](path)
+      casperBufferStorage <- {
+        implicit val kvm = storeManager
+        CasperBufferKeyValueStorage.create[F]
+      }
+    } yield casperBufferStorage)
 
   def mkDeployStorageAt[F[_]: Sync](path: Path): Resource[F, DeployStorage[F]] =
     LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, BlockDagStorageTestFixture.mapSize))

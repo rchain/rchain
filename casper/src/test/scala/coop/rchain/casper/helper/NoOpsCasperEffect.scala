@@ -29,12 +29,14 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
 
   def store: Map[BlockHash, BlockMessage] = blockStore.toMap
 
-  def addBlock(b: BlockMessage): F[ValidBlockProcessing] =
+  def addBlock(b: BlockMessage, allowFromStore: Boolean): F[ValidBlockProcessing] =
     for {
       _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
       _ <- BlockStore[F].put(b.blockHash, b)
     } yield BlockStatus.valid.asRight
-  def contains(blockHash: BlockHash): F[Boolean] = false.pure[F]
+  def contains(blockHash: BlockHash): F[Boolean]       = false.pure[F]
+  def dagContains(blockHash: BlockHash): F[Boolean]    = false.pure[F]
+  def bufferContains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: Signed[DeployData]): F[Either[DeployError, DeployId]] =
     Applicative[F].pure(Right(ByteString.EMPTY))
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
@@ -47,6 +49,11 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def getGenesis: F[BlockMessage]                                     = Dummies.createBlockMessage().pure[F]
   def getValidator: F[Option[PublicKey]]                              = none.pure[F]
+  def getVersion: F[Long]                                             = 1L.pure[F]
+  def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
+  def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean): F[ValidBlockProcessing] =
+    for { _ <- ().pure[F] } yield BlockStatus.valid.asRight
+
 }
 
 object NoOpsCasperEffect {

@@ -69,7 +69,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       testProgram.unsafeRunSync(scheduler)
 
     threadStatuses should matchPattern {
-      case (Left(Processing), Right(Valid)) | (Right(Valid), Left(Processing)) =>
+      case (Left(CasperIsBusy), Right(Valid)) | (Right(Valid), Left(CasperIsBusy)) =>
     }
   }
 
@@ -247,7 +247,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock1Prime     <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                     <- nodes(1).syncWith(nodes(0)) // should receive BlockMessage here
         maybeHash             <- nodes(1).blockStore.get(signedBlock1Prime.blockHash)
-        noMoreRequestedBlocks <- nodes(1).requestedBlocks.reads(_.isEmpty)
+        noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(!_.exists(_._2.received == false))
       } yield {
         maybeHash shouldBe Some(signedBlock1Prime)
         noMoreRequestedBlocks shouldBe true
@@ -363,10 +363,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).casperEff
               .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
-        _ <- nodes(0).blockStore.get(signedBlock1.blockHash) shouldBeF None
-        _ <- nodes(0).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
-              signedBlock1Prime
-            )
+        _ <- nodes(0).casperEff.contains(signedBlock1.blockHash) shouldBeF false
+        _ <- nodes(0).casperEff.contains(signedBlock1Prime.blockHash) shouldBeF true
         _ <- nodes(1).blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
         _ <- nodes(1).blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
         _ <- nodes(2).blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
