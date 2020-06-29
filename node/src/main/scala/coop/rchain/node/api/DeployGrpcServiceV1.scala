@@ -235,7 +235,10 @@ object DeployGrpcServiceV1 {
         }
 
       def exploratoryDeploy(request: ExploratoryDeployQuery): Task[ExploratoryDeployResponse] =
-        defer(BlockAPI.exploratoryDeploy[F](request.term)) { r =>
+        defer(
+          BlockAPI
+            .exploratoryDeploy[F](request.term, Some(request.blockHash), request.usePreStateHash)
+        ) { r =>
           import ExploratoryDeployResponse.Message
           import ExploratoryDeployResponse.Message._
           ExploratoryDeployResponse(r.fold[Message](Error, {

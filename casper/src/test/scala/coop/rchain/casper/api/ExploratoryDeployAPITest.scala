@@ -68,7 +68,9 @@ class ExploratoryDeployAPITest
           _              <- n2.propagateBlock(produceDeploys(1))(nodes: _*)
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-          result <- exploratoryDeploy("new return in { for (@data <- @\"store\") {return!(data)}}")(
+          result <- exploratoryDeploy(
+                     "new return in { for (@data <- @\"store\") {return!(data)}}"
+                   )(
                      engineCell
                    ).map(_.right.value)
           (par, lastFinalizedBlock) = result

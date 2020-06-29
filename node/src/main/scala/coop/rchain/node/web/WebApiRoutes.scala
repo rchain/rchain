@@ -105,6 +105,7 @@ object WebApiRoutes {
     implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
     implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
     implicit val prepareDecoder       = jsonOf[F, PrepareRequest]
+    implicit val ExploreDeployRequest = jsonOf[F, ExploreDeployRequest]
 
     HttpRoutes.of[F] {
       case GET -> Root / "status" =>
@@ -124,7 +125,14 @@ object WebApiRoutes {
         req.handle[DeployRequest, String](webApi.deploy)
 
       case req @ POST -> Root / "explore-deploy" =>
-        req.handle[String, ExploratoryDeployResponse](webApi.exploratoryDeploy)
+        req.handle[String, ExploratoryDeployResponse](
+          term => webApi.exploratoryDeploy(term, none[String], true)
+        )
+
+      case req @ POST -> Root / "explore-deploy-by-block-hash" =>
+        req.handle[ExploreDeployRequest, ExploratoryDeployResponse](
+          req => webApi.exploratoryDeploy(req.term, Some(req.blockHash), req.usePreStateHash)
+        )
 
       // Get data
 

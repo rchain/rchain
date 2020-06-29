@@ -77,6 +77,8 @@ message BondStatusQuery {
 
 message ExploratoryDeployQuery{
   string term = 1;
+  string blockHash = 2;
+  bool usePreStateHash = 3;
 }
 
 message BondInfo{
