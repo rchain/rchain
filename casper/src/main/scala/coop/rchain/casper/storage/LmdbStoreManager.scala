@@ -140,8 +140,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
   override def shutdown: F[Unit] =
     for {
       // Close LMDB environment
-      st  <- varState.get
-      env <- st.envDefer.get
-      _   <- Sync[F].delay(env.close())
+      st <- varState.get
+      _  <- st.envDefer.get.map(_.close()).whenA(st.status == EnvOpen)
     } yield ()
 }
