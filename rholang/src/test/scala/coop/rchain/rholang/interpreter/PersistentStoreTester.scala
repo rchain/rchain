@@ -19,7 +19,7 @@ import scala.concurrent.duration._
 import coop.rchain.shared.PathOps._
 import coop.rchain.rholang.interpreter.storage._
 
-final case class TestFixture(space: RhoISpace[Task], reducer: DebruijnInterpreter[Task, Task.Par])
+final case class TestFixture(space: RhoISpace[Task], reducer: DebruijnInterpreter[Task])
 
 trait PersistentStoreTester {
   implicit val ms: Metrics.Source = Metrics.BaseSource

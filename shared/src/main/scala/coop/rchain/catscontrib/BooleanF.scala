@@ -1,15 +1,16 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.syntax.all._
+import cats.FlatMap
+import cats.syntax.all._
 
-final class BooleanF[F[_]: FlatMap](val self: F[Boolean]) {
-  def &&^(other: => F[Boolean]): F[Boolean] =
+final class BooleanF[F[_]](val self: F[Boolean]) extends AnyVal {
+  def &&^(other: => F[Boolean])(implicit f: FlatMap[F]): F[Boolean] =
     BooleanF.&&^[F](self, other)
 
-  def ||^(other: => F[Boolean]): F[Boolean] =
+  def ||^(other: => F[Boolean])(implicit f: FlatMap[F]): F[Boolean] =
     BooleanF.||^[F](self, other)
 
-  def not: F[Boolean] = BooleanF.~^(self)
+  def not(implicit f: FlatMap[F]): F[Boolean] = BooleanF.~^(self)
 }
 
 object BooleanF {

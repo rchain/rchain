@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
 import coop.rchain.crypto.codec.Base16
@@ -19,8 +20,6 @@ import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
-import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.crypto.signatures.Signed
 import monix.eval.Coeval
 
@@ -250,7 +249,7 @@ object InterpreterUtil {
               ReplayIntoMergeBlockMetricsSource
             )
         _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-        blocksToApply <- blockMetasToApply.traverse(b => ProtoUtil.getBlock(b.blockHash))
+        blocksToApply <- blockMetasToApply.traverse(b => BlockStore[F].getUnsafe(b.blockHash))
         _             <- Span[F].mark("before-compute-parents-post-state-replay")
         replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
                          (for {

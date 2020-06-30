@@ -40,7 +40,7 @@ trait Reduce[M[_]] {
 
 }
 
-class DebruijnInterpreter[M[_], F[_]](
+class DebruijnInterpreter[M[_]](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]

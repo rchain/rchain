@@ -6,8 +6,7 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.CasperState.CasperStateCell
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.catscontrib.ListContrib
+import coop.rchain.casper.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
@@ -35,7 +34,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       finalizedChildHash: BlockHash
   ): F[Unit] =
     for {
-      block          <- ProtoUtil.getBlock[F](finalizedChildHash)
+      block          <- BlockStore[F].getUnsafe(finalizedChildHash)
       deploys        = block.body.deploys.map(_.deploy)
       deploysRemoved <- DeployStorage[F].remove(deploys)
       _ <- Log[F].info(

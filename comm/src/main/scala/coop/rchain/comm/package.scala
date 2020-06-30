@@ -3,10 +3,10 @@ package coop.rchain
 import java.net.InetAddress
 
 import cats.effect.Sync
-import cats.implicits._
 import cats.mtl.ApplicativeAsk
-
+import cats.syntax.all._
 import coop.rchain.catscontrib.ski.kp
+import coop.rchain.comm.transport.TransportLayerSyntax
 import coop.rchain.metrics.Metrics
 
 package object comm {
@@ -34,4 +34,10 @@ package object comm {
           a.isMulticastAddress ||
           a.isSiteLocalAddress)
     )
+
+  // Importing syntax object means using all extensions in the project
+  object syntax extends AllSyntaxComm
 }
+
+// Comm syntax
+trait AllSyntaxComm extends TransportLayerSyntax

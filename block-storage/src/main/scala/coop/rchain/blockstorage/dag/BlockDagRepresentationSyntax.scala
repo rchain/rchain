@@ -21,7 +21,7 @@ final class BlockDagRepresentationOps[F[_]: Sync](
 ) {
   // Get block metadata, "unsafe" because method expects block already in the DAG.
   def lookupUnsafe(hash: BlockHash): F[BlockMetadata] = {
-    def errMsg = s"Block hash ${PrettyPrinter.buildString(hash)} not found in the DAG."
+    def errMsg = s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
     dag.lookup(hash) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 

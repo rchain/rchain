@@ -11,7 +11,7 @@ trait KeyValueStoreSyntax {
 final class KeyValueStoreOps[F[_]](
     // KeyValueStore extensions / syntax
     private val store: KeyValueStore[F]
-) {
+) extends AnyVal {
   // From key-value store, with serializers for K and V, typed store can be created
   def toTypedStore[K, V](kCodec: Codec[K], vCodec: Codec[V])(
       implicit s: Sync[F]

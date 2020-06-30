@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.models.Validator.Validator
@@ -43,7 +44,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
         true.pure[F]
       case Some(lastProposedBlockHash) =>
         for {
-          lastProposedBlock <- ProtoUtil.getBlock[F](lastProposedBlockHash)
+          lastProposedBlock <- BlockStore[F].getUnsafe(lastProposedBlockHash)
           // Guaranteed to be present since last proposed block was present
           seenSenders            <- calculateSeenSendersSince(lastProposedBlock, dag)
           lastProposedTuplespace = ProtoUtil.postStateHash(lastProposedBlock)
