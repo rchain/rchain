@@ -47,7 +47,9 @@ object Engine {
     * @return
     */
   def logNoApprovedBlockAvailable[F[_]: Log](identifier: String): F[Unit] =
-    Log[F].info(s"No approved block available on node $identifier")
+    Log[F].info(
+      s"No approved block available on node $identifier. Will request again in 10 seconds."
+    )
 
   /*
    * Note the ordering of the insertions is important.

@@ -21,7 +21,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared._
 import coop.rchain.shared
-
+import scala.concurrent.duration._
 import scala.language.higherKinds
 
 /** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
@@ -48,9 +48,12 @@ class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: 
         shardId,
         finalizationRate
       )
-    case br: ApprovedBlockRequest     => sendNoApprovedBlockAvailable(peer, br.identifier)
-    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
-    case _                            => noop
+    case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+    case na: NoApprovedBlockAvailable =>
+      logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
+        Time[F].sleep(10.seconds) >>
+        CommUtil[F].requestApprovedBlock
+    case _ => noop
   }
 
   private def onApprovedBlockTransition(
