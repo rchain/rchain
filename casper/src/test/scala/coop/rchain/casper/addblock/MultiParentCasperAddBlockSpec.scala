@@ -169,6 +169,9 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }.parSequence_
   }
 
+  //This test are not valid anymore because we have check for block validity before sending to Casper.
+  //TODO move to Running tests
+  /*
   it should "reject unsigned blocks" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
@@ -210,6 +213,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       }
     }
   }
+   */
 
   it should "reject blocks not from bonded validators" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>

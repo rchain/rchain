@@ -1,6 +1,5 @@
 package coop.rchain.casper.engine
 
-import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
 import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
@@ -15,6 +14,9 @@ import org.scalatest._
 
 class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
+  // This is a test for BlockRetriever
+  // TODO move to BlockRetriever tests
+  /*
   implicit private def log = new LogStub[Coeval]
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
@@ -147,4 +149,5 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
   private def alwaysFalse: BlockHash => Coeval[Boolean]            = kp(Coeval(false))
+ */
 }

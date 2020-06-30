@@ -1,6 +1,5 @@
 package coop.rchain.casper.engine
 
-import Running.{Requested, RequestedBlocks}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.PrettyPrinter
@@ -20,6 +19,9 @@ import org.scalatest._
 
 class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
+  // This is a test for BlockRetriever
+  // TODO move to BlockRetriever tests
+  /*
   val hash                    = ByteString.copyFrom("hash", "UTF-8")
   implicit val metrics        = new Metrics.MetricsNOP[Coeval]
   val timeout: FiniteDuration = 240.seconds
@@ -174,4 +176,5 @@ class RunningMaintainRequestedBlocksSpec extends FunSpec with BeforeAndAfterEach
   private def timedOut: Long    = time.clock - (2 * timeout.toMillis)
   private def notTimedOut: Long = time.clock - 1
 
+ */
 }
