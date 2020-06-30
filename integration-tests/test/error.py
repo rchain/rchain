@@ -24,7 +24,3 @@ class UnexpectedProposeOutputFormatError(Exception):
         super().__init__()
         self.output = output
 
-class UnexpectedDeployOutputFormatError(Exception):
-    def __init__(self, output: str) -> None:
-        super().__init__()
-        self.output = output

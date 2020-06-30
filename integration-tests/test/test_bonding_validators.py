@@ -17,6 +17,7 @@ from .rnode import (
 from .wait import (
     wait_for_node_sees_block,
     wait_for_peers_count_at_least,
+    wait_for_approved_block_received_handler_state
 )
 
 from .test_wallets import get_vault_balance
@@ -54,11 +55,12 @@ def test_bonding_validators(command_line_options: CommandLineOptions, random_gen
             latest_block_hash = bonded_validator.propose()
 
             # assure the joining validator is not bonded
-            block_info = bonded_validator.show_block_parsed(latest_block_hash)
-            assert block_info.bonds.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) is None
+            block_info = bonded_validator.get_block(latest_block_hash)
+            assert JOINING_VALIDATOR_KEY.get_public_key().to_hex() not in [b.validator for b in block_info.blockInfo.bonds]
 
             with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='joining-validator', private_key=JOINING_VALIDATOR_KEY) as joining_validator:
                 wait_for_peers_count_at_least(context, bonded_validator, 2)
+                wait_for_approved_block_received_handler_state(context, joining_validator)
 
                 # new joining validator can not propose before bonding
                 with pytest.raises(NonZeroExitCodeError):
@@ -79,8 +81,9 @@ def test_bonding_validators(command_line_options: CommandLineOptions, random_gen
 
                 # bonding map already has the bond message
                 # but the validator is not active
-                block_info = bonded_validator.show_block_parsed(bonding_block_hash)
-                assert block_info.bonds.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == bond_amount
+                block_info = bonded_validator.get_block(bonding_block_hash)
+                bonds = {b.validator: b.stake for b in block_info.blockInfo.bonds}
+                assert bonds.get(JOINING_VALIDATOR_KEY.get_public_key().to_hex()) == bond_amount
 
                 # block number 3
                 bonded_validator.deploy(contract_path, BOOTSTRAP_KEY)

@@ -55,7 +55,7 @@ def test_propose_cost(command_line_options: CommandLineOptions, docker_client: D
         container_contract_file_path = os.path.join(bootstrap.remote_deploy_dir, rho_contract)
         bootstrap.deploy(container_contract_file_path, USER_KEY, 100000000, 1)
         block_hash = bootstrap.propose()
-        block_info = bootstrap.show_block_parsed(block_hash)
+        block_info = bootstrap.get_block(block_hash)
         deploys = block_info.deploys
         assert contract_cost == deploys[0].cost
 
@@ -69,8 +69,7 @@ def test_find_block_by_deploy_id(command_line_options: CommandLineOptions, docke
         block_hash = bootstrap.propose()
         block_info = bootstrap.find_deploy(deploy_id)
 
-        # block_hash is not a full hash but omiited one like 1964aa120ae
-        assert block_info.block_hash[:10] == block_hash[:10]
+        assert block_info.blockHash == block_hash
 
 
 def test_deploy_invalid_contract(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
@@ -84,5 +83,5 @@ def test_deploy_invalid_contract(command_line_options: CommandLineOptions, docke
 
         bootstrap.deploy('/opt/docker/examples/hello_world_again.rho', USER_KEY, 100000000, 1)
         block_hash = bootstrap.propose()
-        block_info = bootstrap.show_block_parsed(block_hash)
-        assert block_info.deploy_count == 1
+        block_info = bootstrap.get_block(block_hash)
+        assert len(block_info.deploys) == 1
