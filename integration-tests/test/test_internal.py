@@ -47,6 +47,18 @@ bonds {
 blockSize: "192205"
 deployCount: 11
 faultTolerance: 0.2631579
+justifications {
+  validator: "04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
 
 -----------------------------------------------------
 
@@ -91,7 +103,18 @@ bonds {
 blockSize: "20939"
 deployCount: 1
 faultTolerance: 0.57894737
-
+justifications {
+  validator: "04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
 -----------------------------------------------------
 
 
@@ -125,7 +148,18 @@ bonds {
 blockSize: "192205"
 deployCount: 11
 faultTolerance: 1.0
-
+justifications {
+  validator: "04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
+justifications {
+  validator: "04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0"
+  latestBlockHash: "2729db9efe943668950a7b8ad9197aff1e172c3396a379b705887f83c07c1607"
+}
 -----------------------------------------------------
 
 
@@ -220,6 +254,18 @@ def test_parse_show_block_output() -> None:
   blockSize: "20939"
   deployCount: 1
   faultTolerance: -1.0
+  justifications {
+    validator: "04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
+  justifications {
+    validator: "0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
+  justifications {
+    validator: "04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
 }
 deploys {
   deployer: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"
@@ -305,6 +351,18 @@ def test_parse_show_block_output_without_parents() -> None:
   blockSize: "20939"
   deployCount: 1
   faultTolerance: -1.0
+  justifications {
+    validator: "04126107bc353c73e044fb21a5085aeafeecd69895fc05ec5033764a586bf044ddb19da5140a00912d892bfe8e10aa34eb7f9a68308646c3ac8804096ba605c2d2"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
+  justifications {
+    validator: "0412ce31a3c3cbf9c69c098e593568c476a6bf7efdf9f7579c80e5328af05db7693b077d04fabbed28bb4e2d28aaba4ee50af6eddfab957c9c3c16d629c9d6aac3"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
+  justifications {
+    validator: "04f42348554ab10387739d6f709ddba0eb9b80792f57ed68a1c9341635c0777590e9dbdd316c57cff51587f2f320e30605e6641e042f030b83aaaa3a3268a00fb0"
+    latestBlockHash: "3546358e6b5675b0e85f30edb55f837d851aa7446ee4f3cc4ada0e7b9d8d0bd7"
+  }
 }
 deploys {
   deployer: "04ac75929e588b030989d216043d2c98117d50d863c4f6b7115d737509f2df848d7fec7ccae9a7c5a45ad94d151ec4372ab552dd8c27ae9ed09f085377ebee0519"

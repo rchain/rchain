@@ -673,7 +673,8 @@ object BlockAPI {
       bonds = block.body.state.bonds.map(ProtoUtil.bondToBondInfo),
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
-      faultTolerance = faultTolerance
+      faultTolerance = faultTolerance,
+      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos)
     ).pure[F]
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem

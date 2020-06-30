@@ -97,7 +97,7 @@ block_pattern = r'''blockInfo {
   (?P<bonds>(.*\n)+)  blockSize: "(?P<blockSize>[0-9]+)"
   deployCount: (?P<deployCount>[0-9]+)
   faultTolerance: (?P<faultTolerance>[+-]?\d+(?:\.\d+)?)
-}
+  (?P<justification>(.*\n)+)}
 (?P<deploys>(.*\n)+)
 '''
 
@@ -118,6 +118,7 @@ bodyExtraBytes: "(?P<bodyExtraBytes>[a-zA-Z0-9]*)"
 (?P<bonds>.*?)blockSize: "(?P<blockSize>[0-9]+)"
 deployCount: (?P<deployCount>[0-9]+)
 faultTolerance: (?P<faultTolerance>[+-]?\d+(?:\.\d+)?)
+(?P<justification>.*?)
 '''
 
 def extract_block_count_from_show_blocks(show_blocks_output: str) -> int:
