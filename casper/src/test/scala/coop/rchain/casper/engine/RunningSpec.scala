@@ -95,12 +95,17 @@ class RunningSpec extends WordSpec {
     "respond to ForkChoiceTipRequest messages" in {
       val request = ForkChoiceTipRequest
       val test: Task[Unit] = for {
-        tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
+        tip <- MultiParentCasper.forkChoiceTip[Task](casper)
+        // Without the following line RunningSpec fails, not sure why.
+        // This particular test passes when being run separately, but when executed in batch it fails
+        // before https://github.com/rchain/rchain/pull/2943/commits/3c57890b71328b8d76fc4a3cd5e2199c308e1433
+        // it worked without this line. Looks like something with tests setup for streaming vs sending.
+        _    = transportLayer.setResponses(_ => p => Right(()))
         _    <- engine.handle(local, request)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
         _ = assert(
-          head.msg.message.packet.get == ToPacket(tip.toProto)
+          head.msg.message.packet.get == ToPacket(HasBlockProto(tip))
         )
       } yield ()
 
