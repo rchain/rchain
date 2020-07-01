@@ -51,6 +51,9 @@ trait BlockRetriever[F[_]] {
 
   /** If block is received and waiting for Casper to add it */
   def received(hash: BlockHash): F[Boolean]
+
+  /** Blocks that are received but still not in Casper*/
+  def getEnqueuedToCasper: F[List[BlockHash]]
 }
 
 object BlockRetriever {
@@ -131,6 +134,7 @@ object BlockRetriever {
       final object NewSourcePeerAddedToRequest extends AdmitHashStatus
       final object NewRequestAdded             extends AdmitHashStatus
       final object Ignore                      extends AdmitHashStatus
+
       case class AdmitHashResult(
           status: AdmitHashStatus,
           broadcastRequest: Boolean,
@@ -238,9 +242,14 @@ object BlockRetriever {
               }
         } yield ()
 
-      override def ackInCasper(hash: BlockHash): F[Unit] = RequestedBlocks[F].update { state =>
-        state + (hash -> state(hash).copy(inCasperBuffer = true))
-      }
+      override def ackInCasper(hash: BlockHash): F[Unit] =
+        for {
+          r <- received(hash)
+          _ <- ackReceive(hash).unlessA(r)
+          _ <- RequestedBlocks[F].update { state =>
+                state + (hash -> state(hash).copy(inCasperBuffer = true))
+              }
+        } yield ()
 
       override def received(hash: BlockHash): F[Boolean] =
         RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received)
@@ -307,5 +316,12 @@ object BlockRetriever {
               })
         } yield ()
       }
+
+      /** Blocks that are received but still not in Casper */
+      override def getEnqueuedToCasper: F[List[BlockHash]] =
+        for {
+          state         <- RequestedBlocks[F].get
+          waitingHashes = state.toList.filter(i => i._2.received && !i._2.inCasperBuffer).map(_._1)
+        } yield waitingHashes
     }
 }

@@ -385,7 +385,7 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
         // At this stage block should be in CasperBuffer, or even in the DAG.
         // It might wait for dependencies so not added to DAG, but there is no point to rerequest it again
         status =>
-          BlockRetriever[F].ackInCasper(bh) >> Log[F].info(
+          Log[F].info(
             s"Block ${PrettyPrinter.buildString(bh)} adding finished with status: $status. " +
               s"BlockRetriever is informed that block consumed by Casper."
           )
