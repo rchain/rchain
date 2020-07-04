@@ -9,19 +9,24 @@ import coop.rchain.casper.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
-final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
-    faultToleranceThreshold: Float
-) {
-  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash): F[BlockHash] =
+final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage] {
+  def run(
+      dag: BlockDagRepresentation[F],
+      lastFinalizedBlockHash: BlockHash,
+      faultToleranceThreshold: Float
+  ): F[BlockHash] =
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
       childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList
-      maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
+      maybeFinalizedChild <- childrenHashes.findM(
+                              isGreaterThanFaultToleranceThreshold(dag, _, faultToleranceThreshold)
+                            )
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
                               removeDeploysInFinalizedBlock(finalizedChild) >> run(
                                 dag,
-                                finalizedChild
+                                finalizedChild,
+                                faultToleranceThreshold
                               )
                             case None => lastFinalizedBlockHash.pure[F]
                           }
@@ -49,7 +54,8 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
    */
   private def isGreaterThanFaultToleranceThreshold(
       dag: BlockDagRepresentation[F],
-      blockHash: BlockHash
+      blockHash: BlockHash,
+      faultToleranceThreshold: Float
   ): F[Boolean] =
     for {
       faultTolerance <- SafetyOracle[F].normalizedFaultTolerance(dag, blockHash)
@@ -63,9 +69,4 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
 object LastFinalizedBlockCalculator {
   def apply[F[_]](implicit ev: LastFinalizedBlockCalculator[F]): LastFinalizedBlockCalculator[F] =
     ev
-
-  def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
-      faultToleranceThreshold: Float
-  ): LastFinalizedBlockCalculator[F] =
-    new LastFinalizedBlockCalculator[F](faultToleranceThreshold)
 }

@@ -93,9 +93,7 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      approvedBlock: BlockMessage,
-      shardId: String,
-      finalizationRate: Int
+      approvedBlock: BlockMessage
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       blockProcessingLock <- MetricsSemaphore.single[F]
@@ -104,8 +102,6 @@ sealed abstract class MultiParentCasperInstances {
       new MultiParentCasperImpl(
         validatorId,
         approvedBlock,
-        shardId,
-        finalizationRate,
         blockProcessingLock,
         blocksInProcessing
       )

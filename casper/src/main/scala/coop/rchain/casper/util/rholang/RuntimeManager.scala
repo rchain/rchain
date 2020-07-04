@@ -6,7 +6,7 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.{CasperMetricsSource, CasperShardConf}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
@@ -79,6 +79,7 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
+  def getShardConfig(stateHash: StateHash): F[CasperShardConf]
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
@@ -753,6 +754,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       }
   }
 
+  def getShardConfig(stateHash: StateHash): F[CasperShardConf] = {
+    val deploy = ConstructDeploy.sourceDeployNow(shardConfigQuerySource)
+    captureResults(stateHash, deploy)
+      .ensureOr(
+        shardConfigPar =>
+          new IllegalArgumentException(
+            s"Incorrect number of results from query of shard config: ${shardConfigPar.size}"
+          )
+      )(shardConfigPar => shardConfigPar.size == 1)
+      .flatMap(shardConfigPar => toShardConfig(shardConfigPar.head))
+  }
+
   private def activaValidatorQuerySource: String =
     s"""
        # new return, rl(`rho:registry:lookup`), poSCh in {
@@ -772,6 +785,16 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
        #   }
        # }
        """.stripMargin('#')
+
+  // TODO put real id
+  val shardConfigChan = "rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr"
+  private def shardConfigQuerySource: String =
+    s"""
+       # new return, rl(`rho:registry:lookup`), shardConfCh in {
+       #  rl!(`${shardConfigChan}`, *shardConfCh) |
+       #  shardConfCh!("get", return)
+       # }
+       #""".stripMargin('#')
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
@@ -822,6 +845,39 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
         val stakeAmount   = bond.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
+
+  private def toShardConfig(shardConfigMap: Par): F[CasperShardConf] = {
+    val map = shardConfigMap.exprs.head.getEMapBody.ps
+    CasperShardConf(
+      map
+        .get(Par(exprs = Seq(Expr(GString("faultToleranceThreshold")))))
+        .get
+        .exprs
+        .head
+        .getGInt
+        .toFloat,
+      map.get(Par(exprs = Seq(Expr(GString("shardName"))))).get.exprs.head.getGString,
+      map.get(Par(exprs = Seq(Expr(GString("parentShardId"))))).get.exprs.head.getGString,
+      map.get(Par(exprs = Seq(Expr(GString("finalizationRate"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("maxNumberOfParents"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("maxParentDepth"))))).get.exprs.head.getGInt.toInt,
+      map
+        .get(Par(exprs = Seq(Expr(GString("synchronyConstraintThreshold")))))
+        .get
+        .exprs
+        .head
+        .getGInt
+        .toFloat,
+      map.get(Par(exprs = Seq(Expr(GString("heightConstraintThreshold"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("deployLifespan"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("version"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("configVersion"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("bondMinimum"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("bondMaximum"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("epochLength"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("quarantineLength"))))).get.exprs.head.getGInt.toInt
+    ).pure[F]
+  }
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     withResetRuntimeLock(hash)(getData(_)(channel))

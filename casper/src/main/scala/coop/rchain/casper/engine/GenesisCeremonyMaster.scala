@@ -77,9 +77,7 @@ object GenesisCeremonyMaster {
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
-                                ab,
-                                shardId,
-                                finalizationRate
+                                ab
                               )
                    _ <- Engine
                          .transitionToRunning[F](
