@@ -131,7 +131,11 @@ object WebApiRoutes {
 
       case req @ POST -> Root / "explore-deploy-by-block-hash" =>
         req.handle[ExploreDeployRequest, ExploratoryDeployResponse](
-          req => webApi.exploratoryDeploy(req.term, Some(req.blockHash), req.usePreStateHash)
+          req =>
+            if (req.blockHash.isEmpty)
+              webApi.exploratoryDeploy(req.term, none[String], req.usePreStateHash)
+            else
+              webApi.exploratoryDeploy(req.term, Some(req.blockHash), req.usePreStateHash)
         )
 
       // Get data
