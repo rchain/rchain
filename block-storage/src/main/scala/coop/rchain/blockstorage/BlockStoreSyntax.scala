@@ -2,7 +2,6 @@ package coop.rchain.blockstorage
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
@@ -27,9 +26,22 @@ final class BlockStoreOps[F[_]: Sync](
     // BlockStore extensions / syntax
     private val blockStore: BlockStore[F]
 ) {
-  // Get block, "unsafe" because method expects block already in the block store.
-  def getUnsafe(hash: BlockHash): F[BlockMessage] = {
-    def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}"
+
+  /**
+    * Get block, "unsafe" because method expects block already in the block store.
+    *
+    * Unfortunately there is no way to get stack trace when error is thrown in async execution.
+    * Monix does not have support and cats.effect support is in creation.
+    * https://github.com/typelevel/cats-effect/pull/854
+    * So extra source parameters are a desperate measure to indicate who is the caller.
+    */
+  def getUnsafe(hash: BlockHash)(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing
+  ): F[BlockMessage] = {
+    def source = s"${file.value}:${line.value} ${enclosing.value}"
+    def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
     blockStore.get(hash) >>= (_.liftTo(BlockStoreInconsistencyError(errMsg)))
   }
 }
