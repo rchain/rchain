@@ -714,8 +714,8 @@ object BlockAPI {
           s"Failure! Invalid block: $status".asLeft[String].pure[F]
         case BlockError.BlockException(ex) =>
           s"Error during block processing: $ex".asLeft[String].pure[F]
-        case BlockError.Processing =>
-          "No action taken since other thread is already processing the block."
+        case BlockError.Processed =>
+          "No action taken since other thread has already processed the block."
             .asLeft[String]
             .pure[F]
         case BlockError.CasperIsBusy =>

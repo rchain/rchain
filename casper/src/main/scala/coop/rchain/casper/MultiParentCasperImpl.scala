@@ -231,7 +231,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                      s"Block ${PrettyPrinter.buildString(b, short = true)} " +
                        s"has already been processed."
                    )
-                   .as(BlockStatus.processing.asLeft[ValidBlock])
+                   .as(BlockStatus.processed.asLeft[ValidBlock])
                } else {
                  for {
                    validSender <- Validate.blockSenderHasWeight(b, approvedBlock, dag)
@@ -490,7 +490,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             )
             .as(dag)
 
-        case BlockError.Processing =>
+        case BlockError.Processed =>
           syncF.raiseError[BlockDagRepresentation[F]](
             new RuntimeException(s"A block should not be processing at this stage.")
           )
