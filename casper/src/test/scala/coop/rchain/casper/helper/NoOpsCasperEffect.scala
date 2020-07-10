@@ -50,9 +50,10 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def getGenesis: F[BlockMessage]                                     = Dummies.createBlockMessage().pure[F]
   def getValidator: F[Option[PublicKey]]                              = none.pure[F]
   def getVersion: F[Long]                                             = 1L.pure[F]
+  def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
   def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean): F[ValidBlockProcessing] =
-    for { _ <- ().pure[F] } yield BlockStatus.valid.asRight
+    BlockStatus.valid.asRight.pure[F]
 
 }
 

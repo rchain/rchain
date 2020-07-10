@@ -262,4 +262,5 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   override def dagContains(hash: BlockHash): F[Boolean]    = underlying.dagContains(hash)
   override def bufferContains(hash: BlockHash): F[Boolean] = underlying.bufferContains(hash)
   override def getVersion: F[Long]                         = underlying.getVersion
+  override def getDeployLifespan: F[Int]                   = underlying.getDeployLifespan
 }

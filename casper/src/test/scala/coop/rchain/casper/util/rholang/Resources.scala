@@ -76,7 +76,7 @@ object Resources {
       }
     } yield blockDagStorage)
 
-  def mkCasperBuferStorate[F[_]: Concurrent: Sync: Log: Metrics](
+  def mkCasperBuferStorate[F[_]: Concurrent: Log: Metrics](
       path: Path
   ): Resource[F, CasperBufferStorage[F]] =
     Resource.liftF(for {

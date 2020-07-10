@@ -335,14 +335,14 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
               }
           lastFinalizedStateBlock = approvedBlock.candidate.block
           // TODO might be more checks can/should be applied here
-          validShard   = lastFinalizedStateBlock.shardId.equalsIgnoreCase(b.shardId)
-          validFormat  <- Validate.formatOfFields(b)
-          validSig     <- Validate.blockSignature(b)
-          validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
-          // TODO 50 is hardcoded value expirationThreshold from MultiParentCasperImpl. Move to conf
+          validShard     = lastFinalizedStateBlock.shardId.equalsIgnoreCase(b.shardId)
+          validFormat    <- Validate.formatOfFields(b)
+          validSig       <- Validate.blockSignature(b)
+          validVersion   <- casper.getVersion.flatMap(Validate.version(b, _))
+          deployLifespan <- casper.getDeployLifespan
           oldBlock = (ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(
             lastFinalizedStateBlock
-          ) - 50).pure[F]
+          ) - deployLifespan).pure[F]
           approvedBlockStateComplete = casper.approvedBlockStateComplete
           notAnIgnorableOldBlock     <- oldBlock.not ||^ (oldBlock &&^ approvedBlockStateComplete.not)
           _ <- Log[F]

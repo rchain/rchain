@@ -59,6 +59,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
 
+  def getDeployLifespan: F[Int] = expirationThreshold.pure[F]
+
   def getVersion: F[Long] = version.pure[F]
 
   //TODO rename to getApprovedBlock
@@ -275,7 +277,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       all      = enqueued ++ depFreePendants
       _ <- Log[F].info(s"Blocks ready to be added: enqueued to Casper ${PrettyPrinter
             .buildString(enqueued)}, buffer pendants ${PrettyPrinter.buildString(depFreePendants)}.")
-    } yield if (all.nonEmpty) all.head.some else None
+    } yield all.headOption
   }
 
   def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
@@ -530,7 +532,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
               s"Already in CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
               s"Already in DAG: ${PrettyPrinter.buildString(depsInDag)}."
           )
-      _ <- missingDeps.traverse(
+      _ <- missingDeps.traverse_(
             BlockRetriever[F]
               .admitHash(_, admitHashReason = BlockRetriever.MissingDependencyRequested)
           )
@@ -554,7 +556,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       pendants       <- casperBuffer.getPendants
       pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
       _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
-            pendantsUnseen.toList.traverse(
+            pendantsUnseen.toList.traverse_(
               dependency =>
                 Log[F]
                   .debug(
