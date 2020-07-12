@@ -27,24 +27,26 @@ final case class LmdbKeyValueStore[F[_]: Sync](
       dbEnv <- getEnvDbi
       // "Done" must be called to mark finished operation with the environment/dbi
       DbEnv(env, dbi, done) = dbEnv
-      // Create read or write transaction
-      txn = if (isWrite) env.txnWrite else env.txnRead
       // Execute database operation, commit at the end
-      result <- try {
-                 // Execute DB operation within transaction
-                 val res = op(txn, dbi)
-                 // Commit transaction (read and write)
-                 txn.commit()
-                 // DB result
-                 res.pure[F]
-               } catch {
-                 case NonFatal(ex) =>
-                   // Ack done and rethrow error.
-                   done *> ex.raiseError[F, T]
-               } finally {
-                 // Close transaction at the end.
-                 txn.close()
-               }
+      result <- {
+        // Create read or write transaction
+        val txn = if (isWrite) env.txnWrite else env.txnRead
+        try {
+          // Execute DB operation within transaction
+          val res = op(txn, dbi)
+          // Commit transaction (read and write)
+          txn.commit()
+          // DB result
+          res.pure[F]
+        } catch {
+          case NonFatal(ex) =>
+            // Ack done and rethrow error.
+            done *> ex.raiseError[F, T]
+        } finally {
+          // Close transaction at the end.
+          txn.close()
+        }
+      }
       // Ack done
       _ <- done
     } yield result
