@@ -12,14 +12,21 @@ import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import monix.eval.Task
-import org.scalatest.WordSpec
+import org.scalatest.{BeforeAndAfterEach, WordSpec}
 
-class RunningSpec extends WordSpec {
+class RunningSpec extends WordSpec with BeforeAndAfterEach {
+
+  val fixture = Setup()
+  import fixture._
+
+  override def beforeEach(): Unit =
+    transportLayer.setResponses(_ => p => Right(()))
+
+  override def afterEach(): Unit =
+    transportLayer.reset()
 
   "Running state" should {
     import monix.execution.Scheduler.Implicits.global
-    val fixture = Setup()
-    import fixture._
 
     val genesis                = GenesisBuilder.createGenesis()
     val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
@@ -40,8 +47,6 @@ class RunningSpec extends WordSpec {
 
     val engine = new Running[Task](casper, approvedBlock, None, Task.unit)
 
-    transportLayer.setResponses(_ => p => Right(()))
-
     /*
     // Need to have well-formed block here. Do we have that API in tests?
     "respond to BlockMessage messages " in {
@@ -53,7 +58,6 @@ class RunningSpec extends WordSpec {
       } yield ()
 
       test.unsafeRunSync
-      transportLayer.reset()
     }*/
 
     "respond to BlockRequest messages" in {
@@ -67,7 +71,6 @@ class RunningSpec extends WordSpec {
       } yield ()
 
       test.unsafeRunSync
-      transportLayer.reset()
     }
 
     "respond to ApprovedBlockRequest messages" in {
@@ -89,18 +92,12 @@ class RunningSpec extends WordSpec {
       } yield ()
 
       test.unsafeRunSync
-      transportLayer.reset()
     }
 
     "respond to ForkChoiceTipRequest messages" in {
       val request = ForkChoiceTipRequest
       val test: Task[Unit] = for {
-        tip <- MultiParentCasper.forkChoiceTip[Task](casper)
-        // Without the following line RunningSpec fails, not sure why.
-        // This particular test passes when being run separately, but when executed in batch it fails
-        // before https://github.com/rchain/rchain/pull/2943/commits/3c57890b71328b8d76fc4a3cd5e2199c308e1433
-        // it worked without this line. Looks like something with tests setup for streaming vs sending.
-        _    = transportLayer.setResponses(_ => p => Right(()))
+        tip  <- MultiParentCasper.forkChoiceTip[Task](casper)
         _    <- engine.handle(local, request)
         head = transportLayer.requests.head
         _    = assert(head.peer == local)
@@ -110,7 +107,6 @@ class RunningSpec extends WordSpec {
       } yield ()
 
       test.unsafeRunSync
-      transportLayer.reset()
     }
   }
 }
