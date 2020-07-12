@@ -53,11 +53,16 @@ object Main {
     })
     implicit val console: ConsoleIO[Task] = consoleIO
 
+    // Ensure terminal is restored on exit
+    sys.addShutdownHook {
+      console.close.unsafeRunSync
+    }
+
     // Parse CLI options
     val options = commandline.Options(args)
-    if (options.subcommand == Some(options.run))
+    if (options.subcommand.contains(options.run))
       // Start the node
-      startNode(options)
+      startNode(options).unsafeRunSync
     //or
     else
       // Execute CLI command
@@ -67,14 +72,12 @@ object Main {
   /**
     * Starts RNode instance
     * @param options command line options
-    * @param scheduler main scheduler
     * @param console console
     */
   private def startNode(options: commandline.Options)(
       implicit
-      scheduler: Scheduler,
       console: ConsoleIO[Task]
-  ): Unit = {
+  ): Task[Unit] = {
     // Create merged configuration from CLI options and config file
     val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
     // This system variable is used in Logger config file `node/src/main/resources/logback.xml`
@@ -97,18 +100,15 @@ object Main {
           _               <- runtime.main.run(NodeCallCtx.init)
         } yield ()
       })
-      .unsafeRunSync
   }
 
   /**
     * Executes CLI commands
     * @param options command line options
-    * @param scheduler
     * @param console console
     */
   private def runCLI(options: commandline.Options)(
       implicit
-      scheduler: Scheduler,
       console: ConsoleIO[Task]
   ): Task[Unit] = {
     // Clients for executing gRPC calls on remote RNode instance
@@ -183,7 +183,6 @@ object Main {
         proposeServiceClient.close()
         replServiceClient.close()
         deployServiceClient.close()
-        console.close.unsafeRunSync(scheduler)
       }
     ) >> program
   }
@@ -226,7 +225,10 @@ object Main {
   private def decryptKeyFromCon(
       encryptedPrivateKeyPath: Path
   )(implicit console: ConsoleIO[Task]): Task[PrivateKey] =
-    Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, getValidatorPassword)
+    for {
+      password   <- getValidatorPassword
+      privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
+    } yield privateKey
 
   private def generateKey(
       path: Path
@@ -277,20 +279,19 @@ object Main {
     * @param console
     * @return
     */
-  def getValidatorPassword(implicit console: ConsoleIO[Task]): String =
+  def getValidatorPassword(implicit console: ConsoleIO[Task]): Task[String] =
     sys.env.get(RNodeValidatorPasswordEnvVar) match {
       case Some(password) =>
-        if (password.length > 0) password else requestForPassword
+        if (password.length > 0) password.pure[Task] else requestForPassword
       case None => requestForPassword
     }
 
-  def requestForPassword(implicit console: ConsoleIO[Task]): String =
+  def requestForPassword(implicit console: ConsoleIO[Task]): Task[String] =
     console
       .readPassword(
         "Variable RNODE_VALIDATOR_PASSWORD is not set, please enter password for keyfile. \n" +
           "Password for keyfile: "
       )
-      .unsafeRunSync
 
   /**
     * Loads validator key from file into configuration.
