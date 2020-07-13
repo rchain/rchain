@@ -740,10 +740,12 @@ object NodeRuntime {
         implicit val kvm = casperStoreManager
         for {
           // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb  <- casperStoreManager.database("block-metadata")
-          dagStrageIsEmpty <- blockMetadataDb.iterate(_.isEmpty)
+          blockMetadataDb   <- casperStoreManager.database("block-metadata")
+          dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
+          oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
+          shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists
           // TODO: remove `dagConfig`, it's not used anymore (after migration)
-          _ <- BlockDagKeyValueStorage.importFromFileStorage(dagConfig).whenA(dagStrageIsEmpty)
+          _ <- BlockDagKeyValueStorage.importFromFileStorage(dagConfig).whenA(shouldMigrate)
           // Create DAG store
           dagStorage <- BlockDagKeyValueStorage.create[F]
         } yield dagStorage
