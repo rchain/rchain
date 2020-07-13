@@ -171,6 +171,38 @@ object DeployGrpcServiceV1 {
           )
         }
 
+      override def getDataAtChannel(
+          request: DataAtChannelQuery
+      ): Task[DatasAtChannelResponse] =
+        defer(
+          BlockAPI
+            .getDataAtChannel[F](request.channel.get, request.blockHash, request.usePreStateHash)
+        ) { r =>
+          import DatasAtChannelResponse.Message
+          import DatasAtChannelResponse.Message._
+          DatasAtChannelResponse(r.fold[Message](Error, { d =>
+            Message.Result(d)
+          }))
+        }
+
+      override def getContinuationAtChannel(
+          request: ContinuationAtChannelsQuery
+      ): Task[ContinuationsAtChannelsResponse] =
+        defer(
+          BlockAPI
+            .getContinuationAtChannel(request.channels, request.blockHash, request.usePreStateHash)
+        ) { r =>
+          import ContinuationsAtChannelsResponse.Message
+          import ContinuationsAtChannelsResponse.Message._
+          ContinuationsAtChannelsResponse(
+            r.fold[Message](
+              Error, { c =>
+                Message.Result(c)
+              }
+            )
+          )
+        }
+
       def listenForContinuationAtName(
           request: ContinuationAtNameQuery
       ): Task[ContinuationAtNameResponse] =

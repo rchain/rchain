@@ -59,6 +59,10 @@ service DeployService {
   rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse){}
   // temporary api for testing
   rpc getEventByHash(BlockQuery) returns (EventInfoResponse){}
+
+  // get data from par
+  rpc getDataAtChannel(DataAtChannelQuery) returns (DatasAtChannelResponse){}
+  rpc getContinuationAtChannel(ContinuationAtChannelsQuery) returns (ContinuationsAtChannelsResponse){}
 }
 
 message EventInfoResponse{
@@ -112,6 +116,20 @@ message BlockInfoResponse {
   oneof message {
     ServiceError error        = 1;
     LightBlockInfo blockInfo  = 2;
+  }
+}
+
+message DatasAtChannelResponse{
+  oneof message {
+    ServiceError error = 1;
+    DataWithBlockInfo result = 2;
+  }
+}
+
+message ContinuationsAtChannelsResponse{
+  oneof message {
+    ServiceError error = 1;
+    ContinuationsWithBlockInfo result = 2;
   }
 }
 

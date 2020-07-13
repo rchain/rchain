@@ -75,6 +75,18 @@ message BondStatusQuery {
   bytes publicKey = 1;
 }
 
+message DataAtChannelQuery{
+  Par channel = 1;
+  string blockHash = 2;
+  bool usePreStateHash = 3;
+}
+
+message ContinuationAtChannelsQuery{
+  repeated Par channels = 1;
+  string blockHash = 2;
+  bool usePreStateHash = 3;
+}
+
 message ExploratoryDeployQuery{
   string term = 1;
   string blockHash = 2;

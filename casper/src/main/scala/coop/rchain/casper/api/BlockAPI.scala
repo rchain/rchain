@@ -157,6 +157,117 @@ object BlockAPI {
       )
     )
   }
+  def getDataAtChannel[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+      channel: Par,
+      blockHash: String,
+      usePreStateHash: Boolean
+  ): F[ApiErr[DataWithBlockInfo]] = {
+    val errorMessage =
+      "Could not execute get data at channel, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper(
+        implicit casper =>
+          for {
+            isReadOnly <- casper.getValidator
+            result <- isReadOnly match {
+                       case Some(_) =>
+                         "Get Data At channel can only be executed on read-only RNode."
+                           .asLeft[DataWithBlockInfo]
+                           .pure[F]
+                       case None =>
+                         for {
+                           targetBlock <- if (blockHash.isEmpty)
+                                           casper.lastFinalizedBlock.map(_.some)
+                                         else
+                                           for {
+                                             hashByteString <- Base16
+                                                                .decode(blockHash)
+                                                                .map(ByteString.copyFrom)
+                                                                .liftTo[F](
+                                                                  BlockRetrievalError(
+                                                                    s"Input hash value is not valid hex string: $blockHash"
+                                                                  )
+                                                                )
+                                             block <- BlockStore[F].get(hashByteString)
+                                           } yield block
+                           sortedListeningName <- parSortable.sortMatch[F](channel).map(_.term)
+                           runtimeManager      <- casper.getRuntimeManager
+                           res <- targetBlock
+                                   .flatTraverse(
+                                     block =>
+                                       getDataWithBlockInfo[F](
+                                         runtimeManager,
+                                         sortedListeningName,
+                                         block
+                                       )
+                                   )
+
+                         } yield res.fold(
+                           s"Can not find block ${blockHash}".asLeft[DataWithBlockInfo]
+                         )(_.asRight[Error])
+                     }
+          } yield result,
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
+  def getContinuationAtChannel[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+      channels: Seq[Par],
+      blockHash: String,
+      usePreStateHash: Boolean
+  ): F[ApiErr[ContinuationsWithBlockInfo]] = {
+    val errorMessage =
+      "Could not execute get continuation at channels, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper(
+        implicit casper =>
+          for {
+            isReadOnly <- casper.getValidator
+            result <- isReadOnly match {
+                       case Some(_) =>
+                         "Get Continuation At Channel can only be executed on read-only RNode."
+                           .asLeft[ContinuationsWithBlockInfo]
+                           .pure[F]
+                       case None =>
+                         for {
+                           targetBlock <- if (blockHash.isEmpty)
+                                           casper.lastFinalizedBlock.map(_.some)
+                                         else
+                                           for {
+                                             hashByteString <- Base16
+                                                                .decode(blockHash)
+                                                                .map(ByteString.copyFrom)
+                                                                .liftTo[F](
+                                                                  BlockRetrievalError(
+                                                                    s"Input hash value is not valid hex string: $blockHash"
+                                                                  )
+                                                                )
+                                             block <- BlockStore[F].get(hashByteString)
+                                           } yield block
+                           sortedListeningNames <- channels.toList.traverse(
+                                                    parSortable.sortMatch[F](_).map(_.term)
+                                                  )
+                           runtimeManager <- casper.getRuntimeManager
+                           res <- targetBlock
+                                   .flatTraverse(
+                                     block =>
+                                       getContinuationsWithBlockInfo[F](
+                                         runtimeManager,
+                                         sortedListeningNames,
+                                         block
+                                       )
+                                   )
+
+                         } yield res.fold(
+                           s"Can not find block ${blockHash}".asLeft[ContinuationsWithBlockInfo]
+                         )(_.asRight[Error])
+                     }
+          } yield result,
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
 
   def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
