@@ -142,11 +142,7 @@ object BlockCreator {
         signedBlock = unsignedBlock.map(
           signBlock(
             _,
-            validatorIdentity.privateKey,
-            validatorIdentity.sigAlgorithm,
-            shardId,
-            seqNum,
-            sender
+            validatorIdentity
           )
         )
         _ <- spanF.mark("block-signed")
@@ -276,7 +272,7 @@ object BlockCreator {
 
     val body   = Body(postState, persistableDeploys.toList, persistableSystemDeploys.toList)
     val header = blockHeader(body, p.map(_.blockHash), version, blockData.timeStamp)
-    val block  = unsignedBlockProto(body, header, justifications, shardId)
+    val block  = unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
     CreateBlockStatus.created(block)
   }
 }

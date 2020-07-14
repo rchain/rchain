@@ -10,7 +10,7 @@ import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
 import coop.rchain.casper.protocol.{DeployData, _}
 import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
@@ -289,7 +289,8 @@ object ProtoUtil {
       body: Body,
       header: Header,
       justifications: Seq[Justification],
-      shardId: String
+      shardId: String,
+      seqNum: Int = 0
   ): BlockMessage = {
     val hash = hashUnsignedBlock(header, justifications)
 
@@ -300,7 +301,7 @@ object ProtoUtil {
       body,
       justifications.toList,
       sender = ByteString.EMPTY,
-      seqNum = 0,
+      seqNum = seqNum,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
       shardId,
@@ -334,31 +335,29 @@ object ProtoUtil {
 
   def signBlock(
       block: BlockMessage,
-      sk: PrivateKey,
-      sigAlgorithm: String,
-      shardId: String,
-      seqNum: Int,
-      sender: Validator
+      validatorId: ValidatorIdentity,
   ): BlockMessage = {
 
     val header = block.header
+    val sender = ByteString.copyFrom(validatorId.publicKey.bytes)
+    val sk = validatorId.privateKey
     val blockHash = hashSignedBlock(
       header,
       block.body,
       sender,
-      sigAlgorithm,
-      seqNum,
-      shardId,
+      validatorId.sigAlgorithm,
+      block.seqNum,
+      block.shardId,
       block.extraBytes
     )
-    val sigAlgorithmBlock = block.copy(sigAlgorithm = sigAlgorithm)
+    val sigAlgorithmBlock = block.copy(sigAlgorithm = validatorId.sigAlgorithm)
     val sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
     sigAlgorithmBlock.copy(
       sender = sender,
       sig = sig,
-      seqNum = seqNum,
+      seqNum = block.seqNum,
       blockHash = blockHash,
-      shardId = shardId
+      shardId = block.shardId
     )
   }
 
