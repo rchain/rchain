@@ -1,17 +1,22 @@
 package coop.rchain.casper.engine
 
+import java.nio.file.Path
+
 import cats._
 import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.blockstorage.deploy.InMemDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
+import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
@@ -25,6 +30,7 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -95,8 +101,8 @@ object Setup {
     implicit val transportLayer = new TransportLayerStub[Task]
     implicit val rpConf         = createRPConfAsk[Task](local)
     implicit val time           = TestTime.instance
-    implicit val currentRequests: Running.RequestedBlocks[Task] =
-      Cell.unsafe[Task, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+    implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
+      Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
     implicit val commUtil = CommUtil.of[Task]
     implicit val errHandler =
       ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
@@ -131,7 +137,13 @@ object Setup {
     implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
     implicit val lastFinalizedConstraintChecker =
       LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
-    implicit val estimator = Estimator[Task](Estimator.UnlimitedParents, None)
+    implicit val estimator      = Estimator[Task](Estimator.UnlimitedParents, None)
+    implicit val blockRetriever = BlockRetriever.of[Task]
+
+    implicit val kvsManager = InMemoryStoreManager[Task]
+    implicit val casperBuffer = CasperBufferKeyValueStorage
+      .create[Task]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

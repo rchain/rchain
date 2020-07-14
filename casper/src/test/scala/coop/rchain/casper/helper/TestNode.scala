@@ -5,14 +5,16 @@ import java.nio.file.Path
 
 import cats.Monad
 import cats.data.State
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
-import coop.rchain.casper.CasperState.CasperStateCell
+import coop.rchain.casper
+import casper.engine.BlockRetriever._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
@@ -69,7 +71,7 @@ class TestNode[F[_]](
     implicit val deployStorage: DeployStorage[F],
     val metricEff: Metrics[F],
     val span: Span[F],
-    val casperState: CasperStateCell[F],
+    val casperBufferStorage: CasperBufferStorage[F],
     val runtimeManager: RuntimeManager[F],
     val rhoHistoryRepository: RhoHistoryRepository[F]
 ) {
@@ -109,10 +111,11 @@ class TestNode[F[_]](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val requestedBlocks: Running.RequestedBlocks[F] =
-    Cell.unsafe[F, Map[BlockHash, Running.Requested]](Map.empty[BlockHash, Running.Requested])
+  implicit val requestedBlocks: RequestedBlocks[F] =
+    Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
 
-  implicit val commUtil: CommUtil[F] = CommUtil.of[F]
+  implicit val commUtil: CommUtil[F]             = CommUtil.of[F]
+  implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
@@ -163,9 +166,10 @@ class TestNode[F[_]](
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
     val networkMap = nodes.filterNot(_.local == local).map(node => node.local -> node).toMap
-    val asked = Running
+    val asked = casper.engine.BlockRetriever
       .RequestedBlocks[F]
-      .reads(
+      .get
+      .map(
         _.values
           .flatMap(
             requested =>
@@ -175,7 +179,7 @@ class TestNode[F[_]](
           )
           .toList
       )
-    val allSynced = Running.RequestedBlocks[F].reads(_.isEmpty)
+    val allSynced = RequestedBlocks[F].get.map(!_.exists(_._2.received == false))
     val doNothing = concurrentF.unit
 
     def drainQueueOf(peerNode: PeerNode) = networkMap.get(peerNode).fold(doNothing)(_.receive())
@@ -191,9 +195,7 @@ class TestNode[F[_]](
 
     (receive() >> allSynced >>= (done => loop(0, done))).flatTap {
       case (_, false) =>
-        Running
-          .RequestedBlocks[F]
-          .read
+        RequestedBlocks[F].get
           .flatMap(
             requestedBlocks =>
               logEff.warn(
@@ -216,7 +218,7 @@ class TestNode[F[_]](
 
   def contains(blockHash: BlockHash) = casperEff.contains(blockHash)
   def knowsAbout(blockHash: BlockHash) =
-    (contains(blockHash), Running.RequestedBlocks.contains(blockHash)).mapN(_ || _)
+    (contains(blockHash), RequestedBlocks.contains[F](blockHash)).mapN(_ || _)
 
   def shutoff() = transportLayerEff.clear(local)
 
@@ -384,17 +386,17 @@ object TestNode {
     for {
       paths <- Resources.copyStorage[F](storageMatrixPath)
 
-      blockStore      <- Resources.mkBlockStoreAt[F](paths.blockStoreDir)
-      blockDagStorage <- Resources.mkBlockDagStorageAt[F](paths.blockDagDir)
-      deployStorage   <- Resources.mkDeployStorageAt[F](paths.deployStorageDir)
-      runtimeManager  <- createRuntime(paths.rspaceDir)
+      blockStore          <- Resources.mkBlockStoreAt[F](paths.blockStoreDir)
+      blockDagStorage     <- Resources.mkBlockDagStorageAt[F](paths.blockDagDir)
+      deployStorage       <- Resources.mkDeployStorageAt[F](paths.deployStorageDir)
+      casperBufferStorage <- Resources.mkCasperBuferStorate[F](paths.deployStorageDir)
+      runtimeManager      <- createRuntime(paths.rspaceDir)
 
       node <- Resource.liftF(
                for {
                  lastFinalizedStorage <- LastFinalizedFileStorage.make[F](paths.lastFinalizedFile)
                  _                    <- TestNetwork.addPeer(currentPeerNode)
                  blockProcessingLock  <- Semaphore[F](1)
-                 casperState          <- Cell.mvarCell[F, CasperState](CasperState())
                  node = new TestNode[F](
                    name,
                    currentPeerNode,
@@ -418,7 +420,7 @@ object TestNode {
                    deployStorage,
                    metricEff,
                    spanEff,
-                   casperState,
+                   casperBufferStorage,
                    runtimeManager._1,
                    runtimeManager._2
                  )

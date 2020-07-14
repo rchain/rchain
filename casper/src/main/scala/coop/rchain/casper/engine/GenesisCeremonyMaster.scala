@@ -6,6 +6,7 @@ import cats.implicits._
 import cats.Applicative
 import EngineCell._
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
@@ -40,7 +41,7 @@ class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RP
 
 object GenesisCeremonyMaster {
   import Engine._
-  def waitingForApprovedBlockLoop[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Running.RequestedBlocks: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
+  def waitingForApprovedBlockLoop[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: BlockRetriever: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity]

@@ -7,20 +7,20 @@ import scala.concurrent.duration._
 import cats._
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.mtl._
 import cats.tagless.implicits._
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.{ReportingCasper, _}
-import coop.rchain.casper.engine._
+import coop.rchain.casper.{ReportingCasper, engine, _}
+import coop.rchain.casper.engine.{BlockRetriever, _}
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine.Running.Requested
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -43,7 +43,7 @@ import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api._
-import coop.rchain.node.configuration.{Configuration, NodeConf}
+import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
@@ -136,21 +136,32 @@ class NodeRuntime private[node] (
                     commTmpFolder
                   )(grpcScheduler, log, metrics)
                   .toReaderT
-    rpConnections   <- effects.rpConnections[Task].toReaderT
-    initPeer        = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
-    peerNode        = rpConf(local, initPeer)
-    rpConfState     = effects.rpConfState[Task](peerNode)
-    peerNodeAsk     = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    rpConfAsk       = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    requestedBlocks <- Cell.mvarCell[Task, Map[BlockHash, Running.Requested]](Map.empty).toReaderT
+    rpConnections <- effects.rpConnections[Task].toReaderT
+    initPeer      = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
+    peerNode      = rpConf(local, initPeer)
+    rpConfState   = effects.rpConfState[Task](peerNode)
+    peerNodeAsk   = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    rpConfAsk     = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
+    requestedBlocks <- Ref
+                        .of[Task, Map[BlockHash, engine.BlockRetriever.RequestState]](Map.empty)
+                        .toReaderT
     commUtil = CommUtil.of[Task](
       Concurrent[Task],
       transport,
       rpConfAsk,
       rpConnections,
-      requestedBlocks,
       log,
       time
+    )
+    blockRetriever = BlockRetriever.of[Task](
+      Monad[Task],
+      requestedBlocks,
+      log,
+      time,
+      rpConfAsk,
+      transport,
+      commUtil,
+      metrics
     )
 
     kademliaRPC = effects.kademliaRPC(
@@ -205,15 +216,15 @@ class NodeRuntime private[node] (
     peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, PeerNode](
       peerNodeAsk
     )
-    metricsEnv         = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
-    transportEnv       = transport.mapK(taskToEnv)
-    timeEnv            = time.mapK(taskToEnv)
-    logEnv             = log.mapK(taskToEnv)
-    eventLogEnv        = eventLog.mapK(taskToEnv)
-    nodeDiscoveryEnv   = nodeDiscovery.mapK(taskToEnv)
-    rpConnectionsEnv   = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
-    requestedBlocksEnv = Cell.readerT[Task, NodeCallCtx, Map[BlockHash, Requested]](requestedBlocks)
-    commUtilEnv        = commUtil.mapK(taskToEnv)
+    metricsEnv        = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
+    transportEnv      = transport.mapK(taskToEnv)
+    timeEnv           = time.mapK(taskToEnv)
+    logEnv            = log.mapK(taskToEnv)
+    eventLogEnv       = eventLog.mapK(taskToEnv)
+    nodeDiscoveryEnv  = nodeDiscovery.mapK(taskToEnv)
+    rpConnectionsEnv  = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
+    commUtilEnv       = commUtil.mapK(taskToEnv)
+    blockRetrieverEnv = blockRetriever.mapK(taskToEnv)
     taskableEnv = new Taskable[TaskEnv] {
       override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
     }
@@ -224,7 +235,7 @@ class NodeRuntime private[node] (
                rpConfAskEnv,
                rpConfStateEnv,
                commUtilEnv,
-               requestedBlocksEnv,
+               blockRetrieverEnv,
                nodeConf,
                dagConfig,
                blockstoreEnv,
@@ -692,7 +703,7 @@ object NodeRuntime {
       rpConfAsk: ApplicativeAsk[F, RPConf],
       rpConfState: MonadState[F, RPConf],
       commUtil: CommUtil[F],
-      requestedBlocks: Running.RequestedBlocks[F],
+      blockRetriever: BlockRetriever[F],
       conf: NodeConf,
       dagConfig: BlockDagFileStorage.Config,
       blockstoreEnv: Env[ByteBuffer],
@@ -740,7 +751,7 @@ object NodeRuntime {
         implicit val kvm = casperStoreManager
         for {
           // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- casperStoreManager.database("block-metadata")
+          blockMetadataDb   <- casperStoreManager.store("block-metadata")
           dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
           oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
           shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists
@@ -749,6 +760,10 @@ object NodeRuntime {
           // Create DAG store
           dagStorage <- BlockDagKeyValueStorage.create[F]
         } yield dagStorage
+      }
+      casperBufferStorage <- {
+        implicit val kvm = casperStoreManager
+        CasperBufferKeyValueStorage.create[F]
       }
       lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
@@ -830,7 +845,7 @@ object NodeRuntime {
         implicit val ec     = engineCell
         implicit val ev     = envVars
         implicit val re     = raiseIOError
-        implicit val rb     = requestedBlocks
+        implicit val br     = blockRetriever
         implicit val rm     = runtimeManager
         implicit val or     = oracle
         implicit val lc     = lastFinalizedBlockCalculator
@@ -844,8 +859,9 @@ object NodeRuntime {
         implicit val cu     = commUtil
         implicit val es     = estimator
         implicit val ds     = deployStorage
+        implicit val cbs    = casperBufferStorage
 
-        CasperLaunch.of(conf.casper)
+        CasperLaunch.of[F](conf.casper)
       }
       packetHandler = {
         implicit val ec = engineCell
@@ -882,20 +898,17 @@ object NodeRuntime {
           lastFinalizedHeightConstraintChecker,
           reportingCasper
         )
-      casperLoop = for {
-        engine <- engineCell.read
-        _      <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
-        _ <- Running.maintainRequestedBlocks[F](conf.casper.requestedBlocksTimeout)(
-              Monad[F],
-              TransportLayer[F],
-              rpConfAsk,
-              requestedBlocks,
-              Log[F],
-              Time[F],
-              Metrics[F]
-            )
-        _ <- Time[F].sleep(conf.casper.casperLoopInterval)
-      } yield ()
+      casperLoop = {
+        implicit val br = blockRetriever
+        for {
+          engine <- engineCell.read
+          // Fetch dependencies from CasperBuffer
+          _ <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
+          // Maintain RequestedBlocks for Casper
+          _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
+          _ <- Time[F].sleep(conf.casper.casperLoopInterval)
+        } yield ()
+      }
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {

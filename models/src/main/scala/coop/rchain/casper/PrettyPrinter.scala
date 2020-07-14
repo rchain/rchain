@@ -4,28 +4,33 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.codec._
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.BlockHash.BlockHash
 
 object PrettyPrinter {
 
   def buildStringNoLimit(b: Array[Byte]): String = Base16.encode(b)
   def buildStringNoLimit(b: ByteString): String  = Base16.encode(b.toByteArray)
 
-  def buildString(t: CasperMessage): String =
+  def buildString(t: CasperMessage, short: Boolean = false): String =
     t match {
-      case b: BlockMessage => buildString(b)
+      case b: BlockMessage => buildString(b, short)
       case _               => "Unknown consensus protocol message"
     }
 
   // TODO shouldn header.parentsHashList be nonempty list?
-  private def buildString(b: BlockMessage): String =
+  private def buildString(b: BlockMessage, short: Boolean): String =
     b.header.parentsHashList.headOption
-      .fold(s"Block ${buildString(b.blockHash)} with missing elements")(
+      .fold(s"Block ${buildString(b.blockHash)} with empty parents (supposedly genesis)")(
         mainParent =>
-          s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
-            s"-- Sender ID ${buildString(b.sender)} " +
-            s"-- M Parent Hash ${buildString(mainParent)} " +
-            s"-- Contents ${buildString(b.body.state)}" +
-            s"-- Shard ID ${limit(b.shardId, 10)}"
+          if (short) {
+            s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
+          } else {
+            s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
+              s"-- Sender ID ${buildString(b.sender)} " +
+              s"-- M Parent Hash ${buildString(mainParent)} " +
+              s"-- Contents ${buildString(b.body.state)}" +
+              s"-- Shard ID ${limit(b.shardId, 10)}"
+          }
       )
 
   def buildString(bh: BlockHashMessage): String =
@@ -63,4 +68,7 @@ object PrettyPrinter {
 
   def buildString(b: Bond): String =
     s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"
+
+  def buildString(hashes: List[BlockHash]): String =
+    hashes.map(PrettyPrinter.buildString).mkString("[", " ", "]")
 }

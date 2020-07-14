@@ -5,7 +5,6 @@ import cats.implicits._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.CasperState.CasperStateCell
 import coop.rchain.casper.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
@@ -13,9 +12,7 @@ import coop.rchain.shared.Log
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
     faultToleranceThreshold: Float
 ) {
-  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash)(
-      implicit state: CasperStateCell[F]
-  ): F[BlockHash] =
+  def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash): F[BlockHash] =
     for {
       maybeChildrenHashes <- dag.children(lastFinalizedBlockHash)
       childrenHashes      = maybeChildrenHashes.getOrElse(Set.empty[BlockHash]).toList

@@ -21,7 +21,6 @@ import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validat
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import scodec.Codec
 
 import scala.collection.immutable.SortedMap
 
@@ -209,39 +208,37 @@ object BlockDagKeyValueStorage {
       deploys: KeyValueTypedStore[F, DeployId, BlockHash]
   )
 
-  private def createStores[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics] = {
-    def createDB[K, V](name: String, kCodec: Codec[K], vCodec: Codec[V]) =
-      KeyValueStoreManager[F].database(name).map(_.toTypedStore(kCodec, vCodec))
-
+  private def createStores[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics] =
     for {
       // Block metadata map
-      blockMetadataDb <- createDB[BlockHash, BlockMetadata](
+      blockMetadataDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
                           "block-metadata",
                           codecBlockHash,
                           codecBlockMetadata
                         )
       blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
       // Equivocation tracker map
-      equivocationTrackerDb <- createDB[(Validator, SequenceNumber), Set[BlockHash]](
-                                "equivocation-tracker",
-                                codecValidator ~ codecSeqNum,
-                                codecBlockHashSet
-                              )
+      equivocationTrackerDb <- KeyValueStoreManager[F]
+                                .database[(Validator, SequenceNumber), Set[BlockHash]](
+                                  "equivocation-tracker",
+                                  codecValidator ~ codecSeqNum,
+                                  codecBlockHashSet
+                                )
       equivocationTrackerIndex <- EquivocationTrackerStore[F](equivocationTrackerDb)
       // Latest messages map
-      latestMessagesDb <- createDB[Validator, BlockHash](
+      latestMessagesDb <- KeyValueStoreManager[F].database[Validator, BlockHash](
                            "latest-messages",
                            codecValidator,
                            codecBlockHash
                          )
       // Invalid blocks map
-      invalidBlocksDb <- createDB[BlockHash, BlockMetadata](
+      invalidBlocksDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
                           "invalid-blocks",
                           codecBlockHash,
                           codecBlockMetadata
                         )
       // Deploy map
-      deployIndexDb <- createDB[DeployId, BlockHash](
+      deployIndexDb <- KeyValueStoreManager[F].database[DeployId, BlockHash](
                         "deploy-index",
                         codecDeployId,
                         codecBlockHash
@@ -255,7 +252,6 @@ object BlockDagKeyValueStorage {
       invalidBlocksDb,
       deployIndexDb
     )
-  }
 
   def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[BlockDagStorage[F]] =
     for {

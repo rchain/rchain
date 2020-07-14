@@ -2,7 +2,6 @@ package coop.rchain.casper.engine
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.engine.Running.{Requested, RequestedBlocks}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -23,6 +22,10 @@ import org.scalatest._
 
 class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
+  // TODO this is testing how CommUtil manipulates RequestedBlocks,
+  //  is not a valid test anymore with introduction of BlockRetriever and us moving towards more use of TransportLayer.
+  //  move to BlockRetriever tests.
+  /*
   val hash = ByteString.copyFrom("hash", "UTF-8")
 
   override def beforeEach(): Unit = {
@@ -132,4 +135,5 @@ class CommUtilSpec extends FunSpec with BeforeAndAfterEach with Matchers {
     )
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
+ */
 }

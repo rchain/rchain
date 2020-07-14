@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import EngineCell._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -20,7 +21,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: Running.RequestedBlocks: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage](
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
     validatorId: ValidatorIdentity,
     shardId: String,
     finalizationRate: Int,

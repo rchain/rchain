@@ -93,7 +93,7 @@ object EffectsTestInstances {
       broadcast(peers, ProtocolHelper.protocol(blob.sender, networkId).withPacket(blob.packet)).void
   }
 
-  class LogStub[F[_]: Applicative](delegate: Log[F]) extends Log[F] {
+  class LogStub[F[_]: Sync](delegate: Log[F]) extends Log[F] {
 
     def this() = this(new NOPLog[F]())
 
@@ -110,26 +110,16 @@ object EffectsTestInstances {
     }
     def isTraceEnabled(implicit ev: LogSource): F[Boolean]     = false.pure[F]
     def trace(msg: => String)(implicit ev: LogSource): F[Unit] = ().pure[F]
-    def debug(msg: => String)(implicit ev: LogSource): F[Unit] = {
-      debugs = debugs :+ msg
-      delegate.debug(msg)
-    }
-    def info(msg: => String)(implicit ev: LogSource): F[Unit] = {
-      infos = infos :+ msg
-      delegate.info(msg)
-    }
-    def warn(msg: => String)(implicit ev: LogSource): F[Unit] = {
-      warns = warns :+ msg
-      delegate.warn(msg)
-    }
-    def error(msg: => String)(implicit ev: LogSource): F[Unit] = {
-      errors = errors :+ msg
-      delegate.error(msg)
-    }
-    def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] = {
-      errors = errors :+ msg
-      delegate.error(msg, cause)
-    }
+    def debug(msg: => String)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(debugs = debugs :+ msg) >> delegate.debug(msg)
+    def info(msg: => String)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(infos = infos :+ msg) >> delegate.info(msg)
+    def warn(msg: => String)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(warns = warns :+ msg) >> delegate.warn(msg)
+    def error(msg: => String)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg)
+    def error(msg: => String, cause: scala.Throwable)(implicit ev: LogSource): F[Unit] =
+      Sync[F].delay(errors = errors :+ msg) >> delegate.error(msg, cause)
   }
 
   class EventLogStub[F[_]: Applicative] extends EventLog[F] {

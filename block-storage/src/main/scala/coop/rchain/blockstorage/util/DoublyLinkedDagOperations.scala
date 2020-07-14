@@ -1,14 +1,16 @@
-package coop.rchain.casper.util
+package coop.rchain.blockstorage.util
 
 import coop.rchain.models.BlockHash.BlockHash
 
 import scala.collection.immutable.{HashMap, HashSet}
+import scala.collection.mutable
 
 trait DoublyLinkedDag[A] {
   val parentToChildAdjacencyList: Map[A, Set[A]]
   val childToParentAdjacencyList: Map[A, Set[A]]
   val dependencyFree: Set[A]
 }
+
 final case class BlockDependencyDag(
     parentToChildAdjacencyList: Map[BlockHash, Set[BlockHash]],
     childToParentAdjacencyList: Map[BlockHash, Set[BlockHash]],
@@ -60,37 +62,59 @@ object DoublyLinkedDagOperations {
 
   // If the element doesn't exist in the dag, the dag is returned as is
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
-  def remove[A](dag: DoublyLinkedDag[A], element: A): DoublyLinkedDag[A] = {
+  def remove[A](
+      dag: DoublyLinkedDag[A],
+      element: A
+  ): (DoublyLinkedDag[A], Set[A], Set[A]) = {
     val parentToChildAdjacencyList: Map[A, Set[A]] = dag.parentToChildAdjacencyList
     val childToParentAdjacencyList: Map[A, Set[A]] = dag.childToParentAdjacencyList
     assert(!childToParentAdjacencyList.contains(element))
-    assert(!parentToChildAdjacencyList.values.toSet.contains(element))
+    assert(!parentToChildAdjacencyList.valuesIterator.flatten.contains(element))
     val maybeChildren = parentToChildAdjacencyList.get(element)
-    val initAcc       = (childToParentAdjacencyList, Set.empty[A])
-    val (updatedChildToParentAdjacencyList, newDependencyFree) = maybeChildren match {
-      case Some(children) =>
-        children.foldLeft(initAcc) {
-          case ((childToParentAdjacencyListAcc, dependencyFreeAcc), child) =>
-            val maybeParents = childToParentAdjacencyListAcc.get(child)
-            maybeParents match {
-              case Some(parents) =>
-                val updatedParents = parents - element
-                if (updatedParents.isEmpty) {
-                  (childToParentAdjacencyListAcc - child, dependencyFreeAcc + child)
-                } else {
-                  (childToParentAdjacencyListAcc.updated(child, updatedParents), dependencyFreeAcc)
-                }
-              case None =>
-                throw new Error(s"We should have at least $element as parent")
-            }
-        }
-      case None => initAcc
-    }
-    new DoublyLinkedDag[A] {
+    val initAcc       = (childToParentAdjacencyList, Set.empty[A], Set.empty[A], Set.empty[A])
+    val (updatedChildToParentAdjacencyList, newDependencyFree, childrenAffected, childrenRemoved) =
+      maybeChildren match {
+        case Some(children) =>
+          children.foldLeft(initAcc) {
+            case (
+                (
+                  childToParentAdjacencyListAcc,
+                  dependencyFreeAcc,
+                  childrenAffected,
+                  childrenRemoved
+                ),
+                child
+                ) =>
+              val maybeParents = childToParentAdjacencyListAcc.get(child)
+              maybeParents match {
+                case Some(parents) =>
+                  val updatedParents = parents - element
+                  if (updatedParents.isEmpty)
+                    (
+                      childToParentAdjacencyListAcc - child,
+                      dependencyFreeAcc + child,
+                      childrenAffected,
+                      childrenRemoved + child
+                    )
+                  else
+                    (
+                      childToParentAdjacencyListAcc.updated(child, updatedParents),
+                      dependencyFreeAcc,
+                      childrenAffected + child,
+                      childrenRemoved
+                    )
+
+                case None =>
+                  throw new Error(s"We should have at least $element as parent")
+              }
+          }
+        case None => initAcc
+      }
+    (new DoublyLinkedDag[A] {
       override val parentToChildAdjacencyList
           : Map[A, Set[A]]                                    = dag.parentToChildAdjacencyList - element
       override val childToParentAdjacencyList: Map[A, Set[A]] = updatedChildToParentAdjacencyList
       override val dependencyFree: Set[A]                     = dag.dependencyFree ++ newDependencyFree - element
-    }
+    }, childrenAffected, childrenRemoved)
   }
 }

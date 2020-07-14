@@ -12,10 +12,9 @@ import scodec.codecs.{int64, utf8}
 class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
   def copyToDb(data: Map[Long, String]): F[KeyValueTypedStore[F, Long, String]] =
     for {
-      db    <- KeyValueStoreManager[F].database("test")
-      store = db.toTypedStore(int64, utf8)
-      _     <- store.put(data.toSeq)
-    } yield store
+      db <- KeyValueStoreManager[F].database("test", int64, utf8)
+      _  <- db.put(data.toSeq)
+    } yield db
 
   def testPutGet(input: Map[Long, String]) =
     for {
