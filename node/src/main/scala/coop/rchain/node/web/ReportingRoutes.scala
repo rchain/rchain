@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.implicits._
 import cats.{~>, Applicative}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{ReportBlockNotFound, ReportError, ReportReplayError}
+import coop.rchain.casper.{ReportError, ReportReplayError}
 import coop.rchain.models.BlockHash._
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.casper.protocol.ProcessedDeploy
@@ -65,7 +65,6 @@ object ReportingRoutes {
     state.map(
       s =>
         s match {
-          case Left(ReportBlockNotFound(hash)) => BlockNotFound(hash.base16String)
           case Left(ReportReplayError(error)) =>
             BlockReplayFailed(
               hash.base16String,
@@ -90,22 +89,22 @@ object ReportingRoutes {
     import io.circe.generic.extras.Configuration
     import io.circe.generic.extras.auto._
 
-    implicit val genDevConfig: Configuration =
-      Configuration.default
-        .withDiscriminator("type")
-        .withKebabCaseConstructorNames
-        .withKebabCaseMemberNames
+//    implicit val genDevConfig: Configuration =
+//      Configuration.default
+//        .withDiscriminator("type")
+//        .withKebabCaseConstructorNames
+//        .withKebabCaseMemberNames
 
     implicit val BlockHashQueryParamDecoder: QueryParamDecoder[BlockHash] =
       QueryParamDecoder[String].map(s => ByteString.copyFrom(Base16.decode(s).get))
 
     object BlockHashQueryParamMatcher extends QueryParamDecoderMatcher[ByteString]("blockHash")
 
-    implicit val prepareEncoder = jsonEncoderOf[F, Report]
+//    implicit val prepareEncoder = jsonEncoderOf[F, Report]
 
     HttpRoutes.of[F] {
       case GET -> Root / "trace" :? BlockHashQueryParamMatcher(hash) =>
-        Ok { transforResult(hash, nt(reportingCasper.trace(hash))) }
+        Ok { nt(s"${hash} no play".pure[M]) }
     }
   }
 }

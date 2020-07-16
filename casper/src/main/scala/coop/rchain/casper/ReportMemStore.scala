@@ -4,16 +4,11 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.codecs
+import coop.rchain.casper.protocol.BlockEventInfo
 import coop.rchain.metrics.Span
-import coop.rchain.rspace.ReportingRspace._
-import coop.rchain.scodec.codecs.seqOfN
-import coop.rchain.shared.AttemptOpsF.RichAttempt
-import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import scodec.Codec
-import scodec.bits.BitVector
-import scodec.codecs.{discriminated, int32, uint2}
+import scodec.bits.{BitVector, ByteVector}
 
 /**
   This is a temporary solution for the performance problem which is caused by the
@@ -24,95 +19,35 @@ import scodec.codecs.{discriminated, int32, uint2}
   The ReportHotStore is a in memory store for event data in every block.
   */
 trait ReportMemStore[F[_]] {
-  def put(hash: ByteString, data: Seq[Seq[ReportingEvent]]): F[Unit]
-  def get(hash: ByteString): F[Option[Seq[Seq[ReportingEvent]]]]
+  def put(hash: ByteString, data: BlockEventInfo): F[Unit]
+  def get(hash: ByteString): F[Option[BlockEventInfo]]
 }
 
 class ReportMemStoreImpl[F[_]: Sync](
-    store: KeyValueTypedStore[F, ByteString, BitVector],
-    coder: Codec[Seq[Seq[ReportingEvent]]]
+    store: KeyValueTypedStore[F, ByteString, BitVector]
 ) extends ReportMemStore[F] {
-  override def get(hash: ByteString): F[Option[Seq[Seq[ReportingEvent]]]] = {
+  override def get(hash: ByteString): F[Option[BlockEventInfo]] = {
     import cats.instances.option._
     for {
       encoded <- store.get(hash)
-      data    <- encoded.traverse(e => coder.decode(e).get)
-      result  = data.map(_.value)
+      result  = encoded.map(e => BlockEventInfo.parseFrom(e.toByteArray))
     } yield result
   }
 
-  override def put(hash: ByteString, data: Seq[Seq[ReportingEvent]]): F[Unit] =
+  override def put(hash: ByteString, data: BlockEventInfo): F[Unit] =
     for {
-      encoded <- coder.encode(data).get
+      encoded <- Sync[F].delay(BitVector(data.toByteArray))
       _       <- store.put(hash, encoded)
     } yield ()
 }
 
 object ReportMemStore {
-  def codecSeq[A](codecA: Codec[A]): Codec[Seq[A]] =
-    seqOfN(int32, codecA)
-  implicit def codecReportingProduce[C, A](
-      implicit codeC: Codec[C],
-      codeA: Codec[A]
-  ): Codec[ReportingProduce[C, A]] =
-    (codeC :: codeA).as[ReportingProduce[C, A]]
-  implicit def codecReportingConsume[C, P, K](
-      implicit codeC: Codec[C],
-      codeP: Codec[P],
-      codeK: Codec[K]
-  ): Codec[ReportingConsume[C, P, K]] =
-    (codecSeq(codeC) :: codecSeq(codeP) :: codeK :: codecSeq(int32))
-      .as[ReportingConsume[C, P, K]]
-  implicit def codecReportingComm[C, P, A, K](
-      implicit codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K]
-  ): Codec[ReportingComm[C, P, A, K]] =
-    (codecReportingConsume[C, P, K](codecC, codecP, codecK) :: codecSeq(
-      codecReportingProduce[C, A](codecC, codecA)
-    )).as[ReportingComm[C, P, A, K]]
 
-  def reportingCodec[C, P, A, K](
+  def store[F[_]: Sync: Span](
       implicit
-      serializeC: Serialize[C],
-      serializeP: Serialize[P],
-      serializeA: Serialize[A],
-      serializeK: Serialize[K]
-  ): Codec[ReportingEvent] =
-    discriminated[ReportingEvent]
-      .by(uint2)
-      .subcaseP(0)({
-        case n: ReportingProduce[C, A] @unchecked => n
-      })(codecReportingProduce(serializeC.toCodec, serializeA.toCodec))
-      .subcaseP(1) {
-        case n: ReportingConsume[C, P, K] @unchecked => n
-      }(codecReportingConsume(serializeC.toCodec, serializeP.toCodec, serializeK.toCodec))
-      .subcaseP(2) {
-        case n: ReportingComm[C, P, A, K] @unchecked => n
-      }(
-        codecReportingComm(
-          serializeC.toCodec,
-          serializeP.toCodec,
-          serializeA.toCodec,
-          serializeK.toCodec
-        )
-      )
-
-  def store[F[_]: Sync: Span, C, P, A, K](
-      implicit
-      serializeC: Serialize[C],
-      serializeP: Serialize[P],
-      serializeA: Serialize[A],
-      serializeK: Serialize[K],
       kvm: KeyValueStoreManager[F]
-  ): F[ReportMemStore[F]] = {
-    val codecReporting = reportingCodec[C, P, A, K]
-    val codec          = codecSeq[ReportingEvent](codecReporting)
-    val seqEventCodec  = codecSeq[Seq[ReportingEvent]](codec)
-
+  ): F[ReportMemStore[F]] =
     for {
       db <- kvm.database("reporting-cache", codecs.codecByteString, scodec.codecs.bits)
-    } yield new ReportMemStoreImpl[F](db, seqEventCodec)
-  }
+    } yield new ReportMemStoreImpl[F](db)
 }

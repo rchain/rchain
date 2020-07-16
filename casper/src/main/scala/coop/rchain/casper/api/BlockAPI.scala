@@ -489,8 +489,13 @@ object BlockAPI {
       )
     )
   def blockReport[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
-      hash: String
-  )(reportingCasper: ReportingCasper[F]): F[ApiErr[BlockEventInfo]] = {
+      hash: String,
+      forceReplay: Boolean
+  )(
+      reportingCasper: ReportingCasper[F],
+      reportMemStore: ReportMemStore[F]
+  ): F[ApiErr[BlockEventInfo]] = {
+    import cats.instances.either._
     val errorMessage =
       "Could not get event data."
     def casperResponse(
@@ -501,15 +506,50 @@ object BlockAPI {
         result <- isReadOnly match {
                    case None =>
                      for {
-                       reportResult <- reportingCasper.trace(
-                                        ByteString.copyFrom(Base16.unsafeDecode(hash))
-                                      )
-                       mayberesult = createBlockReportResponse(reportResult)
-                       block       <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
-                       lightBlock  <- block.traverse(getLightBlockInfo[F](_))
+                       maybeBlock <- BlockStore[F].get(
+                                      ByteString.copyFrom(Base16.unsafeDecode(hash))
+                                    )
+                       report <- maybeBlock match {
+                                  case Some(b) =>
+                                    for {
+                                      cached <- reportMemStore.get(b.blockHash)
+                                      result <- if (cached.isEmpty || forceReplay) {
+                                                 for {
+                                                   reportResult <- reportingCasper.trace(b)
+                                                   res <- reportResult match {
+                                                           case Left(ReportReplayError(r)) =>
+                                                             s"Block replayed error ${r}"
+                                                               .asLeft[BlockEventInfo]
+                                                               .pure[F]
+                                                           case Right(result) =>
+                                                             for {
+                                                               lightBlock <- getLightBlockInfo[F](b)
+                                                               deploys = createDeployReport(
+                                                                 result.deployReportResult
+                                                               )
+                                                               sysDeploys = createSystemDeployReport(
+                                                                 result.systemDeployReportResult
+                                                               )
+                                                               blockEvent = BlockEventInfo(
+                                                                 Some(lightBlock),
+                                                                 deploys,
+                                                                 sysDeploys,
+                                                                 result.postStateHash
+                                                               )
+                                                               _ <- reportMemStore.put(
+                                                                     b.blockHash,
+                                                                     blockEvent
+                                                                   )
+                                                             } yield blockEvent.asRight[Error]
+                                                         }
+                                                 } yield res
+                                               } else cached.get.asRight[Error].pure[F]
 
-                       res = mayberesult.map(BlockEventInfo(lightBlock, _))
-                     } yield res
+                                    } yield result
+                                  case _ =>
+                                    s"Block ${hash} not found".asLeft[BlockEventInfo].pure[F]
+                                }
+                     } yield report
                    case Some(_) =>
                      "Block report can only be executed on read-only RNode."
                        .asLeft[BlockEventInfo]
@@ -521,31 +561,44 @@ object BlockAPI {
       Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
     ))
   }
-  private def createBlockReportResponse(
-      maybeResult: Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
-  ): ApiErr[List[DeployInfoWithEventData]] =
-    maybeResult match {
-      case Left(ReportBlockNotFound(hash)) => Left(s"Block ${hash} not found")
-      case Left(ReportReplayError(r))      => Left(s"Block replayed error ${r}")
-      case Right(result) =>
-        result
+
+  private def createSystemDeployReport(
+      result: List[SystemDeployReportResult]
+  ): List[SystemDeployInfoWithEventData] = result.map(
+    sd =>
+      SystemDeployInfoWithEventData(
+        Some(SystemDeployData.toProto(sd.processedSystemDeploy)),
+        sd.events
           .map(
-            p =>
-              DeployInfoWithEventData(
-                deployInfo = p._1.toDeployInfo.some,
-                report = p._2
-                  .map(
-                    a =>
-                      SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                        case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                        case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                        case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                      }))
-                  )
+            a =>
+              SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+                case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+                case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+                case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+              }))
+          )
+      )
+  )
+
+  private def createDeployReport(
+      result: List[DeployReportResult]
+  ): List[DeployInfoWithEventData] =
+    result
+      .map(
+        p =>
+          DeployInfoWithEventData(
+            deployInfo = p.processedDeploy.toDeployInfo.some,
+            report = p.events
+              .map(
+                a =>
+                  SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+                    case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+                    case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+                    case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+                  }))
               )
           )
-          .asRight[Error]
-    }
+      )
 
   def getBlock[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore: Span](
       hash: String

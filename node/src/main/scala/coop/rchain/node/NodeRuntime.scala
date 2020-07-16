@@ -814,20 +814,28 @@ object NodeRuntime {
           runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
-                       implicit val kvm = casperStoreManager
-                       for {
-                         reportingCache <- ReportMemStore
-                                            .store[
-                                              F,
-                                              Par,
-                                              BindPattern,
-                                              ListParWithRandom,
-                                              TaggedContinuation
-                                            ]
-                       } yield ReportingCasper.rhoReporter(hr, reportingCache)
+//                       implicit val kvm = casperStoreManager
+//                       for {
+//                         reportingCache <- ReportMemStore
+//                                            .store[
+//                                              F,
+//                                              Par,
+//                                              BindPattern,
+//                                              ListParWithRandom,
+//                                              TaggedContinuation
+//                                            ]
+//                       } yield
+                       ReportingCasper.rhoReporter(hr).pure[F]
                      } else
                        ReportingCasper.noop.pure[F]
         } yield (runtime, reporter)
+      }
+      reportMemStore <- {
+        implicit val kvm = casperStoreManager
+        implicit val sp  = span
+        for {
+          reportingCache <- ReportMemStore.store[F]
+        } yield reportingCache
       }
       (casperRuntime, reportingCasper) = casperRuntimeAndReporter
       runtimeManager <- {
@@ -896,7 +904,8 @@ object NodeRuntime {
           Taskable[F],
           synchronyConstraintChecker,
           lastFinalizedHeightConstraintChecker,
-          reportingCasper
+          reportingCasper,
+          reportMemStore
         )
       casperLoop = {
         implicit val br = blockRetriever
@@ -981,12 +990,14 @@ object NodeRuntime {
       taskable: Taskable[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
       lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
-      reportingCasper: ReportingCasper[F]
+      reportingCasper: ReportingCasper[F],
+      reportMemStore: ReportMemStore[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper)
-    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
+    val deploy =
+      DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper, reportMemStore)
+    val propose = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
 }

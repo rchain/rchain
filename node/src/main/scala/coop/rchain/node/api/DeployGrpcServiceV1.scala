@@ -29,7 +29,8 @@ object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F],
       apiMaxBlocksLimit: Int,
-      reportingCasper: ReportingCasper[F]
+      reportingCasper: ReportingCasper[F],
+      reportMemStore: ReportMemStore[F]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -250,8 +251,11 @@ object DeployGrpcServiceV1 {
           }))
         }
 
-      override def getEventByHash(request: BlockQuery): Task[EventInfoResponse] =
-        defer(BlockAPI.blockReport[F](request.hash)(reportingCasper)) { r =>
+      override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
+        defer(
+          BlockAPI
+            .blockReport[F](request.hash, request.forceReplay)(reportingCasper, reportMemStore)
+        ) { r =>
           import EventInfoResponse.Message
           import EventInfoResponse.Message._
           EventInfoResponse(r.fold[Message](Error, Result))
