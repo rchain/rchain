@@ -224,8 +224,8 @@ object HistoryInstances {
         previousPath: KeyPath,
         previousRoot: Trie
     ): F[Option[Blake2b256Hash]] = {
-      def commonPrefixWithLastDiverging(path: KeyPath, affix: ByteVector): Boolean =
-        affix.toSeq.startsWith(path.dropRight(1))
+      def isDiverging(path: KeyPath, affix: ByteVector): Boolean =
+        (path.view, affix.toSeq.view).zipped.exists((l, r) => l != r)
 
       def extractPointerToPointerBlock(ptr: ValuePointer): Option[Blake2b256Hash] =
         ptr match {
@@ -254,7 +254,7 @@ object HistoryInstances {
             }
 
           // the path does not exist but some other skip lives near it == a node was removed
-          case (path, Skip(affix, _)) if commonPrefixWithLastDiverging(path, affix) =>
+          case (path, Skip(affix, _)) if isDiverging(path, affix) =>
             Applicative[F].pure(None.asRight) // removed path
 
           case (b :: Nil, PointerBlock(pointers)) => // interpret terminal pointer block
