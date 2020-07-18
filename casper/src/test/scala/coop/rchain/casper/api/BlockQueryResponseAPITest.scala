@@ -18,6 +18,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash._
 import coop.rchain.shared.Cell
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.Secp256k1
@@ -29,6 +30,7 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.collection.immutable.HashMap
 import coop.rchain.metrics.NoopSpan
+import coop.rchain.models.blockImplicits.getRandomBlock
 
 class BlockQueryResponseAPITest
     extends FlatSpec
@@ -40,73 +42,35 @@ class BlockQueryResponseAPITest
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager("block-query-response-api-test")
 
-  val secondBlockQuery = "123456"
-  val toShortQuery     = "12345"
+  val tooShortQuery    = "12345"
   val badTestHashQuery = "1234acd"
   val invalidHexQuery  = "No such a hash"
 
-  val genesisHashString = "0000000000000000000000000000000000000000000000000000000000000000"
-  val version           = 1L
+  val genesisBlock: BlockMessage = getRandomBlock()
+
+  val deployCount = 10
+  val randomDeploys =
+    (0 until deployCount).toList
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
+      .unsafeRunSync(scheduler)
 
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
   val sender: ByteString = ProtoUtil.stringToByteString(senderString)
   val bondsValidator     = Bond(sender, 1)
 
-  def genesisBlock(genesisHashString: String, version: Long): BlockMessage = {
-    val genesisHash = ProtoUtil.stringToByteString(genesisHashString)
-    val blockNumber = 0L
-    val timestamp   = 1527191663L
-    val ps          = Dummies.createRChainState(blockNumber = blockNumber, bonds = List(bondsValidator))
-    val body        = Dummies.createBody(state = ps)
-    val header      = ProtoUtil.blockHeader(body, Seq.empty[ByteString], version, timestamp)
-
-    Dummies.createBlockMessage(blockHash = genesisHash, header = header, body = body)
-  }
-  val genesisBlock: BlockMessage = genesisBlock(genesisHashString, version)
-
-  val secondHashString     = "1234567891011121314151617181921234567891011121314151617181928192"
-  val blockHash: BlockHash = ProtoUtil.stringToByteString(secondHashString)
-  val blockNumber          = 1L
-  val timestamp            = 1527191665L
-  val preStateHash         = "1234567891011121314151617181231412341891011121314151617181928192"
-  val postStateHash        = "1234567891323456514151617181231412341891011121314151617181928192"
-  val ps: RChainState =
-    Dummies.createRChainState(
-      preStateHash = ProtoUtil.stringToByteString(preStateHash),
-      postStateHash = ProtoUtil.stringToByteString(postStateHash),
-      blockNumber = blockNumber,
-      bonds = List(bondsValidator)
-    )
-  val deployCount = 10
-  val randomDeploys =
-    (0 until deployCount).toList
-      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
-      .unsafeRunSync(scheduler)
-  val body: Body                       = Dummies.createBody(state = ps, deploys = randomDeploys)
-  val parentsString                    = List(genesisHashString, "0000000001")
-  val parentsHashList: List[BlockHash] = parentsString.map(ProtoUtil.stringToByteString)
-  val header: Header                   = ProtoUtil.blockHeader(body, parentsHashList, version, timestamp)
-  val shardId: String                  = "abcdefgh"
-  val sigString                        = "12345678913234565141516171"
-  val sigAlgorithm                     = "Secp256k1"
   val secondBlock: BlockMessage =
-    Dummies.createBlockMessage(
-      blockHash = blockHash,
-      header = header,
-      body = body,
-      justifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)),
-      sender = sender,
-      shardId = shardId,
-      sig = ProtoUtil.stringToByteString("12345678913234565141516171"),
-      sigAlgorithm = sigAlgorithm
+    getRandomBlock(
+      setValidator = sender.some,
+      setDeploys = randomDeploys.some,
+      setJustifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)).some,
+      setBonds = List(bondsValidator).some
     )
 
   val faultTolerance = 1f
 
-  val bondValidatorHashList: List[String] = List(bondsValidator).map(PrettyPrinter.buildString)
-
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
+
   // TODO: Test tsCheckpoint:
   // we should be able to stub in a tuplespace dump but there is currently no way to do that.
   "getBlock" should "return successful block info response" in withStorage {
@@ -115,7 +79,7 @@ class BlockQueryResponseAPITest
         effects                                  <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = secondBlockQuery
+        hash                                     = BlockHashOps(secondBlock.blockHash).base16String
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
@@ -131,23 +95,29 @@ class BlockQueryResponseAPITest
             )
             blockInfo.blockInfo match {
               case Some(b) =>
-                b.blockHash should be(secondHashString)
-                b.sender should be(senderString)
+                b.blockHash should be(BlockHashOps(secondBlock.blockHash).base16String)
+                b.sender should be(BlockHashOps(secondBlock.sender).base16String)
                 b.blockSize should be(secondBlock.toProto.serializedSize.toString)
                 b.seqNum should be(secondBlock.toProto.seqNum)
-                b.sig should be(sigString)
-                b.sigAlgorithm should be(sigAlgorithm)
+                b.sig should be(BlockHashOps(secondBlock.sig).base16String)
+                b.sigAlgorithm should be(secondBlock.sigAlgorithm)
                 b.shardId should be(secondBlock.toProto.shardId)
                 b.extraBytes should be(secondBlock.toProto.extraBytes)
                 b.version should be(secondBlock.header.version)
                 b.timestamp should be(secondBlock.header.timestamp)
                 b.headerExtraBytes should be(secondBlock.header.extraBytes)
-                b.parentsHashList should be(parentsString)
-                b.blockNumber should be(body.state.blockNumber)
-                b.preStateHash should be(preStateHash)
-                b.postStateHash should be(postStateHash)
-                b.bodyExtraBytes should be(body.extraBytes)
-                b.bonds should be(ps.bonds.map(ProtoUtil.bondToBondInfo))
+                b.parentsHashList should be(
+                  secondBlock.header.parentsHashList.map(BlockHashOps(_).base16String)
+                )
+                b.blockNumber should be(secondBlock.body.state.blockNumber)
+                b.preStateHash should be(
+                  BlockHashOps(secondBlock.body.state.preStateHash).base16String
+                )
+                b.postStateHash should be(
+                  BlockHashOps(secondBlock.body.state.postStateHash).base16String
+                )
+                b.bodyExtraBytes should be(secondBlock.body.extraBytes)
+                b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
                 b.blockSize should be(secondBlock.toProto.serializedSize.toString)
                 b.deployCount should be(secondBlock.body.deploys.length)
                 b.faultTolerance should be(faultTolerance)
@@ -214,7 +184,7 @@ class BlockQueryResponseAPITest
         effects                                  <- emptyEffects(blockStore, blockDagStorage)
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = toShortQuery
+        hash                                     = tooShortQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
@@ -226,7 +196,7 @@ class BlockQueryResponseAPITest
         _ = inside(blockQueryResponse) {
           case Left(msg) =>
             msg should be(
-              s"Input hash value must be at least 6 characters: $toShortQuery"
+              s"Input hash value must be at least 6 characters: $tooShortQuery"
             )
         }
       } yield ()
@@ -247,24 +217,29 @@ class BlockQueryResponseAPITest
                              )
         _ = inside(blockQueryResponse) {
           case Right(blockInfo) =>
-            blockInfo.blockHash should be(secondHashString)
-            blockInfo.blockHash should be(secondHashString)
-            blockInfo.sender should be(senderString)
+            blockInfo.blockHash should be(BlockHashOps(secondBlock.toProto.blockHash).base16String)
+            blockInfo.sender should be(BlockHashOps(secondBlock.toProto.sender).base16String)
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.seqNum should be(secondBlock.toProto.seqNum)
-            blockInfo.sig should be(sigString)
-            blockInfo.sigAlgorithm should be(sigAlgorithm)
+            blockInfo.sig should be(BlockHashOps(secondBlock.sig).base16String)
+            blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
             blockInfo.shardId should be(secondBlock.toProto.shardId)
             blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
             blockInfo.version should be(secondBlock.header.version)
             blockInfo.timestamp should be(secondBlock.header.timestamp)
             blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
-            blockInfo.parentsHashList should be(parentsString)
-            blockInfo.blockNumber should be(body.state.blockNumber)
-            blockInfo.preStateHash should be(preStateHash)
-            blockInfo.postStateHash should be(postStateHash)
-            blockInfo.bodyExtraBytes should be(body.extraBytes)
-            blockInfo.bonds should be(ps.bonds.map(ProtoUtil.bondToBondInfo))
+            blockInfo.parentsHashList should be(
+              secondBlock.header.parentsHashList.map(BlockHashOps(_).base16String)
+            )
+            blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
+            blockInfo.preStateHash should be(
+              BlockHashOps(secondBlock.body.state.preStateHash).base16String
+            )
+            blockInfo.postStateHash should be(
+              BlockHashOps(secondBlock.body.state.postStateHash).base16String
+            )
+            blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
+            blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.deployCount should be(secondBlock.body.deploys.length)
             blockInfo.faultTolerance should be(faultTolerance)
@@ -307,8 +282,8 @@ class BlockQueryResponseAPITest
         _ <- blockDagStorage.insert(secondBlock, genesisBlock, false)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap[BlockHash, BlockMessage](
-                           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                           (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                           (genesisBlock.blockHash, genesisBlock),
+                           (secondBlock.blockHash, secondBlock)
                          )
                        )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         logEff     = new LogStub[Task]()
@@ -328,8 +303,8 @@ class BlockQueryResponseAPITest
       for {
         casperEffect <- NoOpsCasperEffect(
                          HashMap[BlockHash, BlockMessage](
-                           (ProtoUtil.stringToByteString(genesisHashString), genesisBlock),
-                           (ProtoUtil.stringToByteString(secondHashString), secondBlock)
+                           (genesisBlock.blockHash, genesisBlock),
+                           (secondBlock.blockHash, secondBlock)
                          )
                        )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         logEff     = new LogStub[Task]()

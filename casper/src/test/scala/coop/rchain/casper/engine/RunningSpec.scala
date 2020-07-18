@@ -4,13 +4,14 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.GenesisBuilder
+import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.models.blockImplicits.getRandomBlock
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, WordSpec}
 
@@ -50,11 +51,12 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach {
     /*
     // Need to have well-formed block here. Do we have that API in tests?
     "respond to BlockMessage messages " in {
-      val blockMessage =
-        Dummies.createBlockMessage(blockHash = ByteString.copyFrom("Test BlockMessage", "UTF-8"))
+      val blockMessage = getRandomBlock()
+
+      val signedBlockMessage = ProtoUtil.signBlock(blockMessage, validatorId)
       val test: Task[Unit] = for {
-        _ <- engine.handle(local, blockMessage)
-        _ = assert(casper.store.contains(blockMessage.blockHash))
+        _ <- engine.handle(local, signedBlockMessage)
+        _ = assert(casper.store.contains(signedBlockMessage.blockHash))
       } yield ()
 
       test.unsafeRunSync

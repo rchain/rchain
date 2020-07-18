@@ -16,7 +16,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   "dependenciesHashesOf" should "return hashes of all justifications and parents of a block" in {
-    forAll(blockElementGen) { blockElement =>
+    forAll(blockElementGen()) { blockElement =>
       val result = ProtoUtil.dependenciesHashesOf(blockElement)
       val justificationsHashes = blockElement.justifications.map(
         _.latestBlockHash

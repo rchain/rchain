@@ -38,7 +38,7 @@ class LastFinalizedFileStorageTest
     }
 
   "Last finalized file storage" should "return genesis on empty state" in {
-    forAll(blockElementGen) { genesis =>
+    forAll(blockElementGen()) { genesis =>
       withLfbStorage {
         _.get(genesis) shouldBeF genesis.blockHash
       }
@@ -46,7 +46,7 @@ class LastFinalizedFileStorageTest
   }
 
   it should "be able to restore saved last finalized block on restart" in {
-    forAll(blockElementGen, blockHashGen) { (genesis, blockHash) =>
+    forAll(blockElementGen(), blockHashGen) { (genesis, blockHash) =>
       withLfbStorageFile { lfbStorageFile =>
         for {
           lfbStorage1 <- LastFinalizedFileStorage.make[Task](lfbStorageFile)

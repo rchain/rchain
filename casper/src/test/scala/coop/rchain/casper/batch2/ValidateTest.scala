@@ -10,7 +10,11 @@ import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, UnlimitedParentsEstimatorFixture}
+import coop.rchain.casper.helper.{
+  BlockDagStorageFixture,
+  BlockGenerator,
+  UnlimitedParentsEstimatorFixture
+}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
@@ -28,6 +32,7 @@ import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import coop.rchain.models.blockImplicits._
 
 import scala.collection.immutable.HashMap
 
@@ -261,19 +266,18 @@ class ValidateTest
           genesis: BlockMessage,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] =
-        Time[Task].currentMillis >>= { timestamp =>
-          val blockWithNumber: BlockMessage =
-            Dummies
-              .createBlockMessage(
-                header = Dummies.createHeader(parentHashes.toList, timestamp = timestamp)
-              )
-              .withBlockNumber(n)
-          val hash  = ProtoUtil.hashUnsignedBlock(blockWithNumber.header, Nil)
-          val block = blockWithNumber.copy(blockHash = hash)
+        for {
+          timestamp <- Time[Task].currentMillis
+          block = getRandomBlock(
+            setBlockNumber = n.some,
+            setTimestamp = timestamp.some,
+            setParentsHashList = parentHashes.some,
+            hashF = (ProtoUtil.hashUnsignedBlock _).some
+          )
 
-          blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, false) >> block
-            .pure[Task]
-        }
+          _ <- blockStore.put(block.blockHash, block)
+          _ <- blockDagStorage.insert(block, genesis, false)
+        } yield block
 
       for {
         genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
@@ -547,7 +551,7 @@ class ValidateTest
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              Dummies.createBlockMessage(),
+              getRandomBlock(hashF = (ProtoUtil.hashUnsignedBlock _).some),
               dag,
               "rchain",
               Int.MaxValue
@@ -670,9 +674,10 @@ class ValidateTest
           Justification(v0, b1.blockHash),
           Justification(v1, b4.blockHash)
         )
-        blockWithJustificationRegression = Dummies.createBlockMessage(
-          sender = v1,
-          justifications = justificationsWithRegression.toList
+        blockWithJustificationRegression = getRandomBlock(
+          setValidator = v1.some,
+          setJustifications = justificationsWithRegression.some,
+          hashF = (ProtoUtil.hashUnsignedBlock _).some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
@@ -704,9 +709,9 @@ class ValidateTest
           Justification(v0, b5.blockHash),
           Justification(v1, b4.blockHash)
         )
-        blockWithInvalidJustification = Dummies.createBlockMessage(
-          sender = v1,
-          justifications = justificationsWithInvalidBlock.toList
+        blockWithInvalidJustification = getRandomBlock(
+          setValidator = v1.some,
+          setJustifications = justificationsWithInvalidBlock.some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
