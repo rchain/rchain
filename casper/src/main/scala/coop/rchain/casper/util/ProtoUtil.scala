@@ -269,7 +269,7 @@ object ProtoUtil {
   def protoSeqHash[A <: { def toByteArray: Array[Byte] }](protoSeq: Seq[A]): ByteString =
     hashByteArrays(protoSeq.map(_.toByteArray): _*)
 
-  private def hashByteArrays(items: Array[Byte]*): ByteString =
+  def hashByteArrays(items: Array[Byte]*): ByteString =
     ByteString.copyFrom(Blake2b256.hash(Array.concat(items: _*)))
 
   // TODO inline this
@@ -292,11 +292,9 @@ object ProtoUtil {
       shardId: String,
       seqNum: Int = 0
   ): BlockMessage = {
-    val hash = hashUnsignedBlock(header, justifications)
-
     // TODO FIX-ME fields that can be empty SHOULD be optional
-    BlockMessage(
-      hash,
+    val block = BlockMessage(
+      ByteString.EMPTY,
       header,
       body,
       justifications.toList,
@@ -307,60 +305,29 @@ object ProtoUtil {
       shardId,
       extraBytes = ByteString.EMPTY
     )
+
+    val hash = hashUnsignedBlock(block)
+
+    block.copy(blockHash = hash)
   }
 
-  def hashUnsignedBlock(header: Header, justifications: Seq[Justification]): BlockHash = {
-    val items = header.toProto.toByteArray +: justifications.map(_.toProto.toByteArray)
-    hashByteArrays(items: _*)
+  def hashUnsignedBlock(blockMessage: BlockMessage): BlockHash = {
+    val toHash = blockMessage.header.toProto.toByteArray +: blockMessage.justifications.map(
+      _.toProto.toByteArray
+    )
+    hashByteArrays(toHash: _*)
   }
 
-  def hashSignedBlock(
-      header: Header,
-      body: Body,
-      sender: ByteString,
-      sigAlgorithm: String,
-      seqNum: Int,
-      shardId: String,
-      extraBytes: ByteString
-  ): BlockHash =
-    hashByteArrays(
-      header.toProto.toByteArray,
-      body.toProto.toByteArray,
-      sender.toByteArray,
-      StringValue.of(sigAlgorithm).toByteArray,
-      Int32Value.of(seqNum).toByteArray,
-      StringValue.of(shardId).toByteArray,
-      extraBytes.toByteArray
+  def hashSignedBlock(blockMessage: BlockMessage): BlockHash =
+    ProtoUtil.hashByteArrays(
+      blockMessage.header.toProto.toByteArray,
+      blockMessage.body.toProto.toByteArray,
+      blockMessage.sender.toByteArray,
+      StringValue.of(blockMessage.sigAlgorithm).toByteArray,
+      Int32Value.of(blockMessage.seqNum).toByteArray,
+      StringValue.of(blockMessage.shardId).toByteArray,
+      blockMessage.extraBytes.toByteArray
     )
-
-  def signBlock(
-      block: BlockMessage,
-      validatorId: ValidatorIdentity,
-  ): BlockMessage = {
-
-    val header = block.header
-    val sender = ByteString.copyFrom(validatorId.publicKey.bytes)
-    val sk = validatorId.privateKey
-    val blockHash = hashSignedBlock(
-      header,
-      block.body,
-      sender,
-      validatorId.sigAlgorithm,
-      block.seqNum,
-      block.shardId,
-      block.extraBytes
-    )
-    val sigAlgorithmBlock = block.copy(sigAlgorithm = validatorId.sigAlgorithm)
-    val sig               = ByteString.copyFrom(sigAlgorithmBlock.signFunction(blockHash.toByteArray, sk))
-    sigAlgorithmBlock.copy(
-      sender = sender,
-      sig = sig,
-      seqNum = block.seqNum,
-      blockHash = blockHash,
-      shardId = block.shardId
-    )
-  }
-
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
   def stringToByteString(string: String): ByteString =

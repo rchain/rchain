@@ -13,7 +13,7 @@ import scala.util.Random
 object BlockUtil {
   def resignBlock(b: BlockMessage, sk: PrivateKey): BlockMessage = {
     val blockHash =
-      hashSignedBlock(b.header, b.body, b.sender, b.sigAlgorithm, b.seqNum, b.shardId, b.extraBytes)
+      hashSignedBlock(b)
     val sig = ByteString.copyFrom(b.signFunction(blockHash.toByteArray, sk))
     b.copy(blockHash = blockHash, sig = sig)
   }

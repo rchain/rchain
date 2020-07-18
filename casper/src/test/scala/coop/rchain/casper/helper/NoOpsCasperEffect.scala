@@ -24,19 +24,16 @@ import monix.eval.Task
 import scala.collection.mutable.{Map => MutableMap}
 
 class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
-    private val blockStore: MutableMap[BlockHash, BlockMessage],
+    private val store: MutableMap[BlockHash, BlockMessage],
     estimatorFunc: IndexedSeq[BlockHash]
 )(implicit runtimeManager: RuntimeManager[F])
     extends MultiParentCasper[F] {
 
-  def store: Map[BlockHash, BlockMessage] = blockStore.toMap
-
   def addBlock(b: BlockMessage, allowFromStore: Boolean): F[ValidBlockProcessing] =
     for {
-      _ <- Sync[F].delay(blockStore.update(b.blockHash, b))
-      _ <- BlockStore[F].put(b.blockHash, b)
+      _ <- Sync[F].delay(store.update(b.blockHash, b))
     } yield BlockStatus.valid.asRight
-  def contains(blockHash: BlockHash): F[Boolean]       = false.pure[F]
+  def contains(blockHash: BlockHash): F[Boolean]       = store.contains(blockHash).pure[F]
   def dagContains(blockHash: BlockHash): F[Boolean]    = false.pure[F]
   def bufferContains(blockHash: BlockHash): F[Boolean] = false.pure[F]
   def deploy(r: Signed[DeployData]): F[Either[DeployError, DeployId]] =
@@ -54,8 +51,11 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def getVersion: F[Long]                                             = 1L.pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
-  def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean): F[ValidBlockProcessing] =
-    BlockStatus.valid.asRight.pure[F]
+  def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =
+    for {
+      b <- BlockStore[F].get(bh)
+      _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
+    } yield BlockStatus.valid.asRight
 
 }
 

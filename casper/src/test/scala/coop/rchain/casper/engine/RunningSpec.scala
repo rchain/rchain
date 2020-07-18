@@ -48,19 +48,19 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach {
 
     val engine = new Running[Task](casper, approvedBlock, None, Task.unit)
 
-    /*
     // Need to have well-formed block here. Do we have that API in tests?
     "respond to BlockMessage messages " in {
       val blockMessage = getRandomBlock()
 
-      val signedBlockMessage = ProtoUtil.signBlock(blockMessage, validatorId)
+      val signedBlockMessage = validatorId.signBlock(blockMessage)
       val test: Task[Unit] = for {
-        _ <- engine.handle(local, signedBlockMessage)
-        _ = assert(casper.store.contains(signedBlockMessage.blockHash))
+        _               <- engine.handle(local, signedBlockMessage)
+        blockIsInCasper <- casper.contains(signedBlockMessage.blockHash)
+        _               = assert(blockIsInCasper)
       } yield ()
 
       test.unsafeRunSync
-    }*/
+    }
 
     "respond to BlockRequest messages" in {
       val blockRequest = BlockRequest(genesis.blockHash)

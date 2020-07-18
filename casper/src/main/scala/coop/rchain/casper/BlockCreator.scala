@@ -138,14 +138,9 @@ object BlockCreator {
                           },
                           CreateBlockStatus.readOnlyMode.pure[F]
                         )
-        _ <- spanF.mark("block-created")
-        signedBlock = unsignedBlock.map(
-          signBlock(
-            _,
-            validatorIdentity
-          )
-        )
-        _ <- spanF.mark("block-signed")
+        _           <- spanF.mark("block-created")
+        signedBlock = unsignedBlock.map(validatorIdentity.signBlock)
+        _           <- spanF.mark("block-signed")
       } yield signedBlock
     }
 

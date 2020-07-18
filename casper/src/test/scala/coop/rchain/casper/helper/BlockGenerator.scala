@@ -95,7 +95,7 @@ trait BlockGenerator {
       justifications: Seq[Justification] = Seq.empty[Justification],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
   ): F[BlockMessage] =
@@ -118,7 +118,7 @@ trait BlockGenerator {
       justifications: Seq[Justification] = Seq.empty[Justification],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
   ): F[BlockMessage] =
@@ -148,7 +148,7 @@ trait BlockGenerator {
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       postStateHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0,
       invalid: Boolean = false

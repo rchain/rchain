@@ -106,7 +106,7 @@ class ValidateTest
       sender           = ByteString.copyFrom(pk.bytes)
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      result           = ProtoUtil.signBlock(block.copy(seqNum = seqNum), ValidatorIdentity[Task](sk))
+      result           = ValidatorIdentity[Task](sk).signBlock(block.copy(seqNum = seqNum))
     } yield result
   }
 
@@ -545,15 +545,14 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        signedBlock = ProtoUtil.signBlock(
-          block.withBlockNumber(17).copy(seqNum = 1),
-          ValidatorIdentity[Task](sk)
+        signedBlock = ValidatorIdentity[Task](sk).signBlock(
+          block.withBlockNumber(17).copy(seqNum = 1)
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
               getRandomBlock(hashF = (ProtoUtil.hashUnsignedBlock _).some),
               dag,
-              "rchain",
+              "root",
               Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
@@ -755,8 +754,8 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ProtoUtil
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum), ValidatorIdentity[Task](sk))
+        genesis = ValidatorIdentity[Task](sk)
+          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
@@ -780,8 +779,8 @@ class ValidateTest
         dag              <- blockDagStorage.getRepresentation
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ProtoUtil
-          .signBlock(context.genesisBlock.copy(seqNum = seqNum), ValidatorIdentity[Task](sk))
+        genesis = ValidatorIdentity[Task](sk)
+          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
@@ -797,9 +796,8 @@ class ValidateTest
       dag              <- blockDagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      genesis = ProtoUtil.signBlock(
-        context.genesisBlock.copy(seqNum = seqNum),
-        ValidatorIdentity[Task](sk)
+      genesis = ValidatorIdentity[Task](sk).signBlock(
+        context.genesisBlock.copy(seqNum = seqNum)
       )
       _      <- Validate.version[Task](genesis, -1) shouldBeF false
       result <- Validate.version[Task](genesis, 1) shouldBeF true
