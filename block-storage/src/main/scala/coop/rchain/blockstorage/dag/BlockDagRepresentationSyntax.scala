@@ -19,9 +19,22 @@ final class BlockDagRepresentationOps[F[_]: Sync](
     // BlockDagRepresentation extensions / syntax
     private val dag: BlockDagRepresentation[F]
 ) {
-  // Get block metadata, "unsafe" because method expects block already in the DAG.
-  def lookupUnsafe(hash: BlockHash): F[BlockMetadata] = {
-    def errMsg = s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}"
+
+  /**
+    * Get block metadata, "unsafe" because method expects block already in the DAG.
+    *
+    * Unfortunately there is no way to get stack trace when error is thrown in async execution.
+    * Monix does not have support and cats.effect support is in creation.
+    * https://github.com/typelevel/cats-effect/pull/854
+    * So extra source parameters are a desperate measure to indicate who is the caller.
+    */
+  def lookupUnsafe(hash: BlockHash)(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing
+  ): F[BlockMetadata] = {
+    def source = s"${file.value}:${line.value} ${enclosing.value}"
+    def errMsg = s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
     dag.lookup(hash) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 
