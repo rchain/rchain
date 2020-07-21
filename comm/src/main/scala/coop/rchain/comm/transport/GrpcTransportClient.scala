@@ -3,20 +3,19 @@ package coop.rchain.comm.transport
 import java.io.ByteArrayInputStream
 import java.nio.file.Path
 
+import cats.effect.concurrent.Ref
+
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
-
 import cats.implicits._
-
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.comm.CommError.{protocolException, CommErr}
+import coop.rchain.comm.CommError.{CommErr, protocolException}
 import coop.rchain.grpc.implicits._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Log, UncaughtExceptionLogger}
 import coop.rchain.shared.PathOps.PathDelete
-
 import io.grpc.ManagedChannel
 import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
@@ -93,14 +92,27 @@ class GrpcTransportClient(
           }
     } yield c
 
-  def disconnect(peer: PeerNode): Task[Unit] = Task.unit
+  val p2pChannels: Ref[Task, Map[PeerNode, ManagedChannel]] = Ref.unsafe[Task, Map[PeerNode, ManagedChannel]](Map.empty)
+
+  def getChannel(peer: PeerNode): Task[ManagedChannel] = for {
+    c <- clientChannel(peer)
+    r <- p2pChannels.modify[(ManagedChannel, Boolean)](
+      m => {
+        val liveChannels = m.filter(c => !c._2.isTerminated)
+        val channelExists = liveChannels.exists(c => c._1 equals peer)
+        val channel = if (channelExists) liveChannels(peer) else c
+        (liveChannels + (peer -> channel), (channel, channelExists))
+      }
+    )
+    (channel, reuse) = r
+    _ <- log.info(s"Creating new channel to peer ${peer.toAddress}").unlessA(reuse)
+  } yield channel
 
   private def withClient[A](peer: PeerNode, timeout: FiniteDuration)(
       request: GrpcTransport.Request[A]
   ): Task[CommErr[A]] =
     (for {
-      //_       <- log.debug(s"Creating new channel to peer ${peer.toAddress}")
-      channel <- clientChannel(peer)
+      channel <- getChannel(peer)
       stub    <- Task.delay(RoutingGrpcMonix.stub(channel).withDeadlineAfter(timeout))
       result  <- request(stub).doOnFinish(kp(Task.delay(channel.shutdown()).attempt.void))
       //_       <- log.debug(s"Send request to peer ${peer.toAddress} done")
