@@ -108,6 +108,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   )(systemDeploy: S, replay: Boolean): F[EvaluateResult] = {
     implicit val c: _cost[F]         = runtime.cost
     implicit val r: Blake2b512Random = systemDeploy.rand
+    implicit val i: Interpreter[F]   = Interpreter.newIntrepreter[F]
     Interpreter[F].injAttempt(
       if (replay) runtime.replayReducer else runtime.reducer,
       systemDeploy.source,
@@ -901,11 +902,13 @@ object RuntimeManager {
       Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)
     implicit val cost: _cost[F] = costState
 
-    Interpreter[F].injAttempt(
-      reducer,
-      deploy.data.term,
-      Cost(deploy.data.phloLimit),
-      NormalizerEnv(deploy).toEnv
-    )
+    Interpreter
+      .newIntrepreter[F]
+      .injAttempt(
+        reducer,
+        deploy.data.term,
+        Cost(deploy.data.phloLimit),
+        NormalizerEnv(deploy).toEnv
+      )
   }
 }

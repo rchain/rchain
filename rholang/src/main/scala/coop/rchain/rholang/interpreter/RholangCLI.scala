@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Resources
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
@@ -197,8 +198,9 @@ object RholangCLI {
   }
 
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
-    implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source, Map.empty).map {
+    implicit val c           = runtime.cost
+    implicit val interpreter = Interpreter.newIntrepreter[Task]
+    Interpreter[Task].evaluate(runtime, source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -265,8 +267,9 @@ object RholangCLI {
               printNormalizedTerm(par)
             })
         result <- {
-          implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source, Map.empty)
+          implicit val c           = runtime.cost
+          implicit val interpreter = Interpreter.newIntrepreter[Task]
+          Interpreter[Task].evaluate(runtime, source, Cost.UNSAFE_MAX, Map.empty)
         }
       } yield result
 

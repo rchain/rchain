@@ -10,6 +10,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
@@ -69,7 +70,8 @@ object StoragePrinter {
       checkpoint <- runtime.space.createCheckpoint()
       beforeEval <- unmatchedSends
       _ <- {
-        implicit val c = runtime.cost
+        implicit val c           = runtime.cost
+        implicit val interpreter = Interpreter.newIntrepreter[F]
         Interpreter[F].evaluate(runtime, deploy.data.term, NormalizerEnv(deploy).toEnv)
       }
       afterEval <- unmatchedSends
