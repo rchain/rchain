@@ -484,8 +484,9 @@ object ReportingCasper {
     private def evaluateSystemSource[S <: SystemDeploy](
         runtime: ReportingRuntime[F]
     )(systemDeploy: S, replay: Boolean): F[EvaluateResult] = {
-      implicit val c: _cost[F]         = runtime.cost
-      implicit val r: Blake2b512Random = systemDeploy.rand
+      implicit val c: _cost[F]                 = runtime.cost
+      implicit val r: Blake2b512Random         = systemDeploy.rand
+      implicit val interpreter: Interpreter[F] = Interpreter.newIntrepreter[F]
       Interpreter[F].injAttempt(
         runtime.replayReducer,
         systemDeploy.source,

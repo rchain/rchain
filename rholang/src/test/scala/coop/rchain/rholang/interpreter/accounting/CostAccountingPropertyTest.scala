@@ -10,6 +10,7 @@ import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
@@ -80,20 +81,22 @@ object CostAccountingPropertyTest {
       .map { _.sliding(2).forall { case List(r1, r2) => r1 == r2 } }
       .runSyncUnsafe(duration)
 
-  def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
+  def execute[F[_]: Sync](runtime: Runtime[F], p: Proc): F[Long] =
     for {
       program <- ParBuilderUtil.buildPar(p)
       res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value
 
-  def evaluatePar[F[_]: Monad: Sync: _cost](
+  def evaluatePar[F[_]: Monad: Sync](
       runtime: Runtime[F],
       par: Par
   ): F[EvaluateResult] = {
-    val term = PP().buildString(par)
+    val term                       = PP().buildString(par)
+    implicit val c: _cost[F]       = runtime.cost
+    implicit val i: Interpreter[F] = Interpreter.newIntrepreter[F]
 
-    InterpreterUtil.evaluateResult(runtime, term)
+    Interpreter[F].evaluate(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
@@ -108,7 +111,6 @@ object CostAccountingPropertyTest {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         cost <- CostAccounting.emptyCost[Task]
         res <- {
-          implicit val c = cost
           procs.toStream
             .traverse(execute(runtime, _))
             .map(_.sum)

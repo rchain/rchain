@@ -8,6 +8,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint
@@ -49,8 +50,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       .use {
         case (runtime, costL) =>
           costL.listen {
-            implicit val cost = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+            implicit val cost                 = runtime.cost
+            implicit val i: Interpreter[Task] = Interpreter.newIntrepreter[Task]
+            Interpreter[Task].evaluate(runtime, contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)
@@ -82,6 +84,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         case (runtime, _) =>
           implicit val c: _cost[Task]         = runtime.cost
           implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+          implicit val i: Interpreter[Task]   = Interpreter.newIntrepreter[Task]
           Interpreter[Task].injAttempt(
             runtime.reducer,
             term,

@@ -27,7 +27,6 @@ class PeekSpec extends FlatSpec with Matchers {
   "peek" should "not remove read data" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _    <- evaluate[Task](runtime, """@1!("v1") | for(_ <<- @1) { Nil }""")
           _    <- evaluate[Task](runtime, """for(_ <- @1) { @2!("v2") }""")
@@ -43,7 +42,6 @@ class PeekSpec extends FlatSpec with Matchers {
   it should "not duplicate read persistent data - send is executed first" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _          <- evaluate[Task](runtime, """@1!!("v1")""")
           _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
@@ -62,7 +60,6 @@ class PeekSpec extends FlatSpec with Matchers {
   it should "not duplicate read persistent data - send is executed second" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _          <- evaluate[Task](runtime, """for(_ <<- @1) { Nil }""")
           _          <- evaluate[Task](runtime, """@1!!("v1")""")
@@ -81,7 +78,6 @@ class PeekSpec extends FlatSpec with Matchers {
   it should "clear all peeks when inserting a persistent send" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
@@ -95,7 +91,6 @@ class PeekSpec extends FlatSpec with Matchers {
   it should "clear all peeks when inserting a send" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
           _   <- evaluate[Task](runtime, """for (_ <<- @0) { @1!(0) }""")
@@ -109,7 +104,6 @@ class PeekSpec extends FlatSpec with Matchers {
   it should "continue executing the loop until quiescence" in {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
         for {
           _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
           _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")

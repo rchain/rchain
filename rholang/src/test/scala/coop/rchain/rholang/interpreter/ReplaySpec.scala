@@ -69,6 +69,7 @@ class ReplaySpec extends FlatSpec with Matchers {
   def evaluateWithRuntime(runtime: Runtime[Task])(term: String, initialPhlo: Cost) = {
     implicit val c: _cost[Task]         = runtime.cost
     implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+    implicit val i: Interpreter[Task]   = Interpreter.newIntrepreter[Task]
     for {
       // Save revert checkpoints
       startState       <- runtime.space.createSoftCheckpoint()
