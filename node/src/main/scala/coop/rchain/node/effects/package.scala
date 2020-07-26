@@ -3,6 +3,7 @@ package coop.rchain.node
 import java.nio.file.Path
 
 import cats.data.ReaderT
+import cats.effect.concurrent.{Deferred, Ref}
 
 import scala.concurrent.duration._
 import scala.io.Source
@@ -18,6 +19,7 @@ import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
+import io.grpc.ManagedChannel
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
@@ -58,7 +60,8 @@ package object effects {
       keyPath: Path,
       maxMessageSize: Int,
       packetChunkSize: Int,
-      folder: Path
+      folder: Path,
+      channels: Ref[Task, Map[PeerNode, Deferred[Task, ManagedChannel]]]
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
@@ -67,7 +70,16 @@ package object effects {
     Task.delay {
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
-      new GrpcTransportClient(networkId, cert, key, maxMessageSize, packetChunkSize, folder, 100)
+      new GrpcTransportClient(
+        networkId,
+        cert,
+        key,
+        maxMessageSize,
+        packetChunkSize,
+        folder,
+        100,
+        channels
+      )
     }
 
   def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
