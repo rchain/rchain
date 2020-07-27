@@ -294,7 +294,7 @@ object ProtoUtil {
   ): BlockMessage = {
     // TODO FIX-ME fields that can be empty SHOULD be optional
     val block = BlockMessage(
-      ByteString.EMPTY,
+      blockHash = ByteString.EMPTY,
       header,
       body,
       justifications.toList,

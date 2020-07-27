@@ -13,9 +13,9 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.blockImplicits.getRandomBlock
 import monix.eval.Task
-import org.scalatest.{BeforeAndAfterEach, WordSpec}
+import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
-class RunningSpec extends WordSpec with BeforeAndAfterEach {
+class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
 
   val fixture = Setup()
   import fixture._

@@ -188,8 +188,7 @@ object BlockRetriever {
                                    broadcastRequest = false,
                                    // if peer is the first one in waiting list - request block from that peer,
                                    // otherwise requests should be triggered by casper loop
-                                   requestBlock =
-                                     if (state(hash).waitingList.isEmpty) true else false
+                                   requestBlock = state(hash).waitingList.isEmpty
                                  )
                                )
                              }
