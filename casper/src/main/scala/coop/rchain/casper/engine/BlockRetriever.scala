@@ -35,7 +35,7 @@ trait BlockRetriever[F[_]] {
       hash: BlockHash,
       peer: Option[PeerNode] = None,
       admitHashReason: BlockRetriever.AdmitHashReason
-  ): F[Unit]
+  ): F[BlockRetriever.AdmitHashResult]
 
   /**
     * Try to request all pending hashes
@@ -63,6 +63,17 @@ object BlockRetriever {
   final case object HashBroadcastRecieved      extends AdmitHashReason
   final case object MissingDependencyRequested extends AdmitHashReason
   final case object BlockReceived              extends AdmitHashReason
+
+  trait AdmitHashStatus
+  final object NewSourcePeerAddedToRequest extends AdmitHashStatus
+  final object NewRequestAdded             extends AdmitHashStatus
+  final object Ignore                      extends AdmitHashStatus
+
+  final case class AdmitHashResult(
+      status: AdmitHashStatus,
+      broadcastRequest: Boolean,
+      requestBlock: Boolean
+  )
 
   implicit private[this] val BlockRequesterMetricsSource: Source =
     Metrics.Source(CasperMetricsSource, "blocks-retriever")
@@ -130,17 +141,6 @@ object BlockRetriever {
               received = markAsReceived
             ))
 
-      trait AdmitHashStatus
-      final object NewSourcePeerAddedToRequest extends AdmitHashStatus
-      final object NewRequestAdded             extends AdmitHashStatus
-      final object Ignore                      extends AdmitHashStatus
-
-      case class AdmitHashResult(
-          status: AdmitHashStatus,
-          broadcastRequest: Boolean,
-          requestBlock: Boolean
-      )
-
       /**
         * @param hash - block hash node encountered
         * @param peer - peer that node received message with hash from, None hash admit is triggered by some internal
@@ -152,7 +152,7 @@ object BlockRetriever {
           hash: BlockHash,
           peer: Option[PeerNode],
           admitHashReason: AdmitHashReason
-      ): F[Unit] =
+      ): F[AdmitHashResult] =
         for {
           now <- Time[F].currentMillis
           result <- RequestedBlocks[F]
@@ -171,14 +171,28 @@ object BlockRetriever {
                          // peer is provided - add it to waiting list
                          if (peer.nonEmpty)
                            (
-                             addSourcePeerToRequest(state, hash, peer.get),
-                             AdmitHashResult(
-                               NewSourcePeerAddedToRequest,
-                               broadcastRequest = false,
-                               // if peer is the first one in waiting list - request block from that peer,
-                               // otherwise requests should be triggered by casper loop
-                               requestBlock = if (state(hash).waitingList.isEmpty) true else false
-                             )
+                             if (state(hash).waitingList.contains(peer.get))
+                               (
+                                 state,
+                                 AdmitHashResult(
+                                   Ignore,
+                                   broadcastRequest = false,
+                                   requestBlock = false
+                                 )
+                               )
+                             else {
+                               (
+                                 addSourcePeerToRequest(state, hash, peer.get),
+                                 AdmitHashResult(
+                                   NewSourcePeerAddedToRequest,
+                                   broadcastRequest = false,
+                                   // if peer is the first one in waiting list - request block from that peer,
+                                   // otherwise requests should be triggered by casper loop
+                                   requestBlock =
+                                     if (state(hash).waitingList.isEmpty) true else false
+                                 )
+                               )
+                             }
                            )
                          // otherwise ignore, no new information to add
                          else
@@ -207,7 +221,7 @@ object BlockRetriever {
               else ().pure[F]
           _ <- if (result.requestBlock) CommUtil[F].requestForBlock(peer.get, hash)
               else ().pure[F]
-        } yield ()
+        } yield result
 
       trait AckReceiveResult
       final case object AddedAsReceived  extends AckReceiveResult
