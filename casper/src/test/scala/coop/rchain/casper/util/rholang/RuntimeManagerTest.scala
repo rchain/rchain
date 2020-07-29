@@ -3,6 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.Resource
 import cats.syntax.all._
 import cats.{Functor, Id}
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -718,5 +719,48 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         assert(initialCost == 9999L && replayCost == 10000L)
       case _ => fail()
     }
+  }
+
+  // This is additional test for sorting with joins and channels inside joins.
+  // - after reverted PR https://github.com/rchain/rchain/pull/2436
+  "joins" should "be replayed correctly" in effectTest {
+    def hex(bs: ByteString) = Base16.encode(bs.toByteArray)
+
+    val term =
+      """
+        |new a, b, c, d in {
+        |  for (_ <- a; _ <- b) { Nil } |
+        |  for (_ <- a; _ <- c) { Nil } |
+        |  for (_ <- a; _ <- d) { Nil }
+        |}
+        |""".stripMargin
+
+    val genPostState = genesis.body.state.postStateHash
+    for {
+      deploy <- ConstructDeploy.sourceDeployNowF(term)
+      result <- runtimeManagerResource.use { rm =>
+                 for {
+                   time          <- timeF.currentMillis
+                   blockData     = BlockData(time, 1L, genesisContext.validatorPks.head, 1)
+                   invalidBlocks = Map.empty[BlockHash, Validator]
+                   newState <- rm.computeState(genPostState)(
+                                Seq(deploy),
+                                Seq(),
+                                blockData,
+                                invalidBlocks
+                              )
+                   (stateHash, processedDeploys, processedSysDeploys) = newState
+                   result <- rm.replayComputeState(genPostState)(
+                              processedDeploys,
+                              processedSysDeploys,
+                              blockData,
+                              invalidBlocks,
+                              isGenesis = false
+                            )
+                 } yield (stateHash, result.right.get)
+               }
+      (playHash, replayHash) = result
+      _                      = hex(playHash) shouldBe hex(replayHash)
+    } yield ()
   }
 }

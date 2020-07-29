@@ -236,15 +236,6 @@ object HistoryRepositoryImpl {
       .get
       .toByteVector
 
-  private def encodeUnsorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
-    codecSeqByteVector
-      .encode(
-        data
-          .map(d => Codec.encode[D](d).get.toByteVector)
-      )
-      .get
-      .toByteVector
-
   def encodeData[A](data: Seq[internal.Datum[A]])(implicit codec: Codec[Datum[A]]): ByteVector =
     encodeSorted(data)
 
@@ -267,8 +258,9 @@ object HistoryRepositoryImpl {
       .encode(
         joins
           .map(
-            channels => encodeUnsorted(channels)
+            channels => encodeSorted(channels)
           )
+          .sorted(util.ordByteVector)
       )
       .get
       .toByteVector
