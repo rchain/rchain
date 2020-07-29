@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.implicits._
 import cats.mtl._
 import cats.tagless.implicits._
@@ -55,6 +55,7 @@ import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
 import coop.rchain.store.KeyValueStoreManager
+import io.grpc.ManagedChannel
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -125,6 +126,10 @@ class NodeRuntime private[node] (
             Task.unit
           )
           .toReaderT
+
+    clientChannelsCache <- Ref
+                            .of[Task, Map[PeerNode, Deferred[Task, ManagedChannel]]](Map.empty)
+                            .toReaderT
     transport <- effects
                   .transportClient(
                     //TODO refactor to accept ProtocolClient, tls and storage configs
@@ -133,7 +138,8 @@ class NodeRuntime private[node] (
                     nodeConf.tls.keyPath,
                     nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
                     nodeConf.protocolClient.grpcStreamChunkSize.toInt,
-                    commTmpFolder
+                    commTmpFolder,
+                    clientChannelsCache
                   )(grpcScheduler, log, metrics)
                   .toReaderT
     rpConnections <- effects.rpConnections[Task].toReaderT

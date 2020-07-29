@@ -2,8 +2,9 @@ package coop.rchain.comm.transport
 
 import java.nio.file._
 
-import scala.concurrent.duration.Duration
+import cats.effect.concurrent.{Deferred, Ref}
 
+import scala.concurrent.duration.Duration
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.codec.Base16
@@ -11,7 +12,7 @@ import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.Log
-
+import io.grpc.ManagedChannel
 import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -59,7 +60,8 @@ class TcpTransportLayerSpec
         maxMessageSize,
         maxMessageSize,
         tempFolder,
-        100
+        100,
+        Ref.unsafe[Task, Map[PeerNode, Deferred[Task, ManagedChannel]]](Map.empty)
       )
     )
 
