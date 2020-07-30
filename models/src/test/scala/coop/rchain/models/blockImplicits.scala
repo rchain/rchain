@@ -8,35 +8,41 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash
+import coop.rchain.models.block.StateHash.StateHash
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
 import org.scalacheck.util.Buildable
 
+import scala.util.Random
+
 object blockImplicits {
 
+  // Generators
   val blockHashGen: Gen[BlockHash] = for {
     byteArray <- listOfN(BlockHash.Length, arbitrary[Byte])
+  } yield ByteString.copyFrom(byteArray.toArray)
+
+  val stateHashGen: Gen[StateHash] = for {
+    byteArray <- listOfN(StateHash.Length, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
   val validatorGen: Gen[Validator] = for {
     byteArray <- listOfN(Validator.Length, arbitrary[Byte])
   } yield ByteString.copyFrom(byteArray.toArray)
 
-  val arbitraryHash: Arbitrary[BlockHash]      = Arbitrary(blockHashGen)
-  val arbitraryValidator: Arbitrary[Validator] = Arbitrary(validatorGen)
-  val arbitraryValidators: Arbitrary[Seq[Validator]] =
-    Arbitrary.arbContainer[Seq, Validator](
-      arbitraryValidator,
-      Buildable.buildableCanBuildFrom,
-      identity
-    )
+  val bondGen: Gen[Bond] = for {
+    byteArray <- listOfN(Validator.Length, arbitrary[Byte])
+    validator = ByteString.copyFrom(byteArray.toArray)
+    stake     <- arbitrary[Long]
+  } yield Bond(validator, stake)
 
   val justificationGen: Gen[Justification] = for {
-    latestBlockHash <- arbitrary[BlockHash](arbitraryHash)
-  } yield Justification.from(JustificationProto().withLatestBlockHash(latestBlockHash))
-
-  implicit val arbitraryJustification: Arbitrary[Justification] = Arbitrary(justificationGen)
+    latestBlockHash <- arbitrary[BlockHash](Arbitrary(blockHashGen))
+    byteArray       <- listOfN(Validator.Length, arbitrary[Byte])
+    validator       = ByteString.copyFrom(byteArray.toArray)
+  } yield Justification(validator, latestBlockHash)
 
   val signedDeployDataGen: Gen[Signed[DeployData]] =
     for {
@@ -67,55 +73,128 @@ object blockImplicits {
       isFailed = false
     )
 
-  implicit val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(processedDeployGen)
+  // Arbitrary values
+  val arbitraryBlockHash: Arbitrary[BlockHash] = Arbitrary(blockHashGen)
+  val arbitraryBond: Arbitrary[Bond]           = Arbitrary(bondGen)
+  val arbitraryStateHash: Arbitrary[StateHash] = Arbitrary(stateHashGen)
+  val arbitraryValidator: Arbitrary[Validator] = Arbitrary(validatorGen)
 
-  val blockElementGen: Gen[BlockMessage] =
-    for {
-      hash            <- arbitrary[BlockHash](arbitraryHash)
-      validator       <- arbitrary[Validator](arbitraryValidator)
-      version         <- arbitrary[Long]
-      timestamp       <- arbitrary[Long]
-      parentsHashList <- arbitrary[Seq[Validator]](arbitraryValidators)
-      justifications  <- arbitrary[Seq[Justification]]
-      deploys         <- arbitrary[Seq[ProcessedDeploy]]
-    } yield BlockMessage(
-      blockHash = hash,
-      header = Header(
-        parentsHashList = parentsHashList.toList,
-        timestamp = timestamp,
-        version = version
-      ),
-      body = Body(
-        state = RChainState(
-          preStateHash = ByteString.EMPTY,
-          postStateHash = ByteString.EMPTY,
-          bonds = List.empty,
-          blockNumber = 0L
-        ),
-        deploys = deploys.toList,
-        systemDeploys = List.empty
-      ),
-      justifications = justifications.toList,
-      sender = validator,
-      seqNum = 0,
-      sig = ByteString.EMPTY,
-      sigAlgorithm = "",
-      shardId = ""
+  val arbitraryJustification: Arbitrary[Justification] = Arbitrary(
+    justificationGen
+  )
+  val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(
+    processedDeployGen
+  )
+  val arbitraryJustifications: Arbitrary[Seq[Justification]] =
+    Arbitrary.arbContainer[Seq, Justification](
+      arbitraryJustification,
+      Buildable.buildableCanBuildFrom,
+      identity
+    )
+  val arbitraryProcessedDeploys: Arbitrary[Seq[ProcessedDeploy]] =
+    Arbitrary.arbContainer[Seq, ProcessedDeploy](
+      arbitraryProcessedDeploy,
+      Buildable.buildableCanBuildFrom,
+      identity
+    )
+  val arbitraryBlockHashes: Arbitrary[Seq[BlockHash]] =
+    Arbitrary.arbContainer[Seq, BlockHash](
+      arbitraryBlockHash,
+      Buildable.buildableCanBuildFrom,
+      identity
+    )
+  val arbitraryBonds: Arbitrary[Seq[Bond]] =
+    Arbitrary.arbContainer[Seq, Bond](
+      arbitraryBond,
+      Buildable.buildableCanBuildFrom,
+      identity
     )
 
   val blockElementsGen: Gen[List[BlockMessage]] =
-    Gen.listOf(blockElementGen)
+    Gen.listOf(blockElementGen())
 
   val blockBatchesGen: Gen[List[List[BlockMessage]]] =
     Gen.listOf(blockElementsGen)
 
-  def blockElementsWithParentsGen: Gen[List[BlockMessage]] =
+  def blockElementGen(
+      setBlockNumber: Option[Long] = Some(0L),
+      setSeqNumber: Option[Int] = Some(0),
+      setPreStateHash: Option[StateHash] = None,
+      setPostStateHash: Option[StateHash] = None,
+      setValidator: Option[Validator] = None,
+      setVersion: Option[Long] = None,
+      setTimestamp: Option[Long] = None,
+      setParentsHashList: Option[Seq[BlockHash]] = None,
+      setJustifications: Option[Seq[Justification]] = None,
+      setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setBonds: Option[Seq[Bond]] = None,
+      setShardId: Option[String] = None,
+      hashF: Option[BlockMessage => BlockHash] = None
+  ): Gen[BlockMessage] =
+    for {
+      preStatehash <- if (setPreStateHash.isEmpty)
+                       arbitrary[StateHash](arbitraryStateHash)
+                     else Gen.const(setPreStateHash.get)
+      postStatehash <- if (setPostStateHash.isEmpty)
+                        arbitrary[StateHash](arbitraryStateHash)
+                      else Gen.const(setPostStateHash.get)
+      parentsHashList <- if (setParentsHashList.isEmpty)
+                          arbitrary[Seq[BlockHash]](arbitraryBlockHashes)
+                        else Gen.const(setParentsHashList.get)
+      justifications <- if (setJustifications.isEmpty)
+                         arbitrary[Seq[Justification]](arbitraryJustifications)
+                       else Gen.const(setJustifications.get)
+      deploys <- if (setDeploys.isEmpty)
+                  arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys)
+                else Gen.const(setDeploys.get)
+      // 10 random validators in bonds list
+      bonds <- if (setBonds.isEmpty) Gen.containerOfN[List, Bond](10, bondGen)
+              else Gen.const(setBonds.get)
+      // Pick random validator from bonds file
+      validator <- if (setValidator.isEmpty)
+                    Gen.const(
+                      Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
+                    )
+                  else Gen.const(setValidator.get)
+      version   = if (setVersion.isEmpty) 1L else setVersion.get
+      timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
+      shardId   = if (setShardId.isEmpty) "root" else setShardId.get
+      block = BlockMessage(
+        blockHash = ByteString.EMPTY,
+        header = Header(
+          parentsHashList = parentsHashList.toList,
+          timestamp = timestamp,
+          version = version
+        ),
+        body = Body(
+          state = RChainState(
+            preStateHash = preStatehash,
+            postStateHash = postStatehash,
+            bonds = bonds.toList,
+            blockNumber = setBlockNumber.get
+          ),
+          deploys = deploys.toList,
+          systemDeploys = List.empty
+        ),
+        justifications = justifications.toList,
+        sender = validator,
+        seqNum = setSeqNumber.get,
+        sig = ByteString.EMPTY,
+        sigAlgorithm = "",
+        shardId = shardId
+      )
+      blockHash <- if (hashF.isEmpty) arbitrary[BlockHash](arbitraryBlockHash)
+                  else Gen.const(hashF.get(block))
+      ret = block.copy(blockHash = blockHash)
+    } yield ret
+
+  def blockElementsWithParentsGen(genesis: BlockMessage): Gen[List[BlockMessage]] =
     Gen.sized { size =>
-      (0 until size).foldLeft(Gen.listOfN(0, blockElementGen)) {
+      (0 until size).foldLeft(Gen.listOfN(0, blockElementGen())) {
         case (gen, _) =>
           for {
             blocks       <- gen
-            b            <- blockElementGen
+            b            <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
             parents      <- Gen.someOf(blocks)
             parentHashes = parents.map(_.blockHash).toList
             newBlock     = b.copy(header = b.header.copy(parentsHashList = parentHashes))
@@ -129,4 +208,35 @@ object blockImplicits {
         case (b, hash) => b.copy(blockHash = hash)
       }
     }
+
+  def getRandomBlock(
+      setBlockNumber: Option[Long] = Some(0L),
+      setSeqNumber: Option[Int] = Some(0),
+      setPreStateHash: Option[StateHash] = None,
+      setPostStateHash: Option[StateHash] = None,
+      setValidator: Option[Validator] = None,
+      setVersion: Option[Long] = None,
+      setTimestamp: Option[Long] = None,
+      setParentsHashList: Option[Seq[BlockHash]] = None,
+      setJustifications: Option[Seq[Justification]] = None,
+      setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setBonds: Option[Seq[Bond]] = None,
+      setShardId: Option[String] = None,
+      hashF: Option[BlockMessage => BlockHash] = None
+  ): BlockMessage =
+    blockElementGen(
+      setBlockNumber,
+      setSeqNumber,
+      setPreStateHash,
+      setPostStateHash,
+      setValidator,
+      setVersion,
+      setTimestamp,
+      setParentsHashList,
+      setJustifications,
+      setDeploys,
+      setBonds,
+      setShardId,
+      hashF
+    ).sample.get
 }

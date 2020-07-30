@@ -147,7 +147,7 @@ object Setup {
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
-  private def peerNode(name: String, port: Int): PeerNode =
+  def peerNode(name: String, port: Int): PeerNode =
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
 }

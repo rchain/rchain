@@ -224,11 +224,12 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         block            <- node.createBlock(basicDeployData)
         dag              <- node.blockDagStorage.getRepresentation
         (sk, pk)         = Secp256k1.newKeyPair
+        validatorId      = ValidatorIdentity[Effect](sk)
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        illSignedBlock = ProtoUtil
-          .signBlock(block, sk, Secp256k1.name, block.shardId, seqNum, sender)
+        illSignedBlock = validatorId
+          .signBlock(block)
         status <- node.casperEff.addBlock(illSignedBlock)
       } yield (status shouldBe Left(InvalidSender))
     }
@@ -550,20 +551,15 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         seqNum = 0,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
-        shardId = ""
+        shardId = "root"
       )
     nodes(1).casperEff.blockDag.flatMap { dag =>
       val sender = blockThatPointsToInvalidBlock.sender
       for {
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        block = ProtoUtil.signBlock(
-          blockThatPointsToInvalidBlock,
-          defaultValidatorSks(1),
-          "secp256k1",
-          "rchain",
-          seqNum,
-          sender
+        block = ValidatorIdentity[Effect](defaultValidatorSks(1)).signBlock(
+          blockThatPointsToInvalidBlock
         )
       } yield block
     }

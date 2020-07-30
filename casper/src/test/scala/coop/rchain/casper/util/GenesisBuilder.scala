@@ -46,7 +46,7 @@ object GenesisBuilder {
     (
       validatorKeyPairs,
       Genesis(
-        shardId = "rchain",
+        shardId = "root",
         timestamp = 0L,
         proofOfStake = ProofOfStake(
           minimumBond = 0L,

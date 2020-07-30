@@ -35,7 +35,7 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   val seqNum           = 1L
   val sig              = "sig_str"
   val sigAlgorithm     = "secp256k1"
-  val shardId          = "rchain"
+  val shardId          = "root"
   val extraBytes       = ByteString.EMPTY
   val version          = 1L
   val timestamp        = 123L

@@ -6,11 +6,14 @@ import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Signature
+import com.google.protobuf.{ByteString, Int32Value, StringValue}
+import coop.rchain.casper.protocol.{BlockMessage, Body, Header, Signature}
+import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.ProtoUtil.{hashByteArrays, hashSignedBlock}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{EnvVars, Log, LogSource}
 
 final case class ValidatorIdentity(
@@ -21,6 +24,25 @@ final case class ValidatorIdentity(
   def signature(data: Array[Byte]): Signature = {
     val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
     Signature(ByteString.copyFrom(publicKey.bytes), sigAlgorithm, ByteString.copyFrom(sig))
+  }
+
+  def signBlock(
+      block: BlockMessage
+  ): BlockMessage = {
+
+    val sender = ByteString.copyFrom(publicKey.bytes)
+
+    // Hash should include sigAlgorithm and sender
+    val b = block.copy(sigAlgorithm = sigAlgorithm, sender = sender)
+
+    val blockHash = ProtoUtil.hashSignedBlock(b)
+
+    val sig = signature(blockHash.toByteArray).sig
+
+    b.copy(
+      sig = sig,
+      blockHash = blockHash
+    )
   }
 }
 

@@ -10,7 +10,7 @@ import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.{RuntimeManager, SystemDeploy}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.models.block.StateHash._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
@@ -24,7 +24,9 @@ import monix.eval.Task
 
 import scala.collection.immutable.HashMap
 import scala.language.higherKinds
+import coop.rchain.models.blockImplicits.getRandomBlock
 
+// TODO squash this with block generator in blockimplicits
 object BlockGenerator {
   implicit val timeEff = new LogicalTime[Task]
   private[this] val GenerateBlockMetricsSource =
@@ -90,51 +92,33 @@ trait BlockGenerator {
       creator: Validator = ByteString.EMPTY,
       now: Long,
       bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      justifications: Seq[Justification] = Seq.empty[Justification],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      postStateHash: ByteString = ByteString.EMPTY,
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
-  ): F[BlockMessage] = {
-    val postState: RChainState = Dummies.createRChainState(
-      preStateHash = preStateHash,
-      postStateHash = tsHash,
-      bonds = bonds.toList
-    )
-    val header = Dummies.createHeader(
-      parentHashes = parentsHashList.toList,
-      timestamp = now
-    )
-    val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-    val body      = Dummies.createBody(state = postState, deploys = deploys.toList)
-    val serializedJustifications = justifications.toList.map {
-      case (cr: Validator, latestBlockHash: BlockHash) =>
-        Justification(cr, latestBlockHash)
-    }
-    val serializedBlockHash = ByteString.copyFrom(blockHash)
-
-    Dummies
-      .createBlockMessage(
-        blockHash = serializedBlockHash,
-        header = header,
-        body = body,
-        justifications = serializedJustifications,
-        sender = creator,
-        shardId = shardId,
-        seqNum = seqNum
-      )
-      .pure[F]
-
-  }
+  ): F[BlockMessage] =
+    getRandomBlock(
+      setParentsHashList = parentsHashList.some,
+      setValidator = creator.some,
+      setTimestamp = now.some,
+      setBonds = bonds.some,
+      setJustifications = justifications.some,
+      setDeploys = deploys.some,
+      setPostStateHash = postStateHash.some,
+      setShardId = shardId.some,
+      setPreStateHash = preStateHash.some,
+      setSeqNumber = seqNum.some
+    ).pure[F]
 
   def createGenesis[F[_]: Monad: Time: BlockStore: IndexedBlockDagStorage](
       creator: Validator = ByteString.EMPTY,
       bonds: Seq[Bond] = Seq.empty[Bond],
-      justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
+      justifications: Seq[Justification] = Seq.empty[Justification],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
       tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0
   ): F[BlockMessage] =
@@ -163,8 +147,8 @@ trait BlockGenerator {
       bonds: Seq[Bond] = Seq.empty[Bond],
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       deploys: Seq[ProcessedDeploy] = Seq.empty[ProcessedDeploy],
-      tsHash: ByteString = ByteString.EMPTY,
-      shardId: String = "rchain",
+      postStateHash: ByteString = ByteString.EMPTY,
+      shardId: String = "root",
       preStateHash: ByteString = ByteString.EMPTY,
       seqNum: Int = 0,
       invalid: Boolean = false
@@ -176,9 +160,9 @@ trait BlockGenerator {
                 creator,
                 now,
                 bonds,
-                justifications,
+                justifications.toSeq.map(d => new Justification(d._1, d._2)),
                 deploys,
-                tsHash,
+                postStateHash,
                 shardId,
                 preStateHash,
                 seqNum

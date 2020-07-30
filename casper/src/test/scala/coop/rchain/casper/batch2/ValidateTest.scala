@@ -19,7 +19,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.{InvalidBlock, ValidBlock, Validate}
+import coop.rchain.casper.{InvalidBlock, ValidBlock, Validate, ValidatorIdentity}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -32,6 +32,7 @@ import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import coop.rchain.models.blockImplicits._
 
 import scala.collection.immutable.HashMap
 
@@ -105,7 +106,7 @@ class ValidateTest
       sender           = ByteString.copyFrom(pk.bytes)
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      result           = ProtoUtil.signBlock(block, sk, "secp256k1", "rchain", seqNum, sender)
+      result           = ValidatorIdentity[Task](sk).signBlock(block.copy(seqNum = seqNum))
     } yield result
   }
 
@@ -265,19 +266,18 @@ class ValidateTest
           genesis: BlockMessage,
           parentHashes: Seq[ByteString] = Nil
       ): Task[BlockMessage] =
-        Time[Task].currentMillis >>= { timestamp =>
-          val blockWithNumber: BlockMessage =
-            Dummies
-              .createBlockMessage(
-                header = Dummies.createHeader(parentHashes.toList, timestamp = timestamp)
-              )
-              .withBlockNumber(n)
-          val hash  = ProtoUtil.hashUnsignedBlock(blockWithNumber.header, Nil)
-          val block = blockWithNumber.copy(blockHash = hash)
+        for {
+          timestamp <- Time[Task].currentMillis
+          block = getRandomBlock(
+            setBlockNumber = n.some,
+            setTimestamp = timestamp.some,
+            setParentsHashList = parentHashes.some,
+            hashF = (ProtoUtil.hashUnsignedBlock _).some
+          )
 
-          blockStore.put(hash, block) >> blockDagStorage.insert(block, genesis, false) >> block
-            .pure[Task]
-        }
+          _ <- blockStore.put(block.blockHash, block)
+          _ <- blockDagStorage.insert(block, genesis, false)
+        } yield block
 
       for {
         genesis <- createChain[Task](8) // Note we need to create a useless chain to satisfy the assert in TopoSort
@@ -545,19 +545,14 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        signedBlock = ProtoUtil.signBlock(
-          block.withBlockNumber(17).copy(seqNum = 1),
-          sk,
-          "secp256k1",
-          "rchain",
-          seqNum,
-          sender
+        signedBlock = ValidatorIdentity[Task](sk).signBlock(
+          block.withBlockNumber(17).copy(seqNum = 1)
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              Dummies.createBlockMessage(),
+              getRandomBlock(hashF = (ProtoUtil.hashUnsignedBlock _).some),
               dag,
-              "rchain",
+              "root",
               Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
         result = log.warns.size should be(1)
@@ -678,9 +673,10 @@ class ValidateTest
           Justification(v0, b1.blockHash),
           Justification(v1, b4.blockHash)
         )
-        blockWithJustificationRegression = Dummies.createBlockMessage(
-          sender = v1,
-          justifications = justificationsWithRegression.toList
+        blockWithJustificationRegression = getRandomBlock(
+          setValidator = v1.some,
+          setJustifications = justificationsWithRegression.some,
+          hashF = (ProtoUtil.hashUnsignedBlock _).some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
@@ -712,9 +708,9 @@ class ValidateTest
           Justification(v0, b5.blockHash),
           Justification(v1, b4.blockHash)
         )
-        blockWithInvalidJustification = Dummies.createBlockMessage(
-          sender = v1,
-          justifications = justificationsWithInvalidBlock.toList
+        blockWithInvalidJustification = getRandomBlock(
+          setValidator = v1.some,
+          setJustifications = justificationsWithInvalidBlock.some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
@@ -758,8 +754,8 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ProtoUtil
-          .signBlock(context.genesisBlock, sk, "secp256k1", "rchain", seqNum, sender)
+        genesis = ValidatorIdentity[Task](sk)
+          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
@@ -783,8 +779,8 @@ class ValidateTest
         dag              <- blockDagStorage.getRepresentation
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ProtoUtil
-          .signBlock(context.genesisBlock, sk, "secp256k1", "rchain", seqNum, sender)
+        genesis = ValidatorIdentity[Task](sk)
+          .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
                    genesis.copy(blockHash = ByteString.copyFromUtf8("123"))
@@ -800,13 +796,8 @@ class ValidateTest
       dag              <- blockDagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      genesis = ProtoUtil.signBlock(
-        context.genesisBlock,
-        sk,
-        "secp256k1",
-        "rchain",
-        seqNum,
-        sender
+      genesis = ValidatorIdentity[Task](sk).signBlock(
+        context.genesisBlock.copy(seqNum = seqNum)
       )
       _      <- Validate.version[Task](genesis, -1) shouldBeF false
       result <- Validate.version[Task](genesis, 1) shouldBeF true

@@ -60,7 +60,7 @@ class TestNode[F[_]](
     synchronyConstraintThreshold: Double,
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
     maxParentDepth: Option[Int] = None,
-    shardId: String = "rchain",
+    shardId: String = "root",
     finalizationRate: Int = 1,
     isReadOnly: Boolean = false
 )(

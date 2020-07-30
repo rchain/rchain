@@ -138,18 +138,9 @@ object BlockCreator {
                           },
                           CreateBlockStatus.readOnlyMode.pure[F]
                         )
-        _ <- spanF.mark("block-created")
-        signedBlock = unsignedBlock.map(
-          signBlock(
-            _,
-            validatorIdentity.privateKey,
-            validatorIdentity.sigAlgorithm,
-            shardId,
-            seqNum,
-            sender
-          )
-        )
-        _ <- spanF.mark("block-signed")
+        _           <- spanF.mark("block-created")
+        signedBlock = unsignedBlock.map(validatorIdentity.signBlock)
+        _           <- spanF.mark("block-signed")
       } yield signedBlock
     }
 
@@ -276,7 +267,7 @@ object BlockCreator {
 
     val body   = Body(postState, persistableDeploys.toList, persistableSystemDeploys.toList)
     val header = blockHeader(body, p.map(_.blockHash), version, blockData.timeStamp)
-    val block  = unsignedBlockProto(body, header, justifications, shardId)
+    val block  = unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
     CreateBlockStatus.created(block)
   }
 }

@@ -215,7 +215,7 @@ object GenesisTest {
   def storageLocation  = Files.createTempDirectory(s"casper-genesis-test-runtime-")
   def genesisPath      = Files.createTempDirectory(s"casper-genesis-test-")
   val autogenShardSize = 5
-  val rchainShardId    = "rchain"
+  val rchainShardId    = "root"
 
   implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
   implicit val log          = new LogStub[Task]

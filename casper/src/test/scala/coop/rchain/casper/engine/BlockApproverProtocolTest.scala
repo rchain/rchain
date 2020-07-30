@@ -13,6 +13,7 @@ import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.execution.Scheduler
 import org.scalatest.{FlatSpec, Matchers}
+import coop.rchain.models.blockImplicits.getRandomBlock
 
 class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
@@ -45,7 +46,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
       case (approver, node) =>
         val differentUnapproved1 = createUnapproved(approver.requiredSigs / 2, node.genesis) //wrong number of signatures
         val differentUnapproved2 =
-          createUnapproved(approver.requiredSigs, Dummies.createBlockMessage()) //wrong block
+          createUnapproved(approver.requiredSigs, getRandomBlock()) //wrong block
         import node._
 
         for {

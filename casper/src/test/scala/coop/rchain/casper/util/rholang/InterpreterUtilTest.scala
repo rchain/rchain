@@ -393,7 +393,7 @@ class InterpreterUtilTest
                 genesis,
                 ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                 deploys = processedDeploys,
-                tsHash = computedTsHash,
+                postStateHash = computedTsHash,
                 preStateHash = preStateHash
               )
       dag2 <- blockDagStorage.getRepresentation
@@ -444,7 +444,7 @@ class InterpreterUtilTest
                   genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
-                  tsHash = computedTsHash,
+                  postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
         dag2           <- blockDagStorage.getRepresentation
@@ -499,7 +499,7 @@ class InterpreterUtilTest
                   genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
-                  tsHash = computedTsHash,
+                  postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
         dag2           <- blockDagStorage.getRepresentation
@@ -551,7 +551,7 @@ class InterpreterUtilTest
                   genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = processedDeploys,
-                  tsHash = computedTsHash,
+                  postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
         dag2           <- blockDagStorage.getRepresentation
@@ -597,7 +597,7 @@ class InterpreterUtilTest
                     genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
-                    tsHash = computedTsHash,
+                    postStateHash = computedTsHash,
                     preStateHash = preStateHash,
                     seqNum = i + 1
                   )
@@ -632,7 +632,7 @@ class InterpreterUtilTest
                   genesis,
                   ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                   deploys = Seq(badProcessedDeploy, processedDeploys.last),
-                  tsHash = computedTsHash,
+                  postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
         dag2           <- blockDagStorage.getRepresentation
@@ -680,7 +680,7 @@ class InterpreterUtilTest
                     genesis,
                     ByteString.copyFrom(genesisContext.validatorPks.head.bytes),
                     deploys = processedDeploys,
-                    tsHash = computedTsHash,
+                    postStateHash = computedTsHash,
                     preStateHash = preStateHash,
                     seqNum = i + 1
                   )

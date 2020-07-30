@@ -163,7 +163,7 @@ object Running {
       if (r.doIgnore) {
         logIgnore(r.status)
       } else {
-        logSuccess >> processHash
+        logSuccess >> processHash.void
       }
     })
   }
@@ -191,7 +191,7 @@ object Running {
       if (r.doIgnore) {
         logIgnore(r.status)
       } else {
-        logProcess >> processHash
+        logProcess >> processHash.void
       }
     })
   }

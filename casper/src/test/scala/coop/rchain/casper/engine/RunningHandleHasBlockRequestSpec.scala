@@ -2,13 +2,16 @@ package coop.rchain.casper.engine
 
 import coop.rchain.catscontrib.ski._
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}, CommError._
+import coop.rchain.comm.{CommError, Endpoint, NodeIdentifier, PeerNode}
+import CommError._
 import coop.rchain.comm.protocol.routing.Protocol
-import coop.rchain.comm.rp.{ProtocolHelper, RPConf}, ProtocolHelper.toPacket
+import coop.rchain.comm.rp.{ProtocolHelper, RPConf}
+import ProtocolHelper.toPacket
 import coop.rchain.shared._
 import coop.rchain.p2p.EffectsTestInstances.TransportLayerStub
 import coop.rchain.models.BlockHash.BlockHash
 import com.google.protobuf.ByteString
+import coop.rchain.p2p.EffectsTestInstances
 import monix.eval.Coeval
 import org.scalatest._
 
@@ -16,6 +19,22 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
 
   val hash = ByteString.copyFrom("hash", "UTF-8")
   val hbr  = HasBlockRequest(hash)
+
+  val local: PeerNode = peerNode("src", 40400)
+  val networkId       = "nid"
+  val conf            = RPConf(local, networkId, null, null, 0, null)
+
+  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
+  private def peerNode(name: String, port: Int): PeerNode =
+    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
+
+  def toHasBlock(protocol: Protocol): HasBlock =
+    HasBlock.from(convert[PacketTypeTag.HasBlock.type](toPacket(protocol).right.get).get)
+
+  private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
+
+  implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
+  implicit private val transport = new TransportLayerStub[Coeval]
 
   override def beforeEach(): Unit = {
     transport.reset()
@@ -51,19 +70,4 @@ class RunningHandleHasBlockRequestSpec extends FunSpec with BeforeAndAfterEach w
       }
     }
   }
-  val local: PeerNode = peerNode("src", 40400)
-  val networkId       = "nid"
-  val conf            = RPConf(local, networkId, null, null, 0, null)
-
-  implicit private val askConf   = new ConstApplicativeAsk[Coeval, RPConf](conf)
-  implicit private val transport = new TransportLayerStub[Coeval]
-
-  private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
-  private def peerNode(name: String, port: Int): PeerNode =
-    PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
-
-  def toHasBlock(protocol: Protocol): HasBlock =
-    HasBlock.from(convert[PacketTypeTag.HasBlock.type](toPacket(protocol).right.get).get)
-
-  private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
 }
