@@ -19,7 +19,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared._
 
 /**

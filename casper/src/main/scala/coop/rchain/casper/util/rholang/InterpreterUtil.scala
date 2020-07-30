@@ -17,7 +17,7 @@ import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.ParBuilder
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.signatures.Signed

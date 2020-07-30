@@ -46,20 +46,13 @@ import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.Runtime.{
   setupMapsAndRefs,
   setupReducer,
-  BlockData,
-  RhoHistoryRepository,
-  SystemProcess
+  RhoHistoryRepository
 }
+import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition, InvalidBlocks}
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.storage._
-import coop.rchain.rholang.interpreter.{
-  EvaluateResult,
-  HasCost,
-  Interpreter,
-  Reduce,
-  RhoType,
-  Runtime
-}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
+import coop.rchain.rholang.interpreter.accounting.HasCost
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{
@@ -507,7 +500,7 @@ class ReportingRuntime[F[_]: Sync](
     val reportingSpace: RhoReportingRspace[F],
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
-    val invalidBlocks: Runtime.InvalidBlocks[F]
+    val invalidBlocks: InvalidBlocks[F]
 ) extends HasCost[F] {
   def close(): F[Unit] =
     for {
@@ -521,7 +514,7 @@ object ReportingRuntime {
 
   def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       reporting: RhoReportingRspace[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] = {
     implicit val P = Parallel[F]
     for {
@@ -535,7 +528,7 @@ object ReportingRuntime {
 
   def create[F[_]: Concurrent: Log: Metrics: Span, M[_]](
       reporting: RhoReportingRspace[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F],
       cost: _cost[F]

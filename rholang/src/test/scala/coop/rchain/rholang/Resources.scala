@@ -10,7 +10,8 @@ import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoHistoryRepository, RhoISpace, SystemProcess}
+import coop.rchain.rholang.interpreter.Runtime.{RhoHistoryRepository, RhoISpace}
+import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
@@ -63,20 +64,20 @@ object Resources {
   def mkRuntime[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       prefix: String,
       storageSize: Long = 1024 * 1024 * 1024L,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
     mkRuntimeWithHistory(prefix, storageSize, additionalSystemProcesses).map(_._1)
 
   def mkRuntimeWithHistory[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       prefix: String,
       storageSize: Long,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
+      additionalSystemProcesses: Seq[Definition[F]]
   )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
     mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
 
   def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](path: Path)(
       storageSize: Long = 1024 * 1024 * 1024L,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
     Resource.make[F, (Runtime[F], RhoHistoryRepository[F])](
       Runtime.setupRSpace[F](path, storageSize) >>= {

@@ -20,7 +20,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.Time
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.shared.scalatestcontrib._
