@@ -50,6 +50,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 }
 
 object RholangAndScalaDispatcher {
+  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandom, TaggedContinuation]
 
   def create[M[_], F[_]](
       tuplespace: RhoTuplespace[M],

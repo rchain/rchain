@@ -18,6 +18,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
 import monix.eval.Task
@@ -83,9 +84,9 @@ class CryptoChannelsSpec
     implicit val (reduce, store) = fixture
 
     val hashChannel: Par = channelName match {
-      case "sha256Hash"     => Runtime.FixedChannels.SHA256_HASH
-      case "keccak256Hash"  => Runtime.FixedChannels.KECCAK256_HASH
-      case "blake2b256Hash" => Runtime.FixedChannels.BLAKE2B256_HASH
+      case "sha256Hash"     => FixedChannels.SHA256_HASH
+      case "keccak256Hash"  => FixedChannels.KECCAK256_HASH
+      case "blake2b256Hash" => FixedChannels.BLAKE2B256_HASH
     }
 
     val ackChannel                  = GString("x")
@@ -133,7 +134,7 @@ class CryptoChannelsSpec
     fixture =>
       implicit val (reduce, space) = fixture
 
-      val secp256k1VerifyhashChannel = Runtime.FixedChannels.SECP256K1_VERIFY
+      val secp256k1VerifyhashChannel = FixedChannels.SECP256K1_VERIFY
 
       val pubKey = Base16.unsafeDecode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
@@ -178,7 +179,7 @@ class CryptoChannelsSpec
 
       implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-      val ed25519VerifyChannel = Runtime.FixedChannels.ED25519_VERIFY;
+      val ed25519VerifyChannel = FixedChannels.ED25519_VERIFY;
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
       val ackChannel                  = GString("x")

@@ -6,10 +6,6 @@ import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -22,6 +18,8 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
+import coop.rchain.rholang.interpreter.SystemProcesses._
+import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
@@ -44,10 +42,6 @@ class Runtime[F[_]: Sync] private (
     } yield ()
 }
 
-trait HasCost[F[_]] {
-  def cost: _cost[F]
-}
-
 object Runtime {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
@@ -60,10 +54,6 @@ object Runtime {
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
   type RhoReplayISpace[F[_]] = TCPAK[F, IReplaySpace]
 
-  type RhoDispatch[F[_]]    = Dispatch[F, ListParWithRandom, TaggedContinuation]
-  type RhoSysFunction[F[_]] = Seq[ListParWithRandom] => F[Unit]
-  type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
-
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
@@ -75,85 +65,6 @@ object Runtime {
       ListParWithRandom,
       TaggedContinuation
     ]
-
-  type Name      = Par
-  type Arity     = Int
-  type Remainder = Option[Var]
-  type BodyRef   = Long
-
-  // seqNum is not exposed to rholang api contract currently
-  final case class BlockData private (
-      timeStamp: Long,
-      blockNumber: Long,
-      sender: PublicKey,
-      seqNum: Int
-  )
-  object BlockData {
-    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), 0)
-    def fromBlock(template: BlockMessage) =
-      BlockData(
-        template.header.timestamp,
-        template.body.state.blockNumber,
-        PublicKey(template.sender),
-        template.seqNum
-      )
-  }
-
-  class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
-    def setParams(invalidBlocks: Par): F[Unit] =
-      this.invalidBlocks.set(invalidBlocks)
-  }
-
-  object InvalidBlocks {
-    def apply[F[_]]()(implicit F: Sync[F]): F[InvalidBlocks[F]] =
-      for {
-        invalidBlocks <- Ref[F].of(Par())
-      } yield new InvalidBlocks[F](invalidBlocks)
-
-    def unsafe[F[_]]()(implicit F: Sync[F]): InvalidBlocks[F] =
-      new InvalidBlocks(Ref.unsafe[F, Par](Par()))
-  }
-
-  object BodyRefs {
-    val STDOUT: Long             = 0L
-    val STDOUT_ACK: Long         = 1L
-    val STDERR: Long             = 2L
-    val STDERR_ACK: Long         = 3L
-    val ED25519_VERIFY: Long     = 4L
-    val SHA256_HASH: Long        = 5L
-    val KECCAK256_HASH: Long     = 6L
-    val BLAKE2B256_HASH: Long    = 7L
-    val SECP256K1_VERIFY: Long   = 9L
-    val GET_BLOCK_DATA: Long     = 11L
-    val GET_INVALID_BLOCKS: Long = 12L
-    val REV_ADDRESS: Long        = 13L
-    val DEPLOYER_ID_OPS: Long    = 14L
-    val REG_OPS: Long            = 15L
-    val SYS_AUTHTOKEN_OPS: Long  = 16L
-  }
-
-  def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
-
-  object FixedChannels {
-    val STDOUT: Par             = byteName(0)
-    val STDOUT_ACK: Par         = byteName(1)
-    val STDERR: Par             = byteName(2)
-    val STDERR_ACK: Par         = byteName(3)
-    val ED25519_VERIFY: Par     = byteName(4)
-    val SHA256_HASH: Par        = byteName(5)
-    val KECCAK256_HASH: Par     = byteName(6)
-    val BLAKE2B256_HASH: Par    = byteName(7)
-    val SECP256K1_VERIFY: Par   = byteName(8)
-    val GET_BLOCK_DATA: Par     = byteName(10)
-    val GET_INVALID_BLOCKS: Par = byteName(11)
-    val REV_ADDRESS: Par        = byteName(12)
-    val DEPLOYER_ID_OPS: Par    = byteName(13)
-    val REG_LOOKUP: Par         = byteName(14)
-    val REG_INSERT_RANDOM: Par  = byteName(15)
-    val REG_INSERT_SIGNED: Par  = byteName(16)
-    val REG_OPS: Par            = byteName(17)
-    val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
-  }
 
   def introduceSystemProcesses[F[_]: Sync: _cost: Span](
       spaces: List[RhoTuplespace[F]],
@@ -173,59 +84,24 @@ object Runtime {
         spaces.map(_.install(channels, patterns, continuation))
     }.sequence
 
-  object SystemProcess {
-    final case class Context[F[_]: Concurrent: Span](
-        space: RhoTuplespace[F],
-        dispatcher: RhoDispatch[F],
-        blockData: Ref[F, BlockData],
-        invalidBlocks: InvalidBlocks[F]
-    ) {
-      val systemProcesses = SystemProcesses[F](dispatcher, space)
-    }
-
-    final case class Definition[F[_]](
-        urn: String,
-        fixedChannel: Name,
-        arity: Arity,
-        bodyRef: BodyRef,
-        handler: Context[F] => Seq[ListParWithRandom] => F[Unit],
-        remainder: Remainder = None
-    ) {
-      def toDispatchTable(
-          context: SystemProcess.Context[F]
-      ): (BodyRef, Seq[ListParWithRandom] => F[Unit]) =
-        bodyRef -> handler(context)
-
-      def toUrnMap: (String, Par) = {
-        val bundle: Par = Bundle(fixedChannel, writeFlag = true)
-        urn -> bundle
-      }
-
-      def toProcDefs: (Name, Arity, Remainder, BodyRef) =
-        (fixedChannel, arity, remainder, bodyRef)
-    }
-  }
-
-  def stdSystemProcesses[F[_]]: Seq[SystemProcess.Definition[F]] = Seq(
-    SystemProcess.Definition[F]("rho:io:stdout", FixedChannels.STDOUT, 1, BodyRefs.STDOUT, {
-      ctx: SystemProcess.Context[F] =>
+  def stdSystemProcesses[F[_]]: Seq[Definition[F]] = Seq(
+    Definition[F]("rho:io:stdout", FixedChannels.STDOUT, 1, BodyRefs.STDOUT, {
+      ctx: ProcessContext[F] =>
         ctx.systemProcesses.stdOut
     }),
-    SystemProcess
-      .Definition[F]("rho:io:stdoutAck", FixedChannels.STDOUT_ACK, 2, BodyRefs.STDOUT_ACK, {
-        ctx: SystemProcess.Context[F] =>
-          ctx.systemProcesses.stdOutAck
-      }),
-    SystemProcess.Definition[F]("rho:io:stderr", FixedChannels.STDERR, 1, BodyRefs.STDERR, {
-      ctx: SystemProcess.Context[F] =>
+    Definition[F]("rho:io:stdoutAck", FixedChannels.STDOUT_ACK, 2, BodyRefs.STDOUT_ACK, {
+      ctx: ProcessContext[F] =>
+        ctx.systemProcesses.stdOutAck
+    }),
+    Definition[F]("rho:io:stderr", FixedChannels.STDERR, 1, BodyRefs.STDERR, {
+      ctx: ProcessContext[F] =>
         ctx.systemProcesses.stdErr
     }),
-    SystemProcess
-      .Definition[F]("rho:io:stderrAck", FixedChannels.STDERR_ACK, 2, BodyRefs.STDERR_ACK, {
-        ctx: SystemProcess.Context[F] =>
-          ctx.systemProcesses.stdErrAck
-      }),
-    SystemProcess.Definition[F](
+    Definition[F]("rho:io:stderrAck", FixedChannels.STDERR_ACK, 2, BodyRefs.STDERR_ACK, {
+      ctx: ProcessContext[F] =>
+        ctx.systemProcesses.stdErrAck
+    }),
+    Definition[F](
       "rho:block:data",
       FixedChannels.GET_BLOCK_DATA,
       1,
@@ -233,7 +109,7 @@ object Runtime {
         ctx.systemProcesses.getBlockData(ctx.blockData)
       }
     ),
-    SystemProcess.Definition[F](
+    Definition[F](
       "rho:casper:invalidBlocks",
       FixedChannels.GET_INVALID_BLOCKS,
       1,
@@ -241,7 +117,7 @@ object Runtime {
         ctx.systemProcesses.invalidBlocks(ctx.invalidBlocks)
       }
     ),
-    SystemProcess.Definition[F](
+    Definition[F](
       "rho:rev:address",
       FixedChannels.REV_ADDRESS,
       3,
@@ -249,7 +125,7 @@ object Runtime {
         ctx.systemProcesses.revAddress
       }
     ),
-    SystemProcess.Definition[F](
+    Definition[F](
       "rho:rchain:deployerId:ops",
       FixedChannels.DEPLOYER_ID_OPS,
       3,
@@ -257,7 +133,7 @@ object Runtime {
         ctx.systemProcesses.deployerIdOps
       }
     ),
-    SystemProcess.Definition[F](
+    Definition[F](
       "rho:registry:ops",
       FixedChannels.REG_OPS,
       3,
@@ -265,7 +141,7 @@ object Runtime {
         ctx.systemProcesses.registryOps
       }
     ),
-    SystemProcess.Definition[F](
+    Definition[F](
       "sys:authToken:ops",
       FixedChannels.SYS_AUTHTOKEN_OPS,
       3,
@@ -277,7 +153,7 @@ object Runtime {
 
   def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       spaceAndReplay: ISpaceAndReplay[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[Runtime[F]] = {
     implicit val P = Parallel[F]
     createWithEmptyCost_(spaceAndReplay, extraSystemProcesses)
@@ -285,7 +161,7 @@ object Runtime {
 
   private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+      extraSystemProcesses: Seq[Definition[F]]
   )(
       implicit
       P: Parallel[F]
@@ -303,7 +179,7 @@ object Runtime {
       dispatcher: RhoDispatch[F],
       blockData: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]]
+      extraSystemProcesses: Seq[Definition[F]]
   ): RhoDispatchMap[F] = {
     val systemProcesses = SystemProcesses[F](dispatcher, space)
     import BodyRefs._
@@ -317,7 +193,7 @@ object Runtime {
       (stdSystemProcesses[F] ++ extraSystemProcesses)
         .map(
           _.toDispatchTable(
-            SystemProcess.Context(space, dispatcher, blockData, invalidBlocks)
+            ProcessContext(space, dispatcher, blockData, invalidBlocks)
           )
         )
   }
@@ -349,7 +225,7 @@ object Runtime {
       chargingRSpace: RhoTuplespace[F],
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]],
+      extraSystemProcesses: Seq[Definition[F]],
       urnMap: Map[String, Par]
   )(implicit cost: _cost[F], P: Parallel[F]): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
@@ -371,7 +247,7 @@ object Runtime {
   }
 
   def setupMapsAndRefs[F[_]: Sync](
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ) =
     for {
       blockDataRef  <- Ref.of(BlockData.empty)
@@ -383,7 +259,7 @@ object Runtime {
 
   def create[F[_]: Concurrent: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
-      extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit P: Parallel[F],
       cost: _cost[F]

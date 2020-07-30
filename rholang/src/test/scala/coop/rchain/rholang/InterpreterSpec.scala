@@ -5,7 +5,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, InterpreterUtil, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Runtime}
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -15,7 +15,6 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 import coop.rchain.metrics.Span
 import coop.rchain.metrics.NoopSpan
-import coop.rchain.models.Par
 
 class InterpreterSpec extends FlatSpec with Matchers {
   private val mapSize     = 1024L * 1024L * 1024L
