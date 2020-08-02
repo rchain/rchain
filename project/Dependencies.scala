@@ -78,7 +78,7 @@ object Dependencies {
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
-  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.4"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
