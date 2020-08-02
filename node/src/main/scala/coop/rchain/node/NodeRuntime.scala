@@ -128,7 +128,9 @@ class NodeRuntime private[node] (
           .toReaderT
 
     clientChannelsCache <- Ref
-                            .of[Task, Map[PeerNode, Deferred[Task, ManagedChannel]]](Map.empty)
+                            .of[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel]]](
+                              Map.empty
+                            )
                             .toReaderT
     transport <- effects
                   .transportClient(

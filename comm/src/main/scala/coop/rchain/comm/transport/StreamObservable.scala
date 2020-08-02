@@ -5,7 +5,6 @@ import java.nio.file._
 import cats.implicits._
 
 import PacketOps._
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
@@ -15,17 +14,21 @@ import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
 
-final case class StreamToPeers(peers: Seq[PeerNode], path: Path, sender: PeerNode)
+final case class Stream(path: Path, sender: PeerNode)
 
-class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], scheduler: Scheduler)
-    extends Observable[StreamToPeers] {
+class StreamObservable(peer: PeerNode, bufferSize: Int, folder: Path)(
+    implicit log: Log[Task],
+    scheduler: Scheduler
+) extends Observable[Stream] {
 
-  private val subject = buffer.LimitedBufferObservable.dropNew[StreamToPeers](bufferSize)
+  private val subject = buffer.LimitedBufferObservable.dropNew[Stream](bufferSize)
 
-  def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] = {
+  def enque(blob: Blob): Task[Unit] = {
 
     val logStreamInformation =
-      log.debug(s"Streaming packet (type = ${blob.packet.typeId}) to peers ${peers.mkString(", ")}")
+      log.debug(
+        s"Pushing message to $peer stream message queue."
+      )
 
     val storeBlob: Task[Option[Path]] =
       blob.packet.store[Task](folder) >>= {
@@ -34,22 +37,19 @@ class StreamObservable(bufferSize: Int, folder: Path)(implicit log: Log[Task], s
       }
 
     def push(file: Path): Task[Boolean] =
-      Task.delay(subject.pushNext(StreamToPeers(peers, file, blob.sender)))
+      Task.delay(subject.pushNext(Stream(file, blob.sender)))
 
-    def propose(file: Path): Task[Unit] =
-      push(file) >>= (
-        _.fold(
-          log.debug(s"Enqueued for streaming packet $file"),
-          log.warn(
-            s"Client stream message queue is full. Dropping packet (type = ${blob.packet.typeId})"
-          ) >> file.deleteSingleFile[Task]
-        )
-      )
+    def propose(file: Path): Task[Unit] = {
+      val processError = log.warn(
+        s"Client stream message queue for $peer is full (${bufferSize} items). Dropping message.)"
+      ) >> file.deleteSingleFile[Task]
+      push(file) >>= (pushSucceed => processError.unlessA(pushSucceed))
+    }
 
     logStreamInformation >> storeBlob >>= (_.fold(Task.unit)(propose))
   }
 
-  def unsafeSubscribeFn(subscriber: Subscriber[StreamToPeers]): Cancelable = {
+  def unsafeSubscribeFn(subscriber: Subscriber[Stream]): Cancelable = {
     val subscription = subject.subscribe(subscriber)
     () => subscription.cancel()
   }
