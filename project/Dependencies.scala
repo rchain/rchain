@@ -53,7 +53,7 @@ object Dependencies {
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
-  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
+  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
