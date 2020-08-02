@@ -31,7 +31,7 @@ object Dependencies {
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
-  val guava               = "com.google.guava"            % "guava"                     % "24.1.1-jre"
+  val guava               = "com.google.guava"            % "guava"                     % "29.0-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
