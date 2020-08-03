@@ -22,7 +22,7 @@ import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
 import monix.execution.Ack.Continue
-import monix.execution.{CancelableFuture, Scheduler}
+import monix.execution.{Cancelable, CancelableFuture, Scheduler}
 import monix.reactive.Observable
 
 /**
@@ -32,7 +32,8 @@ import monix.reactive.Observable
   */
 final case class BufferedGrpcStreamChannel(
     grpcTransport: ManagedChannel,
-    buffer: StreamObservable
+    buffer: StreamObservable,
+    buferSubscriber: Cancelable
 )
 
 class GrpcTransportClient(
@@ -74,6 +75,7 @@ class GrpcTransportClient(
 
   private def createChannel(peer: PeerNode): Task[BufferedGrpcStreamChannel] =
     for {
+      _                <- log.info(s"Creating new channel to peer ${peer.toAddress}")
       clientSslContext <- clientSslContextTask
       grpcChannel = NettyChannelBuilder
         .forAddress(peer.endpoint.host, peer.endpoint.tcpPort)
@@ -86,14 +88,14 @@ class GrpcTransportClient(
         .build()
       buffer = new StreamObservable(peer, clientQueueSize, tempFolder)
 
-      channel = BufferedGrpcStreamChannel(grpcChannel, buffer)
-
-      _ = buffer.subscribe(
+      buferSubscriber = buffer.subscribe(
         sMsg =>
           streamBlobFile(sMsg.path, peer, sMsg.sender)
             .guarantee(sMsg.path.deleteSingleFile[Task])
             .runToFuture >> Continue.pure[CancelableFuture]
       )
+
+      channel = BufferedGrpcStreamChannel(grpcChannel, buffer, buferSubscriber)
     } yield channel
 
   private def getChannel(peer: PeerNode): Task[BufferedGrpcStreamChannel] =
@@ -108,16 +110,15 @@ class GrpcTransportClient(
               }
             }
       (cDef, newChannel) = ret
-      _ <- Applicative[Task].whenA(newChannel)(
-            log.info(s"Creating new channel to peer ${peer.toAddress}") >>
-              createChannel(peer) >>= cDef.complete
-          )
-      c <- cDef.get
-      // In case underlying gRPC transport is terminated - remove current record and try one more time
+      _                  <- Applicative[Task].whenA(newChannel)(createChannel(peer) >>= cDef.complete)
+      c                  <- cDef.get
+      // In case underlying gRPC transport is terminated - clean resources,
+      // remove current record and try one more time
       r <- if (c.grpcTransport.isTerminated)
-            log.info(
-              s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
-            ) >>
+            Task.delay(c.buferSubscriber.cancel()) >>
+              log.info(
+                s"Channel to peer ${peer.toAddress} is terminated, removing from connections map"
+              ) >>
               channelsMap.update(_ - peer) >> getChannel(peer)
           else c.pure[Task]
     } yield r
