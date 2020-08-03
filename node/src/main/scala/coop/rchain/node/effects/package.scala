@@ -61,7 +61,7 @@ package object effects {
       maxMessageSize: Int,
       packetChunkSize: Int,
       folder: Path,
-      channels: Ref[Task, Map[PeerNode, Deferred[Task, ManagedChannel]]]
+      channels: Ref[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel]]]
   )(
       implicit scheduler: Scheduler,
       log: Log[Task],
