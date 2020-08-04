@@ -101,8 +101,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                        InvalidBlock.MissingBlocks
                      )
 
-                     isReadyApprovedBlockChild = isApprovedBlockChild(b) &&^ approvedBlockStateComplete
-                     blockIsReady              <- ~^(dagMissingBlockDependencies.pure[F]) ||^ isReadyApprovedBlockChild
+                     blockIsReady <- ~^(dagMissingBlockDependencies.pure[F]) ||^
+                                      isApprovedBlockChild(b)
 
                      _ <- fetchMissingDependencies(b).whenA(dagMissingBlockDependencies)
                      r <- if (blockIsReady) addBlock(b, allowAddFromBuffer)
@@ -116,32 +116,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                    } yield r
                }
     } yield result
-  }
-
-  override def approvedBlockStateComplete: F[Boolean] = {
-    import cats.instances.list._
-    for {
-      approvedBlock  <- getGenesis
-      abHasLowHeight = ProtoUtil.blockNumber(approvedBlock) < expirationThreshold
-
-      // active validators as per approved block state
-      abValidators = approvedBlock.body.state.bonds.filter(_.stake > 0).map(_.validator)
-
-      cbPendants       <- casperBuffer.getPendants
-      cbPendantsStored <- cbPendants.toList.filterA(BlockStore[F].contains)
-      cbPendantsBlocks <- cbPendantsStored.map(BlockStore[F].getUnsafe).sequence
-
-      enoughBlocksAreInBuffer = abValidators.foldLeft(true)((acc, validator) => {
-        val pendantFromValidator = cbPendantsBlocks.find(b => b.sender.equals(validator))
-        val enoughBlocksAreInBufferForValidator = pendantFromValidator.exists(
-          p =>
-            ProtoUtil.blockNumber(p) <= ProtoUtil.blockNumber(approvedBlock) - expirationThreshold
-        )
-        acc && enoughBlocksAreInBufferForValidator
-      })
-
-      bufferFilled = abHasLowHeight || enoughBlocksAreInBuffer
-    } yield bufferFilled
   }
 
   private def isApprovedBlockChild(blockMessage: BlockMessage): F[Boolean] =

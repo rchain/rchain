@@ -59,15 +59,6 @@ trait Casper[F[_]] {
   def getValidator: F[Option[PublicKey]]
   def getVersion: F[Long]
   def getDeployLifespan: F[Int]
-
-  /**
-    * Approved Block extends notion of Genesis Block - its the block that meets Last Finalized State.
-    * To be able to start building on top of the Approved Block, node have to have some additional information
-    * from the network.
-    *
-    * @return if node has all necessary information accompanying ApprovedBlock
-    */
-  def approvedBlockStateComplete: F[Boolean]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {

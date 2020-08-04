@@ -374,31 +374,26 @@ object Running {
                       )
                     )
                 }
-            lastFinalizedStateBlock = approvedBlock.candidate.block
+            ab = approvedBlock.candidate.block
             // TODO might be more checks can/should be applied here
-            validShard     = lastFinalizedStateBlock.shardId.equalsIgnoreCase(b.shardId)
-            validFormat    <- Validate.formatOfFields(b)
-            validSig       <- Validate.blockSignature(b)
-            validVersion   <- casper.getVersion.flatMap(Validate.version(b, _))
-            deployLifespan <- casper.getDeployLifespan
-            oldBlock = (ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(
-              lastFinalizedStateBlock
-            ) - deployLifespan).pure[F]
-            approvedBlockStateComplete = casper.approvedBlockStateComplete
-            notAnIgnorableOldBlock     <- oldBlock.not ||^ (oldBlock &&^ approvedBlockStateComplete.not)
+            validShard   = ab.shardId.equalsIgnoreCase(b.shardId)
+            validFormat  <- Validate.formatOfFields(b)
+            validSig     <- Validate.blockSignature(b)
+            validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
+            oldBlock     = ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(ab)
             _ <- Log[F]
                   .warn(
-                    s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${lastFinalizedStateBlock.shardId}]."
+                    s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${ab.shardId}]."
                   )
                   .unlessA(validShard)
             _ <- Log[F].warn(s"Block is bad: ill formed.").unlessA(validFormat)
             _ <- Log[F].warn(s"Block is bad: wrong signature.").unlessA(validSig)
             _ <- Log[F].warn(s"Block is bad: wrong version.").unlessA(validVersion)
             _ <- Log[F]
-                  .warn(s"Block is not needed: more then 50 blocks behind last finalised state.")
-                  .unlessA(notAnIgnorableOldBlock)
+                  .warn(s"Block is old: we don't need siblings or parents of approvedBlock")
+                  .whenA(oldBlock)
 
-            isValid = validShard && validFormat && validSig && validVersion && notAnIgnorableOldBlock
+            isValid = validShard && validFormat && validSig && validVersion && !oldBlock
           } yield isValid,
         Log[F].info("Casper is not ready, rejecting all blocks until it is ready.") >> false.pure[F]
       )
