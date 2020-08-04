@@ -269,21 +269,6 @@ object Running {
   final case object LastFinalizedBlockNotFoundError
       extends Exception("Last finalized block not found in the block storage.")
 
-  private def handleLastFinalizedBlockRequest[F[_]: Sync: TransportLayer: RPConfAsk: LastFinalizedStorage: BlockStore: Log](
-      peer: PeerNode,
-      casper: MultiParentCasper[F]
-  ): F[Unit] =
-    for {
-      genesis    <- casper.getGenesis
-      blockHash  <- LastFinalizedStorage[F].get(genesis)
-      maybeBlock <- BlockStore[F].get(blockHash)
-      // Exception if the block is not in the block store
-      block     <- maybeBlock.liftTo(LastFinalizedBlockNotFoundError)
-      respProto = LastFinalizedBlock(block).toProto
-      _         <- TransportLayer[F].streamToPeer(peer, ToPacket(respProto))
-      _         <- Log[F].info(s"Last finalized store hash sent to $peer")
-    } yield ()
-
   private def handleStateItemsMessageRequest[F[_]: Sync: TransportLayer: RPConfAsk: RSpaceStateManager: Log](
       peer: PeerNode,
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
@@ -461,10 +446,7 @@ object Running {
       case _: ApprovedBlockRequest      => handleApprovedBlockRequest(peer, approvedBlock)
       case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
 
-      // Last finalized block response
-      case LastFinalizedBlockRequest => handleLastFinalizedBlockRequest(peer, casper)
-
-      // Last finalized state / response store records
+      // Approved state store records
       case StoreItemsMessageRequest(startPath, skip, take) =>
         handleStateItemsMessageRequest(peer, startPath, skip, take)
 

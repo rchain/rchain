@@ -143,18 +143,15 @@ final class CommUtilOps[F[_]](
       _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "ApprovedBlockRequest")
     } yield ()
 
-  def requestLastFinalizedBlock(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
-    for {
-      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
-      bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
-      msg            = LastFinalizedBlockRequest.toProto
-      _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "LastFinalizedBlockRequest")
-    } yield ()
-
-  def sendStoreItemsRequest(req: StoreItemsMessageRequest): F[Unit] =
+  def sendStoreItemsRequest(
+      req: StoreItemsMessageRequest
+  ): F[Unit] =
     sendToPeers(StoreItemsMessageRequest.toProto(req))
 
-  def sendStoreItemsRequest(rootStateHash: Blake2b256Hash, pageSize: Int): F[Unit] = {
+  def sendStoreItemsRequest(
+      rootStateHash: Blake2b256Hash,
+      pageSize: Int
+  ): F[Unit] = {
     val rootPath = Seq((rootStateHash, none[Byte]))
     val req      = StoreItemsMessageRequest(rootPath, 0, pageSize)
     sendStoreItemsRequest(req)

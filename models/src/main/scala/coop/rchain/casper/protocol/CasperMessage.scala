@@ -25,16 +25,13 @@ object CasperMessage {
     case p: BlockApprovalProto            => BlockApproval.from(p)
     case p: BlockRequestProto             => Right(BlockRequest.from(p))
     case _: ForkChoiceTipRequestProto     => Right(ForkChoiceTipRequest)
-    case p: ForkChoiceTipResponseProto    => Right(ForkChoiceTipResponse(p.hash))
     case p: HasBlockProto                 => Right(HasBlock.from(p))
     case p: HasBlockRequestProto          => Right(HasBlockRequest.from(p))
     case p: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(p))
     case p: UnapprovedBlockProto          => UnapprovedBlock.from(p)
     // Last finalized state messages
-    case _: LastFinalizedBlockRequestProto  => Right(LastFinalizedBlockRequest)
-    case p: LastFinalizedBlockResponseProto => LastFinalizedBlock.from(p)
-    case p: StoreItemsMessageRequestProto   => Right(StoreItemsMessageRequest.from(p))
-    case p: StoreItemsMessageProto          => Right(StoreItemsMessage.from(p))
+    case p: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(p))
+    case p: StoreItemsMessageProto        => Right(StoreItemsMessage.from(p))
   }
 }
 
@@ -62,17 +59,8 @@ object BlockRequest {
   def from(hbr: BlockRequestProto): BlockRequest = BlockRequest(hbr.hash)
 }
 
-final case object ForkChoiceTipRequest extends CasperMessage {
+case object ForkChoiceTipRequest extends CasperMessage {
   val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
-}
-
-final case class ForkChoiceTipResponse(hash: ByteString) extends CasperMessage {
-  def toProto: ForkChoiceTipResponseProto = ForkChoiceTipResponseProto(hash)
-}
-
-object ForkChoiceTipResponse {
-  def from(fct: ForkChoiceTipResponseProto): ForkChoiceTipResponse =
-    ForkChoiceTipResponse(fct.hash)
 }
 
 final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
@@ -597,21 +585,6 @@ object Bond {
 }
 
 // Last finalized state
-
-case object LastFinalizedBlockRequest extends CasperMessage {
-  override val toProto: LastFinalizedBlockRequestProto = LastFinalizedBlockRequestProto()
-}
-
-final case class LastFinalizedBlock(block: BlockMessage) extends CasperMessage {
-  override def toProto: LastFinalizedBlockResponseProto = LastFinalizedBlock.toProto(this)
-}
-
-object LastFinalizedBlock {
-  def from(b: LastFinalizedBlockResponseProto) =
-    BlockMessage.from(b.block).map(LastFinalizedBlock(_))
-  def toProto(b: LastFinalizedBlock): LastFinalizedBlockResponseProto =
-    LastFinalizedBlockResponseProto(BlockMessage.toProto(b.block))
-}
 
 final case class StoreItemsMessageRequest(
     startPath: Seq[(Blake2b256Hash, Option[Byte])],

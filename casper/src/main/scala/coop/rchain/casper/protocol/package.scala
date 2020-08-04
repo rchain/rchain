@@ -17,15 +17,12 @@ package object protocol extends CasperMessageProtocol {
         case HasBlockRequest          => convert[HasBlockRequest.type](packet)
         case HasBlock                 => convert[HasBlock.type](packet)
         case ForkChoiceTipRequest     => convert[ForkChoiceTipRequest.type](packet)
-        case ForkChoiceTipResponse    => convert[ForkChoiceTipResponse.type](packet)
         case BlockApproval            => convert[BlockApproval.type](packet)
         case UnapprovedBlock          => convert[UnapprovedBlock.type](packet)
         case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
         // Last finalized state messages
-        case LastFinalizedBlockRequest  => convert[LastFinalizedBlockRequest.type](packet)
-        case LastFinalizedBlockResponse => convert[LastFinalizedBlockResponse.type](packet)
-        case StoreItemsMessageRequest   => convert[StoreItemsMessageRequest.type](packet)
-        case StoreItemsMessage          => convert[StoreItemsMessage.type](packet)
+        case StoreItemsMessageRequest => convert[StoreItemsMessageRequest.type](packet)
+        case StoreItemsMessage        => convert[StoreItemsMessage.type](packet)
       }
       .getOrElse(PacketParseResult.IllegalPacket(s"Unrecognized typeId: ${packet.typeId}"))
 
