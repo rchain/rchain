@@ -73,6 +73,7 @@ message ApprovedBlockProto  {
 message ApprovedBlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
   string identifier = 1;
+  bool trimState = 2;
 }
 
 message NoApprovedBlockAvailableProto {

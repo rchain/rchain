@@ -59,7 +59,7 @@ object CasperLaunch {
           (msg, action)
         case None =>
           val msg    = "Approved block not found, connecting to existing network"
-          val action = connectAndQueryApprovedBlock()
+          val action = connectAndQueryApprovedBlock(true)
           (msg, action)
       } >>= {
         case (msg, action) => Log[F].info(msg) >> action
@@ -193,7 +193,7 @@ object CasperLaunch {
         _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
       } yield ()
 
-    private def connectAndQueryApprovedBlock(): F[Unit] =
+    private def connectAndQueryApprovedBlock(trimState: Boolean): F[Unit] =
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
         _ <- Engine.transitionToInitializing(
@@ -202,7 +202,7 @@ object CasperLaunch {
               validatorId,
               // TODO peer should be able to request approved blocks on different heghts
               // from genesis to the most recent one (default)
-              CommUtil[F].requestApprovedBlock
+              CommUtil[F].requestApprovedBlock(trimState)
             )
       } yield ()
 

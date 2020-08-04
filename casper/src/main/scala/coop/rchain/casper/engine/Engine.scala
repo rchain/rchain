@@ -122,7 +122,8 @@ object Engine {
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
-      init: F[Unit]
+      init: F[Unit],
+      trimState: Boolean = false
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.unbounded[F, BlockMessage]

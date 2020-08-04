@@ -52,7 +52,8 @@ class Initializing[F[_]
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
-    tupleSpaceQueue: Queue[F, StoreItemsMessage]
+    tupleSpaceQueue: Queue[F, StoreItemsMessage],
+    trimState: Boolean = false
 ) extends Engine[F] {
 
   import Engine._
@@ -65,7 +66,7 @@ class Initializing[F[_]
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
         Time[F].sleep(10.seconds) >>
-        CommUtil[F].requestApprovedBlock
+        CommUtil[F].requestApprovedBlock(trimState)
     case s: StoreItemsMessage =>
       tupleSpaceQueue.enqueue1(s)
 

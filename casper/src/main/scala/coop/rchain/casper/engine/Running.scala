@@ -443,7 +443,21 @@ object Running {
       case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
       case _: ForkChoiceTipRequest.type =>
         handleForkChoiceTipRequest(peer)(casper)
-      case _: ApprovedBlockRequest      => handleApprovedBlockRequest(peer, approvedBlock)
+      case abr: ApprovedBlockRequest =>
+        for {
+          approvedBlock <- if (abr.trimState) for {
+                            lfBlock <- LastFinalizedStorage[F]
+                                        .get(approvedBlock.candidate.block)
+                                        .flatMap(BlockStore[F].getUnsafe)
+                            lastApprovedBlock = ApprovedBlock(
+                              ApprovedBlockCandidate(lfBlock, 0),
+                              List.empty
+                            )
+                          } yield lastApprovedBlock
+                          else
+                            approvedBlock.pure[F]
+          _ <- handleApprovedBlockRequest(peer, approvedBlock)
+        } yield ()
       case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
 
       // Approved state store records

@@ -145,13 +145,14 @@ object NoApprovedBlockAvailable {
     NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
 }
 
-final case class ApprovedBlockRequest(identifier: String) extends CasperMessage {
-  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier)
+final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
+    extends CasperMessage {
+  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
 }
 
 object ApprovedBlockRequest {
   def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
-    ApprovedBlockRequest(abr.identifier)
+    ApprovedBlockRequest(abr.identifier, abr.trimState)
 }
 
 final case class BlockHashMessage(blockHash: BlockHash, blockCreator: ByteString)
