@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine.Initializing._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
@@ -22,12 +23,19 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
 import coop.rchain.shared._
+import fs2.concurrent.Queue
 
 import scala.concurrent.duration._
 
-/** Node in this state will query peers in the network with [[ApprovedBlockRequest]] message
-  * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
-  * `F[None]` to all other message types.
+object Initializing {
+  val pageSize = 3000
+
+  // Approved block must be available before restoring last finalized state
+  final case object ApprovedBlockNotAvailableWhenRestoringLastFinalizedStateError extends Exception
+}
+
+/**
+  * initializing engine makes sure node receives Approved State and transitions to Running after
   * */
 // format: off
 class Initializing[F[_]
@@ -38,121 +46,151 @@ class Initializing[F[_]
   /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
   /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
-(shardId: String, finalizationRate: Int, validatorId: Option[ValidatorIdentity], theInit: F[Unit])
-    extends Engine[F] {
+(
+    shardId: String,
+    finalizationRate: Int,
+    validatorId: Option[ValidatorIdentity],
+    theInit: F[Unit],
+    blockMessageQueue: Queue[F, BlockMessage],
+    tupleSpaceQueue: Queue[F, StoreItemsMessage]
+) extends Engine[F] {
 
   import Engine._
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock =>
-      onApprovedBlockTransition(
-        peer,
-        ab,
-        validatorId,
-        shardId,
-        finalizationRate
-      )
+    case ab: ApprovedBlock        => onApprovedBlock(peer, ab.candidate.block)
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
         Time[F].sleep(10.seconds) >>
         CommUtil[F].requestApprovedBlock
-    case LastFinalizedBlock(block) => onLastFinalizedBlock(peer, block)
-    case _                         => ().pure
+    case s: StoreItemsMessage =>
+      tupleSpaceQueue.enqueue1(s)
+
+    case b: BlockMessage =>
+      Log[F].info(s"BlockMessage received ${PrettyPrinter.buildString(b)}") *>
+        blockMessageQueue.enqueue1(b)
+
+    case _ => ().pure
   }
 
-  private def onApprovedBlockTransition(
+  /*private def onApprovedBlock(
       sender: PeerNode,
-      approvedBlock: ApprovedBlock,
-      validatorId: Option[ValidatorIdentity],
-      shardId: String,
-      finalizationRate: Int
+      approvedBlock: ApprovedBlock
   ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {
       _       <- Log[F].info("Received ApprovedBlock message.")
       isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
-      maybeCasper <- if (isValid) {
-                      for {
-                        _ <- Log[F].info("Valid ApprovedBlock received!")
-                        _ <- EventLog[F].publish(
-                              shared.Event.ApprovedBlockReceived(
-                                PrettyPrinter
-                                  .buildStringNoLimit(approvedBlock.candidate.block.blockHash)
-                              )
-                            )
-                        genesis = approvedBlock.candidate.block
-                        _       <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
-                        _       <- LastApprovedBlock[F].set(approvedBlock)
-                        casper <- MultiParentCasper
-                                   .hashSetCasper[F](
-                                     validatorId,
-                                     genesis,
-                                     shardId,
-                                     finalizationRate,
-                                     skipValidateGenesis = false
-                                   )
-                        _ <- Engine
-                              .transitionToRunning[F](
-                                casper,
-                                approvedBlock,
-                                validatorId,
-                                ().pure[F]
-                              )
-                        _ <- CommUtil[F].sendForkChoiceTipRequest
-                      } yield Option(casper)
-                    } else
-                      Log[F]
-                        .info("Invalid ApprovedBlock received; refusing to add.")
-                        .map(_ => none[MultiParentCasper[F]])
-      _ <- maybeCasper.fold(Log[F].warn("MultiParentCasper instance not created."))(
-            _ => Log[F].info("MultiParentCasper instance created.")
-          )
+      _ <- if (isValid) {
+            for {
+              _       <- Log[F].info("Valid ApprovedBlock received!")
+              genesis = approvedBlock.candidate.block
+              _ <- EventLog[F].publish(
+                    shared.Event.ApprovedBlockReceived(
+                      PrettyPrinter
+                        .buildStringNoLimit(genesis.blockHash)
+                    )
+                  )
+              _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
+              _ <- LastApprovedBlock[F].set(approvedBlock)
+              // Request last finalized block from bootstrap node
+              _ <- CommUtil[F].requestLastFinalizedBlock
+            } yield ()
+          } else
+            Log[F].info("Invalid ApprovedBlock received; refusing to add.")
 
     } yield ()
-  }
+  }*/
 
-  private def onLastFinalizedBlock(sender: PeerNode, lastFinalizedBlock: BlockMessage): F[Unit] = {
+  private def onApprovedBlock(sender: PeerNode, approvedBlock: BlockMessage): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {
-      isValid <- senderIsBootstrap
+      // TODO: resolve validation of received approved block
+      isValid <- senderIsBootstrap // &&^ Validate.approvedBlock[F](approvedBlock)
       _ <- if (isValid) {
             for {
               _ <- Log[F].info(
-                    s"Valid Last Finalized Block received ${PrettyPrinter.buildString(lastFinalizedBlock)}"
+                    s"Valid Last Finalized Block received ${PrettyPrinter.buildString(approvedBlock)}"
                   )
               _ <- Log[F].warn(
-                    s"JUSTIF: ${lastFinalizedBlock.justifications.map(_.latestBlockHash).map(PrettyPrinter.buildString).mkString(", ")}"
+                    s"JUSTIF: ${approvedBlock.justifications.map(_.latestBlockHash).map(PrettyPrinter.buildString).mkString(", ")}"
                   )
 
               _ <- EventLog[F].publish(
                     shared.Event.ApprovedBlockReceived(
                       PrettyPrinter
-                        .buildStringNoLimit(lastFinalizedBlock.blockHash)
+                        .buildStringNoLimit(approvedBlock.blockHash)
                     )
                   )
 
-              // TODO: resolve validation of received last finalized block
               // Add last finalized block as ApprovedBlock
-              approvedBlock = ApprovedBlock(ApprovedBlockCandidate(lastFinalizedBlock, 0), Nil)
-              _             <- insertIntoBlockAndDagStore[F](lastFinalizedBlock, approvedBlock)
-              _             <- LastApprovedBlock[F].set(approvedBlock)
+              ab = ApprovedBlock(ApprovedBlockCandidate(approvedBlock, 0), Nil)
+              _  <- insertIntoBlockAndDagStore[F](approvedBlock, ab)
+              _  <- LastApprovedBlock[F].set(ab)
 
               // Update last finalized block with received block hash
-              _ <- LastFinalizedStorage[F].put(lastFinalizedBlock.blockHash)
+              _ <- LastFinalizedStorage[F].put(approvedBlock.blockHash)
 
               // Transition to restore last finalized state
-              _ <- transitionToLastFinalizedState(
-                    shardId,
-                    finalizationRate,
-                    validatorId
-                  )
+              _ <- requestApprovedState
             } yield ()
           } else
             Log[F].info("Invalid LastFinalizedBlock received; refusing to add.")
     } yield ()
   }
 
+  def requestApprovedState =
+    for {
+      // Approved block is the starting point to request the state
+      approvedBlock <- LastApprovedBlock[F].get >>= (_.liftTo(
+                        ApprovedBlockNotAvailableWhenRestoringLastFinalizedStateError
+                      ))
+
+      // Request all blocks for Last Finalized State
+      blockRequestStream <- LastFinalizedStateBlockRequester.stream(
+                             approvedBlock,
+                             blockMessageQueue
+                           )
+
+      // Request tuple space state for Last Finalized State
+      tupleSpaceStream <- LastFinalizedStateTupleSpaceRequester.stream(
+                           approvedBlock,
+                           tupleSpaceQueue
+                         )
+
+      // Execute stream until tuple space and all needed blocks are received
+      _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
+
+      _ <- Log[F].info(
+            s"Last Finalized State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
+          )
+
+      // Transition to Running state
+      _ <- createCasperAndTransitionToRunning(approvedBlock)
+    } yield ()
+
+  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
+    val genesis = approvedBlock.candidate.block
+    for {
+      casper <- MultiParentCasper
+                 .hashSetCasper[F](
+                   validatorId,
+                   genesis,
+                   shardId,
+                   finalizationRate,
+                   skipValidateGenesis = true
+                 )
+      _ <- Log[F].info("MultiParentCasper instance created.")
+      _ <- transitionToRunning[F](
+            casper,
+            approvedBlock,
+            validatorId,
+            ().pure
+          )
+      _ <- CommUtil[F].sendForkChoiceTipRequest
+    } yield ()
+  }
 }

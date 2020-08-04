@@ -12,6 +12,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
 import coop.rchain.shared.{Cell, EventPublisher}
+import fs2.concurrent.Queue
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -29,13 +30,18 @@ class InitializingSpec extends WordSpec {
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
       implicit val rspaceMan  = RSpaceStateManagerDummyImpl[Task]()
 
+      val blockResponseQueue = Queue.unbounded[Task, BlockMessage].runSyncUnsafe()
+      val stateResponseQueue = Queue.unbounded[Task, StoreItemsMessage].runSyncUnsafe()
+
       // interval and duration don't really matter since we don't require and signs from validators
       val initializingEngine =
         new Initializing[Task](
           shardId,
           finalizationRate,
           Some(validatorId),
-          theInit
+          theInit,
+          blockResponseQueue,
+          stateResponseQueue
         )
 
       val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)

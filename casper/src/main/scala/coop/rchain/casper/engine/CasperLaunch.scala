@@ -44,21 +44,21 @@ object CasperLaunch {
     def launch(): F[Unit] =
       BlockStore[F].getApprovedBlock map {
         case Some(approvedBlock) =>
-          val msg    = "Found ApprovedBlock in storage, reconnecting to existing network"
+          val msg    = "Approved block found, reconnecting to existing network"
           val action = connectToExistingNetwork(approvedBlock)
           (msg, action)
         case None if (conf.genesisCeremony.genesisValidatorMode) =>
           val msg =
-            "ApprovedBlock not found in storage, taking part in ceremony as genesis validator"
+            "Approved block not found, taking part in ceremony as genesis validator"
           val action = connectAsGenesisValidator()
           (msg, action)
         case None if (conf.genesisCeremony.ceremonyMasterMode) =>
           val msg =
-            "ApprovedBlock not found in storage, taking part in ceremony as ceremony master"
+            "Approved block not found, taking part in ceremony as ceremony master"
           val action = initBootstrap()
           (msg, action)
         case None =>
-          val msg    = "ApprovedBlock not found in storage, connecting to existing network"
+          val msg    = "Approved block not found, connecting to existing network"
           val action = connectAndQueryApprovedBlock()
           (msg, action)
       } >>= {
@@ -200,8 +200,9 @@ object CasperLaunch {
               conf.shardName,
               conf.finalizationRate,
               validatorId,
+              // TODO peer should be able to request approved blocks on different heghts
+              // from genesis to the most recent one (default)
               CommUtil[F].requestApprovedBlock
-//              CommUtil[F].requestLastFinalizedBlock // To enable LFS
             )
       } yield ()
 
