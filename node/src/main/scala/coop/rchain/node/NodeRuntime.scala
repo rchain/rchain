@@ -954,7 +954,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl[F](conf.apiServer.maxBlocksLimit)
+        new WebApiImpl(conf.apiServer.maxBlocksLimit, rnodeStateManager)
       }
       adminWebApi = {
         implicit val ec     = engineCell
@@ -963,7 +963,7 @@ object NodeRuntime {
         implicit val bs     = blockStore
         implicit val sc     = synchronyConstraintChecker
         implicit val lfhscc = lastFinalizedHeightConstraintChecker
-        new AdminWebApiImpl[F](conf.apiServer.maxBlocksLimit, blockApiLock)
+        new AdminWebApiImpl[F](blockApiLock, rnodeStateManager)
       }
     } yield (
       blockStore,
