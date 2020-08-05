@@ -184,7 +184,7 @@ object LastFinalizedStateTupleSpaceRequester {
     }
 
     val stateHash = Blake2b256Hash.fromByteString(
-      ProtoUtil.preStateHash(approvedBlock.candidate.block)
+      ProtoUtil.postStateHash(approvedBlock.candidate.block)
     )
     val startRequest: StatePartPath = Seq((stateHash, None))
     val importer                    = RSpaceStateManager[F].importer
