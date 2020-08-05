@@ -169,10 +169,10 @@ object LastFinalizedStateBlockRequester {
       requestStream.takeWhile(!_) concurrently responseStream concurrently timeoutResendStream
     }
 
-    val parentHashes = approvedBlock.candidate.block.header.parentsHashList
+    val dependenciesHashes = ProtoUtil.dependenciesHashesOf(approvedBlock.candidate.block)
     for {
       // Requester state
-      st <- SignallingRef[F, ST[BlockHash]](ST(parentHashes))
+      st <- SignallingRef[F, ST[BlockHash]](ST(dependenciesHashes))
       // Block requests queue
       requestQueue <- Queue.unbounded[F, Boolean]
       // Light the fire! / Starts the first request for block
