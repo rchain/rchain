@@ -2,16 +2,16 @@ package coop.rchain.casper.engine
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
+import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.ProtocolHelper._
-import coop.rchain.comm.transport
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
@@ -44,7 +44,8 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
       )
     )
 
-    implicit val casper = NoOpsCasperEffect[Task]().unsafeRunSync
+    implicit val casper    = NoOpsCasperEffect[Task]().unsafeRunSync
+    implicit val rspaceMan = RSpaceStateManagerDummyImpl[Task]()
 
     val engine = new Running[Task](casper, approvedBlock, None, Task.unit)
 
