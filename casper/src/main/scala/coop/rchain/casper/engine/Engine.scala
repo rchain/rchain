@@ -21,7 +21,12 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.engine.Running.Running
+import coop.rchain.casper.state.RNodeStateManager
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.state.RSpaceStateManager
+import fs2.concurrent.Queue
 
 trait Engine[F[_]] {
   def init: F[Unit]
@@ -79,7 +84,14 @@ object Engine {
       _   <- TransportLayer[F].stream(peer, msg)
     } yield ()
 
-  def transitionToRunning[F[_]: Sync: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: BlockRetriever: LastFinalizedStorage: Concurrent: CasperBufferStorage: Metrics](
+  // format: off
+  def transitionToRunning[F[_]
+    /* Execution */   : Concurrent: Time
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* State */       : EngineCell: RPConfAsk: ConnectionsCell
+    /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+    /* Diagnostics */ : Log: EventLog: Metrics] // format: on
+  (
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
@@ -97,11 +109,50 @@ object Engine {
 
     } yield ()
 
-  def transitionToInitializing[F[_]: Concurrent: Metrics: Span: Monad: EngineCell: Log: EventLog: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
+  // format: off
+  def transitionToInitializing[F[_]
+    /* Execution */   : Concurrent: Time
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+    /* Rholang */     : RuntimeManager
+    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  (
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit]
   ): F[Unit] = EngineCell[F].set(new Initializing(shardId, finalizationRate, validatorId, init))
+
+  // format: off
+  def transitionToLastFinalizedState[F[_]
+    /* Execution */   : Concurrent: Time
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+    /* Rholang */     : RuntimeManager
+    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  (
+      shardId: String,
+      finalizationRate: Int,
+      validatorId: Option[ValidatorIdentity]
+  ): F[Unit] =
+    for {
+      blockResponseQueue <- Queue.unbounded[F, BlockMessage]
+      stateResponseQueue <- Queue.unbounded[F, StoreItemsMessage]
+      lfs = new LastFinalizedState[F](
+        shardId,
+        finalizationRate,
+        validatorId,
+        blockResponseQueue,
+        stateResponseQueue
+      )
+      _ <- EngineCell[F].set(lfs)
+
+      // Start requesting Last finalized state
+      _ <- lfs.start
+    } yield ()
 
 }

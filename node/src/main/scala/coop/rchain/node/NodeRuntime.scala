@@ -882,6 +882,7 @@ object NodeRuntime {
         implicit val es     = estimator
         implicit val ds     = deployStorage
         implicit val cbs    = casperBufferStorage
+        implicit val rsm    = rspaceStateManager
 
         CasperLaunch.of[F](conf.casper)
       }
