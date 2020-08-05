@@ -362,43 +362,47 @@ object ProtoUtil {
     import cats.instances.stream._
 
     for {
-      latestMessages        <- dag.latestMessages
-      latestMessagesOfBlock <- toLatestMessage(block.justifications, dag)
-      unseenBlockHashesAndLatestMessages <- latestMessages.toStream
-                                             .traverse {
-                                               case (validator, latestMessage) =>
-                                                 getJustificationChainFromLatestMessageToBlock(
-                                                   dag,
-                                                   latestMessagesOfBlock,
-                                                   validator,
-                                                   latestMessage
-                                                 )
-                                             }
-                                             .map(_.flatten.toSet)
-    } yield unseenBlockHashesAndLatestMessages -- latestMessagesOfBlock.values.map(_.blockHash) - block.blockHash
+      dagsLatestMessages   <- dag.latestMessages
+      blocksLatestMessages <- toLatestMessage(block.justifications, dag)
+
+      unseenLatestMessages = dagsLatestMessages.filter(
+        dlm =>
+          !blocksLatestMessages.contains(dlm._1) ||
+            (blocksLatestMessages.contains(dlm._1) &&
+              dlm._2.seqNum > blocksLatestMessages.toList.find(_._1 == dlm._1).get._2.seqNum)
+      )
+
+      unseenBlockHashes <- unseenLatestMessages.toStream
+                            .traverse { ulm =>
+                              getCreatorBlocksBetween(
+                                dag,
+                                ulm._2,
+                                blocksLatestMessages.get(ulm._1)
+                              )
+                            }
+                            .map(_.flatten.toSet)
+    } yield unseenBlockHashes -- blocksLatestMessages.values.map(_.blockHash) - block.blockHash
   }
 
-  private def getJustificationChainFromLatestMessageToBlock[F[_]: Sync: BlockStore](
+  private def getCreatorBlocksBetween[F[_]: Sync: BlockStore](
       dag: BlockDagRepresentation[F],
-      latestMessagesOfBlock: Map[Validator, BlockMetadata],
-      validator: Validator,
-      latestMessage: BlockMetadata
+      topBlock: BlockMetadata,
+      bottomBlock: Option[BlockMetadata]
   ): F[Set[BlockHash]] =
-    latestMessagesOfBlock.get(validator) match {
-      case Some(latestMessageOfBlockByValidator) =>
+    bottomBlock match {
+      case None => Set(topBlock.blockHash).pure[F]
+      case Some(bottomBlock) =>
         DagOperations
-          .bfTraverseF(List(latestMessage))(
-            block =>
+          .bfTraverseF(List(topBlock))(
+            nextCreatorBlock =>
               getCreatorJustificationUnlessGoal(
                 dag,
-                block,
-                latestMessageOfBlockByValidator
+                nextCreatorBlock,
+                bottomBlock
               )
           )
           .map(_.blockHash)
           .toSet
-      case None =>
-        Set.empty[BlockHash].pure
     }
 
   private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockStore](
@@ -417,7 +421,10 @@ object ProtoUtil {
             }
           case None =>
             Sync[F].raiseError[List[BlockMetadata]](
-              new RuntimeException(s"Missing block hash $hash in block dag.")
+              new RuntimeException(
+                s"BlockDAG is missing justification ${PrettyPrinter
+                  .buildString(hash)} for ${PrettyPrinter.buildString(block.blockHash)}."
+              )
             )
         }
       case None =>
