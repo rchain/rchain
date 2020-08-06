@@ -12,7 +12,7 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper.{engine, _}
+import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
@@ -22,6 +22,7 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
 
 trait CasperLaunch[F[_]] {
@@ -30,10 +31,16 @@ trait CasperLaunch[F[_]] {
 
 object CasperLaunch {
 
-  def of[F[_]: Parallel: LastApprovedBlock: Metrics: Span: BlockStore: CommUtil: ConnectionsCell: TransportLayer: RPConfAsk: SafetyOracle: LastFinalizedBlockCalculator: Concurrent: Time: Log: EventLog: BlockDagStorage: LastFinalizedStorage: EngineCell: EnvVars: RaiseIOError: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
-      conf: CasperConf
-  ): CasperLaunch[F] = new CasperLaunch[F] {
-
+  // format: off
+  def of[F[_]
+    /* Execution */   : Concurrent: Parallel: Time: RaiseIOError
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+    /* Rholang */     : RuntimeManager
+    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  (conf: CasperConf): CasperLaunch[F] = new CasperLaunch[F] {
     def launch(): F[Unit] =
       BlockStore[F].getApprovedBlock map {
         case Some(approvedBlock) =>
@@ -194,7 +201,9 @@ object CasperLaunch {
               conf.finalizationRate,
               validatorId,
               CommUtil[F].requestApprovedBlock
+//              CommUtil[F].requestLastFinalizedBlock // To enable LFS
             )
       } yield ()
+
   }
 }

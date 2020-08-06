@@ -42,6 +42,14 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       dbi.get(txn, key)
     }.map(v => Option(v))
 
+  def get[V](key: Seq[ByteBuffer], fromBuffer: ByteBuffer => V): F[Seq[Option[V]]] =
+    withReadTxnF { txn =>
+      key.map { k =>
+        val v = Option(dbi.get(txn, k))
+        v.map(fromBuffer)
+      }
+    }
+
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def put(key: ByteBuffer, value: ByteBuffer): F[Unit] =
     withWriteTxnF { txn =>
@@ -56,6 +64,17 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       kvPairs.foreach {
         case (key, value) =>
           if (!dbi.put(txn, key, value)) {
+            throw new RuntimeException("was not able to put data")
+          }
+      }
+    }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def put[T](kvPairs: Seq[(ByteBuffer, T)], toBuffer: T => ByteBuffer): F[Unit] =
+    withWriteTxnF { txn =>
+      kvPairs.foreach {
+        case (key, value) =>
+          if (!dbi.put(txn, key, toBuffer(value))) {
             throw new RuntimeException("was not able to put data")
           }
       }

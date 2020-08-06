@@ -1,23 +1,24 @@
 package coop.rchain.casper.util.comm
 
-import scala.concurrent.duration._
+import cats.Monad
 import cats.effect._
 import cats.syntax.all._
 import cats.tagless.autoFunctorK
-import cats.{Applicative, Monad}
+import com.google.protobuf.ByteString
 import coop.rchain.casper._
-import coop.rchain.comm.syntax._
-import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol._
-import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.casper.util.comm.CommUtil.StandaloneNodeSendToBootstrapError
 import coop.rchain.comm.protocol.routing.{Packet, Protocol}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.rp.ProtocolHelper.{packet, protocol}
+import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.comm.syntax._
 import coop.rchain.comm.transport.{Blob, TransportLayer}
+import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared._
-import com.google.protobuf.ByteString
-import coop.rchain.casper.util.comm.CommUtil.StandaloneNodeSendToBootstrapError
+
+import scala.concurrent.duration._
 
 // TODO: remove CommUtil completely and move to extensions (syntax) on TransportLayer
 @autoFunctorK
@@ -127,6 +128,9 @@ final class CommUtilOps[F[_]](
   def broadcastHasBlockRequest(hash: BlockHash): F[Unit] =
     sendToPeers(HasBlockRequestProto(hash))
 
+  def broadcastRequestForBlock(hash: BlockHash): F[Unit] =
+    sendToPeers(BlockRequest(hash).toProto)
+
   def sendForkChoiceTipRequest(implicit m: Monad[F], log: Log[F]): F[Unit] =
     sendToPeers(ForkChoiceTipRequest.toProto) >>
       Log[F].info(s"Requested fork tip from peers")
@@ -138,4 +142,21 @@ final class CommUtilOps[F[_]](
       msg            = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toProto
       _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "ApprovedBlockRequest")
     } yield ()
+
+  def requestLastFinalizedBlock(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
+    for {
+      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
+      bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
+      msg            = LastFinalizedBlockRequest.toProto
+      _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "LastFinalizedBlockRequest")
+    } yield ()
+
+  def sendStoreItemsRequest(req: StoreItemsMessageRequest): F[Unit] =
+    sendToPeers(StoreItemsMessageRequest.toProto(req))
+
+  def sendStoreItemsRequest(rootStateHash: Blake2b256Hash, pageSize: Int): F[Unit] = {
+    val rootPath = Seq((rootStateHash, none[Byte]))
+    val req      = StoreItemsMessageRequest(rootPath, 0, pageSize)
+    sendStoreItemsRequest(req)
+  }
 }

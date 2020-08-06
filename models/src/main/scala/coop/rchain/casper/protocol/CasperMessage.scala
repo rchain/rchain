@@ -3,11 +3,11 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.{PCost, Pretty}
+import coop.rchain.models.PCost
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -25,10 +25,16 @@ object CasperMessage {
     case p: BlockApprovalProto            => BlockApproval.from(p)
     case p: BlockRequestProto             => Right(BlockRequest.from(p))
     case _: ForkChoiceTipRequestProto     => Right(ForkChoiceTipRequest)
+    case p: ForkChoiceTipResponseProto    => Right(ForkChoiceTipResponse(p.hash))
     case p: HasBlockProto                 => Right(HasBlock.from(p))
     case p: HasBlockRequestProto          => Right(HasBlockRequest.from(p))
     case p: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(p))
     case p: UnapprovedBlockProto          => UnapprovedBlock.from(p)
+    // Last finalized state messages
+    case _: LastFinalizedBlockRequestProto  => Right(LastFinalizedBlockRequest)
+    case p: LastFinalizedBlockResponseProto => LastFinalizedBlock.from(p)
+    case p: StoreItemsMessageRequestProto   => Right(StoreItemsMessageRequest.from(p))
+    case p: StoreItemsMessageProto          => Right(StoreItemsMessage.from(p))
   }
 }
 
@@ -56,8 +62,17 @@ object BlockRequest {
   def from(hbr: BlockRequestProto): BlockRequest = BlockRequest(hbr.hash)
 }
 
-case object ForkChoiceTipRequest extends CasperMessage {
+final case object ForkChoiceTipRequest extends CasperMessage {
   val toProto: ForkChoiceTipRequestProto = ForkChoiceTipRequestProto()
+}
+
+final case class ForkChoiceTipResponse(hash: ByteString) extends CasperMessage {
+  def toProto: ForkChoiceTipResponseProto = ForkChoiceTipResponseProto(hash)
+}
+
+object ForkChoiceTipResponse {
+  def from(fct: ForkChoiceTipResponseProto): ForkChoiceTipResponse =
+    ForkChoiceTipResponse(fct.hash)
 }
 
 final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
@@ -579,4 +594,102 @@ final case class Bond(
 object Bond {
   def from(b: BondProto): Bond    = Bond(b.validator, b.stake)
   def toProto(b: Bond): BondProto = BondProto(b.validator, b.stake)
+}
+
+// Last finalized state
+
+case object LastFinalizedBlockRequest extends CasperMessage {
+  override val toProto: LastFinalizedBlockRequestProto = LastFinalizedBlockRequestProto()
+}
+
+final case class LastFinalizedBlock(block: BlockMessage) extends CasperMessage {
+  override def toProto: LastFinalizedBlockResponseProto = LastFinalizedBlock.toProto(this)
+}
+
+object LastFinalizedBlock {
+  def from(b: LastFinalizedBlockResponseProto) =
+    BlockMessage.from(b.block).map(LastFinalizedBlock(_))
+  def toProto(b: LastFinalizedBlock): LastFinalizedBlockResponseProto =
+    LastFinalizedBlockResponseProto(BlockMessage.toProto(b.block))
+}
+
+final case class StoreItemsMessageRequest(
+    startPath: Seq[(Blake2b256Hash, Option[Byte])],
+    skip: Int,
+    take: Int
+) extends CasperMessage {
+  override def toProto: CasperMessageProto = StoreItemsMessageRequest.toProto(this)
+}
+
+object StoreItemsMessageRequest {
+  import cats.syntax.all._
+  def from(x: StoreItemsMessageRequestProto): StoreItemsMessageRequest =
+    StoreItemsMessageRequest(
+      // Start path
+      x.startPath.map { p =>
+        (
+          // Key hash
+          Blake2b256Hash.fromByteString(p.hash),
+          // Relative branch index / max 8-bit
+          if (p.index == -1) none[Byte] else p.index.toByte.some
+        )
+      },
+      x.skip,
+      x.take
+    )
+
+  def toProto(x: StoreItemsMessageRequest): StoreItemsMessageRequestProto =
+    StoreItemsMessageRequestProto(
+      x.startPath
+        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
+        .toList,
+      x.skip,
+      x.take
+    )
+}
+
+final case class StoreItemsMessage(
+    startPath: Seq[(Blake2b256Hash, Option[Byte])],
+    lastPath: Seq[(Blake2b256Hash, Option[Byte])],
+    historyItems: Seq[(Blake2b256Hash, ByteString)],
+    dataItems: Seq[(Blake2b256Hash, ByteString)]
+) extends CasperMessage {
+  override def toProto: StoreItemsMessageProto = StoreItemsMessage.toProto(this)
+}
+
+object StoreItemsMessage {
+  import cats.syntax.all._
+  def from(x: StoreItemsMessageProto): StoreItemsMessage =
+    StoreItemsMessage(
+      x.startPath.map(
+        p =>
+          (
+            Blake2b256Hash.fromByteString(p.hash),
+            if (p.index == -1) none[Byte]
+            else p.index.toByte.some
+          )
+      ),
+      x.lastPath.map(
+        p =>
+          (
+            Blake2b256Hash.fromByteString(p.hash),
+            if (p.index == -1) none[Byte]
+            else p.index.toByte.some
+          )
+      ),
+      x.historyItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value)),
+      x.dataItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value))
+    )
+
+  def toProto(x: StoreItemsMessage): StoreItemsMessageProto =
+    StoreItemsMessageProto(
+      x.startPath
+        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
+        .toList,
+      x.lastPath
+        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
+        .toList,
+      x.historyItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList,
+      x.dataItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList
+    )
 }

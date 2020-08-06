@@ -22,8 +22,8 @@ class RootRepository[F[_]: Sync](
       case Some(root) => Applicative[F].pure(root)
     }
 
-  def validateRoot(root: Blake2b256Hash): F[Unit] =
-    rootsStore.validateRoot(root).flatMap {
+  def validateAndSetCurrentRoot(root: Blake2b256Hash): F[Unit] =
+    rootsStore.validateAndSetCurrentRoot(root).flatMap {
       case None    => Sync[F].raiseError[Unit](unknownRoot)
       case Some(_) => Applicative[F].pure(())
     }

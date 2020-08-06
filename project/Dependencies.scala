@@ -81,8 +81,9 @@ object Dependencies {
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
-  // format: on
   val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.12.3"
+  val fs2Core             = "co.fs2"                      %% "fs2-core"                 % "2.3.0"
+  // format: on
 
   val overrides = Seq(
     catsCore,
@@ -94,7 +95,7 @@ object Dependencies {
     scalacheck,
     disciplineCore,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
-    "com.typesafe"             % "config"                 % "1.4.0",
+    "com.typesafe"             % "config"                  % "1.4.0",
     "org.typelevel"            %% "machinist"              % "0.6.5",
     "org.typelevel"            %% "catalysts-platform"     % "0.6",
     "com.lihaoyi"              %% "sourcecode"             % "0.1.4",

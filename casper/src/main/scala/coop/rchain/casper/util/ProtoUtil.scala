@@ -417,7 +417,9 @@ object ProtoUtil {
             }
           case None =>
             Sync[F].raiseError[List[BlockMetadata]](
-              new RuntimeException(s"Missing block hash $hash in block dag.")
+              new RuntimeException(
+                s"Missing block hash ${PrettyPrinter.buildString(hash)} in block dag."
+              )
             )
         }
       case None =>

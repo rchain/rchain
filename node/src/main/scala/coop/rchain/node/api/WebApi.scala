@@ -17,6 +17,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBo
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
+import coop.rchain.state.StateManager
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -54,7 +55,8 @@ trait WebApi[F[_]] {
 object WebApi {
 
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
-      apiMaxBlocksLimit: Int
+      apiMaxBlocksLimit: Int,
+      stateManager: StateManager[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -319,18 +321,6 @@ object WebApi {
     val (pars, lightBlockInfo) = data
     val rhoExprs               = pars.flatMap(exprFromParProto)
     ExploratoryDeployResponse(rhoExprs, lightBlockInfo)
-  }
-
-  object WebApiSyntax {
-    implicit final class OptionExt[A](val x: Option[A]) extends AnyVal {
-      def liftToSigErr[F[_]: Sync](error: String): F[A] =
-        x.liftTo[F](new SignatureException(error))
-    }
-
-    implicit final class EitherStringExt[A](val x: Either[String, A]) extends AnyVal {
-      def liftToBlockApiErr[F[_]: Sync]: F[A] =
-        x.leftMap(new BlockApiException(_)).liftTo[F]
-    }
   }
 
 }

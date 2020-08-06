@@ -13,8 +13,7 @@ import scodec.bits.BitVector
 object StoreFactory {
   def keyValueStore[F[_]: Sync: KeyValueStoreManager](dbName: String): F[Store[F]] =
     for {
-      kvStore <- KeyValueStoreManager[F].store(dbName)
-      store   = kvStore
+      store <- KeyValueStoreManager[F].store(dbName)
     } yield new Store[F] {
 
       override def get(key: ByteBuffer): F[Option[ByteBuffer]] =
@@ -28,13 +27,19 @@ object StoreFactory {
         get(directKey).map(v => v.map(BitVector(_)))
       }
 
+      override def get[T](
+          keys: Seq[Blake2b256Hash],
+          fromBuffer: ByteBuffer => T
+      ): F[Seq[Option[T]]] =
+        store.get(keys.map(_.bytes.toDirectByteBuffer), fromBuffer)
+
       override def put(key: Blake2b256Hash, value: BitVector): F[Unit] = {
         val directKey   = key.bytes.toDirectByteBuffer
         val directValue = value.toByteVector.toDirectByteBuffer
         put(directKey, directValue)
       }
 
-      def put[T](
+      override def put[T](
           data: Seq[(Blake2b256Hash, T)],
           toBuffer: T => ByteBuffer
       ): F[Unit] = {
