@@ -380,7 +380,7 @@ object Running {
             validFormat  <- Validate.formatOfFields(b)
             validSig     <- Validate.blockSignature(b)
             validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
-            oldBlock     = ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(ab)
+            oldBlock     = ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(ab)
             _ <- Log[F]
                   .warn(
                     s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${ab.shardId}]."
