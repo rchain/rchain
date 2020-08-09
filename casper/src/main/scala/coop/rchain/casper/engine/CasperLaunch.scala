@@ -105,14 +105,13 @@ object CasperLaunch {
 
       for {
         validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-        genesis     = approvedBlock.candidate.block
+        ab          = approvedBlock.candidate.block
         casper <- MultiParentCasper
                    .hashSetCasper[F](
                      validatorId,
-                     genesis,
+                     ab,
                      conf.shardName,
-                     conf.finalizationRate,
-                     skipValidateGenesis = true
+                     conf.finalizationRate
                    )
         init = for {
           _ <- askPeersForForkChoiceTips
