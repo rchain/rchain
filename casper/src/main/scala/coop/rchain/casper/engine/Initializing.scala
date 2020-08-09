@@ -201,15 +201,14 @@ class Initializing[F[_]
   }
 
   private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
-    val genesis = approvedBlock.candidate.block
+    val ab = approvedBlock.candidate.block
     for {
       casper <- MultiParentCasper
                  .hashSetCasper[F](
                    validatorId,
-                   genesis,
+                   ab,
                    shardId,
-                   finalizationRate,
-                   skipValidateGenesis = true
+                   finalizationRate
                  )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](

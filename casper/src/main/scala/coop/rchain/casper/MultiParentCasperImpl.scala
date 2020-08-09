@@ -35,7 +35,6 @@ import coop.rchain.crypto.signatures.Signed
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
     approvedBlock: BlockMessage,
-    postGenesisStateHash: StateHash,
     shardId: String,
     finalizationRate: Int,
     blockProcessingLock: Semaphore[F]
