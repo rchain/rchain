@@ -21,6 +21,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
 import coop.rchain.shared._
@@ -29,8 +30,6 @@ import fs2.concurrent.Queue
 import scala.concurrent.duration._
 
 object Initializing {
-  val pageSize = 3000
-
   // Approved block must be available before restoring last finalized state
   final case object ApprovedBlockNotAvailableWhenRestoringLastFinalizedStateError extends Exception
 }
@@ -145,27 +144,62 @@ class Initializing[F[_]
   }
 
   def requestApprovedState: F[Unit] = {
+    def populateDag(approvedBlock: ApprovedBlock): F[Unit] = {
+      import cats.instances.list._
 
-    import cats.instances.list._
-    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
-    def addBlockToDag(block: BlockMessage, approvedBlock: ApprovedBlock): F[Unit] =
+      def step(
+          data: (List[(BlockHash, Long)], List[(BlockHash, Long)])
+      ): F[Either[(List[(BlockHash, Long)], List[(BlockHash, Long)]), List[(BlockHash, Long)]]] = {
+
+        val tail    = data._1
+        val acc     = data._2
+        val return_ = acc.asRight[(List[(BlockHash, Long)], List[(BlockHash, Long)])].pure[F]
+
+        if (tail.isEmpty)
+          return_
+        else {
+          val toProcess = tail.head
+          val remainder = tail.tail
+          for {
+            blockStored <- BlockStore[F].contains(toProcess._1)
+            r <- if (blockStored && !acc.contains(toProcess)) for {
+                  block       <- BlockStore[F].getUnsafe(toProcess._1)
+                  deps        = ProtoUtil.dependenciesHashesOf(block)
+                  blocksToAdd <- deps.traverse(BlockStore[F].get)
+                  newToProcess = blocksToAdd.flatten
+                    .map(b => (b.blockHash, b.body.state.blockNumber))
+                    .toSet
+                } yield (remainder ++ newToProcess, toProcess :: acc).asLeft[List[(BlockHash, Long)]]
+                else
+                  (remainder, acc).asLeft[List[(BlockHash, Long)]].pure[F]
+          } yield r
+        }
+      }
+
       for {
-        dag   <- BlockDagStorage[F].getRepresentation
-        added <- dag.contains(block.blockHash)
-        _ <- BlockDagStorage[F]
-              .insert(
-                block,
-                approvedBlock.candidate.block,
-                invalid = false
-              )
-              .unlessA(added)
-        missingDeps <- ProtoUtil.dependenciesHashesOf(block).filterA(dag.contains(_).not)
-        blocksToAdd <- missingDeps.traverse(BlockStore[F].get)
-        sortedDeps = blocksToAdd.flatten.sortWith(
-          _.body.state.blockNumber > _.body.state.blockNumber
-        )
-        _ <- sortedDeps.traverse(addBlockToDag(_, approvedBlock))
+        hashes <- (
+                   List(
+                     (
+                       approvedBlock.candidate.block.blockHash,
+                       approvedBlock.candidate.block.body.state.blockNumber
+                     )
+                   ),
+                   List.empty[(BlockHash, Long)]
+                 ).tailRecM(step)
+        _ <- Log[F].info(s"Inserting ${hashes.size} hashes into DagStore.")
+        _ <- hashes.sortBy(_._2).reverse.traverse { h =>
+              for {
+                block <- BlockStore[F].getUnsafe(h._1)
+                _ <- BlockDagStorage[F]
+                      .insert(
+                        block,
+                        approvedBlock.candidate.block,
+                        invalid = false
+                      )
+              } yield ()
+            }
       } yield ()
+    }
 
     for {
       // Approved block is the starting point to request the state
@@ -189,7 +223,7 @@ class Initializing[F[_]
       _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
       // Populate DAG with blocks retrieved
-      _ <- addBlockToDag(approvedBlock.candidate.block, approvedBlock)
+      _ <- populateDag(approvedBlock)
 
       _ <- Log[F].info(
             s"Approved State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
