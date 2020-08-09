@@ -13,6 +13,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.Initializing._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
@@ -143,7 +144,29 @@ class Initializing[F[_]
     } yield ()
   }
 
-  def requestApprovedState =
+  def requestApprovedState: F[Unit] = {
+
+    import cats.instances.list._
+    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
+    def addBlockToDag(block: BlockMessage, approvedBlock: ApprovedBlock): F[Unit] =
+      for {
+        dag   <- BlockDagStorage[F].getRepresentation
+        added <- dag.contains(block.blockHash)
+        _ <- BlockDagStorage[F]
+              .insert(
+                block,
+                approvedBlock.candidate.block,
+                invalid = false
+              )
+              .unlessA(added)
+        missingDeps <- ProtoUtil.dependenciesHashesOf(block).filterA(dag.contains(_).not)
+        blocksToAdd <- missingDeps.traverse(BlockStore[F].get)
+        sortedDeps = blocksToAdd.flatten.sortWith(
+          _.body.state.blockNumber > _.body.state.blockNumber
+        )
+        _ <- sortedDeps.traverse(addBlockToDag(_, approvedBlock))
+      } yield ()
+
     for {
       // Approved block is the starting point to request the state
       approvedBlock <- LastApprovedBlock[F].get >>= (_.liftTo(
@@ -165,13 +188,17 @@ class Initializing[F[_]
       // Execute stream until tuple space and all needed blocks are received
       _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
+      // Populate DAG with blocks retrieved
+      _ <- addBlockToDag(approvedBlock.candidate.block, approvedBlock)
+
       _ <- Log[F].info(
-            s"Last Finalized State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
+            s"Approved State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
           )
 
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
     } yield ()
+  }
 
   private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
     val genesis = approvedBlock.candidate.block

@@ -129,8 +129,6 @@ object LastFinalizedStateBlockRequester {
         _ <- Stream
               .eval(d.update(_.add(ProtoUtil.dependenciesHashesOf(block).toSet)))
               .whenA(isReceived && (inDeployLifeSpanRage || !allValidatorsSeen))
-        // TODO: add support to insert blocks to DAG in block number order
-        // _ <- Stream.eval(d.update(_.add(block.justifications.map(_.latestBlockHash).toSet))).whenA(isReceived)
 
         /**
           * Validate block hash. Checking justifications from last finalized block gives us proof
@@ -151,14 +149,6 @@ object LastFinalizedStateBlockRequester {
                 for {
                   // Save block to the store
                   _ <- BlockStore[F].put(block.blockHash, block)
-                  _ <- BlockDagStorage[F]
-                        .insert(
-                          block,
-                          approvedBlock.candidate.block,
-                          invalid = false,
-                          unsafe = true
-                        )
-
                   // Mark block as finished
                   _ <- d.update(_.done(block.blockHash))
                 } yield ()
