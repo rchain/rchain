@@ -70,7 +70,7 @@ object GenesisCeremonyMaster {
                                 genesis,
                                 shardId,
                                 finalizationRate,
-                                skipValidateGenesis = false
+                                skipValidateGenesis = true
                               )
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])
