@@ -152,26 +152,40 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                   .map(_.validator)
                   .toSet
                   .diff(block.justifications.map(_.validator).toSet)
+
+                currLatestMessageHash <- latestMessagesIndex.get(Seq(block.sender))
+                currLatestMessageMetadata <- blockMetadataIndex.get(
+                                              currLatestMessageHash.head.getOrElse(ByteString.EMPTY)
+                                            )
+                currLatestMessageSeqNum = if (currLatestMessageMetadata.isDefined)
+                  currLatestMessageMetadata.get.seqNum
+                else 0
                 newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
-                newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
-                                                          // Ignore empty sender for special cases such as genesis block
-                                                          Log[F].warn(
-                                                            s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                                          ) >> newValidatorsLatestMessages.pure[F]
-                                                        } else if (block.sender
-                                                                     .size() == Validator.Length) {
-                                                          (newValidatorsLatestMessages + (
-                                                            (
-                                                              block.sender,
-                                                              block.blockHash
-                                                            )
-                                                          )).pure[F]
-                                                        } else {
-                                                          Sync[F].raiseError[Set[
-                                                            (ByteString, ByteString)
-                                                          ]](
-                                                            BlockSenderIsMalformed(block)
-                                                          )
+                newValidatorsWithSenderLatestMessages <- block.sender match {
+                                                          case ByteString.EMPTY =>
+                                                            // Ignore empty sender for special cases such as genesis block
+                                                            Log[F].warn(
+                                                              s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
+                                                            ) >> newValidatorsLatestMessages.pure[F]
+                                                          case _ =>
+                                                            if (block.sender
+                                                                  .size() == Validator.Length) {
+                                                              if (block.seqNum >= currLatestMessageSeqNum)
+                                                                (newValidatorsLatestMessages + (
+                                                                  (
+                                                                    block.sender,
+                                                                    block.blockHash
+                                                                  )
+                                                                )).pure[F]
+                                                              else
+                                                                newValidatorsLatestMessages.pure[F]
+                                                            } else {
+                                                              Sync[F].raiseError[Set[
+                                                                (ByteString, ByteString)
+                                                              ]](
+                                                                BlockSenderIsMalformed(block)
+                                                              )
+                                                            }
                                                         }
                 deployHashes = deployData(block).map(_.sig).toList
                 // Add deploys to deploy index storage
