@@ -75,9 +75,6 @@ object BlockRetriever {
       requestBlock: Boolean
   )
 
-  implicit private[this] val BlockRequesterMetricsSource: Source =
-    Metrics.Source(CasperMetricsSource, "blocks-retriever")
-
   final case class RequestState(
       // Last time block was requested
       timestamp: Long,
@@ -283,7 +280,6 @@ object BlockRetriever {
                         s"Remain waiting: ${waitingListTail.map(_.endpoint.host).mkString(", ")}."
                     )
                 _  <- CommUtil[F].requestForBlock(nextPeer, hash)
-                _  <- CommUtil[F].broadcastHasBlockRequest(hash).whenA(waitingListTail.isEmpty)
                 ts <- Time[F].currentMillis
                 _ <- RequestedBlocks.put(
                       hash,
@@ -295,11 +291,14 @@ object BlockRetriever {
                     )
               } yield ()
             case _ =>
-              val warnMessage = s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)} " +
-                s"from ${requested.peers.mkString(", ")}. Removing the request from the requested blocks list. " +
-                s"Casper will have to re-request the block."
-              Metrics[F].incrementCounter("block-retrieve-failed") >>
-                Log[F].warn(warnMessage)
+              for {
+                _ <- Log[F].warn(
+                      s"Could not retrieve requested block ${PrettyPrinter.buildString(hash)} " +
+                        s"from ${requested.peers.mkString(", ")}. Asking peers again."
+                    )
+                _ <- RequestedBlocks.remove(hash)
+                _ <- CommUtil[F].broadcastHasBlockRequest(hash)
+              } yield ()
           }
 
         import cats.instances.list._
