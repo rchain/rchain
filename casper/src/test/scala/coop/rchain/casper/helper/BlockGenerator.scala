@@ -82,7 +82,7 @@ object BlockGenerator {
       b.body.copy(state = updatedBlockPostState, deploys = processedDeploys.toList)
     val updatedBlock = b.copy(body = updatedBlockBody)
     BlockStore[F].put(b.blockHash, updatedBlock) >>
-      BlockDagStorage[F].insert(updatedBlock, genesis, invalid = false).void
+      BlockDagStorage[F].insert(updatedBlock, invalid = false).void
   }
 }
 
