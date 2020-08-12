@@ -287,7 +287,6 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   def insert(
       block: BlockMessage,
-      genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
     lock.withPermit(
@@ -306,7 +305,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
                   .map(_.validator)
                   .toSet
                   .diff(block.justifications.map(_.validator).toSet)
-                newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
+                newValidatorsLatestMessages = newValidators.map(v => (v, block.blockHash))
                 newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
                                                           // Ignore empty sender for special cases such as genesis block
                                                           Log[F].warn(

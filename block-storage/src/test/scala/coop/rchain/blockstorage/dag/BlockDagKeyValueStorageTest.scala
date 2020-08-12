@@ -121,7 +121,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
         for {
-          _      <- blockElements.traverse_(storage.insert(_, genesis, false))
+          _      <- blockElements.traverse_(storage.insert(_, false))
           result <- lookupElements(blockElements, storage)
         } yield testLookupElementsResult(result, blockElements)
       }
@@ -139,7 +139,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
       }
       withDagStorage { storage =>
         for {
-          _      <- blockElementsWithGenesis.traverse_(storage.insert(_, genesis, false))
+          _      <- blockElementsWithGenesis.traverse_(storage.insert(_, false))
           result <- lookupElements(blockElementsWithGenesis, storage)
         } yield testLookupElementsResult(result, blockElementsWithGenesis)
       }
@@ -152,8 +152,8 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         secondBlockElements =>
           withDagStorage { storage =>
             for {
-              _      <- firstBlockElements.traverse_(storage.insert(_, genesis, false))
-              _      <- secondBlockElements.traverse_(storage.insert(_, genesis, false))
+              _      <- firstBlockElements.traverse_(storage.insert(_, false))
+              _      <- secondBlockElements.traverse_(storage.insert(_, false))
               result <- lookupElements(firstBlockElements ++ secondBlockElements, storage)
             } yield testLookupElementsResult(result, firstBlockElements ++ secondBlockElements)
           }
@@ -167,9 +167,9 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         (secondBlockElements, thirdBlockElements) =>
           withDagStorage { storage =>
             for {
-              _      <- blockElements.traverse_(storage.insert(_, genesis, false))
-              _      <- secondBlockElements.traverse_(storage.insert(_, genesis, false))
-              _      <- thirdBlockElements.traverse_(storage.insert(_, genesis, false))
+              _      <- blockElements.traverse_(storage.insert(_, false))
+              _      <- secondBlockElements.traverse_(storage.insert(_, false))
+              _      <- thirdBlockElements.traverse_(storage.insert(_, false))
               result <- lookupElements(blockElements, storage)
             } yield testLookupElementsResult(
               result,
@@ -186,7 +186,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         forAll(blockHashGen) { blockHash =>
           withDagStorage { storage =>
             for {
-              _ <- blockElements.traverse_(storage.insert(_, genesis, false))
+              _ <- blockElements.traverse_(storage.insert(_, false))
               record = EquivocationRecord(
                 equivocator,
                 0,
@@ -229,7 +229,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
         for {
-          _             <- blockElements.traverse_(storage.insert(_, genesis, true))
+          _             <- blockElements.traverse_(storage.insert(_, true))
           dag           <- storage.getRepresentation
           invalidBlocks <- dag.invalidBlocks
         } yield invalidBlocks shouldBe blockElements.map(BlockMetadata.fromBlock(_, true)).toSet
@@ -241,7 +241,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
         for {
-          _   <- blockElements.traverse_(storage.insert(_, genesis, true))
+          _   <- blockElements.traverse_(storage.insert(_, true))
           dag <- storage.getRepresentation
           (deploys, blockHashes) = blockElements
             .flatMap(b => b.body.deploys.map(_ -> b.blockHash))
@@ -258,8 +258,8 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         val invalidBlock = block.copy(
           body = block.body.copy(state = block.body.state.copy(blockNumber = 1000))
         )
-        storage.insert(genesis, genesis, false) >>
-          storage.insert(invalidBlock, genesis, true)
+        storage.insert(genesis, false) >>
+          storage.insert(invalidBlock, true)
       }
     }
   }
