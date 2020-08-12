@@ -124,7 +124,7 @@ object GenesisBuilder {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[Task]
       }
-      _ <- blockDagStorage.insert(genesis, genesis, invalid = false)
+      _ <- blockDagStorage.insert(genesis, invalid = false)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, storageDirectory)).unsafeRunSync
   }
 
