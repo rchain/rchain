@@ -365,26 +365,33 @@ object ProtoUtil {
       dagsLatestMessages   <- dag.latestMessages
       blocksLatestMessages <- toLatestMessage(block.justifications, dag)
 
-      unseenLatestMessages = dagsLatestMessages.filter(
-        dlm =>
-          !blocksLatestMessages.contains(dlm._1) ||
-            (blocksLatestMessages.contains(dlm._1) &&
-              dlm._2.seqNum > blocksLatestMessages.toList.find(_._1 == dlm._1).get._2.seqNum)
-      )
+      // From input block perspective we want to find what latest messages are not seen
+      //  that are in the DAG latest messages.
+      // - if validator is not in the justification of the block
+      // - if justification contains validator's newer latest message
+      unseenLatestMessages = dagsLatestMessages.filter {
+        case (validator, dagLatestMessage) =>
+          val validatorInJustification = blocksLatestMessages.contains(validator)
+          def blockHasNewerLatestMessage =
+            blocksLatestMessages.get(validator).map(dagLatestMessage.seqNum > _.seqNum)
+
+          !validatorInJustification || (validatorInJustification && blockHasNewerLatestMessage.get)
+      }
 
       unseenBlockHashes <- unseenLatestMessages.toStream
-                            .traverse { ulm =>
-                              getCreatorBlocksBetween(
-                                dag,
-                                ulm._2,
-                                blocksLatestMessages.get(ulm._1)
-                              )
+                            .traverse {
+                              case (validator, unseenLatestMessage) =>
+                                getCreatorBlocksBetween(
+                                  dag,
+                                  unseenLatestMessage,
+                                  blocksLatestMessages.get(validator)
+                                )
                             }
                             .map(_.flatten.toSet)
     } yield unseenBlockHashes -- blocksLatestMessages.values.map(_.blockHash) - block.blockHash
   }
 
-  private def getCreatorBlocksBetween[F[_]: Sync: BlockStore](
+  private def getCreatorBlocksBetween[F[_]: Sync](
       dag: BlockDagRepresentation[F],
       topBlock: BlockMetadata,
       bottomBlock: Option[BlockMetadata]
@@ -405,7 +412,7 @@ object ProtoUtil {
           .toSet
     }
 
-  private def getCreatorJustificationUnlessGoal[F[_]: Sync: BlockStore](
+  private def getCreatorJustificationUnlessGoal[F[_]: Sync](
       dag: BlockDagRepresentation[F],
       block: BlockMetadata,
       goal: BlockMetadata
