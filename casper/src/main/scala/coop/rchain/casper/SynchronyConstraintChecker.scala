@@ -49,14 +49,26 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
           seenSenders            <- calculateSeenSendersSince(lastProposedBlock, dag)
           lastProposedTuplespace = ProtoUtil.postStateHash(lastProposedBlock)
           bonds                  <- runtimeManager.computeBonds(lastProposedTuplespace)
-          validatorWeightMap     = bonds.map(b => b.validator -> b.stake).toMap
-          sendersWeight          = seenSenders.toList.flatMap(s => validatorWeightMap.get(s)).sum
-          otherValidatorsWeight  = validatorWeightMap.values.sum - validatorWeightMap(validator)
+          activeValidators       <- runtimeManager.getActiveValidators(lastProposedTuplespace)
+          validatorWeightMap = bonds
+            .filter(b => activeValidators.contains(b.validator))
+            .map(b => b.validator -> b.stake)
+            .toMap
+          sendersWeight = seenSenders.toList.flatMap(s => validatorWeightMap.get(s)).sum
+          // This method can be called on readonly node or not active validator.
+          // So map validator -> stake might not have key associated with the node,
+          // that's why we need `getOrElse`
+          otherValidatorsWeight = validatorWeightMap.values.sum - validatorWeightMap
+            .getOrElse(validator, 0L)
+          // If there is no other active validators, do not put any constraint (value = 1)
+          synchronyConstraintValue = if (otherValidatorsWeight == 0) 1
+          else
+            sendersWeight.toDouble / otherValidatorsWeight
           _ <- Log[F].info(
                 s"Seen ${seenSenders.size} senders with weight $sendersWeight out of total $otherValidatorsWeight " +
-                  s"(${sendersWeight.toDouble / otherValidatorsWeight} out of $synchronyConstraintThreshold needed)"
+                  s"(${synchronyConstraintValue} out of $synchronyConstraintThreshold needed)"
               )
-        } yield sendersWeight.toDouble / otherValidatorsWeight >= synchronyConstraintThreshold
+        } yield synchronyConstraintValue >= synchronyConstraintThreshold
       case None =>
         Sync[F].raiseError[Boolean](
           new IllegalStateException("Validator does not have a latest message")
