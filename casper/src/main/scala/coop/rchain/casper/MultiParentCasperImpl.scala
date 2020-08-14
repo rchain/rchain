@@ -435,7 +435,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       .map { _ =>
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
-          updatedDag <- BlockDagStorage[F].insert(block, approvedBlock, invalid = false)
+          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block, true)}"
               )
@@ -549,7 +549,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[BlockDagRepresentation[F]] =
     Log[F].warn(
       s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-    ) >> BlockDagStorage[F].insert(block, approvedBlock, invalid = true)
+    ) >> BlockDagStorage[F].insert(block, invalid = true)
 
   def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 
