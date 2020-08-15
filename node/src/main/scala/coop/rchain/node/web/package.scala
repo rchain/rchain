@@ -90,6 +90,7 @@ package object web {
       adminHttpServerFiber <- BlazeServerBuilder[Task](scheduler)
                                .bindHttp(httpPort, host)
                                .withHttpApp(Router(baseRoutes.toList: _*).orNotFound)
+                               .withResponseHeaderTimeout(connectionIdleTimeout)
                                .withIdleTimeout(connectionIdleTimeout)
                                .resource
                                .use(_ => Task.never[Unit])
