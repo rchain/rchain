@@ -117,13 +117,16 @@ class TestNode[F[_]](
   implicit val commUtil: CommUtil[F]             = CommUtil.of[F]
   implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
 
+  val blocksInProcessing = Ref.unsafe[F, Set[BlockHash]](Set.empty)
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     genesis,
     postGenesisStateHash,
     shardId,
     finalizationRate,
-    blockProcessingLock
+    blockProcessingLock,
+    blocksInProcessing
   )
 
   val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F])
