@@ -329,7 +329,9 @@ object BlockRetriever {
         } yield ()
       }
 
-      /** Blocks that are received but still not in Casper */
+      /** Blocks that are received and
+        * have all dependencies filled, so not put in casperBuffer,
+        * but were not accepted by Casper, so processing is postponed*/
       override def getEnqueuedToCasper: F[List[BlockHash]] =
         for {
           state         <- RequestedBlocks[F].get

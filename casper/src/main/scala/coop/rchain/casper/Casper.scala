@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
@@ -68,6 +69,8 @@ trait Casper[F[_]] {
     * @return if node has all necessary information accompanying ApprovedBlock
     */
   def approvedBlockStateComplete: F[Boolean]
+
+  def getBlocksInProcessing: F[Set[BlockHash]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -136,6 +139,7 @@ sealed abstract class MultiParentCasperInstances {
                                  } yield postGenesisStateHash
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
+        blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
       } yield {
         new MultiParentCasperImpl(
           validatorId,
@@ -143,7 +147,8 @@ sealed abstract class MultiParentCasperInstances {
           postGenesisStateHash,
           shardId,
           finalizationRate,
-          blockProcessingLock
+          blockProcessingLock,
+          blocksInProcessing
         )
       }
     }
