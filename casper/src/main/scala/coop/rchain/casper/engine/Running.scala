@@ -283,8 +283,8 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
   /**
     * Message that relates to a block A (e.g. block message or block hash broadcast message) shall be considered
     * as repeated and ignored if block A is
-    * 1. BlockIsWaitingForCasper  -> ready to be replayed but Casper is busy, so processing is postponed
-    * 2. BlockIsInProcessing      -> currently replayed by Casper
+    * 1. BlockIsInProcessing      -> currently replayed by Casper
+    * 2. BlockIsWaitingForCasper  -> ready to be replayed but Casper is busy, so processing is postponed
     * 3. BlockIsInCasperBuffer    -> is missing dependencies so added to CasperBuffer
     *                                and waiting for all dependencies to be filled
     * 4. BlockIsInDag             -> is already added to the DAG.
@@ -299,14 +299,14 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
       // This long chain of ifM created to minimise computation for ignore check and provide
       // readable output for each ignore reason
       received <- BlockRetriever[F].received(hash)
-      r <- BlockRetriever[F].getEnqueuedToCasper
+      r <- casper.getBlocksInProcessing
             .map(_.contains(hash))
             .ifM(
-              IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
-              casper.getBlocksInProcessing
+              IgnoreCasperMessageStatus(doIgnore = true, BlockIsInProcessing).pure[F],
+              BlockRetriever[F].getEnqueuedToCasper
                 .map(_.contains(hash))
                 .ifM(
-                  IgnoreCasperMessageStatus(doIgnore = true, BlockIsInProcessing).pure[F],
+                  IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
                   CasperBufferStorage[F]
                     .contains(hash)
                     .ifM(
