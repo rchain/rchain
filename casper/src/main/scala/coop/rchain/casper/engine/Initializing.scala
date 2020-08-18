@@ -27,6 +27,7 @@ import coop.rchain.shared
 import coop.rchain.shared._
 import fs2.concurrent.Queue
 
+import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
 
 object Initializing {
@@ -144,58 +145,37 @@ class Initializing[F[_]
   }
 
   def requestApprovedState: F[Unit] = {
-    def populateDag(approvedBlock: ApprovedBlock): F[Unit] = {
+    def populateDag(startBlock: BlockMessage): F[Unit] = {
       import cats.instances.list._
 
-      def step(
-          data: (List[(BlockHash, Long)], List[(BlockHash, Long)])
-      ): F[Either[(List[(BlockHash, Long)], List[(BlockHash, Long)]), List[(BlockHash, Long)]]] = {
+      type SortedBlocks = SortedMap[Long, Set[BlockHash]]
+      type RecParams    = (Seq[BlockHash], SortedBlocks)
 
-        val tail    = data._1
-        val acc     = data._2
-        val return_ = acc.asRight[(List[(BlockHash, Long)], List[(BlockHash, Long)])].pure[F]
-
-        if (tail.isEmpty)
-          return_
-        else {
-          val toProcess = tail.head
-          val remainder = tail.tail
-          for {
-            blockStored <- BlockStore[F].contains(toProcess._1)
-            r <- if (blockStored && !acc.contains(toProcess)) for {
-                  block       <- BlockStore[F].getUnsafe(toProcess._1)
-                  deps        = ProtoUtil.dependenciesHashesOf(block)
-                  blocksToAdd <- deps.traverse(BlockStore[F].get)
-                  newToProcess = blocksToAdd.flatten
-                    .map(b => (b.blockHash, b.body.state.blockNumber))
-                    .toSet
-                } yield (remainder ++ newToProcess, toProcess :: acc).asLeft[List[(BlockHash, Long)]]
-                else
-                  (remainder, acc).asLeft[List[(BlockHash, Long)]].pure[F]
-          } yield r
+      def loopDependencies(params: RecParams): F[Either[RecParams, SortedBlocks]] = {
+        val (hashes, sorted) = params
+        hashes match {
+          case Nil => sorted.asRight[RecParams].pure[F]
+          case head +: tail =>
+            for {
+              block       <- BlockStore[F].getUnsafe(head)
+              deps        = ProtoUtil.dependenciesHashesOf(block)
+              blockNumber = block.body.state.blockNumber
+              nrHashes    = sorted.getOrElse(blockNumber, Set())
+              // Data for continue recursion
+              newRest   = deps ++ tail
+              newSorted = sorted.updated(blockNumber, nrHashes + block.blockHash)
+            } yield (newRest, newSorted).asLeft
         }
       }
 
+      val emptySorted = SortedMap[Long, Set[BlockHash]]()
       for {
-        hashes <- (
-                   List(
-                     (
-                       approvedBlock.candidate.block.blockHash,
-                       approvedBlock.candidate.block.body.state.blockNumber
-                     )
-                   ),
-                   List.empty[(BlockHash, Long)]
-                 ).tailRecM(step)
-        _ <- Log[F].info(s"Inserting ${hashes.size} hashes into DagStore.")
-        _ <- hashes.sortBy(_._2).reverse.traverse { h =>
+        sortedHashes <- (Seq(startBlock.blockHash), emptySorted).tailRecM(loopDependencies)
+        // Add sorted DAG in reverse order (from approved block)
+        _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
               for {
-                block <- BlockStore[F].getUnsafe(h._1)
-                _ <- BlockDagStorage[F]
-                      .insert(
-                        block,
-                        approvedBlock.candidate.block,
-                        invalid = false
-                      )
+                block <- BlockStore[F].getUnsafe(hash)
+                _     <- BlockDagStorage[F].insert(block, startBlock, invalid = false)
               } yield ()
             }
       } yield ()
@@ -223,7 +203,7 @@ class Initializing[F[_]
       _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
       // Populate DAG with blocks retrieved
-      _ <- populateDag(approvedBlock)
+      _ <- populateDag(approvedBlock.candidate.block)
 
       _ <- Log[F].info(
             s"Approved State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
