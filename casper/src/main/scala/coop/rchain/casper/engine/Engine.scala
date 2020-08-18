@@ -122,37 +122,21 @@ object Engine {
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
-      init: F[Unit]
-  ): F[Unit] = EngineCell[F].set(new Initializing(shardId, finalizationRate, validatorId, init))
-
-  // format: off
-  def transitionToLastFinalizedState[F[_]
-    /* Execution */   : Concurrent: Time
-    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
-    /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
-    /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
-    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
-  (
-      shardId: String,
-      finalizationRate: Int,
-      validatorId: Option[ValidatorIdentity]
+      init: F[Unit],
+      trimState: Boolean = false
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.unbounded[F, BlockMessage]
       stateResponseQueue <- Queue.unbounded[F, StoreItemsMessage]
-      lfs = new LastFinalizedState[F](
-        shardId,
-        finalizationRate,
-        validatorId,
-        blockResponseQueue,
-        stateResponseQueue
-      )
-      _ <- EngineCell[F].set(lfs)
-
-      // Start requesting Last finalized state
-      _ <- lfs.start
+      _ <- EngineCell[F].set(
+            new Initializing(
+              shardId,
+              finalizationRate,
+              validatorId,
+              init,
+              blockResponseQueue,
+              stateResponseQueue
+            )
+          )
     } yield ()
-
 }

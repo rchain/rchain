@@ -61,16 +61,15 @@ object GenesisCeremonyMaster {
                case None =>
                  waitingForApprovedBlockLoop[F](shardId, finalizationRate, validatorId)
                case Some(approvedBlock) =>
-                 val genesis = approvedBlock.candidate.block
+                 val ab = approvedBlock.candidate.block
                  for {
-                   _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
+                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
-                                genesis,
+                                ab,
                                 shardId,
-                                finalizationRate,
-                                skipValidateGenesis = false
+                                finalizationRate
                               )
                    _ <- Engine
                          .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])

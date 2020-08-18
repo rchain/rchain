@@ -245,7 +245,6 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def lastFinalizedBlock: F[BlockMessage]     = underlying.lastFinalizedBlock
   def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
-  def approvedBlockStateComplete: F[Boolean]  = underlying.approvedBlockStateComplete
 
   def getGenesis: F[BlockMessage]        = underlying.getGenesis
   def getValidator: F[Option[PublicKey]] = underlying.getValidator

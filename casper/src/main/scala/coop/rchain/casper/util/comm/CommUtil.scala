@@ -135,26 +135,25 @@ final class CommUtilOps[F[_]](
     sendToPeers(ForkChoiceTipRequest.toProto) >>
       Log[F].info(s"Requested fork tip from peers")
 
-  def requestApprovedBlock(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
+  def requestApprovedBlock(
+      trimState: Boolean = false
+  )(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
       bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
-      msg            = ApprovedBlockRequest("PleaseSendMeAnApprovedBlock").toProto
+      msg            = ApprovedBlockRequest("", trimState).toProto
       _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "ApprovedBlockRequest")
     } yield ()
 
-  def requestLastFinalizedBlock(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
-    for {
-      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
-      bootstrap      <- maybeBootstrap.liftTo(StandaloneNodeSendToBootstrapError)
-      msg            = LastFinalizedBlockRequest.toProto
-      _              <- commUtil.sendWithRetry(ToPacket(msg), bootstrap, 10.seconds, "LastFinalizedBlockRequest")
-    } yield ()
-
-  def sendStoreItemsRequest(req: StoreItemsMessageRequest): F[Unit] =
+  def sendStoreItemsRequest(
+      req: StoreItemsMessageRequest
+  ): F[Unit] =
     sendToPeers(StoreItemsMessageRequest.toProto(req))
 
-  def sendStoreItemsRequest(rootStateHash: Blake2b256Hash, pageSize: Int): F[Unit] = {
+  def sendStoreItemsRequest(
+      rootStateHash: Blake2b256Hash,
+      pageSize: Int
+  ): F[Unit] = {
     val rootPath = Seq((rootStateHash, none[Byte]))
     val req      = StoreItemsMessageRequest(rootPath, 0, pageSize)
     sendStoreItemsRequest(req)

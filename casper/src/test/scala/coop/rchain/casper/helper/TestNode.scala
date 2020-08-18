@@ -121,7 +121,6 @@ class TestNode[F[_]](
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     genesis,
-    postGenesisStateHash,
     shardId,
     finalizationRate,
     blockProcessingLock

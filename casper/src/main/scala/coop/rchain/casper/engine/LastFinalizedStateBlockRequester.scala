@@ -1,6 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
@@ -8,8 +9,10 @@ import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper.{PrettyPrinter, Validate}
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.{Queue, SignallingRef}
@@ -75,7 +78,8 @@ object LastFinalizedStateBlockRequester {
 
     def createStream(
         d: SignallingRef[F, ST[BlockHash]],
-        requestQueue: Queue[F, Boolean]
+        requestQueue: Queue[F, Boolean],
+        validatorsRequired: Ref[F, Set[Validator]]
     ): Stream[F, Boolean] = {
 
       def broadcastStreams(ids: Seq[BlockHash]) = {
@@ -112,10 +116,19 @@ object LastFinalizedStateBlockRequester {
         // Mark block as received
         isReceived <- Stream.eval(d.modify(_.received(block.blockHash)))
 
+        allValidatorsSeen <- Stream.eval(validatorsRequired.modify[Boolean] { currSet =>
+                              val newSet = currSet - block.sender
+                              (newSet, newSet.isEmpty)
+                            })
+
+        inDeployLifeSpanRage = ProtoUtil.blockNumber(block) > ProtoUtil.blockNumber(
+          approvedBlock.candidate.block
+          // TODO extract this number from shard config
+        ) - 50
         // Add block parents for requesting
-        _ <- Stream.eval(d.update(_.add(block.header.parentsHashList.toSet))).whenA(isReceived)
-        // TODO: add support to insert blocks to DAG in block number order
-        // _ <- Stream.eval(d.update(_.add(block.justifications.map(_.latestBlockHash).toSet))).whenA(isReceived)
+        _ <- Stream
+              .eval(d.update(_.add(ProtoUtil.dependenciesHashesOf(block).toSet)))
+              .whenA(isReceived && (inDeployLifeSpanRage || !allValidatorsSeen))
 
         /**
           * Validate block hash. Checking justifications from last finalized block gives us proof
@@ -136,9 +149,6 @@ object LastFinalizedStateBlockRequester {
                 for {
                   // Save block to the store
                   _ <- BlockStore[F].put(block.blockHash, block)
-                  _ <- BlockDagStorage[F]
-                        .insert(block, approvedBlock.candidate.block, invalid = false)
-
                   // Mark block as finished
                   _ <- d.update(_.done(block.blockHash))
                 } yield ()
@@ -169,16 +179,24 @@ object LastFinalizedStateBlockRequester {
       requestStream.takeWhile(!_) concurrently responseStream concurrently timeoutResendStream
     }
 
-    val parentHashes = approvedBlock.candidate.block.header.parentsHashList
+    val dependenciesHashes = ProtoUtil.dependenciesHashesOf(approvedBlock.candidate.block)
     for {
       // Requester state
-      st <- SignallingRef[F, ST[BlockHash]](ST(parentHashes))
+      st <- SignallingRef[F, ST[BlockHash]](ST(dependenciesHashes))
       // Block requests queue
       requestQueue <- Queue.unbounded[F, Boolean]
+
+      // active validators as per approved block state
+      // for approved state to be complete it is required to have block from each of them
+      abValidators = approvedBlock.candidate.block.body.state.bonds
+        .filter(_.stake > 0)
+        .map(_.validator)
+      validatorsRequired <- Ref.of[F, Set[Validator]](abValidators.toSet)
+
       // Light the fire! / Starts the first request for block
       // - `true` if requested blocks should be re-requested
       _ <- requestQueue.enqueue1(false)
       // Create block receiver stream
-    } yield createStream(st, requestQueue)
+    } yield createStream(st, requestQueue, validatorsRequired)
   }
 }
