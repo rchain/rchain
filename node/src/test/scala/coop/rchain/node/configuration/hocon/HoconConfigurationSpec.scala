@@ -150,7 +150,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           approveInterval = 5.minute,
           autogenShardSize = 5,
           genesisValidatorMode = false,
-          ceremonyMasterMode = false
+          ceremonyMasterMode = false,
+          fromGenesis = false
         )
       ),
       metrics = Metrics(

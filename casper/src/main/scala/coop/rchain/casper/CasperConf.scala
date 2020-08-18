@@ -43,7 +43,8 @@ final case class GenesisCeremonyConf(
     approveDuration: FiniteDuration,
     autogenShardSize: Int,
     genesisValidatorMode: Boolean,
-    ceremonyMasterMode: Boolean
+    ceremonyMasterMode: Boolean,
+    fromGenesis: Boolean
 )
 
 final case class RoundRobinDispatcher(

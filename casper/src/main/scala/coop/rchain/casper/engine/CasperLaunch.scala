@@ -59,7 +59,7 @@ object CasperLaunch {
           (msg, action)
         case None =>
           val msg    = "Approved block not found, connecting to existing network"
-          val action = connectAndQueryApprovedBlock(true)
+          val action = connectAndQueryApprovedBlock(!conf.genesisCeremony.fromGenesis)
           (msg, action)
       } >>= {
         case (msg, action) => Log[F].info(msg) >> action

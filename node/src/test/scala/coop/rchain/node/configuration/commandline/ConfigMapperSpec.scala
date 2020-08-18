@@ -240,7 +240,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           approveInterval = 111111.seconds,
           autogenShardSize = 111111,
           genesisValidatorMode = true,
-          ceremonyMasterMode = true
+          ceremonyMasterMode = true,
+          fromGenesis = false
         )
       ),
       metrics = Metrics(
