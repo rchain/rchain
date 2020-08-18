@@ -78,35 +78,6 @@ class Initializing[F[_]
     case _ => ().pure
   }
 
-  /*private def onApprovedBlock(
-      sender: PeerNode,
-      approvedBlock: ApprovedBlock
-  ): F[Unit] = {
-    val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
-    for {
-      _       <- Log[F].info("Received ApprovedBlock message.")
-      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
-      _ <- if (isValid) {
-            for {
-              _       <- Log[F].info("Valid ApprovedBlock received!")
-              genesis = approvedBlock.candidate.block
-              _ <- EventLog[F].publish(
-                    shared.Event.ApprovedBlockReceived(
-                      PrettyPrinter
-                        .buildStringNoLimit(genesis.blockHash)
-                    )
-                  )
-              _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
-              _ <- LastApprovedBlock[F].set(approvedBlock)
-              // Request last finalized block from bootstrap node
-              _ <- CommUtil[F].requestLastFinalizedBlock
-            } yield ()
-          } else
-            Log[F].info("Invalid ApprovedBlock received; refusing to add.")
-
-    } yield ()
-  }*/
-
   private def onApprovedBlock(sender: PeerNode, approvedBlock: BlockMessage): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {

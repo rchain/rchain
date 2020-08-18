@@ -199,7 +199,7 @@ object CasperLaunch {
               conf.shardName,
               conf.finalizationRate,
               validatorId,
-              // TODO peer should be able to request approved blocks on different heghts
+              // TODO peer should be able to request approved blocks on different heights
               // from genesis to the most recent one (default)
               CommUtil[F].requestApprovedBlock(trimState)
             )
