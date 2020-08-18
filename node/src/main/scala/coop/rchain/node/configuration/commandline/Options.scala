@@ -190,6 +190,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "in `<genesis-path>/<public_key>.sk`" +
         "This param specifies number of validator identites to generate."
     )
+    val trimState = opt[Flag](
+      descr = "Node would start from approved block state."
+    )
 
     val host = opt[String](
       descr = "Address to bind RChain Protocol server."

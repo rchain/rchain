@@ -40,7 +40,7 @@ object CasperLaunch {
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
     /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
-  (conf: CasperConf): CasperLaunch[F] = new CasperLaunch[F] {
+  (conf: CasperConf, trimState: Boolean): CasperLaunch[F] = new CasperLaunch[F] {
     def launch(): F[Unit] =
       BlockStore[F].getApprovedBlock map {
         case Some(approvedBlock) =>
@@ -59,7 +59,7 @@ object CasperLaunch {
           (msg, action)
         case None =>
           val msg    = "Approved block not found, connecting to existing network"
-          val action = connectAndQueryApprovedBlock(true)
+          val action = connectAndQueryApprovedBlock(trimState)
           (msg, action)
       } >>= {
         case (msg, action) => Log[F].info(msg) >> action

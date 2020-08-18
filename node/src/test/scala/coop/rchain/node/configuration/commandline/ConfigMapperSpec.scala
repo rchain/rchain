@@ -101,6 +101,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--approve-interval 111111seconds",
         "--approve-duration 111111seconds",
         "--genesis-validator",
+        "--trim-state",
         "--prometheus",
         "--influxdb",
         "--influxdb-udp",
@@ -160,6 +161,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           )
           .right
           .get,
+        trimState = true,
         batchMaxConnections = 111111,
         networkTimeout = 111111.seconds,
         grpcMaxRecvMessageSize = 111111,

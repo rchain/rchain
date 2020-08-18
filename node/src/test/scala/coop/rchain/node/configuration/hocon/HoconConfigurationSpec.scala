@@ -70,6 +70,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           )
           .right
           .get,
+        trimState = true,
         batchMaxConnections = 20,
         networkTimeout = 5.seconds,
         grpcMaxRecvMessageSize = 262144,
