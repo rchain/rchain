@@ -56,7 +56,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
             shardId,
             finalizationRate,
             Some(validatorId),
-            enableStateExporter=true
+            enableStateExporter = true
           )
           .startAndForget
           .runToFuture

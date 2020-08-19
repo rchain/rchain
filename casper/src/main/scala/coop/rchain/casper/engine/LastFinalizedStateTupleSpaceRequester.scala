@@ -3,10 +3,17 @@ package coop.rchain.casper.engine
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{ApprovedBlock, StoreItemsMessage, StoreItemsMessageRequest}
+import coop.rchain.casper.protocol.{
+  ApprovedBlock,
+  StoreItemsMessage,
+  StoreItemsMessageRequest,
+  ToPacket
+}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.comm.rp.Connect.RPConfAsk
+import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared.ByteVectorOps._
@@ -74,7 +81,7 @@ object LastFinalizedStateTupleSpaceRequester {
     * @param tupleSpaceMessageQueue Handler of tuple space messages
     * @return fs2.Stream processing all tuple space state
     */
-  def stream[F[_]: Concurrent: Time: RSpaceStateManager: CommUtil: Log](
+  def stream[F[_]: Concurrent: Time: RSpaceStateManager: CommUtil: Log: RPConfAsk: TransportLayer](
       approvedBlock: ApprovedBlock,
       tupleSpaceMessageQueue: Queue[F, StoreItemsMessage]
   ): F[Stream[F, Boolean]] = {
@@ -89,7 +96,9 @@ object LastFinalizedStateTupleSpaceRequester {
         val broadcastRequests = ids.map(
           x =>
             Stream.eval(
-              CommUtil[F].sendStoreItemsRequest(StoreItemsMessageRequest(x, 0, pageSize))
+              TransportLayer[F].sendToBootstrap(
+                ToPacket(StoreItemsMessageRequest(x, 0, pageSize).toProto)
+              )
             )
         )
         // Create stream if requests

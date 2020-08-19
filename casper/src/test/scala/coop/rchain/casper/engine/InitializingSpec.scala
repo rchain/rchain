@@ -18,16 +18,23 @@ import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task
-import org.scalatest.WordSpec
+import org.scalatest.{BeforeAndAfterEach, WordSpec}
 
-class InitializingSpec extends WordSpec {
+class InitializingSpec extends WordSpec with BeforeAndAfterEach {
   implicit val eventBus = EventPublisher.noop[Task]
+
+  val fixture = Setup()
+  import fixture._
+
+  override def beforeEach(): Unit =
+    transportLayer.setResponses(_ => p => Right(()))
+
+  override def afterEach(): Unit =
+    transportLayer.reset()
 
   "Initializing state" should {
     "make a transition to Running once ApprovedBlock has been received" in {
       import monix.execution.Scheduler.Implicits.global
-      val fixture = Setup()
-      import fixture._
 
       val theInit = Task.unit
 
@@ -45,8 +52,8 @@ class InitializingSpec extends WordSpec {
           theInit,
           blockResponseQueue,
           stateResponseQueue,
-          trimState=false,
-          enableStateExporter=true
+          trimState = false,
+          enableStateExporter = true
         )
 
       val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
