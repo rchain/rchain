@@ -2,7 +2,6 @@ package coop.rchain.casper.engine
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
-import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.helper.NoOpsCasperEffect
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.{GenesisBuilder, ProtoUtil}

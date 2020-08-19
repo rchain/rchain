@@ -24,11 +24,10 @@ final class IndexedBlockDagStorage[F[_]: Sync](
 
   def insert(
       block: BlockMessage,
-      genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
     lock.withPermit(
-      underlying.insert(block, genesis, invalid) >> underlying.getRepresentation
+      underlying.insert(block, invalid) >> underlying.getRepresentation
     )
 
   def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
@@ -46,7 +45,7 @@ final class IndexedBlockDagStorage[F[_]: Sync](
           body = block.body.copy(state = newPostState),
           seqNum = nextCreatorSeqNum
         )
-      _ <- underlying.insert(modifiedBlock, genesis, invalid)
+      _ <- underlying.insert(modifiedBlock, invalid)
       _ <- idToBlocksRef.update(_.updated(nextId, modifiedBlock))
       _ <- currentIdRef.set(nextId)
     } yield modifiedBlock)
@@ -55,7 +54,7 @@ final class IndexedBlockDagStorage[F[_]: Sync](
     lock
       .withPermit(
         idToBlocksRef
-          .update(_.updated(index.toLong, block)) >> underlying.insert(block, genesis, invalid)
+          .update(_.updated(index.toLong, block)) >> underlying.insert(block, invalid)
       )
       .void
 

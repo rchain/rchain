@@ -11,7 +11,6 @@ trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
       block: BlockMessage,
-      genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]

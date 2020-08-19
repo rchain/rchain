@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
@@ -59,6 +60,8 @@ trait Casper[F[_]] {
   def getValidator: F[Option[PublicKey]]
   def getVersion: F[Long]
   def getDeployLifespan: F[Int]
+
+  def getBlocksInProcessing: F[Set[BlockHash]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -97,13 +100,15 @@ sealed abstract class MultiParentCasperInstances {
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       blockProcessingLock <- MetricsSemaphore.single[F]
+      blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
     } yield {
       new MultiParentCasperImpl(
         validatorId,
         approvedBlock,
         shardId,
         finalizationRate,
-        blockProcessingLock
+        blockProcessingLock,
+        blocksInProcessing
       )
     }
 }

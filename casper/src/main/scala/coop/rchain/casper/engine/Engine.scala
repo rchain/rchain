@@ -21,7 +21,6 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.state.RNodeStateManager
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.rspace.Blake2b256Hash
@@ -66,7 +65,7 @@ object Engine {
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
-      _ <- BlockDagStorage[F].insert(genesis, genesis, invalid = false)
+      _ <- BlockDagStorage[F].insert(genesis, invalid = false)
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 

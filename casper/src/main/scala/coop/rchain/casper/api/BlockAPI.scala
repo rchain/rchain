@@ -11,6 +11,7 @@ import coop.rchain.casper.DeployError._
 import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
@@ -61,6 +62,13 @@ object BlockAPI {
           )
         )
 
+    // Check if deploy is signed with system keys
+    val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
+    val forbiddenKeyError = new RuntimeException(
+      s"Deploy refused because it's signed with forbidden private key."
+    ).raiseError[F, ApiErr[String]]
+    val forbiddenKeyCheck = forbiddenKeyError.whenA(isForbiddenKey)
+
     // Check if deploy has minimum phlo price
     val minPhloPrice = 1
     val minPriceError = new RuntimeException(
@@ -68,12 +76,13 @@ object BlockAPI {
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
+    // Error message in case Casper is not ready
     val errorMessage = "Could not deploy, casper instance was not available yet."
     val logErrorMessage = Log[F]
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
       casperDeploy,
       logErrorMessage
     ))

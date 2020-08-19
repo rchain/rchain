@@ -14,8 +14,8 @@ object Dependencies {
   val slf4jVersion      = "1.7.25"
 
   // format: off
-  val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.61"
-  val bouncyPkixCastle    = "org.bouncycastle"           % "bcpkix-jdk15on"             % "1.61"
+  val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.66"
+  val bouncyPkixCastle    = "org.bouncycastle"           % "bcpkix-jdk15on"             % "1.66"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
@@ -23,7 +23,7 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.9"
+  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
   val disciplineCore      = "org.typelevel"                                    %% "discipline-core"           % "1.0.2"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
@@ -44,18 +44,18 @@ object Dependencies {
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
-  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.1"
+  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
-  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.0-Beta-rc2")
+  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.1"
+  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.3"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
-  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.0"
+  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
   val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
-  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.0"
+  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.13.5"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
@@ -72,7 +72,7 @@ object Dependencies {
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.7"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.18"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
@@ -81,7 +81,7 @@ object Dependencies {
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
-  val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.12.3"
+  val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.13.0"
   val fs2Core             = "co.fs2"                      %% "fs2-core"                 % "2.3.0"
   // format: on
 
@@ -105,7 +105,7 @@ object Dependencies {
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
   )
 
-  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.9")
+  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full

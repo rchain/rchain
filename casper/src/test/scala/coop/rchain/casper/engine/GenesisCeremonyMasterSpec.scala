@@ -6,7 +6,6 @@ import cats.implicits._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import coop.rchain.casper._
-import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl

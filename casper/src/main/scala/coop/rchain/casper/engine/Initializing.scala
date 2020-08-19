@@ -146,7 +146,7 @@ class Initializing[F[_]
         _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
               for {
                 block <- BlockStore[F].getUnsafe(hash)
-                _     <- BlockDagStorage[F].insert(block, startBlock, invalid = false)
+                _     <- BlockDagStorage[F].insert(block, invalid = false)
               } yield ()
             }
       } yield ()

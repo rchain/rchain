@@ -132,7 +132,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def insert(
       block: BlockMessage,
-      genesis: BlockMessage,
       invalid: Boolean
   ): F[BlockDagRepresentation[F]] =
     lock.withPermit(
@@ -152,6 +151,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                   .map(_.validator)
                   .toSet
                   .diff(block.justifications.map(_.validator).toSet)
+                newValidatorsLatestMessages = newValidators.map(v => (v, block.blockHash))
 
                 currLatestMessageHash <- latestMessagesIndex.get(Seq(block.sender))
                 currLatestMessageMetadata <- blockMetadataIndex.get(
@@ -160,7 +160,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                 currLatestMessageSeqNum = if (currLatestMessageMetadata.isDefined)
                   currLatestMessageMetadata.get.seqNum
                 else 0
-                newValidatorsLatestMessages = newValidators.map(v => (v, genesis.blockHash))
                 newValidatorsWithSenderLatestMessages <- block.sender match {
                                                           case ByteString.EMPTY =>
                                                             // Ignore empty sender for special cases such as genesis block

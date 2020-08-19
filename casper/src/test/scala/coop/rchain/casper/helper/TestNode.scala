@@ -18,7 +18,6 @@ import casper.engine.BlockRetriever._
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
@@ -118,12 +117,15 @@ class TestNode[F[_]](
   implicit val commUtil: CommUtil[F]             = CommUtil.of[F]
   implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
 
+  val blocksInProcessing = Ref.unsafe[F, Set[BlockHash]](Set.empty)
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     genesis,
     shardId,
     finalizationRate,
-    blockProcessingLock
+    blockProcessingLock,
+    blocksInProcessing
   )
 
   implicit val rspaceMan                 = RSpaceStateManagerDummyImpl()
