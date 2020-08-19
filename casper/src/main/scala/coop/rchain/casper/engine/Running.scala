@@ -313,7 +313,8 @@ class Running[F[_]
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
-    theInit: F[Unit]
+    theInit: F[Unit],
+    enableStateExporter: Boolean
 ) extends Engine[F] {
 
   import Engine._
@@ -490,8 +491,13 @@ class Running[F[_]
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>
-      handleStateItemsMessageRequest(peer, startPath, skip, take)
-
+      if (enableStateExporter) {
+        handleStateItemsMessageRequest(peer, startPath, skip, take)
+      } else {
+        Log[F].debug(
+          s"Received StoreItemsMessage from ${peer} but the node is configured to not respond to StoreItemsMessage."
+        )
+      }
     case _ => noop
   }
 

@@ -52,14 +52,24 @@ object GenesisCeremonyMaster {
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
     /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
-  (shardId: String, finalizationRate: Int, validatorId: Option[ValidatorIdentity]): F[Unit] =
+  (
+      shardId: String,
+      finalizationRate: Int,
+      validatorId: Option[ValidatorIdentity],
+      enableStateExporter: Boolean
+  ): F[Unit] =
     for {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
       _                  <- Time[F].sleep(2.seconds)
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 waitingForApprovedBlockLoop[F](shardId, finalizationRate, validatorId)
+                 waitingForApprovedBlockLoop[F](
+                   shardId,
+                   finalizationRate,
+                   validatorId,
+                   enableStateExporter
+                 )
                case Some(approvedBlock) =>
                  val ab = approvedBlock.candidate.block
                  for {
@@ -72,7 +82,13 @@ object GenesisCeremonyMaster {
                                 finalizationRate
                               )
                    _ <- Engine
-                         .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])
+                         .transitionToRunning[F](
+                           casper,
+                           approvedBlock,
+                           validatorId,
+                           ().pure[F],
+                           enableStateExporter
+                         )
                    _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()
              }

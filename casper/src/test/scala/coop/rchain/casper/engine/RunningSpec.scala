@@ -46,7 +46,7 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
     implicit val casper    = NoOpsCasperEffect[Task]().unsafeRunSync
     implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
 
-    val engine = new Running[Task](casper, approvedBlock, None, Task.unit)
+    val engine = new Running[Task](casper, approvedBlock, None, Task.unit, true)
 
     // Need to have well-formed block here. Do we have that API in tests?
     "respond to BlockMessage messages " in {

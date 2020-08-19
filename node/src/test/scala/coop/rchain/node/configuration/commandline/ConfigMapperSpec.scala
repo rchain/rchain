@@ -48,6 +48,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--protocol-grpc-stream-chunk-size 111111",
         "--protocol-max-connections 111111",
         "--protocol-max-message-consumers 111111",
+        "--enable-state-exporter",
         //other vars?
         "--tls-certificate-path /var/lib/rnode/node.certificate.pem",
         "--tls-key-path /var/lib/rnode/node.key.pem",
@@ -151,7 +152,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         port = 111111,
         grpcMaxRecvMessageSize = 111111,
         grpcMaxRecvStreamMessageSize = 111111,
-        maxMessageConsumers = 111111
+        maxMessageConsumers = 111111,
+        enableStateExporter = true
       ),
       protocolClient = ProtocolClient(
         networkId = "testnet",

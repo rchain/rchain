@@ -44,7 +44,9 @@ class InitializingSpec extends WordSpec {
           Some(validatorId),
           theInit,
           blockResponseQueue,
-          stateResponseQueue
+          stateResponseQueue,
+          trimState=false,
+          enableStateExporter=true
         )
 
       val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)

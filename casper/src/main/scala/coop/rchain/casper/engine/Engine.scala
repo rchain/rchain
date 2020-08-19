@@ -94,7 +94,8 @@ object Engine {
       casper: MultiParentCasper[F],
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
-      init: F[Unit]
+      init: F[Unit],
+      enableStateExporter: Boolean
   ): F[Unit] =
     for {
       _ <- Log[F].info("Making a transition to Running state.")
@@ -103,8 +104,14 @@ object Engine {
               PrettyPrinter.buildStringNoLimit(approvedBlock.candidate.block.blockHash)
             )
           )
-      running = new Running[F](casper, approvedBlock, validatorId, init)
-      _       <- EngineCell[F].set(running)
+      running = new Running[F](
+        casper,
+        approvedBlock,
+        validatorId,
+        init,
+        enableStateExporter
+      )
+      _ <- EngineCell[F].set(running)
 
     } yield ()
 
@@ -122,7 +129,8 @@ object Engine {
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      trimState: Boolean = false
+      trimState: Boolean = false,
+      enableStateExporter: Boolean = false
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.unbounded[F, BlockMessage]
@@ -134,7 +142,9 @@ object Engine {
               validatorId,
               init,
               blockResponseQueue,
-              stateResponseQueue
+              stateResponseQueue,
+              trimState,
+              enableStateExporter
             )
           )
     } yield ()

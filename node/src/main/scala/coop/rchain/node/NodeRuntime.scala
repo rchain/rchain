@@ -884,7 +884,11 @@ object NodeRuntime {
         implicit val cbs    = casperBufferStorage
         implicit val rsm    = rspaceStateManager
 
-        CasperLaunch.of[F](conf.casper, conf.protocolClient.trimState)
+        CasperLaunch.of[F](
+          conf.casper,
+          conf.protocolClient.trimState,
+          conf.protocolServer.enableStateExporter
+        )
       }
       packetHandler = {
         implicit val ec = engineCell

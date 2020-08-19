@@ -206,6 +206,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Allow connections to peers with private network addresses."
     )
 
+    val enableStateExporter = opt[Flag](
+      descr = "Allow the node to export the state."
+    )
+
     val networkTimeout = opt[FiniteDuration](
       descr = "Default timeout for network calls."
     )

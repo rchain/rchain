@@ -128,7 +128,7 @@ class TestNode[F[_]](
   )
 
   implicit val rspaceMan                 = RSpaceStateManagerTestImpl()
-  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F])
+  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F], true)
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 

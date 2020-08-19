@@ -54,7 +54,8 @@ class Initializing[F[_]
     theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
-    trimState: Boolean = false
+    trimState: Boolean = false,
+    enableStateExporter: Boolean
 ) extends Engine[F] {
 
   import Engine._
@@ -62,7 +63,8 @@ class Initializing[F[_]
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock        => onApprovedBlock(peer, ab)
+    case ab: ApprovedBlock =>
+      onApprovedBlock(peer, ab, enableStateExporter)
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
@@ -78,7 +80,11 @@ class Initializing[F[_]
     case _ => ().pure
   }
 
-  private def onApprovedBlock(sender: PeerNode, approvedBlock: ApprovedBlock): F[Unit] = {
+  private def onApprovedBlock(
+      sender: PeerNode,
+      approvedBlock: ApprovedBlock,
+      enableStateExporter: Boolean
+  ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {
       // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
@@ -197,7 +203,8 @@ class Initializing[F[_]
             casper,
             approvedBlock,
             validatorId,
-            ().pure
+            ().pure,
+            enableStateExporter
           )
       _ <- CommUtil[F].sendForkChoiceTipRequest
     } yield ()
