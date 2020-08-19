@@ -25,6 +25,9 @@ object AdminWebApiRoutes {
           .handleErrorWith(err => BadRequest(err.getMessage.asJson))
     }
 
+    // Encoders
+    implicit val stringEncoder = jsonEncoderOf[F, String]
+
     HttpRoutes.of[F] {
       case POST -> Root / "propose" =>
         adminWebApi.propose.handle

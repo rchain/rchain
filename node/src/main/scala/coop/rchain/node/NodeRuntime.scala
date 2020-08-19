@@ -960,8 +960,6 @@ object NodeRuntime {
       adminWebApi = {
         implicit val ec     = engineCell
         implicit val sp     = span
-        implicit val or     = oracle
-        implicit val bs     = blockStore
         implicit val sc     = synchronyConstraintChecker
         implicit val lfhscc = lastFinalizedHeightConstraintChecker
         new AdminWebApiImpl[F](blockApiLock, rnodeStateManager)

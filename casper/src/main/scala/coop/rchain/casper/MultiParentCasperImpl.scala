@@ -37,7 +37,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     approvedBlock: BlockMessage,
     shardId: String,
     finalizationRate: Int,
-    blockProcessingLock: Semaphore[F]
+    blockProcessingLock: Semaphore[F],
+    blocksInProcessing: Ref[F, Set[BlockHash]]
 )(
     implicit casperBuffer: CasperBufferStorage[F],
     metricsF: Metrics[F],
@@ -66,6 +67,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def getGenesis: F[BlockMessage] = approvedBlock.pure[F]
 
   def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
+
+  override def getBlocksInProcessing: F[Set[BlockHash]] = blocksInProcessing.get
 
   // Later this should replace addBlock, but for now one more method created, or there are too many tests to fix
   def addBlockFromStore(
@@ -146,6 +149,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       addResult <- Sync[F].bracket(blockProcessingLock.tryAcquire) {
                     case true =>
                       for {
+                        _ <- blocksInProcessing.update(_ + b.blockHash)
                         _ <- Log[F].info(
                               s"Block ${PrettyPrinter.buildString(b, short = true)} got blockProcessingLock."
                             )
@@ -165,7 +169,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                       blockProcessingLock.release >>
                         Log[F].info(
                           s"Block ${PrettyPrinter.buildString(b, short = true)} released blockProcessingLock."
-                        )
+                        ) >> blocksInProcessing.update(_ - b.blockHash)
                     case false =>
                       ().pure[F]
                   }
@@ -408,7 +412,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       .map { _ =>
         // Add successful! Send block hash to peers, log success, try to add other blocks
         for {
-          updatedDag <- BlockDagStorage[F].insert(block, approvedBlock, invalid = false)
+          updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block, true)}"
               )
@@ -522,7 +526,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[BlockDagRepresentation[F]] =
     Log[F].warn(
       s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
-    ) >> BlockDagStorage[F].insert(block, approvedBlock, invalid = true)
+    ) >> BlockDagStorage[F].insert(block, invalid = true)
 
   def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
 

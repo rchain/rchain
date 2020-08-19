@@ -276,7 +276,7 @@ class ValidateTest
           )
 
           _ <- blockStore.put(block.blockHash, block)
-          _ <- blockDagStorage.insert(block, genesis, false)
+          _ <- blockDagStorage.insert(block, false)
         } yield block
 
       for {
