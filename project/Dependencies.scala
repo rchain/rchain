@@ -23,7 +23,7 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.9"
+  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
   val disciplineCore      = "org.typelevel"                                    %% "discipline-core"           % "1.0.2"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
