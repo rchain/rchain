@@ -152,6 +152,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                   .toSet
                   .diff(block.justifications.map(_.validator).toSet)
                 newValidatorsLatestMessages = newValidators.map(v => (v, block.blockHash))
+
                 currLatestMessageHash <- latestMessagesIndex.get(Seq(block.sender))
                 currLatestMessageMetadata <- blockMetadataIndex.get(
                                               currLatestMessageHash.head.getOrElse(ByteString.EMPTY)

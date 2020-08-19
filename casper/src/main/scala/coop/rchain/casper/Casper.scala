@@ -100,7 +100,7 @@ sealed abstract class MultiParentCasperInstances {
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       blockProcessingLock <- MetricsSemaphore.single[F]
-        blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
+      blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
     } yield {
       new MultiParentCasperImpl(
         validatorId,
