@@ -88,9 +88,6 @@ class Initializing[F[_]
               _ <- Log[F].info(
                     s"Valid Last Finalized Block received ${PrettyPrinter.buildString(approvedBlock)}"
                   )
-              _ <- Log[F].warn(
-                    s"JUSTIF: ${approvedBlock.justifications.map(_.latestBlockHash).map(PrettyPrinter.buildString).mkString(", ")}"
-                  )
 
               _ <- EventLog[F].publish(
                     shared.Event.ApprovedBlockReceived(
