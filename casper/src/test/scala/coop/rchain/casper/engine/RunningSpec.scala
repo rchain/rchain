@@ -10,7 +10,7 @@ import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.blockImplicits.getRandomBlock
-import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
@@ -44,7 +44,7 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
     )
 
     implicit val casper    = NoOpsCasperEffect[Task]().unsafeRunSync
-    implicit val rspaceMan = RSpaceStateManagerDummyImpl[Task]()
+    implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
 
     val engine = new Running[Task](casper, approvedBlock, None, Task.unit)
 

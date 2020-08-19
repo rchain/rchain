@@ -9,7 +9,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task
