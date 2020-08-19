@@ -298,173 +298,174 @@ object Running {
       _        <- Log[F].info(s"Store items sent to $peer")
     } yield ()
   }
+}
 
-  // format: off
-  class Running[F[_]
-    /* Execution */   : Concurrent: Time
-    /* Transport */   : TransportLayer: CommUtil: BlockRetriever
-    /* State */       : RPConfAsk: ConnectionsCell
-    /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
-    /* Diagnostics */ : Log: Metrics] // format: on
-  (
-      casper: MultiParentCasper[F],
-      approvedBlock: ApprovedBlock,
-      validatorId: Option[ValidatorIdentity],
-      theInit: F[Unit]
-  ) extends Engine[F] {
+// format: off
+class Running[F[_]
+  /* Execution */   : Concurrent: Time
+  /* Transport */   : TransportLayer: CommUtil: BlockRetriever
+  /* State */       : RPConfAsk: ConnectionsCell
+  /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+  /* Diagnostics */ : Log: Metrics] // format: on
+(
+    casper: MultiParentCasper[F],
+    approvedBlock: ApprovedBlock,
+    validatorId: Option[ValidatorIdentity],
+    theInit: F[Unit]
+) extends Engine[F] {
 
-    import Engine._
+  import Engine._
+  import Running._
 
-    private val F    = Applicative[F]
-    private val noop = F.unit
+  private val F    = Applicative[F]
+  private val noop = F.unit
 
-    /**
-      * Message that relates to a block A (e.g. block message or block hash broadcast message) shall be considered
-      * as repeated and ignored if block A is
-      * 1. marked as received in BlocksRetriever and pending adding to CasperBuffer or
-      * 2. added do CasperBuffer and pending adding to DAG or
-      * 3. already added to DAG.
-      * Otherwise - that is a new message and shall be processed normal way.
-      *
-      * @param hash Block hash
-      * @return If message should be ignored
-      */
-    private def ignoreCasperMessage(hash: BlockHash): F[IgnoreCasperMessageStatus] =
-      BlockRetriever[F]
-        .received(hash)
-        .ifM(
-          IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
-          CasperBufferStorage[F]
-            .contains(hash)
-            .ifM(
-              IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer).pure[F],
-              casper.blockDag.flatMap(
-                _.contains(hash)
-                  .ifM(
-                    IgnoreCasperMessageStatus(doIgnore = true, BlockIsInDag).pure[F],
-                    IgnoreCasperMessageStatus(doIgnore = false, DoNotIgnore).pure[F]
-                  )
-              )
+  /**
+    * Message that relates to a block A (e.g. block message or block hash broadcast message) shall be considered
+    * as repeated and ignored if block A is
+    * 1. marked as received in BlocksRetriever and pending adding to CasperBuffer or
+    * 2. added do CasperBuffer and pending adding to DAG or
+    * 3. already added to DAG.
+    * Otherwise - that is a new message and shall be processed normal way.
+    *
+    * @param hash Block hash
+    * @return If message should be ignored
+    */
+  private def ignoreCasperMessage(hash: BlockHash): F[IgnoreCasperMessageStatus] =
+    BlockRetriever[F]
+      .received(hash)
+      .ifM(
+        IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
+        CasperBufferStorage[F]
+          .contains(hash)
+          .ifM(
+            IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer).pure[F],
+            casper.blockDag.flatMap(
+              _.contains(hash)
+                .ifM(
+                  IgnoreCasperMessageStatus(doIgnore = true, BlockIsInDag).pure[F],
+                  IgnoreCasperMessageStatus(doIgnore = false, DoNotIgnore).pure[F]
+                )
             )
-        )
-
-    /**
-      * Basic block validation before saving block in Blockstore. The intention here is to prevent saving
-      * bad and useless blocks. So the check is if block is well formed and of interest for this particular node.
-      * Should not catch any slashable offences - such blocks should be persisted and processed by Casper.
-      *
-      * @param b    BlockMessage
-      * @param peer peer from which BlockMessage came from
-      * @return if block is suitable for this node
-      */
-    private def blockIsOk(
-        b: BlockMessage,
-        peer: PeerNode
-    ): F[Boolean] =
-      withCasper(
-        casper =>
-          for {
-            _ <- validatorId match {
-                  case None => ().pure[F]
-                  case Some(id) =>
-                    F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
-                      Log[F].warn(
-                        s"There is another node $peer proposing using the same private key as you. " +
-                          s"Or did you restart your node?"
-                      )
-                    )
-                }
-            ab = approvedBlock.candidate.block
-            // TODO might be more checks can/should be applied here
-            validShard   = ab.shardId.equalsIgnoreCase(b.shardId)
-            validFormat  <- Validate.formatOfFields(b)
-            validSig     <- Validate.blockSignature(b)
-            validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
-            oldBlock     = ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(ab)
-            _ <- Log[F]
-                  .warn(
-                    s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${ab.shardId}]."
-                  )
-                  .unlessA(validShard)
-            _ <- Log[F].warn(s"Block is bad: ill formed.").unlessA(validFormat)
-            _ <- Log[F].warn(s"Block is bad: wrong signature.").unlessA(validSig)
-            _ <- Log[F].warn(s"Block is bad: wrong version.").unlessA(validVersion)
-            _ <- Log[F]
-                  .warn(s"Block is old: we don't need siblings or parents of approvedBlock")
-                  .whenA(oldBlock)
-
-            isValid = validShard && validFormat && validSig && validVersion && !oldBlock
-          } yield isValid,
-        Log[F].info("Casper is not ready, rejecting all blocks until it is ready.") >> false.pure[F]
+          )
       )
 
-    /**
-      * Sends block to from BlockStore to Casper for inserting to the DAG.
-      *
-      * @param bh block hash
-      * @return Result of block processing
-      */
-    private def sendBlockFromStoreToCasper(bh: BlockHash): F[Unit] =
-      casper.addBlockFromStore(bh) >>= (
-          // At this stage block should be in CasperBuffer, or even in the DAG.
-          // It might wait for dependencies so not added to DAG, but there is no point to rerequest it again
-          status =>
-            BlockRetriever[F].ackInCasper(bh) >> Log[F].info(
-              s"Block ${PrettyPrinter.buildString(bh)} adding finished with status: $status. " +
-                s"BlockRetriever is informed that block consumed by Casper."
-            )
-        )
-
-    override def init: F[Unit] = theInit
-
-    private[this] val hashHandlerLock = TrieMap.empty[BlockHash, Semaphore[F]]
-
-    override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-      case h: BlockHashMessage =>
-        handleBlockHashMessage(peer, h)(
-          ignoreCasperMessage
-        )
-      case b: BlockMessage =>
-        handleBlockMessage(b, peer)(
-          ignoreCasperMessage,
-          blockIsOk,
-          sendBlockFromStoreToCasper,
-          hashHandlerLock
-        )
-      case br: BlockRequest => handleBlockRequest(peer, br)
-      // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
-      // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
-      case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
-      case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
-      case _: ForkChoiceTipRequest.type =>
-        handleForkChoiceTipRequest(peer)(casper)
-      case abr: ApprovedBlockRequest =>
+  /**
+    * Basic block validation before saving block in Blockstore. The intention here is to prevent saving
+    * bad and useless blocks. So the check is if block is well formed and of interest for this particular node.
+    * Should not catch any slashable offences - such blocks should be persisted and processed by Casper.
+    *
+    * @param b    BlockMessage
+    * @param peer peer from which BlockMessage came from
+    * @return if block is suitable for this node
+    */
+  private def blockIsOk(
+      b: BlockMessage,
+      peer: PeerNode
+  ): F[Boolean] =
+    withCasper(
+      casper =>
         for {
-          approvedBlock <- if (abr.trimState) for {
-                            lfBlock <- LastFinalizedStorage[F]
-                                        .get(approvedBlock.candidate.block)
-                                        .flatMap(BlockStore[F].getUnsafe)
-                            lastApprovedBlock = ApprovedBlock(
-                              ApprovedBlockCandidate(lfBlock, 0),
-                              List.empty
-                            )
-                          } yield lastApprovedBlock
-                          else
-                            approvedBlock.pure[F]
-          _ <- handleApprovedBlockRequest(peer, approvedBlock)
-        } yield ()
-      case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
+          _ <- validatorId match {
+                case None => ().pure[F]
+                case Some(id) =>
+                  F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
+                    Log[F].warn(
+                      s"There is another node $peer proposing using the same private key as you. " +
+                        s"Or did you restart your node?"
+                    )
+                  )
+              }
+          ab = approvedBlock.candidate.block
+          // TODO might be more checks can/should be applied here
+          validShard   = ab.shardId.equalsIgnoreCase(b.shardId)
+          validFormat  <- Validate.formatOfFields(b)
+          validSig     <- Validate.blockSignature(b)
+          validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
+          oldBlock     = ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(ab)
+          _ <- Log[F]
+                .warn(
+                  s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${ab.shardId}]."
+                )
+                .unlessA(validShard)
+          _ <- Log[F].warn(s"Block is bad: ill formed.").unlessA(validFormat)
+          _ <- Log[F].warn(s"Block is bad: wrong signature.").unlessA(validSig)
+          _ <- Log[F].warn(s"Block is bad: wrong version.").unlessA(validVersion)
+          _ <- Log[F]
+                .warn(s"Block is old: we don't need siblings or parents of approvedBlock")
+                .whenA(oldBlock)
 
-      // Approved state store records
-      case StoreItemsMessageRequest(startPath, skip, take) =>
-        handleStateItemsMessageRequest(peer, startPath, skip, take)
+          isValid = validShard && validFormat && validSig && validVersion && !oldBlock
+        } yield isValid,
+      Log[F].info("Casper is not ready, rejecting all blocks until it is ready.") >> false.pure[F]
+    )
 
-      case _ => noop
-    }
+  /**
+    * Sends block to from BlockStore to Casper for inserting to the DAG.
+    *
+    * @param bh block hash
+    * @return Result of block processing
+    */
+  private def sendBlockFromStoreToCasper(bh: BlockHash): F[Unit] =
+    casper.addBlockFromStore(bh) >>= (
+        // At this stage block should be in CasperBuffer, or even in the DAG.
+        // It might wait for dependencies so not added to DAG, but there is no point to rerequest it again
+        status =>
+          BlockRetriever[F].ackInCasper(bh) >> Log[F].info(
+            s"Block ${PrettyPrinter.buildString(bh)} adding finished with status: $status. " +
+              s"BlockRetriever is informed that block consumed by Casper."
+          )
+      )
 
-    override def withCasper[A](
-        f: MultiParentCasper[F] => F[A],
-        default: F[A]
-    ): F[A] = f(casper)
+  override def init: F[Unit] = theInit
+
+  private[this] val hashHandlerLock = TrieMap.empty[BlockHash, Semaphore[F]]
+
+  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case h: BlockHashMessage =>
+      handleBlockHashMessage(peer, h)(
+        ignoreCasperMessage
+      )
+    case b: BlockMessage =>
+      handleBlockMessage(b, peer)(
+        ignoreCasperMessage,
+        blockIsOk,
+        sendBlockFromStoreToCasper,
+        hashHandlerLock
+      )
+    case br: BlockRequest => handleBlockRequest(peer, br)
+    // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
+    // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
+    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
+    case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+    case _: ForkChoiceTipRequest.type =>
+      handleForkChoiceTipRequest(peer)(casper)
+    case abr: ApprovedBlockRequest =>
+      for {
+        approvedBlock <- if (abr.trimState) for {
+                          lfBlock <- LastFinalizedStorage[F]
+                                      .get(approvedBlock.candidate.block)
+                                      .flatMap(BlockStore[F].getUnsafe)
+                          lastApprovedBlock = ApprovedBlock(
+                            ApprovedBlockCandidate(lfBlock, 0),
+                            List.empty
+                          )
+                        } yield lastApprovedBlock
+                        else
+                          approvedBlock.pure[F]
+        _ <- handleApprovedBlockRequest(peer, approvedBlock)
+      } yield ()
+    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
+
+    // Approved state store records
+    case StoreItemsMessageRequest(startPath, skip, take) =>
+      handleStateItemsMessageRequest(peer, startPath, skip, take)
+
+    case _ => noop
   }
+
+  override def withCasper[A](
+      f: MultiParentCasper[F] => F[A],
+      default: F[A]
+  ): F[A] = f(casper)
 }

@@ -18,7 +18,6 @@ import casper.engine.BlockRetriever._
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine.Running.Running
 import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
