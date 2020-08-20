@@ -469,12 +469,20 @@ class Running[F[_]
                           lfBlock <- LastFinalizedStorage[F]
                                       .get(approvedBlock.candidate.block)
                                       .flatMap(BlockStore[F].getUnsafe)
+                          // Each approved block should be justified by validators signatures
+                          // ATM we have signatures only for genesis approved block - we also have to have a procedure
+                          // for gathering signatures for each approved block post genesis.
+                          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
+                          // TODO We need signatures of Validators supporting this block
                           lastApprovedBlock = ApprovedBlock(
                             ApprovedBlockCandidate(lfBlock, 0),
                             List.empty
                           )
                         } yield lastApprovedBlock
                         else
+                          // Respond with approved block that this node is started from.
+                          // The very first one is genesis, but this node still might start from later block,
+                          // so it will not necessary be genesis.
                           approvedBlock.pure[F]
         _ <- handleApprovedBlockRequest(peer, approvedBlock)
       } yield ()

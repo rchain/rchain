@@ -62,7 +62,7 @@ class Initializing[F[_]
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock        => onApprovedBlock(peer, ab.candidate.block)
+    case ab: ApprovedBlock        => onApprovedBlock(peer, ab)
     case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
     case na: NoApprovedBlockAvailable =>
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
@@ -78,31 +78,31 @@ class Initializing[F[_]
     case _ => ().pure
   }
 
-  private def onApprovedBlock(sender: PeerNode, approvedBlock: BlockMessage): F[Unit] = {
+  private def onApprovedBlock(sender: PeerNode, approvedBlock: ApprovedBlock): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
     for {
-      // TODO: resolve validation of received approved block
-      isValid <- senderIsBootstrap // &&^ Validate.approvedBlock[F](approvedBlock)
+      // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
+      // Might be Validate.approvedBlock is enough but have to check
+      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
+      block   = approvedBlock.candidate.block
       _ <- if (isValid) {
             for {
               _ <- Log[F].info(
-                    s"Valid Last Finalized Block received ${PrettyPrinter.buildString(approvedBlock)}"
+                    s"Valid approved block received ${PrettyPrinter.buildString(approvedBlock)}"
                   )
 
               _ <- EventLog[F].publish(
                     shared.Event.ApprovedBlockReceived(
                       PrettyPrinter
-                        .buildStringNoLimit(approvedBlock.blockHash)
+                        .buildStringNoLimit(block.blockHash)
                     )
                   )
 
-              // Add last finalized block as ApprovedBlock
-              ab = ApprovedBlock(ApprovedBlockCandidate(approvedBlock, 0), Nil)
-              _  <- insertIntoBlockAndDagStore[F](approvedBlock, ab)
-              _  <- LastApprovedBlock[F].set(ab)
+              _ <- insertIntoBlockAndDagStore[F](block, approvedBlock)
+              _ <- LastApprovedBlock[F].set(approvedBlock)
 
               // Update last finalized block with received block hash
-              _ <- LastFinalizedStorage[F].put(approvedBlock.blockHash)
+              _ <- LastFinalizedStorage[F].put(block.blockHash)
 
               // Transition to restore last finalized state
               _ <- requestApprovedState
