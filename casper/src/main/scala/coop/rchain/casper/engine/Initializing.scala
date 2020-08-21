@@ -125,12 +125,19 @@ class Initializing[F[_]
           case Nil => sorted.asRight[RecParams].pure[F]
           case head +: tail =>
             for {
-              block       <- BlockStore[F].getUnsafe(head)
-              deps        = ProtoUtil.dependenciesHashesOf(block)
+              block <- BlockStore[F].getUnsafe(head)
+              deps <- ProtoUtil
+                       .dependenciesHashesOf(block)
+                       .filterA(
+                         hash =>
+                           tail.contains(hash).pure[F].not &&^
+                             sorted.values.toList.contains(hash).pure[F].not &&^
+                             BlockStore[F].contains(hash)
+                       )
               blockNumber = block.body.state.blockNumber
               nrHashes    = sorted.getOrElse(blockNumber, Set())
               // Data for continue recursion
-              newRest   = deps ++ tail
+              newRest   = tail ++ deps
               newSorted = sorted.updated(blockNumber, nrHashes + block.blockHash)
             } yield (newRest, newSorted).asLeft
         }
