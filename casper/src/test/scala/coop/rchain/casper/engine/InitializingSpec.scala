@@ -74,7 +74,7 @@ class InitializingSpec extends WordSpec {
       val storeResponseMessage =
         StoreItemsMessage(startPath = startPath, lastPath = startPath, Seq(), Seq())
 
-      // Send two response messages to end signal the end
+      // Send two response messages to signal the end
       val enqueResponses = stateResponseQueue.enqueue1(storeResponseMessage) *>
         stateResponseQueue.enqueue1(storeResponseMessage)
       enqueResponses.unsafeRunSync
@@ -99,6 +99,7 @@ class InitializingSpec extends WordSpec {
         _               = assert(handlerInternal.isInstanceOf[Running[Task]])
 
         // Assert requested messages for the state and fork choice tip
+        _        = assert(transportLayer.requests.size == expectedRequests.size)
         messages = transportLayer.requests.map(_.msg)
         _ = messages.zip(expectedRequests).map {
           case (msg1, msg2) => assert(msg1 == msg2)
