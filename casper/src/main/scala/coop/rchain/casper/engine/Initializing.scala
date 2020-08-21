@@ -122,35 +122,32 @@ class Initializing[F[_]
       import cats.instances.list._
 
       type SortedBlocks = SortedMap[Long, Set[BlockHash]]
-      type RecParams    = (Seq[BlockHash], SortedBlocks)
+      type RecParams    = (Seq[BlockHash], Set[BlockHash], SortedBlocks)
 
       def loopDependencies(params: RecParams): F[Either[RecParams, SortedBlocks]] = {
-        val (hashes, sorted) = params
+        val (hashes, skipped, sorted) = params
         hashes match {
           case Nil => sorted.asRight[RecParams].pure[F]
           case head +: tail =>
             for {
-              block <- BlockStore[F].getUnsafe(head)
-              deps <- ProtoUtil
-                       .dependenciesHashesOf(block)
-                       .filterA(
-                         hash =>
-                           tail.contains(hash).pure[F].not &&^
-                             sorted.values.toList.contains(hash).pure[F].not &&^
-                             BlockStore[F].contains(hash)
-                       )
+              block       <- BlockStore[F].getUnsafe(head)
+              depsAll     = ProtoUtil.dependenciesHashesOf(block)
+              depsNext    <- depsAll.filter(skipped).filterA(BlockStore[F].contains)
+              depsSkipped = depsAll.filter(depsNext.contains)
               blockNumber = block.body.state.blockNumber
               nrHashes    = sorted.getOrElse(blockNumber, Set())
               // Data for continue recursion
-              newRest   = tail ++ deps
-              newSorted = sorted.updated(blockNumber, nrHashes + block.blockHash)
-            } yield (newRest, newSorted).asLeft
+              newRest    = tail ++ depsNext
+              newSkipped = skipped ++ depsSkipped
+              newSorted  = sorted.updated(blockNumber, nrHashes + block.blockHash)
+            } yield (newRest, newSkipped, newSorted).asLeft
         }
       }
 
       val emptySorted = SortedMap[Long, Set[BlockHash]]()
       for {
-        sortedHashes <- (Seq(startBlock.blockHash), emptySorted).tailRecM(loopDependencies)
+        sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
+                         .tailRecM(loopDependencies)
         // Add sorted DAG in reverse order (from approved block)
         _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
               for {
