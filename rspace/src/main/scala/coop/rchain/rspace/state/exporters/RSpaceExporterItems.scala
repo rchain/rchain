@@ -25,7 +25,7 @@ object RSpaceExporterItems {
   ): F[StoreItems[Blake2b256Hash, Value]] =
     for {
       // Traverse and collect tuple space nodes
-      nodes <- time("IMPL READ TRIE NODES")(exporter.getNodes(startPath, skip, take))
+      nodes <- time("TRAVERSE TRIE FOR HISTORY")(exporter.getNodes(startPath, skip, take))
 
       // Get last entry / raise exception if empty (partial function)
       lastEntry <- nodes.lastOption.liftTo(EmptyHistoryException)
@@ -33,7 +33,7 @@ object RSpaceExporterItems {
       // Load all history items / without leafs
       historyKeys = nodes.filterNot(_.isLeaf)
       keys        = historyKeys.distinct.map(_.hash)
-      items       <- time("GET HISTORY NODES")(exporter.getHistoryItems(keys, fromBuffer))
+      items       <- time("GET HISTORY BY KEYS")(exporter.getHistoryItems(keys, fromBuffer))
 
       // TEMP: print exported tries
 //      tries <- time("GET HISTORY NODES")(exporter.getHistoryItems(keys, { buf =>
@@ -52,7 +52,7 @@ object RSpaceExporterItems {
   ): F[StoreItems[Blake2b256Hash, Value]] =
     for {
       // Traverse and collect tuple space nodes
-      nodes <- time("GET DATA NODES")(exporter.getNodes(startPath, skip, take))
+      nodes <- time("TRAVERSE TRIE FOR DATA")(exporter.getNodes(startPath, skip, take))
 
       // Get last entry / raise exception if empty (partial function)
       lastEntry <- nodes.lastOption.liftTo(EmptyHistoryException)
@@ -60,6 +60,6 @@ object RSpaceExporterItems {
       // Load all data items / without history
       dataKeys = nodes.filter(_.isLeaf)
       keys     = dataKeys.distinct.map(_.hash)
-      items    <- time("DATA LOADED")(exporter.getDataItems(keys, fromBuffer))
+      items    <- time("GET DATA BY KEYS")(exporter.getDataItems(keys, fromBuffer))
     } yield StoreItems(items, lastEntry.path :+ (lastEntry.hash, none))
 }

@@ -28,12 +28,3 @@ object RSpaceStateManagerImpl {
       }
   }
 }
-
-// TODO: move it to test project
-final case class RSpaceStateManagerDummyImpl[F[_]: Sync]() extends RSpaceStateManager[F] {
-  override def exporter: RSpaceExporter[F] = ???
-
-  override def importer: RSpaceImporter[F] = ???
-
-  override def isEmpty: F[Boolean] = ???
-}

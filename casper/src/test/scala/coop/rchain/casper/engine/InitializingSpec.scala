@@ -6,10 +6,15 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.CommError.CommErr
+import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
+import coop.rchain.models.rholang.implicits.fromVar
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
+import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -27,7 +32,6 @@ class InitializingSpec extends WordSpec {
       val theInit = Task.unit
 
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
-      implicit val rspaceMan  = RSpaceStateManagerDummyImpl[Task]()
 
       val blockResponseQueue = Queue.unbounded[Task, BlockMessage].runSyncUnsafe()
       val stateResponseQueue = Queue.unbounded[Task, StoreItemsMessage].runSyncUnsafe()
@@ -59,9 +63,32 @@ class InitializingSpec extends WordSpec {
         )
       )
 
+      val postStateHashBs = approvedBlock.candidate.block.body.state.postStateHash
+      val postStateHash   = Blake2b256Hash.fromByteString(postStateHashBs)
+      val startPath       = Seq((postStateHash, none))
+
+      // Store request message
+      val storeRequestMessage =
+        StoreItemsMessageRequest(startPath, 0, LastFinalizedStateTupleSpaceRequester.pageSize)
+      // Store response message
+      val storeResponseMessage =
+        StoreItemsMessage(startPath = startPath, lastPath = startPath, Seq(), Seq())
+
+      // Send two response messages to signal the end
+      val enqueResponses = stateResponseQueue.enqueue1(storeResponseMessage) *>
+        stateResponseQueue.enqueue1(storeResponseMessage)
+      enqueResponses.unsafeRunSync
+
+      val expectedRequests = Seq(
+        packet(local, networkId, storeRequestMessage.toProto),
+        packet(local, networkId, ForkChoiceTipRequestProto())
+      )
+
       val test = for {
-        _               <- EngineCell[Task].set(initializingEngine)
-        _               <- initializingEngine.handle(local, approvedBlock)
+        _ <- EngineCell[Task].set(initializingEngine)
+        // Send approved block
+        _ <- initializingEngine.handle(local, approvedBlock)
+
         engine          <- EngineCell[Task].read
         casperDefined   <- engine.withCasper(kp(true.pure[Task]), false.pure[Task])
         _               = assert(casperDefined)
@@ -70,20 +97,25 @@ class InitializingSpec extends WordSpec {
         _               = assert(blockO.contains(genesis))
         handlerInternal <- EngineCell[Task].read
         _               = assert(handlerInternal.isInstanceOf[Running[Task]])
-        _ = assert(
-          transportLayer.requests.head.msg == packet(
-            local,
-            networkId,
-            ForkChoiceTipRequestProto()
-          )
-        )
+
+        // Assert requested messages for the state and fork choice tip
+        _        = assert(transportLayer.requests.size == expectedRequests.size)
+        messages = transportLayer.requests.map(_.msg)
+        _ = messages.zip(expectedRequests).map {
+          case (msg1, msg2) => assert(msg1 == msg2)
+        }
         _ = transportLayer.reset()
+
         // assert that we really serve last approved block
         lastApprovedBlockO <- LastApprovedBlock[Task].get
         _                  = assert(lastApprovedBlockO.isDefined)
-        _                  <- EngineCell[Task].read >>= (_.handle(local, ApprovedBlockRequest("test")))
-        head               = transportLayer.requests.head
-        _                  = assert(head.msg.message.packet.get.content == approvedBlock.toProto.toByteString)
+        _ <- EngineCell[Task].read >>= (_.handle(
+              local,
+              ApprovedBlockRequest("test", trimState = false)
+            ))
+        head = transportLayer.requests.head
+        // TODO: fix missing signature in received approved block
+        _ = assert(head.msg.message.packet.get.content == approvedBlock.toProto.toByteString)
       } yield ()
 
       test.unsafeRunSync

@@ -592,7 +592,7 @@ final case class StoreItemsMessageRequest(
     skip: Int,
     take: Int
 ) extends CasperMessage {
-  override def toProto: CasperMessageProto = StoreItemsMessageRequest.toProto(this)
+  override def toProto: StoreItemsMessageRequestProto = StoreItemsMessageRequest.toProto(this)
 }
 
 object StoreItemsMessageRequest {

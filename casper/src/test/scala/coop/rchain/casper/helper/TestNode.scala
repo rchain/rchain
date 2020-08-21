@@ -38,7 +38,6 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
-import coop.rchain.rspace.state.instances.RSpaceStateManagerDummyImpl
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -128,7 +127,7 @@ class TestNode[F[_]](
     blocksInProcessing
   )
 
-  implicit val rspaceMan                 = RSpaceStateManagerDummyImpl()
+  implicit val rspaceMan                 = RSpaceStateManagerTestImpl()
   val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F])
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
