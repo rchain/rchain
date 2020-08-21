@@ -131,6 +131,8 @@ class Initializing[F[_]
                            tupleSpaceQueue
                          )
 
+      // Approved block is saved after the whole state is received
+      //  to restart requesting if interrupted with incomplete state.
       _ <- BlockStore[F].put(approvedBlock.candidate.block)
 
       // Execute stream until tuple space and all needed blocks are received

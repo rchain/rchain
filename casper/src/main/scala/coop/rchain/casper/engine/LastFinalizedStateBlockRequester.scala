@@ -11,6 +11,7 @@ import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, Time}
@@ -127,7 +128,12 @@ object LastFinalizedStateBlockRequester {
         ) - 50
         // Add block parents for requesting
         _ <- Stream
-              .eval(d.update(_.add(ProtoUtil.dependenciesHashesOf(block).toSet)))
+              .eval {
+                for {
+                  deps <- getBlockDependencies(block)
+                  _    <- d.update(_.add(deps.toSet))
+                } yield ()
+              }
               .whenA(isReceived && (inDeployLifeSpanRage || !allValidatorsSeen))
 
         /**
@@ -179,8 +185,15 @@ object LastFinalizedStateBlockRequester {
       requestStream.takeWhile(!_) concurrently responseStream concurrently timeoutResendStream
     }
 
-    val dependenciesHashes = ProtoUtil.dependenciesHashesOf(approvedBlock.candidate.block)
+    def getBlockDependencies(block: BlockMessage) = {
+      import cats.instances.list._
+      ProtoUtil.dependenciesHashesOf(block).filterA(BlockStore[F].contains(_).not)
+    }
+
     for {
+
+      // Start block hashes
+      dependenciesHashes <- getBlockDependencies(approvedBlock.candidate.block)
       // Requester state
       st <- SignallingRef[F, ST[BlockHash]](ST(dependenciesHashes))
       // Block requests queue
@@ -199,4 +212,5 @@ object LastFinalizedStateBlockRequester {
       // Create block receiver stream
     } yield createStream(st, requestQueue, validatorsRequired)
   }
+
 }
