@@ -88,8 +88,12 @@ class Initializing[F[_]
       _ <- if (isValid) {
             for {
               _ <- Log[F].info(
-                    s"Valid approved block received ${PrettyPrinter.buildString(approvedBlock)}"
+                    s"Valid approved block ${PrettyPrinter
+                      .buildString(approvedBlock.candidate.block, short = true)} received. Restoring approved state."
                   )
+
+              // Download approved state and all related blocks
+              _ <- requestApprovedState(approvedBlock)
 
               _ <- EventLog[F].publish(
                     shared.Event.ApprovedBlockReceived(
@@ -98,63 +102,23 @@ class Initializing[F[_]
                     )
                   )
 
-              _ <- insertIntoBlockAndDagStore[F](block, approvedBlock)
               _ <- LastApprovedBlock[F].set(approvedBlock)
 
               // Update last finalized block with received block hash
               _ <- LastFinalizedStorage[F].put(block.blockHash)
 
-              // Transition to restore last finalized state
-              _ <- requestApprovedState
+              _ <- Log[F].info(
+                    s"Approved state for block ${PrettyPrinter
+                      .buildString(approvedBlock.candidate.block, short = true)} is successfully restored."
+                  )
             } yield ()
           } else
             Log[F].info("Invalid LastFinalizedBlock received; refusing to add.")
     } yield ()
   }
 
-  def requestApprovedState: F[Unit] = {
-    def populateDag(startBlock: BlockMessage): F[Unit] = {
-      import cats.instances.list._
-
-      type SortedBlocks = SortedMap[Long, Set[BlockHash]]
-      type RecParams    = (Seq[BlockHash], SortedBlocks)
-
-      def loopDependencies(params: RecParams): F[Either[RecParams, SortedBlocks]] = {
-        val (hashes, sorted) = params
-        hashes match {
-          case Nil => sorted.asRight[RecParams].pure[F]
-          case head +: tail =>
-            for {
-              block       <- BlockStore[F].getUnsafe(head)
-              deps        = ProtoUtil.dependenciesHashesOf(block)
-              blockNumber = block.body.state.blockNumber
-              nrHashes    = sorted.getOrElse(blockNumber, Set())
-              // Data for continue recursion
-              newRest   = deps ++ tail
-              newSorted = sorted.updated(blockNumber, nrHashes + block.blockHash)
-            } yield (newRest, newSorted).asLeft
-        }
-      }
-
-      val emptySorted = SortedMap[Long, Set[BlockHash]]()
-      for {
-        sortedHashes <- (Seq(startBlock.blockHash), emptySorted).tailRecM(loopDependencies)
-        // Add sorted DAG in reverse order (from approved block)
-        _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
-              for {
-                block <- BlockStore[F].getUnsafe(hash)
-                _     <- BlockDagStorage[F].insert(block, invalid = false)
-              } yield ()
-            }
-      } yield ()
-    }
-
+  def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] =
     for {
-      // Approved block is the starting point to request the state
-      approvedBlock <- LastApprovedBlock[F].get >>= (_.liftTo(
-                        ApprovedBlockNotAvailableWhenRestoringLastFinalizedStateError
-                      ))
-
       // Request all blocks for Last Finalized State
       blockRequestStream <- LastFinalizedStateBlockRequester.stream(
                              approvedBlock,
@@ -167,18 +131,57 @@ class Initializing[F[_]
                            tupleSpaceQueue
                          )
 
+      // Approved block is saved after the whole state is received
+      //  to restart requesting if interrupted with incomplete state.
+      _ <- BlockStore[F].put(approvedBlock.candidate.block)
+
       // Execute stream until tuple space and all needed blocks are received
       _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
       // Populate DAG with blocks retrieved
       _ <- populateDag(approvedBlock.candidate.block)
 
-      _ <- Log[F].info(
-            s"Approved State received ${PrettyPrinter.buildString(approvedBlock.candidate.block)}, transitioning to Running state."
-          )
-
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
+    } yield ()
+
+  private def populateDag(startBlock: BlockMessage): F[Unit] = {
+    import cats.instances.list._
+
+    type SortedBlocks = SortedMap[Long, Set[BlockHash]]
+    type RecParams    = (Seq[BlockHash], Set[BlockHash], SortedBlocks)
+
+    def loopDependencies(params: RecParams): F[Either[RecParams, SortedBlocks]] = {
+      val (hashes, skipped, sorted) = params
+      hashes match {
+        case Nil => sorted.asRight[RecParams].pure[F]
+        case head +: tail =>
+          for {
+            block       <- BlockStore[F].getUnsafe(head)
+            depsAll     = ProtoUtil.dependenciesHashesOf(block)
+            depsNext    <- depsAll.filter(skipped).filterA(BlockStore[F].contains)
+            depsSkipped = depsAll.filter(depsNext.contains)
+            blockNumber = block.body.state.blockNumber
+            nrHashes    = sorted.getOrElse(blockNumber, Set())
+            // Data for continue recursion
+            newRest    = tail ++ depsNext
+            newSkipped = skipped ++ depsSkipped
+            newSorted  = sorted.updated(blockNumber, nrHashes + block.blockHash)
+          } yield (newRest, newSkipped, newSorted).asLeft
+      }
+    }
+
+    val emptySorted = SortedMap[Long, Set[BlockHash]]()
+    for {
+      sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
+                       .tailRecM(loopDependencies)
+      // Add sorted DAG in reverse order (from approved block)
+      _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
+            for {
+              block <- BlockStore[F].getUnsafe(hash)
+              _     <- BlockDagStorage[F].insert(block, invalid = false)
+            } yield ()
+          }
     } yield ()
   }
 
