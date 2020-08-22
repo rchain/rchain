@@ -55,7 +55,22 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
 
-    def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
+    def latestMessageHashes: F[Map[Validator, BlockHash]] =
+      latestMessagesMap
+        .filter(
+          // This filter is a quick fix until https://github.com/rchain/rchain/issues/3093 is implemented,
+          // as we need to filter latest messages with only active validators. Adn this info is available only
+          // on chain.
+          message => {
+            val messageHeight = heightMap.find(_._2.contains(message._2)) match {
+              // Invalid blocks are not stored in height map
+              case None => invalidBlocksSet.find(_.blockHash == message._2).get.blockNum
+              case m    => m.get._1
+            }
+            messageHeight > (getMaxHeight - 1000)
+          }
+        )
+        .pure[F]
 
     def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
 
