@@ -26,13 +26,10 @@ object RSpaceExporterDisk {
     ): F[Either[Param, Unit]] = {
       val (startPath, chunk) = p
       println(s"PART ${chunk}")
-      val skip          = 0 // if (chunk == 0) chunkSize * 7 - 7 else 0
-      val exportHistory = exporter.getHistory(startPath, skip, chunkSize, BitVector(_))
-      val exportData    = exporter.getData(startPath, skip, chunkSize, BitVector(_))
+      val skip      = 0
+      val exportAll = exporter.getHistoryAndData(startPath, skip, chunkSize, BitVector(_))
       for {
-//        inputHistory <- exportHistory
-//        inputValues  <- exportData
-        inputs                      <- Parallel.parProduct(exportHistory, exportData)
+        inputs                      <- exportAll
         (inputHistory, inputValues) = inputs
 
         // Get history
@@ -41,20 +38,11 @@ object RSpaceExporterDisk {
         // Get values
         partialValuesList = inputValues.items
 
-        // Restore lmdb stores
-        historyStore <- mkLmdbInstance(dirPath.resolve("history"))
-        dataStore    <- mkLmdbInstance(dirPath.resolve("cold"))
-
         // Write to restore store
-//        _ <- time("COMPLETE LMDB HISTORY WRITE")(historyStore.put(partialStoreList))
-//        _ <- time("COMPLETE LMDB VALUES WRITE")(dataStore.put(partialValuesList))
         _ <- Parallel.parProduct(
               time("COMPLETE LMDB HISTORY WRITE")(historyStore.put(partialStoreList)),
               time("COMPLETE LMDB VALUES WRITE")(dataStore.put(partialValuesList))
             )
-
-        _ <- historyStore.close()
-        _ <- dataStore.close()
 
         _ = println(s"LAST PATH: ${inputHistory.lastPath.map { case (x, y) => (x, toHex(y)) }}")
 
@@ -83,7 +71,7 @@ object RSpaceExporterDisk {
     val newStore = StoreInstances.lmdbStore[F](
       StoreConfig(
         path = path,
-        mapSize = 10073741824L
+        mapSize = 10L * 1024 * 1024 * 1024
       )
     )
     Sync[F].delay(Files.createDirectories(path)) >> newStore
