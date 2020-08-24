@@ -1,6 +1,7 @@
 package coop.rchain.rspace.util
 
 import cats.Monad
+import cats.effect.Sync
 import cats.syntax.all._
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
@@ -21,15 +22,14 @@ object Lib {
     else s"${m / 1e6d} ms"
   }
 
-  def time[F[_]: Monad, A](tag: String)(block: => F[A]): F[A] = {
-    val t0 = System.nanoTime
+  def time[F[_]: Sync, A](tag: String)(block: => F[A]): F[A] =
     for {
+      t0 <- Sync[F].delay(System.nanoTime)
       a  <- block
       t1 = System.nanoTime
       m  = Duration.fromNanos(t1 - t0)
       _  = println(s">>> $tag elapsed: ${showTime(m)}")
     } yield a
-  }
 
   def toHex(b: Option[Byte]) =
     b.map(v => String.format("%02x", Integer.valueOf(v & 0xff))).getOrElse("--")
