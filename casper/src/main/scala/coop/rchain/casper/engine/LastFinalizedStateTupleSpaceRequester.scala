@@ -16,6 +16,7 @@ import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
@@ -34,8 +35,9 @@ object LastFinalizedStateTupleSpaceRequester {
 
   type StatePartPath = Seq[(Blake2b256Hash, Option[Byte])]
 
-  // TODO: extract this as a parameter (3000 on local machine is showing best results)
-  val pageSize = 3000
+  // TODO: extract this as a parameter
+  // 20,000 records uses about 2G of direct buffer memory
+  val pageSize = 20000
 
   /**
     * State to control processing of requests
@@ -137,7 +139,8 @@ object LastFinalizedStateTupleSpaceRequester {
         // Add chunk paths for requesting
         _ <- Stream.eval(d.update(_.add(Set(lastPath)))).whenA(isReceived)
 
-//        _ <- Stream.eval(Time[F].sleep(3.seconds))
+        // Trigger request queue (without resend of already requested)
+        _ <- Stream.eval(requestQueue.enqueue1(false))
 
         // Import chunk to RSpace
         _ <- Stream
@@ -151,31 +154,32 @@ object LastFinalizedStateTupleSpaceRequester {
                   importer = RSpaceStateManager[F].importer
 
                   // Write incoming data
-                  _ <- importer
-                        .setHistoryItems[ByteString](
-                          historyItems,
-                          x => ByteVector(x.toByteArray).toDirectByteBuffer
-                        )
-                  _ <- importer
-                        .setDataItems[ByteString](
-                          dataItems,
-                          x => ByteVector(x.toByteArray).toDirectByteBuffer
-                        )
+                  _ <- Lib.time("IMPORT HISTORY")(
+                        importer
+                          .setHistoryItems[ByteString](
+                            historyItems,
+                            x => ByteVector(x.toByteArray).toDirectByteBuffer
+                          )
+                      )
+                  _ <- Lib.time("IMPORT DATA")(
+                        importer
+                          .setDataItems[ByteString](
+                            dataItems,
+                            x => ByteVector(x.toByteArray).toDirectByteBuffer
+                          )
+                      )
 
                   // Mark chunk as finished
                   _ <- d.update(_.done(startPath))
                 } yield ()
               )
               .whenA(isReceived)
-
-        // Trigger request queue (without resend of already requested)
-        _ <- Stream.eval(requestQueue.enqueue1(false))
       } yield ()
 
       /**
         * Timeout to resend requests for tuple state chunks if response is not received.
         */
-      val timeoutDuration = 30.seconds
+      val timeoutDuration = 5.minute
       val timeoutMsg      = s"No tuple space state responses for $timeoutDuration. Requests resent."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
