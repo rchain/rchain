@@ -63,7 +63,7 @@ import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
@@ -698,8 +698,9 @@ object NodeRuntime {
   }
 
   def cleanup[F[_]: Sync: Log](
-      runtime: Runtime[F],
-      casperRuntime: Runtime[F],
+      runtime: RhoRuntime[F],
+      casperRuntime: RhoRuntime[F],
+      casperReplayRuntime: RhoRuntime[F],
       deployStorageCleanup: F[Unit],
       casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
@@ -707,9 +708,10 @@ object NodeRuntime {
       override def close(): F[Unit] =
         for {
           _ <- Log[F].info("Shutting down interpreter runtime ...")
-          _ <- runtime.close()
+          _ <- runtime.close
           _ <- Log[F].info("Shutting down Casper runtime ...")
-          _ <- casperRuntime.close()
+          _ <- casperRuntime.close
+          _ <- casperReplayRuntime.close
           _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
           _ <- Log[F].info("Shutting down deploy storage ...")
@@ -817,20 +819,20 @@ object NodeRuntime {
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        Runtime.setupRSpace[F](cliConf.storage, cliConf.size) >>= {
-          case (space, replay, _) => Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size) >>= {
+          case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
-      _ <- Runtime.bootstrapRegistry[F](evalRuntime)
       casperRuntimeAndReporter <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
-          (space, replay, hr) = sarAndHR
-          runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+          space            <- RhoRuntime.setupRhoRSpace[F](casperConf.storage, casperConf.size)
+          rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty)
+          replaySpace      <- RhoRuntime.setupReplaySpace(casperConf.storage, casperConf.size)
+          replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty)
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
                        implicit val kvm = casperStoreManager
@@ -843,15 +845,19 @@ object NodeRuntime {
                                               ListParWithRandom,
                                               TaggedContinuation
                                             ]
-                       } yield ReportingCasper.rhoReporter(hr, reportingCache)
+                       } yield ReportingCasper.rhoReporter(
+                         reportingCache,
+                         casperConf.storage,
+                         casperConf.size
+                       )
                      } else
                        ReportingCasper.noop.pure[F]
-        } yield (runtime, reporter)
+        } yield (rhoRuntime, replayRhoRuntime, reporter)
       }
-      (casperRuntime, reportingCasper) = casperRuntimeAndReporter
+      (casperRuntime, casperReplayRuntime, reportingCasper) = casperRuntimeAndReporter
       runtimeManager <- {
         implicit val sp = span
-        RuntimeManager.fromRuntime[F](casperRuntime)
+        RuntimeManager.fromRuntimes[F](casperRuntime, casperReplayRuntime)
       }
 
       engineCell   <- EngineCell.init[F]
@@ -944,6 +950,7 @@ object NodeRuntime {
       runtimeCleanup = NodeRuntime.cleanup(
         evalRuntime,
         casperRuntime,
+        casperReplayRuntime,
         deployStorageCleanup,
         casperStoreManager
       )
@@ -983,7 +990,7 @@ object NodeRuntime {
   )
 
   def acquireAPIServers[F[_]](
-      runtime: Runtime[F],
+      runtime: RhoRuntime[F],
       blockApiLock: Semaphore[F],
       scheduler: Scheduler,
       apiMaxBlocksLimit: Int,

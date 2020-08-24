@@ -17,8 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.SystemProcesses
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, Runtime, SystemProcesses}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -170,9 +169,9 @@ class RhoSpec(
     }
 
   private def setupRuntime[F[_]: Sync](
-      runtime: Runtime[F],
+      runtime: RhoRuntime[F],
       otherLibs: Seq[Signed[DeployData]]
-  ): F[Runtime[F]] =
+  ): F[RhoRuntime[F]] =
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
       _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
@@ -180,7 +179,7 @@ class RhoSpec(
 
   private def evalDeploy[F[_]: Sync](
       deploy: Signed[DeployData],
-      runtime: Runtime[F]
+      runtime: RhoRuntime[F]
   ): F[Unit] = {
     import coop.rchain.models.rholang.implicits._
     val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)

@@ -193,9 +193,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix, mapSize).use { runtime =>
-          implicit val c                    = runtime.cost
-          implicit val i: Interpreter[Task] = Interpreter.newIntrepreter[Task]
-          Interpreter[Task].evaluate(runtime, rho)
+          runtime.evaluate(rho)
         }
       }
     }
