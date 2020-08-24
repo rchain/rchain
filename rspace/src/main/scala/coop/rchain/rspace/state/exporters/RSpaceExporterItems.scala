@@ -34,13 +34,6 @@ object RSpaceExporterItems {
       historyKeys = nodes.filterNot(_.isLeaf)
       keys        = historyKeys.distinct.map(_.hash)
       items       <- time("GET HISTORY BY KEYS")(exporter.getHistoryItems(keys, fromBuffer))
-
-      // TEMP: print exported tries
-//      tries <- time("GET HISTORY NODES")(exporter.getHistoryItems(keys, { buf =>
-//                Trie.codecTrie.decodeValue(BitVector(buf)).get
-//              }))
-//      _ = println(s"${tries.map(_._2).mkString("\n")}")
-
     } yield StoreItems(items, lastEntry.path :+ (lastEntry.hash, none))
 
   def getData[F[_]: Sync, Value](
@@ -62,4 +55,32 @@ object RSpaceExporterItems {
       keys     = dataKeys.distinct.map(_.hash)
       items    <- time("GET DATA BY KEYS")(exporter.getDataItems(keys, fromBuffer))
     } yield StoreItems(items, lastEntry.path :+ (lastEntry.hash, none))
+
+  def getHistoryAndData[F[_]: Sync, Value](
+      exporter: RSpaceExporter[F],
+      startPath: Seq[(Blake2b256Hash, Option[Byte])],
+      skip: Int,
+      take: Int,
+      fromBuffer: ByteBuffer => Value
+  ): F[(StoreItems[Blake2b256Hash, Value], StoreItems[Blake2b256Hash, Value])] =
+    for {
+      // Traverse and collect tuple space nodes
+      nodes <- time("TRAVERSE TRIE")(exporter.getNodes(startPath, skip, take))
+
+      // Get last entry / raise exception if empty (partial function)
+      lastEntry <- nodes.lastOption.liftTo(EmptyHistoryException)
+
+      // Split by leaf nodes
+      (leafs, nonLeafs) = nodes.partition(_.isLeaf)
+      historyKeys       = nonLeafs.distinct.map(_.hash)
+      dataKeys          = leafs.distinct.map(_.hash)
+
+      // Load all history and data items
+      historyItems <- time("GET HISTORY BY KEYS")(exporter.getHistoryItems(historyKeys, fromBuffer))
+      dataItems    <- time("GET DATA BY KEYS")(exporter.getDataItems(dataKeys, fromBuffer))
+
+      history = StoreItems(historyItems, lastEntry.path :+ (lastEntry.hash, none))
+      data    = StoreItems(dataItems, lastEntry.path :+ (lastEntry.hash, none))
+
+    } yield (history, data)
 }
