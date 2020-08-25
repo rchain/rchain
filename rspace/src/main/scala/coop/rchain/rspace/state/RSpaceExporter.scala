@@ -131,4 +131,11 @@ object RSpaceExporter {
             Vector.empty
         }
     }
+
+  // Pretty printer helpers
+  def pathPretty(path: (Blake2b256Hash, Option[Byte])) = {
+    val (hash, idx) = path
+    val idxStr      = idx.fold("--")(i => String.format("%02x", Integer.valueOf(i & 0xff)))
+    s"$idxStr:${hash.bytes.toHex.take(8)}"
+  }
 }

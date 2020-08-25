@@ -8,6 +8,7 @@ import coop.rchain.models.PCost
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -629,6 +630,14 @@ final case class StoreItemsMessage(
     dataItems: Seq[(Blake2b256Hash, ByteString)]
 ) extends CasperMessage {
   override def toProto: StoreItemsMessageProto = StoreItemsMessage.toProto(this)
+
+  def pretty: String = {
+    val start       = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+    val last        = lastPath.map(RSpaceExporter.pathPretty).mkString(" ")
+    val historySize = historyItems.size
+    val dataSize    = dataItems.size
+    s"StoreItems(history: $historySize, data: $dataSize, start: [$start], last: [$last])"
+  }
 }
 
 object StoreItemsMessage {

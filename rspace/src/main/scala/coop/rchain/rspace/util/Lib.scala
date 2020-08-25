@@ -30,7 +30,4 @@ object Lib {
       m  = Duration.fromNanos(t1 - t0)
       _  = println(s">>> $tag elapsed: ${showTime(m)}")
     } yield a
-
-  def toHex(b: Option[Byte]) =
-    b.map(v => String.format("%02x", Integer.valueOf(v & 0xff))).getOrElse("--")
 }

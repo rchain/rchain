@@ -44,7 +44,7 @@ object RSpaceExporterDisk {
               time("COMPLETE LMDB VALUES WRITE")(dataStore.put(partialValuesList))
             )
 
-        _ = println(s"LAST PATH: ${inputHistory.lastPath.map { case (x, y) => (x, toHex(y)) }}")
+        _ = println(s"LAST PATH: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
 
         _ = println("")
 
