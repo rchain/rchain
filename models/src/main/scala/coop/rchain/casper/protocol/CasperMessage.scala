@@ -588,6 +588,22 @@ object Bond {
 
 // Last finalized state
 
+object StoreNodeKey {
+  // Encoding of non existent index for store node (Skip or Leaf node)
+  val noneIndex = 0x100
+
+  def from(s: StoreNodeKeyProto): (Blake2b256Hash, Option[Byte]) = {
+    // Key hash
+    val hashBytes = Blake2b256Hash.fromByteString(s.hash)
+    // Relative branch index / max 8-bit
+    val idx = if (s.index == noneIndex) none[Byte] else s.index.toByte.some
+    (hashBytes, idx)
+  }
+
+  def toProto(s: (Blake2b256Hash, Option[Byte])): StoreNodeKeyProto =
+    StoreNodeKeyProto(s._1.toByteString, s._2.map(_.toInt).getOrElse(noneIndex))
+}
+
 final case class StoreItemsMessageRequest(
     startPath: Seq[(Blake2b256Hash, Option[Byte])],
     skip: Int,
@@ -597,30 +613,11 @@ final case class StoreItemsMessageRequest(
 }
 
 object StoreItemsMessageRequest {
-  import cats.syntax.all._
   def from(x: StoreItemsMessageRequestProto): StoreItemsMessageRequest =
-    StoreItemsMessageRequest(
-      // Start path
-      x.startPath.map { p =>
-        (
-          // Key hash
-          Blake2b256Hash.fromByteString(p.hash),
-          // Relative branch index / max 8-bit
-          if (p.index == -1) none[Byte] else p.index.toByte.some
-        )
-      },
-      x.skip,
-      x.take
-    )
+    StoreItemsMessageRequest(x.startPath.map(StoreNodeKey.from), x.skip, x.take)
 
   def toProto(x: StoreItemsMessageRequest): StoreItemsMessageRequestProto =
-    StoreItemsMessageRequestProto(
-      x.startPath
-        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
-        .toList,
-      x.skip,
-      x.take
-    )
+    StoreItemsMessageRequestProto(x.startPath.map(StoreNodeKey.toProto).toList, x.skip, x.take)
 }
 
 final case class StoreItemsMessage(
@@ -641,37 +638,18 @@ final case class StoreItemsMessage(
 }
 
 object StoreItemsMessage {
-  import cats.syntax.all._
   def from(x: StoreItemsMessageProto): StoreItemsMessage =
     StoreItemsMessage(
-      x.startPath.map(
-        p =>
-          (
-            Blake2b256Hash.fromByteString(p.hash),
-            if (p.index == -1) none[Byte]
-            else p.index.toByte.some
-          )
-      ),
-      x.lastPath.map(
-        p =>
-          (
-            Blake2b256Hash.fromByteString(p.hash),
-            if (p.index == -1) none[Byte]
-            else p.index.toByte.some
-          )
-      ),
+      x.startPath.map(StoreNodeKey.from),
+      x.lastPath.map(StoreNodeKey.from),
       x.historyItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value)),
       x.dataItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value))
     )
 
   def toProto(x: StoreItemsMessage): StoreItemsMessageProto =
     StoreItemsMessageProto(
-      x.startPath
-        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
-        .toList,
-      x.lastPath
-        .map(k => StoreNodeKeyProto(k._1.toByteString, k._2.map(_.toInt).getOrElse(-1)))
-        .toList,
+      x.startPath.map(StoreNodeKey.toProto).toList,
+      x.lastPath.map(StoreNodeKey.toProto).toList,
       x.historyItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList,
       x.dataItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList
     )
