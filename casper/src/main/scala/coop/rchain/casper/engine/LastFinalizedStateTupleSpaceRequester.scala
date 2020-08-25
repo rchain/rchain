@@ -36,7 +36,7 @@ object LastFinalizedStateTupleSpaceRequester {
   type StatePartPath = Seq[(Blake2b256Hash, Option[Byte])]
 
   // TODO: extract this as a parameter
-  // 20,000 records uses about 2G of direct buffer memory
+  // 20,000 records uses about 2G of direct buffer memory on importing side
   val pageSize = 20000
 
   /**
@@ -133,26 +133,22 @@ object LastFinalizedStateTupleSpaceRequester {
 
         StoreItemsMessage(startPath, lastPath, historyItems, dataItems) = msg
 
+        _ <- Stream.eval(Log[F].info(s"Received ${msg.pretty}"))
+
         // Mark chunk as received
         isReceived <- Stream.eval(d.modify(_.received(startPath)))
 
-        // Add chunk paths for requesting
-        _ <- Stream.eval(d.update(_.add(Set(lastPath)))).whenA(isReceived)
-
-        // Trigger request queue (without resend of already requested)
-        _ <- Stream.eval(requestQueue.enqueue1(false))
+        // Add chunk paths for requesting and trigger request queue (without resend of already requested)
+        _ <- Stream
+              .eval(d.update(_.add(Set(lastPath))) >> requestQueue.enqueue1(false))
+              .whenA(isReceived)
 
         // Import chunk to RSpace
         _ <- Stream
-              .eval(
+              .eval {
+                // Get importer
+                val importer = RSpaceStateManager[F].importer
                 for {
-                  _ <- Log[F].info(
-                        s"Received store items - history: ${historyItems.size}, data: ${dataItems.size}, START: $startPath: LAST: $lastPath"
-                      )
-
-                  // Get importer
-                  importer = RSpaceStateManager[F].importer
-
                   // Write incoming data
                   _ <- Lib.time("IMPORT HISTORY")(
                         importer
@@ -171,8 +167,11 @@ object LastFinalizedStateTupleSpaceRequester {
 
                   // Mark chunk as finished
                   _ <- d.update(_.done(startPath))
+
+                  // Trigger request queue again to process finished chunks
+                  _ <- requestQueue.enqueue1(false)
                 } yield ()
-              )
+              }
               .whenA(isReceived)
       } yield ()
 
