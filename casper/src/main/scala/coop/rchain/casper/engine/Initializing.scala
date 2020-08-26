@@ -137,12 +137,12 @@ class Initializing[F[_]
                            tupleSpaceQueue
                          )
 
+      // Execute stream until tuple space and all needed blocks are received
+      _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
+
       // Approved block is saved after the whole state is received
       //  to restart requesting if interrupted with incomplete state.
       _ <- BlockStore[F].put(approvedBlock.candidate.block)
-
-      // Execute stream until tuple space and all needed blocks are received
-      _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
       // Populate DAG with blocks retrieved
       _ <- populateDag(approvedBlock.candidate.block)
