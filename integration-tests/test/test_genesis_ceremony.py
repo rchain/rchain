@@ -35,7 +35,7 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     bootstrap_cli_options = {
         '--deploy-timestamp'   : '1',
         '--required-signatures': '2',
-        '--approve-duration'   : '5min',
+        '--approve-duration'   : '1min',
         '--approve-interval'   : '10sec',
     }
     peers_cli_flags = {'--genesis-validator'}
