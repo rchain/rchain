@@ -44,12 +44,14 @@ final case class ProtocolServer(
     port: Int,
     grpcMaxRecvMessageSize: Long,
     grpcMaxRecvStreamMessageSize: Long,
-    maxMessageConsumers: Int
+    maxMessageConsumers: Int,
+    enableStateExporter: Boolean
 )
 
 final case class ProtocolClient(
     networkId: String,
     bootstrap: PeerNode,
+    trimState: Boolean,
     batchMaxConnections: Int,
     networkTimeout: FiniteDuration,
     grpcMaxRecvMessageSize: Long,

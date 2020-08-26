@@ -60,7 +60,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         port = 40400,
         grpcMaxRecvMessageSize = 262144,
         grpcMaxRecvStreamMessageSize = 268435456,
-        maxMessageConsumers = 400
+        maxMessageConsumers = 400,
+        enableStateExporter = true
       ),
       protocolClient = ProtocolClient(
         networkId = "testnet",
@@ -70,6 +71,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           )
           .right
           .get,
+        trimState = true,
         batchMaxConnections = 20,
         networkTimeout = 5.seconds,
         grpcMaxRecvMessageSize = 262144,

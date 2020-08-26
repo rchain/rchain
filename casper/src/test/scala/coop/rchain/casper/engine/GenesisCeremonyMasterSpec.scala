@@ -55,7 +55,8 @@ class GenesisCeremonyMasterSpec extends WordSpec {
           .waitingForApprovedBlockLoop[Task](
             shardId,
             finalizationRate,
-            Some(validatorId)
+            Some(validatorId),
+            enableStateExporter = true
           )
           .startAndForget
           .runToFuture
