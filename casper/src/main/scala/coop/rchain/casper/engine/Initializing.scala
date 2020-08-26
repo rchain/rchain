@@ -70,8 +70,9 @@ class Initializing[F[_]
       logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
         Time[F].sleep(10.seconds) >>
         CommUtil[F].requestApprovedBlock(trimState)
+
     case s: StoreItemsMessage =>
-      tupleSpaceQueue.enqueue1(s)
+      Log[F].info(s"Received ${s.pretty}") *> tupleSpaceQueue.enqueue1(s)
 
     case b: BlockMessage =>
       Log[F].info(s"BlockMessage received ${PrettyPrinter.buildString(b)}") *>

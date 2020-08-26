@@ -133,8 +133,6 @@ object LastFinalizedStateTupleSpaceRequester {
 
         StoreItemsMessage(startPath, lastPath, historyItems, dataItems) = msg
 
-        _ <- Stream.eval(Log[F].info(s"Received ${msg.pretty}"))
-
         // Mark chunk as received
         isReceived <- Stream.eval(d.modify(_.received(startPath)))
 
