@@ -279,25 +279,26 @@ object Running {
   ): F[Unit] = {
     import coop.rchain.rspace.state.syntax._
     for {
-      history <- RSpaceStateManager[F].exporter.getHistory(
-                  startPath,
-                  skip,
-                  take,
-                  ByteString.copyFrom
-                )
-      data <- RSpaceStateManager[F].exporter.getData(
-               startPath,
-               skip,
-               take,
-               ByteString.copyFrom
-             )
-      _ = println(
-        s"HISTORY READ history: ${history.items.size}, data: ${data.items.size}, path: $startPath"
-      )
-      req      = StoreItemsMessage(startPath, history.lastPath, history.items, data.items)
-      reqProto = StoreItemsMessage.toProto(req)
-      _        <- TransportLayer[F].streamToPeer(peer, reqProto)
-      _        <- Log[F].info(s"Store items sent to $peer")
+      // Export chunk of store items from RSpace
+      exportedItems <- RSpaceStateManager[F].exporter.getHistoryAndData(
+                        startPath,
+                        skip,
+                        take,
+                        ByteString.copyFrom
+                      )
+
+      (history, data) = exportedItems
+
+      // Prepare response with the chunk of store items
+      resp = StoreItemsMessage(startPath, history.lastPath, history.items, data.items)
+
+      _ <- Log[F].info(s"Read ${resp.pretty}")
+
+      // Stream store items to peer
+      respProto = StoreItemsMessage.toProto(resp)
+      _         <- TransportLayer[F].streamToPeer(peer, respProto)
+
+      _ <- Log[F].info(s"Store items sent to $peer")
     } yield ()
   }
 }

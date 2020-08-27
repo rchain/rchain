@@ -35,6 +35,16 @@ package object syntax {
     )(implicit m: Sync[F]): F[StoreItems[Blake2b256Hash, Value]] =
       RSpaceExporterItems.getData(exporter, startPath, skip, take, fromBuffer)
 
+    def getHistoryAndData[Value](
+        startPath: Seq[(Blake2b256Hash, Option[Byte])],
+        skip: Int,
+        take: Int,
+        fromBuffer: ByteBuffer => Value
+    )(
+        implicit m: Sync[F]
+    ): F[(StoreItems[Blake2b256Hash, Value], StoreItems[Blake2b256Hash, Value])] =
+      RSpaceExporterItems.getHistoryAndData(exporter, startPath, skip, take, fromBuffer)
+
     // Export to disk
 
     def writeToDisk(root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(

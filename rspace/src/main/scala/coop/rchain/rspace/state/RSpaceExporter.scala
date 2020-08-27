@@ -1,10 +1,10 @@
 package coop.rchain.rspace.state
 
 import cats.Monad
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.util.Lib
 import coop.rchain.state.{TrieExporter, TrieNode}
 
 trait RSpaceExporter[F[_]] extends TrieExporter[F] {
@@ -22,14 +22,14 @@ object RSpaceExporter {
 
   type ReadParams[F[_]] = (
       // Keys (tries) to read
-      Seq[TrieNode[Blake2b256Hash]],
+      Vector[TrieNode[Blake2b256Hash]],
       // Offset path
       Seq[(Blake2b256Hash, Option[Byte])],
       // Skip & take counter
       Counter,
       // Result tries as indexed collection
-      Seq[TrieNode[Blake2b256Hash]],
-      // Items traversed (not necessary)
+      Vector[TrieNode[Blake2b256Hash]],
+      // Items traversed (temp for debugging)
       Int
   )
 
@@ -38,31 +38,31 @@ object RSpaceExporter {
       skip: Int,
       take: Int,
       getTrie: Blake2b256Hash => F[Trie]
-  ): F[Seq[TrieNode[Blake2b256Hash]]] =
-    startPath.headOption.fold(Seq.empty[TrieNode[Blake2b256Hash]].pure[F]) {
+  ): F[Vector[TrieNode[Blake2b256Hash]]] =
+    startPath.headOption.fold(Vector.empty[TrieNode[Blake2b256Hash]].pure[F]) {
       case (root, _) =>
         val startParams: ReadParams[F] = (
           // First node is root / start path head
-          Seq(TrieNode(root, isLeaf = false, Nil)),
+          Vector(TrieNode(root, isLeaf = false, Seq.empty)),
           startPath,
           Counter(skip, take),
-          Seq.empty,
+          Vector.empty,
           0
         )
-        Monad[F].tailRecM(startParams)(traverseTrieRec[F](getTrie))
+        startParams.tailRecM(traverseTrieRec[F](getTrie))
     }
 
   private def traverseTrieRec[F[_]: Monad](
       getTrie: Blake2b256Hash => F[Trie]
-  )(params: ReadParams[F]): F[Either[ReadParams[F], Seq[TrieNode[Blake2b256Hash]]]] = {
+  )(params: ReadParams[F]): F[Either[ReadParams[F], Vector[TrieNode[Blake2b256Hash]]]] = {
     val (keys, path, Counter(skip, take), currentNodes, iterations) = params
-    def getCounter(n: Int, items: Seq[TrieNode[Blake2b256Hash]]) =
-      if (skip > 0) (Counter(skip + n, take), Seq.empty) else (Counter(skip, take + n), items)
+    def getCounter(n: Int, items: Vector[TrieNode[Blake2b256Hash]]) =
+      if (skip > 0) (Counter(skip + n, take), Vector.empty) else (Counter(skip, take + n), items)
     keys match {
       case _ if skip == 0 && take == 0 =>
         println(s"ITERATIONS $iterations")
         currentNodes.asRight[ReadParams[F]].pure[F]
-      case Nil =>
+      case Seq() =>
         println(s"ITERATIONS $iterations")
         currentNodes.asRight[ReadParams[F]].pure[F]
       case key +: keysRest =>
@@ -79,56 +79,63 @@ object RSpaceExporter {
             (none, path)
           }
           // Extract child nodes
-          children = extractRefs(trie, key, offset)
+          children                    = extractRefs(trie, key, offset)
+          (childLeafs, childNotLeafs) = children.partition(_.isLeaf)
           (counter, collected) = if (isHeadPath && !isSelectedNode) {
             // Prefix path selected, continue traverse
-            getCounter(0, Seq.empty)
+            getCounter(0, Vector.empty)
           } else if (isSelectedNode) {
             // Selected node in the path, keep it and continue traverse
-            getCounter(-1, Seq(key))
+            getCounter(-1, Vector(key))
           } else if (path.nonEmpty) {
             // Path non empty, continue traverse
-            getCounter(0, Seq.empty)
+            getCounter(0, Vector.empty)
           } else {
             // Add child nodes to result history
-            val childLeafs = children.filter(_.isLeaf)
             getCounter(-1, currentNodes ++ childLeafs :+ key)
           }
           // Tries left to process
-          remainingKeys = children.filterNot(_.isLeaf) ++ keysRest
+          remainingKeys = childNotLeafs ++ keysRest
         } yield (remainingKeys, pathRest, counter, collected, iterations + 1).asLeft
     }
   }
 
   private def extractRefs(
-      t: Trie,
+      trie: Trie,
       node: TrieNode[Blake2b256Hash],
       offset: Option[Byte]
-  ): Seq[TrieNode[Blake2b256Hash]] =
-    t match {
-      case EmptyTrie => Seq.empty
+  ): Vector[TrieNode[Blake2b256Hash]] =
+    trie match {
+      case EmptyTrie => Vector.empty
       // Collects key for cold store
       case Skip(_, LeafPointer(hash)) =>
-        Seq(TrieNode(hash, isLeaf = true, node.path))
+        Vector(TrieNode(hash, isLeaf = true, node.path))
       // Collects child reference
       case Skip(_, NodePointer(hash)) =>
-        Seq(TrieNode(hash, isLeaf = false, node.path))
+        Vector(TrieNode(hash, isLeaf = false, node.path))
       case PointerBlock(childs) =>
         // Collects hashes of child tries
         val itemsIndexed = childs.zipWithIndex
         // Filter by offset / repositioning for the starting path
-        val items = if (offset.nonEmpty) itemsIndexed.dropWhile {
-          case (_, i) => (offset.get & 0xff) > i
-        } else itemsIndexed
+        val items = offset.fold(itemsIndexed)(
+          offsetVal => itemsIndexed.dropWhile { case (_, i) => (offsetVal & 0xff) > i }
+        )
         items.flatMap {
           case (SkipPointer(hash), idx) =>
-            Seq(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
+            Vector(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
           case (NodePointer(hash), idx) =>
-            Seq(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
+            Vector(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
           case (LeafPointer(hash), idx) =>
-            Seq(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
+            Vector(TrieNode(hash, isLeaf = false, node.path :+ (node.hash, idx.toByte.some)))
           case _ =>
-            Seq.empty
+            Vector.empty
         }
     }
+
+  // Pretty printer helpers
+  def pathPretty(path: (Blake2b256Hash, Option[Byte])) = {
+    val (hash, idx) = path
+    val idxStr      = idx.fold("--")(i => String.format("%02x", Integer.valueOf(i & 0xff)))
+    s"$idxStr:${hash.bytes.toHex.take(8)}"
+  }
 }

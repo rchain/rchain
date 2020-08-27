@@ -1,6 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{
@@ -15,7 +16,8 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
+import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
@@ -34,15 +36,20 @@ object LastFinalizedStateTupleSpaceRequester {
 
   type StatePartPath = Seq[(Blake2b256Hash, Option[Byte])]
 
-  // TODO: extract this as a parameter (3000 on local machine is showing best results)
-  val pageSize = 3000
+  // TODO: extract this as a parameter
+  // 20,000 records uses about 2G of direct buffer memory on importing side
+  val pageSize = 20000
 
   /**
     * State to control processing of requests
     */
-  final case class ST[Key](private val d: Map[Key, ReqStatus]) {
+  final case class ST[Key](private val d: Map[Key, ReqStatus], c: Int = 0) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
-    def add(keys: Set[Key]): ST[Key] = ST(d ++ keys.filterNot(d.contains).map((_, Init)))
+    def add(keys: Set[Key]): ST[Key] = {
+      val r = ST(d ++ keys.filterNot(d.contains).map((_, Init)), c = c + 1)
+      println(s"ADD ${r.c}.${r.d}")
+      r
+    }
 
     // Get next keys not already requested or
     //  in case of resend together with Requested.
@@ -51,7 +58,9 @@ object LastFinalizedStateTupleSpaceRequester {
       val requested = d
         .filter { case (_, v) => v == Init || (resend && v == Requested) }
         .mapValues(_ => Requested)
-      ST(d ++ requested) -> requested.keysIterator.toSeq
+      val r = ST(d ++ requested, c = c + 1)
+      println(s"GET_NEXT ${r.c}.${r.d}")
+      r -> requested.keysIterator.toSeq
     }
 
     // Confirm key is Received if it was Requested.
@@ -59,11 +68,17 @@ object LastFinalizedStateTupleSpaceRequester {
     def received(k: Key): (ST[Key], Boolean) = {
       val isRequested = d.get(k).contains(Requested)
       val newSt       = if (isRequested) d + ((k, Received)) else d
-      ST(newSt) -> isRequested
+      val r           = ST(newSt, c = c + 1)
+      println(s"RECEIVED ${r.c}.${r.d}")
+      r -> isRequested
     }
 
     // Mark key as finished (Done).
-    def done(k: Key): ST[Key] = ST(d + ((k, Done)))
+    def done(k: Key): ST[Key] = {
+      val r = ST(d + ((k, Done)), c = c + 1)
+      println(s"DONE ${r.c}.${r.d}")
+      r
+    }
 
     // Returns flag if all keys are marked as finished (Done).
     def isFinished: Boolean = !d.exists { case (_, v) => v != Done }
@@ -118,6 +133,10 @@ object LastFinalizedStateTupleSpaceRequester {
         // Take next set of items to request
         ids <- Stream.eval(d.modify(_.getNext(resend)))
 
+        idsStr = ids.map(_.map(RSpaceExporter.pathPretty).mkString(", "))
+
+        _ <- Stream.eval(Log[F].warn(s"REQUEST_STREAM end: $isEnd ids: ${idsStr}"))
+
         // Send all requests in parallel
         _ <- broadcastStreams(ids).parJoinUnbounded.whenA(!isEnd && ids.nonEmpty)
       } yield isEnd
@@ -134,48 +153,51 @@ object LastFinalizedStateTupleSpaceRequester {
         // Mark chunk as received
         isReceived <- Stream.eval(d.modify(_.received(startPath)))
 
-        // Add chunk paths for requesting
-        _ <- Stream.eval(d.update(_.add(Set(lastPath)))).whenA(isReceived)
+        // Add chunk paths for requesting and trigger request queue (without resend of already requested)
+        _ <- Stream
+              .eval(d.update(_.add(Set(lastPath))) >> requestQueue.enqueue1(false))
+              .whenA(isReceived)
 
-//        _ <- Stream.eval(Time[F].sleep(3.seconds))
+        _ <- Stream.eval(Log[F].warn(s"RESPONSE_STREAM before import, isReceived: $isReceived"))
 
         // Import chunk to RSpace
         _ <- Stream
-              .eval(
+              .eval {
+                // Get importer
+                val importer = RSpaceStateManager[F].importer
                 for {
-                  _ <- Log[F].info(
-                        s"Received store items - history: ${historyItems.size}, data: ${dataItems.size}, START: $startPath: LAST: $lastPath"
-                      )
-
-                  // Get importer
-                  importer = RSpaceStateManager[F].importer
+                  _ <- Log[F].warn(s"RESPONSE_STREAM start import")
 
                   // Write incoming data
-                  _ <- importer
-                        .setHistoryItems[ByteString](
-                          historyItems,
-                          x => ByteVector(x.toByteArray).toDirectByteBuffer
-                        )
-                  _ <- importer
-                        .setDataItems[ByteString](
-                          dataItems,
-                          x => ByteVector(x.toByteArray).toDirectByteBuffer
-                        )
+                  _ <- Lib.time("IMPORT HISTORY")(
+                        importer
+                          .setHistoryItems[ByteString](
+                            historyItems,
+                            x => ByteVector(x.toByteArray).toDirectByteBuffer
+                          )
+                      )
+                  _ <- Lib.time("IMPORT DATA")(
+                        importer
+                          .setDataItems[ByteString](
+                            dataItems,
+                            x => ByteVector(x.toByteArray).toDirectByteBuffer
+                          )
+                      )
 
                   // Mark chunk as finished
                   _ <- d.update(_.done(startPath))
-                } yield ()
-              )
-              .whenA(isReceived)
 
-        // Trigger request queue (without resend of already requested)
-        _ <- Stream.eval(requestQueue.enqueue1(false))
+                  // Trigger request queue again to process finished chunks
+                  _ <- requestQueue.enqueue1(false)
+                } yield ()
+              }
+              .whenA(isReceived)
       } yield ()
 
       /**
         * Timeout to resend requests for tuple state chunks if response is not received.
         */
-      val timeoutDuration = 30.seconds
+      val timeoutDuration = 5.minutes
       val timeoutMsg      = s"No tuple space state responses for $timeoutDuration. Requests resent."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
