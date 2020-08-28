@@ -99,11 +99,15 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       latestMessages <- latestMessagesHashes.values.toStream
                          .traverse(hash => blockDag.lookup(hash))
                          .map(_.flatten)
-      result <- if (latestMessages.isEmpty) {
+      topBlockNumber <- blockDag.latestBlockNumber
+      filteredLM = latestMessages.filter(
+        _.blockNum > topBlockNumber - Estimator.latestMessageMaxDepth
+      )
+      result <- if (filteredLM.isEmpty) {
                  genesis.blockHash.pure[F]
                } else {
-                 latestMessages
-                   .foldM(latestMessages.head) {
+                 filteredLM
+                   .foldM(filteredLM.head) {
                      case (acc, latestMessage) =>
                        // TODO: Change to mainParentLCA
                        DagOperations.lowestUniversalCommonAncestorF[F](
@@ -211,6 +215,12 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
 
 object Estimator {
   val UnlimitedParents = Int.MaxValue
+
+  // Latest messages with block number more then this value before the tip of the DAG
+  // won't be taken into account when calculating LCA
+  // TODO remove when proper fix for https://github.com/rchain/rchain/issues/3094 is implemented
+  //  Have to be removed before block merge
+  val latestMessageMaxDepth = 1000L
 
   def apply[F[_]](implicit ev: Estimator[F]): Estimator[F] =
     ev
