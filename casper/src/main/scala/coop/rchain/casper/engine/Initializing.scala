@@ -131,8 +131,9 @@ class Initializing[F[_]
 
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
-                case true if isValid => (false, true)
-                case _               => (false, false)
+                case true if isValid  => (false, true)
+                case true if !isValid => (true, false)
+                case _                => (false, false)
               }
 
       // HACK: Wait for master transition to Running
