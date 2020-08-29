@@ -127,13 +127,12 @@ object Running {
                       if (r.doIgnore) {
                         logIgnore(r.status) >> false.pure[F]
                       } else {
-                        hasBlock.ifM(
-                          logAlreadyInStore >> ackReceive >> true.pure[F],
-                          validateBlockF(blockMessage, peer).ifM(
-                            saveBlock >> logOkSaved >> ackReceive >> true
-                              .pure[F],
-                            logBadDropped >> false.pure[F]
-                          )
+                        validateBlockF(blockMessage, peer).ifM(
+                          hasBlock.ifM(
+                            logAlreadyInStore >> ackReceive >> true.pure[F],
+                            saveBlock >> logOkSaved >> ackReceive >> true.pure[F]
+                          ),
+                          logBadDropped >> false.pure[F]
                         )
                       }
                     })
