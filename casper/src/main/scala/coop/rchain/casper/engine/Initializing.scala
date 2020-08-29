@@ -110,6 +110,7 @@ class Initializing[F[_]
               )
             )
 
+        _ <- BlockStore[F].putApprovedBlock(approvedBlock)
         _ <- LastApprovedBlock[F].set(approvedBlock)
 
         // Update last finalized block with received block hash
