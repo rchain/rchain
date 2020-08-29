@@ -74,15 +74,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def addBlockFromStore(
       blockHash: BlockHash,
       allowAddFromBuffer: Boolean
-  ): F[ValidBlockProcessing] = {
-    def returnSafetyRangeNotFilled: F[ValidBlockProcessing] =
-      BlockStatus
-        .exception(
-          new Exception("Not enough blocks past ApprovedBlock received.")
-        )
-        .asLeft[ValidBlock]
-        .pure[F]
-
+  ): F[ValidBlockProcessing] =
     for {
       blockAvailable <- BlockStore[F].get(blockHash)
       returnNoBlockInStore = BlockStatus
@@ -106,19 +98,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                      blockIsReady <- ~^(dagMissingBlockDependencies.pure[F]) ||^
                                       isApprovedBlockChild(b)
 
-                     _ <- fetchMissingDependencies(b).whenA(dagMissingBlockDependencies)
                      r <- if (blockIsReady) addBlock(b, allowAddFromBuffer)
-                         else {
-                           isApprovedBlockChild(b).flatMap(
-                             c =>
-                               if (c) returnSafetyRangeNotFilled
-                               else missingDepCheckResult.pure[F]
-                           )
-                         }
+                         else fetchMissingDependencies(b) >> missingDepCheckResult.pure[F]
+
                    } yield r
                }
     } yield result
-  }
 
   private def isApprovedBlockChild(blockMessage: BlockMessage): F[Boolean] =
     blockMessage.header.parentsHashList.contains(approvedBlock.blockHash).pure[F]
