@@ -1,27 +1,21 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{
-  ApprovedBlock,
-  StoreItemsMessage,
-  StoreItemsMessageRequest,
-  ToPacket
-}
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.{Log, Time}
-import fs2.Stream
 import fs2.concurrent.{Queue, SignallingRef}
+import fs2.{Pipe, Stream}
 import scodec.bits.ByteVector
 
 import scala.concurrent.duration._
@@ -90,7 +84,7 @@ object LastFinalizedStateTupleSpaceRequester {
   ): F[Stream[F, Boolean]] = {
 
     def createStream(
-        d: SignallingRef[F, ST[StatePartPath]],
+        st: SignallingRef[F, ST[StatePartPath]],
         requestQueue: Queue[F, Boolean]
     ): Stream[F, Boolean] = {
 
@@ -99,9 +93,8 @@ object LastFinalizedStateTupleSpaceRequester {
         val broadcastRequests = ids.map(
           x =>
             Stream.eval(
-              TransportLayer[F].sendToBootstrap(
-                ToPacket(StoreItemsMessageRequest(x, 0, pageSize).toProto)
-              )
+              Log[F].info(s"Sending StoreItemsRequest to bootstrap") *>
+                TransportLayer[F].sendToBootstrap(StoreItemsMessageRequest(x, 0, pageSize).toProto)
             )
         )
         // Create stream if requests
@@ -116,12 +109,10 @@ object LastFinalizedStateTupleSpaceRequester {
         resend <- requestQueue.dequeue
 
         // Check if stream is finished (no more requests)
-        isEnd <- Stream.eval(d.get.map(_.isFinished))
+        isEnd <- Stream.eval(st.get.map(_.isFinished))
 
         // Take next set of items to request
-        ids <- Stream.eval(d.modify(_.getNext(resend)))
-
-        idsStr = ids.map(_.map(RSpaceExporter.pathPretty).mkString(", "))
+        ids <- Stream.eval(st.modify(_.getNext(resend)))
 
         // Send all requests in parallel
         _ <- broadcastStreams(ids).parJoinUnbounded.whenA(!isEnd && ids.nonEmpty)
@@ -137,11 +128,11 @@ object LastFinalizedStateTupleSpaceRequester {
         StoreItemsMessage(startPath, lastPath, historyItems, dataItems) = msg
 
         // Mark chunk as received
-        isReceived <- Stream.eval(d.modify(_.received(startPath)))
+        isReceived <- Stream.eval(st.modify(_.received(startPath)))
 
         // Add chunk paths for requesting and trigger request queue (without resend of already requested)
         _ <- Stream
-              .eval(d.update(_.add(Set(lastPath))) >> requestQueue.enqueue1(false))
+              .eval(st.update(_.add(Set(lastPath))) >> requestQueue.enqueue1(false))
               .whenA(isReceived)
 
         // Import chunk to RSpace
@@ -167,7 +158,7 @@ object LastFinalizedStateTupleSpaceRequester {
                       )
 
                   // Mark chunk as finished
-                  _ <- d.update(_.done(startPath))
+                  _ <- st.update(_.done(startPath))
 
                   // Trigger request queue again to process finished chunks
                   _ <- requestQueue.enqueue1(false)
@@ -177,9 +168,9 @@ object LastFinalizedStateTupleSpaceRequester {
       } yield ()
 
       /**
-        * Timeout to resend requests for tuple state chunks if response is not received.
+        * Timeout to resend block requests if response is not received
         */
-      val timeoutDuration = 5.minutes
+      val timeoutDuration = 2.minutes
       val timeoutMsg      = s"No tuple space state responses for $timeoutDuration. Requests resent."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
@@ -187,13 +178,14 @@ object LastFinalizedStateTupleSpaceRequester {
       )
       // Switch to resend if response is not triggered after timeout
       // - response message reset timeout by canceling previous stream
-      val timeoutResendStream = responseStream.switchMap(_ => resendStream.repeat)
+      def withTimeout: Pipe[F, Boolean, Boolean] =
+        in => in concurrently in.switchMap(_ => resendStream)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
         *  with resend timeout if response is not received.
         */
-      requestStream.takeWhile(!_) concurrently responseStream concurrently timeoutResendStream
+      requestStream.takeWhile(!_).broadcastThrough(withTimeout) concurrently responseStream
     }
 
     val stateHash = Blake2b256Hash.fromByteString(
@@ -204,13 +196,17 @@ object LastFinalizedStateTupleSpaceRequester {
     for {
       // Write last finalized state root
       _ <- importer.setRoot(stateHash)
+
       // Requester state
       st <- SignallingRef[F, ST[StatePartPath]](ST(Seq(startRequest)))
+
       // Tuple space state requests queue
       requestQueue <- Queue.unbounded[F, Boolean]
+
       // Light the fire! / Starts the first request for chunk of state
       // - `true` if requested chunks should be re-requested
       _ <- requestQueue.enqueue1(false)
+
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)
   }
