@@ -104,7 +104,7 @@ object Dependencies {
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
   )
 
-  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
+  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
