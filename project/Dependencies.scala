@@ -43,7 +43,7 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
-  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
+  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "2.1.6"
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
