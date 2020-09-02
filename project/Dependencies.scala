@@ -47,11 +47,11 @@ object Dependencies {
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
-  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
+  val lightningj          = ("org.lightningj"             % "lightningj"                % "0.10.0-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
-  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.6.3"
+  val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.7.0"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
-  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
+  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
@@ -72,7 +72,7 @@ object Dependencies {
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.18"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.19"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
