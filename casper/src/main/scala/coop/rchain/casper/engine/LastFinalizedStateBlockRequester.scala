@@ -98,7 +98,7 @@ object LastFinalizedStateBlockRequester {
 
     // Active validators as per approved block state
     // - for approved state to be complete it is required to have block from each of them
-    val validators = ProtoUtil.bonds(block).filter(_.stake > 0).map(_.validator).toSet[Validator]
+    val validators = ProtoUtil.bonds(block).map(_.validator).toSet[Validator]
 
     def createStream(
         st: SignallingRef[F, ST[BlockHash, Validator]],
