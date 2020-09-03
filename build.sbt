@@ -184,7 +184,7 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
+    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.30",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
       nettyBoringSsl,
