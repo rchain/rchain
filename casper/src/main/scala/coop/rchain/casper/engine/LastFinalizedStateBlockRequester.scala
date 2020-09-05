@@ -138,7 +138,7 @@ object LastFinalizedStateBlockRequester {
 
           // Mark block as finished
           blockNumber           = ProtoUtil.blockNumber(block)
-          blockNumberOpt        = if (useAsMinHeight) blockNumber.some else none
+          blockNumberOpt        = if (useAsMinHeight) (blockNumber - 1).some else none
           minBlockNumberForDeps <- st.modify(_.done(block.blockHash, blockNumberOpt))
 
           // Minimum block number to request
