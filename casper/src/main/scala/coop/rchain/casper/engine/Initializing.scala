@@ -202,11 +202,19 @@ class Initializing[F[_]
     for {
       sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
                        .tailRecM(loopDependencies)
+      // Latest messages from slashed validators / invalid blocks
+      slashedValidators = startBlock.body.state.bonds.filter(_.stake == 0L).map(_.validator)
+      invalidBlocks = startBlock.justifications
+        .filter(v => slashedValidators.contains(v.validator))
+        .map(_.latestBlockHash)
+        .toSet
       // Add sorted DAG in reverse order (from approved block)
       _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
-              _     <- BlockDagStorage[F].insert(block, invalid = false)
+              // if sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
+              isInvalid = invalidBlocks(block.blockHash)
+              _ <- BlockDagStorage[F].insert(block, invalid = isInvalid)
             } yield ()
           }
 
