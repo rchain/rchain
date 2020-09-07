@@ -179,6 +179,7 @@ class Initializing[F[_]
         case head +: tail =>
           for {
             block <- BlockStore[F].getUnsafe(head)
+            _     <- Log[F].info(s"Sorting ${PrettyPrinter.buildString(block, short = true)}")
 
             // Block's all dependencies
             depsAll = ProtoUtil.dependenciesHashesOf(block).filterNot(visited)
@@ -200,6 +201,7 @@ class Initializing[F[_]
 
     val emptySorted = SortedMap[Long, Set[BlockHash]]()
     for {
+      _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
       sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
                        .tailRecM(loopDependencies)
       // Latest messages from slashed validators / invalid blocks
@@ -214,6 +216,9 @@ class Initializing[F[_]
               block <- BlockStore[F].getUnsafe(hash)
               // if sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
               isInvalid = invalidBlocks(block.blockHash)
+              _ <- Log[F].info(
+                    s"Adding block ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
+                  )
               _ <- BlockDagStorage[F].insert(block, invalid = isInvalid)
             } yield ()
           }
