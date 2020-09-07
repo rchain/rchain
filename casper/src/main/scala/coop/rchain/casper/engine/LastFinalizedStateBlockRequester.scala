@@ -30,19 +30,15 @@ object LastFinalizedStateBlockRequester {
   /**
     * State to control processing of requests
     */
-  final case class ST[Key, Sender](
-      private val d: Map[Key, ReqStatus] = Map[Key, ReqStatus](),
-      senders: Set[Sender] = Set[Sender](),
-      lowerBound: Long = Long.MaxValue
-  ) {
+  final case class ST[Key](private val d: Map[Key, ReqStatus], latest: Set[Key], lowerBound: Long) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
-    def add(keys: Set[Key]): ST[Key, Sender] =
+    def add(keys: Set[Key]): ST[Key] =
       this.copy(d ++ keys.filterNot(d.contains).map((_, Init)))
 
     // Get next keys not already requested or
     //  in case of resend together with Requested.
     // Returns updated state with requested keys.
-    def getNext(resend: Boolean): (ST[Key, Sender], Seq[Key]) = {
+    def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
       val requested = d
         .filter { case (_, v) => v == Init || (resend && v == Requested) }
         .mapValues(_ => Requested)
@@ -51,14 +47,14 @@ object LastFinalizedStateBlockRequester {
 
     // Confirm key is Received if it was Requested.
     // Returns updated state with the flag if it was Requested.
-    def received(k: Key): (ST[Key, Sender], Boolean) = {
+    def received(k: Key): (ST[Key], Boolean) = {
       val isRequested = d.get(k).contains(Requested)
       val newSt       = if (isRequested) d + ((k, Received)) else d
       this.copy(newSt) -> isRequested
     }
 
     // Mark key as finished (Done) with optionally set minimum lower bound.
-    def done(k: Key, height: Option[Long]): (ST[Key, Sender], Long) = {
+    def done(k: Key, height: Option[Long]): (ST[Key], Long) = {
       val newLowest = height.fold(lowerBound)(Math.min(_, lowerBound))
       val newSt     = d + ((k, Done))
       this.copy(newSt, lowerBound = newLowest) -> newLowest
@@ -68,16 +64,22 @@ object LastFinalizedStateBlockRequester {
     def isFinished: Boolean = !d.exists { case (_, v) => v != Done }
 
     // Track when senders list will be empty
-    def hasSender(sender: Sender): (ST[Key, Sender], Boolean) = {
-      val newSenders = senders - sender
-      this.copy(senders = newSenders) -> (senders != newSenders)
+    def admitLatest(msg: Key): (ST[Key], (Boolean, Boolean)) = {
+      // Remove message from the set of latest messages (if exists)
+      val newLatest = latest - msg
+      // Is message found in the set of latest messages
+      val isFound = latest != newLatest
+      // Is set of latest messages empty
+      val isEmpty = newLatest.isEmpty
+      // Returns new state and observed changes to the state
+      (this.copy(latest = newLatest), (isFound, isEmpty))
     }
   }
 
   object ST {
     // Create requests state with initial keys.
-    def apply[Key, V](initial: Seq[Key], senders: Set[V]): ST[Key, V] =
-      ST[Key, V](d = initial.map((_, Init)).toMap, senders)
+    def apply[Key](initial: Seq[Key], latest: Set[Key] = Set[Key]()): ST[Key] =
+      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound = Long.MaxValue)
   }
 
   /**
@@ -87,7 +89,7 @@ object LastFinalizedStateBlockRequester {
     * @param responseQueue Handler of block messages
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Concurrent: Time: BlockDagStorage: BlockStore: CommUtil: Log](
+  def stream[F[_]: Concurrent: Time: BlockStore: CommUtil: Log](
       approvedBlock: ApprovedBlock,
       responseQueue: Queue[F, BlockMessage]
   ): F[Stream[F, Boolean]] = {
@@ -98,10 +100,10 @@ object LastFinalizedStateBlockRequester {
 
     // Active validators as per approved block state
     // - for approved state to be complete it is required to have block from each of them
-    val validators = ProtoUtil.bonds(block).map(_.validator).toSet[Validator]
+    val latestMessages = block.justifications.map(_.latestBlockHash).toSet
 
     def createStream(
-        st: SignallingRef[F, ST[BlockHash, Validator]],
+        st: SignallingRef[F, ST[BlockHash]],
         requestQueue: Queue[F, Boolean]
     ): Stream[F, Boolean] = {
 
@@ -134,7 +136,8 @@ object LastFinalizedStateBlockRequester {
           // Block is latest message from bonded validator
           // - we need all child blocks of this block
           // - it must be used to calculate minimum block height
-          useAsMinHeight <- st.modify(_.hasSender(block.sender))
+          admitResult                     <- st.modify(_.admitLatest(block.blockHash))
+          (useAsMinHeight, isLatestEmpty) = admitResult
 
           // Mark block as finished
           blockNumber           = ProtoUtil.blockNumber(block)
@@ -145,7 +148,9 @@ object LastFinalizedStateBlockRequester {
           minBlockNumber = Math.min(minBlockNumberForDeps, minBlockNumberForDeployLifespan)
 
           // Is block number accepted
-          isBlockNumberAccepted = blockNumber >= minBlockNumber
+          // - true if all latest are not received
+          // - or all latest received and minimum height is the from oldest latest block
+          isBlockNumberAccepted = !isLatestEmpty || (isLatestEmpty && blockNumber >= minBlockNumber)
 
           // Save block to the store
           alreadySaved <- BlockStore[F].contains(block.blockHash)
@@ -237,8 +242,8 @@ object LastFinalizedStateBlockRequester {
 
     for {
       // Requester state, fill with validators for required latest messages
-      st <- SignallingRef[F, ST[BlockHash, Validator]](
-             ST(Seq(block.blockHash), senders = validators)
+      st <- SignallingRef[F, ST[BlockHash]](
+             ST(Seq(block.blockHash), latest = latestMessages)
            )
 
       // Block requests queue
