@@ -218,7 +218,7 @@ object LastFinalizedStateBlockRequester {
         * Timeout to resend block requests if response is not received.
         */
       val timeoutDuration = 30.seconds
-      val timeoutMsg      = s"No block responses for $timeoutDuration. Requests resent."
+      val timeoutMsg      = s"No block responses for $timeoutDuration. Resending requests."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
         Time[F].sleep(timeoutDuration) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
@@ -226,7 +226,7 @@ object LastFinalizedStateBlockRequester {
       // Switch to resend if response is not triggered after timeout
       // - response message reset timeout by canceling previous stream
       def withTimeout: Pipe[F, Boolean, Boolean] =
-        in => in concurrently in.switchMap(_ => resendStream)
+        in => in concurrently resendStream.interruptWhen(in.map(_ => true)).repeat
 
       /**
         * Final result! Concurrently pulling requests and handling responses
