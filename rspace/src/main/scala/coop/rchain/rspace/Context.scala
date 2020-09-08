@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.file.Path
 
 import org.lmdbjava.{Env, EnvFlags, Txn}
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 
 object Context {
 
@@ -13,7 +14,7 @@ object Context {
       flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
   ): Env[ByteBuffer] =
     Env
-      .create()
+      .create(PROXY_SAFE)
       .setMapSize(mapSize)
       .setMaxDbs(8)
       .setMaxReaders(2048)
