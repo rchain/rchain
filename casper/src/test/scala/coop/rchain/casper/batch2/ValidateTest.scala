@@ -663,7 +663,6 @@ class ValidateTest
                   dag   <- blockDagStorage.getRepresentation
                   result <- Validate.justificationRegressions[Task](
                              block,
-                             b0,
                              dag
                            )
                 } yield result == Right(Valid)
@@ -681,7 +680,6 @@ class ValidateTest
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
               blockWithJustificationRegression,
-              b0,
               dag
             ) shouldBeF Left(JustificationRegression)
         result = log.warns.size shouldBe 1
@@ -715,7 +713,6 @@ class ValidateTest
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
               blockWithInvalidJustification,
-              b0,
               dag
             ) shouldBeF Right(Valid)
       } yield ()
