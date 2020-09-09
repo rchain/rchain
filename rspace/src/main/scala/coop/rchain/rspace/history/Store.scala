@@ -48,10 +48,8 @@ object StoreInstances {
       dbi   <- Sync[F].delay { env.openDbi("db", MDB_CREATE) }
       store = LMDBStore(env, dbi)
     } yield new Store[F] {
-      override def get(key: Blake2b256Hash): F[Option[BitVector]] = {
-        val directKey = key.bytes.toDirectByteBuffer
-        get(directKey).map(v => v.map(BitVector(_)))
-      }
+      override def get(key: Blake2b256Hash): F[Option[BitVector]] =
+        get(Seq(key), BitVector(_)).map(_.head)
 
       override def put(key: Blake2b256Hash, value: BitVector): F[Unit] = {
         val directKey   = key.bytes.toDirectByteBuffer
