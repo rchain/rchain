@@ -60,9 +60,6 @@ object LastFinalizedStateBlockRequester {
       this.copy(newSt, lowerBound = newLowest) -> newLowest
     }
 
-    // Returns flag if all keys are marked as finished (Done).
-    def isFinished: Boolean = !d.exists { case (_, v) => v != Done }
-
     // Track when senders list will be empty
     def admitLatest(msg: Key): (ST[Key], (Boolean, Boolean)) = {
       // Remove message from the set of latest messages (if exists)
@@ -74,6 +71,9 @@ object LastFinalizedStateBlockRequester {
       // Returns new state and observed changes to the state
       (this.copy(latest = newLatest), (isFound, isEmpty))
     }
+
+    // Returns flag if all keys are marked as finished (Done).
+    def isFinished: Boolean = latest.isEmpty && !d.exists { case (_, v) => v != Done }
   }
 
   object ST {
@@ -87,11 +87,19 @@ object LastFinalizedStateBlockRequester {
     *
     * @param approvedBlock Last finalized block
     * @param responseQueue Handler of block messages
+    * @param requestForBlock Send request for block
+    * @param containsBlock Check if block is in the store
+    * @param putBlockToStore Add block to the store
+    * @param validateBlock Check if received block is valid
     * @return fs2.Stream processing all blocks
     */
-  def stream[F[_]: Concurrent: Time: BlockStore: CommUtil: Log](
+  def stream[F[_]: Concurrent: Time: Log](
       approvedBlock: ApprovedBlock,
-      responseQueue: Queue[F, BlockMessage]
+      responseQueue: Queue[F, BlockMessage],
+      requestForBlock: BlockHash => F[Unit],
+      containsBlock: BlockHash => F[Boolean],
+      putBlockToStore: (BlockHash, BlockMessage) => F[Unit],
+      validateBlock: BlockMessage => F[Boolean]
   ): F[Stream[F, Boolean]] = {
 
     val block                           = approvedBlock.candidate.block
@@ -109,7 +117,7 @@ object LastFinalizedStateBlockRequester {
 
       def broadcastStreams(ids: Seq[BlockHash]) = {
         // Create broadcast requests to peers
-        val broadcastRequests = ids.map(x => Stream.eval(CommUtil[F].broadcastRequestForBlock(x)))
+        val broadcastRequests = ids.map(x => Stream.eval(requestForBlock(x)))
         // Create stream of requests
         Stream(broadcastRequests: _*)
       }
@@ -120,15 +128,15 @@ object LastFinalizedStateBlockRequester {
         */
       def validateAndSaveBlock(block: BlockMessage) =
         for {
-          isBlockHashValid_ <- Validate.blockHash(block).map(_ == Right(Valid))
+          blockHashIsValid_ <- validateBlock(block)
           // TODO: validate zero genesis correctly
-          isBlockHashValid = block.body.state.blockNumber == 0 || isBlockHashValid_
+          blockHashIsValid = block.body.state.blockNumber == 0 || blockHashIsValid_
 
           // Log invalid block
           invalidBlockMsg = s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
-          _               <- Log[F].warn(invalidBlockMsg).whenA(!isBlockHashValid)
+          _               <- Log[F].warn(invalidBlockMsg).whenA(!blockHashIsValid)
 
-          _ <- saveBlock(block).whenA(isBlockHashValid)
+          _ <- saveBlock(block).whenA(blockHashIsValid)
         } yield ()
 
       def saveBlock(block: BlockMessage) =
@@ -153,10 +161,8 @@ object LastFinalizedStateBlockRequester {
           isBlockNumberAccepted = !isLatestEmpty || (isLatestEmpty && blockNumber >= minBlockNumber)
 
           // Save block to the store
-          alreadySaved <- BlockStore[F].contains(block.blockHash)
-          _ <- BlockStore[F]
-                .put(block.blockHash, block)
-                .whenA(isBlockNumberAccepted && !alreadySaved)
+          alreadySaved <- containsBlock(block.blockHash)
+          _            <- putBlockToStore(block.blockHash, block).whenA(isBlockNumberAccepted && !alreadySaved)
 
           _ <- Log[F]
                 .info(s"New minimum block height re-calculated $minBlockNumberForDeps.")
@@ -185,7 +191,7 @@ object LastFinalizedStateBlockRequester {
         hashes <- Stream.eval(st.modify(_.getNext(resend)))
 
         // Check existing blocks
-        existingHashes <- Stream.eval(hashes.toList.filterA(BlockStore[F].contains))
+        existingHashes <- Stream.eval(hashes.toList.filterA(containsBlock))
 
         // Missing blocks not already in the block store
         missingBlocks = hashes.diff(existingHashes)
@@ -237,7 +243,7 @@ object LastFinalizedStateBlockRequester {
 
     def getBlockDependencies(block: BlockMessage) = {
       import cats.instances.list._
-      ProtoUtil.dependenciesHashesOf(block).filterA(BlockStore[F].contains(_).not)
+      ProtoUtil.dependenciesHashesOf(block).filterA(containsBlock(_).not)
     }
 
     for {

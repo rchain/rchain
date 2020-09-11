@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
@@ -140,7 +141,11 @@ class Initializing[F[_]
       // Request all blocks for Last Finalized State
       blockRequestStream <- LastFinalizedStateBlockRequester.stream(
                              approvedBlock,
-                             blockMessageQueue
+                             blockMessageQueue,
+                             CommUtil[F].broadcastRequestForBlock,
+                             BlockStore[F].contains,
+                             BlockStore[F].put,
+                             block => Validate.blockHash(block).map(_ == Right(Valid))
                            )
 
       // Request tuple space state for Last Finalized State
