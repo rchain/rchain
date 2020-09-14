@@ -17,6 +17,7 @@
   </appender>
 
   <logger name="coop.rchain.shared.EventLogger" level="OFF" />
+  <logger name="io.opencensus" level="OFF" />
   <logger name="coop.rchain.rspace" level="warn" />
   <logger name="org.http4s" level="warn" />
   <logger name="io.netty" level="warn" />
