@@ -142,29 +142,29 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     // Empty sender is valid for genesis
     val senderIsEmpty          = block.sender == ByteString.EMPTY
-    val senderHasInvalidFormat = (block.sender.size() != Validator.Length) && !senderIsEmpty
+    val senderHasInvalidFormat = !senderIsEmpty && (block.sender.size() != Validator.Length)
     val sendersNewLM           = (block.sender, block.blockHash)
 
     val logAlreadyStored =
-      Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
+      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
     val logEmptySender =
-      Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty")
+      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} sender is empty")
 
+    // Add LM either if there is no existing message for the sender, or if sequence number advances
+    // - assumes block sender is not valid hash
     def shouldAddAsLatest: F[Boolean] =
-      // Do not add LM for empty senders
-      (!senderIsEmpty).pure[F] &&^
-        // Add LM either if there is no one for sender, or if sequence number advances
-        (latestMessagesIndex.contains(block.sender).not ||^
-          latestMessagesIndex
-          // Try get sender's latest message
-            .get(block.sender)
-            // Get metadata from index
-            .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
-            // Check if seq number is greater that existing
-            .map(_.map(block.seqNum >= _.seqNum))
-            // Evaluate option and result
-            .map(_.contains(true)))
+      latestMessagesIndex
+      // Try get sender's latest message
+        .get(block.sender)
+        // Get metadata from index
+        .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
+        // Check if seq number is greater that existing
+        .map(_.map(_.seqNum))
+        // Evaluate option and result. Add if:
+        // - latest message is not found, or
+        // - is found with seq num greater then existing
+        .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
     def newLatestMessages: F[Map[Validator, BlockHash]] = {
       val newlyBondedSet = bonds(block)
@@ -173,12 +173,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .diff(block.justifications.map(_.validator).toSet)
       for {
         // This filter is required to enable adding blocks backward from higher height to lower
-        newlyBondedUnseen <- newlyBondedSet.toList.filterA(
-                              lm => latestMessagesIndex.contains(lm).not
-                            )
-        newlyBondedLMs = newlyBondedUnseen.map(v => (v, block.blockHash)).toMap
-
-      } yield newlyBondedLMs
+        newlyBondedUnseen <- newlyBondedSet.toList.filterA(latestMessagesIndex.contains(_).not)
+      } yield newlyBondedUnseen.map((_, block.blockHash)).toMap
     }
 
     def doInsert: F[Unit] = {
@@ -208,11 +204,10 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- invalidBlocksIndex.put(blockMetadata.blockHash, blockMetadata).whenA(invalid)
 
         // Resolve if block should be added as the latest message for the block sender
-        newLatestFromSender <- (senderIsEmpty.pure[F].not &&^ shouldAddAsLatest)
-                                .ifM(
-                                  Map(sendersNewLM).pure[F],
-                                  Map.empty[Validator, BlockHash].pure[F]
-                                )
+        emptyLM = Map.empty[Validator, BlockHash].pure[F]
+        newLatestFromSender <- if (!senderIsEmpty)
+                                shouldAddAsLatest.ifM(Map(sendersNewLM).pure[F], emptyLM)
+                              else emptyLM
 
         // Add/update validators latest messages
         newLatestFromNewValidators <- newLatestMessages
