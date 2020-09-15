@@ -29,7 +29,7 @@ in {
               @vault!("transfer", to, amount, *key, *resultCh) |
               for (@result <- resultCh) {
 
-                stdout!(("Finished transfer of ", amount, "REV to", to, "result was:", result))
+                stdout!(("Finished transfer of ", amount, "nanoREV to", to, "result was:", result))
               }
             }
           }
