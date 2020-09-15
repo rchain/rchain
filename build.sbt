@@ -172,7 +172,7 @@ lazy val casper = (project in file("casper"))
     shared       % "compile->compile;test->test",
     graphz,
     crypto,
-    models   % "compile->compile;test->test",
+    models % "compile->compile;test->test",
     rspace,
     rholang % "compile->compile;test->test"
   )
@@ -246,6 +246,7 @@ lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
   .settings(
+    wartremoverErrors in (Compile, compile) -= Wart.NonUnitStatements,
     version := git.gitDescribedVersion.value.getOrElse({
       val v = "0.0.0-unknown"
       System.err.println("Could not get version from `git describe`.")

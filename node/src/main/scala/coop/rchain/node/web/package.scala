@@ -1,6 +1,7 @@
 package coop.rchain.node
 
-import cats.effect.Concurrent
+import cats.syntax.all._
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import coop.rchain.casper.ReportingCasper
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -16,10 +17,41 @@ import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.CORS
+import com.http4s.rho.swagger.ui.SwaggerUi
+import org.http4s.rho.swagger.SwaggerMetadata
+import org.http4s.rho.swagger.models.{Contact, Info, License, Tag}
 
 import scala.concurrent.duration.FiniteDuration
+import org.http4s.rho.swagger.SwaggerSupport
 
 package object web {
+  val metaData = SwaggerMetadata(
+    apiInfo = Info(
+      title = "RChain node API",
+      version = BuildInfo.version,
+      license =
+        License(name = "Apache 2.0", url = "http://www.apache.org/licenses/LICENSE-2.0.html").some,
+      contact = Contact(
+        name = "RChain Cooperative",
+        url = "https://rchain.coop/".some,
+        email = "info@rchain.coop".some
+      ).some,
+      description =
+        "Build dApps for RChain, a decentralized, economically sustainable public compute infrastructure.".some
+    ),
+    tags = List(
+      Tag(
+        name = "blocks",
+        description =
+          "Find and explore blocks for establishing consensus on the state of the RhoVM.".some
+      ),
+      Tag(
+        name = "rhovm",
+        description = "Deploy Rholang code and explore the RhoVM tuple space.".some
+      )
+    ),
+    basePath = Some("/api")
+  )
   def aquireHttpServer(
       reporting: Boolean,
       host: String = "0.0.0.0",
@@ -47,7 +79,16 @@ package object web {
         "/ws/events" -> CORS(event),
         "/api" -> CORS({
           implicit val et = NodeRuntime.envToTask
-          WebApiRoutes.service[Task, TaskEnv](webApiRoutes)
+          val swaggerUiRhoMiddleware =
+            new SwaggerUi[Task].createRhoMiddleware(
+              Blocker.liftExecutionContext(scheduler),
+              swaggerRoutesInSwagger = true,
+              swaggerMetadata = metaData
+            )
+          val ioSwagger = SwaggerSupport.apply[Task]
+          WebApiRoutes
+            .service[Task, TaskEnv](webApiRoutes, ioSwagger)
+            .toRoutes(swaggerUiRhoMiddleware)
         })
       )
       extraRoutes = if (reporting)
