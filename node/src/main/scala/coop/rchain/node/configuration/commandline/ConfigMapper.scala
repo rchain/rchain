@@ -22,6 +22,7 @@ object ConfigMapper {
       val run = options.run
       val add = addToMap()
       add("standalone", run.standalone)
+      add("devMode", run.devMode)
       add("protocol-server.network-id", run.networkId)
       add("protocol-server.dynamic-ip", run.dynamicIp)
       add("protocol-server.no-upnp", run.noUpnp)
