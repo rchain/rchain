@@ -4,6 +4,7 @@ import cats.Monad
 import cats.effect.Sync
 import cats.mtl.MonadState
 import cats.syntax.all._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.syntax._
@@ -25,6 +26,8 @@ object BlockMetadataStore {
       new AtomicMonadState(AtomicAny(dagState))
     )
 
+  final case class BlockMetadataStoreInconsistencyError(message: String) extends Exception(message)
+
   private final case class DagState(
       dagSet: Set[BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
@@ -45,6 +48,18 @@ object BlockMetadataStore {
       } yield ()
 
     def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get(hash)
+
+    def getUnsafe(hash: BlockHash)(
+        implicit f: Sync[F],
+        line: sourcecode.Line,
+        file: sourcecode.File,
+        enclosing: sourcecode.Enclosing
+    ): F[BlockMetadata] = {
+      def source = s"${file.value}:${line.value} ${enclosing.value}"
+      def errMsg =
+        s"BlockMetadataStore is missing key ${PrettyPrinter.buildString(hash)}\n  $source"
+      get(hash) >>= (_.liftTo(BlockMetadataStoreInconsistencyError(errMsg)))
+    }
 
     // DAG state operations
 
