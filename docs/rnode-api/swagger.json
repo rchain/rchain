@@ -1,0 +1,915 @@
+{
+  "swagger" : "2.0",
+  "info" : {
+    "version" : "0.9.25.4-1-g49ba198",
+    "title" : "RChain node API"
+  },
+  "basePath" : "/api2",
+  "paths" : {
+    "/swagger.json" : {
+      "get" : {
+        "tags" : [ "swagger.json" ],
+        "summary" : "Swagger documentation",
+        "operationId" : "getSwagger.json",
+        "produces" : [ "text/plain" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/prepare-deploy" : {
+      "get" : {
+        "tags" : [ "prepare-deploy" ],
+        "operationId" : "getPrepare-deploy",
+        "produces" : [ "application/json" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/PrepareResponse"
+            }
+          }
+        },
+        "deprecated" : false
+      },
+      "post" : {
+        "tags" : [ "prepare-deploy" ],
+        "operationId" : "postPrepare-deploy-body",
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "body",
+          "description" : "PrepareRequest",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/PrepareRequest"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/PrepareResponse"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/deploy/{string}" : {
+      "get" : {
+        "tags" : [ "deploy" ],
+        "operationId" : "getDeploy-string",
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "name" : "string",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/LightBlockInfo"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/data-at-name" : {
+      "post" : {
+        "tags" : [ "data-at-name" ],
+        "operationId" : "postData-at-name-body",
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "body",
+          "description" : "DataRequest",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/DataRequest"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/DataResponse"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/block/{string}" : {
+      "get" : {
+        "tags" : [ "block" ],
+        "operationId" : "getBlock-string",
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "name" : "string",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/last-finalized-block" : {
+      "get" : {
+        "tags" : [ "last-finalized-block" ],
+        "operationId" : "getLast-finalized-block",
+        "produces" : [ "application/json" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/explore-deploy-by-block-hash" : {
+      "post" : {
+        "tags" : [ "explore-deploy-by-block-hash" ],
+        "operationId" : "postExplore-deploy-by-block-hash-body",
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "body",
+          "description" : "ExploreDeployRequest",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/ExploreDeployRequest"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/explore-deploy" : {
+      "post" : {
+        "tags" : [ "explore-deploy" ],
+        "operationId" : "postExplore-deploy-body",
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "body",
+          "description" : "String",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/blocks/{int}" : {
+      "get" : {
+        "tags" : [ "blocks" ],
+        "operationId" : "getBlocks-int",
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "name" : "int",
+          "in" : "path",
+          "required" : true,
+          "type" : "integer"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/status" : {
+      "get" : {
+        "tags" : [ "status" ],
+        "operationId" : "getStatus",
+        "produces" : [ "application/json" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "$ref" : "#/definitions/ApiStatus"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/blocks" : {
+      "get" : {
+        "tags" : [ "blocks" ],
+        "operationId" : "getBlocks",
+        "produces" : [ "application/json" ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/blocks/{int}/{int}" : {
+      "get" : {
+        "tags" : [ "blocks" ],
+        "operationId" : "getBlocks-int-int",
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "name" : "int",
+          "in" : "path",
+          "required" : true,
+          "type" : "integer"
+        }, {
+          "name" : "int",
+          "in" : "path",
+          "required" : true,
+          "type" : "integer"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "array",
+              "items" : {
+                "$ref" : "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/is-finalized/{string}" : {
+      "get" : {
+        "tags" : [ "is-finalized" ],
+        "operationId" : "getIs-finalized-string",
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "name" : "string",
+          "in" : "path",
+          "required" : true,
+          "type" : "string"
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "boolean"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    },
+    "/deploy" : {
+      "post" : {
+        "tags" : [ "deploy" ],
+        "operationId" : "postDeploy-body",
+        "consumes" : [ "application/json" ],
+        "produces" : [ "application/json" ],
+        "parameters" : [ {
+          "in" : "body",
+          "name" : "body",
+          "description" : "DeployRequest",
+          "required" : true,
+          "schema" : {
+            "$ref" : "#/definitions/DeployRequest"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        },
+        "deprecated" : false
+      }
+    }
+  },
+  "definitions" : {
+    "RhoExpr" : {
+      "type" : "object",
+      "required" : [ "type" ],
+      "discriminator" : "type",
+      "properties" : {
+        "type" : {
+          "type" : "string",
+          "enum" : [ "ExprList", "ExprPar", "ExprUri", "ExprBytes", "ExprString", "ExprBool", "ExprMap", "ExprUnforg", "ExprInt", "ExprTuple" ]
+        }
+      },
+      "description" : "RhoExpr"
+    },
+    "ExprList" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/definitions/RhoExpr"
+            }
+          }
+        },
+        "description" : "ExprList"
+      } ],
+      "description" : "ExprList"
+    },
+    "ExprPar" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/definitions/RhoExpr"
+            }
+          }
+        },
+        "description" : "ExprPar"
+      } ],
+      "description" : "ExprPar"
+    },
+    "BondInfo" : {
+      "type" : "object",
+      "properties" : {
+        "validator" : {
+          "type" : "string"
+        },
+        "stake" : {
+          "type" : "integer",
+          "format" : "int64"
+        }
+      },
+      "description" : "BondInfo"
+    },
+    "ExprUri" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "ExprUri"
+      } ],
+      "description" : "ExprUri"
+    },
+    "ExprBytes" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "ExprBytes"
+      } ],
+      "description" : "ExprBytes"
+    },
+    "PrepareRequest" : {
+      "type" : "object",
+      "required" : [ "deployer", "nameQty", "timestamp" ],
+      "properties" : {
+        "deployer" : {
+          "type" : "string"
+        },
+        "timestamp" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "nameQty" : {
+          "type" : "integer",
+          "format" : "int32"
+        }
+      },
+      "description" : "PrepareRequest"
+    },
+    "RhoUnforg" : {
+      "type" : "object",
+      "required" : [ "type" ],
+      "discriminator" : "type",
+      "properties" : {
+        "type" : {
+          "type" : "string",
+          "enum" : [ "UnforgDeploy", "UnforgDeployer", "UnforgPrivate" ]
+        }
+      },
+      "description" : "RhoUnforg"
+    },
+    "UnforgPrivate" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoUnforg"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "UnforgPrivate"
+      } ],
+      "description" : "UnforgPrivate"
+    },
+    "ExploratoryDeployResponse" : {
+      "type" : "object",
+      "required" : [ "block", "expr" ],
+      "properties" : {
+        "expr" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/RhoExpr"
+          }
+        },
+        "block" : {
+          "$ref" : "#/definitions/LightBlockInfo"
+        }
+      },
+      "description" : "ExploratoryDeployResponse"
+    },
+    "DataResponse" : {
+      "type" : "object",
+      "required" : [ "exprs", "length" ],
+      "properties" : {
+        "exprs" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/RhoExprWithBlock"
+          }
+        },
+        "length" : {
+          "type" : "integer",
+          "format" : "int32"
+        }
+      },
+      "description" : "DataResponse"
+    },
+    "PrepareResponse" : {
+      "type" : "object",
+      "required" : [ "names", "seqNumber" ],
+      "properties" : {
+        "names" : {
+          "type" : "array",
+          "items" : {
+            "type" : "string"
+          }
+        },
+        "seqNumber" : {
+          "type" : "integer",
+          "format" : "int32"
+        }
+      },
+      "description" : "PrepareResponse"
+    },
+    "ExprString" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "ExprString"
+      } ],
+      "description" : "ExprString"
+    },
+    "RhoExprWithBlock" : {
+      "type" : "object",
+      "required" : [ "block", "expr" ],
+      "properties" : {
+        "expr" : {
+          "$ref" : "#/definitions/RhoExpr"
+        },
+        "block" : {
+          "$ref" : "#/definitions/LightBlockInfo"
+        }
+      },
+      "description" : "RhoExprWithBlock"
+    },
+    "LightBlockInfo" : {
+      "type" : "object",
+      "properties" : {
+        "blockHash" : {
+          "type" : "string"
+        },
+        "justifications" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/JustificationInfo"
+          }
+        },
+        "timestamp" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "extraBytes" : {
+          "type" : "string",
+          "description" : "com.google.protobuf.ByteString"
+        },
+        "bonds" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/BondInfo"
+          }
+        },
+        "parentsHashList" : {
+          "type" : "array",
+          "items" : {
+            "type" : "string"
+          }
+        },
+        "shardId" : {
+          "type" : "string"
+        },
+        "sigAlgorithm" : {
+          "type" : "string"
+        },
+        "sig" : {
+          "type" : "string"
+        },
+        "blockSize" : {
+          "type" : "string"
+        },
+        "postStateHash" : {
+          "type" : "string"
+        },
+        "version" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "seqNum" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "blockNumber" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "sender" : {
+          "type" : "string"
+        },
+        "headerExtraBytes" : {
+          "type" : "string",
+          "description" : "com.google.protobuf.ByteString"
+        },
+        "bodyExtraBytes" : {
+          "type" : "string",
+          "description" : "com.google.protobuf.ByteString"
+        },
+        "faultTolerance" : {
+          "type" : "number",
+          "format" : "float"
+        },
+        "preStateHash" : {
+          "type" : "string"
+        },
+        "deployCount" : {
+          "type" : "integer",
+          "format" : "int32"
+        }
+      },
+      "description" : "LightBlockInfo"
+    },
+    "ExploreDeployRequest" : {
+      "type" : "object",
+      "required" : [ "blockHash", "term", "usePreStateHash" ],
+      "properties" : {
+        "term" : {
+          "type" : "string"
+        },
+        "blockHash" : {
+          "type" : "string"
+        },
+        "usePreStateHash" : {
+          "type" : "boolean"
+        }
+      },
+      "description" : "ExploreDeployRequest"
+    },
+    "DeployData" : {
+      "type" : "object",
+      "required" : [ "phloLimit", "phloPrice", "term", "timestamp", "validAfterBlockNumber" ],
+      "properties" : {
+        "timestamp" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "term" : {
+          "type" : "string"
+        },
+        "phloLimit" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "phloPrice" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "validAfterBlockNumber" : {
+          "type" : "integer",
+          "format" : "int64"
+        }
+      },
+      "description" : "DeployData"
+    },
+    "DeployInfo" : {
+      "type" : "object",
+      "properties" : {
+        "timestamp" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "systemDeployError" : {
+          "type" : "string"
+        },
+        "term" : {
+          "type" : "string"
+        },
+        "phloLimit" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "sigAlgorithm" : {
+          "type" : "string"
+        },
+        "deployer" : {
+          "type" : "string"
+        },
+        "sig" : {
+          "type" : "string"
+        },
+        "errored" : {
+          "type" : "boolean"
+        },
+        "cost" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "phloPrice" : {
+          "type" : "integer",
+          "format" : "int64"
+        },
+        "validAfterBlockNumber" : {
+          "type" : "integer",
+          "format" : "int64"
+        }
+      },
+      "description" : "DeployInfo"
+    },
+    "JustificationInfo" : {
+      "type" : "object",
+      "properties" : {
+        "validator" : {
+          "type" : "string"
+        },
+        "latestBlockHash" : {
+          "type" : "string"
+        }
+      },
+      "description" : "JustificationInfo"
+    },
+    "DeployRequest" : {
+      "type" : "object",
+      "required" : [ "data", "deployer", "sigAlgorithm", "signature" ],
+      "properties" : {
+        "data" : {
+          "$ref" : "#/definitions/DeployData"
+        },
+        "deployer" : {
+          "type" : "string"
+        },
+        "signature" : {
+          "type" : "string"
+        },
+        "sigAlgorithm" : {
+          "type" : "string"
+        }
+      },
+      "description" : "DeployRequest"
+    },
+    "ExprBool" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "boolean"
+          }
+        },
+        "description" : "ExprBool"
+      } ],
+      "description" : "ExprBool"
+    },
+    "UnforgDeploy" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoUnforg"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "UnforgDeploy"
+      } ],
+      "description" : "UnforgDeploy"
+    },
+    "BlockInfo" : {
+      "type" : "object",
+      "properties" : {
+        "blockInfo" : {
+          "$ref" : "#/definitions/LightBlockInfo"
+        },
+        "deploys" : {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/definitions/DeployInfo"
+          }
+        }
+      },
+      "description" : "BlockInfo"
+    },
+    "ExprMap" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/definitions/RhoExpr"
+            }
+          }
+        },
+        "description" : "ExprMap"
+      } ],
+      "description" : "ExprMap"
+    },
+    "UnforgDeployer" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoUnforg"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "string"
+          }
+        },
+        "description" : "UnforgDeployer"
+      } ],
+      "description" : "UnforgDeployer"
+    },
+    "ExprUnforg" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "$ref" : "#/definitions/RhoUnforg"
+          }
+        },
+        "description" : "ExprUnforg"
+      } ],
+      "description" : "ExprUnforg"
+    },
+    "ExprInt" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        },
+        "description" : "ExprInt"
+      } ],
+      "description" : "ExprInt"
+    },
+    "DataRequest" : {
+      "type" : "object",
+      "required" : [ "depth", "name" ],
+      "properties" : {
+        "name" : {
+          "$ref" : "#/definitions/RhoUnforg"
+        },
+        "depth" : {
+          "type" : "integer",
+          "format" : "int32"
+        }
+      },
+      "description" : "DataRequest"
+    },
+    "ApiStatus" : {
+      "type" : "object",
+      "required" : [ "message", "version" ],
+      "properties" : {
+        "version" : {
+          "type" : "integer",
+          "format" : "int32"
+        },
+        "message" : {
+          "type" : "string"
+        }
+      },
+      "description" : "ApiStatus"
+    },
+    "ExprTuple" : {
+      "allOf" : [ {
+        "$ref" : "#/definitions/RhoExpr"
+      }, {
+        "type" : "object",
+        "required" : [ "data" ],
+        "properties" : {
+          "data" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/definitions/RhoExpr"
+            }
+          }
+        },
+        "description" : "ExprTuple"
+      } ],
+      "description" : "ExprTuple"
+    }
+  }
+}
