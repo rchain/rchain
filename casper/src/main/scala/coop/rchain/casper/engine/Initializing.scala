@@ -210,8 +210,8 @@ class Initializing[F[_]
         .filter(v => slashedValidators.contains(v.validator))
         .map(_.latestBlockHash)
         .toSet
-      // Add sorted DAG in reverse order (from approved block)
-      _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
+      // Add sorted DAG in order from oldest to approved block
+      _ <- sortedHashes.flatMap(_._2).toList.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
               // if sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
