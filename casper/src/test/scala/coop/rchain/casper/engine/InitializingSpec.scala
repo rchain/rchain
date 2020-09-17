@@ -1,24 +1,22 @@
 package coop.rchain.casper.engine
 
+import cats.effect.Concurrent
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.catscontrib.ski._
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.comm.CommError.CommErr
-import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.comm.protocol.routing.Protocol
+import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.models.rholang.implicits.fromVar
-import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, WordSpec}
+
+import scala.concurrent.duration._
 
 class InitializingSpec extends WordSpec with BeforeAndAfterEach {
   implicit val eventBus = EventPublisher.noop[Task]
@@ -82,20 +80,28 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       // Store response message
       val storeResponseMessage =
         StoreItemsMessage(startPath = startPath, lastPath = startPath, Seq(), Seq())
+      // Block request message
+      val blockRequestMessage = BlockRequest(genesis.blockHash)
 
       // Send two response messages to signal the end
-      val enqueResponses = stateResponseQueue.enqueue1(storeResponseMessage) *>
-        stateResponseQueue.enqueue1(storeResponseMessage)
-      enqueResponses.unsafeRunSync
+      val enqueueResponses = stateResponseQueue.enqueue1(storeResponseMessage) *>
+        stateResponseQueue.enqueue1(storeResponseMessage) *>
+        // Send block response
+        blockResponseQueue.enqueue1(genesis)
 
       val expectedRequests = Seq(
         packet(local, networkId, storeRequestMessage.toProto),
+        packet(local, networkId, blockRequestMessage.toProto),
         packet(local, networkId, ForkChoiceTipRequestProto())
       )
 
       val test = for {
         _ <- EngineCell[Task].set(initializingEngine)
-        // Send approved block
+
+        // Send responses with some delay because `Initializing.handle` is blocking until LFS is not received.
+        _ <- Concurrent[Task].start(Task.sleep(1.second) >> enqueueResponses)
+
+        // Handle approved block (it's blocking until responses are received)
         _ <- initializingEngine.handle(local, approvedBlock)
 
         engine          <- EngineCell[Task].read
