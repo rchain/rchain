@@ -47,7 +47,7 @@ final class TransportLayerOps[F[_]: Monad: RPConfAsk](
       message: Msg
   ): F[Unit] = streamToPeer(peer, ToPacket(message))
 
-  def sendToBootstrap(message: Packet): F[Unit] =
+  def sendToBootstrap[Msg: ToPacket](message: Msg): F[Unit] =
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
       bootstrap      = maybeBootstrap.get

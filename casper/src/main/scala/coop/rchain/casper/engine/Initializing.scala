@@ -11,7 +11,6 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine.Initializing._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -30,11 +29,6 @@ import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
-
-object Initializing {
-  // Approved block must be available before restoring last finalized state
-  final case object ApprovedBlockNotAvailableWhenRestoringLastFinalizedStateError extends Exception
-}
 
 /**
   * initializing engine makes sure node receives Approved State and transitions to Running after
@@ -96,12 +90,16 @@ class Initializing[F[_]
       val block = approvedBlock.candidate.block
       for {
         _ <- Log[F].info(
-              s"Valid approved block ${PrettyPrinter
-                .buildString(approvedBlock.candidate.block, short = true)} received. Restoring approved state."
+              s"Valid approved block ${PrettyPrinter.buildString(block, short = true)} received. Restoring approved state."
             )
 
         // Download approved state and all related blocks
         _ <- requestApprovedState(approvedBlock)
+
+        // Approved block is saved after the whole state is received,
+        //  to restart requesting if interrupted with incomplete state.
+        _ <- BlockStore[F].putApprovedBlock(approvedBlock)
+        _ <- LastApprovedBlock[F].set(approvedBlock)
 
         _ <- EventLog[F].publish(
               shared.Event.ApprovedBlockReceived(
@@ -110,15 +108,11 @@ class Initializing[F[_]
               )
             )
 
-        _ <- BlockStore[F].putApprovedBlock(approvedBlock)
-        _ <- LastApprovedBlock[F].set(approvedBlock)
-
         // Update last finalized block with received block hash
         _ <- LastFinalizedStorage[F].put(block.blockHash)
 
         _ <- Log[F].info(
-              s"Approved state for block ${PrettyPrinter
-                .buildString(approvedBlock.candidate.block, short = true)} is successfully restored."
+              s"Approved state for block ${PrettyPrinter.buildString(block, short = true)} is successfully restored."
             )
       } yield ()
     }
@@ -136,9 +130,6 @@ class Initializing[F[_]
                 case true if !isValid => (true, false)
                 case _                => (false, false)
               }
-
-      // HACK: Wait for master transition to Running
-      _ <- Time[F].sleep(3.seconds).whenA(start)
 
       _ <- handleApprovedBlock.whenA(start)
     } yield ()
@@ -158,15 +149,13 @@ class Initializing[F[_]
                            tupleSpaceQueue
                          )
 
-      // Execute stream until tuple space and all needed blocks are received
-      _ <- fs2.Stream(blockRequestStream, tupleSpaceStream).parJoinUnbounded.compile.drain
+      // Receive the blocks and after populate the DAG
+      blockRequestAddDagStream = blockRequestStream.drain ++ fs2.Stream.eval(
+        populateDag(approvedBlock.candidate.block)
+      )
 
-      // Approved block is saved after the whole state is received
-      //  to restart requesting if interrupted with incomplete state.
-      _ <- BlockStore[F].put(approvedBlock.candidate.block)
-
-      // Populate DAG with blocks retrieved
-      _ <- populateDag(approvedBlock.candidate.block)
+      // Run both streams in parallel until tuple space and all needed blocks are received
+      _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceStream).parJoinUnbounded.compile.drain
 
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
@@ -178,37 +167,60 @@ class Initializing[F[_]
     type SortedBlocks = SortedMap[Long, Set[BlockHash]]
     type RecParams    = (Seq[BlockHash], Set[BlockHash], SortedBlocks)
 
-    def loopDependencies(params: RecParams): F[Either[RecParams, SortedBlocks]] = {
-      val (hashes, skipped, sorted) = params
+    def loopDependencies(
+        params: RecParams
+    ): F[Either[RecParams, SortedMap[Long, Set[BlockHash]]]] = {
+      val (hashes, visited, sortedByHeight) = params
       hashes match {
-        case Nil => sorted.asRight[RecParams].pure[F]
+        case Nil => sortedByHeight.asRight[RecParams].pure[F]
         case head +: tail =>
           for {
-            block       <- BlockStore[F].getUnsafe(head)
-            depsAll     = ProtoUtil.dependenciesHashesOf(block)
-            depsNext    <- depsAll.filter(skipped).filterA(BlockStore[F].contains)
-            depsSkipped = depsAll.filter(depsNext.contains)
+            block <- BlockStore[F].getUnsafe(head)
+            _     <- Log[F].info(s"Sorting ${PrettyPrinter.buildString(block, short = true)}")
+
+            // Block's all dependencies
+            depsAll = ProtoUtil.dependenciesHashesOf(block).filterNot(visited)
+
+            // Dependencies to add to DAG (without skipped or not in the store)
+            depsInStore <- depsAll.filterA(BlockStore[F].contains)
+
+            // Already collected hashes for block height
             blockNumber = block.body.state.blockNumber
-            nrHashes    = sorted.getOrElse(blockNumber, Set())
+            nrHashes    = sortedByHeight.getOrElse(blockNumber, Set())
+
             // Data for continue recursion
-            newRest    = tail ++ depsNext
-            newSkipped = skipped ++ depsSkipped
-            newSorted  = sorted.updated(blockNumber, nrHashes + block.blockHash)
-          } yield (newRest, newSkipped, newSorted).asLeft
+            newRest    = tail ++ depsInStore
+            newVisited = visited ++ depsAll
+            newSorted  = sortedByHeight.updated(blockNumber, nrHashes + block.blockHash)
+          } yield (newRest, newVisited, newSorted).asLeft
       }
     }
 
     val emptySorted = SortedMap[Long, Set[BlockHash]]()
     for {
+      _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
       sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
                        .tailRecM(loopDependencies)
-      // Add sorted DAG in reverse order (from approved block)
-      _ <- sortedHashes.flatMap(_._2).toList.reverse.traverse_ { hash =>
+      // Latest messages from slashed validators / invalid blocks
+      slashedValidators = startBlock.body.state.bonds.filter(_.stake == 0L).map(_.validator)
+      invalidBlocks = startBlock.justifications
+        .filter(v => slashedValidators.contains(v.validator))
+        .map(_.latestBlockHash)
+        .toSet
+      // Add sorted DAG in order from oldest to approved block
+      _ <- sortedHashes.flatMap(_._2).toList.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
-              _     <- BlockDagStorage[F].insert(block, invalid = false)
+              // if sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
+              isInvalid = invalidBlocks(block.blockHash)
+              _ <- Log[F].info(
+                    s"Adding block ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
+                  )
+              _ <- BlockDagStorage[F].insert(block, invalid = isInvalid)
             } yield ()
           }
+
+      _ <- Log[F].info(s"Blocks for approved state added to DAG.")
     } yield ()
   }
 

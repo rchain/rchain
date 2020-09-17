@@ -59,7 +59,6 @@ trait Casper[F[_]] {
   def getGenesis: F[BlockMessage]
   def getValidator: F[Option[PublicKey]]
   def getVersion: F[Long]
-  def getDeployLifespan: F[Int]
 
   def getBlocksInProcessing: F[Set[BlockHash]]
 }
