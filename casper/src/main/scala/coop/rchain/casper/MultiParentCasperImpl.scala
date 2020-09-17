@@ -282,7 +282,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                 validatorIdentity,
                 shardId,
                 version,
-                deployLifespanBlocks,
+                deployLifespan,
                 runtimeManager
               )
           }
@@ -342,7 +342,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
-        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, deployLifespanBlocks))
+        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, deployLifespan))
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
@@ -536,8 +536,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
 object MultiParentCasperImpl {
 
-  // TODO: Extract hardcoded deployLifespanBlocks from shard config
-  val deployLifespanBlocks = 50
+  // TODO: Extract hardcoded deployLifespan from shard config
+  // Size of deploy safety range.
+  // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+  // Required to enable protection from re-submitting duplicate deploys
+  val deployLifespan = 50
 
   def addedEvent(block: BlockMessage): RChainEvent = {
     val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)

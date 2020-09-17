@@ -96,7 +96,7 @@ object LastFinalizedStateBlockRequester {
 
     val block                           = approvedBlock.candidate.block
     val approvedBlockNumber             = ProtoUtil.blockNumber(block)
-    val minBlockNumberForDeployLifespan = approvedBlockNumber - MultiParentCasperImpl.deployLifespanBlocks
+    val minBlockNumberForDeployLifespan = approvedBlockNumber - MultiParentCasperImpl.deployLifespan
 
     // Active validators as per approved block state
     // - for approved state to be complete it is required to have block from each of them
