@@ -131,9 +131,6 @@ class Initializing[F[_]
                 case _                => (false, false)
               }
 
-      // HACK: Wait for master transition to Running
-      _ <- Time[F].sleep(3.seconds).whenA(start)
-
       _ <- handleApprovedBlock.whenA(start)
     } yield ()
   }
