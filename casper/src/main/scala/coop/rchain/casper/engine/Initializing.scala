@@ -142,7 +142,7 @@ class Initializing[F[_]
       blockRequestStream <- LastFinalizedStateBlockRequester.stream(
                              approvedBlock,
                              blockMessageQueue,
-                             CommUtil[F].broadcastRequestForBlock,
+                             hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              BlockStore[F].contains,
                              BlockStore[F].put,
                              block => Validate.blockHash(block).map(_ == Right(Valid))

@@ -29,9 +29,10 @@ object Connect {
   object ConnectionsCell {
     def apply[F[_]](implicit ev: ConnectionsCell[F]): ConnectionsCell[F] = ev
 
-    def random[F[_]: Monad: ConnectionsCell: RPConfAsk]: F[Connections] =
+    def random[F[_]: Monad: ConnectionsCell](
+        max: Int
+    ): F[Connections] =
       for {
-        max   <- RPConfAsk[F].reader(_.maxNumOfConnections)
         peers <- ConnectionsCell[F].read
       } yield Random.shuffle(peers).take(max)
   }
