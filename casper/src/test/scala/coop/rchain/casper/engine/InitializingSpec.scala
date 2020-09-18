@@ -116,10 +116,8 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
         // Assert requested messages for the state and fork choice tip
         _        = assert(transportLayer.requests.size == expectedRequests.size)
         messages = transportLayer.requests.map(_.msg)
-        _ = messages.zip(expectedRequests).map {
-          case (msg1, msg2) => assert(msg1 == msg2)
-        }
-        _ = transportLayer.reset()
+        _        = assert(messages.toSet == expectedRequests.toSet)
+        _        = transportLayer.reset()
 
         // assert that we really serve last approved block
         lastApprovedBlockO <- LastApprovedBlock[Task].get
@@ -128,9 +126,11 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
               local,
               ApprovedBlockRequest("test", trimState = false)
             ))
-        head = transportLayer.requests.head
         // TODO: fix missing signature in received approved block
-        _ = assert(head.msg.message.packet.get.content == approvedBlock.toProto.toByteString)
+        _ = assert(
+          transportLayer.requests
+            .exists(_.msg.message.packet.get.content == approvedBlock.toProto.toByteString)
+        )
       } yield ()
 
       test.unsafeRunSync

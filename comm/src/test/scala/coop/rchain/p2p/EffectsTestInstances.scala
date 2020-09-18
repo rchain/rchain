@@ -12,6 +12,7 @@ import coop.rchain.comm.transport._
 import coop.rchain.shared.Log.NOPLog
 import coop.rchain.shared._
 
+import scala.concurrent.SyncVar
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 /** Eagerly evaluated instances to do reasoning about applied effects */
@@ -63,26 +64,35 @@ object EffectsTestInstances {
     type Responses = PeerNode => Protocol => CommErr[Unit]
     var reqresp: Option[Responses] = None
     var requests: List[Request]    = List.empty[Request]
+    val lock                       = SyncVarOps.create[TransportLayerStub[F]](this)
 
     def setResponses(responses: Responses): Unit =
       reqresp = Some(responses)
 
-    def reset(): Unit = {
-      reqresp = None
-      requests = List.empty[Request]
+    def atomically[A](operation: => A): A = {
+      lock.take()
+      val result = operation
+      lock.put(this)
+      result
     }
+
+    def reset(): Unit =
+      atomically({
+        reqresp = None
+        requests = List.empty[Request]
+      })
 
     def getRequest(i: Int): (PeerNode, Protocol) = (requests(i).peer, requests(i).msg)
 
     override def send(peer: PeerNode, msg: Protocol): F[CommErr[Unit]] =
       Sync[F].delay {
-        requests = requests :+ Request(peer, msg)
+        atomically(requests = requests :+ Request(peer, msg))
         reqresp.get.apply(peer).apply(msg)
       }
 
     override def broadcast(peers: Seq[PeerNode], msg: Protocol): F[Seq[CommErr[Unit]]] =
       Sync[F].delay {
-        requests = requests ++ peers.map(peer => Request(peer, msg))
+        atomically(requests = requests ++ peers.map(peer => Request(peer, msg)))
         peers.map(_ => Right(()))
       }
 
