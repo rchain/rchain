@@ -99,7 +99,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
         _ <- EngineCell[Task].set(initializingEngine)
 
         // Send responses with some delay because `Initializing.handle` is blocking until LFS is not received.
-        _ <- Concurrent[Task].start(Task.sleep(1.second) >> enqueueResponses)
+        _ <- Concurrent[Task].start(Task.sleep(5.second) >> enqueueResponses)
 
         // Handle approved block (it's blocking until responses are received)
         _ <- initializingEngine.handle(local, approvedBlock)
