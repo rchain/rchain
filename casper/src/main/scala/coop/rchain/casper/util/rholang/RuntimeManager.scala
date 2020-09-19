@@ -1,14 +1,16 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Applicative
+import java.nio.file.Path
+
+import cats.{Applicative, Parallel}
 import cats.data.{EitherT, WriterT}
 import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.{CasperConf, CasperMetricsSource}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
+import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, RuntimeConf, StateHash}
 import SystemDeployPlatformFailure._
 import SystemDeployUserError._
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
@@ -37,6 +39,7 @@ import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
+import monix.execution.Scheduler
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
@@ -76,14 +79,16 @@ trait RuntimeManager[F[_]] {
       channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: StateHash
-  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
+  def withRuntime[A](f: Runtime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
-    val emptyStateHash: StateHash,
-    runtimeContainer: MVar[F, Runtime[F]]
+final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
+    emptyStateHash: StateHash,
+    runtimeConf: RuntimeConf
+)(
+    implicit scheduler: Scheduler
 ) extends RuntimeManager[F] {
   import coop.rchain.models.rholang.{implicits => toPar}
 
@@ -290,7 +295,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    withRuntimeLock { runtime =>
+    withRuntime { runtime =>
       Span[F].trace(computeStateLabel) {
         for {
           _ <- runtime.blockData.set(blockData)
@@ -327,7 +332,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] = {
     val startHash = emptyStateHash
-    withRuntimeLock { runtime =>
+    withRuntime { runtime =>
       Span[F].trace(computeGenesisLabel) {
         for {
           _ <- runtime.blockData.set(
@@ -347,7 +352,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    withRuntimeLock { runtime =>
+    withRuntime { runtime =>
       Span[F].trace(replayComputeStateLabel) {
         for {
           _ <- runtime.blockData.set(blockData)
@@ -797,19 +802,11 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     captureResultsWithErrors(hash, deploy, returnName)
   }
 
-  def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A] =
-    Sync[F].bracket {
-      import coop.rchain.metrics.implicits._
-      implicit val ms: Source = RuntimeManagerMetricsSource
-      for {
-        _       <- Metrics[F].incrementGauge("lock.queue")
-        runtime <- Sync[F].defer(runtimeContainer.take).timer("lock.acquire")
-        _       <- Metrics[F].decrementGauge("lock.queue")
-      } yield runtime
-    }(f)(runtimeContainer.put)
+  def withRuntime[A](f: Runtime[F] => F[A]): F[A] =
+    Sync[F].bracket(setupRuntime)(f)(destroyRuntime)
 
   private def withResetRuntimeLock[R](hash: StateHash)(block: Runtime[F] => F[R]): F[R] =
-    withRuntimeLock(
+    withRuntime(
       runtime => runtime.space.reset(Blake2b256Hash.fromByteString(hash)) >> block(runtime)
     )
 
@@ -843,26 +840,48 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
         )
     )
 
+  def setupRuntime(
+      implicit scheduler: Scheduler
+  ): F[Runtime[F]] =
+    for {
+      sarAndHR           <- Runtime.setupRSpace[F](runtimeConf.storage, runtimeConf.size)
+      (space, replay, _) = sarAndHR
+      runtime            <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+    } yield runtime
+
+  def destroyRuntime(
+      runtime: Runtime[F]
+  ) = runtime.close()
 }
 
 object RuntimeManager {
 
+  final case class RuntimeConf(
+      storage: Path,
+      size: Long
+  )
+
   type StateHash = ByteString
 
-  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
-      runtime: Runtime[F]
-  ): F[RuntimeManager[F]] =
+  def init[F[_]: Concurrent: Sync: Metrics: Span: Log: ContextShift: Parallel](
+      runtimeConf: RuntimeConf
+  )(implicit scheduler: Scheduler): F[RuntimeManager[F]] =
     for {
-      _                <- runtime.space.clear()
-      _                <- runtime.replaySpace.clear()
-      _                <- Runtime.bootstrapRegistry(runtime)
-      checkpoint       <- runtime.space.createCheckpoint()
-      replayCheckpoint <- runtime.replaySpace.createCheckpoint()
-      hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-      replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
-      _                = assert(hash == replayHash)
-      runtime          <- MVar[F].of(runtime)
-    } yield new RuntimeManagerImpl(hash, runtime)
+      // Create checkpoint to serve as `empty hash` for runtime manager
+      sarAndHR           <- Runtime.setupRSpace[F](runtimeConf.storage, runtimeConf.size)
+      (space, replay, _) = sarAndHR
+      runtime            <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+      _                  <- runtime.space.clear()
+      _                  <- runtime.replaySpace.clear()
+      _                  <- Runtime.bootstrapRegistry(runtime)
+      checkpoint         <- runtime.space.createCheckpoint()
+      replayCheckpoint   <- runtime.replaySpace.createCheckpoint()
+      hash               = ByteString.copyFrom(checkpoint.root.bytes.toArray)
+      replayHash         = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
+      // We don't need runtime once RSpace is initialized and we have `empty hash` for runtime manager
+      -                  <- runtime.close()
+      _                  = assert(hash == replayHash)
+    } yield RuntimeManagerImpl(hash, runtimeConf)
 
   def evaluate[F[_]: Sync](
       reducer: Reduce[F],

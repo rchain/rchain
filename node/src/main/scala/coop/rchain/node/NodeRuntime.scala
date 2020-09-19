@@ -27,6 +27,7 @@ import coop.rchain.casper.state.instances.BlockStateManagerImpl
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.RuntimeManager.RuntimeConf
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
@@ -671,11 +672,6 @@ object NodeRuntime {
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
 
-  final case class RuntimeConf(
-      storage: Path,
-      size: Long
-  )
-
   def apply(
       nodeConf: NodeConf,
       kamonConf: Config
@@ -691,7 +687,7 @@ object NodeRuntime {
 
   def cleanup[F[_]: Sync: Log](
       runtime: Runtime[F],
-      casperRuntime: Runtime[F],
+      //casperRuntime: Runtime[F],
       deployStorageCleanup: F[Unit],
       casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
@@ -700,8 +696,8 @@ object NodeRuntime {
         for {
           _ <- Log[F].info("Shutting down interpreter runtime ...")
           _ <- runtime.close()
-          _ <- Log[F].info("Shutting down Casper runtime ...")
-          _ <- casperRuntime.close()
+          //_ <- Log[F].info("Shutting down Casper runtime ...")
+          //_ <- casperRuntime.close()
           _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
           _ <- Log[F].info("Shutting down deploy storage ...")
@@ -820,9 +816,8 @@ object NodeRuntime {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          sarAndHR            <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
-          (space, replay, hr) = sarAndHR
-          runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
+          sarAndHR   <- Runtime.setupRSpace[F](casperConf.storage, casperConf.size)
+          (_, _, hr) = sarAndHR
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
                        implicit val kvm = casperStoreManager
@@ -838,12 +833,13 @@ object NodeRuntime {
                        } yield ReportingCasper.rhoReporter(hr, reportingCache)
                      } else
                        ReportingCasper.noop.pure[F]
-        } yield (runtime, reporter, hr)
+        } yield (reporter, hr)
       }
-      (casperRuntime, reportingCasper, historyRepo) = casperInitialized
+      (reportingCasper, historyRepo) = casperInitialized
       runtimeManager <- {
         implicit val sp = span
-        RuntimeManager.fromRuntime[F](casperRuntime)
+        implicit val s  = rspaceScheduler
+        RuntimeManager.init(casperConf)
       }
       // RNodeStateManager
       stateManagers <- {
@@ -950,7 +946,7 @@ object NodeRuntime {
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
         evalRuntime,
-        casperRuntime,
+        //casperRuntime,
         deployStorageCleanup,
         casperStoreManager
       )
