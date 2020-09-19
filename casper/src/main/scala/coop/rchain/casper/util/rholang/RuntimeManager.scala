@@ -935,8 +935,8 @@ object RuntimeManager {
       hash               = ByteString.copyFrom(checkpoint.root.bytes.toArray)
       replayHash         = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
       // We don't need runtime once RSpace is initialized and we have `empty hash` for runtime manager
-      -                  <- runtime.close()
-      _                  = assert(hash == replayHash)
+      _ <- runtime.close()
+      _ = assert(hash == replayHash)
     } yield RuntimeManagerImpl(hash, runtimeConf)
 
   def evaluate[F[_]: Sync](
