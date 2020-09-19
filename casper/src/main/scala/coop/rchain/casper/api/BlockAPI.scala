@@ -723,7 +723,7 @@ object BlockAPI {
       deploys: Seq[Signed[DeployData]]
   ): F[String] =
     casper.getRuntimeManager >>= (
-      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
+      _.withRuntime(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
     )
 
   def previewPrivateNames[F[_]: Monad: Log](
