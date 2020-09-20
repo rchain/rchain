@@ -144,6 +144,7 @@ object Setup {
     implicit val casperBuffer = CasperBufferKeyValueStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val blockCreator = new BlockCreator[Task]
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

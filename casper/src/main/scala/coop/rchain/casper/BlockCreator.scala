@@ -25,7 +25,7 @@ import coop.rchain.shared.{Cell, Log, Time}
 import coop.rchain.casper.util.rholang.SystemDeployUtil
 
 final class BlockCreator[F[_]: Sync: Log: Time: BlockStore: Estimator: DeployStorage: Metrics](
-    dummyDeployerPrivateKey: Option[PrivateKey]
+    dummyDeployerPrivateKey: Option[PrivateKey] = None
 ) {
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")

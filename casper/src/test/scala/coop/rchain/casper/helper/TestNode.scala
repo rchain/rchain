@@ -119,6 +119,8 @@ class TestNode[F[_]](
 
   val blocksInProcessing = Ref.unsafe[F, Set[BlockHash]](Set.empty)
 
+  implicit val blockCreator = new BlockCreator[F]
+
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     genesis,

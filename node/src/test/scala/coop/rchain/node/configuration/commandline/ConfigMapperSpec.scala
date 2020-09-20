@@ -7,6 +7,7 @@ import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, Ro
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration.{
   ApiServer,
+  DevConf,
   Metrics,
   NodeConf,
   PeersDiscovery,
@@ -28,7 +29,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       Seq(
         "run",
         "--standalone",
-        "--dev-mode",
         "--host localhost",
         "--bootstrap rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404",
         "--network-id testnet",
@@ -106,7 +106,9 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--influxdb",
         "--influxdb-udp",
         "--zipkin",
-        "--sigar"
+        "--sigar",
+        "--dev-mode",
+        "--deployer-private-key somerandonmprivatekey"
       ).mkString(" ")
 
     val options = Options(args.split(' '))
@@ -141,7 +143,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = true,
-      devMode = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",
         host = Some("localhost"),
@@ -251,7 +252,9 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         influxdbUdp = true,
         zipkin = true,
         sigar = true
-      )
+      ),
+      devMode = true,
+      dev = DevConf(deployerPrivateKey = Some("somerandonmprivatekey"))
     )
     config shouldEqual expectedConfig
   }
