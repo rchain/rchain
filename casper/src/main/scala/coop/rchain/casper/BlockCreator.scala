@@ -13,7 +13,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.util.rholang.{SystemDeploy, _}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -80,11 +80,19 @@ final class BlockCreator[F[_]: Sync: Log: Time: BlockStore: Estimator: DeploySto
         maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
         _                     <- Log[F].info(s"Creating block with maxBlockNumber ${maxBlockNumber}")
         invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
-        deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-        latestMessageOpt      <- dag.latestMessage(sender)
-        seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
-        _                     <- Log[F].info(s"Creating block with seqNum ${seqNum}")
+        userDeploys           <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
+        deploys = (if (dummyDeployerPrivateKey.nonEmpty)
+                     userDeploys :+ ConstructDeploy.sourceDeploy(
+                       source = "Nil",
+                       timestamp = System.currentTimeMillis(),
+                       sec = dummyDeployerPrivateKey.get,
+                       validAfterBlockNumber = maxBlockNumber
+                     )
+                   else userDeploys)
+        sender           = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+        latestMessageOpt <- dag.latestMessage(sender)
+        seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
+        _                <- Log[F].info(s"Creating block with seqNum ${seqNum}")
         // if the node is already not bonded by the parent, the node won't slash once more
         invalidLatestMessagesExcludeUnbonded = invalidLatestMessages.filter {
           case (validator, _) => isBonded(parentMetadatas.head, validator)

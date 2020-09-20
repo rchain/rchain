@@ -28,7 +28,8 @@ object ConstructDeploy {
       timestamp: Long,
       phloLimit: Long = 90000,
       phloPrice: Long = 1L,
-      sec: PrivateKey = defaultSec
+      sec: PrivateKey = defaultSec,
+      validAfterBlockNumber: Long = 0L
   ): Signed[DeployData] = {
     val data =
       DeployData(
@@ -36,7 +37,7 @@ object ConstructDeploy {
         timestamp = timestamp,
         phloLimit = phloLimit,
         phloPrice = phloPrice,
-        validAfterBlockNumber = 0L
+        validAfterBlockNumber = validAfterBlockNumber
       )
 
     Signed(data, Secp256k1, sec)
