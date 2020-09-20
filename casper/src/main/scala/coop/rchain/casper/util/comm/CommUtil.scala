@@ -24,10 +24,10 @@ import scala.concurrent.duration._
 @autoFunctorK
 trait CommUtil[F[_]] {
   // Broadcast packet (in one piece)
-  def sendToPeers(message: Packet): F[Unit]
+  def sendToPeers(message: Packet, scopeSize: Option[Int] = None): F[Unit]
 
   // Broadcast packet in chunks (stream)
-  def streamToPeers(packet: Packet): F[Unit]
+  def streamToPeers(packet: Packet, scopeSize: Option[Int] = None): F[Unit]
 
   // Send packet with retry
   def sendWithRetry(
@@ -53,17 +53,21 @@ object CommUtil {
   def of[F[_]: Concurrent: TransportLayer: RPConfAsk: ConnectionsCell: Log: Time]: CommUtil[F] =
     new CommUtil[F] {
 
-      def sendToPeers(message: Packet): F[Unit] =
+      def sendToPeers(message: Packet, scopeSize: Option[Int]): F[Unit] =
         for {
-          peers <- ConnectionsCell.random
+          max <- if (scopeSize.isEmpty) RPConfAsk[F].reader(_.maxNumOfConnections)
+                else scopeSize.get.pure[F]
+          peers <- ConnectionsCell.random(max)
           conf  <- RPConfAsk[F].ask
           msg   = packet(conf.local, conf.networkId, message)
           _     <- TransportLayer[F].broadcast(peers, msg)
         } yield ()
 
-      def streamToPeers(packet: Packet): F[Unit] =
+      def streamToPeers(packet: Packet, scopeSize: Option[Int]): F[Unit] =
         for {
-          peers <- ConnectionsCell.random
+          max <- if (scopeSize.isEmpty) RPConfAsk[F].reader(_.maxNumOfConnections)
+                else scopeSize.get.pure[F]
+          peers <- ConnectionsCell.random(max)
           local <- RPConfAsk[F].reader(_.local)
           msg   = Blob(local, packet)
           _     <- TransportLayer[F].stream(peers, msg)
@@ -112,11 +116,11 @@ final class CommUtilOps[F[_]](
     // CommUtil extensions / syntax
     private val commUtil: CommUtil[F]
 ) {
-  def sendToPeers[Msg: ToPacket](message: Msg): F[Unit] =
-    commUtil.sendToPeers(ToPacket(message))
+  def sendToPeers[Msg: ToPacket](message: Msg, scopeSize: Option[Int] = None): F[Unit] =
+    commUtil.sendToPeers(ToPacket(message), scopeSize)
 
-  def streamToPeers[Msg: ToPacket](message: Msg): F[Unit] =
-    commUtil.streamToPeers(ToPacket(message))
+  def streamToPeers[Msg: ToPacket](message: Msg, scopeSize: Option[Int] = None): F[Unit] =
+    commUtil.streamToPeers(ToPacket(message), scopeSize)
 
   def sendBlockHash(
       hash: BlockHash,
@@ -128,8 +132,8 @@ final class CommUtilOps[F[_]](
   def broadcastHasBlockRequest(hash: BlockHash): F[Unit] =
     sendToPeers(HasBlockRequestProto(hash))
 
-  def broadcastRequestForBlock(hash: BlockHash): F[Unit] =
-    sendToPeers(BlockRequest(hash).toProto)
+  def broadcastRequestForBlock(hash: BlockHash, scopeSize: Option[Int] = None): F[Unit] =
+    sendToPeers(BlockRequest(hash).toProto, scopeSize)
 
   def sendForkChoiceTipRequest(implicit m: Monad[F], log: Log[F]): F[Unit] =
     sendToPeers(ForkChoiceTipRequest.toProto) >>
