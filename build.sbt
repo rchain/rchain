@@ -14,7 +14,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.12",
+  scalaVersion := "2.12.11",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -504,9 +504,9 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
     libraryDependencies ++= commonDependencies,
-    libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
+    libraryDependencies += "com.esotericsoftware" % "kryo" % "5.0.0-RC9",
     dependencyOverrides ++= Seq(
-      "org.ow2.asm" % "asm" % "5.0.4"
+      "org.ow2.asm" % "asm" % "8.0.1"
     ),
     sourceDirectory in Jmh := (sourceDirectory in Test).value,
     classDirectory in Jmh := (classDirectory in Test).value,
