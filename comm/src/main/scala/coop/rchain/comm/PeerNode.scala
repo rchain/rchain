@@ -1,9 +1,13 @@
 package coop.rchain.comm
 
 import java.net.InetSocketAddress
+
+import coop.rchain.comm.protocol.routing.Node
+
 import scala.util.control.NonFatal
 import coop.rchain.crypto.codec.Base16
 import io.lemonlabs.uri.{Uri, Url}
+
 import scala.util.Try
 
 // TODO: Add Show instance
@@ -37,6 +41,12 @@ object PeerNode {
 
   def from(id: NodeIdentifier, host: String, protocol: Int, discovery: Int): PeerNode =
     PeerNode(id, Endpoint(host, protocol, discovery))
+
+  def from(node: Node): PeerNode =
+    PeerNode(
+      NodeIdentifier(node.id.toByteArray),
+      Endpoint(node.host.toStringUtf8, node.tcpPort, node.udpPort)
+    )
 
   def fromAddress(str: String): Either[CommError, PeerNode] = {
     // TODO toInt, not URL, scheme not rnode, renameflag to discovery-port

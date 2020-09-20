@@ -13,7 +13,7 @@ fi
 # This is only used to install curl. FIXME: Use vanilla RNode container image
 # and rewrite integration tests to directly make HTTP requests into containers
 # via e.g. urllib3.
-if [[ ! -v DEFAULT_IMAGE ]]; then
+if [[ -z ${DEFAULT_IMAGE+x} ]]; then
 	export DEFAULT_IMAGE=rchain-integration-tests:latest
 	docker build -t "$DEFAULT_IMAGE" .
 fi
@@ -25,8 +25,9 @@ fi
 
 cleanup=0
 
-if [[ ! -v TEMP_RESOURCES_DIR ]]; then
-	TEMP_RESOURCES_DIR=$(mktemp --tmpdir -d integration-tests.XXXXXXXXXX)
+TMPDIR="/tmp"
+if [[ -z ${TEMP_RESOURCES_DIR+x} ]]; then
+	TEMP_RESOURCES_DIR=$(mktemp -d "${TMPDIR:-/tmp}/integration-tests.XXXXXXXXX")
 	cleanup=1
 fi
 
