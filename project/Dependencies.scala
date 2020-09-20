@@ -11,7 +11,7 @@ object Dependencies {
   val catsVersion       = "2.1.1"
   val catsEffectVersion = "2.1.2"
   val catsMtlVersion    = "0.7.0"
-  val slf4jVersion      = "1.7.30"
+  val slf4jVersion      = "1.7.25"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.66"
