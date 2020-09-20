@@ -28,6 +28,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
       Seq(
         "run",
         "--standalone",
+        "--dev-mode",
         "--host localhost",
         "--bootstrap rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404",
         "--network-id testnet",
@@ -140,6 +141,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = true,
+      devMode = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",
         host = Some("localhost"),

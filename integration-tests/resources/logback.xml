@@ -1,0 +1,31 @@
+<configuration>
+
+  <contextListener class="ch.qos.logback.classic.jul.LevelChangePropagator">
+    <resetJUL>true</resetJUL>
+  </contextListener>
+
+  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>DEBUG</level>
+    </filter>
+    <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%highlight(%-5level{5})] [%cyan(%-5.5thread{5})] [%cyan(%-15.15logger{15})] - %msg%n </pattern>
+    </encoder>
+  </appender>
+
+  <logger name="coop.rchain.shared.EventLogger" level="OFF" />
+  <logger name="io.opencensus" level="OFF" />
+  <logger name="coop.rchain.rspace" level="warn" />
+  <logger name="org.http4s" level="warn" />
+  <logger name="io.netty" level="warn" />
+  <logger name="io.grpc" level="warn" />
+  <logger name="org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" level="OFF" />
+
+  <root level="debug">
+    <appender-ref ref="STDOUT" />
+  </root>
+
+</configuration>

@@ -167,6 +167,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Start a stand-alone node."
     )
 
+    val devMode = opt[Flag](
+      descr = "Enable all developer tools."
+    )
+
     val bootstrap = opt[PeerNode](
       short = 'b',
       descr = "Address of RNode to bootstrap from when connecting to a network."

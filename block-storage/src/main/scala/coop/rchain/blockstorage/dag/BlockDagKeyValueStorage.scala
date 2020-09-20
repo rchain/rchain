@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.Source
@@ -19,6 +20,7 @@ import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -133,57 +135,95 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   def insert(
       block: BlockMessage,
       invalid: Boolean
-  ): F[BlockDagRepresentation[F]] =
-    lock.withPermit(
+  ): F[BlockDagRepresentation[F]] = {
+    import cats.instances.list._
+    import cats.instances.option._
+    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
+
+    // Empty sender is valid for genesis
+    val senderIsEmpty          = block.sender == ByteString.EMPTY
+    val senderHasInvalidFormat = !senderIsEmpty && (block.sender.size() != Validator.Length)
+    val sendersNewLM           = (block.sender, block.blockHash)
+
+    val logAlreadyStored =
+      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} is already stored.")
+
+    val logEmptySender =
+      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} sender is empty")
+
+    // Add LM either if there is no existing message for the sender, or if sequence number advances
+    // - assumes block sender is not valid hash
+    def shouldAddAsLatest: F[Boolean] =
+      latestMessagesIndex
+      // Try get sender's latest message
+        .get(block.sender)
+        // Get metadata from index
+        .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
+        // Check if seq number is greater that existing
+        .map(_.map(_.seqNum))
+        // Evaluate option and result. Add if:
+        // - latest message is not found, or
+        // - is found with seq num greater then existing
+        .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
+
+    def newLatestMessages: F[Map[Validator, BlockHash]] = {
+      val newlyBondedSet = bonds(block)
+        .map(_.validator)
+        .toSet
+        .diff(block.justifications.map(_.validator).toSet)
       for {
-        alreadyStored <- blockMetadataIndex.contains(block.blockHash)
-        _ <- if (alreadyStored) {
-              Log[F].warn(s"Block ${Base16.encode(block.blockHash.toByteArray)} is already stored")
-            } else {
-              val blockMetadata = BlockMetadata.fromBlock(block, invalid)
-              assert(block.blockHash.size == BlockHash.Length)
-              for {
-                _ <- if (invalid) invalidBlocksIndex.put(blockMetadata.blockHash, blockMetadata)
-                    else ().pure[F]
-                //Block which contains newly bonded validators will not
-                //have those validators in its justification
-                newValidators = bonds(block)
-                  .map(_.validator)
-                  .toSet
-                  .diff(block.justifications.map(_.validator).toSet)
-                newValidatorsLatestMessages = newValidators.map(v => (v, block.blockHash))
-                newValidatorsWithSenderLatestMessages <- if (block.sender.isEmpty) {
-                                                          // Ignore empty sender for special cases such as genesis block
-                                                          Log[F].warn(
-                                                            s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
-                                                          ) >> newValidatorsLatestMessages.pure[F]
-                                                        } else if (block.sender
-                                                                     .size() == Validator.Length) {
-                                                          (newValidatorsLatestMessages + (
-                                                            (
-                                                              block.sender,
-                                                              block.blockHash
-                                                            )
-                                                          )).pure[F]
-                                                        } else {
-                                                          Sync[F].raiseError[Set[
-                                                            (ByteString, ByteString)
-                                                          ]](
-                                                            BlockSenderIsMalformed(block)
-                                                          )
-                                                        }
-                deployHashes = deployData(block).map(_.sig).toList
-                // Add deploys to deploy index storage
-                _ <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
-                // Add/update validators latest messages
-                _ <- latestMessagesIndex.put(newValidatorsWithSenderLatestMessages.toList)
-                // Add block metadata
-                _ <- blockMetadataIndex.add(blockMetadata)
-              } yield ()
-            }
-        dag <- representation
-      } yield dag
+        // This filter is required to enable adding blocks backward from higher height to lower
+        newlyBondedUnseen <- newlyBondedSet.toList.filterA(latestMessagesIndex.contains(_).not)
+      } yield newlyBondedUnseen.map((_, block.blockHash)).toMap
+    }
+
+    def doInsert: F[Unit] = {
+      val blockMetadata      = BlockMetadata.fromBlock(block, invalid)
+      val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
+
+      for {
+        // Basic validation of input hash values
+        _ <- BlockSenderIsMalformed(block).raiseError[F, Unit].whenA(senderHasInvalidFormat)
+        // TODO: should we have special error type for block hash error also?
+        //  Should this be checked before calling insert? Is DAG storage responsible for that?
+        _ <- new Exception(
+              s"Block hash (${PrettyPrinter.buildString(block.blockHash)}) is not correct length."
+            ).raiseError[F, Unit]
+              .whenA(blockHashIsInvalid)
+
+        _ <- logEmptySender.whenA(senderIsEmpty)
+
+        // Add block metadata
+        _ <- blockMetadataIndex.add(blockMetadata)
+
+        // Add deploys to deploy index storage
+        deployHashes = deployData(block).map(_.sig).toList
+        _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
+
+        // Update invalid index
+        _ <- invalidBlocksIndex.put(blockMetadata.blockHash, blockMetadata).whenA(invalid)
+
+        // Resolve if block should be added as the latest message for the block sender
+        emptyLM = Map.empty[Validator, BlockHash].pure[F]
+        newLatestFromSender <- if (!senderIsEmpty)
+                                shouldAddAsLatest.ifM(Map(sendersNewLM).pure[F], emptyLM)
+                              else emptyLM
+
+        // Add/update validators latest messages
+        newLatestFromNewValidators <- newLatestMessages
+
+        // All new latest messages to add
+        newLatestToAdd = newLatestFromNewValidators ++ newLatestFromSender
+
+        // Add latest messages to DB
+        _ <- latestMessagesIndex.put(newLatestToAdd.toList)
+      } yield ()
+    }
+
+    lock.withPermit(
+      blockMetadataIndex.contains(block.blockHash).ifM(logAlreadyStored, doInsert) >> representation
     )
+  }
 
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
