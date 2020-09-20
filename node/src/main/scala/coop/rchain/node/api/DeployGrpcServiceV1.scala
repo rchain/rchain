@@ -29,7 +29,8 @@ object DeployGrpcServiceV1 {
   def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
       blockApiLock: Semaphore[F],
       apiMaxBlocksLimit: Int,
-      reportingCasper: ReportingCasper[F]
+      reportingCasper: ReportingCasper[F],
+      devMode: Boolean = false
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -240,7 +241,8 @@ object DeployGrpcServiceV1 {
             .exploratoryDeploy[F](
               request.term,
               if (request.blockHash.isEmpty) none[String] else Some(request.blockHash),
-              request.usePreStateHash
+              request.usePreStateHash,
+              devMode
             )
         ) { r =>
           import ExploratoryDeployResponse.Message

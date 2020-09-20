@@ -892,7 +892,8 @@ object NodeRuntime {
           evalRuntime,
           blockApiLock,
           scheduler,
-          conf.apiServer.maxBlocksLimit
+          conf.apiServer.maxBlocksLimit,
+          conf.devMode
         )(
           blockStore,
           oracle,
@@ -940,7 +941,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl[F](conf.apiServer.maxBlocksLimit)
+        new WebApiImpl[F](conf.apiServer.maxBlocksLimit, conf.devMode)
       }
       adminWebApi = {
         implicit val ec     = engineCell
@@ -974,7 +975,8 @@ object NodeRuntime {
       runtime: Runtime[F],
       blockApiLock: Semaphore[F],
       scheduler: Scheduler,
-      apiMaxBlocksLimit: Int
+      apiMaxBlocksLimit: Int,
+      devMode: Boolean
   )(
       implicit
       blockStore: BlockStore[F],
@@ -991,8 +993,9 @@ object NodeRuntime {
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper)
-    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
+    val deploy =
+      DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper, devMode)
+    val propose = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
 }
