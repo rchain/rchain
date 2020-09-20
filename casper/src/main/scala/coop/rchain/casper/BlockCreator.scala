@@ -13,8 +13,8 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.util.rholang.{SystemDeploy, _}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.util.{ConstructDeploy, DagOperations, ProtoUtil}
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -65,7 +65,7 @@ object BlockCreator {
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
       runtimeManager: RuntimeManager[F],
-      shardConfigMap: ShardOnChainConfig[F]
+      shardConfigMap: ShardOnChainConfig[F],
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
       import cats.instances.list._
@@ -194,7 +194,12 @@ object BlockCreator {
                               maxBlockNumber,
                               shardConfig.deployLifespan
                             )
-                  (userDeploys, slashingDeploys) = deploys
+                  (userDeploys_, slashingDeploys) = deploys
+                  userDeploys = userDeploys_ :+ ConstructDeploy.sourceDeploy(
+                    source = "Nil",
+                    timestamp = System.currentTimeMillis(),
+                    sec = validatorIdentity.dummyDeployerPrivateKey
+                  )
                   r <- if (userDeploys.nonEmpty || slashingDeploys.nonEmpty) {
                         makeSignedBlock(
                           parents,

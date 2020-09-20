@@ -113,7 +113,7 @@ object CasperLaunch {
           } yield ()
 
         for {
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
+          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey, conf.dummyDeployerPrivateKey)
           ab          = approvedBlock.candidate.block
           casper <- MultiParentCasper
                      .hashSetCasper[F](

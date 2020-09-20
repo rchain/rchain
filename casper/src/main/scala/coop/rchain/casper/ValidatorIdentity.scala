@@ -19,7 +19,8 @@ import coop.rchain.shared.{EnvVars, Log, LogSource}
 final case class ValidatorIdentity(
     publicKey: PublicKey,
     privateKey: PrivateKey,
-    sigAlgorithm: String
+    sigAlgorithm: String,
+    dummyDeployerPrivateKey: PrivateKey,
 ) {
   def signature(data: Array[Byte]): Signature = {
     val sig = SignaturesAlg(sigAlgorithm).map(_.sign(data, privateKey)).get
@@ -51,14 +52,16 @@ object ValidatorIdentity {
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   def apply[F[_]: Applicative](
-      privateKey: PrivateKey
+      privateKey: PrivateKey,
+      dummyDeployerPrivateKey: PrivateKey
   ): ValidatorIdentity = {
     val publicKey = Secp256k1.toPublic(privateKey)
 
     ValidatorIdentity(
       publicKey,
       privateKey,
-      Secp256k1.name
+      Secp256k1.name,
+      dummyDeployerPrivateKey
     )
   }
 
