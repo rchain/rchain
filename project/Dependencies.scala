@@ -107,7 +107,7 @@ object Dependencies {
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 
   private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+    "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
   private val testing = Seq(scalactic, scalatest, scalacheck)
