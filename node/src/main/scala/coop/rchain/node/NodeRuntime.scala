@@ -835,7 +835,7 @@ object NodeRuntime {
       runtimeManager <- {
         implicit val sp = span
         implicit val s  = rspaceScheduler
-        RuntimeManager.init(casperConf)
+        RuntimeManager.init(casperConf, conf.casper.genesisBlockData.shardConfig)
       }
       // RNodeStateManager
       stateManagers <- {

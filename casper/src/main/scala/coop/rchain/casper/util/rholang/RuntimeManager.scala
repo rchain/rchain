@@ -8,7 +8,7 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{CasperShardConf, CasperMetricsSource}
+import coop.rchain.casper.{CasperMetricsSource, CasperShardConf}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, RuntimeConf, StateHash}
 import SystemDeployPlatformFailure._
@@ -87,7 +87,8 @@ trait RuntimeManager[F[_]] {
 
 final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     emptyStateHash: StateHash,
-    runtimeConf: RuntimeConf
+    runtimeConf: RuntimeConf,
+    shardConf: CasperShardConf
 )(
     implicit scheduler: Scheduler
 ) extends RuntimeManager[F] {
@@ -759,8 +760,9 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       }
   }
 
-  def getShardConfig(stateHash: StateHash): F[CasperShardConf] = {
-    val deploy = ConstructDeploy.sourceDeployNow(shardConfigQuerySource)
+  def getShardConfig(stateHash: StateHash): F[CasperShardConf] =
+    shardConf.pure[F]
+  /*val deploy = ConstructDeploy.sourceDeployNow(shardConfigQuerySource)
     captureResults(stateHash, deploy)
       .ensureOr(
         shardConfigPar =>
@@ -768,8 +770,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
             s"Incorrect number of results from query of shard config: ${shardConfigPar.size}"
           )
       )(shardConfigPar => shardConfigPar.size == 1)
-      .flatMap(shardConfigPar => toShardConfig(shardConfigPar.head))
-  }
+      .flatMap(shardConfigPar => toShardConfig(shardConfigPar.head))*/
 
   private def activaValidatorQuerySource: String =
     s"""
@@ -792,14 +793,14 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
        """.stripMargin('#')
 
   // TODO put real id
-  val shardConfigChan = "rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr"
+  /*val shardConfigChan = "rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr"
   private def shardConfigQuerySource: String =
     s"""
        # new return, rl(`rho:registry:lookup`), shardConfCh in {
        #  rl!(`${shardConfigChan}`, *shardConfCh) |
        #  shardConfCh!("get", return)
        # }
-       #""".stripMargin('#')
+       #""".stripMargin('#')*/
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
@@ -843,7 +844,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
         Bond(validatorName, stakeAmount)
     }.toList
 
-  private def toShardConfig(shardConfigMap: Par): F[CasperShardConf] = {
+  /*private def toShardConfig(shardConfigMap: Par): F[CasperShardConf] = {
     val map = shardConfigMap.exprs.head.getEMapBody.ps
     CasperShardConf(
       map
@@ -874,7 +875,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       map.get(Par(exprs = Seq(Expr(GString("epochLength"))))).get.exprs.head.getGInt.toInt,
       map.get(Par(exprs = Seq(Expr(GString("quarantineLength"))))).get.exprs.head.getGInt.toInt
     ).pure[F]
-  }
+  }*/
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     withResetRuntimeLock(hash)(getData(_)(channel))
@@ -920,7 +921,8 @@ object RuntimeManager {
   type StateHash = ByteString
 
   def init[F[_]: Concurrent: Sync: Metrics: Span: Log: ContextShift: Parallel](
-      runtimeConf: RuntimeConf
+      runtimeConf: RuntimeConf,
+      shardConf: CasperShardConf
   )(implicit scheduler: Scheduler): F[RuntimeManager[F]] =
     for {
       // Create checkpoint to serve as `empty hash` for runtime manager
@@ -937,7 +939,7 @@ object RuntimeManager {
       // We don't need runtime once RSpace is initialized and we have `empty hash` for runtime manager
       _ <- runtime.close()
       _ = assert(hash == replayHash)
-    } yield RuntimeManagerImpl(hash, runtimeConf)
+    } yield RuntimeManagerImpl(hash, runtimeConf, shardConf)
 
   def evaluate[F[_]: Sync](
       reducer: Reduce[F],
