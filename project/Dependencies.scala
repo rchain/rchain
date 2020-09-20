@@ -8,10 +8,10 @@ object Dependencies {
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.4"
   val kamonVersion      = "1.1.6"
-  val catsVersion       = "2.1.0"
-  val catsEffectVersion = "2.0.0"
+  val catsVersion       = "2.1.1"
+  val catsEffectVersion = "2.1.2"
   val catsMtlVersion    = "0.7.0"
-  val slf4jVersion      = "1.7.25"
+  val slf4jVersion      = "1.7.30"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.66"
@@ -24,7 +24,7 @@ object Dependencies {
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
-  val disciplineCore      = "org.typelevel"                                    %% "discipline-core"           % "1.0.2"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
