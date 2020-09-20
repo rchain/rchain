@@ -139,6 +139,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                             )
                         r <- addBlockInLock(b, allowAddFromBuffer, shardConf)
                         _ <- BlockRetriever[F].ackInCasper(b.blockHash)
+                        _ <- Log[F].debug("Trying to create block")
+                        _ <- createBlock
                       } yield r
 
                     case false =>
