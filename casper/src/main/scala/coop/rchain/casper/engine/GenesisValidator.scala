@@ -21,7 +21,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
+class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockCreator](
     validatorId: ValidatorIdentity,
     shardId: String,
     finalizationRate: Int,

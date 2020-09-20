@@ -32,7 +32,7 @@ import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever: BlockCreator](
     validatorId: Option[ValidatorIdentity],
     approvedBlock: BlockMessage,
     postGenesisStateHash: StateHash,
@@ -319,7 +319,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       case Some(validatorIdentity) =>
         BlockDagStorage[F].getRepresentation
           .flatMap { dag =>
-            BlockCreator
+            BlockCreator[F]
               .createBlock(
                 dag,
                 approvedBlock,

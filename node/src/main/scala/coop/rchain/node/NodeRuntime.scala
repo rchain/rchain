@@ -35,6 +35,8 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -846,6 +848,18 @@ object NodeRuntime {
       engineCell   <- EngineCell.init[F]
       envVars      = EnvVars.envVars[F]
       raiseIOError = IOError.raiseIOErrorThroughSync[F]
+
+      blockCreator = {
+        implicit val bs         = blockStore
+        implicit val es         = estimator
+        implicit val ds         = deployStorage
+        val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
+        val dummyDeployerKey =
+          if (dummyDeployerKeyOpt.isEmpty) None
+          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+        new BlockCreator[F](dummyDeployerKey)
+      }
+
       casperLaunch = {
         implicit val bs     = blockStore
         implicit val bd     = blockDagStorage
@@ -868,6 +882,7 @@ object NodeRuntime {
         implicit val es     = estimator
         implicit val ds     = deployStorage
         implicit val cbs    = casperBufferStorage
+        implicit val bc     = blockCreator
 
         CasperLaunch.of[F](conf.casper)
       }

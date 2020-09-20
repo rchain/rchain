@@ -14,7 +14,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.util.rholang.{SystemDeploy, _}
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -24,13 +24,15 @@ import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
 import coop.rchain.casper.util.rholang.SystemDeployUtil
 
-object BlockCreator {
+final class BlockCreator[F[_]: Sync: Log: Time: BlockStore: Estimator: DeployStorage: Metrics](
+    dummyDeployerPrivateKey: Option[PrivateKey]
+) {
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "process-deploys-and-create-block")
 
-  private def isActiveValidator[F[_]: Sync](
+  private def isActiveValidator(
       block: BlockMessage,
       runtimeManager: RuntimeManager[F],
       validatorId: ValidatorIdentity
@@ -43,7 +45,7 @@ object BlockCreator {
     } yield isActive
   }
 
-  private def isBonded[F[_]: Sync](
+  private def isBonded(
       blockMeta: BlockMetadata,
       validator: Validator
   ): Boolean =
@@ -60,7 +62,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: Estimator: DeployStorage: Metrics](
+  def createBlock(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
@@ -145,7 +147,7 @@ object BlockCreator {
     }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
-  private def extractDeploys[F[_]: Sync: Log: BlockStore: DeployStorage](
+  private def extractDeploys(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
@@ -188,7 +190,7 @@ object BlockCreator {
    * any latest message not from a bonded validator will not change the
    * final fork-choice.
    */
-  private def computeJustifications[F[_]: Sync](
+  private def computeJustifications(
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMessage]
   ): F[Seq[Justification]] = {
@@ -199,7 +201,7 @@ object BlockCreator {
     }
   }
 
-  private def processDeploysAndCreateBlock[F[_]: Sync: Log: BlockStore: Metrics](
+  private def processDeploysAndCreateBlock(
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       parents: Seq[BlockMessage],
@@ -270,4 +272,8 @@ object BlockCreator {
     val block  = unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
     CreateBlockStatus.created(block)
   }
+}
+
+object BlockCreator {
+  def apply[F[_]](implicit ev: BlockCreator[F]): BlockCreator[F] = ev
 }

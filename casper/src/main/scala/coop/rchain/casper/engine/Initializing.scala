@@ -28,7 +28,7 @@ import scala.language.higherKinds
   * and will wait for the [[ApprovedBlock]] message to arrive. Until then  it will respond with
   * `F[None]` to all other message types.
     **/
-class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: BlockRetriever: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
+class Initializing[F[_]: Sync: Metrics: Span: Concurrent: BlockStore: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: BlockRetriever: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockCreator](
     shardId: String,
     finalizationRate: Int,
     validatorId: Option[ValidatorIdentity],
