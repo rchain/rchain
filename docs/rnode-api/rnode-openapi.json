@@ -21,23 +21,6 @@
   "host": "observer.testnet.rchain.coop",
   "basePath": "/api",
   "paths": {
-    "/swagger.json": {
-      "get": {
-        "tags": ["swagger.json"],
-        "summary": "Swagger documentation",
-        "operationId": "getSwagger.json",
-        "produces": ["text/plain"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "type": "string"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
     "/prepare-deploy": {
       "get": {
         "tags": ["prepare-deploy"],
@@ -252,22 +235,6 @@
               "items": {
                 "$ref": "#/definitions/LightBlockInfo"
               }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/status": {
-      "get": {
-        "tags": ["status"],
-        "operationId": "getStatus",
-        "produces": ["application/json"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/ApiStatus"
             }
           }
         },
@@ -972,20 +939,6 @@
         }
       },
       "description": "DataRequest"
-    },
-    "ApiStatus": {
-      "type": "object",
-      "required": ["message", "version"],
-      "properties": {
-        "version": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "message": {
-          "type": "string"
-        }
-      },
-      "description": "ApiStatus"
     },
     "ExprTuple": {
       "allOf": [
