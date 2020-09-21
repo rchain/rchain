@@ -14,7 +14,9 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
+
   scalaVersion := "2.12.9",
+
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
