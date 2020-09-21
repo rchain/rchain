@@ -1,8 +1,22 @@
 {
   "swagger": "2.0",
   "info": {
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    },
     "version": "0.9.25.4-1-g49ba198",
-    "title": "RChain node API"
+    "title": "RChain node API",
+    "contact": {
+      "name": "RChain Cooperative",
+      "url": "https://rchain.coop",
+      "email": "info@rchain.coop"
+    },
+    "description": "Build dApps for RChain, a decentralized, economically sustainable public compute infrastructure.\n\n For background, see [test_web_api.py etc. in PR 2811 / RCHAIN-3935 released in RNode-0.9.19 2020-01-16 d581015](https://github.com/rchain/rchain/blob/dev/integration-tests/test/test_web_api.py)"
+  },
+  "externalDocs": {
+    "description": "RChain Developer",
+    "url": "https://developer.rchain.coop/"
   },
   "basePath": "/api2",
   "paths": {
