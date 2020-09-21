@@ -190,7 +190,7 @@ final case class PrettyPrinter(
         } |+| buildSeq(s.data) |+| pure(")")
 
       case r: Receive =>
-        val (totalFree, bindsString) = ((0, pure("")) /: r.binds.zipWithIndex) {
+        val (totalFree, bindsString) = ((0, pure("")) foldLeft r.binds.zipWithIndex) {
           case ((previousFree, string), (bind, i)) =>
             val bindString =
               this
