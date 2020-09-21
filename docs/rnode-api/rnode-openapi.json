@@ -14,6 +14,16 @@
     },
     "description": "Build dApps for RChain, a decentralized, economically sustainable public compute infrastructure.\n\n For background, see [test_web_api.py etc. in PR 2811 / RCHAIN-3935 released in RNode-0.9.19 2020-01-16 d581015](https://github.com/rchain/rchain/blob/dev/integration-tests/test/test_web_api.py)"
   },
+  "tags": [
+    {
+      "name": "blocks",
+      "description": "Find and explore blocks for establishing consensus on the state of the RhoVM."
+    },
+    {
+      "name": "rhovm",
+      "description": "Deploy Rholang code and explore the RhoVM tuple space."
+    }
+  ],
   "externalDocs": {
     "description": "RChain Developer",
     "url": "https://developer.rchain.coop/"
@@ -21,192 +31,86 @@
   "host": "observer.testnet.rchain.coop",
   "basePath": "/api",
   "paths": {
-    "/prepare-deploy": {
+    "/blocks": {
       "get": {
-        "tags": ["prepare-deploy"],
-        "operationId": "getPrepare-deploy",
-        "produces": ["application/json"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/PrepareResponse"
-            }
-          }
+        "description": "get block hash etc. for the most recent block seen by this node",
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
         },
-        "deprecated": false
-      },
-      "post": {
-        "tags": ["prepare-deploy"],
-        "operationId": "postPrepare-deploy-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "PrepareRequest",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/PrepareRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/PrepareResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/deploy/{deployId}": {
-      "get": {
-        "description": "see also WebApi.findDeploy in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["deploy"],
-        "operationId": "getDeploy-string",
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "name": "deployId",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/LightBlockInfo"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/data-at-name": {
-      "post": {
-        "tags": ["data-at-name"],
-        "operationId": "postData-at-name-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "DataRequest",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/DataRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/DataResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/block/{hash}": {
-      "get": {
-        "description": "see also WebApi.getBlock in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["block"],
-        "operationId": "getBlock-string",
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "name": "hash",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/BlockInfo"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/last-finalized-block": {
-      "get": {
-        "tags": ["last-finalized-block"],
-        "operationId": "getLast-finalized-block",
+        "tags": ["blocks"],
+        "operationId": "getBlocks",
         "produces": ["application/json"],
         "responses": {
           "200": {
             "description": "OK",
+            "examples": {
+              "application/json": [
+                {
+                  "blockHash": "a50b9de03600a02f823a9e16e6d24d14fb0d77c72bdec080556d8e30f43d335f",
+                  "sender": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                  "seqNum": 94997,
+                  "sig": "304502210085d6e576d1e050f15148290a956fb05f787df0071c8f170e00d8e9d903c8ff7a02205e29da8ba9551ca65e017a93efe9840bdf401384b39f1c23f7bb387c1777ed30",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600728957494,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "a6daf94398ad7ca9cc210a8b0fec49e1715a7fae92fd88671b5bdc9748d73a73"
+                  ],
+                  "blockNumber": 419921,
+                  "preStateHash": "313d85002c64a1ea0c09b9c1ef6ef8d1d1801e1c90a7bc0c782e7ea2a1328896",
+                  "postStateHash": "c750d9e5e3bc288f707b11c77c674da4d0773a3bc4ec7934af2c4872b6a4cae1",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "138049",
+                  "deployCount": 1,
+                  "faultTolerance": -1,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "383393291ad3e33caeaae118bde7caaf87067fd2ad5e620d85a95c9f5a424d11"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "b164b41c78bf288223b17ed4612fc4664b5edc01ec9ac8050b4527c6db7904a7"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "a6daf94398ad7ca9cc210a8b0fec49e1715a7fae92fd88671b5bdc9748d73a73"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "04a167a7f1f79459e1b42dc067ea2dc5f5701ef4462d6df43f1fc27592d2b279"
+                    }
+                  ]
+                }
+              ]
+            },
             "schema": {
-              "$ref": "#/definitions/BlockInfo"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/explore-deploy-by-block-hash": {
-      "post": {
-        "tags": ["explore-deploy-by-block-hash"],
-        "operationId": "postExplore-deploy-by-block-hash-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "ExploreDeployRequest",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ExploreDeployRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/ExploratoryDeployResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/explore-deploy": {
-      "post": {
-        "tags": ["explore-deploy"],
-        "operationId": "postExplore-deploy-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "body",
-            "description": "String",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/ExploratoryDeployResponse"
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/LightBlockInfo"
+              }
             }
           }
         },
@@ -215,7 +119,11 @@
     },
     "/blocks/{depth}": {
       "get": {
-        "description": "see also WebApi.getBlocks in src/main/scala/coop/rchain/node/api/WebApi.scala",
+        "description": "get info on recent blocks up to some depth",
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
         "tags": ["blocks"],
         "operationId": "getBlocks-int",
         "produces": ["application/json"],
@@ -241,28 +149,12 @@
         "deprecated": false
       }
     },
-    "/blocks": {
-      "get": {
-        "tags": ["blocks"],
-        "operationId": "getBlocks",
-        "produces": ["application/json"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/LightBlockInfo"
-              }
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
     "/blocks/{startBlockNumber}/{endBlockNumber}": {
       "get": {
-        "description": "see also WebApi.getBlocksByHeights in src/main/scala/coop/rchain/node/api/WebApi.scala",
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
         "tags": ["blocks"],
         "operationId": "getBlocks-int-int",
         "produces": ["application/json"],
@@ -294,10 +186,202 @@
         "deprecated": false
       }
     },
+    "/prepare-deploy": {
+      "get": {
+        "tags": ["rhovm"],
+        "operationId": "getPrepare-deploy",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PrepareResponse"
+            }
+          }
+        },
+        "deprecated": false
+      },
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postPrepare-deploy-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "PrepareRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PrepareRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PrepareResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/deploy/{deployId}": {
+      "get": {
+        "description": "see also WebApi.findDeploy in src/main/scala/coop/rchain/node/api/WebApi.scala",
+        "tags": ["blocks"],
+        "operationId": "getDeploy-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "deployId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/LightBlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/data-at-name": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postData-at-name-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "DataRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DataRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/DataResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/block/{hash}": {
+      "get": {
+        "description": "see also WebApi.getBlock in src/main/scala/coop/rchain/node/api/WebApi.scala",
+        "tags": ["blocks"],
+        "operationId": "getBlock-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/last-finalized-block": {
+      "get": {
+        "tags": ["blocks"],
+        "operationId": "getLast-finalized-block",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy-by-block-hash": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postExplore-deploy-by-block-hash-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "ExploreDeployRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExploreDeployRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postExplore-deploy-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "String",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
     "/is-finalized/{hash}": {
       "get": {
         "description": "see also WebApi.isFinalized in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["is-finalized"],
+        "tags": ["blocks"],
         "operationId": "getIs-finalized-string",
         "produces": ["application/json"],
         "parameters": [
@@ -321,7 +405,7 @@
     },
     "/deploy": {
       "post": {
-        "tags": ["deploy"],
+        "tags": ["rhovm"],
         "operationId": "postDeploy-body",
         "consumes": ["application/json"],
         "produces": ["application/json"],
