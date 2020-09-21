@@ -18,7 +18,8 @@
     "description": "RChain Developer",
     "url": "https://developer.rchain.coop/"
   },
-  "basePath": "/api2",
+  "host": "observer.testnet.rchain.coop",
+  "basePath": "/api",
   "paths": {
     "/swagger.json": {
       "get": {
