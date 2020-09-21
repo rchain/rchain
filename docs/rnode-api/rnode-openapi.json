@@ -65,14 +65,15 @@
         "deprecated": false
       }
     },
-    "/deploy/{string}": {
+    "/deploy/{deployId}": {
       "get": {
+        "description": "see also WebApi.findDeploy in src/main/scala/coop/rchain/node/api/WebApi.scala",
         "tags": ["deploy"],
         "operationId": "getDeploy-string",
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "string",
+            "name": "deployId",
             "in": "path",
             "required": true,
             "type": "string"
@@ -117,14 +118,15 @@
         "deprecated": false
       }
     },
-    "/block/{string}": {
+    "/block/{hash}": {
       "get": {
+        "description": "see also WebApi.getBlock in src/main/scala/coop/rchain/node/api/WebApi.scala",
         "tags": ["block"],
         "operationId": "getBlock-string",
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "string",
+            "name": "hash",
             "in": "path",
             "required": true,
             "type": "string"
@@ -213,14 +215,15 @@
         "deprecated": false
       }
     },
-    "/blocks/{int}": {
+    "/blocks/{depth}": {
       "get": {
+        "description": "see also WebApi.getBlocks in src/main/scala/coop/rchain/node/api/WebApi.scala",
         "tags": ["blocks"],
         "operationId": "getBlocks-int",
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "int",
+            "name": "depth",
             "in": "path",
             "required": true,
             "type": "integer"
@@ -275,20 +278,21 @@
         "deprecated": false
       }
     },
-    "/blocks/{int}/{int}": {
+    "/blocks/{startBlockNumber}/{endBlockNumber}": {
       "get": {
+        "description": "see also WebApi.getBlocksByHeights in src/main/scala/coop/rchain/node/api/WebApi.scala",
         "tags": ["blocks"],
         "operationId": "getBlocks-int-int",
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "int",
+            "name": "startBlockNumber",
             "in": "path",
             "required": true,
             "type": "integer"
           },
           {
-            "name": "int",
+            "name": "endBlockNumber",
             "in": "path",
             "required": true,
             "type": "integer"
@@ -308,14 +312,15 @@
         "deprecated": false
       }
     },
-    "/is-finalized/{string}": {
+    "/is-finalized/{hash}": {
       "get": {
+        "description": "see also WebApi.isFinalized in src/main/scala/coop/rchain/node/api/WebApi.scala",
         "tags": ["is-finalized"],
         "operationId": "getIs-finalized-string",
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "string",
+            "name": "hash",
             "in": "path",
             "required": true,
             "type": "string"
