@@ -453,33 +453,109 @@
         ],
         "responses": {
           "200": {
-            "description": "Returned expression and information from the block of the rhovm state on which the term was deployed.",
+            "description": "Returned expressions and information from the block of the rhovm state on which the term was deployed.",
             "examples": {
               "application/json": {
                 "expr": [
                   {
-                    "ExprInt": {
-                      "data": 2
+                    "ExprMap": {
+                      "data": {
+                        "map": {
+                          "ExprMap": {
+                            "data": {
+                              "color": { "ExprString": { "data": "green" } },
+                              "size": { "ExprInt": { "data": 3 } }
+                            }
+                          }
+                        },
+                        "par": {
+                          "ExprPar": {
+                            "data": [
+                              { "ExprString": { "data": "flight" } },
+                              { "ExprString": { "data": "hotel" } }
+                            ]
+                          }
+                        },
+                        "tuple": {
+                          "ExprTuple": {
+                            "data": [
+                              { "ExprBool": { "data": true } },
+                              { "ExprString": { "data": "win!" } }
+                            ]
+                          }
+                        },
+                        "unforge": {
+                          "ExprMap": {
+                            "data": {
+                              "deploy": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgDeploy": {
+                                      "data": "3045022100b0d8e4e6328e6158864677b65de6afde392b60bc0d9eb6e5f6b24db0c2d7687e02204f96eb5d6e19fca5173ae96fb5c2bcc620d667dd71619b2d4e0d96e621dec37f"
+                                    }
+                                  }
+                                }
+                              },
+                              "deployer": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgDeployer": {
+                                      "data": "0469a91b74ae8ec486dcf365941e48440c01b8aba6f391c0b20b595efca92888e7e0372d6798d233d23abedd156dae15a634f6b8e1d5552e65f2e7f3ffc2162ddb"
+                                    }
+                                  }
+                                }
+                              },
+                              "private": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgPrivate": {
+                                      "data": "94ae814e52277fe33c16bcb78f581ceedc2dbcf979773f327b781a5ef3cf1133"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "list": {
+                          "ExprList": {
+                            "data": [
+                              { "ExprBool": { "data": true } },
+                              { "ExprBool": { "data": false } },
+                              { "ExprInt": { "data": 1 } }
+                            ]
+                          }
+                        }
+                      }
                     }
-                  }
+                  },
+                  { "ExprBytes": { "data": "deadbeef" } },
+                  {
+                    "ExprUri": {
+                      "data": "rho:id:3xagffydedp5qq9yb76udp7dsdxpbd9fyryrd8b7wotkkrru65zpps"
+                    }
+                  },
+                  { "ExprInt": { "data": 123 } },
+                  { "ExprString": { "data": "abc" } },
+                  { "ExprBool": { "data": true } }
                 ],
                 "block": {
-                  "blockHash": "3db9eac1b5a5ba58b0c602e5f6899b19a12532f14abc9affddb7f4c0ac119e60",
+                  "blockHash": "9be0829cbcbc9c9331453f4a089f8c7d77bdb98727bc7de7426eada4f6b35c33",
                   "sender": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
-                  "seqNum": 94523,
-                  "sig": "3045022100de2311e4c73666c9c915b37b9f60c7d9f3408244d9b8cc0870b8be929d069b0e022018fa4683aa2a93886520f3147db6405b6a8faec129871d3093bd56240004e8c4",
+                  "seqNum": 94989,
+                  "sig": "3045022100f36533f52ba93e1d1ef4c521a146b4bb15d1f4c636ab0f7bd75ab2ef011d68f402204104b86224f58cf74ec889db2293e00b94ab83d0a9abbd7092473b5528da2d03",
                   "sigAlgorithm": "secp256k1",
                   "shardId": "rchain",
                   "extraBytes": "",
                   "version": 1,
-                  "timestamp": 1600736651167,
+                  "timestamp": 1600791827635,
                   "headerExtraBytes": "",
                   "parentsHashList": [
-                    "b2256ba43e14bb784b3b4fd7d7f3c4cef7a4b91df3c33f8cdeac43cd0d561642"
+                    "dfa6e7adbfd925ff2ee4f54debf1b79537e7559b45dacd47a1f36ee147566e62"
                   ],
-                  "blockNumber": 420179,
-                  "preStateHash": "455902cda6684be59e0847d2fb7219c38f910c0d76172ce6c774a4c09639459c",
-                  "postStateHash": "1bd92e679365b82199c94cb7dd8361dceb098fa802b2e4343d12edcebcd56931",
+                  "blockNumber": 422043,
+                  "preStateHash": "286dea1f185713b4219d1e599187b9a3eb3dff5bb4f4c1e2ea9cbc3490d9ebd0",
+                  "postStateHash": "3574ea1ec6a6b6d62b1211f43da545a94f6fc045ff1238448f6b77e1c6bade40",
                   "bodyExtraBytes": "",
                   "bonds": [
                     {
@@ -505,19 +581,19 @@
                   "justifications": [
                     {
                       "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
-                      "latestBlockHash": "5365173dc754f5c42dd76764ce00baf24bef1d3f81418cbe11ddeb173603c1b9"
+                      "latestBlockHash": "72a867b668c6ed35e0bd4330c1486d6938f4ead9095eba6fdb120535cad7a1cc"
                     },
                     {
                       "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
-                      "latestBlockHash": "a521c393b30fffc7e1f181dcc8d1d2af2b51d0ec530a3dca37458d239db21a48"
+                      "latestBlockHash": "6b4eee77d031aad2be59c2f5bd053662b1e5508ab157331011ee10232d6be9f0"
                     },
                     {
                       "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
-                      "latestBlockHash": "592a58dc6157829343c96afa7b0745fdc914826d0a720348b1182757623a8869"
+                      "latestBlockHash": "cb6a991d3bc2b48e53dfe0d45f222caa507ab71c355cadc09c7c67a26c258c41"
                     },
                     {
                       "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
-                      "latestBlockHash": "b2256ba43e14bb784b3b4fd7d7f3c4cef7a4b91df3c33f8cdeac43cd0d561642"
+                      "latestBlockHash": "dfa6e7adbfd925ff2ee4f54debf1b79537e7559b45dacd47a1f36ee147566e62"
                     }
                   ]
                 }
@@ -656,33 +732,45 @@
   "definitions": {
     "RhoExpr": {
       "type": "object",
-      "required": ["type"],
-      "discriminator": "type",
       "properties": {
-        "type": {
-          "type": "string",
-          "enum": [
-            "ExprList",
-            "ExprPar",
-            "ExprUri",
-            "ExprBytes",
-            "ExprString",
-            "ExprBool",
-            "ExprMap",
-            "ExprUnforg",
-            "ExprInt",
-            "ExprTuple"
-          ]
+        "ExprMap": {
+          "$ref": "#/definitions/ExprMap"
+        },
+        "ExprList": {
+          "$ref": "#/definitions/ExprList"
+        },
+        "ExprTuple": {
+          "$ref": "#/definitions/ExprTuple"
+        },
+        "ExprPar": {
+          "$ref": "#/definitions/ExprPar"
+        },
+        "ExprUnforg": {
+          "$ref": "#/definitions/ExprUnforg"
+        },
+        "ExprString": {
+          "$ref": "#/definitions/ExprString"
+        },
+        "ExprInt": {
+          "$ref": "#/definitions/ExprInt"
+        },
+        "ExprBool": {
+          "$ref": "#/definitions/ExprBool"
+        },
+        "ExprUri": {
+          "$ref": "#/definitions/ExprUri"
+        },
+        "ExprBytes": {
+          "$ref": "#/definitions/ExprBytes"
         }
       },
       "description": "RhoExpr"
     },
     "ExprList": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprList"],
+      "properties": {
+        "ExprList": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -692,18 +780,16 @@
                 "$ref": "#/definitions/RhoExpr"
               }
             }
-          },
-          "description": "ExprList"
+          }
         }
-      ],
+      },
       "description": "ExprList"
     },
     "ExprPar": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprPar"],
+      "properties": {
+        "ExprPar": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -713,10 +799,9 @@
                 "$ref": "#/definitions/RhoExpr"
               }
             }
-          },
-          "description": "ExprPar"
+          }
         }
-      ],
+      },
       "description": "ExprPar"
     },
     "BondInfo": {
@@ -734,11 +819,10 @@
       "description": "BondInfo"
     },
     "ExprUri": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprUri"],
+      "properties": {
+        "ExprUri": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -746,30 +830,26 @@
               "format": "URI",
               "type": "string"
             }
-          },
-          "description": "ExprUri"
+          }
         }
-      ],
+      },
       "description": "ExprUri"
     },
     "ExprBytes": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprBytes"],
+      "properties": {
+        "ExprBytes": {
           "type": "object",
           "required": ["data"],
           "properties": {
             "data": {
               "format": "hex",
-              "example": "2a021002",
               "type": "string"
             }
-          },
-          "description": "ExprBytes"
+          }
         }
-      ],
+      },
       "description": "ExprBytes"
     },
     "PrepareRequest": {
@@ -793,32 +873,28 @@
     },
     "RhoUnforg": {
       "type": "object",
-      "required": ["type"],
-      "discriminator": "type",
       "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["UnforgDeploy", "UnforgDeployer", "UnforgPrivate"]
+        "UnforgDeploy": {
+          "$ref": "#/definitions/UnforgDeploy"
+        },
+        "UnforgDeployer": {
+          "$ref": "#/definitions/UnforgDeployer"
+        },
+        "UnforgPrivate": {
+          "$ref": "#/definitions/UnforgPrivate"
         }
       },
       "description": "RhoUnforg"
     },
     "UnforgPrivate": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoUnforg"
-        },
-        {
-          "type": "object",
-          "required": ["data"],
-          "properties": {
-            "data": {
-              "type": "string"
-            }
-          },
-          "description": "UnforgPrivate"
+      "type": "object",
+      "required": ["data"],
+      "properties": {
+        "data": {
+          "type": "string",
+          "format": "hex"
         }
-      ],
+      },
       "description": "UnforgPrivate"
     },
     "ExploratoryDeployResponse": {
@@ -873,21 +949,19 @@
       "description": "PrepareResponse"
     },
     "ExprString": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprString"],
+      "properties": {
+        "ExprString": {
           "type": "object",
           "required": ["data"],
           "properties": {
             "data": {
               "type": "string"
             }
-          },
-          "description": "ExprString"
+          }
         }
-      ],
+      },
       "description": "ExprString"
     },
     "RhoExprWithBlock": {
@@ -1154,29 +1228,27 @@
       "description": "A DeployRequest consists of a DeployData plus a signature compouted over the protobuf serialization of the DeployData. The secp256k1 algorithm indicates DER format; secp256k1:eth indicates RS format."
     },
     "ExprBool": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprBool"],
+      "properties": {
+        "ExprBool": {
           "type": "object",
           "required": ["data"],
           "properties": {
             "data": {
               "type": "boolean"
             }
-          },
-          "description": "ExprBool"
+          }
         }
-      ],
+      },
+      "example": { "ExprBool": { "data": true } },
       "description": "ExprBool"
     },
     "UnforgDeploy": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoUnforg"
-        },
-        {
+      "type": "object",
+      "required": ["UnforgDeploy"],
+      "properties": {
+        "UnforgDeploy": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -1184,10 +1256,14 @@
               "format": "signature",
               "type": "string"
             }
-          },
-          "description": "UnforgDeploy"
+          }
         }
-      ],
+      },
+      "example": {
+        "UnforgDeploy": {
+          "data": "3045022100aeec7bd3dfdbf5605d8292a1202b767a430db6c9c17d904a250577d77b48b3b002207cf796702d70c60ee40690badc5c387a0491b0fed8fb4419c1977097773d201e"
+        }
+      },
       "description": "UnforgDeploy"
     },
     "BlockInfo": {
@@ -1206,11 +1282,10 @@
       "description": "BlockInfo"
     },
     "ExprMap": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprMap"],
+      "properties": {
+        "ExprMap": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -1220,18 +1295,32 @@
                 "$ref": "#/definitions/RhoExpr"
               }
             }
-          },
-          "description": "ExprMap"
+          }
         }
-      ],
+      },
+      "example": {
+        "ExprMap": {
+          "data": {
+            "color": {
+              "ExprString": {
+                "data": "green"
+              }
+            },
+            "size": {
+              "ExprInt": {
+                "data": 3
+              }
+            }
+          }
+        }
+      },
       "description": "ExprMap"
     },
     "UnforgDeployer": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoUnforg"
-        },
-        {
+      "type": "object",
+      "required": ["UnforgDeployer"],
+      "properties": {
+        "UnforgDeployer": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -1239,36 +1328,46 @@
               "format": "public key",
               "type": "string"
             }
-          },
-          "description": "UnforgDeployer"
+          }
         }
-      ],
+      },
+      "example": {
+        "UnforgDeployer": {
+          "data": "043967e3659e718deb7b08672007f01b64108d50c0d93d890a4b7fe6ebd293afa50ad6812ac9c902896b61b1aa37be475fceed3e64a607233448f46f76d16e2877"
+        }
+      },
       "description": "UnforgDeployer"
     },
     "ExprUnforg": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprUnforg"],
+      "properties": {
+        "ExprUnforg": {
           "type": "object",
           "required": ["data"],
           "properties": {
             "data": {
               "$ref": "#/definitions/RhoUnforg"
             }
-          },
-          "description": "ExprUnforg"
+          }
         }
-      ],
+      },
+      "example": {
+        "ExprUnforg": {
+          "data": {
+            "UnforgPrivate": {
+              "data": "4e8cb2797b6e2e35b66b487268c3aaeea49b6d35aca976acf33ac02797beba1e"
+            }
+          }
+        }
+      },
       "description": "ExprUnforg"
     },
     "ExprInt": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprInt"],
+      "properties": {
+        "ExprInt": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -1276,10 +1375,10 @@
               "type": "integer",
               "format": "int64"
             }
-          },
-          "description": "ExprInt"
+          }
         }
-      ],
+      },
+      "example": { "ExprInt": { "data": 123 } },
       "description": "ExprInt"
     },
     "DataRequest": {
@@ -1297,11 +1396,10 @@
       "description": "DataRequest"
     },
     "ExprTuple": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/RhoExpr"
-        },
-        {
+      "type": "object",
+      "required": ["ExprTuple"],
+      "properties": {
+        "ExprTuple": {
           "type": "object",
           "required": ["data"],
           "properties": {
@@ -1311,10 +1409,17 @@
                 "$ref": "#/definitions/RhoExpr"
               }
             }
-          },
-          "description": "ExprTuple"
+          }
         }
-      ],
+      },
+      "example": {
+        "ExprTuple": {
+          "data": [
+            { "ExprBool": { "data": true } },
+            { "ExprString": { "data": "win!" } }
+          ]
+        }
+      },
       "description": "ExprTuple"
     }
   }
