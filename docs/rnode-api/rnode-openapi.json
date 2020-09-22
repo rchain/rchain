@@ -186,6 +186,239 @@
         "deprecated": false
       }
     },
+    "/deploy/{deployId}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getDeploy-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "deployId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/LightBlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/block/{hash}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getBlock-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "full details about requested block",
+            "examples": {
+              "application/json": {
+                "blockInfo": {
+                  "blockHash": "0638b0a26d4007740deb57ba0af8103e0fb93ba79d36cee537a6a052568f7422",
+                  "sender": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                  "seqNum": 95051,
+                  "sig": "304502210082ee3896ca5610e8c75a243d80d4c095a95be298d5fa8edbe1c6585b6458decf02207df0d201d977b675137560722aa7135b7622de619ad9d0068bc4a64c46663116",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600735422804,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "e64e1c44ed21bf6fabcf5832a5c77aad538783090cdb1a47342f86f674044793"
+                  ],
+                  "blockNumber": 420137,
+                  "preStateHash": "dc60dff22a2027994e87b01c896d26095b90cdd863ea1e7d63ac8e33b774f3c3",
+                  "postStateHash": "9f427235eb36679f31f6cf026c7f40550680aa1bf8af4ee7203268a54e37b1bf",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "138049",
+                  "deployCount": 1,
+                  "faultTolerance": -1,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "75c219eff5b32bccaa8f77071798396cbd1bad06188ef86f0f5d38985d8aeb5f"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "e42ac37a9878217dd3d04a8d98ecc8da8302350526dcfeb448b1aa62d2ccbcfa"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "e64e1c44ed21bf6fabcf5832a5c77aad538783090cdb1a47342f86f674044793"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "7075ffb82b96eeba9c54e0ff3b928c0f473650001765ebd5524e8094b5290026"
+                    }
+                  ]
+                },
+                "deploys": [
+                  {
+                    "deployer": "041b1a073186d2465a3e09dfd7d77765239c34e427db52cc1952025c3ca1b56e726acc714042fb8f190170bc39608ba3214b7ea873aab91700df769a60cc328754",
+                    "term": "new a in{}\n",
+                    "timestamp": 1600735421769,
+                    "sig": "304402202258eac6522a475d582d19387673322829d7b18c50efe828579dd682b6ff4bad0220195a6bc59eca8898d8ff105fa8963d5df4b238288820f8674e0fefaba9d932a5",
+                    "sigAlgorithm": "secp256k1",
+                    "phloPrice": 1,
+                    "phloLimit": 100000,
+                    "validAfterBlockNumber": 420136,
+                    "cost": 23,
+                    "errored": false,
+                    "systemDeployError": ""
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/last-finalized-block": {
+      "get": {
+        "tags": ["blocks"],
+        "operationId": "getLast-finalized-block",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/is-finalized/{hash}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getIs-finalized-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postExplore-deploy-body",
+        "consumes": ["text/plain"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "term",
+            "description": "Rholang term",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy-by-block-hash": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postExplore-deploy-by-block-hash-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "ExploreDeployRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExploreDeployRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
     "/prepare-deploy": {
       "get": {
         "tags": ["rhovm"],
@@ -228,25 +461,28 @@
         "deprecated": false
       }
     },
-    "/deploy/{deployId}": {
-      "get": {
-        "description": "see also WebApi.findDeploy in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["blocks"],
-        "operationId": "getDeploy-string",
+    "/deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postDeploy-body",
+        "consumes": ["application/json"],
         "produces": ["application/json"],
         "parameters": [
           {
-            "name": "deployId",
-            "in": "path",
+            "in": "body",
+            "name": "request",
+            "description": "DeployRequest",
             "required": true,
-            "type": "string"
+            "schema": {
+              "$ref": "#/definitions/DeployRequest"
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
             "schema": {
-              "$ref": "#/definitions/LightBlockInfo"
+              "type": "string"
             }
           }
         },
@@ -275,156 +511,6 @@
             "description": "OK",
             "schema": {
               "$ref": "#/definitions/DataResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/block/{hash}": {
-      "get": {
-        "description": "see also WebApi.getBlock in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["blocks"],
-        "operationId": "getBlock-string",
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "name": "hash",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/BlockInfo"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/last-finalized-block": {
-      "get": {
-        "tags": ["blocks"],
-        "operationId": "getLast-finalized-block",
-        "produces": ["application/json"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/BlockInfo"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/explore-deploy-by-block-hash": {
-      "post": {
-        "tags": ["rhovm"],
-        "operationId": "postExplore-deploy-by-block-hash-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "description": "ExploreDeployRequest",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/ExploreDeployRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/ExploratoryDeployResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/explore-deploy": {
-      "post": {
-        "tags": ["rhovm"],
-        "operationId": "postExplore-deploy-body",
-        "consumes": ["text/plain"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "term",
-            "description": "Rholang term",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/ExploratoryDeployResponse"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/is-finalized/{hash}": {
-      "get": {
-        "description": "see also WebApi.isFinalized in src/main/scala/coop/rchain/node/api/WebApi.scala",
-        "tags": ["blocks"],
-        "operationId": "getIs-finalized-string",
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "name": "hash",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "type": "boolean"
-            }
-          }
-        },
-        "deprecated": false
-      }
-    },
-    "/deploy": {
-      "post": {
-        "tags": ["rhovm"],
-        "operationId": "postDeploy-body",
-        "consumes": ["application/json"],
-        "produces": ["application/json"],
-        "parameters": [
-          {
-            "in": "body",
-            "name": "request",
-            "description": "DeployRequest",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/DeployRequest"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "type": "string"
             }
           }
         },
