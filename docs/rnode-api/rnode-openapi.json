@@ -200,14 +200,81 @@
             "name": "deployId",
             "in": "path",
             "required": true,
+            "format": "signature",
             "type": "string"
           }
         ],
         "responses": {
           "200": {
             "description": "OK",
+            "examples": {
+              "application/json": {
+                "blockHash": "e525dd6d8727a1ca75a13d17d0e2495370ff7ec9ae0ab5b436e60a20d9ebe698",
+                "sender": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                "seqNum": 94554,
+                "sig": "304402200390f7df4530ce9444533dc6ed9bff0fd8f7d41ccabecb52ca0747201a9c2701022069419a5d3cad82dffed4b9e987ccea165b5ff1ae38e0ac73f1e7fe212db1af39",
+                "sigAlgorithm": "secp256k1",
+                "shardId": "rchain",
+                "extraBytes": "",
+                "version": 1,
+                "timestamp": 1600740298952,
+                "headerExtraBytes": "",
+                "parentsHashList": [
+                  "af731a6bb89cda494459ee7d9f99302d340efb20630dab1ed7d7da1544707f67"
+                ],
+                "blockNumber": 420303,
+                "preStateHash": "bce2bcffacdfbfaa886e14f77fd0e7052212ddaf1a0a56e020ab24dfd859a3aa",
+                "postStateHash": "9280c60d61718791ac1fc977d57b80024c870b6314408dbda83b32e6eee11801",
+                "bodyExtraBytes": "",
+                "bonds": [
+                  {
+                    "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                    "stake": 10000032
+                  },
+                  {
+                    "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                    "stake": 10000004
+                  },
+                  {
+                    "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                    "stake": 10000002
+                  },
+                  {
+                    "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                    "stake": 10000008
+                  }
+                ],
+                "blockSize": "139617",
+                "deployCount": 1,
+                "faultTolerance": -1.0,
+                "justifications": [
+                  {
+                    "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                    "latestBlockHash": "80d9e02c30de741dc5ea21bbb5bb42afb1942046f270cf53f708536c0ac1ea22"
+                  },
+                  {
+                    "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                    "latestBlockHash": "4aa7df340f0078e707ff569d677562e828690175f40557eb952e6af4cea3f1ba"
+                  },
+                  {
+                    "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                    "latestBlockHash": "ba4c95db6d728d793bab1cb3c7022d3c39b6c703d99c4e59b781730127375650"
+                  },
+                  {
+                    "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                    "latestBlockHash": "af731a6bb89cda494459ee7d9f99302d340efb20630dab1ed7d7da1544707f67"
+                  }
+                ]
+              }
+            },
             "schema": {
               "$ref": "#/definitions/LightBlockInfo"
+            }
+          },
+          "400": {
+            "description": "Bad request; e.g. couldn't find block",
+            "examples": {
+              "text/plain": "Couldn't find block containing deploy with id: 1f80ccdc2517d842e67b913f656357b3f7a54a3f7c993f6df98063417d0c680f72a666f2e8a6cb38d0591740adcbded9ad7449d26b6def78a0113e77124f96d41b"
             }
           }
         },
@@ -228,12 +295,13 @@
             "name": "hash",
             "in": "path",
             "required": true,
+            "format": "hash",
             "type": "string"
           }
         ],
         "responses": {
           "200": {
-            "description": "full details about requested block",
+            "description": "full details about requested block including results of deploys",
             "examples": {
               "application/json": {
                 "blockInfo": {
@@ -349,6 +417,7 @@
             "name": "hash",
             "in": "path",
             "required": true,
+            "format": "hash",
             "type": "string"
           }
         ],
@@ -366,6 +435,7 @@
     "/explore-deploy": {
       "post": {
         "tags": ["rhovm"],
+        "description": "Run rholang term in an exploratory mode where the results are not persisted in the consensus state. To get a result, send to the first new name. For example: `new return in { return!(1+1) }`.",
         "operationId": "postExplore-deploy-body",
         "consumes": ["text/plain"],
         "produces": ["application/json"],
@@ -376,13 +446,83 @@
             "description": "Rholang term",
             "required": true,
             "schema": {
+              "format": "rholang",
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Returned expression and information from the block of the rhovm state on which the term was deployed.",
+            "examples": {
+              "application/json": {
+                "expr": [
+                  {
+                    "ExprInt": {
+                      "data": 2
+                    }
+                  }
+                ],
+                "block": {
+                  "blockHash": "3db9eac1b5a5ba58b0c602e5f6899b19a12532f14abc9affddb7f4c0ac119e60",
+                  "sender": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                  "seqNum": 94523,
+                  "sig": "3045022100de2311e4c73666c9c915b37b9f60c7d9f3408244d9b8cc0870b8be929d069b0e022018fa4683aa2a93886520f3147db6405b6a8faec129871d3093bd56240004e8c4",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600736651167,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "b2256ba43e14bb784b3b4fd7d7f3c4cef7a4b91df3c33f8cdeac43cd0d561642"
+                  ],
+                  "blockNumber": 420179,
+                  "preStateHash": "455902cda6684be59e0847d2fb7219c38f910c0d76172ce6c774a4c09639459c",
+                  "postStateHash": "1bd92e679365b82199c94cb7dd8361dceb098fa802b2e4343d12edcebcd56931",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "139522",
+                  "deployCount": 1,
+                  "faultTolerance": -0.49999896,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "5365173dc754f5c42dd76764ce00baf24bef1d3f81418cbe11ddeb173603c1b9"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "a521c393b30fffc7e1f181dcc8d1d2af2b51d0ec530a3dca37458d239db21a48"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "592a58dc6157829343c96afa7b0745fdc914826d0a720348b1182757623a8869"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "b2256ba43e14bb784b3b4fd7d7f3c4cef7a4b91df3c33f8cdeac43cd0d561642"
+                    }
+                  ]
+                }
+              }
+            },
             "schema": {
               "$ref": "#/definitions/ExploratoryDeployResponse"
             }
@@ -394,6 +534,7 @@
     "/explore-deploy-by-block-hash": {
       "post": {
         "tags": ["rhovm"],
+        "description": "Run an exploratory deploy as of a specific block's state.",
         "operationId": "postExplore-deploy-by-block-hash-body",
         "consumes": ["application/json"],
         "produces": ["application/json"],
@@ -422,13 +563,14 @@
     "/prepare-deploy": {
       "post": {
         "tags": ["rhovm"],
+        "description": "Get ids of new names to be allocated in an upcoming deploy; for example, in case the term needs to include a signature over them.",
         "operationId": "postPrepare-deploy-body",
         "consumes": ["application/json"],
         "produces": ["application/json"],
         "parameters": [
           {
             "in": "body",
-            "name": "body",
+            "name": "request",
             "description": "PrepareRequest",
             "required": true,
             "schema": {
@@ -450,6 +592,7 @@
     "/deploy": {
       "post": {
         "tags": ["rhovm"],
+        "description": "Request execution of a rholang term on the RhoVM.",
         "operationId": "postDeploy-body",
         "consumes": ["application/json"],
         "produces": ["application/json"],
@@ -466,9 +609,15 @@
         ],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Success: request was correctly formatted and signed. Note that this does not indicate successful execution.\nUse the signature as deployId in /deploy/ to find the hash of the block in which this deploy was attempted and then GET /block/{hash} to find `DeployInfo` such as `systemDeployError`, `errored` and `cost`.\n",
             "schema": {
               "type": "string"
+            }
+          },
+          "400": {
+            "description": "bad request: Invalid signature or rholang syntax error",
+            "examples": {
+              "text/plain": "syntax error(): } at 3:1-3:2"
             }
           }
         },
@@ -574,6 +723,7 @@
       "type": "object",
       "properties": {
         "validator": {
+          "format": "public key",
           "type": "string"
         },
         "stake": {
@@ -593,6 +743,7 @@
           "required": ["data"],
           "properties": {
             "data": {
+              "format": "URI",
               "type": "string"
             }
           },
@@ -611,6 +762,8 @@
           "required": ["data"],
           "properties": {
             "data": {
+              "format": "hex",
+              "example": "2a021002",
               "type": "string"
             }
           },
@@ -624,6 +777,7 @@
       "required": ["deployer", "nameQty", "timestamp"],
       "properties": {
         "deployer": {
+          "format": "public key",
           "type": "string"
         },
         "timestamp": {
@@ -707,6 +861,7 @@
         "names": {
           "type": "array",
           "items": {
+            "format": "hex",
             "type": "string"
           }
         },
@@ -752,6 +907,7 @@
       "type": "object",
       "properties": {
         "blockHash": {
+          "format": "hash",
           "type": "string"
         },
         "justifications": {
@@ -777,6 +933,7 @@
         "parentsHashList": {
           "type": "array",
           "items": {
+            "format": "hash",
             "type": "string"
           }
         },
@@ -784,15 +941,19 @@
           "type": "string"
         },
         "sigAlgorithm": {
-          "type": "string"
+          "type": "string",
+          "enum": ["secp256k1"]
         },
         "sig": {
+          "format": "signature",
           "type": "string"
         },
         "blockSize": {
+          "format": "Long integer",
           "type": "string"
         },
         "postStateHash": {
+          "format": "hash",
           "type": "string"
         },
         "version": {
@@ -808,6 +969,7 @@
           "format": "int64"
         },
         "sender": {
+          "format": "public key",
           "type": "string"
         },
         "headerExtraBytes": {
@@ -823,6 +985,7 @@
           "format": "float"
         },
         "preStateHash": {
+          "format": "hash",
           "type": "string"
         },
         "deployCount": {
@@ -837,9 +1000,11 @@
       "required": ["blockHash", "term", "usePreStateHash"],
       "properties": {
         "term": {
+          "format": "rholang",
           "type": "string"
         },
         "blockHash": {
+          "format": "hash",
           "type": "string"
         },
         "usePreStateHash": {
@@ -860,21 +1025,26 @@
       "properties": {
         "timestamp": {
           "type": "integer",
+          "description": "conventionally in milliseconds though not constrained by real time",
           "format": "int64"
         },
         "term": {
-          "type": "string"
+          "type": "string",
+          "format": "rholang"
         },
         "phloLimit": {
           "type": "integer",
+          "description": "bound on computation to be paid for.",
           "format": "int64"
         },
         "phloPrice": {
           "type": "integer",
+          "description": "price (in 10^-8 REV) of each unit of computation. typically 1",
           "format": "int64"
         },
         "validAfterBlockNumber": {
           "type": "integer",
+          "description": "number of a recent block",
           "format": "int64"
         }
       },
@@ -888,9 +1058,11 @@
           "format": "int64"
         },
         "systemDeployError": {
+          "description": "empty string indicates lack of error",
           "type": "string"
         },
         "term": {
+          "format": "rholang",
           "type": "string"
         },
         "phloLimit": {
@@ -898,12 +1070,15 @@
           "format": "int64"
         },
         "sigAlgorithm": {
-          "type": "string"
+          "type": "string",
+          "enum": ["secp256k1", "secp256k1:eth"]
         },
         "deployer": {
+          "format": "public key",
           "type": "string"
         },
         "sig": {
+          "format": "signature",
           "type": "string"
         },
         "errored": {
@@ -911,10 +1086,12 @@
         },
         "cost": {
           "type": "integer",
+          "description": "in units of 10^-8 REV",
           "format": "int64"
         },
         "phloPrice": {
           "type": "integer",
+          "description": "in units of 10^-8 REV",
           "format": "int64"
         },
         "validAfterBlockNumber": {
@@ -928,9 +1105,11 @@
       "type": "object",
       "properties": {
         "validator": {
+          "format": "public key",
           "type": "string"
         },
         "latestBlockHash": {
+          "format": "hash",
           "type": "string"
         }
       },
@@ -939,21 +1118,40 @@
     "DeployRequest": {
       "type": "object",
       "required": ["data", "deployer", "sigAlgorithm", "signature"],
+      "externalDocs": {
+        "description": "DeployValidationSpec.scala",
+        "url": "https://github.com/rchain/rchain/blob/dev/casper/src/test/scala/coop/rchain/casper/util/DeployValidationSpec.scala"
+      },
       "properties": {
         "data": {
           "$ref": "#/definitions/DeployData"
         },
         "deployer": {
-          "type": "string"
+          "type": "string",
+          "format": "public key"
         },
         "signature": {
-          "type": "string"
+          "type": "string",
+          "format": "signature"
         },
         "sigAlgorithm": {
-          "type": "string"
+          "type": "string",
+          "enum": ["secp256k1", "secp256k1:eth"]
         }
       },
-      "description": "DeployRequest"
+      "example": {
+        "data": {
+          "term": "new world in {\n  world!(\"Hello!\")\n}\n",
+          "timestamp": 1600740233668,
+          "phloPrice": 1,
+          "phloLimit": 250000,
+          "validAfterBlockNumber": 420299
+        },
+        "sigAlgorithm": "secp256k1:eth",
+        "signature": "1f80ccdc2517d842e67b913f656357b3f7a54a3f7c993f6df98063417d0c680f72a666f2e8a6cb38d0591740adcbded9ad7449d26b6def78a0113e77124f96d41b",
+        "deployer": "043c9c39d032925384f25413d553e91c261555384589329595e9c6956055719b54839704948477e4f0d4743cfdf1635bd497fa44995cea1c5c75971cf779da11b0"
+      },
+      "description": "A DeployRequest consists of a DeployData plus a signature compouted over the protobuf serialization of the DeployData. The secp256k1 algorithm indicates DER format; secp256k1:eth indicates RS format."
     },
     "ExprBool": {
       "allOf": [
@@ -983,6 +1181,7 @@
           "required": ["data"],
           "properties": {
             "data": {
+              "format": "signature",
               "type": "string"
             }
           },
@@ -1037,6 +1236,7 @@
           "required": ["data"],
           "properties": {
             "data": {
+              "format": "public key",
               "type": "string"
             }
           },
