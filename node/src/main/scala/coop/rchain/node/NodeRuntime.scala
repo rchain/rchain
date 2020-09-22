@@ -42,9 +42,22 @@ import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuati
 import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
-import coop.rchain.node.api._
+import coop.rchain.node.api.{
+  acquireExternalServer,
+  acquireInternalServer,
+  AdminWebApi,
+  DeployGrpcServiceV1,
+  ProposeGrpcServiceV1,
+  ReplGrpcService,
+  WebApi
+}
 import coop.rchain.node.configuration.NodeConf
-import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
+import coop.rchain.node.diagnostics.{
+  BatchInfluxDBReporter,
+  NewPrometheusReporter,
+  Trace,
+  UdpInfluxDBReporter
+}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
@@ -582,37 +595,35 @@ class NodeRuntime private[node] (
                             )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
-      externalApiServer <- api
-                            .acquireExternalServer[Task](
-                              //conf.apiServer
-                              nodeConf.apiServer.host,
-                              nodeConf.apiServer.portGrpcExternal,
-                              grpcScheduler,
-                              apiServers.deploy,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                              nodeConf.apiServer.keepAliveTime,
-                              nodeConf.apiServer.keepAliveTimeout,
-                              nodeConf.apiServer.permitKeepAliveTime,
-                              nodeConf.apiServer.maxConnectionIdle,
-                              nodeConf.apiServer.maxConnectionAge,
-                              nodeConf.apiServer.maxConnectionAgeGrace
-                            )
-      internalApiServer <- api
-                            .acquireInternalServer(
-                              nodeConf.apiServer.host,
-                              nodeConf.apiServer.portGrpcInternal,
-                              grpcScheduler,
-                              apiServers.repl,
-                              apiServers.deploy,
-                              apiServers.propose,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                              nodeConf.apiServer.keepAliveTime,
-                              nodeConf.apiServer.keepAliveTimeout,
-                              nodeConf.apiServer.permitKeepAliveTime,
-                              nodeConf.apiServer.maxConnectionIdle,
-                              nodeConf.apiServer.maxConnectionAge,
-                              nodeConf.apiServer.maxConnectionAgeGrace
-                            )
+      externalApiServer <- acquireExternalServer[Task](
+                            //conf.apiServer
+                            nodeConf.apiServer.host,
+                            nodeConf.apiServer.portGrpcExternal,
+                            grpcScheduler,
+                            apiServers.deploy,
+                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                            nodeConf.apiServer.keepAliveTime,
+                            nodeConf.apiServer.keepAliveTimeout,
+                            nodeConf.apiServer.permitKeepAliveTime,
+                            nodeConf.apiServer.maxConnectionIdle,
+                            nodeConf.apiServer.maxConnectionAge,
+                            nodeConf.apiServer.maxConnectionAgeGrace
+                          )
+      internalApiServer <- acquireInternalServer(
+                            nodeConf.apiServer.host,
+                            nodeConf.apiServer.portGrpcInternal,
+                            grpcScheduler,
+                            apiServers.repl,
+                            apiServers.deploy,
+                            apiServers.propose,
+                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                            nodeConf.apiServer.keepAliveTime,
+                            nodeConf.apiServer.keepAliveTimeout,
+                            nodeConf.apiServer.permitKeepAliveTime,
+                            nodeConf.apiServer.maxConnectionIdle,
+                            nodeConf.apiServer.maxConnectionAge,
+                            nodeConf.apiServer.maxConnectionAgeGrace
+                          )
 
       prometheusReporter = new NewPrometheusReporter()
       httpServerFiber = aquireHttpServer(
