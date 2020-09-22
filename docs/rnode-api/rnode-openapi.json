@@ -354,13 +354,13 @@
       "post": {
         "tags": ["rhovm"],
         "operationId": "postExplore-deploy-body",
-        "consumes": ["application/json"],
+        "consumes": ["text/plain"],
         "produces": ["application/json"],
         "parameters": [
           {
             "in": "body",
-            "name": "body",
-            "description": "String",
+            "name": "term",
+            "description": "Rholang term",
             "required": true,
             "schema": {
               "type": "string"
@@ -412,7 +412,7 @@
         "parameters": [
           {
             "in": "body",
-            "name": "body",
+            "name": "request",
             "description": "DeployRequest",
             "required": true,
             "schema": {
