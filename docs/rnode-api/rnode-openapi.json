@@ -420,20 +420,6 @@
       }
     },
     "/prepare-deploy": {
-      "get": {
-        "tags": ["rhovm"],
-        "operationId": "getPrepare-deploy",
-        "produces": ["application/json"],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "schema": {
-              "$ref": "#/definitions/PrepareResponse"
-            }
-          }
-        },
-        "deprecated": false
-      },
       "post": {
         "tags": ["rhovm"],
         "operationId": "postPrepare-deploy-body",
