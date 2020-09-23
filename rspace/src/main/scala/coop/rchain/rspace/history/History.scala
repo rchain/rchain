@@ -51,7 +51,7 @@ final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
   override def toString: String =
-    s"Skip(${hash}, ${affix.toHex})\n  ${ptr}"
+    s"Skip(${hash}, ${affix.toHex}\n  ${ptr})"
 }
 
 final case class PointerBlock private (toVector: Vector[TriePointer]) extends NonEmptyTrie {
@@ -67,12 +67,13 @@ final case class PointerBlock private (toVector: Vector[TriePointer]) extends No
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
   override def toString: String = {
+    // TODO: this is difficult to visualize, maybe XML representation would be useful?
     val pbs =
       toVector.zipWithIndex
         .filter { case (v, _) => v != EmptyPointer }
-        .map { case (v, n) => s"($v, ${Base16.encode(Array(n.toByte))})" }
-        .mkString("\n  ")
-    s"PB(${hash})\n  $pbs"
+        .map { case (v, n) => s"<$v, ${Base16.encode(Array(n.toByte))}>" }
+        .mkString(",\n  ")
+    s"PB(${hash}\n  $pbs)"
   }
 }
 
