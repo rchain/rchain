@@ -9,6 +9,7 @@ import coop.rchain.lmdb.LMDBStore
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.rspace.Blake2b256Hash
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.bits.BitVector
 
@@ -39,7 +40,7 @@ object StoreInstances {
     for {
       env <- Sync[F].delay {
               Env
-                .create()
+                .create(PROXY_SAFE)
                 .setMapSize(config.mapSize)
                 .setMaxDbs(config.maxDbs)
                 .setMaxReaders(config.maxReaders)
