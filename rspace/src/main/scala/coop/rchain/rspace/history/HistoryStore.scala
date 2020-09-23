@@ -22,6 +22,9 @@ object HistoryStoreInstances {
 
       def asEncoded(t: Trie): F[KVData] =
         for {
+          // TODO: the key hash is not the hash of stored binary value but it's
+          //  the hash of each case of Trie (see `Trie.hash`)
+          //  - this makes it much harder to validate binary value because it must be encoded first
           b <- Trie.codecTrie.encode(t).get
           k = Trie.hash(t)
         } yield (k, b)
