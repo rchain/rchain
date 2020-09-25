@@ -2,25 +2,12 @@ package coop.rchain.casper.batch1
 
 import cats.implicits._
 import coop.rchain.casper._
-import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.util.GenesisBuilder.GenesisContext
-import coop.rchain.crypto.signatures.Signed
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib.{assert, fail, succeed, _}
-import monix.execution.Scheduler.Implicits.global
 import org.scalactic.source
 import org.scalatest.Assertion
-import org.scalatest.exceptions.TestFailedException
-
-import scala.util.Random.shuffle
 
 trait MergeabilityRules {
-
-  implicit def timeEff: LogicalTime[Effect]
-  def genesis: GenesisContext
 
   trait TestCase {
 
@@ -623,77 +610,18 @@ trait MergeabilityRules {
     "PX P!!"      -> SamePolarityMerge(P1)(P_)(R0)
   )
 
-  private[this] def conflicts(b1: Rho, b2: Rho, base: Rho)(
+  private[this] def coveredBy(equivalent: String) = ().pure[Effect]
+
+  // need to implement how to check the conflict situation
+  def conflicts(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
-  ) =
-    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 1)
+  ): Effect[Unit]
 
+  // need to implement how to check the merges(non-conflict) situation
   def merges(b1: Rho, b2: Rho, base: Rho)(
       implicit file: sourcecode.File,
       line: sourcecode.Line
-  ) =
-    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 2)
-
-  def randomDiamondConflictCheck(
-      base: Rho,
-      b1: Rho,
-      b2: Rho,
-      numberOfParentsForDiamondTip: Int
-  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] = {
-    val shuffledBlocks = shuffle(Seq(b1, b2))
-    diamondConflictCheck(base, shuffledBlocks(0), shuffledBlocks(1), numberOfParentsForDiamondTip)
-  }
-
-  private[this] def checkBothWays(
-      base: Rho,
-      b1: Rho,
-      b2: Rho,
-      numberOfParentsForDiamondTip: Int
-  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
-    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip) >>
-      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip)
-
-  private[this] def coveredBy(equivalent: String) = ().pure[Effect]
-
-  private[this] def diamondConflictCheck(
-      base: Rho,
-      b1: Rho,
-      b2: Rho,
-      numberOfParentsForDiamondTip: Int
-  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
-    Vector(
-      ConstructDeploy.sourceDeployNowF[Effect](base.value),
-      ConstructDeploy.sourceDeployNowF[Effect](b1.value),
-      ConstructDeploy.sourceDeployNowF[Effect](b2.value, sec = ConstructDeploy.defaultSec2),
-      ConstructDeploy.sourceDeployNowF[Effect]("Nil")
-    ).sequence[Effect, Signed[DeployData]]
-      .flatMap { deploys =>
-        TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-          for {
-            _ <- nodes(0).propagateBlock(deploys(0))(nodes(1))
-            _ <- nodes(0).addBlock(deploys(1))
-            _ <- nodes(1).propagateBlock(deploys(2))(nodes(0))
-
-            multiParentBlock <- nodes(0).addBlock(deploys(3))
-
-            _ = nodes(0).logEff.warns.isEmpty shouldBe true
-            _ = multiParentBlock.header.parentsHashList.size shouldBe numberOfParentsForDiamondTip
-            _ = nodes(0).contains(multiParentBlock.blockHash) shouldBeF true
-          } yield ()
-        }
-      }
-      .adaptError {
-        case e: Throwable =>
-          new TestFailedException(s"""Expected
-               | base = ${base.value}
-               | b1   = ${b1.value}
-               | b2   = ${b2.value}
-               |
-               | to produce a merge block with $numberOfParentsForDiamondTip parents, but it didn't
-               |
-               | go see it at ${file.value}:${line.value}
-               | """.stripMargin, e, 5).severedAtStackDepth
-      }
+  ): Effect[Unit]
 
 }

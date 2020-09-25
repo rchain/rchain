@@ -3,9 +3,10 @@ package coop.rchain.casper.batch1
 import cats.implicits._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
+import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.util.{ConstructDeploy, RSpaceUtil}
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Par}
@@ -15,6 +16,7 @@ import coop.rchain.shared.ByteArrayOps._
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class MultiParentCasperMergeSpec
@@ -98,6 +100,67 @@ class MultiParentCasperMergeSpec
   it should "respect mergeability rules when merging blocks containing events with peek" ignore effectTest {
     peekMergeabilityCases.map(_._2).parSequence
   }
+
+  def conflicts(b1: Rho, b2: Rho, base: Rho)(
+      implicit file: sourcecode.File,
+      line: sourcecode.Line
+  ) =
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 1)
+
+  def merges(b1: Rho, b2: Rho, base: Rho)(
+      implicit file: sourcecode.File,
+      line: sourcecode.Line
+  ) =
+    checkBothWays(base, b1, b2, numberOfParentsForDiamondTip = 2)
+
+  private[this] def checkBothWays(
+      base: Rho,
+      b1: Rho,
+      b2: Rho,
+      numberOfParentsForDiamondTip: Int
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    diamondConflictCheck(base, b1, b2, numberOfParentsForDiamondTip) >>
+      diamondConflictCheck(base, b2, b1, numberOfParentsForDiamondTip)
+
+  private[this] def diamondConflictCheck(
+      base: Rho,
+      b1: Rho,
+      b2: Rho,
+      numberOfParentsForDiamondTip: Int
+  )(implicit file: sourcecode.File, line: sourcecode.Line): Effect[Unit] =
+    Vector(
+      ConstructDeploy.sourceDeployNowF[Effect](base.value),
+      ConstructDeploy.sourceDeployNowF[Effect](b1.value),
+      ConstructDeploy.sourceDeployNowF[Effect](b2.value, sec = ConstructDeploy.defaultSec2),
+      ConstructDeploy.sourceDeployNowF[Effect]("Nil")
+    ).sequence[Effect, Signed[DeployData]]
+      .flatMap { deploys =>
+        TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+          for {
+            _ <- nodes(0).propagateBlock(deploys(0))(nodes(1))
+            _ <- nodes(0).addBlock(deploys(1))
+            _ <- nodes(1).propagateBlock(deploys(2))(nodes(0))
+
+            multiParentBlock <- nodes(0).addBlock(deploys(3))
+
+            _ = nodes(0).logEff.warns.isEmpty shouldBe true
+            _ = multiParentBlock.header.parentsHashList.size shouldBe numberOfParentsForDiamondTip
+            _ = nodes(0).contains(multiParentBlock.blockHash) shouldBeF true
+          } yield ()
+        }
+      }
+      .adaptError {
+        case e: Throwable =>
+          new TestFailedException(s"""Expected
+                                     | base = ${base.value}
+                                     | b1   = ${b1.value}
+                                     | b2   = ${b2.value}
+                                     |
+                                     | to produce a merge block with $numberOfParentsForDiamondTip parents, but it didn't
+                                     |
+                                     | go see it at ${file.value}:${line.value}
+                                     | """.stripMargin, e, 5).severedAtStackDepth
+      }
 
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
 

@@ -5,18 +5,20 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.protocol.ProcessedDeploy
+import coop.rchain.casper.protocol.Event
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.trace._
+import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Log
 
 import scala.collection.BitSet
 
-final case class BlockEvents(produces: Set[Produce], consumes: Set[Consume], comms: Set[COMM])
+final case class EventGroup(produces: Set[Produce], consumes: Set[Consume], comms: Set[COMM])
 
 object EstimatorHelper {
 
@@ -75,9 +77,17 @@ object EstimatorHelper {
           }
     } yield conflicts
 
+  def isConflict(d1: ProcessedDeploy, d2: ProcessedDeploy): Boolean = {
+    val eventGroup1 = extractEventGroup(d1.deployLog)
+    val eventGroup2 = extractEventGroup(d2.deployLog)
+    extractJoinedChannels(eventGroup1).intersect(allChannels(eventGroup2)).nonEmpty ||
+    extractJoinedChannels(eventGroup2).intersect(allChannels(eventGroup1)).nonEmpty ||
+    containConflictingEvents(eventGroup1, eventGroup2)
+  }
+
   private[this] def containConflictingEvents(
-      b1Events: BlockEvents,
-      b2Events: BlockEvents
+      b1Events: EventGroup,
+      b2Events: EventGroup
   ): Boolean = {
     def channelConflicts(
         b1Events: Set[TuplespaceEvent],
@@ -109,7 +119,7 @@ object EstimatorHelper {
         produce => !produce.persistent && produces.contains(produce)
       )
 
-  private[this] def allChannels(events: BlockEvents) =
+  private[this] def allChannels(events: EventGroup) =
     events.produces.map(_.channelsHash).toSet ++ events.consumes
       .flatMap(_.channelsHashes)
       .toSet ++ events.comms.flatMap { comm =>
@@ -118,27 +128,33 @@ object EstimatorHelper {
 
   private[this] def extractBlockEvents[F[_]: Sync: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
-  ): F[BlockEvents] =
+  ): F[EventGroup] =
     for {
       ancestors <- blockAncestorsMeta.traverse(
                     blockAncestorMeta => BlockStore[F].getUnsafe(blockAncestorMeta.blockHash)
                   )
-      ancestorEvents = ancestors
+      events = ancestors
         .flatMap(_.body.deploys.flatMap(_.deployLog))
-        .map(EventConverter.toRspaceEvent)
-        .toSet
-      allProduceEvents = ancestorEvents.collect { case p: Produce => p }
-      allConsumeEvents = ancestorEvents.collect { case c: Consume => c }
-      allCommEvents    = ancestorEvents.collect { case c: COMM    => c }
-      (volatileCommEvents, nonVolatileCommEvents) = allCommEvents
-        .partition(isVolatile(_, allConsumeEvents, allProduceEvents))
-      producesInVolatileCommEvents = volatileCommEvents.flatMap(_.produces)
-      consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
-      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
-      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
-    } yield BlockEvents(produceEvents, consumeEvents, nonVolatileCommEvents)
+      eventGroup = extractEventGroup(events)
+    } yield eventGroup
 
-  private[this] def extractJoinedChannels(b: BlockEvents): Set[Blake2b256Hash] = {
+  private[this] def extractEventGroup(events: List[Event]): EventGroup = {
+    val rspaceEvents = events
+      .map(EventConverter.toRspaceEvent)
+      .toSet
+    val allProduceEvents = rspaceEvents.collect { case p: Produce => p }
+    val allConsumeEvents = rspaceEvents.collect { case c: Consume => c }
+    val allCommEvents    = rspaceEvents.collect { case c: COMM    => c }
+    val (volatileCommEvents, nonVolatileCommEvents) = allCommEvents
+      .partition(isVolatile(_, allConsumeEvents, allProduceEvents))
+    val producesInVolatileCommEvents = volatileCommEvents.flatMap(_.produces)
+    val consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
+    val produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
+    val consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
+    EventGroup(produceEvents, consumeEvents, nonVolatileCommEvents)
+  }
+
+  private[this] def extractJoinedChannels(b: EventGroup): Set[Blake2b256Hash] = {
 
     def joinedChannels(consumes: Set[Consume]) =
       consumes.withFilter(Consume.hasJoins).flatMap(_.channelsHashes)
@@ -148,7 +164,7 @@ object EstimatorHelper {
   }
 
   private[this] def tuplespaceEventsPerChannel(
-      b: BlockEvents
+      b: EventGroup
   ): Map[Blake2b256Hash, Set[TuplespaceEvent]] = {
     val nonPersistentProducesInComms = b.comms.flatMap(_.produces).filterNot(_.persistent)
     val nonPersistentConsumesInComms = b.comms.map(_.consume).filterNot(_.persistent)
