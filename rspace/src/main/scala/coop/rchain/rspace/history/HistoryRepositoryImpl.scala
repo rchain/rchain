@@ -230,7 +230,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
 object HistoryRepositoryImpl {
   val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
 
-  private def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
+  def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
     codecSeqByteVector.decode(data.bits).get.value.map(bv => codec.decode(bv.bits).get.value)
 
   private def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
