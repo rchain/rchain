@@ -6,10 +6,13 @@ import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{ColdStoreInstances, PersistedData, Trie}
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.state.TrieImporter
-import scodec.bits.BitVector
+import scodec.Codec
+import scodec.bits.ByteVector
 
 trait RSpaceImporter[F[_]] extends TrieImporter[F] {
   type KeyHash = Blake2b256Hash
+
+  def getHistoryItem(hash: KeyHash): F[Option[ByteVector]]
 }
 
 final case class StateValidationError(message: String) extends Exception(message)
