@@ -8,6 +8,7 @@ import cats.effect.{Concurrent, Sync}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
 import coop.rchain.rspace.state.exporters.{RSpaceExporterDisk, RSpaceExporterItems}
+import scodec.Codec
 
 package object syntax {
 
@@ -47,10 +48,14 @@ package object syntax {
 
     // Export to disk
 
-    def writeToDisk(root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
+    def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
         implicit m: Concurrent[F],
-        p: Parallel[F]
+        p: Parallel[F],
+        codecC: Codec[C],
+        codecP: Codec[P],
+        codecA: Codec[A],
+        codecK: Codec[K]
     ): F[Unit] =
-      RSpaceExporterDisk.writeToDisk(exporter, root, dirPath, chunkSize)
+      RSpaceExporterDisk.writeToDisk[F, C, P, A, K](exporter, root, dirPath, chunkSize)
   }
 }

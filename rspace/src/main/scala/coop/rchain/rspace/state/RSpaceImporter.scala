@@ -3,7 +3,9 @@ package coop.rchain.rspace.state
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.{ColdStoreInstances, PersistedData, Trie}
+import coop.rchain.rspace.history.HistoryRepositoryImpl.{decodeJoins, decodeSorted}
+import coop.rchain.rspace.history._
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.state.TrieImporter
 import scodec.Codec
@@ -18,39 +20,39 @@ trait RSpaceImporter[F[_]] extends TrieImporter[F] {
 final case class StateValidationError(message: String) extends Exception(message)
 
 object RSpaceImporter {
-  def validateStateItems[F[_]: Sync](
-      historyItems: Seq[(Blake2b256Hash, BitVector)],
-      dataItems: Seq[(Blake2b256Hash, BitVector)],
+  def validateStateItems[F[_]: Sync, C, P, A, K](
+      historyItems: Seq[(Blake2b256Hash, ByteVector)],
+      dataItems: Seq[(Blake2b256Hash, ByteVector)],
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       chunkSize: Int,
       skip: Int,
-      getFromHistory: Blake2b256Hash => F[Option[BitVector]]
-  ): F[Unit] = {
+      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
+  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
     import cats.instances.list._
 
     val receivedHistorySize = historyItems.size
     val receivedDataSize    = dataItems.size
     val isEnd               = receivedHistorySize < chunkSize
 
-    def raiseError[A](msg: String): F[A] = StateValidationError(msg).raiseError[F, A]
+    def raiseError[T](msg: String): F[T] = StateValidationError(msg).raiseError[F, T]
 
-    def decodeTrie(bytes: BitVector): Trie = Trie.codecTrie.decodeValue(bytes).get
+    def decodeTrie(bytes: ByteVector): Trie = Trie.codecTrie.decodeValue(bytes.bits).get
 
-    def decodeData(bytes: BitVector): PersistedData =
-      ColdStoreInstances.codecPersistedData.decodeValue(bytes).get
+    def decodeData(bytes: ByteVector): PersistedData =
+      ColdStoreInstances.codecPersistedData.decodeValue(bytes.bits).get
 
     // Validate history items size
-    def validateHistorySize[A]: F[Unit] = {
+    def validateHistorySize[T]: F[Unit] = {
       val sizeIsValid = receivedHistorySize == chunkSize | isEnd
-      raiseError[A](
+      raiseError[T](
         s"Input size of history items is not valid. Expected chunk size $chunkSize, received $receivedHistorySize."
       ).whenA(!sizeIsValid)
     }
 
     // Validate data items size
-    def validateDataSize[A]: F[Unit] = {
+    def validateDataSize[T]: F[Unit] = {
       val sizeIsValid = receivedDataSize <= chunkSize | isEnd
-      raiseError[A](
+      raiseError[T](
         s"Input size of data items $receivedDataSize is greater then expected chunk size $chunkSize."
       ).whenA(!sizeIsValid)
     }
@@ -75,11 +77,25 @@ object RSpaceImporter {
 
     // Validate data hashes
     def validateDataItemsHashes: F[Unit] = dataItems.toList traverse_ {
-      case (hash, bytes) =>
-        val persistedData = decodeData(bytes)
+      case (hash, valueBytes) =>
+        val persistedData = decodeData(valueBytes)
         val dataHash      = Blake2b256Hash.create(persistedData.bytes)
-        if (hash == dataHash) ().pure[F]
-        else
+        if (hash == dataHash) {
+          // When hash matches we also need to check if variance of PersistedData if correct
+          //  because we don't have the hash of concrete type holding hashed binary value.
+          Sync[F]
+            .delay(persistedData match {
+              case JoinsLeaf(bytes)         => decodeJoins[C](bytes)
+              case DataLeaf(bytes)          => decodeSorted[Datum[A]](bytes)
+              case ContinuationsLeaf(bytes) => decodeSorted[WaitingContinuation[P, K]](bytes)
+            })
+            .void
+            .handleErrorWith { ex: Throwable =>
+              raiseError(
+                s"${ex.getMessage}, ${persistedData.getClass.getSimpleName}, hash: ${hash.bytes.toHex}"
+              )
+            }
+        } else
           raiseError[Unit](
             s"Data hash does not match decoded data, key: ${hash.bytes.toHex}, decoded: ${dataHash.bytes.toHex}."
           )
@@ -113,9 +129,6 @@ object RSpaceImporter {
       // Traverse trie and extract nodes / the same as in export. Nodes must match hashed keys.
       nodes <- RSpaceExporter.traverseTrie(startPath, skip, chunkSize, getTrie(trieMap))
 
-      // Validate data (leaf) items hashes.
-      _ <- validateDataItemsHashes
-
       // Extract history and data keys.
       (leafs, nonLeafs) = nodes.partition(_.isLeaf)
       historyKeys       = nonLeafs.map(_.hash)
@@ -127,6 +140,9 @@ object RSpaceImporter {
 
       dataKeysMatch = dataItems.map(_._1) == dataKeys
       _             <- raiseError(s"Data items are corrupted.").whenA(!dataKeysMatch)
+
+      // Validate data (leaf) items hashes. It's the last check because it's the heaviest.
+      _ <- validateDataItemsHashes
     } yield ()
   }
 }

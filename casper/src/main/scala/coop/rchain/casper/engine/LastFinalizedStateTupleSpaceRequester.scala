@@ -1,16 +1,18 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
+import cats.effect.syntax.all._
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.{Log, Time}
@@ -88,6 +90,9 @@ object LastFinalizedStateTupleSpaceRequester {
         requestQueue: Queue[F, Boolean]
     ): Stream[F, Boolean] = {
 
+      // Get importer
+      val importer = RSpaceStateManager[F].importer
+
       def broadcastStreams(ids: Seq[StatePartPath]) = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(
@@ -138,24 +143,52 @@ object LastFinalizedStateTupleSpaceRequester {
         // Import chunk to RSpace
         _ <- Stream
               .eval {
-                // Get importer
-                val importer = RSpaceStateManager[F].importer
+                // Transform values from ByteString to ByteVector
+                val historyItemsWithByteVector = historyItems.map {
+                  case (k, v) => (k, ByteVector(v.toByteArray))
+                }
+                val dataItemsWithByteVector = dataItems.map {
+                  case (k, v) => (k, ByteVector(v.toByteArray))
+                }
+
                 for {
+                  // Validate received tuple space items. Run it in parallel with writing to store.
+                  validateJob <- Lib
+                                  .time("VALIDATE STATE CHUNK")(
+                                    validateTupleSpaceItems(
+                                      historyItemsWithByteVector,
+                                      dataItemsWithByteVector,
+                                      startPath,
+                                      chunkSize = pageSize,
+                                      skip = 0,
+                                      importer.getHistoryItem
+                                    )
+                                  )
+                                  .start
+
                   // Write incoming data
-                  _ <- Lib.time("IMPORT HISTORY")(
-                        importer
-                          .setHistoryItems[ByteString](
-                            historyItems,
-                            x => ByteVector(x.toByteArray).toDirectByteBuffer
-                          )
-                      )
+                  historyJob <- Lib
+                                 .time("IMPORT HISTORY")(
+                                   importer
+                                     .setHistoryItems[ByteVector](
+                                       historyItemsWithByteVector,
+                                       _.toDirectByteBuffer
+                                     )
+                                 )
+                                 .start
                   _ <- Lib.time("IMPORT DATA")(
                         importer
-                          .setDataItems[ByteString](
-                            dataItems,
-                            x => ByteVector(x.toByteArray).toDirectByteBuffer
+                          .setDataItems[ByteVector](
+                            dataItemsWithByteVector,
+                            _.toDirectByteBuffer
                           )
                       )
+
+                  // Wait history write
+                  _ <- historyJob.join
+
+                  // Wait for validation to finish, throw if failed.
+                  _ <- validateJob.join
 
                   // Mark chunk as finished
                   _ <- st.update(_.done(startPath))
@@ -210,4 +243,26 @@ object LastFinalizedStateTupleSpaceRequester {
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)
   }
+
+  implicit val codecPar  = storage.serializePar.toCodec
+  implicit val codecBind = storage.serializeBindPattern.toCodec
+  implicit val codecPars = storage.serializePars.toCodec
+  implicit val codecCont = storage.serializeTaggedContinuation.toCodec
+
+  def validateTupleSpaceItems[F[_]: Sync](
+      historyItems: Seq[(Blake2b256Hash, ByteVector)],
+      dataItems: Seq[(Blake2b256Hash, ByteVector)],
+      startPath: Seq[(Blake2b256Hash, Option[Byte])],
+      chunkSize: Int,
+      skip: Int,
+      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
+  ) =
+    RSpaceImporter.validateStateItems[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+      historyItems,
+      dataItems,
+      startPath,
+      chunkSize,
+      skip,
+      getFromHistory
+    )
 }
