@@ -1,10 +1,13 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
-import java.nio.file.Path
 
-import cats.Parallel
 import cats.effect.Sync
+import cats.implicits._
+import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.rspace.{
   util,
   Blake2b256Hash,
@@ -16,24 +19,17 @@ import coop.rchain.rspace.{
   InsertData,
   InsertJoins
 }
+import coop.rchain.state.TrieNode
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
-
-import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
-import coop.rchain.rspace.trace.{Consume, Produce}
-
-import scala.collection.concurrent.TrieMap
-import scala.util.Random
-import cats.implicits._
-import com.google.protobuf.ByteString
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.state.{TrieExporter, TrieNode}
+import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scodec.Codec
+import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.duration._
+import scala.util.Random
 
 class HistoryRepositorySpec
     extends FlatSpec
@@ -268,5 +264,7 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
     ): F[Unit] = ???
 
     override def setRoot(key: Blake2b256Hash): F[Unit] = ???
+
+    override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] = ???
   }
 }
