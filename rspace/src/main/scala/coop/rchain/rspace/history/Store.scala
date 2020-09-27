@@ -9,6 +9,7 @@ import coop.rchain.lmdb.LMDBStore
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.rspace.Blake2b256Hash
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.bits.BitVector
 
@@ -18,6 +19,11 @@ trait Store[F[_]] {
   def get(key: ByteBuffer): F[Option[ByteBuffer]]
   def put(key: ByteBuffer, value: ByteBuffer): F[Unit]
   def put(data: Seq[(Blake2b256Hash, BitVector)]): F[Unit]
+
+  // Multiple keys (for exporter/importer)
+  def get[T](keys: Seq[Blake2b256Hash], fromBuffer: ByteBuffer => T): F[Seq[Option[T]]]
+  def put[T](keys: Seq[(Blake2b256Hash, T)], toBuffer: T => ByteBuffer): F[Unit]
+
   def close(): F[Unit]
 }
 
@@ -34,7 +40,7 @@ object StoreInstances {
     for {
       env <- Sync[F].delay {
               Env
-                .create()
+                .create(PROXY_SAFE)
                 .setMapSize(config.mapSize)
                 .setMaxDbs(config.maxDbs)
                 .setMaxReaders(config.maxReaders)
@@ -43,10 +49,8 @@ object StoreInstances {
       dbi   <- Sync[F].delay { env.openDbi("db", MDB_CREATE) }
       store = LMDBStore(env, dbi)
     } yield new Store[F] {
-      override def get(key: Blake2b256Hash): F[Option[BitVector]] = {
-        val directKey = key.bytes.toDirectByteBuffer
-        get(directKey).map(v => v.map(BitVector(_)))
-      }
+      override def get(key: Blake2b256Hash): F[Option[BitVector]] =
+        get(Seq(key), BitVector(_)).map(_.head)
 
       override def put(key: Blake2b256Hash, value: BitVector): F[Unit] = {
         val directKey   = key.bytes.toDirectByteBuffer
@@ -55,6 +59,11 @@ object StoreInstances {
       }
 
       override def get(key: ByteBuffer): F[Option[ByteBuffer]] = store.get(key)
+
+      override def get[T](
+          keys: Seq[Blake2b256Hash],
+          fromBuffer: ByteBuffer => T
+      ): F[Seq[Option[T]]] = store.get[T](keys.map(_.bytes.toDirectByteBuffer), fromBuffer)
 
       override def put(key: ByteBuffer, value: ByteBuffer): F[Unit] = store.put(key, value)
 
@@ -80,6 +89,14 @@ object StoreInstances {
         store.withWriteTxnF { txn =>
           byteBuffers.foreach { case (key, value) => putIfAbsent(txn, key, value) }
         }
+      }
+
+      override def put[T](
+          data: Seq[(Blake2b256Hash, T)],
+          toBuffer: T => ByteBuffer
+      ): F[Unit] = {
+        val rawData = data.map { case (k, v) => (k.bytes.toDirectByteBuffer, v) }
+        store.put(rawData, toBuffer)
       }
 
       override def close(): F[Unit] = store.close()

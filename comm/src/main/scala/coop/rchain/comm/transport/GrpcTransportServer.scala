@@ -4,6 +4,8 @@ import java.io.ByteArrayInputStream
 import java.nio.file.Path
 import java.util.concurrent.atomic.AtomicReference
 
+import cats.effect.concurrent.{Deferred, Ref}
+
 import scala.io.Source
 import scala.util.{Left, Right}
 import cats.implicits._
@@ -11,7 +13,8 @@ import coop.rchain.catscontrib.TaskContrib
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.comm.CommMetricsSource
+import coop.rchain.comm.transport.GrpcTransportReceiver.MessageBuffers
+import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared._
 import io.grpc.netty.GrpcSslContexts
@@ -47,13 +50,6 @@ class GrpcTransportServer(
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
 
-  private val queueScheduler =
-    Scheduler.fixedPool(
-      "tl-dispatcher-server-queue",
-      parallelism,
-      reporter = UncaughtExceptionLogger
-    )
-
   private val serverSslContextTask: Task[SslContext] =
     Task
       .evalOnce {
@@ -88,29 +84,19 @@ class GrpcTransportServer(
 
     for {
       serverSslContext <- serverSslContextTask
-      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](1024))
-      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](100))
+      messageBuffers   <- Ref.of[Task, Map[PeerNode, Deferred[Task, MessageBuffers]]](Map.empty)
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
                    serverSslContext,
                    maxMessageSize,
                    maxStreamMessageSize,
-                   tellBuffer,
-                   blobBuffer,
-                   tempFolder = tempFolder
+                   messageBuffers,
+                   (dispatchSend, dispatchBlob),
+                   tempFolder = tempFolder,
+                   parallelism = parallelism
                  )
-      tellConsumer <- Task.delay(
-                       tellBuffer
-                         .mapParallelUnordered(parallelism)(dispatchSend)
-                         .subscribe()(queueScheduler)
-                     )
-      blobConsumer <- Task.delay(
-                       blobBuffer
-                         .mapParallelUnordered(parallelism)(dispatchBlob)
-                         .subscribe()(queueScheduler)
-                     )
-    } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
+    } yield receiver
   }
 }
 
