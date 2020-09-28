@@ -55,7 +55,7 @@ lazy val projectSettings = Seq(
   ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
 
-  scapegoatVersion in ThisBuild := "1.4.2",
+  scapegoatVersion in ThisBuild >= "1.3.8",
 
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
