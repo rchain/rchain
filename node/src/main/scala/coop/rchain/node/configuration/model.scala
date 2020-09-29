@@ -16,6 +16,7 @@ import pureconfig.generic.auto._
 
 final case class NodeConf(
     standalone: Boolean,
+    devMode: Boolean,
     protocolServer: ProtocolServer,
     protocolClient: ProtocolClient,
     peersDiscovery: PeersDiscovery,

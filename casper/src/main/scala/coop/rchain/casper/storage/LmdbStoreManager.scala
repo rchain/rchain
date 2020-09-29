@@ -10,6 +10,7 @@ import coop.rchain.shared.Log
 import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import enumeratum.{Enum, EnumEntry}
 import org.lmdbjava.{DbiFlags, Env, EnvFlags}
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 
 object LmdbStoreManager {
   def apply[F[_]: Concurrent: Log](dirPath: Path, maxEnvSize: Long): F[KeyValueStoreManager[F]] =
@@ -121,7 +122,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
       // Create environment
       env <- Sync[F].delay(
               Env
-                .create()
+                .create(PROXY_SAFE)
                 .setMapSize(maxEnvSize)
                 .setMaxDbs(20)
                 // Maximum parallel readers

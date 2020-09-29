@@ -19,6 +19,7 @@ import coop.rchain.lmdb.LMDBStore
 import coop.rchain.shared.ByteStringOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags}
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import scodec.Attempt.{Failure, Successful}
 import scodec.DecodeResult
 import scodec.bits.BitVector
@@ -95,7 +96,7 @@ object LMDBDeployStorage {
           env <- Sync[F].delay {
                   val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
                   Env
-                    .create()
+                    .create(PROXY_SAFE)
                     .setMapSize(config.mapSize)
                     .setMaxDbs(config.maxDbs)
                     .setMaxReaders(config.maxReaders)
