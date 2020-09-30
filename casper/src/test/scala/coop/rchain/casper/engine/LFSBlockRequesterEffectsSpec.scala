@@ -107,7 +107,8 @@ class LFSBlockRequesterEffectsSpec
 
   def createSut[F[_]: Concurrent: Time: Log, Eff <: Effects[F]](
       startBlock: BlockMessage,
-      effects: Eff
+      effects: Eff,
+      requestTimeout: FiniteDuration
   )(test: SUT[F, Eff] => F[Unit]): F[Unit] = {
     import cats.instances.list._
 
@@ -119,6 +120,7 @@ class LFSBlockRequesterEffectsSpec
       requestStream <- LastFinalizedStateBlockRequester.stream(
                         approvedBlock,
                         responseQueue,
+                        requestTimeout,
                         effects.requestForBlock,
                         effects.containsBlockInStore,
                         effects.putBlockToStore,
@@ -148,9 +150,15 @@ class LFSBlockRequesterEffectsSpec
 
   import monix.execution.Scheduler.Implicits.global
 
-  def dagFromBlock(startBlock: BlockMessage)(f: SUT[Task, EffectsImpl[Task]] => Task[Unit]): Unit =
-    createSut[Task, EffectsImpl[Task]](startBlock, EffectsImpl[Task](Nil, Map(), Set()))(f)
-      .runSyncUnsafe(20000.seconds)
+  // Default timeout is set to large value to disable re-request messages if CI is slow.
+  def dagFromBlock(startBlock: BlockMessage, requestTimeout: FiniteDuration = 10.days)(
+      f: SUT[Task, EffectsImpl[Task]] => Task[Unit]
+  ): Unit =
+    createSut[Task, EffectsImpl[Task]](
+      startBlock,
+      EffectsImpl[Task](Nil, Map(), Set()),
+      requestTimeout
+    )(f).runSyncUnsafe(20000.seconds)
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
@@ -254,6 +262,27 @@ class LFSBlockRequesterEffectsSpec
       // All blocks should be saved
       _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5)
     } yield ()
+  }
+
+  /**
+    * Test for request timeout. This is timing test which in CI can be a problem if execution is paused.
+    *
+    * NOTE: We don't have any abstraction to test time in execution (with monix Task or cats IO).
+    *  We have LogicalTime and DiscreteTime which are just wrappers to get different "milliseconds" but are totally
+    *  disconnected from Task/IO execution notion of time (e.g. Task.sleep).
+    *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
+    *  https://github.com/rchain/rchain/issues/3001
+    */
+  it should "re-send request after timeout" in dagFromBlock(b9, requestTimeout = 300.millis) {
+    sut =>
+      import sut._
+      for {
+        // Wait for timeout to expire
+        _ <- stream.compile.drain.timeout(350.millis).onErrorHandle(_ => ())
+
+        // Request should be repeated
+        _ = eff.requests shouldBe List(hash9, hash9)
+      } yield ()
   }
 
 }

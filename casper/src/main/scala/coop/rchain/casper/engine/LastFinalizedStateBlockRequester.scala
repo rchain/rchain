@@ -87,6 +87,7 @@ object LastFinalizedStateBlockRequester {
     *
     * @param approvedBlock Last finalized block
     * @param responseQueue Handler of block messages
+    * @param requestTimeout Time after request will be resent if not received
     * @param requestForBlock Send request for block
     * @param containsBlock Check if block is in the store
     * @param putBlockToStore Add block to the store
@@ -96,6 +97,7 @@ object LastFinalizedStateBlockRequester {
   def stream[F[_]: Concurrent: Time: Log](
       approvedBlock: ApprovedBlock,
       responseQueue: Queue[F, BlockMessage],
+      requestTimeout: FiniteDuration,
       requestForBlock: BlockHash => F[Unit],
       containsBlock: BlockHash => F[Boolean],
       putBlockToStore: (BlockHash, BlockMessage) => F[Unit],
@@ -223,11 +225,10 @@ object LastFinalizedStateBlockRequester {
       /**
         * Timeout to resend block requests if response is not received.
         */
-      val timeoutDuration = 30.seconds
-      val timeoutMsg      = s"No block responses for $timeoutDuration. Resending requests."
+      val timeoutMsg = s"No block responses for $requestTimeout. Resending requests."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
-        Time[F].sleep(timeoutDuration) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
+        Time[F].sleep(requestTimeout) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
       )
       // Switch to resend if response is not triggered after timeout
       // - response message reset timeout by canceling previous stream
