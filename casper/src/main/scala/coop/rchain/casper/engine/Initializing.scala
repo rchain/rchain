@@ -142,6 +142,7 @@ class Initializing[F[_]
       blockRequestStream <- LastFinalizedStateBlockRequester.stream(
                              approvedBlock,
                              blockMessageQueue,
+                             requestTimeout = 30.seconds,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              BlockStore[F].contains,
                              BlockStore[F].put,
