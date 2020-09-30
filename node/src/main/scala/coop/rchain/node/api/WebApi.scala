@@ -56,6 +56,7 @@ object WebApi {
 
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
+      devMode: Boolean = false,
       stateManager: StateManager[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
@@ -106,7 +107,7 @@ object WebApi {
         usePreStateHash: Boolean
     ): F[ExploratoryDeployResponse] =
       BlockAPI
-        .exploratoryDeploy(term, blockHash, usePreStateHash)
+        .exploratoryDeploy(term, blockHash, usePreStateHash, devMode)
         .flatMap(_.liftToBlockApiErr)
         .map(toExploratoryResponse)
 

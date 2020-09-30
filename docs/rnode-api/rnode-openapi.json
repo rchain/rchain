@@ -1,0 +1,1426 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    },
+    "version": "0.9.25.4-1-g49ba198",
+    "title": "RChain node API",
+    "contact": {
+      "name": "RChain Cooperative",
+      "url": "https://rchain.coop",
+      "email": "info@rchain.coop"
+    },
+    "description": "Build dApps for RChain, a decentralized, economically sustainable public compute infrastructure.\n\n For background, see [test_web_api.py etc. in PR 2811 / RCHAIN-3935 released in RNode-0.9.19 2020-01-16 d581015](https://github.com/rchain/rchain/blob/dev/integration-tests/test/test_web_api.py)"
+  },
+  "tags": [
+    {
+      "name": "blocks",
+      "description": "Find and explore blocks for establishing consensus on the state of the RhoVM."
+    },
+    {
+      "name": "rhovm",
+      "description": "Deploy Rholang code and explore the RhoVM tuple space."
+    }
+  ],
+  "externalDocs": {
+    "description": "RChain Developer",
+    "url": "https://developer.rchain.coop/"
+  },
+  "host": "observer.testnet.rchain.coop",
+  "basePath": "/api",
+  "paths": {
+    "/blocks": {
+      "get": {
+        "description": "get block hash etc. for the most recent block seen by this node",
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getBlocks",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "examples": {
+              "application/json": [
+                {
+                  "blockHash": "a50b9de03600a02f823a9e16e6d24d14fb0d77c72bdec080556d8e30f43d335f",
+                  "sender": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                  "seqNum": 94997,
+                  "sig": "304502210085d6e576d1e050f15148290a956fb05f787df0071c8f170e00d8e9d903c8ff7a02205e29da8ba9551ca65e017a93efe9840bdf401384b39f1c23f7bb387c1777ed30",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600728957494,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "a6daf94398ad7ca9cc210a8b0fec49e1715a7fae92fd88671b5bdc9748d73a73"
+                  ],
+                  "blockNumber": 419921,
+                  "preStateHash": "313d85002c64a1ea0c09b9c1ef6ef8d1d1801e1c90a7bc0c782e7ea2a1328896",
+                  "postStateHash": "c750d9e5e3bc288f707b11c77c674da4d0773a3bc4ec7934af2c4872b6a4cae1",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "138049",
+                  "deployCount": 1,
+                  "faultTolerance": -1,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "383393291ad3e33caeaae118bde7caaf87067fd2ad5e620d85a95c9f5a424d11"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "b164b41c78bf288223b17ed4612fc4664b5edc01ec9ac8050b4527c6db7904a7"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "a6daf94398ad7ca9cc210a8b0fec49e1715a7fae92fd88671b5bdc9748d73a73"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "04a167a7f1f79459e1b42dc067ea2dc5f5701ef4462d6df43f1fc27592d2b279"
+                    }
+                  ]
+                }
+              ]
+            },
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/blocks/{depth}": {
+      "get": {
+        "description": "get info on recent blocks up to some depth",
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getBlocks-int",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "depth",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/blocks/{startBlockNumber}/{endBlockNumber}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getBlocks-int-int",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "startBlockNumber",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "endBlockNumber",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/LightBlockInfo"
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/deploy/{deployId}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getDeploy-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "deployId",
+            "in": "path",
+            "required": true,
+            "format": "signature",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "examples": {
+              "application/json": {
+                "blockHash": "e525dd6d8727a1ca75a13d17d0e2495370ff7ec9ae0ab5b436e60a20d9ebe698",
+                "sender": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                "seqNum": 94554,
+                "sig": "304402200390f7df4530ce9444533dc6ed9bff0fd8f7d41ccabecb52ca0747201a9c2701022069419a5d3cad82dffed4b9e987ccea165b5ff1ae38e0ac73f1e7fe212db1af39",
+                "sigAlgorithm": "secp256k1",
+                "shardId": "rchain",
+                "extraBytes": "",
+                "version": 1,
+                "timestamp": 1600740298952,
+                "headerExtraBytes": "",
+                "parentsHashList": [
+                  "af731a6bb89cda494459ee7d9f99302d340efb20630dab1ed7d7da1544707f67"
+                ],
+                "blockNumber": 420303,
+                "preStateHash": "bce2bcffacdfbfaa886e14f77fd0e7052212ddaf1a0a56e020ab24dfd859a3aa",
+                "postStateHash": "9280c60d61718791ac1fc977d57b80024c870b6314408dbda83b32e6eee11801",
+                "bodyExtraBytes": "",
+                "bonds": [
+                  {
+                    "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                    "stake": 10000032
+                  },
+                  {
+                    "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                    "stake": 10000004
+                  },
+                  {
+                    "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                    "stake": 10000002
+                  },
+                  {
+                    "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                    "stake": 10000008
+                  }
+                ],
+                "blockSize": "139617",
+                "deployCount": 1,
+                "faultTolerance": -1.0,
+                "justifications": [
+                  {
+                    "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                    "latestBlockHash": "80d9e02c30de741dc5ea21bbb5bb42afb1942046f270cf53f708536c0ac1ea22"
+                  },
+                  {
+                    "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                    "latestBlockHash": "4aa7df340f0078e707ff569d677562e828690175f40557eb952e6af4cea3f1ba"
+                  },
+                  {
+                    "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                    "latestBlockHash": "ba4c95db6d728d793bab1cb3c7022d3c39b6c703d99c4e59b781730127375650"
+                  },
+                  {
+                    "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                    "latestBlockHash": "af731a6bb89cda494459ee7d9f99302d340efb20630dab1ed7d7da1544707f67"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/LightBlockInfo"
+            }
+          },
+          "400": {
+            "description": "Bad request; e.g. couldn't find block",
+            "examples": {
+              "text/plain": "Couldn't find block containing deploy with id: 1f80ccdc2517d842e67b913f656357b3f7a54a3f7c993f6df98063417d0c680f72a666f2e8a6cb38d0591740adcbded9ad7449d26b6def78a0113e77124f96d41b"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/block/{hash}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getBlock-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "format": "hash",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "full details about requested block including results of deploys",
+            "examples": {
+              "application/json": {
+                "blockInfo": {
+                  "blockHash": "0638b0a26d4007740deb57ba0af8103e0fb93ba79d36cee537a6a052568f7422",
+                  "sender": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                  "seqNum": 95051,
+                  "sig": "304502210082ee3896ca5610e8c75a243d80d4c095a95be298d5fa8edbe1c6585b6458decf02207df0d201d977b675137560722aa7135b7622de619ad9d0068bc4a64c46663116",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600735422804,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "e64e1c44ed21bf6fabcf5832a5c77aad538783090cdb1a47342f86f674044793"
+                  ],
+                  "blockNumber": 420137,
+                  "preStateHash": "dc60dff22a2027994e87b01c896d26095b90cdd863ea1e7d63ac8e33b774f3c3",
+                  "postStateHash": "9f427235eb36679f31f6cf026c7f40550680aa1bf8af4ee7203268a54e37b1bf",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "138049",
+                  "deployCount": 1,
+                  "faultTolerance": -1,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "75c219eff5b32bccaa8f77071798396cbd1bad06188ef86f0f5d38985d8aeb5f"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "e42ac37a9878217dd3d04a8d98ecc8da8302350526dcfeb448b1aa62d2ccbcfa"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "e64e1c44ed21bf6fabcf5832a5c77aad538783090cdb1a47342f86f674044793"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "7075ffb82b96eeba9c54e0ff3b928c0f473650001765ebd5524e8094b5290026"
+                    }
+                  ]
+                },
+                "deploys": [
+                  {
+                    "deployer": "041b1a073186d2465a3e09dfd7d77765239c34e427db52cc1952025c3ca1b56e726acc714042fb8f190170bc39608ba3214b7ea873aab91700df769a60cc328754",
+                    "term": "new a in{}\n",
+                    "timestamp": 1600735421769,
+                    "sig": "304402202258eac6522a475d582d19387673322829d7b18c50efe828579dd682b6ff4bad0220195a6bc59eca8898d8ff105fa8963d5df4b238288820f8674e0fefaba9d932a5",
+                    "sigAlgorithm": "secp256k1",
+                    "phloPrice": 1,
+                    "phloLimit": 100000,
+                    "validAfterBlockNumber": 420136,
+                    "cost": 23,
+                    "errored": false,
+                    "systemDeployError": ""
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/last-finalized-block": {
+      "get": {
+        "tags": ["blocks"],
+        "operationId": "getLast-finalized-block",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/BlockInfo"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/is-finalized/{hash}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": ["blocks"],
+        "operationId": "getIs-finalized-string",
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "format": "hash",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "description": "Run rholang term in an exploratory mode where the results are not persisted in the consensus state. To get a result, send to the first new name. For example: `new return in { return!(1+1) }`.",
+        "operationId": "postExplore-deploy-body",
+        "consumes": ["text/plain"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "term",
+            "description": "Rholang term",
+            "required": true,
+            "schema": {
+              "format": "rholang",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Returned expressions and information from the block of the rhovm state on which the term was deployed.",
+            "examples": {
+              "application/json": {
+                "expr": [
+                  {
+                    "ExprMap": {
+                      "data": {
+                        "map": {
+                          "ExprMap": {
+                            "data": {
+                              "color": { "ExprString": { "data": "green" } },
+                              "size": { "ExprInt": { "data": 3 } }
+                            }
+                          }
+                        },
+                        "par": {
+                          "ExprPar": {
+                            "data": [
+                              { "ExprString": { "data": "flight" } },
+                              { "ExprString": { "data": "hotel" } }
+                            ]
+                          }
+                        },
+                        "tuple": {
+                          "ExprTuple": {
+                            "data": [
+                              { "ExprBool": { "data": true } },
+                              { "ExprString": { "data": "win!" } }
+                            ]
+                          }
+                        },
+                        "unforge": {
+                          "ExprMap": {
+                            "data": {
+                              "deploy": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgDeploy": {
+                                      "data": "3045022100b0d8e4e6328e6158864677b65de6afde392b60bc0d9eb6e5f6b24db0c2d7687e02204f96eb5d6e19fca5173ae96fb5c2bcc620d667dd71619b2d4e0d96e621dec37f"
+                                    }
+                                  }
+                                }
+                              },
+                              "deployer": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgDeployer": {
+                                      "data": "0469a91b74ae8ec486dcf365941e48440c01b8aba6f391c0b20b595efca92888e7e0372d6798d233d23abedd156dae15a634f6b8e1d5552e65f2e7f3ffc2162ddb"
+                                    }
+                                  }
+                                }
+                              },
+                              "private": {
+                                "ExprUnforg": {
+                                  "data": {
+                                    "UnforgPrivate": {
+                                      "data": "94ae814e52277fe33c16bcb78f581ceedc2dbcf979773f327b781a5ef3cf1133"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "list": {
+                          "ExprList": {
+                            "data": [
+                              { "ExprBool": { "data": true } },
+                              { "ExprBool": { "data": false } },
+                              { "ExprInt": { "data": 1 } }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  },
+                  { "ExprBytes": { "data": "deadbeef" } },
+                  {
+                    "ExprUri": {
+                      "data": "rho:id:3xagffydedp5qq9yb76udp7dsdxpbd9fyryrd8b7wotkkrru65zpps"
+                    }
+                  },
+                  { "ExprInt": { "data": 123 } },
+                  { "ExprString": { "data": "abc" } },
+                  { "ExprBool": { "data": true } }
+                ],
+                "block": {
+                  "blockHash": "9be0829cbcbc9c9331453f4a089f8c7d77bdb98727bc7de7426eada4f6b35c33",
+                  "sender": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                  "seqNum": 94989,
+                  "sig": "3045022100f36533f52ba93e1d1ef4c521a146b4bb15d1f4c636ab0f7bd75ab2ef011d68f402204104b86224f58cf74ec889db2293e00b94ab83d0a9abbd7092473b5528da2d03",
+                  "sigAlgorithm": "secp256k1",
+                  "shardId": "rchain",
+                  "extraBytes": "",
+                  "version": 1,
+                  "timestamp": 1600791827635,
+                  "headerExtraBytes": "",
+                  "parentsHashList": [
+                    "dfa6e7adbfd925ff2ee4f54debf1b79537e7559b45dacd47a1f36ee147566e62"
+                  ],
+                  "blockNumber": 422043,
+                  "preStateHash": "286dea1f185713b4219d1e599187b9a3eb3dff5bb4f4c1e2ea9cbc3490d9ebd0",
+                  "postStateHash": "3574ea1ec6a6b6d62b1211f43da545a94f6fc045ff1238448f6b77e1c6bade40",
+                  "bodyExtraBytes": "",
+                  "bonds": [
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "stake": 10000032
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "stake": 10000004
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "stake": 10000002
+                    },
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "stake": 10000008
+                    }
+                  ],
+                  "blockSize": "139522",
+                  "deployCount": 1,
+                  "faultTolerance": -0.49999896,
+                  "justifications": [
+                    {
+                      "validator": "04bcca4904285db7585e5eea2e70300f23df6332a1fff6ceb718adb2962fca7da1618a59ebf4b423e014584b76b9cc8f02423d39989076963b9845ff5fef7db692",
+                      "latestBlockHash": "72a867b668c6ed35e0bd4330c1486d6938f4ead9095eba6fdb120535cad7a1cc"
+                    },
+                    {
+                      "validator": "04953bfb7421d530712c507f7f060b9efe636816659add5544949170719c3b3b3c2256076c953b549f3c098421de603d27ecef2b9d208e705dbb90b5972eae174a",
+                      "latestBlockHash": "6b4eee77d031aad2be59c2f5bd053662b1e5508ab157331011ee10232d6be9f0"
+                    },
+                    {
+                      "validator": "0466fe01872364f0f26be110ba5201383ec450c458edeb862b1b2520b6ef042e91c60094a0c4a98b2d80bbd64d252e58f3b749a4e8d75976b51e441ada4ce667f6",
+                      "latestBlockHash": "cb6a991d3bc2b48e53dfe0d45f222caa507ab71c355cadc09c7c67a26c258c41"
+                    },
+                    {
+                      "validator": "0468253959709c06610a32b7607cf489fd0f56602f8c6fbef1c00384ae8e8be9cc43987277a05e13c2f1764a92e9d44e3577ccc9d5c447cef9caf1b77129481133",
+                      "latestBlockHash": "dfa6e7adbfd925ff2ee4f54debf1b79537e7559b45dacd47a1f36ee147566e62"
+                    }
+                  ]
+                }
+              }
+            },
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/explore-deploy-by-block-hash": {
+      "post": {
+        "tags": ["rhovm"],
+        "description": "Run an exploratory deploy as of a specific block's state.",
+        "operationId": "postExplore-deploy-by-block-hash-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "ExploreDeployRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/ExploreDeployRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/ExploratoryDeployResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/prepare-deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "description": "Get ids of new names to be allocated in an upcoming deploy; for example, in case the term needs to include a signature over them.",
+        "operationId": "postPrepare-deploy-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "PrepareRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/PrepareRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/PrepareResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/deploy": {
+      "post": {
+        "tags": ["rhovm"],
+        "description": "Request execution of a rholang term on the RhoVM.",
+        "externalDocs": {
+          "description": "DeployValidationSpec.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/casper/src/test/scala/coop/rchain/casper/util/DeployValidationSpec.scala"
+        },
+        "operationId": "postDeploy-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "request",
+            "description": "A DeployRequest consists of a DeployData plus a signature compouted over the protobuf serialization of the DeployData. The secp256k1 algorithm indicates DER format; secp256k1:eth indicates RS format.",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DeployRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success: request was correctly formatted and signed. Note that this does not indicate successful execution.\nUse the signature as deployId in /deploy/ to find the hash of the block in which this deploy was attempted and then GET /block/{hash} to find `DeployInfo` such as `systemDeployError`, `errored` and `cost`.\n",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "400": {
+            "description": "bad request: Invalid signature or rholang syntax error",
+            "examples": {
+              "text/plain": "syntax error(): } at 3:1-3:2"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    },
+    "/data-at-name": {
+      "post": {
+        "tags": ["rhovm"],
+        "operationId": "postData-at-name-body",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "DataRequest",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/DataRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/DataResponse"
+            }
+          }
+        },
+        "deprecated": false
+      }
+    }
+  },
+  "definitions": {
+    "RhoExpr": {
+      "type": "object",
+      "properties": {
+        "ExprMap": {
+          "$ref": "#/definitions/ExprMap"
+        },
+        "ExprList": {
+          "$ref": "#/definitions/ExprList"
+        },
+        "ExprTuple": {
+          "$ref": "#/definitions/ExprTuple"
+        },
+        "ExprPar": {
+          "$ref": "#/definitions/ExprPar"
+        },
+        "ExprUnforg": {
+          "$ref": "#/definitions/ExprUnforg"
+        },
+        "ExprString": {
+          "$ref": "#/definitions/ExprString"
+        },
+        "ExprInt": {
+          "$ref": "#/definitions/ExprInt"
+        },
+        "ExprBool": {
+          "$ref": "#/definitions/ExprBool"
+        },
+        "ExprUri": {
+          "$ref": "#/definitions/ExprUri"
+        },
+        "ExprBytes": {
+          "$ref": "#/definitions/ExprBytes"
+        }
+      },
+      "description": "RhoExpr"
+    },
+    "ExprList": {
+      "type": "object",
+      "required": ["ExprList"],
+      "properties": {
+        "ExprList": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RhoExpr"
+              }
+            }
+          }
+        }
+      },
+      "description": "ExprList"
+    },
+    "ExprPar": {
+      "type": "object",
+      "required": ["ExprPar"],
+      "properties": {
+        "ExprPar": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RhoExpr"
+              }
+            }
+          }
+        }
+      },
+      "description": "ExprPar"
+    },
+    "BondInfo": {
+      "type": "object",
+      "properties": {
+        "validator": {
+          "format": "public key",
+          "type": "string"
+        },
+        "stake": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "description": "BondInfo"
+    },
+    "ExprUri": {
+      "type": "object",
+      "required": ["ExprUri"],
+      "properties": {
+        "ExprUri": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "format": "URI",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "ExprUri"
+    },
+    "ExprBytes": {
+      "type": "object",
+      "required": ["ExprBytes"],
+      "properties": {
+        "ExprBytes": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "format": "hex",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "ExprBytes"
+    },
+    "PrepareRequest": {
+      "type": "object",
+      "required": ["deployer", "nameQty", "timestamp"],
+      "properties": {
+        "deployer": {
+          "format": "public key",
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "nameQty": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "PrepareRequest"
+    },
+    "RhoUnforg": {
+      "type": "object",
+      "properties": {
+        "UnforgDeploy": {
+          "$ref": "#/definitions/UnforgDeploy"
+        },
+        "UnforgDeployer": {
+          "$ref": "#/definitions/UnforgDeployer"
+        },
+        "UnforgPrivate": {
+          "$ref": "#/definitions/UnforgPrivate"
+        }
+      },
+      "description": "RhoUnforg"
+    },
+    "UnforgPrivate": {
+      "type": "object",
+      "required": ["data"],
+      "properties": {
+        "data": {
+          "type": "string",
+          "format": "hex"
+        }
+      },
+      "description": "UnforgPrivate"
+    },
+    "ExploratoryDeployResponse": {
+      "type": "object",
+      "required": ["block", "expr"],
+      "properties": {
+        "expr": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RhoExpr"
+          }
+        },
+        "block": {
+          "$ref": "#/definitions/LightBlockInfo"
+        }
+      },
+      "description": "ExploratoryDeployResponse"
+    },
+    "DataResponse": {
+      "type": "object",
+      "required": ["exprs", "length"],
+      "properties": {
+        "exprs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RhoExprWithBlock"
+          }
+        },
+        "length": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "DataResponse"
+    },
+    "PrepareResponse": {
+      "type": "object",
+      "required": ["names", "seqNumber"],
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "format": "hex",
+            "type": "string"
+          }
+        },
+        "seqNumber": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "PrepareResponse"
+    },
+    "ExprString": {
+      "type": "object",
+      "required": ["ExprString"],
+      "properties": {
+        "ExprString": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "ExprString"
+    },
+    "RhoExprWithBlock": {
+      "type": "object",
+      "required": ["block", "expr"],
+      "properties": {
+        "expr": {
+          "$ref": "#/definitions/RhoExpr"
+        },
+        "block": {
+          "$ref": "#/definitions/LightBlockInfo"
+        }
+      },
+      "description": "RhoExprWithBlock"
+    },
+    "LightBlockInfo": {
+      "type": "object",
+      "properties": {
+        "blockHash": {
+          "format": "hash",
+          "type": "string"
+        },
+        "justifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/JustificationInfo"
+          }
+        },
+        "timestamp": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "extraBytes": {
+          "type": "string",
+          "description": "com.google.protobuf.ByteString"
+        },
+        "bonds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BondInfo"
+          }
+        },
+        "parentsHashList": {
+          "type": "array",
+          "items": {
+            "format": "hash",
+            "type": "string"
+          }
+        },
+        "shardId": {
+          "type": "string"
+        },
+        "sigAlgorithm": {
+          "type": "string",
+          "enum": ["secp256k1"]
+        },
+        "sig": {
+          "format": "signature",
+          "type": "string"
+        },
+        "blockSize": {
+          "format": "Long integer",
+          "type": "string"
+        },
+        "postStateHash": {
+          "format": "hash",
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "seqNum": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "blockNumber": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sender": {
+          "format": "public key",
+          "type": "string"
+        },
+        "headerExtraBytes": {
+          "type": "string",
+          "description": "com.google.protobuf.ByteString"
+        },
+        "bodyExtraBytes": {
+          "type": "string",
+          "description": "com.google.protobuf.ByteString"
+        },
+        "faultTolerance": {
+          "type": "number",
+          "format": "float"
+        },
+        "preStateHash": {
+          "format": "hash",
+          "type": "string"
+        },
+        "deployCount": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "LightBlockInfo"
+    },
+    "ExploreDeployRequest": {
+      "type": "object",
+      "required": ["blockHash", "term", "usePreStateHash"],
+      "properties": {
+        "term": {
+          "format": "rholang",
+          "type": "string"
+        },
+        "blockHash": {
+          "format": "hash",
+          "type": "string"
+        },
+        "usePreStateHash": {
+          "type": "boolean"
+        }
+      },
+      "description": "ExploreDeployRequest"
+    },
+    "DeployData": {
+      "type": "object",
+      "required": [
+        "phloLimit",
+        "phloPrice",
+        "term",
+        "timestamp",
+        "validAfterBlockNumber"
+      ],
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "description": "conventionally in milliseconds though not constrained by real time",
+          "format": "int64"
+        },
+        "term": {
+          "type": "string",
+          "format": "rholang"
+        },
+        "phloLimit": {
+          "type": "integer",
+          "description": "bound on computation to be paid for.",
+          "format": "int64"
+        },
+        "phloPrice": {
+          "type": "integer",
+          "description": "price (in 10^-8 REV) of each unit of computation. typically 1",
+          "format": "int64"
+        },
+        "validAfterBlockNumber": {
+          "type": "integer",
+          "description": "number of a recent block",
+          "format": "int64"
+        }
+      },
+      "description": "DeployData"
+    },
+    "DeployInfo": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "systemDeployError": {
+          "description": "empty string indicates lack of error",
+          "type": "string"
+        },
+        "term": {
+          "format": "rholang",
+          "type": "string"
+        },
+        "phloLimit": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "sigAlgorithm": {
+          "type": "string",
+          "enum": ["secp256k1", "secp256k1:eth"]
+        },
+        "deployer": {
+          "format": "public key",
+          "type": "string"
+        },
+        "sig": {
+          "format": "signature",
+          "type": "string"
+        },
+        "errored": {
+          "type": "boolean"
+        },
+        "cost": {
+          "type": "integer",
+          "description": "in units of 10^-8 REV",
+          "format": "int64"
+        },
+        "phloPrice": {
+          "type": "integer",
+          "description": "in units of 10^-8 REV",
+          "format": "int64"
+        },
+        "validAfterBlockNumber": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "description": "DeployInfo"
+    },
+    "JustificationInfo": {
+      "type": "object",
+      "properties": {
+        "validator": {
+          "format": "public key",
+          "type": "string"
+        },
+        "latestBlockHash": {
+          "format": "hash",
+          "type": "string"
+        }
+      },
+      "description": "JustificationInfo"
+    },
+    "DeployRequest": {
+      "type": "object",
+      "required": ["data", "deployer", "sigAlgorithm", "signature"],
+      "properties": {
+        "data": {
+          "$ref": "#/definitions/DeployData"
+        },
+        "deployer": {
+          "type": "string",
+          "format": "public key"
+        },
+        "signature": {
+          "type": "string",
+          "format": "signature"
+        },
+        "sigAlgorithm": {
+          "type": "string",
+          "enum": ["secp256k1", "secp256k1:eth"]
+        }
+      },
+      "example": {
+        "data": {
+          "term": "new world in {\n  world!(\"Hello!\")\n}\n",
+          "timestamp": 1600740233668,
+          "phloPrice": 1,
+          "phloLimit": 250000,
+          "validAfterBlockNumber": 420299
+        },
+        "sigAlgorithm": "secp256k1:eth",
+        "signature": "1f80ccdc2517d842e67b913f656357b3f7a54a3f7c993f6df98063417d0c680f72a666f2e8a6cb38d0591740adcbded9ad7449d26b6def78a0113e77124f96d41b",
+        "deployer": "043c9c39d032925384f25413d553e91c261555384589329595e9c6956055719b54839704948477e4f0d4743cfdf1635bd497fa44995cea1c5c75971cf779da11b0"
+      },
+      "description": "DeployRequest"
+    },
+    "ExprBool": {
+      "type": "object",
+      "required": ["ExprBool"],
+      "properties": {
+        "ExprBool": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      "example": { "ExprBool": { "data": true } },
+      "description": "ExprBool"
+    },
+    "UnforgDeploy": {
+      "type": "object",
+      "required": ["UnforgDeploy"],
+      "properties": {
+        "UnforgDeploy": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "format": "signature",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "example": {
+        "UnforgDeploy": {
+          "data": "3045022100aeec7bd3dfdbf5605d8292a1202b767a430db6c9c17d904a250577d77b48b3b002207cf796702d70c60ee40690badc5c387a0491b0fed8fb4419c1977097773d201e"
+        }
+      },
+      "description": "UnforgDeploy"
+    },
+    "BlockInfo": {
+      "type": "object",
+      "properties": {
+        "blockInfo": {
+          "$ref": "#/definitions/LightBlockInfo"
+        },
+        "deploys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DeployInfo"
+          }
+        }
+      },
+      "description": "BlockInfo"
+    },
+    "ExprMap": {
+      "type": "object",
+      "required": ["ExprMap"],
+      "properties": {
+        "ExprMap": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/RhoExpr"
+              }
+            }
+          }
+        }
+      },
+      "example": {
+        "ExprMap": {
+          "data": {
+            "color": {
+              "ExprString": {
+                "data": "green"
+              }
+            },
+            "size": {
+              "ExprInt": {
+                "data": 3
+              }
+            }
+          }
+        }
+      },
+      "description": "ExprMap"
+    },
+    "UnforgDeployer": {
+      "type": "object",
+      "required": ["UnforgDeployer"],
+      "properties": {
+        "UnforgDeployer": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "format": "public key",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "example": {
+        "UnforgDeployer": {
+          "data": "043967e3659e718deb7b08672007f01b64108d50c0d93d890a4b7fe6ebd293afa50ad6812ac9c902896b61b1aa37be475fceed3e64a607233448f46f76d16e2877"
+        }
+      },
+      "description": "UnforgDeployer"
+    },
+    "ExprUnforg": {
+      "type": "object",
+      "required": ["ExprUnforg"],
+      "properties": {
+        "ExprUnforg": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "$ref": "#/definitions/RhoUnforg"
+            }
+          }
+        }
+      },
+      "example": {
+        "ExprUnforg": {
+          "data": {
+            "UnforgPrivate": {
+              "data": "4e8cb2797b6e2e35b66b487268c3aaeea49b6d35aca976acf33ac02797beba1e"
+            }
+          }
+        }
+      },
+      "description": "ExprUnforg"
+    },
+    "ExprInt": {
+      "type": "object",
+      "required": ["ExprInt"],
+      "properties": {
+        "ExprInt": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "example": { "ExprInt": { "data": 123 } },
+      "description": "ExprInt"
+    },
+    "DataRequest": {
+      "type": "object",
+      "required": ["depth", "name"],
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/RhoUnforg"
+        },
+        "depth": {
+          "type": "integer",
+          "format": "int32"
+        }
+      },
+      "description": "DataRequest"
+    },
+    "ExprTuple": {
+      "type": "object",
+      "required": ["ExprTuple"],
+      "properties": {
+        "ExprTuple": {
+          "type": "object",
+          "required": ["data"],
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/RhoExpr"
+              }
+            }
+          }
+        }
+      },
+      "example": {
+        "ExprTuple": {
+          "data": [
+            { "ExprBool": { "data": true } },
+            { "ExprString": { "data": "win!" } }
+          ]
+        }
+      },
+      "description": "ExprTuple"
+    }
+  }
+}

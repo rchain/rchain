@@ -43,9 +43,22 @@ import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuati
 import coop.rchain.node.NodeRuntime.{apply => _, _}
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
-import coop.rchain.node.api._
+import coop.rchain.node.api.{
+  acquireExternalServer,
+  acquireInternalServer,
+  AdminWebApi,
+  DeployGrpcServiceV1,
+  ProposeGrpcServiceV1,
+  ReplGrpcService,
+  WebApi
+}
 import coop.rchain.node.configuration.NodeConf
-import coop.rchain.node.diagnostics.{NewPrometheusReporter, _}
+import coop.rchain.node.diagnostics.{
+  BatchInfluxDBReporter,
+  NewPrometheusReporter,
+  Trace,
+  UdpInfluxDBReporter
+}
 import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
@@ -585,37 +598,35 @@ class NodeRuntime private[node] (
                             )(grpcScheduler, rPConfAsk, log, metrics)
                           )
 
-      externalApiServer <- api
-                            .acquireExternalServer[Task](
-                              //conf.apiServer
-                              nodeConf.apiServer.host,
-                              nodeConf.apiServer.portGrpcExternal,
-                              grpcScheduler,
-                              apiServers.deploy,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                              nodeConf.apiServer.keepAliveTime,
-                              nodeConf.apiServer.keepAliveTimeout,
-                              nodeConf.apiServer.permitKeepAliveTime,
-                              nodeConf.apiServer.maxConnectionIdle,
-                              nodeConf.apiServer.maxConnectionAge,
-                              nodeConf.apiServer.maxConnectionAgeGrace
-                            )
-      internalApiServer <- api
-                            .acquireInternalServer(
-                              nodeConf.apiServer.host,
-                              nodeConf.apiServer.portGrpcInternal,
-                              grpcScheduler,
-                              apiServers.repl,
-                              apiServers.deploy,
-                              apiServers.propose,
-                              nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                              nodeConf.apiServer.keepAliveTime,
-                              nodeConf.apiServer.keepAliveTimeout,
-                              nodeConf.apiServer.permitKeepAliveTime,
-                              nodeConf.apiServer.maxConnectionIdle,
-                              nodeConf.apiServer.maxConnectionAge,
-                              nodeConf.apiServer.maxConnectionAgeGrace
-                            )
+      externalApiServer <- acquireExternalServer[Task](
+                            //conf.apiServer
+                            nodeConf.apiServer.host,
+                            nodeConf.apiServer.portGrpcExternal,
+                            grpcScheduler,
+                            apiServers.deploy,
+                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                            nodeConf.apiServer.keepAliveTime,
+                            nodeConf.apiServer.keepAliveTimeout,
+                            nodeConf.apiServer.permitKeepAliveTime,
+                            nodeConf.apiServer.maxConnectionIdle,
+                            nodeConf.apiServer.maxConnectionAge,
+                            nodeConf.apiServer.maxConnectionAgeGrace
+                          )
+      internalApiServer <- acquireInternalServer(
+                            nodeConf.apiServer.host,
+                            nodeConf.apiServer.portGrpcInternal,
+                            grpcScheduler,
+                            apiServers.repl,
+                            apiServers.deploy,
+                            apiServers.propose,
+                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+                            nodeConf.apiServer.keepAliveTime,
+                            nodeConf.apiServer.keepAliveTimeout,
+                            nodeConf.apiServer.permitKeepAliveTime,
+                            nodeConf.apiServer.maxConnectionIdle,
+                            nodeConf.apiServer.maxConnectionAge,
+                            nodeConf.apiServer.maxConnectionAgeGrace
+                          )
 
       prometheusReporter = new NewPrometheusReporter()
       httpServerFiber = aquireHttpServer(
@@ -911,7 +922,8 @@ object NodeRuntime {
           evalRuntime,
           blockApiLock,
           scheduler,
-          conf.apiServer.maxBlocksLimit
+          conf.apiServer.maxBlocksLimit,
+          conf.devMode
         )(
           blockStore,
           oracle,
@@ -959,7 +971,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl(conf.apiServer.maxBlocksLimit, rnodeStateManager)
+        new WebApiImpl[F](conf.apiServer.maxBlocksLimit, conf.devMode, rnodeStateManager)
       }
       adminWebApi = {
         implicit val ec     = engineCell
@@ -993,7 +1005,8 @@ object NodeRuntime {
       runtime: Runtime[F],
       blockApiLock: Semaphore[F],
       scheduler: Scheduler,
-      apiMaxBlocksLimit: Int
+      apiMaxBlocksLimit: Int,
+      devMode: Boolean
   )(
       implicit
       blockStore: BlockStore[F],
@@ -1010,8 +1023,9 @@ object NodeRuntime {
   ): APIServers = {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService.instance(runtime, s)
-    val deploy                = DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper)
-    val propose               = ProposeGrpcServiceV1.instance(blockApiLock)
+    val deploy =
+      DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper, devMode)
+    val propose = ProposeGrpcServiceV1.instance(blockApiLock)
     APIServers(repl, propose, deploy)
   }
 }

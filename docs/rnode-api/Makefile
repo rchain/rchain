@@ -12,6 +12,9 @@ DIAG_PROTOS=../../node/src/main/protobuf
 
 EXTERNAL=$(MODELS)/target/protobuf_external
 
+rnode-openapi-schema.ts:
+	npx @manifoldco/swagger-to-ts rnode-openapi.json --output rnode-openapi-schema.ts
+
 index.md: $(DEPLOY_PROTOS)/CasperMessage.proto $(DEPLOY_PROTOS)/RhoTypes.proto \
 		$(DIAG_PROTOS)/diagnostics.proto
 	$(PROTOC) -I$(EXTERNAL) -I$(DIAG_PROTOS) -I$(DEPLOY_PROTOS) --plugin=$(PGENDOC) \

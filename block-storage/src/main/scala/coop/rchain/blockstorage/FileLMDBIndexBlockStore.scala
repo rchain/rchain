@@ -28,6 +28,7 @@ import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.{AtomicMonadState, Log}
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava._
 
 import scala.util.matching.Regex
@@ -335,7 +336,7 @@ object FileLMDBIndexBlockStore {
       env <- Sync[F].delay {
               val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
               Env
-                .create()
+                .create(PROXY_SAFE)
                 .setMapSize(config.mapSize)
                 .setMaxDbs(config.maxDbs)
                 .setMaxReaders(config.maxReaders)
