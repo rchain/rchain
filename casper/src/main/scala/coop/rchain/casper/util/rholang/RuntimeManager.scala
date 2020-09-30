@@ -300,7 +300,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                                   runtime,
                                   startHash,
                                   terms,
-                                  processDeployWithCostAccounting(runtime)
+                                  processDeploy(runtime)
                                 )
           (startHash, processedDeploys) = deployProcessResult
           systemDeployProcessResult <- {
@@ -358,7 +358,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
                      startHash,
                      terms,
                      systemDeploys,
-                     replayDeploy(runtime, withCostAccounting = !isGenesis),
+                     replayDeploy(runtime, withCostAccounting = false),
                      replaySystemDeploy(runtime, blockData)
                    )
         } yield result
@@ -381,70 +381,70 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
   }
-
-  private def processDeployWithCostAccounting(
-      runtime: Runtime[F]
-  )(deploy: Signed[DeployData])(implicit Log: Log[F]) = {
-    import cats.instances.vector._
-    EitherT(
-      WriterT(
-        Log.info(
-          s"PreCharging ${Base16.encode(deploy.pk.bytes)} for ${deploy.data.totalPhloCharge}"
-        ) >>
-          /* execute pre-charge */
-          playSystemDeployInternal(runtime)(
-            new PreChargeDeploy(
-              deploy.data.totalPhloCharge,
-              deploy.pk,
-              SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
-            )
-          )
-      )
-    ).semiflatMap( // execute user deploy
-        _ => WriterT(processDeploy(runtime)(deploy).map(pd => (pd.deployLog.toVector, pd)))
-      )
-      .flatTap(
-        pd =>
-          /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
-          EitherT(
-            WriterT(
-              Log.info(
-                s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
-              ) >>
-                playSystemDeployInternal(runtime)(
-                  new RefundDeploy(
-                    pd.refundAmount,
-                    SystemDeployUtil.generateRefundDeployRandomSeed(deploy)
-                  )
-                )
-            )
-          ).leftSemiflatMap(
-            error =>
-              /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
-                .liftF(
-                  Log.warn(s"Refund failure '${error.errorMsg}'") >> GasRefundFailure(
-                    error.errorMsg
-                  ).raiseError
-                )
-          )
-      )
-      .onError {
-        case SystemDeployError(errorMsg) =>
-          EitherT.right(WriterT.liftF(Log.warn(s"Deploy failure '$errorMsg'")))
-      }
-      .valueOr {
-        /* we can end up here if any of the PreCharge threw an user error
-        we still keep the logs (from the underlying WriterT) which we'll fill in the next step.
-        We're assigning it 0 cost - replay should reach the same state
-         */
-        case SystemDeployError(errorMsg) =>
-          ProcessedDeploy
-            .empty(deploy)
-            .copy(systemDeployError = Some(errorMsg))
-      }
-      .run // run the computation and produce the logs
-      .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
-  }
+//
+//  private def processDeployWithCostAccounting(
+//      runtime: Runtime[F]
+//  )(deploy: Signed[DeployData])(implicit Log: Log[F]) = {
+//    import cats.instances.vector._
+//    EitherT(
+//      WriterT(
+//        Log.info(
+//          s"PreCharging ${Base16.encode(deploy.pk.bytes)} for ${deploy.data.totalPhloCharge}"
+//        ) >>
+//          /* execute pre-charge */
+//          playSystemDeployInternal(runtime)(
+//            new PreChargeDeploy(
+//              deploy.data.totalPhloCharge,
+//              deploy.pk,
+//              SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
+//            )
+//          )
+//      )
+//    ).semiflatMap( // execute user deploy
+//        _ => WriterT(processDeploy(runtime)(deploy).map(pd => (pd.deployLog.toVector, pd)))
+//      )
+//      .flatTap(
+//        pd =>
+//          /*execute Refund as a side effect (keeping the logs and the possible error but discarding result)*/
+//          EitherT(
+//            WriterT(
+//              Log.info(
+//                s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
+//              ) >>
+//                playSystemDeployInternal(runtime)(
+//                  new RefundDeploy(
+//                    pd.refundAmount,
+//                    SystemDeployUtil.generateRefundDeployRandomSeed(deploy)
+//                  )
+//                )
+//            )
+//          ).leftSemiflatMap(
+//            error =>
+//              /*If pre-charge succeeds and refund fails, it's a platform error and we should signal it with raiseError*/ WriterT
+//                .liftF(
+//                  Log.warn(s"Refund failure '${error.errorMsg}'") >> GasRefundFailure(
+//                    error.errorMsg
+//                  ).raiseError
+//                )
+//          )
+//      )
+//      .onError {
+//        case SystemDeployError(errorMsg) =>
+//          EitherT.right(WriterT.liftF(Log.warn(s"Deploy failure '$errorMsg'")))
+//      }
+//      .valueOr {
+//        /* we can end up here if any of the PreCharge threw an user error
+//        we still keep the logs (from the underlying WriterT) which we'll fill in the next step.
+//        We're assigning it 0 cost - replay should reach the same state
+//         */
+//        case SystemDeployError(errorMsg) =>
+//          ProcessedDeploy
+//            .empty(deploy)
+//            .copy(systemDeployError = Some(errorMsg))
+//      }
+//      .run // run the computation and produce the logs
+//      .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
+//  }
 
   private def processDeploy(runtime: Runtime[F])(
       deploy: Signed[DeployData]
