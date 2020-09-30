@@ -158,7 +158,10 @@ class LFSBlockRequesterEffectsSpec
       startBlock,
       EffectsImpl[Task](Nil, Map(), Set()),
       requestTimeout
-    )(f).runSyncUnsafe(20000.seconds)
+    )(f)
+    // These tests should be executed in milliseconds or maximum seconds,
+    //  but large timeout is because of CI which can pause execution.
+      .runSyncUnsafe(timeout = 3.minutes)
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
