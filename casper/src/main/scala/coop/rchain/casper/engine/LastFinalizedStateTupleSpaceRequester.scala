@@ -2,6 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.casper.engine.LastFinalizedStateTupleSpaceRequester.pageSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -79,9 +80,19 @@ object LastFinalizedStateTupleSpaceRequester {
     * @param tupleSpaceMessageQueue Handler of tuple space messages
     * @return fs2.Stream processing all tuple space state
     */
-  def stream[F[_]: Concurrent: Time: RSpaceStateManager: CommUtil: Log: RPConfAsk: TransportLayer](
+  def stream[F[_]: Concurrent: Time: Log](
       approvedBlock: ApprovedBlock,
-      tupleSpaceMessageQueue: Queue[F, StoreItemsMessage]
+      tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
+      requestForStoreItem: (StatePartPath, Int) => F[Unit],
+      stateImporter: RSpaceImporter[F],
+      validateTupleSpaceItems: (
+          Seq[(Blake2b256Hash, ByteVector)],
+          Seq[(Blake2b256Hash, ByteVector)],
+          Seq[(Blake2b256Hash, Option[Byte])],
+          Int,
+          Int,
+          Blake2b256Hash => F[Option[ByteVector]]
+      ) => F[Unit]
   ): F[Stream[F, Boolean]] = {
 
     def createStream(
@@ -89,16 +100,13 @@ object LastFinalizedStateTupleSpaceRequester {
         requestQueue: Queue[F, Boolean]
     ): Stream[F, Boolean] = {
 
-      // Get importer
-      val importer = RSpaceStateManager[F].importer
-
       def broadcastStreams(ids: Seq[StatePartPath]) = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(
           x =>
             Stream.eval(
-              Log[F].info(s"Sending StoreItemsRequest to bootstrap") *>
-                TransportLayer[F].sendToBootstrap(StoreItemsMessageRequest(x, 0, pageSize).toProto)
+              Log[F]
+                .info(s"Sending StoreItemsRequest to bootstrap") *> requestForStoreItem(x, pageSize)
             )
         )
         // Create stream if requests
@@ -157,22 +165,22 @@ object LastFinalizedStateTupleSpaceRequester {
                           historyItemsWithByteVector,
                           dataItemsWithByteVector,
                           startPath,
-                          chunkSize = pageSize,
-                          skip = 0,
-                          importer.getHistoryItem
+                          pageSize,
+                          0,
+                          stateImporter.getHistoryItem
                         )
                       )
 
                   // Write incoming data
                   _ <- Lib.time("IMPORT HISTORY")(
-                        importer
+                        stateImporter
                           .setHistoryItems[ByteVector](
                             historyItemsWithByteVector,
                             _.toDirectByteBuffer
                           )
                       )
                   _ <- Lib.time("IMPORT DATA")(
-                        importer
+                        stateImporter
                           .setDataItems[ByteVector](
                             dataItemsWithByteVector,
                             _.toDirectByteBuffer
@@ -214,10 +222,9 @@ object LastFinalizedStateTupleSpaceRequester {
       ProtoUtil.postStateHash(approvedBlock.candidate.block)
     )
     val startRequest: StatePartPath = Seq((stateHash, None))
-    val importer                    = RSpaceStateManager[F].importer
     for {
       // Write last finalized state root
-      _ <- importer.setRoot(stateHash)
+      _ <- stateImporter.setRoot(stateHash)
 
       // Requester state
       st <- SignallingRef[F, ST[StatePartPath]](ST(Seq(startRequest)))
@@ -232,26 +239,4 @@ object LastFinalizedStateTupleSpaceRequester {
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)
   }
-
-  implicit val codecPar  = storage.serializePar.toCodec
-  implicit val codecBind = storage.serializeBindPattern.toCodec
-  implicit val codecPars = storage.serializePars.toCodec
-  implicit val codecCont = storage.serializeTaggedContinuation.toCodec
-
-  def validateTupleSpaceItems[F[_]: Sync](
-      historyItems: Seq[(Blake2b256Hash, ByteVector)],
-      dataItems: Seq[(Blake2b256Hash, ByteVector)],
-      startPath: Seq[(Blake2b256Hash, Option[Byte])],
-      chunkSize: Int,
-      skip: Int,
-      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
-  ) =
-    RSpaceImporter.validateStateItems[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-      historyItems,
-      dataItems,
-      startPath,
-      chunkSize,
-      skip,
-      getFromHistory
-    )
 }

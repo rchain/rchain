@@ -22,8 +22,10 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rholang.interpreter.storage
+import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared
 import coop.rchain.shared._
 import fs2.concurrent.Queue
@@ -150,9 +152,28 @@ class Initializing[F[_]
                            )
 
       // Request tuple space state for Last Finalized State
+      stateValidator = {
+        implicit val codecPar  = storage.serializePar.toCodec
+        implicit val codecBind = storage.serializeBindPattern.toCodec
+        implicit val codecPars = storage.serializePars.toCodec
+        implicit val codecCont = storage.serializeTaggedContinuation.toCodec
+        RSpaceImporter.validateStateItems[
+          F,
+          Par,
+          BindPattern,
+          ListParWithRandom,
+          TaggedContinuation
+        ] _
+      }
       tupleSpaceStream <- LastFinalizedStateTupleSpaceRequester.stream(
                            approvedBlock,
-                           tupleSpaceQueue
+                           tupleSpaceQueue,
+                           (statePartPath, pageSize) =>
+                             TransportLayer[F].sendToBootstrap(
+                               StoreItemsMessageRequest(statePartPath, 0, pageSize).toProto
+                             ),
+                           RSpaceStateManager[F].importer,
+                           stateValidator
                          )
 
       // Receive the blocks and after populate the DAG
