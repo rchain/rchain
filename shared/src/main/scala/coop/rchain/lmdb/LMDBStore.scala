@@ -5,7 +5,7 @@ import java.nio.ByteBuffer
 import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.shared.Resources.withResource
-import org.lmdbjava.{CursorIterator, Dbi, Env, Txn}
+import org.lmdbjava.{CursorIterable, Dbi, Env, Txn}
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -87,10 +87,10 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       }
     }
 
-  def iterate[R](f: Iterator[CursorIterator.KeyVal[ByteBuffer]] => R): F[R] =
+  def iterate[R](f: Iterator[CursorIterable.KeyVal[ByteBuffer]] => R): F[R] =
     withReadTxnF { txn =>
       withResource(dbi.iterate(txn)) { iterator =>
-        f(iterator.asScala)
+        f(iterator.iterator.asScala)
       }
     }
 

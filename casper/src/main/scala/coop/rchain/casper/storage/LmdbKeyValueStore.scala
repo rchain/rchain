@@ -83,7 +83,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
     withReadTxn { (txn, dbi) =>
       withResource(dbi.iterate(txn)) { iterator =>
         import scala.collection.JavaConverters._
-        f(iterator.asScala.map(c => (c.key, c.`val`)))
+        f(iterator.iterator.asScala.map(c => (c.key, c.`val`)))
       }
     }
 }
