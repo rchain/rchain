@@ -202,6 +202,22 @@ class Initializing[F[_]
       }
     }
 
+    def getMinBlockHeight: F[Long] = {
+      val blockHashes = startBlock.justifications.map(_.latestBlockHash)
+      for {
+        blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
+        minHeight = if (blocks.isEmpty) 0L else blocks.map(ProtoUtil.blockNumber).min
+        // We need parent of oldest latest block, that's why -1.
+        // The same condition is also applied when downloading.
+        // https://github.com/rchain/rchain/blob/0a09467628/casper/src/main/scala/coop/rchain/casper/engine/LastFinalizedStateBlockRequester.scala#L154
+      } yield minHeight - 1
+    }
+
+    def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
+      Log[F].info(
+        s"Adding block ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
+      ) <* BlockDagStorage[F].insert(block, invalid = isInvalid)
+
     val emptySorted = SortedMap[Long, Set[BlockHash]]()
     for {
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
@@ -214,15 +230,17 @@ class Initializing[F[_]
         .map(_.latestBlockHash)
         .toSet
       // Add sorted DAG in order from oldest to approved block
+      minHeight <- getMinBlockHeight
       _ <- sortedHashes.flatMap(_._2).toList.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
-              // if sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
+              // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
               isInvalid = invalidBlocks(block.blockHash)
-              _ <- Log[F].info(
-                    s"Adding block ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
-                  )
-              _ <- BlockDagStorage[F].insert(block, invalid = isInvalid)
+              // Filter older not necessary blocks
+              blockHeight   = ProtoUtil.blockNumber(block)
+              blockHeightOk = blockHeight >= minHeight
+              // Add block to DAG
+              _ <- addBlockToDag(block, isInvalid).whenA(blockHeightOk)
             } yield ()
           }
 
