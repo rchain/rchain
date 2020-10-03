@@ -50,10 +50,7 @@ trait BlockRetriever[F[_]] {
   def ackInCasper(hash: BlockHash): F[Unit]
 
   /** If block is received and waiting for Casper to add it */
-  def received(hash: BlockHash): F[Boolean]
-
-  /** Blocks that are received but still not in Casper*/
-  def getEnqueuedToCasper: F[List[BlockHash]]
+  def isReceived(hash: BlockHash): F[Boolean]
 }
 
 object BlockRetriever {
@@ -139,9 +136,9 @@ object BlockRetriever {
             ))
 
       /**
-        * @param hash - block hash node encountered
-        * @param peer - peer that node received message with hash from, None hash admit is triggered by some internal
-        *             process, not as a result of external message
+        * @param hash            - block hash node encountered
+        * @param peer            - peer that node received message with hash from, None hash admit is triggered by some internal
+        *                        process, not as a result of external message
         * @param admitHashReason - source of hash info, for logging purposes
         * @return
         */
@@ -220,7 +217,9 @@ object BlockRetriever {
         } yield result
 
       trait AckReceiveResult
-      final case object AddedAsReceived  extends AckReceiveResult
+
+      final case object AddedAsReceived extends AckReceiveResult
+
       final case object MarkedAsReceived extends AckReceiveResult
 
       override def ackReceive(
@@ -254,14 +253,14 @@ object BlockRetriever {
 
       override def ackInCasper(hash: BlockHash): F[Unit] =
         for {
-          r <- received(hash)
+          r <- isReceived(hash)
           _ <- ackReceive(hash).unlessA(r)
           _ <- RequestedBlocks[F].update { state =>
                 state + (hash -> state(hash).copy(inCasperBuffer = true))
               }
         } yield ()
 
-      override def received(hash: BlockHash): F[Boolean] =
+      override def isReceived(hash: BlockHash): F[Boolean] =
         RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received)
 
       override def requestAll(
@@ -328,14 +327,5 @@ object BlockRetriever {
               })
         } yield ()
       }
-
-      /** Blocks that are received and
-        * have all dependencies filled, so not put in casperBuffer,
-        * but were not accepted by Casper, so processing is postponed*/
-      override def getEnqueuedToCasper: F[List[BlockHash]] =
-        for {
-          state         <- RequestedBlocks[F].get
-          waitingHashes = state.toList.filter(i => i._2.received && !i._2.inCasperBuffer).map(_._1)
-        } yield waitingHashes
     }
 }

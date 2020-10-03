@@ -71,6 +71,7 @@ trait Casper[F[_]] {
   def approvedBlockStateComplete: F[Boolean]
 
   def getBlocksInProcessing: F[Set[BlockHash]]
+  def getBlocksEnqueued: F[Set[BlockHash]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -140,6 +141,7 @@ sealed abstract class MultiParentCasperInstances {
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
         blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
+        blocksEnqueued      <- Ref.of[F, Set[BlockHash]](Set.empty)
       } yield {
         new MultiParentCasperImpl(
           validatorId,
@@ -148,7 +150,8 @@ sealed abstract class MultiParentCasperInstances {
           shardId,
           finalizationRate,
           blockProcessingLock,
-          blocksInProcessing
+          blocksInProcessing,
+          blocksEnqueued
         )
       }
     }

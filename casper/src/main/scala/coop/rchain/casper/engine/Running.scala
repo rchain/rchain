@@ -298,12 +298,12 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
     for {
       // This long chain of ifM created to minimise computation for ignore check and provide
       // readable output for each ignore reason
-      received <- BlockRetriever[F].received(hash)
+      received <- BlockRetriever[F].isReceived(hash)
       r <- casper.getBlocksInProcessing
             .map(_.contains(hash))
             .ifM(
               IgnoreCasperMessageStatus(doIgnore = true, BlockIsInProcessing).pure[F],
-              BlockRetriever[F].getEnqueuedToCasper
+              casper.getBlocksEnqueued
                 .map(_.contains(hash))
                 .ifM(
                   IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
