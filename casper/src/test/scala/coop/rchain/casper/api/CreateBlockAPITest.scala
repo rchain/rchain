@@ -264,4 +264,5 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   override def getVersion: F[Long]                         = underlying.getVersion
   override def getDeployLifespan: F[Int]                   = underlying.getDeployLifespan
   override def getBlocksInProcessing: F[Set[BlockHash]]    = underlying.getBlocksInProcessing
+  override def getBlocksEnqueued: F[Set[BlockHash]]        = underlying.getBlocksEnqueued
 }

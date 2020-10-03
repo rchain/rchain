@@ -58,6 +58,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     } yield BlockStatus.valid.asRight
 
   def getBlocksInProcessing: F[Set[BlockHash]] = Set.empty[BlockHash].pure[F]
+  def getBlocksEnqueued: F[Set[BlockHash]]     = Set.empty[BlockHash].pure[F]
 }
 
 object NoOpsCasperEffect {

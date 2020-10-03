@@ -98,7 +98,7 @@ class RunningHandleBlockMessageSpec extends FunSpec with BeforeAndAfterEach with
           )
           .runSyncUnsafe()
         sentToCasper.contains(validBlock.blockHash) should be(true)
-        blockRetriever.received(validBlock.blockHash).unsafeRunSync should be(true)
+        blockRetriever.isReceived(validBlock.blockHash).unsafeRunSync should be(true)
       }
 
       it("should drop not valid messages") {
