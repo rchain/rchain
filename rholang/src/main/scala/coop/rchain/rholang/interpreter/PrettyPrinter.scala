@@ -116,7 +116,7 @@ final case class PrettyPrinter(
       case ESetBody(ParSet(pars, _, _, remainder)) =>
         pure("Set(") |+| buildSeq(pars.sortedPars) |+| buildRemainderString(remainder) |+| pure(")")
       case EMapBody(ParMap(ps, _, _, remainder)) =>
-        pure("{") |+| (pure("") /: ps.sortedList.zipWithIndex) {
+        pure("{") |+| ps.sortedList.zipWithIndex.foldLeft(pure("")) {
           case (string, (kv, i)) =>
             string |+| buildStringM(kv._1) |+| pure(" : ") |+| buildStringM(kv._2) |+| pure {
               if (i != ps.sortedList.size - 1) ", "
@@ -190,7 +190,7 @@ final case class PrettyPrinter(
         } |+| buildSeq(s.data) |+| pure(")")
 
       case r: Receive =>
-        val (totalFree, bindsString) = ((0, pure("")) /: r.binds.zipWithIndex) {
+        val (totalFree, bindsString) = r.binds.zipWithIndex.foldLeft((0, pure(""))) {
           case ((previousFree, string), (bind, i)) =>
             val bindString =
               this
@@ -241,7 +241,7 @@ final case class PrettyPrinter(
 
       case m: Match =>
         pure("match ") |+| buildStringM(m.target) |+| pure(" {\n") |+|
-          (pure("") /: m.cases.zipWithIndex) {
+          m.cases.zipWithIndex.foldLeft(pure("")) {
             case (string, (matchCase, i)) =>
               string |+| pure(indentStr * (indent + 1)) |+| buildMatchCase(matchCase, indent + 1) |+| pure {
                 if (i != m.cases.length - 1) "\n"
@@ -280,13 +280,13 @@ final case class PrettyPrinter(
               par.unforgeables,
               par.connectives
             )
-          ((false, pure("")) /: list) {
+          list.foldLeft((false, pure(""))) {
             // format: off
             case ((prevNonEmpty, string), items) =>
               if (items.nonEmpty) {
                 (true,
                  string |+| pure { if (prevNonEmpty) " |\n" + (indentStr * indent) else "" } |+|
-                   (pure("") /: items.zipWithIndex) {
+                    items.zipWithIndex.foldLeft(pure("")) {
                      case (_string, (_par, index)) =>
                        _string |+| buildStringM(_par, indent) |+| pure {
                          if (index != items.length - 1) " |\n" + (indentStr * indent) else ""
@@ -322,7 +322,7 @@ final case class PrettyPrinter(
       .mkString(", ")
 
   private def buildSeq[T <: GeneratedMessage](s: Seq[T]): Coeval[String] =
-    (pure("") /: s.zipWithIndex) {
+    s.zipWithIndex.foldLeft(pure("")) {
       case (string, (p, i)) =>
         string |+| buildStringM(p) |+| pure {
           if (i != s.length - 1) ", "
@@ -331,7 +331,7 @@ final case class PrettyPrinter(
     }
 
   private def buildPattern(patterns: Seq[Par]): Coeval[String] =
-    (pure("") /: patterns.zipWithIndex) {
+    patterns.zipWithIndex.foldLeft(pure("")) {
 
       case (string, (pattern, i)) =>
         string |+| buildChannelStringM(pattern) |+| pure {
