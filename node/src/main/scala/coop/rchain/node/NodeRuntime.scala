@@ -299,10 +299,7 @@ class NodeRuntime private[node] (
       adminWebApi
     ) = result
 
-    // 4. launch casper
-    _ <- casperLaunch.launch()
-
-    // 5. run the node program.
+    // 4. run the node program.
     program = nodeProgram(
       apiServers,
       casperLoop,
@@ -332,6 +329,10 @@ class NodeRuntime private[node] (
       eventLogEnv,
       eventBus
     )
+
+    // 5. launch casper
+    _ <- casperLaunch.launch()
+
     _ <- handleUnrecoverableErrors(program)
   } yield ()
 
