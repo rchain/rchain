@@ -123,6 +123,8 @@ class Initializing[F[_]
       // Might be Validate.approvedBlock is enough but have to check
       isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
 
+      _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
+
       _ <- Log[F].info("Invalid LastFinalizedBlock received; refusing to add.").whenA(!isValid)
 
       // Start only once, when state is true and approved block is valid
