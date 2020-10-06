@@ -39,7 +39,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     shardId: String,
     finalizationRate: Int,
     blockProcessingLock: Semaphore[F],
-    blocksInProcessing: Ref[F, Set[BlockHash]]
+    blockProcessingState: Ref[F, BlockProcessingState]
 )(
     implicit casperBuffer: CasperBufferStorage[F],
     metricsF: Metrics[F],
@@ -69,7 +69,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
-  override def getBlocksInProcessing: F[Set[BlockHash]] = blocksInProcessing.get
+  override def getBlockProcessingState: F[BlockProcessingState] = blockProcessingState.get
 
   // Later this should replace addBlock, but for now one more method created, or there are too many tests to fix
   def addBlockFromStore(
@@ -176,7 +176,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       addResult <- Sync[F].bracket(blockProcessingLock.tryAcquire) {
                     case true =>
                       for {
-                        _ <- blocksInProcessing.update(_ + b.blockHash)
+                        _ <- blockProcessingState
+                              .update(
+                                c =>
+                                  c.copy(
+                                    enqueued = c.enqueued - b.blockHash,
+                                    processing = c.processing + b.blockHash
+                                  )
+                              )
                         _ <- Log[F].info(
                               s"Block ${PrettyPrinter.buildString(b, short = true)} got blockProcessingLock."
                             )
@@ -189,14 +196,19 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                         .info(
                           s"Block ${PrettyPrinter.buildString(b, short = true)} " +
                             s"processing deferred as Casper is busy."
-                        )
-                        .as(BlockStatus.casperIsBusy.asLeft[ValidBlock])
+                        ) >>
+                        blockProcessingState
+                          .update(c => c.copy(enqueued = c.enqueued + b.blockHash))
+                          .as(BlockStatus.casperIsBusy.asLeft[ValidBlock])
                   } {
                     case true =>
                       blockProcessingLock.release >>
                         Log[F].info(
                           s"Block ${PrettyPrinter.buildString(b, short = true)} released blockProcessingLock."
-                        ) >> blocksInProcessing.update(_ - b.blockHash)
+                        ) >>
+                        blockProcessingState.update(
+                          c => c.copy(processing = c.processing - b.blockHash)
+                        )
                     case false =>
                       ().pure[F]
                   }
@@ -277,12 +289,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                                            .existsM(dagContains(_).not)
                           } yield !missingDep
                         }
-      enqueued <- BlockRetriever[F].getEnqueuedToCasper
+      enqueued <- getBlockProcessingState.map(_.enqueued)
       all      = depFreePendants ++ enqueued
       _ <- Log[F].info(
             s"Blocks ready to be added: " +
               s"dependency free buffer pendants ${PrettyPrinter.buildString(depFreePendants)}, " +
-              s"enqueued to Casper ${PrettyPrinter.buildString(enqueued)}"
+              s"enqueued to Casper ${PrettyPrinter.buildString(enqueued.toList)}"
           )
     } yield all.headOption
   }

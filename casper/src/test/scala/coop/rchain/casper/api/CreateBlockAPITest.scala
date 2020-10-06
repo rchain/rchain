@@ -257,11 +257,11 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   override def addBlockFromStore(
       b: BlockHash,
       allowAddFromBuffer: Boolean
-  ): F[ValidBlockProcessing]                               = underlying.addBlockFromStore(b, allowAddFromBuffer)
-  override def contains(hash: BlockHash): F[Boolean]       = underlying.contains(hash)
-  override def dagContains(hash: BlockHash): F[Boolean]    = underlying.dagContains(hash)
-  override def bufferContains(hash: BlockHash): F[Boolean] = underlying.bufferContains(hash)
-  override def getVersion: F[Long]                         = underlying.getVersion
-  override def getDeployLifespan: F[Int]                   = underlying.getDeployLifespan
-  override def getBlocksInProcessing: F[Set[BlockHash]]    = underlying.getBlocksInProcessing
+  ): F[ValidBlockProcessing]                                    = underlying.addBlockFromStore(b, allowAddFromBuffer)
+  override def contains(hash: BlockHash): F[Boolean]            = underlying.contains(hash)
+  override def dagContains(hash: BlockHash): F[Boolean]         = underlying.dagContains(hash)
+  override def bufferContains(hash: BlockHash): F[Boolean]      = underlying.bufferContains(hash)
+  override def getVersion: F[Long]                              = underlying.getVersion
+  override def getDeployLifespan: F[Int]                        = underlying.getDeployLifespan
+  override def getBlockProcessingState: F[BlockProcessingState] = underlying.getBlockProcessingState
 }

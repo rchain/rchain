@@ -298,37 +298,32 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
     for {
       // This long chain of ifM created to minimise computation for ignore check and provide
       // readable output for each ignore reason
-      received <- BlockRetriever[F].received(hash)
-      r <- casper.getBlocksInProcessing
-            .map(_.contains(hash))
-            .ifM(
-              IgnoreCasperMessageStatus(doIgnore = true, BlockIsInProcessing).pure[F],
-              BlockRetriever[F].getEnqueuedToCasper
-                .map(_.contains(hash))
-                .ifM(
-                  IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F],
-                  CasperBufferStorage[F]
-                    .contains(hash)
+      received  <- BlockRetriever[F].isReceived(hash)
+      casperBPS <- casper.getBlockProcessingState
+      r <- if (casperBPS.processing.contains(hash))
+            IgnoreCasperMessageStatus(doIgnore = true, BlockIsInProcessing).pure[F]
+          else if (casperBPS.enqueued.contains(hash))
+            IgnoreCasperMessageStatus(doIgnore = true, BlockIsWaitingForCasper).pure[F]
+          else
+            CasperBufferStorage[F]
+              .contains(hash)
+              .ifM(
+                IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer).pure[F],
+                casper.blockDag.flatMap(
+                  _.contains(hash)
                     .ifM(
-                      IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer).pure[F],
-                      casper.blockDag.flatMap(
-                        _.contains(hash)
-                          .ifM(
-                            IgnoreCasperMessageStatus(doIgnore = true, BlockIsInDag).pure[F],
-                            // If none of the checks above is true, this means that
-                            // thread that received block did not execute Casper code yet.
-                            // So there is still possibility of `received` to be true, that's why
-                            // this check put in place. But the possibility is close to 0.
-                            if (received)
-                              IgnoreCasperMessageStatus(doIgnore = true, BlockIsReceived).pure[F]
-                            else
-                              IgnoreCasperMessageStatus(doIgnore = false, DoNotIgnore).pure[F]
-                          )
-                      )
+                      IgnoreCasperMessageStatus(doIgnore = true, BlockIsInDag).pure[F],
+                      // If none of the checks above is true, this means that
+                      // thread that received block did not execute Casper code yet.
+                      // So there is still possibility of `received` to be true, that's why
+                      // this check put in place. But the possibility is close to 0.
+                      if (received)
+                        IgnoreCasperMessageStatus(doIgnore = true, BlockIsReceived).pure[F]
+                      else
+                        IgnoreCasperMessageStatus(doIgnore = false, DoNotIgnore).pure[F]
                     )
                 )
-            )
-
+              )
     } yield r
 
   /**
