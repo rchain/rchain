@@ -47,6 +47,8 @@ object DeployError {
   }
 }
 
+final case class BlockProcessingState(enqueued: Set[BlockHash], processing: Set[BlockHash])
+
 trait Casper[F[_]] {
   def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
   def addBlock(b: BlockMessage, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
@@ -60,7 +62,7 @@ trait Casper[F[_]] {
   def getValidator: F[Option[PublicKey]]
   def getVersion: F[Long]
 
-  def getBlocksInProcessing: F[Set[BlockHash]]
+  def getBlockProcessingState: F[BlockProcessingState]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -99,7 +101,9 @@ sealed abstract class MultiParentCasperInstances {
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       blockProcessingLock <- MetricsSemaphore.single[F]
-      blocksInProcessing  <- Ref.of[F, Set[BlockHash]](Set.empty)
+      blockProcessingState <- Ref.of[F, BlockProcessingState](
+                               BlockProcessingState(Set.empty, Set.empty)
+                             )
     } yield {
       new MultiParentCasperImpl(
         validatorId,
@@ -107,7 +111,7 @@ sealed abstract class MultiParentCasperInstances {
         shardId,
         finalizationRate,
         blockProcessingLock,
-        blocksInProcessing
+        blockProcessingState
       )
     }
 }

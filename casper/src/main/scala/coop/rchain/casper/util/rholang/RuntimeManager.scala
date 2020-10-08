@@ -6,7 +6,7 @@ import cats.effect.concurrent.MVar
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
@@ -731,7 +731,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       .ensureOr(
         validatorsPar =>
           new IllegalArgumentException(
-            s"Incorrect number of results from query of current active balidator: ${validatorsPar.size}"
+            s"Incorrect number of results from query of current active validator in state ${PrettyPrinter
+              .buildString(startHash)}: ${validatorsPar.size}"
           )
       )(validatorsPar => validatorsPar.size == 1)
       .map(validatorsPar => toValidatorSeq(validatorsPar.head))
@@ -745,7 +746,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(
-            s"Incorrect number of results from query of current bonds: ${bondsPar.size}"
+            s"Incorrect number of results from query of current bonds in state ${PrettyPrinter
+              .buildString(hash)}: ${bondsPar.size}"
           )
       )(bondsPar => bondsPar.size == 1)
       .map { bondsPar =>

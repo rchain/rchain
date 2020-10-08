@@ -57,7 +57,8 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
-  def getBlocksInProcessing: F[Set[BlockHash]] = Set.empty[BlockHash].pure[F]
+  def getBlockProcessingState: F[BlockProcessingState] =
+    BlockProcessingState(Set.empty[BlockHash], Set.empty[BlockHash]).pure[F]
 }
 
 object NoOpsCasperEffect {
