@@ -138,17 +138,25 @@ class Initializing[F[_]
     } yield ()
   }
 
-  def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] =
+  def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] = {
+    // Starting minimum block height. When latest blocks are downloaded new minimum will be calculated.
+    val block            = approvedBlock.candidate.block
+    val startBlockNumber = ProtoUtil.blockNumber(block)
+    val minBlockNumberForDeployLifespan =
+      Math.max(0, startBlockNumber - MultiParentCasperImpl.deployLifespan)
+
     for {
       // Request all blocks for Last Finalized State
       blockRequestStream <- LastFinalizedStateBlockRequester.stream(
                              approvedBlock,
                              blockMessageQueue,
+                             minBlockNumberForDeployLifespan,
                              requestTimeout = 30.seconds,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              BlockStore[F].contains,
+                             BlockStore[F].getUnsafe,
                              BlockStore[F].put,
-                             block => Validate.blockHash(block).map(_ == Right(Valid))
+                             validateBlock
                            )
 
       // Request tuple space state for Last Finalized State
@@ -159,7 +167,7 @@ class Initializing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.drain ++ fs2.Stream.eval(
-        populateDag(approvedBlock.candidate.block)
+        populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan)
       )
 
       // Run both streams in parallel until tuple space and all needed blocks are received
@@ -168,8 +176,18 @@ class Initializing[F[_]
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
     } yield ()
+  }
 
-  private def populateDag(startBlock: BlockMessage): F[Unit] = {
+  private def validateBlock(block: BlockMessage): F[Boolean] = {
+    val blockNumber = ProtoUtil.blockNumber(block)
+    if (blockNumber == 0L) {
+      // TODO: genesis (zero) block correctly
+      true.pure
+    } else
+      Validate.blockHash(block).map(_ == Right(Valid))
+  }
+
+  private def populateDag(startBlock: BlockMessage, initialMinHeight: Long): F[Unit] = {
     import cats.instances.list._
 
     type SortedBlocks = SortedMap[Long, Set[BlockHash]]
@@ -212,12 +230,12 @@ class Initializing[F[_]
         // We need parent of oldest latest block, that's why -1.
         // The same condition is also applied when downloading.
         // https://github.com/rchain/rchain/blob/0a09467628/casper/src/main/scala/coop/rchain/casper/engine/LastFinalizedStateBlockRequester.scala#L154
-      } yield minHeight - 1
+      } yield Math.min(minHeight - 1, initialMinHeight)
     }
 
     def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
       Log[F].info(
-        s"Adding block ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
+        s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
       ) <* BlockDagStorage[F].insert(block, invalid = isInvalid)
 
     val emptySorted = SortedMap[Long, Set[BlockHash]]()
