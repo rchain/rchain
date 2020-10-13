@@ -2,7 +2,7 @@ package coop.rchain.shared
 
 import cats._
 import cats.data.ReaderT
-import cats.effect.concurrent.{MVar, Ref}
+import cats.effect.concurrent.{MVar, MVar2, Ref}
 import cats.effect.{Concurrent, ExitCase, Sync}
 import cats.syntax.flatMap._
 import cats.syntax.functor._
@@ -38,7 +38,8 @@ object Cell {
     override def reads[A](f: S => A) = read map f
   }
 
-  private class MVarCell[F[_], S](mvar: MVar[F, S])(implicit F: Sync[F]) extends DefaultCell[F, S] {
+  private class MVarCell[F[_], S](mvar: MVar2[F, S])(implicit F: Sync[F])
+      extends DefaultCell[F, S] {
     def modify(f: S => S): F[Unit] = flatModify(s => F.pure(f(s)))
     def flatModify(f: S => F[S]): F[Unit] = F.bracketCase(mvar.take)(s => f(s).flatMap(mvar.put)) {
       case (oldState, ExitCase.Error(_) | ExitCase.Canceled) => mvar.put(oldState)

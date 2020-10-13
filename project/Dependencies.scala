@@ -8,9 +8,9 @@ object Dependencies {
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.4"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "2.1.0"
-  val catsEffectVersion = "2.0.0"
-  val catsMtlVersion    = "0.7.0"
+  val catsVersion       = "2.1.1"
+  val catsEffectVersion = "2.2.0"
+  val catsMtlVersion    = "0.7.1"
   val slf4jVersion      = "1.7.25"
 
   // format: off
@@ -24,7 +24,7 @@ object Dependencies {
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
-  val disciplineCore      = "org.typelevel"                                    %% "discipline-core"           % "1.0.2"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -52,7 +52,7 @@ object Dependencies {
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
-  val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
+  val monix               = "io.monix"                   %% "monix"                     % "3.2.2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"
