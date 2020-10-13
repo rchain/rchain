@@ -2,7 +2,7 @@ package coop.rchain.casper.util.rholang
 
 import cats.Applicative
 import cats.data.{EitherT, WriterT}
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.{MVar, MVar2}
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -83,7 +83,7 @@ trait RuntimeManager[F[_]] {
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     val emptyStateHash: StateHash,
-    runtimeContainer: MVar[F, Runtime[F]]
+    runtimeContainer: MVar2[F, Runtime[F]]
 ) extends RuntimeManager[F] {
   import coop.rchain.models.rholang.{implicits => toPar}
 

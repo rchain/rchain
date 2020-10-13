@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.concurrent.{MVar, Ref}
+import cats.effect.concurrent.{MVar, MVar2, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.{Monad, Parallel}
@@ -260,7 +260,7 @@ object ReportingCasper {
     */
   class ReportingRuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       val emptyStateHash: StateHash,
-      runtimeContainer: MVar[F, ReportingRuntime[F]]
+      runtimeContainer: MVar2[F, ReportingRuntime[F]]
   ) {
     import coop.rchain.models.rholang.{implicits => toPar}
     private val systemDeployConsumeAllPattern =
