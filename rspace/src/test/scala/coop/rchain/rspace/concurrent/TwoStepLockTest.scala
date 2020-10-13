@@ -19,7 +19,7 @@ class TwoStepLockTest extends FlatSpec with Matchers {
     val t3   = acquireLock(lock, List("a", "b"), List("w1", "w2"), { a = a + 5 })
     val t4   = acquireLock(lock, List("a", "b"), List("w1", "w2"), { a = a - 8 })
 
-    val r = Task.gatherUnordered(List(t1, t2, t3, t4))
+    val r = Task.parSequenceUnordered(List(t1, t2, t3, t4))
     r.unsafeRunSync
   }
 

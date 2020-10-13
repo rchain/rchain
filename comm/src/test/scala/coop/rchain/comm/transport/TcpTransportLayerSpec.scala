@@ -2,9 +2,7 @@ package coop.rchain.comm.transport
 
 import java.nio.file._
 
-import cats.effect.concurrent.{Deferred, Ref}
-
-import scala.concurrent.duration.Duration
+import cats.effect.concurrent.{Deferred, MVar, Ref}
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.crypto.codec.Base16
@@ -12,11 +10,11 @@ import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.Log
-import io.grpc.ManagedChannel
-import monix.catnap.MVar
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
+
+import scala.concurrent.duration.Duration
 
 class TcpTransportLayerSpec
     extends TransportLayerSpec[Task, TcpTlsEnvironment]
@@ -68,7 +66,7 @@ class TcpTransportLayerSpec
   def extract[A](fa: Task[A]): A = fa.runSyncUnsafe(Duration.Inf)
 
   def createDispatcherCallback: Task[DispatcherCallback[Task]] =
-    MVar.empty[Task, Unit]().map(new DispatcherCallback(_))
+    MVar.empty[Task, Unit].map(new DispatcherCallback(_))
 
   def createTransportLayerServer(env: TcpTlsEnvironment): Task[TransportLayerServer[Task]] =
     Task.delay {
