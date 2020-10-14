@@ -24,7 +24,7 @@ import scala.io.Source
 import scala.util.{Left, Right}
 
 trait TransportLayerServer[F[_]] {
-  def receive(
+  def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable]
@@ -63,7 +63,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
         case Left(t)           => Sync[F].raiseError[SslContext](t)
       }
 
-  def receive(
+  def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable] = {
@@ -143,7 +143,7 @@ class TransportServer[F[_]: Monixable: Concurrent](server: GrpcTransportServer[F
       case Some(_) => ().pure[F]
       case _ =>
         server
-          .receive(dispatch, handleStreamed)
+          .handleReceive(dispatch, handleStreamed)
           .toTask
           .foreachL { cancelable =>
             ref
