@@ -7,19 +7,21 @@ import cats.syntax.all._
 import cats.{Monad, Parallel}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
-import coop.rchain.rspace.state.RSpaceExporter
-import scodec.bits.BitVector
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.shared.ByteVectorOps.RichByteVector
+import scodec.Codec
+import scodec.bits.ByteVector
 
 object RSpaceExporterDisk {
   import coop.rchain.rspace.state.syntax._
   import coop.rchain.rspace.util.Lib._
 
-  def writeToDisk[F[_]: Sync: Parallel](
+  def writeToDisk[F[_]: Sync: Parallel, C, P, A, K](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
       chunkSize: Int
-  ): F[Unit] = {
+  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
     def writeChunkRec(historyStore: Store[F], dataStore: Store[F])(
         p: Param
@@ -27,28 +29,43 @@ object RSpaceExporterDisk {
       val (startPath, chunk) = p
       println(s"PART ${chunk}")
       val skip      = 0
-      val exportAll = exporter.getHistoryAndData(startPath, skip, chunkSize, BitVector(_))
+      val exportAll = exporter.getHistoryAndData(startPath, skip, chunkSize, ByteVector(_))
       for {
         inputs                      <- exportAll
         (inputHistory, inputValues) = inputs
 
-        // Get history
-        partialStoreList = inputHistory.items
+        // Get history and data items
+        historyItems = inputHistory.items.toVector
+        dataItems    = inputValues.items.toVector
 
-        // Get values
-        partialValuesList = inputValues.items
+        // Validate items
+        _ <- time("Validate state items")(
+              RSpaceImporter.validateStateItems[F, C, P, A, K](
+                historyItems,
+                dataItems,
+                startPath,
+                chunkSize,
+                skip,
+                k => historyStore.get(Seq(k), ByteVector(_)).map(_.head)
+              )
+            )
 
         // Write to restore store
         _ <- Parallel.parProduct(
-              time("COMPLETE LMDB HISTORY WRITE")(historyStore.put(partialStoreList)),
-              time("COMPLETE LMDB VALUES WRITE")(dataStore.put(partialValuesList))
+              time("COMPLETE LMDB HISTORY WRITE")(
+                historyStore.put[ByteVector](historyItems, _.toDirectByteBuffer)
+              ),
+              time("COMPLETE LMDB VALUES WRITE")(
+                dataStore.put[ByteVector](dataItems, _.toDirectByteBuffer)
+              )
             )
 
         _ = println(s"LAST PATH: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
 
         _ = println("")
 
-        isEnd = partialStoreList.size < chunkSize
+        receivedSize = historyItems.size
+        isEnd        = receivedSize < chunkSize
       } yield if (isEnd) ().asRight else (inputHistory.lastPath, chunk + 1).asLeft
     }
 
