@@ -54,7 +54,7 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.3.8",
+  scapegoatVersion in ThisBuild := "1.3.11",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
