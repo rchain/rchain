@@ -41,7 +41,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
-      invalidBlocksSet: Set[BlockMetadata]
+      invalidBlocksSet: Set[BlockMetadata],
+      equivocationHashes: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
@@ -121,12 +122,17 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap       <- blockMetadataIndex.childMapData
       heightMap      <- blockMetadataIndex.heightMap
       invalidBlocks  <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+      equivocationHashes <- KeyValueStoreEquivocationsTracker.equivocationRecords.map {
+                             equivocations =>
+                               equivocations.flatMap(_.equivocationDetectedBlockHashes)
+                           }
     } yield KeyValueDagRepresentation(
       dagSet,
       latestMessages,
       childMap,
       heightMap,
-      invalidBlocks
+      invalidBlocks,
+      equivocationHashes
     )
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
