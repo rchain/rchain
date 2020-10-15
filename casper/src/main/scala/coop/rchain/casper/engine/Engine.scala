@@ -125,8 +125,6 @@ object Engine {
     /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      shardId: String,
-      finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
       trimState: Boolean = false,
@@ -137,8 +135,6 @@ object Engine {
       stateResponseQueue <- Queue.unbounded[F, StoreItemsMessage]
       _ <- EngineCell[F].set(
             new Initializing(
-              shardId,
-              finalizationRate,
               validatorId,
               init,
               blockResponseQueue,

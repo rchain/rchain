@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.Applicative
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.syntax.bracket
 import cats.syntax.all._
 import coop.rchain.blockstorage._
@@ -29,14 +29,21 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.protocol.ShardId.ShardId
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
+// format: off
+class MultiParentCasperImpl[F[_]:
+/* Execution */ Concurrent: Time:
+/* Transport */ CommUtil:
+/* State */ BlockRetriever:
+/* Casper */  Estimator: SafetyOracle: LastFinalizedBlockCalculator: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker:
+/* Storage */ BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage:
+/* Diagnostics */ Log: EventPublisher]// format: on
+(
     validatorId: Option[ValidatorIdentity],
     approvedBlock: BlockMessage,
-    shardId: String,
-    finalizationRate: Int,
     blockProcessingLock: Semaphore[F],
     blockProcessingState: Ref[F, BlockProcessingState]
 )(
@@ -127,7 +134,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       // Save block in block store
       // This is required for some unit tests to pass
       // TODO remove this and rewrite failing tests
-      _ <- BlockStore[F].contains(b.blockHash).ifM(().pure[F], BlockStore[F].put(b))
+      _         <- BlockStore[F].contains(b.blockHash).ifM(().pure[F], BlockStore[F].put(b))
+      shardConf <- runtimeManager.getShardConfig(ProtoUtil.postStateHash(b), approvedBlock.shardId)
       // We force Casper to be single threaded. More investigations needed to allow it be multi threaded.
       addResult <- Sync[F].bracket(blockProcessingLock.tryAcquire) {
                     case true =>
@@ -143,7 +151,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                         _ <- Log[F].info(
                               s"Block ${PrettyPrinter.buildString(b, short = true)} got blockProcessingLock."
                             )
-                        r <- addBlockInLock(b, allowAddFromBuffer)
+                        r <- addBlockInLock(b, allowAddFromBuffer, shardConf)
                         _ <- BlockRetriever[F].ackInCasper(b.blockHash)
                       } yield r
 
@@ -190,7 +198,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   private def addBlockInLock(
       b: BlockMessage,
-      allowAddFromBuffer: Boolean
+      allowAddFromBuffer: Boolean,
+      shardConf: CasperShardConf
   ): F[ValidBlockProcessing] = {
     for {
       dag <- blockDag
@@ -210,7 +219,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                    resultWithUpdDag <- if (!validSender)
                                         // TODO What's the scenario when this can happen?
                                         (BlockStatus.invalidSender.asLeft[ValidBlock], dag).pure
-                                      else attemptAdd(b, dag)
+                                      else attemptAdd(b, dag, shardConf)
                    (result, updatedDag) = resultWithUpdDag
                    tipHashes            <- estimator(updatedDag)
                    _                    <- Span[F].mark("after-estimator")
@@ -223,8 +232,23 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield result
   }.timer("add-block-time")
 
-  private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
-    lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
+  private def updateLastFinalizedBlock(
+      newBlock: BlockMessage,
+      finalizationRate: Int,
+      faultToleranceThreshold: Float
+  ): F[Unit] =
+    Applicative[F].whenA(newBlock.body.state.blockNumber % finalizationRate == 0)(for {
+      dag                    <- blockDag
+      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(approvedBlock)
+      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
+                                        .run(dag, lastFinalizedBlockHash, faultToleranceThreshold)
+      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
+      _ <- EventPublisher[F]
+            .publish(
+              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
+            )
+            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
+    } yield ())
 
   /**
     * Check if there are blocks in CasperBuffer available with all dependencies met.
@@ -285,46 +309,35 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def createBlock: F[CreateBlockStatus] = spanF.trace(CreateBlockMetricsSource) {
     (validatorId match {
       case Some(validatorIdentity) =>
-        BlockDagStorage[F].getRepresentation
-          .flatMap { dag =>
-            BlockCreator
-              .createBlock(
-                dag,
-                approvedBlock,
-                validatorIdentity,
-                shardId,
-                version,
-                deployLifespan,
-                runtimeManager
-              )
-          }
-          .flatMap {
-            case c: Created =>
-              spanF.mark("block-store-put") >>
-                BlockStore[F].put(c.block) >>
-                BlockRetriever[F].ackReceive(c.block.blockHash) >>
-                EventPublisher[F]
-                  .publish(MultiParentCasperImpl.createdEvent(c))
-                  .as[CreateBlockStatus](c)
-            case o: CreateBlockStatus => o.pure
-          }
+        for {
+          dag <- BlockDagStorage[F].getRepresentation
+          block <- BlockCreator
+                    .createBlock(
+                      dag,
+                      approvedBlock,
+                      validatorIdentity,
+                      runtimeManager,
+                      approvedBlock.shardId
+                    )
+          result <- block match {
+                     case c: Created =>
+                       spanF.mark("block-store-put") >>
+                         BlockStore[F].put(c.block) >>
+                         BlockRetriever[F].ackReceive(c.block.blockHash) >>
+                         EventPublisher[F]
+                           .publish(MultiParentCasperImpl.createdEvent(c))
+                           .as[CreateBlockStatus](c)
+                     case o: CreateBlockStatus => o.pure
+                   }
+        } yield result
       case None => CreateBlockStatus.readOnlyMode.pure
     }).timer("create-block-time")
   }
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
-      dag                    <- blockDag
       lastFinalizedBlockHash <- LastFinalizedStorage[F].get(approvedBlock)
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
-      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
-      _ <- EventPublisher[F]
-            .publish(
-              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
-            )
-            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
-      blockMessage <- BlockStore[F].getUnsafe(updatedLastFinalizedBlockHash)
+      blockMessage           <- BlockStore[F].getUnsafe(lastFinalizedBlockHash)
     } yield blockMessage
 
   def blockDag: F[BlockDagRepresentation[F]] =
@@ -350,11 +363,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
    */
   private def attemptAdd(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      shardConf: CasperShardConf
   ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
-        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, deployLifespan))
+        _ <- EitherT(
+              Validate.blockSummary(b, approvedBlock, dag, approvedBlock.shardId, deployLifespan)
+            )
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
@@ -389,11 +405,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       } yield status
 
     for {
-      _          <- Span[F].mark("attempt-add")
-      _          <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b, true)} to DAG.")
-      status     <- validationStatus.value
-      updatedDag <- addEffects(status, b, dag)
-      _          <- Span[F].mark("effects-added")
+      _      <- Span[F].mark("attempt-add")
+      _      <- Log[F].info(s"Attempting to add Block ${PrettyPrinter.buildString(b, true)} to DAG.")
+      status <- validationStatus.value
+      updatedDag <- addEffects(
+                     status,
+                     b,
+                     dag,
+                     shardConf.finalizationRate,
+                     shardConf.faultToleranceThreshold
+                   )
+      _ <- Span[F].mark("effects-added")
     } yield (status, updatedDag)
   }
 
@@ -401,7 +423,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   private def addEffects(
       blockProcessingResult: ValidBlockProcessing,
       block: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      finalizationRate: Int,
+      faultToleranceThreshold: Float
   ): F[BlockDagRepresentation[F]] =
     blockProcessingResult
       .map { _ =>
@@ -411,7 +435,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
           _ <- Log[F].info(
                 s"Added ${PrettyPrinter.buildString(block, true)}"
               )
-          _ <- updateLastFinalizedBlock(block)
+          _ <- updateLastFinalizedBlock(block, finalizationRate, faultToleranceThreshold)
         } yield updatedDag
       }
       .leftMap {

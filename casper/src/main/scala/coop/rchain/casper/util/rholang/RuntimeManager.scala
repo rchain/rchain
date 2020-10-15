@@ -2,16 +2,17 @@ package coop.rchain.casper.util.rholang
 
 import cats.Applicative
 import cats.data.{EitherT, WriterT}
-import cats.effect.concurrent.MVar
+import cats.effect.concurrent.{Deferred, MVar, Ref}
 import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
+import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, PrettyPrinter}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.{evaluate, StateHash}
 import SystemDeployPlatformFailure._
 import SystemDeployUserError._
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
+import coop.rchain.casper.protocol.ShardId.ShardId
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.costacc.{
   CloseBlockDeploy,
@@ -79,9 +80,11 @@ trait RuntimeManager[F[_]] {
   def withRuntimeLock[A](f: Runtime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
+  def getShardConfig(stateHash: StateHash, shardId: ShardId): F[CasperShardConf]
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
+    onChainCache: Ref[F, Map[StateHash, Deferred[F, CasperShardConf]]], //TODO this cache should handle all onchain data not just shard config
     val emptyStateHash: StateHash,
     runtimeContainer: MVar[F, Runtime[F]]
 ) extends RuntimeManager[F] {
@@ -755,6 +758,42 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       }
   }
 
+  /**
+    * Read shard configuration from the chain
+    * @param stateHash - RSpace state hash to read data from
+    * @param shardId - registry id of the contract to read
+    * @return
+    */
+  def getShardConfig(stateHash: StateHash, shardId: ShardId): F[CasperShardConf] = {
+
+    val queryState = {
+      val deploy = ConstructDeploy.sourceDeployNow(shardConfigQuerySource(shardId))
+      captureResults(stateHash, deploy)
+        .ensureOr(
+          shardConfigPar =>
+            new IllegalArgumentException(
+              s"Incorrect number of results from query of shard config in state ${stateHash}: ${shardConfigPar.size}"
+            )
+        )(shardConfigPar => shardConfigPar.size == 1)
+        .flatMap(shardConfigPar => toShardConfig(shardConfigPar.head))
+    }
+
+    // TODO extract shard config from RSpace and cache it. For now shard config is considered constant
+    //val sourceHash = stateHash
+    val sourceHash = ByteString.EMPTY
+    for {
+      newEntry <- Deferred[F, CasperShardConf]
+      r <- onChainCache.modify[(Deferred[F, (CasperShardConf)], Boolean)] { s =>
+            if (s.contains(stateHash))
+              (s, (s(sourceHash), true))
+            else
+              (s + (sourceHash -> newEntry), (newEntry, false))
+          }
+      (configDef, available) = r
+      _                      <- (queryState >>= configDef.complete).unlessA(available)
+    } yield configDef.get
+  }
+
   private def activaValidatorQuerySource: String =
     s"""
        # new return, rl(`rho:registry:lookup`), poSCh in {
@@ -774,6 +813,14 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
        #   }
        # }
        """.stripMargin('#')
+
+  private def shardConfigQuerySource(shardId: ShardId): String =
+    s"""
+       # new return, rl(`rho:registry:lookup`), shardConfCh in {
+       #  rl!(`${shardId}`, *shardConfCh) |
+       #  shardConfCh!("get", return)
+       # }
+       #""".stripMargin('#')
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
@@ -824,6 +871,39 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
         val stakeAmount   = bond.exprs.head.getGInt
         Bond(validatorName, stakeAmount)
     }.toList
+
+  private def toShardConfig(shardConfigMap: Par): F[CasperShardConf] = {
+    val map = shardConfigMap.exprs.head.getEMapBody.ps
+    CasperShardConf(
+      map
+        .get(Par(exprs = Seq(Expr(GString("faultToleranceThreshold")))))
+        .get
+        .exprs
+        .head
+        .getGInt
+        .toFloat,
+      map.get(Par(exprs = Seq(Expr(GString("shardName"))))).get.exprs.head.getGString,
+      map.get(Par(exprs = Seq(Expr(GString("parentShardId"))))).get.exprs.head.getGString,
+      map.get(Par(exprs = Seq(Expr(GString("finalizationRate"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("maxNumberOfParents"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("maxParentDepth"))))).get.exprs.head.getGInt.toInt,
+      map
+        .get(Par(exprs = Seq(Expr(GString("synchronyConstraintThreshold")))))
+        .get
+        .exprs
+        .head
+        .getGInt
+        .toFloat,
+      map.get(Par(exprs = Seq(Expr(GString("heightConstraintThreshold"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("deployLifespan"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("version"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("configVersion"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("bondMinimum"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("bondMaximum"))))).get.exprs.head.getGInt,
+      map.get(Par(exprs = Seq(Expr(GString("epochLength"))))).get.exprs.head.getGInt.toInt,
+      map.get(Par(exprs = Seq(Expr(GString("quarantineLength"))))).get.exprs.head.getGInt.toInt
+    ).pure[F]
+  }
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     withResetRuntimeLock(hash)(getData(_)(channel))

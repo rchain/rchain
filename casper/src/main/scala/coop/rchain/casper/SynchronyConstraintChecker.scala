@@ -11,9 +11,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
-final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
-    synchronyConstraintThreshold: Double
-) {
+final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log]() {
   private def calculateSeenSendersSince(
       lastProposed: BlockMessage,
       dag: BlockDagRepresentation[F]
@@ -36,7 +34,8 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F],
       genesis: BlockMessage,
-      validator: Validator
+      validator: Validator,
+      synchronyConstraintThreshold: Float
   ): F[Boolean] =
     dag.latestMessageHash(validator).flatMap {
       case Some(lastProposedBlockHash) if lastProposedBlockHash == genesis.blockHash =>
@@ -79,9 +78,4 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log](
 object SynchronyConstraintChecker {
   def apply[F[_]](implicit ev: SynchronyConstraintChecker[F]): SynchronyConstraintChecker[F] =
     ev
-
-  def apply[F[_]: Sync: BlockStore: Log](
-      synchronyConstraintThreshold: Double
-  ): SynchronyConstraintChecker[F] =
-    new SynchronyConstraintChecker[F](synchronyConstraintThreshold)
 }

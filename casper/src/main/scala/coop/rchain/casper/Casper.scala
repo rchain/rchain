@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
@@ -11,6 +11,7 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.{BlockRetriever, Running}
+import coop.rchain.casper.protocol.ShardId.ShardId
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
@@ -95,23 +96,25 @@ sealed abstract class MultiParentCasperInstances {
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      approvedBlock: BlockMessage,
-      shardId: String,
-      finalizationRate: Int
+      approvedBlock: BlockMessage
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       blockProcessingLock <- MetricsSemaphore.single[F]
       blockProcessingState <- Ref.of[F, BlockProcessingState](
                                BlockProcessingState(Set.empty, Set.empty)
                              )
+      c <- ShardOnChainConfig[F]
+      shardConfigCache <- Ref.of(
+                           (CasperShardConf, Map.empty[StateHash, Deferred[F, CasperShardConf]])
+                         )
     } yield {
       new MultiParentCasperImpl(
         validatorId,
         approvedBlock,
-        shardId,
-        finalizationRate,
         blockProcessingLock,
-        blockProcessingState
+        blockProcessingState,
+        approvedBlock.shardId,
+        shardConfigCache
       )
     }
 }

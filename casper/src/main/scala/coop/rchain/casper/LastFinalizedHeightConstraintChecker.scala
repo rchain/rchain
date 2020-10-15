@@ -12,13 +12,12 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
-final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: Log](
-    heightConstraintThreshold: Long
-) {
+final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: Log] {
   def check(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
-      validator: Validator
+      validator: Validator,
+      heightConstraintThreshold: Long
   ): F[Boolean] =
     for {
       lastFinalizedBlockHash <- LastFinalizedStorage[F].get(genesis)
@@ -44,9 +43,4 @@ object LastFinalizedHeightConstraintChecker {
       implicit ev: LastFinalizedHeightConstraintChecker[F]
   ): LastFinalizedHeightConstraintChecker[F] =
     ev
-
-  def apply[F[_]: Sync: LastFinalizedStorage: BlockStore: Log](
-      heightConstraintThreshold: Long
-  ): LastFinalizedHeightConstraintChecker[F] =
-    new LastFinalizedHeightConstraintChecker[F](heightConstraintThreshold)
 }

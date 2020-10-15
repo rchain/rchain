@@ -33,8 +33,6 @@ class GenesisValidator[F[_]
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     validatorId: ValidatorIdentity,
-    shardId: String,
-    finalizationRate: Int,
     blockApprover: BlockApproverProtocol
 ) extends Engine[F] {
   import Engine._
@@ -58,7 +56,7 @@ class GenesisValidator[F[_]
           ack(ub.candidate.block.blockHash) >> blockApprover
             .unapprovedBlockPacketHandler(peer, ub) >> {
             Engine
-              .transitionToInitializing(shardId, finalizationRate, Some(validatorId), init = noop)
+              .transitionToInitializing(Some(validatorId), init = noop)
           }
         )
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)

@@ -61,7 +61,7 @@ object CasperLaunch {
           case None if (conf.genesisCeremony.ceremonyMasterMode) =>
             val msg =
               "Approved block not found, taking part in ceremony as ceremony master"
-            val action = initBootstrap(enableStateExporter)
+            val action = initBootstrap
             (msg, action)
           case None =>
             val msg = "Approved block not found, connecting to existing network"
@@ -121,9 +121,7 @@ object CasperLaunch {
           casper <- MultiParentCasper
                      .hashSetCasper[F](
                        validatorId,
-                       ab,
-                       conf.shardName,
-                       conf.finalizationRate
+                       ab
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
@@ -161,19 +159,22 @@ object CasperLaunch {
                   timestamp,
                   vaults,
                   bonds,
-                  conf.genesisBlockData.bondMinimum,
-                  conf.genesisBlockData.bondMaximum,
-                  conf.genesisBlockData.epochLength,
-                  conf.genesisBlockData.quarantineLength,
+                  conf.genesisBlockData.shardConfig.bondMinimum,
+                  conf.genesisBlockData.shardConfig.bondMaximum,
+                  conf.genesisBlockData.shardConfig.epochLength,
+                  conf.genesisBlockData.shardConfig.quarantineLength,
                   conf.genesisBlockData.numberOfActiveValidators,
                   conf.genesisCeremony.requiredSignatures
                 )(Sync[F])
           _ <- EngineCell[F].set(
-                new GenesisValidator(validatorId.get, conf.shardName, conf.finalizationRate, bap)
+                new GenesisValidator(
+                  validatorId.get,
+                  bap
+                )
               )
         } yield ()
 
-      private def initBootstrap(enableStateExporter: Boolean): F[Unit] =
+      private def initBootstrap: F[Unit] =
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           abp <- ApproveBlockProtocol
@@ -182,12 +183,12 @@ object CasperLaunch {
                     conf.genesisCeremony.autogenShardSize,
                     conf.genesisBlockData.genesisDataDir,
                     conf.genesisBlockData.walletsFile,
-                    conf.genesisBlockData.bondMinimum,
-                    conf.genesisBlockData.bondMaximum,
-                    conf.genesisBlockData.epochLength,
-                    conf.genesisBlockData.quarantineLength,
+                    conf.genesisBlockData.shardConfig.bondMinimum,
+                    conf.genesisBlockData.shardConfig.bondMaximum,
+                    conf.genesisBlockData.shardConfig.epochLength,
+                    conf.genesisBlockData.shardConfig.quarantineLength,
                     conf.genesisBlockData.numberOfActiveValidators,
-                    conf.shardName,
+                    conf.genesisBlockData.shardConfig.shardName,
                     conf.genesisBlockData.deployTimestamp,
                     conf.genesisCeremony.requiredSignatures,
                     conf.genesisCeremony.approveDuration,
@@ -197,8 +198,8 @@ object CasperLaunch {
           _ <- Concurrent[F].start(
                 GenesisCeremonyMaster
                   .waitingForApprovedBlockLoop[F](
-                    conf.shardName,
-                    conf.finalizationRate,
+                    conf.genesisBlockData.shardConfig.shardName,
+                    conf.genesisBlockData.shardConfig.finalizationRate,
                     validatorId,
                     enableStateExporter
                   )
@@ -213,8 +214,6 @@ object CasperLaunch {
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           _ <- Engine.transitionToInitializing(
-                conf.shardName,
-                conf.finalizationRate,
                 validatorId,
                 // TODO peer should be able to request approved blocks on different heights
                 // from genesis to the most recent one (default)

@@ -18,10 +18,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{Log, LogSource}
 
-final class Estimator[F[_]: Sync: Log: Metrics: Span](
-    maxNumberOfParents: Int,
-    maxParentDepthOpt: Option[Int]
-) {
+final class Estimator[F[_]: Sync: Log: Metrics: Span] {
 
   implicit val decreasingOrder = Ordering.Tuple2(
     Ordering[Long].reverse,
@@ -68,12 +65,13 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
       rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
       _                          <- Span[F].mark("filtered-deep-parents")
-    } yield rankedShallowHashes.take(maxNumberOfParents)
+    } yield rankedShallowHashes
   }
 
   private def filterDeepParents(
       rankedLatestHashes: Vector[BlockHash],
-      dag: BlockDagRepresentation[F]
+      dag: BlockDagRepresentation[F],
+      maxParentDepthOpt: Option[Int] = None
   ): F[Vector[BlockHash]] =
     maxParentDepthOpt match {
       case Some(maxParentDepth) =>
@@ -224,10 +222,4 @@ object Estimator {
 
   def apply[F[_]](implicit ev: Estimator[F]): Estimator[F] =
     ev
-
-  def apply[F[_]: Sync: Log: Metrics: Span](
-      maxNumberOfParents: Int,
-      maxParentDepthOpt: Option[Int]
-  ): Estimator[F] =
-    new Estimator(maxNumberOfParents, maxParentDepthOpt)
 }

@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.protocol.ShardId.ShardId
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -60,43 +61,101 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def createBlock[F[_]: Sync: Log: Time: BlockStore: Estimator: DeployStorage: Metrics](
+  def createBlock[F[_]: Sync: Log: Time: BlockStore: Estimator: DeployStorage: Metrics: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity,
-      shardId: String,
-      version: Long,
-      expirationThreshold: Int,
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      shardId: ShardId
   )(implicit spanF: Span[F]): F[CreateBlockStatus] =
     spanF.trace(CreateBlockMetricsSource) {
       import cats.instances.list._
+
+      def prepareDeploys(
+          parentMetadatas: Seq[BlockMetadata],
+          seqNum: Int,
+          maxBlockNumber: Long,
+          deployLifespan: Int
+      ): F[(Seq[Signed[DeployData]], Seq[SlashDeploy])] =
+        for {
+          invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
+          // if the node is already not bonded by the parent, the node won't slash once more
+          invalidLatestMessagesExcludeUnbonded = invalidLatestMessages.filter {
+            case (validator, _) => isBonded(parentMetadatas.head, validator)
+          }
+          deploys <- extractDeploys(dag, parentMetadatas, maxBlockNumber, deployLifespan)
+          // TODO: Add `slashingDeploys` to DeployStorage
+          selfId = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+          slashingDeploys = invalidLatestMessagesExcludeUnbonded.values.map(
+            invalidBlockHash =>
+              SlashDeploy(
+                invalidBlockHash,
+                validatorIdentity.publicKey,
+                SystemDeployUtil.generateSlashDeployRandomSeed(selfId, seqNum)
+              )
+          )
+        } yield (deploys, slashingDeploys.toSeq)
+
+      def makeSignedBlock(
+          parents: List[BlockMessage],
+          seqNum: Int,
+          maxBlockNumber: Long,
+          deploys: Seq[Signed[DeployData]],
+          systemDeploys: Seq[SystemDeploy],
+          shardId: String,
+          casperVersion: Long
+      ): F[CreateBlockStatus] =
+        for {
+          justifications   <- computeJustifications(dag, parents)
+          invalidBlocksSet <- dag.invalidBlocks
+          invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
+          // make sure closeBlock is the last system Deploy
+          now <- Time[F].currentMillis
+          unsignedBlock <- processDeploysAndCreateBlock(
+                            dag,
+                            runtimeManager,
+                            parents,
+                            deploys,
+                            systemDeploys,
+                            justifications,
+                            maxBlockNumber,
+                            validatorIdentity.publicKey,
+                            shardId,
+                            casperVersion,
+                            now,
+                            seqNum,
+                            invalidBlocks
+                          )
+          _           <- spanF.mark("block-created")
+          selfId      = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+          signedBlock = unsignedBlock.map(validatorIdentity.signBlock)
+          _           <- spanF.mark("block-signed")
+        } yield signedBlock
+
+      def selfIsActiveValidator(parents: List[BlockMessage]): F[Boolean] =
+        parents
+          .traverse(b => isActiveValidator(b, runtimeManager, validatorIdentity))
+          .map(_.forall(identity))
+
+      def syncCheckFailed =
+        Log[F]
+          .warn("Must wait for more blocks from other validators")
+          .as(CreateBlockStatus.notEnoughNewBlocks)
+
+      def lfhcCheckFailed =
+        Log[F]
+          .warn("Too far ahead of the last finalized block")
+          .as(CreateBlockStatus.tooFarAheadOfLastFinalized)
+
       for {
-        tipHashes             <- Estimator[F].tips(dag, genesis)
-        _                     <- spanF.mark("after-estimator")
-        parentMetadatas       <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
-        maxBlockNumber        = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
-        _                     <- Log[F].info(s"Creating block with maxBlockNumber ${maxBlockNumber}")
-        invalidLatestMessages <- ProtoUtil.invalidLatestMessages(dag)
-        deploys               <- extractDeploys(dag, parentMetadatas, maxBlockNumber, expirationThreshold)
-        sender                = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-        latestMessageOpt      <- dag.latestMessage(sender)
-        seqNum                = latestMessageOpt.fold(0)(_.seqNum) + 1
-        _                     <- Log[F].info(s"Creating block with seqNum ${seqNum}")
-        // if the node is already not bonded by the parent, the node won't slash once more
-        invalidLatestMessagesExcludeUnbonded = invalidLatestMessages.filter {
-          case (validator, _) => isBonded(parentMetadatas.head, validator)
-        }
-        // TODO: Add `slashingDeploys` to DeployStorage
-        slashingDeploys = invalidLatestMessagesExcludeUnbonded.values.map(
-          invalidBlockHash =>
-            SlashDeploy(
-              invalidBlockHash,
-              validatorIdentity.publicKey,
-              SystemDeployUtil.generateSlashDeployRandomSeed(sender, seqNum)
-            )
-        )
-        parents <- parentMetadatas.toList.traverse(p => BlockStore[F].getUnsafe(p.blockHash))
+        // Note: Estimator[F].tips returns sequence sorted by sender weight
+        tipHashes       <- Estimator[F].tips(dag, genesis)
+        _               <- spanF.mark("after-estimator")
+        parentMetadatas <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
+        _               <- spanF.mark("non-conflicting-chosen")
+        parentsStr      = parentMetadatas.map(b => PrettyPrinter.buildString(b.blockHash)).mkString(", ")
+        parents         <- parentMetadatas.toList.traverse(p => BlockStore[F].getUnsafe(p.blockHash))
+        // TODO the following is too strict not honor Casper discipline. Rewrite to obey SafetyOracle logic
         // there are 3 situations on judging whether the validator is active
         // 1. it is possible that you are active in some parents but not active in other parents
         // 2. all of the parents are in active state
@@ -105,43 +164,70 @@ object BlockCreator {
         // If one validator issue a bonding or unbonding request , it would be possible to end up with
         // parent in 1 situation. It would be safer for the validator to make sure all parents post state
         // are in active state.
-        isActive = parents
-          .traverse(b => isActiveValidator(b, runtimeManager, validatorIdentity))
-          .map(_.forall(identity))
-        justifications   <- computeJustifications(dag, parents)
-        now              <- Time[F].currentMillis
-        invalidBlocksSet <- dag.invalidBlocks
-        invalidBlocks    = invalidBlocksSet.map(block => (block.blockHash, block.sender)).toMap
-        // make sure closeBlock is the last system Deploy
-        systemDeploys = slashingDeploys.toList :+ CloseBlockDeploy(
-          SystemDeployUtil.generateCloseDeployRandomSeed(sender, seqNum)
-        )
-        unsignedBlock <- isActive.ifM(
-                          if (deploys.nonEmpty || slashingDeploys.nonEmpty) {
-                            processDeploysAndCreateBlock(
-                              dag,
-                              runtimeManager,
-                              parents,
-                              deploys,
-                              systemDeploys,
-                              justifications,
+        r <- selfIsActiveValidator(parents).ifM(
+              for {
+                // In the very beginning of block creation we need to get all on-chain data neccessary
+                // runtime = RuntimeManager.spawnRuntime(parents.)
+                selfId            <- ByteString.copyFrom(validatorIdentity.publicKey.bytes).pure[F]
+                selfLatestMessage <- dag.latestMessage(selfId)
+                blockSeqNum       = selfLatestMessage.fold(0)(_.seqNum) + 1
+                maxBlockNumber    = ProtoUtil.maxBlockNumberMetadata(parentMetadatas)
+                mainParent        = parents.head
+                shardConfig <- runtimeManager.getShardConfig(
+                                ProtoUtil.postStateHash(mainParent, shardId)
+                              )
+                p = parents.take(shardConfig.maxNumberOfParents)
+                checkSynchronyConstraint = SynchronyConstraintChecker[F]
+                  .check(
+                    dag,
+                    runtimeManager,
+                    genesis,
+                    selfId,
+                    shardConfig.synchronyConstraintThreshold
+                  )
+                checkLastFinalizedHeightConstraint = LastFinalizedHeightConstraintChecker[F]
+                  .check(dag, genesis, selfId, shardConfig.heightConstraintThreshold)
+                propose = for {
+                  _ <- Log[F].info(
+                        s"Creating block with seqNum ${blockSeqNum} and maxBlockNumber ${maxBlockNumber}."
+                      )
+                  deploys <- prepareDeploys(
+                              parentMetadatas,
+                              blockSeqNum,
                               maxBlockNumber,
-                              validatorIdentity.publicKey,
-                              shardId,
-                              version,
-                              now,
-                              seqNum,
-                              invalidBlocks
+                              shardConfig.deployLifespan
                             )
-                          } else {
-                            CreateBlockStatus.noNewDeploys.pure[F]
-                          },
-                          CreateBlockStatus.readOnlyMode.pure[F]
+                  (userDeploys, slashingDeploys) = deploys
+                  r <- if (userDeploys.nonEmpty || slashingDeploys.nonEmpty) {
+                        makeSignedBlock(
+                          parents,
+                          blockSeqNum,
+                          maxBlockNumber,
+                          userDeploys,
+                          slashingDeploys :+ CloseBlockDeploy(
+                            SystemDeployUtil
+                              .generateCloseDeployRandomSeed(selfId, blockSeqNum)
+                          ),
+                          shardConfig.shardName,
+                          shardConfig.casperVersion
                         )
-        _           <- spanF.mark("block-created")
-        signedBlock = unsignedBlock.map(validatorIdentity.signBlock)
-        _           <- spanF.mark("block-signed")
-      } yield signedBlock
+                      } else {
+                        CreateBlockStatus.noNewDeploys.pure[F]
+                      }
+                } yield r
+
+                result <- checkSynchronyConstraint.ifM(
+                           checkLastFinalizedHeightConstraint.ifM(
+                             propose,
+                             lfhcCheckFailed
+                           ),
+                           syncCheckFailed
+                         )
+
+              } yield result,
+              CreateBlockStatus.readOnlyMode.pure[F]
+            )
+      } yield r
     }
 
   // TODO: Remove no longer valid deploys here instead of with lastFinalizedBlock call
@@ -149,12 +235,12 @@ object BlockCreator {
       dag: BlockDagRepresentation[F],
       parents: Seq[BlockMetadata],
       maxBlockNumber: Long,
-      expirationThreshold: Int
+      deployLifespan: Int
   ): F[Seq[Signed[DeployData]]] =
     for {
       deploys             <- DeployStorage[F].getUnfinalized
       currentBlockNumber  = maxBlockNumber + 1
-      earliestBlockNumber = currentBlockNumber - expirationThreshold
+      earliestBlockNumber = currentBlockNumber - deployLifespan
       validDeploys = deploys.filter(
         d =>
           notFutureDeploy(currentBlockNumber, d.data) && notExpiredDeploy(

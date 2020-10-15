@@ -98,9 +98,7 @@ object BlockAPI {
         casper => {
           Sync[F].bracket(blockApiLock.tryAcquire) {
             case true => {
-              implicit val ms     = BlockAPIMetricsSource
-              val syncCheckFailed = logWarning("Must wait for more blocks from other validators")
-              val lfhcCheckFailed = logWarning("Too far ahead of the last finalized block")
+              implicit val ms = BlockAPIMetricsSource
               val validatorCheckFailed = new IllegalStateException(
                 "Read only node cannot create a block"
               ).raiseError[F, PublicKey]
@@ -111,15 +109,6 @@ object BlockAPI {
                 genesis         <- casper.getGenesis
                 dag             <- casper.blockDag
                 runtimeManager  <- casper.getRuntimeManager
-                checkSynchronyConstraint = SynchronyConstraintChecker[F]
-                  .check(
-                    dag,
-                    runtimeManager,
-                    genesis,
-                    validator
-                  )
-                checkLastFinalizedHeightConstraint = LastFinalizedHeightConstraintChecker[F]
-                  .check(dag, genesis, validator)
                 createBlock = (for {
                   _          <- Metrics[F].incrementCounter("propose")
                   maybeBlock <- casper.createBlock
@@ -147,10 +136,7 @@ object BlockAPI {
                       logWarning(error) <* Metrics[F].incrementCounter("propose-failed")
                     case result => result.pure[F]
                   }
-                result <- checkSynchronyConstraint.ifM(
-                           checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
-                           syncCheckFailed
-                         )
+                result <- createBlock
               } yield result
             }
             case false =>

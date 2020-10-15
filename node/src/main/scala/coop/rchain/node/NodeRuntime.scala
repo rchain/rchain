@@ -794,29 +794,25 @@ object NodeRuntime {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
       }
-      lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
-        conf.casper.faultToleranceThreshold
-      )(
-        Sync[F],
-        Log[F],
-        Concurrent[F],
-        blockStore,
-        blockDagStorage,
-        oracle,
-        deployStorage
-      )
-      synchronyConstraintChecker = SynchronyConstraintChecker[F](
-        conf.casper.synchronyConstraintThreshold
-      )(Sync[F], blockStore, Log[F])
-      lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[F](
-        conf.casper.heightConstraintThreshold
-      )(Sync[F], lastFinalizedStorage, blockStore, Log[F])
-      estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)(
-        Sync[F],
-        Log[F],
-        Metrics[F],
-        span
-      )
+      lastFinalizedBlockCalculator = {
+        implicit val bs  = blockStore
+        implicit val bds = blockDagStorage
+        implicit val o   = oracle
+        implicit val ds  = deployStorage
+        new LastFinalizedBlockCalculator[F]
+      }
+      synchronyConstraintChecker = {
+        implicit val b = blockStore
+        new SynchronyConstraintChecker[F]
+      }
+      lastFinalizedHeightConstraintChecker = {
+        implicit val lfs = lastFinalizedStorage
+        new LastFinalizedHeightConstraintChecker[F]
+      }
+      estimator = {
+        implicit val s = span
+        new Estimator[F]
+      }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span

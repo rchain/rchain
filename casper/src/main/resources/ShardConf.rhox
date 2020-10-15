@@ -1,0 +1,49 @@
+/*
+ The table below describes the required computations and their dependencies
+
+ No. | Dependency | Computation method | Result
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+ 1.  |            | given              | sk = a9585a0687761139ab3587a4938fb5ab9fcba675c79fefba889859674046d4a5
+ 2.  |            | given              | timestamp = 1571308472850
+ 3.  |            | lastNonce          | nonce = 9223372036854775807
+ 4.  | 1,         | secp256k1          | pk = 047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f
+ 5.  | 4, 2,      | genIds             | uname = ???
+ 6.  | 3, 5,      | registry           | value = ???
+ 7.  | 6,         | protobuf           | toSign = ???
+ 8.  | 7, 1,      | secp256k1          | sig = ???
+ 9.  | 4,         | registry           | uri = ???
+ ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+*/
+new shardConf, 
+    rs(`rho:registry:insertSigned:secp256k1`),
+    uriOut
+in {
+  contract shardConf(@"get", returnCh) = {
+    returnCh!({
+      "casperVersion": casperVersion,
+      "configVersion": configVersion,
+      "shardName": shardName,
+      "parentShardId": parentShardId,
+      "faultToleranceThreshold": faultToleranceThreshold,
+      "finalizationRate": finalizationRate,
+      "maxNumberOfParents": maxNumberOfParents,
+      "maxParentDepth": maxParentDepth,
+      "synchronyConstraintThreshold": synchronyConstraintThreshold,
+      "heightConstraintThreshold": heightConstraintThreshold,
+      // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+      // Required to enable protection from re-submitting duplicate deploys
+      "deployLifespan": deployLifespan,
+      "bondMinimum": bondMinimum,
+      "bondMaximum": bondMaximum,
+      "epochLength": epochLength,
+      "quarantineLength": quarantineLength
+    })
+  } |
+  // Registers signed write-only shardConf contract bundle.
+  rs!(
+    "???".hexToBytes(),
+    (9223372036854775807, bundle+{*shardConf}),
+    "???".hexToBytes(),
+    // Do we need this uriOut here?
+    *uriOut)
+}

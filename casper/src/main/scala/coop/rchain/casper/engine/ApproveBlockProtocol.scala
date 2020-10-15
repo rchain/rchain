@@ -109,6 +109,7 @@ object ApproveBlockProtocol {
                            ),
                            vaults = vaults,
                            supply = Long.MaxValue
+                           // TODO insert here shard configuration contract [[coop.rchain.casper.genesis.contracts.ShardConf]]
                          )
                        )
                      }

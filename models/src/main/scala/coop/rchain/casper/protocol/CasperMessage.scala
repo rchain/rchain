@@ -3,6 +3,7 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.protocol.ShardId.ShardId
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.PCost
 import coop.rchain.models.BlockHash.BlockHash
@@ -174,7 +175,7 @@ final case class BlockMessage(
     seqNum: Int,
     sig: ByteString,
     sigAlgorithm: String,
-    shardId: String,
+    shardId: ShardId,
     extraBytes: ByteString = ByteString.EMPTY
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
@@ -653,4 +654,8 @@ object StoreItemsMessage {
       x.historyItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList,
       x.dataItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList
     )
+}
+
+object ShardId {
+  type ShardId = String
 }
