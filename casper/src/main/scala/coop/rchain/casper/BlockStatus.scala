@@ -62,8 +62,10 @@ object InvalidBlock {
   // For now we won't eagerly slash equivocations that we can just ignore,
   // as we aren't forced to add it to our view as a dependency.
   // TODO: The above will become a DOS vector if we don't fix.
-  case object IgnorableEquivocation                       extends InvalidBlock
-  final case class MissingBlocks(missing: Set[BlockHash]) extends InvalidBlock
+  case object IgnorableEquivocation extends InvalidBlock
+  final case class MissingBlocks(missing: Set[BlockHash]) extends InvalidBlock {
+    override def toString: String = "MissingBlocks"
+  }
 
   case object InvalidFormat    extends InvalidBlock
   case object InvalidSignature extends InvalidBlock

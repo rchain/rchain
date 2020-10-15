@@ -6,7 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
@@ -20,6 +20,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
+import coop.rchain.catscontrib.Catscontrib._
 
 import scala.util.{Success, Try}
 
@@ -202,12 +203,15 @@ object Validate {
     import cats.instances.list._
 
     for {
-      parentsPresent <- ProtoUtil.parentHashes(block).forallM(p => dag.contains(p))
-      justificationsPresent <- block.justifications
-                                .forallM(j => dag.contains(j.latestBlockHash))
-      result = if (parentsPresent && justificationsPresent) {
+      missing <- ProtoUtil
+                  .dependenciesHashesOf(block)
+                  .filterA(
+                    d => (dag.contains(d) ||^ dag.equivocationHashes.contains(d).pure[F]).not
+                  )
+
+      result = if (missing.isEmpty) {
         BlockStatus.valid.asRight[BlockError]
-      } else BlockStatus.missingBlocks.asLeft[ValidBlock]
+      } else BlockStatus.missingBlocks(missing.toSet).asLeft[ValidBlock]
     } yield result
   }
 
