@@ -1,34 +1,37 @@
 package coop.rchain.casper
 
+import coop.rchain.models.BlockHash
+import coop.rchain.models.BlockHash.BlockHash
+
 sealed trait BlockStatus
 object BlockStatus {
-  def valid: ValidBlock                    = ValidBlock.Valid
-  def processed: BlockError                = BlockError.Processed
-  def casperIsBusy: BlockError             = BlockError.CasperIsBusy
-  def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
-  def admissibleEquivocation: BlockError   = InvalidBlock.AdmissibleEquivocation
-  def ignorableEquivocation: BlockError    = InvalidBlock.IgnorableEquivocation
-  def missingBlocks: BlockError            = InvalidBlock.MissingBlocks
-  def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
-  def invalidSignature: BlockError         = InvalidBlock.InvalidSignature
-  def invalidSender: BlockError            = InvalidBlock.InvalidSender
-  def invalidVersion: BlockError           = InvalidBlock.InvalidVersion
-  def invalidTimestamp: BlockError         = InvalidBlock.InvalidTimestamp
-  def deployNotSigned: BlockError          = InvalidBlock.DeployNotSigned
-  def invalidBlockNumber: BlockError       = InvalidBlock.InvalidBlockNumber
-  def invalidRepeatDeploy: BlockError      = InvalidBlock.InvalidRepeatDeploy
-  def invalidParents: BlockError           = InvalidBlock.InvalidParents
-  def invalidFollows: BlockError           = InvalidBlock.InvalidFollows
-  def invalidSequenceNumber: BlockError    = InvalidBlock.InvalidSequenceNumber
-  def invalidShardId: BlockError           = InvalidBlock.InvalidShardId
-  def justificationRegression: BlockError  = InvalidBlock.JustificationRegression
-  def neglectedInvalidBlock: BlockError    = InvalidBlock.NeglectedInvalidBlock
-  def neglectedEquivocation: BlockError    = InvalidBlock.NeglectedEquivocation
-  def invalidTransaction: BlockError       = InvalidBlock.InvalidTransaction
-  def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
-  def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
-  def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
-  def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
+  def valid: ValidBlock                                  = ValidBlock.Valid
+  def processed: BlockError                              = BlockError.Processed
+  def casperIsBusy: BlockError                           = BlockError.CasperIsBusy
+  def exception(ex: Throwable): BlockError               = BlockError.BlockException(ex)
+  def admissibleEquivocation: BlockError                 = InvalidBlock.AdmissibleEquivocation
+  def ignorableEquivocation: BlockError                  = InvalidBlock.IgnorableEquivocation
+  def missingBlocks(missing: Set[BlockHash]): BlockError = InvalidBlock.MissingBlocks(missing)
+  def invalidFormat: BlockError                          = InvalidBlock.InvalidFormat
+  def invalidSignature: BlockError                       = InvalidBlock.InvalidSignature
+  def invalidSender: BlockError                          = InvalidBlock.InvalidSender
+  def invalidVersion: BlockError                         = InvalidBlock.InvalidVersion
+  def invalidTimestamp: BlockError                       = InvalidBlock.InvalidTimestamp
+  def deployNotSigned: BlockError                        = InvalidBlock.DeployNotSigned
+  def invalidBlockNumber: BlockError                     = InvalidBlock.InvalidBlockNumber
+  def invalidRepeatDeploy: BlockError                    = InvalidBlock.InvalidRepeatDeploy
+  def invalidParents: BlockError                         = InvalidBlock.InvalidParents
+  def invalidFollows: BlockError                         = InvalidBlock.InvalidFollows
+  def invalidSequenceNumber: BlockError                  = InvalidBlock.InvalidSequenceNumber
+  def invalidShardId: BlockError                         = InvalidBlock.InvalidShardId
+  def justificationRegression: BlockError                = InvalidBlock.JustificationRegression
+  def neglectedInvalidBlock: BlockError                  = InvalidBlock.NeglectedInvalidBlock
+  def neglectedEquivocation: BlockError                  = InvalidBlock.NeglectedEquivocation
+  def invalidTransaction: BlockError                     = InvalidBlock.InvalidTransaction
+  def invalidBondsCache: BlockError                      = InvalidBlock.InvalidBondsCache
+  def invalidBlockHash: BlockError                       = InvalidBlock.InvalidBlockHash
+  def containsExpiredDeploy: BlockError                  = InvalidBlock.ContainsExpiredDeploy
+  def containsFutureDeploy: BlockError                   = InvalidBlock.ContainsFutureDeploy
 
   def isInDag(blockStatus: BlockStatus): Boolean =
     blockStatus match {
@@ -59,8 +62,8 @@ object InvalidBlock {
   // For now we won't eagerly slash equivocations that we can just ignore,
   // as we aren't forced to add it to our view as a dependency.
   // TODO: The above will become a DOS vector if we don't fix.
-  case object IgnorableEquivocation extends InvalidBlock
-  case object MissingBlocks         extends InvalidBlock
+  case object IgnorableEquivocation                       extends InvalidBlock
+  final case class MissingBlocks(missing: Set[BlockHash]) extends InvalidBlock
 
   case object InvalidFormat    extends InvalidBlock
   case object InvalidSignature extends InvalidBlock
