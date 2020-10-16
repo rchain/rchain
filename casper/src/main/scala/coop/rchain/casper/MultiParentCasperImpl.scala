@@ -516,8 +516,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
         case BlockError.BlockException(ex) =>
           Log[F]
-            .error(s"Encountered exception in while processing block ${PrettyPrinter
-              .buildString(block.blockHash)}: ${ex.getMessage}")
+            .error(s"Unhandled exception while processing block ${PrettyPrinter
+              .buildString(block.blockHash)}: ${ex.getMessage}. Leaving casper intact.")
             .as(dag)
 
       }
