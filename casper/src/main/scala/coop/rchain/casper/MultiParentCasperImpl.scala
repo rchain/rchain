@@ -130,7 +130,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                              _ <- missDeps.traverse(
                                    casperBuffer.addRelation(_, b.blockHash)
                                  ) >> BlockRetriever[F].ackInCasper(b.blockHash)
-                             depsInProcessing = dPv.intersect(dNv).toList
+                             depsInProcessing = dPv.toSet.intersect(dNv).toList
                              // As block can be parent for multiple children, missing dep might already be in
                              // casper buffer, requested as some another block parent.
                              // Such parents should not be requested again.
@@ -212,11 +212,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                       for {
                         _ <- blockProcessingState
                               .update(
-                                c =>
-                                  c.copy(
-                                    enqueued = c.enqueued - b.blockHash,
-                                    processing = c.processing + b.blockHash
-                                  )
+                                c => c.copy(processing = c.processing + b.blockHash)
                               )
                         _ <- Log[F].info(
                               s"Block ${PrettyPrinter.buildString(b, short = true)} got blockProcessingLock."
@@ -232,7 +228,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                             s"processing deferred as Casper is busy."
                         ) >>
                         blockProcessingState
-                          .update(c => c.copy(enqueued = c.enqueued + b.blockHash))
+                          .update(c => c.copy(enqueued = c.enqueued.enqueue(b.blockHash)))
                           .as(BlockStatus.casperIsBusy.asLeft[ValidBlock])
                   } {
                     case true =>
@@ -324,13 +320,26 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                           } yield !missingDep
                         }
       enqueued <- getBlockProcessingState.map(_.enqueued)
-      all      = depFreePendants ++ enqueued
       _ <- Log[F].info(
             s"Blocks ready to be added: " +
               s"dependency free buffer pendants ${PrettyPrinter.buildString(depFreePendants)}, " +
               s"enqueued to Casper ${PrettyPrinter.buildString(enqueued.toList)}"
           )
-    } yield all.headOption
+
+      nextDepFrePendant = depFreePendants.headOption
+      // Return next pendant, or, if no any, next enqueued to Casper
+      r <- if (nextDepFrePendant.nonEmpty)
+            nextDepFrePendant.pure[F]
+          else
+            blockProcessingState.modify[Option[BlockHash]] { state =>
+              val dequeueResult = state.enqueued.dequeueOption
+              dequeueResult match {
+                case Some((next, updEnqueued)) =>
+                  (state.copy(enqueued = updEnqueued), Some(next))
+                case None => (state, None)
+              }
+            }
+    } yield r
   }
 
   def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))

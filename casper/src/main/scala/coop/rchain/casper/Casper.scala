@@ -25,6 +25,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 
+import scala.collection.immutable.Queue
+
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
 final case object MissingUser                           extends DeployError
@@ -47,7 +49,7 @@ object DeployError {
   }
 }
 
-final case class BlockProcessingState(enqueued: Set[BlockHash], processing: Set[BlockHash])
+final case class BlockProcessingState(enqueued: Queue[BlockHash], processing: Set[BlockHash])
 
 trait Casper[F[_]] {
   def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
@@ -142,7 +144,7 @@ sealed abstract class MultiParentCasperInstances {
                                }
         blockProcessingLock <- MetricsSemaphore.single[F]
         blockProcessingState <- Ref.of[F, BlockProcessingState](
-                                 BlockProcessingState(Set.empty, Set.empty)
+                                 BlockProcessingState(Queue.empty, Set.empty)
                                )
       } yield {
         new MultiParentCasperImpl(
