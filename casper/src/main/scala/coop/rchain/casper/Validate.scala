@@ -195,23 +195,23 @@ object Validate {
 
   /**
     * Works with either efficient justifications or full explicit justifications
+    * Returns dependencies that have not been validated yet, so not in DAG.
+    * In addition, returns dependencies that are found in EquivocationTracker.
+    * Equivocating hashes should be subset of missing.
     */
   def missingBlocks[F[_]: Monad: Log](
       block: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
-
+    val deps = ProtoUtil.dependenciesHashesOf(block)
     for {
-      missing <- ProtoUtil
-                  .dependenciesHashesOf(block)
-                  .filterA(
-                    d => (dag.contains(d) ||^ dag.equivocationHashes.contains(d).pure[F]).not
-                  )
+      missing      <- deps.filterA(d => dag.contains(d).not)
+      equivocating = missing.filter(d => dag.equivocationHashes.contains(d))
 
       result = if (missing.isEmpty) {
         BlockStatus.valid.asRight[BlockError]
-      } else BlockStatus.missingBlocks(missing.toSet).asLeft[ValidBlock]
+      } else BlockStatus.missingBlocks(missing.toSet, equivocating.toSet).asLeft[ValidBlock]
     } yield result
   }
 

@@ -104,9 +104,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                      dag                <- blockDag
                      missDepCheckResult <- Validate.missingBlocks(b, dag)
                      // Dependencies that are not validated
-                     dNv = missDepCheckResult match {
-                       case Left(MissingBlocks(hashes)) => hashes
-                       case _                           => Set.empty[BlockHash]
+                     // Equivocating dependencies should not be requested again, once they are in equivocation tracker
+                     (dNv, equivocatingDeps) = missDepCheckResult match {
+                       case Left(MissingBlocks(hashes, equiv)) => (hashes, equiv)
+                       case _                                  => (Set.empty[BlockHash], Set.empty[BlockHash])
                      }
                      // Dependencies that are pending validation
                      // Some of missing deps might have all theirs dependencies filled, so already
@@ -135,12 +136,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                              // Such parents should not be requested again.
                              depsInBuffer <- missDeps.filterA(bufferContains)
                              // Set of deps that node has to request
-                             depsToRequest = missDeps diff depsInBuffer
+                             depsToRequest = missDeps diff depsInBuffer diff equivocatingDeps.toList
                              _ <- fetchMissingDependenciesWithLog(
                                    b,
                                    depsToRequest,
                                    depsInProcessing,
-                                   depsInBuffer
+                                   depsInBuffer,
+                                   equivocatingDeps.toList
                                  ).whenA(depsToRequest.nonEmpty)
                              r <- isApprovedBlockChild(b).flatMap(
                                    c =>
@@ -492,7 +494,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       }
       .leftMap {
         // this should not be the case, as checked before trying to add block
-        case InvalidBlock.MissingBlocks(_) => dag.pure
+        case InvalidBlock.MissingBlocks(_, _) => dag.pure
 
         case InvalidBlock.AdmissibleEquivocation =>
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -560,7 +562,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       b: BlockMessage,
       deps: List[BlockHash],
       depsInProcessing: List[BlockHash],
-      depsInBuffer: List[BlockHash]
+      depsInBuffer: List[BlockHash],
+      depsInEquivocationTracker: List[BlockHash]
   ): F[Unit] = {
     import cats.instances.list._
     for {
@@ -568,7 +571,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
             s"Block ${PrettyPrinter.buildString(b, short = true)} missing dependencies. " +
               s"Fetching: ${PrettyPrinter.buildString(deps)}. " +
               s"Pending processing: ${PrettyPrinter.buildString(depsInProcessing)}. " +
-              s"In CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. "
+              s"In CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
+              s"In EquivocationTracker: ${PrettyPrinter.buildString(depsInEquivocationTracker)}. "
           )
       _ <- deps.traverse_(
             BlockRetriever[F]
