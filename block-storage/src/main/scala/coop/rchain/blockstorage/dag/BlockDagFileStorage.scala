@@ -81,7 +81,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSortVector: Vector[Vector[BlockHash]],
       blockHashesByDeploy: Map[DeployId, BlockHash],
       invalidBlocksSet: Set[BlockMetadata],
-      sortOffset: Long
+      sortOffset: Long,
+      equivocationHashes: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
     private def findAndAccessCheckpoint[R](
         blockHash: BlockHash,
@@ -273,6 +274,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       blockHashesByDeploy <- deployIndex.data
       invalidBlocks       <- invalidBlocksIndex.data.map(_.keySet)
       sortOffset          <- getSortOffset
+      equivocationHashes <- FileEquivocationsTracker.equivocationRecords.map { equivocations =>
+                             equivocations.flatMap(_.equivocationDetectedBlockHashes)
+                           }
     } yield FileDagRepresentation(
       latestMessages,
       childMap,
@@ -280,7 +284,8 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
       topoSort,
       blockHashesByDeploy,
       invalidBlocks,
-      sortOffset
+      sortOffset,
+      equivocationHashes
     )
 
   def getRepresentation: F[BlockDagRepresentation[F]] =

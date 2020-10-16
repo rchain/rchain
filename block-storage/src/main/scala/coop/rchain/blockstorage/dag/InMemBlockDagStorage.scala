@@ -36,7 +36,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
       dataLookup: Map[BlockHash, BlockMetadata],
       topoSortVector: Vector[Vector[BlockHash]],
       blockHashesByDeploy: Map[DeployId, BlockHash],
-      invalidBlocksSet: Set[BlockMetadata]
+      invalidBlocksSet: Set[BlockMetadata],
+      equivocationHashes: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
       childMap.get(blockHash).pure[F]
@@ -101,13 +102,17 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
       topoSort          <- topoSortRef.get
       blockHashByDeploy <- blockHashesByDeployRef.get
       invalidBlocks     <- invalidBlocksRef.get
+      equivocationHashes <- InMemEquivocationsTracker.equivocationRecords.map { equivocations =>
+                             equivocations.flatMap(_.equivocationDetectedBlockHashes)
+                           }
     } yield InMemBlockDagRepresentation(
       latestMessages,
       childMap,
       dataLookup,
       topoSort,
       blockHashByDeploy,
-      invalidBlocks
+      invalidBlocks,
+      equivocationHashes
     )
 
   override def insert(
