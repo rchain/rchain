@@ -44,6 +44,7 @@ import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
 
+import scala.collection.immutable.Queue
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 class TestNode[F[_]](
@@ -118,7 +119,7 @@ class TestNode[F[_]](
   implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
 
   val blockProcessingState =
-    Ref.unsafe[F, BlockProcessingState](BlockProcessingState(Set.empty, Set.empty))
+    Ref.unsafe[F, BlockProcessingState](BlockProcessingState(Queue.empty, Set.empty))
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,

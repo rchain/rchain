@@ -21,6 +21,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
 import monix.eval.Task
 
+import scala.collection.immutable.Queue
 import scala.collection.mutable.{Map => MutableMap}
 
 class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
@@ -58,7 +59,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     } yield BlockStatus.valid.asRight
 
   def getBlockProcessingState: F[BlockProcessingState] =
-    BlockProcessingState(Set.empty[BlockHash], Set.empty[BlockHash]).pure[F]
+    BlockProcessingState(Queue.empty[BlockHash], Set.empty[BlockHash]).pure[F]
 }
 
 object NoOpsCasperEffect {
