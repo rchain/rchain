@@ -28,6 +28,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.InvalidBlock.MissingBlocks
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
@@ -83,6 +84,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         )
         .asLeft[ValidBlock]
         .pure[F]
+    import cats.instances.list._
 
     for {
       blockAvailable <- BlockStore[F].get(blockHash)
@@ -97,25 +99,55 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                  case None =>
                    returnNoBlockInStore
                  case Some(b) =>
+                   // Check if all block dependencies are filled before trying to validate
                    for {
-                     dag                   <- blockDag
-                     missingDepCheckResult <- Validate.missingBlocks(b, dag)
-                     dagMissingBlockDependencies = missingDepCheckResult equals Left(
-                       InvalidBlock.MissingBlocks
-                     )
+                     dag                <- blockDag
+                     missDepCheckResult <- Validate.missingBlocks(b, dag)
+                     // Dependencies that are not validated
+                     dNv = missDepCheckResult match {
+                       case Left(MissingBlocks(hashes)) => hashes
+                       case _                           => Set.empty[BlockHash]
+                     }
+                     // Dependencies that are pending validation
+                     // Some of missing deps might have all theirs dependencies filled, so already
+                     // enqueued to Casper and waiting when Casper picks them up
+                     dPv <- getBlockProcessingState.map(bPs => (bPs.enqueued ++ bPs.processing))
+                     // Deps in processing can be considered as available, as eventually they should end up in DAG
+                     // once Casper has resources to process them. So its safe to exclude these block from missing deps.
+                     missDeps = (dNv -- dPv).toList
 
                      isReadyApprovedBlockChild = isApprovedBlockChild(b) &&^ approvedBlockStateComplete
-                     blockIsReady              <- ~^(dagMissingBlockDependencies.pure[F]) ||^ isReadyApprovedBlockChild
+                     // Defines if block can be added
+                     ready <- missDeps.isEmpty.pure[F] ||^ isReadyApprovedBlockChild
 
-                     _ <- fetchMissingDependencies(b).whenA(dagMissingBlockDependencies)
-                     r <- if (blockIsReady) addBlock(b, allowAddFromBuffer)
-                         else {
-                           isApprovedBlockChild(b).flatMap(
-                             c =>
-                               if (c) returnSafetyRangeNotFilled
-                               else missingDepCheckResult.pure[F]
-                           )
-                         }
+                     r <- if (ready)
+                           // Validate block
+                           addBlock(b, allowAddFromBuffer)
+                         else
+                           for {
+                             // Commit block to casper buffer and inform BlockRetriever
+                             _ <- missDeps.traverse(
+                                   casperBuffer.addRelation(_, b.blockHash)
+                                 ) >> BlockRetriever[F].ackInCasper(b.blockHash)
+                             depsInProcessing = dPv.intersect(dNv).toList
+                             // As block can be parent for multiple children, missing dep might already be in
+                             // casper buffer, requested as some another block parent.
+                             // Such parents should not be requested again.
+                             depsInBuffer <- missDeps.filterA(bufferContains)
+                             // Set of deps that node has to request
+                             depsToRequest = missDeps diff depsInBuffer
+                             _ <- fetchMissingDependenciesWithLog(
+                                   b,
+                                   depsToRequest,
+                                   depsInProcessing,
+                                   depsInBuffer
+                                 ).whenA(depsToRequest.nonEmpty)
+                             r <- isApprovedBlockChild(b).flatMap(
+                                   c =>
+                                     if (c) returnSafetyRangeNotFilled
+                                     else missDepCheckResult.pure[F]
+                                 )
+                           } yield r
                    } yield r
                }
     } yield result
@@ -459,7 +491,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         } yield updatedDag
       }
       .leftMap {
-        case InvalidBlock.MissingBlocks => dag.pure
+        // this should not be the case, as checked before trying to add block
+        case InvalidBlock.MissingBlocks(_) => dag.pure
 
         case InvalidBlock.AdmissibleEquivocation =>
           val baseEquivocationBlockSeqNum = block.seqNum - 1
@@ -523,35 +556,21 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       }
       .merge
 
-  private def fetchMissingDependencies(
-      b: BlockMessage
+  private def fetchMissingDependenciesWithLog(
+      b: BlockMessage,
+      deps: List[BlockHash],
+      depsInProcessing: List[BlockHash],
+      depsInBuffer: List[BlockHash]
   ): F[Unit] = {
     import cats.instances.list._
     for {
-      // Request blocks that are not in DAG, CasperBuffer
-      allDeps      <- dependenciesHashesOf(b).pure[F]
-      depsInDag    <- allDeps.filterA(dagContains)
-      depsInBuffer <- allDeps.filterA(bufferContains)
-      // In addition, we have to check equivocation tracker, as admissible equivocations are not stored in DAG
-      equivocationHashes <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-                             tracker.equivocationRecords.map { equivocations =>
-                               equivocations.flatMap(_.equivocationDetectedBlockHashes)
-                             }
-                           }
-      depsInEqTracker = allDeps.filter(equivocationHashes.contains)
-
-      missingDeps = allDeps filterNot (
-          d => depsInDag.contains(d) || depsInBuffer.contains(d) || depsInEqTracker.contains(d)
-      )
-      _ <- (missingDeps ++ depsInBuffer).traverse(casperBuffer.addRelation(_, b.blockHash))
-      _ <- BlockRetriever[F].ackInCasper(b.blockHash)
       _ <- Log[F].info(
             s"Block ${PrettyPrinter.buildString(b, short = true)} missing dependencies. " +
-              s"Fetching: ${PrettyPrinter.buildString(missingDeps)}. " +
-              s"Already in CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
-              s"Already in DAG: ${PrettyPrinter.buildString(depsInDag)}."
+              s"Fetching: ${PrettyPrinter.buildString(deps)}. " +
+              s"Pending processing: ${PrettyPrinter.buildString(depsInProcessing)}. " +
+              s"In CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. "
           )
-      _ <- missingDeps.traverse_(
+      _ <- deps.traverse_(
             BlockRetriever[F]
               .admitHash(_, admitHashReason = BlockRetriever.MissingDependencyRequested)
           )
