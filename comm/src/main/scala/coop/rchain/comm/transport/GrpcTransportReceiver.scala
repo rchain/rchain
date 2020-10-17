@@ -12,9 +12,9 @@ import coop.rchain.comm.transport.buffer.LimitedBuffer
 import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
+import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.PathDelete
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, UncaughtExceptionLogger}
 import io.grpc.netty.NettyServerBuilder
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
@@ -38,17 +38,11 @@ object GrpcTransportReceiver {
       buffersMap: Ref[F, Map[PeerNode, Deferred[F, MessageBuffers]]],
       messageHandlers: MessageHandlers[F],
       tempFolder: Path,
-      parallelism: Int
-  )(implicit scheduler: Scheduler): F[Cancelable] = {
+      parallelism: Int,
+      ioScheduler: Scheduler
+  )(implicit mainScheduler: Scheduler): F[Cancelable] = {
 
     val service = new RoutingGrpcMonix.TransportLayer {
-
-      private val queueScheduler =
-        Scheduler.fixedPool(
-          "tl-dispatcher-server-queue",
-          parallelism,
-          reporter = UncaughtExceptionLogger
-        )
 
       private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
         if (streamed.header.exists(_.networkId != networkId))
@@ -59,15 +53,15 @@ object GrpcTransportReceiver {
 
       private def getBuffers(peer: PeerNode): F[MessageBuffers] = {
         def createBuffers: MessageBuffers = {
-          val tellBuffer = buffer.LimitedBufferObservable.dropNew[Send](64)
-          val blobBuffer = buffer.LimitedBufferObservable.dropNew[StreamMessage](8)
+          val tellBuffer = buffer.LimitedBufferObservable.dropNew[Send](64)(ioScheduler)
+          val blobBuffer = buffer.LimitedBufferObservable.dropNew[StreamMessage](8)(ioScheduler)
           // TODO cancel queues when peer is lost
           val tellCancellable = tellBuffer
             .mapParallelUnordered(parallelism)(messageHandlers._1(_).toTask)
-            .subscribe()(queueScheduler)
+            .subscribe()(mainScheduler)
           val blobCancellable = blobBuffer
             .mapParallelUnordered(parallelism)(messageHandlers._2(_).toTask)
-            .subscribe()(queueScheduler)
+            .subscribe()(mainScheduler)
           val buffersCancellable = Cancelable.collection(tellCancellable, blobCancellable)
 
           (tellBuffer, blobBuffer, buffersCancellable)
@@ -167,10 +161,10 @@ object GrpcTransportReceiver {
 
     val server = NettyServerBuilder
       .forPort(port)
-      .executor(scheduler)
+      .executor(ioScheduler)
       .maxInboundMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
-      .addService(RoutingGrpcMonix.bindService(service, scheduler))
+      .addService(RoutingGrpcMonix.bindService(service, ioScheduler))
       .intercept(new SslSessionServerInterceptor(networkId))
       .build
       .start

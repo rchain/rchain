@@ -521,7 +521,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                               nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
                               nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
                               nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
-                              nodeConf.protocolServer.maxMessageConsumers
+                              nodeConf.protocolServer.maxMessageConsumers,
+                              grpcScheduler
                             )
                           )
 
