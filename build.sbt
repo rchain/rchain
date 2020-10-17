@@ -21,6 +21,8 @@ lazy val projectSettings = Seq(
     Resolver.sonatypeRepo("snapshots"),
     "jitpack" at "https://jitpack.io"
   ),
+  // TODO: added because of monix snapshot dependency
+  updateOptions := updateOptions.value.withLatestSnapshots(false),
   wartremoverExcluded += sourceManaged.value,
   wartremoverErrors in (Compile, compile) ++= Warts.allBut(
     // those we want
