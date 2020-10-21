@@ -538,20 +538,28 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                                equivocations.flatMap(_.equivocationDetectedBlockHashes)
                              }
                            }
-      depsInEqTracker = allDeps.filter(equivocationHashes.contains)
+      depsInEqTracker  = allDeps.filter(equivocationHashes.contains)
+      depsInProcessing <- blockProcessingState.get.map(_.processing)
+      depsEnqueued     <- blockProcessingState.get.map(_.enqueued)
 
-      missingDeps = allDeps filterNot (
-          d => depsInDag.contains(d) || depsInBuffer.contains(d) || depsInEqTracker.contains(d)
-      )
-      _ <- (missingDeps ++ depsInBuffer).traverse(casperBuffer.addRelation(_, b.blockHash))
+      depsToFetch = allDeps filterNot (
+          d =>
+            depsInProcessing.contains(d) || depsEnqueued.contains(d) ||
+              depsInDag.contains(d) || depsInBuffer.contains(d) || depsInEqTracker.contains(d)
+        )
+      // Commit to Casper buffer all relations with deps that have not been validated yet
+      _ <- (allDeps diff depsInDag diff depsInEqTracker)
+            .traverse(casperBuffer.addRelation(_, b.blockHash))
       _ <- BlockRetriever[F].ackInCasper(b.blockHash)
       _ <- Log[F].info(
             s"Block ${PrettyPrinter.buildString(b, short = true)} missing dependencies. " +
-              s"Fetching: ${PrettyPrinter.buildString(missingDeps)}. " +
+              s"Fetching: ${PrettyPrinter.buildString(depsToFetch)}. " +
               s"Already in CasperBuffer: ${PrettyPrinter.buildString(depsInBuffer)}. " +
+              s"In processing: ${PrettyPrinter.buildString(depsInProcessing.toList)}." +
+              s"Enqueued in Casper: ${PrettyPrinter.buildString(depsEnqueued.toList)}." +
               s"Already in DAG: ${PrettyPrinter.buildString(depsInDag)}."
           )
-      _ <- missingDeps.traverse_(
+      _ <- depsToFetch.traverse_(
             BlockRetriever[F]
               .admitHash(_, admitHashReason = BlockRetriever.MissingDependencyRequested)
           )
