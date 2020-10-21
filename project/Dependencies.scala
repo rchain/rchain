@@ -72,7 +72,7 @@ object Dependencies {
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.18"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.20"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
