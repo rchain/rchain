@@ -52,7 +52,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
       runtime                <- Resources.mkRuntimeManagerAt[Task](paths.rspaceDir)()
     } yield (blockStore, indexedBlockDagStorage, runtime)
 
-    resource.use[R] { case (b, d, r) => f(b)(d)(r) }.unsafeRunSync
+    resource.use[Task, R] { case (b, d, r) => f(b)(d)(r) }.unsafeRunSync
   }
 
   def withStorage[R](f: BlockStore[Task] => IndexedBlockDagStorage[Task] => Task[R]): R = {

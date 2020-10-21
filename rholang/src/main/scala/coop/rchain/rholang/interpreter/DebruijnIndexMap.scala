@@ -13,7 +13,7 @@ class DebruijnIndexMap[T](val next: Int, val env: Map[String, (Int, T, Int, Int)
 
   // Returns the new map
   def newBindings(bindings: List[(String, T, Int, Int)]): DebruijnIndexMap[T] =
-    (this /: bindings)((map, binding) => map.newBinding(binding))
+    bindings.foldLeft(this)((map, binding) => map.newBinding(binding))
 
   // Returns the new map, and a list of the shadowed variables
   // Takes a **Level** map, because we use that to track the Free Variables.

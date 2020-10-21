@@ -8,9 +8,9 @@ object Dependencies {
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.4"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "2.1.0"
-  val catsEffectVersion = "2.0.0"
-  val catsMtlVersion    = "0.7.0"
+  val catsVersion       = "2.1.1"
+  val catsEffectVersion = "2.2.0"
+  val catsMtlVersion    = "0.7.1"
   val slf4jVersion      = "1.7.25"
 
   // format: off
@@ -24,7 +24,7 @@ object Dependencies {
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
-  val disciplineCore      = "org.typelevel"                                    %% "discipline-core"           % "1.0.2"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -52,7 +52,7 @@ object Dependencies {
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
-  val monix               = "io.monix"                   %% "monix"                     % "3.1.0"
+  val monix               = "io.monix"                   %% "monix"                     % "3.2.2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"
@@ -64,10 +64,10 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.8.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.8.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.10.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
@@ -83,6 +83,7 @@ object Dependencies {
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.13.0"
   val fs2Core             = "co.fs2"                      %% "fs2-core"                 % "2.3.0"
+  val catsRetry           = "com.github.cb372"            %% "cats-retry"               % "2.0.0"
   // format: on
 
   val overrides = Seq(
@@ -108,7 +109,7 @@ object Dependencies {
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
 
   private val macroParadise = compilerPlugin(
-    "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full
+    "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
 
   private val testing = Seq(scalactic, scalatest, scalacheck)

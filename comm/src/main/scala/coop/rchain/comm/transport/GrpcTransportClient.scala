@@ -137,13 +137,13 @@ class GrpcTransportClient(
     withClient(peer, DefaultSendTimeout)(GrpcTransport.send(peer, msg))
 
   def broadcast(peers: Seq[PeerNode], msg: Protocol): Task[Seq[CommErr[Unit]]] =
-    Task.gatherUnordered(peers.map(send(_, msg)))
+    Task.parSequenceUnordered(peers.map(send(_, msg)))
 
   def stream(peer: PeerNode, blob: Blob): Task[Unit] =
     getChannel(peer).flatMap(_.buffer.enque(blob))
 
   def stream(peers: Seq[PeerNode], blob: Blob): Task[Unit] =
-    Task.gatherUnordered(peers.map(stream(_, blob))).void
+    Task.parSequenceUnordered(peers.map(stream(_, blob))).void
 
   private def streamBlobFile(
       path: Path,
