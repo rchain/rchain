@@ -83,6 +83,7 @@ object Dependencies {
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
   val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.13.0"
+  val catsRetry          ="com.github.cb372"             %% "cats-retry"               % "2.0.0"
 
   val overrides = Seq(
     catsCore,

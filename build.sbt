@@ -160,6 +160,7 @@ lazy val casper = (project in file("casper"))
     name := "casper",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
       catsCore,
+      catsRetry,
       catsMtl,
       monix,
       scalacheck % "slowcooker"
@@ -259,6 +260,7 @@ lazy val node = (project in file("node"))
       apiServerDependencies ++ commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
         catsCore,
         catsTagless,
+        catsRetry,
         grpcNetty,
         grpcServices,
         jline,

@@ -37,6 +37,10 @@ import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, Reduce, RhoType, Runtime}
 import coop.rchain.rspace.{Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
+import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
+import retry._
+
+import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
   def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
@@ -742,17 +746,38 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     // Create a deploy with newly created private key
     val (privKey, _) = Secp256k1.newKeyPair
     val deploy       = ConstructDeploy.sourceDeployNow(bondsQuerySource, sec = privKey)
-    captureResults(hash, deploy)
-      .ensureOr(
-        bondsPar =>
-          new IllegalArgumentException(
-            s"Incorrect number of results from query of current bonds in state ${PrettyPrinter
-              .buildString(hash)}: ${bondsPar.size}"
-          )
-      )(bondsPar => bondsPar.size == 1)
-      .map { bondsPar =>
-        toBondSeq(bondsPar.head)
-      }
+    def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
+      case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
+        Log[F].error(
+          s"Unexpected exception during computeBonds. Retrying ${retriesSoFar + 1} time."
+        )
+      case GivingUp(totalRetries: Int, _) =>
+        Log[F].error(
+          s"Unexpected exception during computeBonds. Giving up after ${totalRetries} retries."
+        )
+    }
+
+    implicit val s = new retry.Sleep[F] {
+      override def sleep(delay: FiniteDuration): F[Unit] = ().pure[F]
+    }
+
+    //TODO this retry is a temp solution for debugging why this throws `IllegalArgumentException`
+    retryingOnAllErrors[Seq[Bond]](
+      RetryPolicies.limitRetries[F](5),
+      onError = logError
+    )(
+      captureResults(hash, deploy)
+        .ensureOr(
+          bondsPar =>
+            new IllegalArgumentException(
+              s"Incorrect number of results from query of current bonds in state ${PrettyPrinter
+                .buildString(hash)}: ${bondsPar.size}"
+            )
+        )(bondsPar => bondsPar.size == 1)
+        .map { bondsPar =>
+          toBondSeq(bondsPar.head)
+        }
+    )
   }
 
   private def activaValidatorQuerySource: String =
