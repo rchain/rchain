@@ -696,7 +696,7 @@ object Validate {
       case Left(ex: Throwable) =>
         for {
           _ <- Log[F].warn(s"Failed to compute bonds from tuplespace hash ${ex.getMessage}")
-        } yield BlockStatus.invalidBondsCache.asLeft[ValidBlock]
+        } yield BlockError.BlockException(ex).asLeft[ValidBlock]
     }
   }
 }
