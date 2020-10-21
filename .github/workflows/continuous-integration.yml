@@ -54,7 +54,7 @@ jobs:
 
       - name: Compile
         run: |
-          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true"
+          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true -Xmx2g -Xss2m"
           sbt update scalafmtCheckAll rholang/bnfc:generate compile
 
       - name: Pack Working Tree

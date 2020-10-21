@@ -895,10 +895,10 @@ class IncrementTester extends FlatSpec with Matchers {
   val printer = PrettyPrinter()
 
   "Increment" should "increment the id prefix every 26 increments" in {
-    val id: String = ("a" /: (0 until 26)) { (s, _) =>
+    val id: String = (0 until 26).foldLeft("a") { (s, _) =>
       printer.increment(s)
     }
-    val _id: String = (id /: (0 until 26)) { (s, _) =>
+    val _id: String = (0 until 26).foldLeft(id) { (s, _) =>
       printer.increment(s)
     }
     id shouldBe "aa"
@@ -907,7 +907,7 @@ class IncrementTester extends FlatSpec with Matchers {
 
   "Increment and Rotate" should "" in {
 
-    val _printer: PrettyPrinter = (printer /: (0 until 52)) { (p, _) =>
+    val _printer: PrettyPrinter = (0 until 52).foldLeft(printer) { (p, _) =>
       p.copy(
         freeId = p.boundId,
         baseId = p.setBaseId()

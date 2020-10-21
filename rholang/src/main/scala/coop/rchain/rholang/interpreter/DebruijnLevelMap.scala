@@ -30,7 +30,7 @@ class DebruijnLevelMap[T](
 
   // Returns the new map, and the first value assigned. Given that they're assigned contiguously
   def newBindings(bindings: List[(String, T, Int, Int)]): (DebruijnLevelMap[T], Int) = {
-    val newMap = (this /: bindings)((map, binding) => map.newBinding(binding)._1)
+    val newMap = bindings.foldLeft(this)((map, binding) => map.newBinding(binding)._1)
     (newMap, next)
   }
 
