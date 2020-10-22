@@ -72,7 +72,7 @@ object Dependencies {
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.18"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.20"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
@@ -82,7 +82,7 @@ object Dependencies {
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
-  val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.13.0"
+  val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.14.0"
   val catsRetry          ="com.github.cb372"             %% "cats-retry"               % "2.0.0"
 
   val overrides = Seq(
