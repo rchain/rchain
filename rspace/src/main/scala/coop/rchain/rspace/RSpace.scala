@@ -335,11 +335,19 @@ object RSpace {
       metricsF: Metrics[F],
       spanF: Span[F],
       par: Parallel[F]
-  ): F[ISpace[F, C, P, A, K]] =
-    setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
-      case (historyReader, store) =>
-        new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), branch)
-    }
+  ): F[ISpace[F, C, P, A, K]] = {
+    val v2Dir = dataDir.resolve("v2")
+    for {
+      setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, branch)
+      (historyReader, store) = setup
+      hotStore               <- HotStore.empty(historyReader)(sk.toCodec, concurrent)
+      replay = new RSpace[F, C, P, A, K](
+        historyReader,
+        AtomicAny(hotStore),
+        branch
+      )
+    } yield replay
+  }
 
   def setUp[F[_], C, P, A, K](
       dataDir: Path,

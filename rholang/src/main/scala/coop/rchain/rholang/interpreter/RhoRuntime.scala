@@ -3,9 +3,11 @@ package coop.rchain.rholang.interpreter
 import java.nio.file.{Files, Path}
 
 import cats._
+import cats.data.Chain
 import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -18,7 +20,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses._
-import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
+import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, HasCost}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
@@ -35,7 +37,7 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
       implicit rand: Blake2b512Random
   ): F[EvaluateResult]
 
-  def inj(par: Par)(
+  def inj(par: Par, env: Env[Par] = Env[Par]())(
       implicit rand: Blake2b512Random
   ): F[Unit]
 
@@ -92,7 +94,8 @@ class RhoRuntimeImpl[F[_]: Sync](
   override def getHotChanges
       : F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap
 
-  override def inj(par: Par)(implicit rand: Blake2b512Random): F[Unit] = reducer.inj(par)
+  override def inj(par: Par, env: Env[Par] = Env[Par]())(implicit rand: Blake2b512Random): F[Unit] =
+    reducer.inj(par)
 
   override def consumeResult(
       channel: Seq[Par],
@@ -496,6 +499,14 @@ object RhoRuntime {
     ](dataDir, mapSize)
   }
 
+  /**
+    *
+    * @param dataDir
+    * @param mapSize
+    * @param scheduler
+    * @tparam F
+    * @return
+    */
   def setupRhoRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long
@@ -522,18 +533,47 @@ object RhoRuntime {
     ](dataDir, mapSize, Branch.MASTER)
   }
 
+  /**
+    *
+    * @param rspace the rspace which the runtime would operate on it
+    * @param extraSystemProcesses extra system rholang processes exposed to the runtime
+    *                             which you can execute funtion on it
+    * @param initRegistry For a newly created rspace, you might need to bootstrap registry
+    *                     in the runtime to use rholang registry normally. Actually this initRegistry
+    *                     is not the only thing you need for rholang registry, after the bootstrap
+    *                     registry, you still need to insert registry contract on the rspace.
+    *                     For a exist rspace which bootstrap registry before, you can skip this.
+    *                     For some test cases, you don't need the registry then you can skip this
+    *                     init process which can be faster.
+    * @param costLog currently only the testcases needs a special costLog for test infomations.
+    *                Normally you can just
+    *                use [[coop.rchain.rholang.interpreter.accounting.noOpCostLog]]
+    * @tparam F
+    * @return
+    */
   def createRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
-  ): F[RhoRuntime[F]] = {
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      initRegistry: Boolean = true
+  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] = {
     implicit val P = Parallel[F]
-    createRuntime[F](rspace, extraSystemProcesses)
+    createRuntime[F](rspace, extraSystemProcesses, initRegistry)
   }
 
+  /**
+    *
+    * @param rspace the replay rspace which the runtime operate on it
+    * @param extraSystemProcesses same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
+    * @param initRegistry same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
+    * @param costLog same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
+    * @tparam F
+    * @return
+    */
   def createReplayRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoReplayISpace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
-  ): F[ReplayRhoRuntime[F]] = {
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      initRegistry: Boolean = true
+  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] = {
     implicit val P = Parallel[F]
     for {
       cost <- CostAccounting.emptyCost[F]
@@ -543,14 +583,17 @@ object RhoRuntime {
       }
       (reducer, blockRef, invalidBlocks) = rhoEnv
       runtime                            = new ReplayRhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-      _                                  <- bootstrapRegistry(runtime)
+      _ <- if (initRegistry) {
+            bootstrapRegistry(runtime) >> runtime.createCheckpoint
+          } else ().pure[F]
     } yield runtime
   }
 
   private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
-      extraSystemProcesses: Seq[Definition[F]]
-  ): F[RhoRuntime[F]] = {
+      extraSystemProcesses: Seq[Definition[F]],
+      initRegistry: Boolean
+  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] = {
     implicit val P = Parallel[F]
     for {
       cost <- CostAccounting.emptyCost[F]
@@ -560,8 +603,24 @@ object RhoRuntime {
       }
       (reducer, blockRef, invalidBlocks) = rhoEnv
       runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-      _                                  <- bootstrapRegistry(runtime)
+      _ <- if (initRegistry) {
+            bootstrapRegistry(runtime) >> runtime.createCheckpoint
+          } else ().pure[F]
     } yield runtime
   }
 
+  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+      dataDir: Path,
+      mapSize: Long,
+      initRegistry: Boolean = true
+  )(
+      implicit scheduler: ExecutionContext,
+      costLog: FunctorTell[F, Chain[Cost]]
+  ) =
+    for {
+      space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize)
+      rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
+      replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize)
+      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
+    } yield (rhoRuntime, replayRhoRuntime)
 }

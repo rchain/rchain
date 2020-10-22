@@ -19,7 +19,7 @@ class EvalBench {
 
   def createTest(state: EvalBenchStateBase): Task[Unit] = {
     val par = state.term.getOrElse(throw new Error("Failed to prepare executable rholang term"))
-    state.runtime.reducer.inj(par)(state.rand)
+    state.runtime.inj(par)(state.rand)
   }
 
   //if we run multiple tests on a single-threaded scheduler

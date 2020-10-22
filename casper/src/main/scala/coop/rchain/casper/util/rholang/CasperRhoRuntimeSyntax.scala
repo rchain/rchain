@@ -54,8 +54,10 @@ import coop.rchain.models.{
   TaggedContinuation,
   Var
 }
+import coop.rchain.rholang.interpreter.RhoRuntime.bootstrapRand
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.errors.BugFoundError
+import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
@@ -96,10 +98,20 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
   def emptyStateHash: F[StateHash] =
     for {
       _          <- runtime.reset(emptyRootHash)
-      _          <- RhoRuntime.bootstrapRegistry(runtime)
+      _          <- bootstrapRuntime
       checkpoint <- runtime.createCheckpoint
       hash       = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     } yield hash
+
+  def bootstrapRuntime: F[Unit] = {
+    implicit val rand = bootstrapRand
+    for {
+      cost <- runtime.cost.get
+      _    <- runtime.cost.set(Cost.UNSAFE_MAX)
+      _    <- runtime.inj(RegistryBootstrap.AST)
+      _    <- runtime.cost.set(cost)
+    } yield ()
+  }
 
   /**
     * This is a hard-coded value for `emptyStateHash`. Because of the value is actually the same, all
@@ -350,9 +362,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
     for {
-      evaluateResult <- runtime.evaluate(systemDeploy.source, Cost.UNSAFE_MAX, systemDeploy.env)(
-                         systemDeploy.rand
-                       )
+      evaluateResult <- evaluateSystemSource(systemDeploy)
       maybeConsumedTuple <- if (evaluateResult.failed)
                              UnexpectedSystemErrors(evaluateResult.errors).raiseError
                            else consumeSystemResult(systemDeploy)

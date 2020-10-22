@@ -829,10 +829,8 @@ object NodeRuntime {
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          space            <- RhoRuntime.setupRhoRSpace[F](casperConf.storage, casperConf.size)
-          rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty)
-          replaySpace      <- RhoRuntime.setupReplaySpace(casperConf.storage, casperConf.size)
-          replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty)
+          runtimes                       <- RhoRuntime.createRuntimes[F](casperConf.storage, casperConf.size)
+          (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
                        implicit val kvm = casperStoreManager

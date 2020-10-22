@@ -16,7 +16,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -107,15 +107,14 @@ object GenesisBuilder {
 
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      sar            <- Runtime.setupRSpace[Task](rspaceDir, storageSize)
-      activeRuntime  <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
+      runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize)
+      runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      _              <- activeRuntime.close()
-
-      blockStoreDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
-      blockStore    <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-      _             <- blockStore.put(genesis.blockHash, genesis)
+      _              <- runtimes._1.close
+      _              <- runtimes._2.close
+      blockStoreDir  <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
+      blockStore     <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      _              <- blockStore.put(genesis.blockHash, genesis)
 
       blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
 

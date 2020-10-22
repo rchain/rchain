@@ -81,7 +81,6 @@ object Resources {
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
-    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
         space   <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
@@ -91,16 +90,15 @@ object Resources {
                           storageSize,
                           Branch.MASTER
                         )
-      } yield (runtime, historyReader)
-    )(_._1.close)
+      } yield (runtime, historyReader._1)
+    )(r => r._1.close >> r._2.close)
   }
 
   def mkHistoryReposity[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       path: Path,
       storageSize: Long = 1024 * 1024 * 1024L
-  )(implicit scheduler: Scheduler): Resource[F, RhoHistoryRepository[F]] = {
+  ): Resource[F, RhoHistoryRepository[F]] = {
     import coop.rchain.rholang.interpreter.storage._
-    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     Resource.make[F, RhoHistoryRepository[F]](
       for {
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -108,7 +106,7 @@ object Resources {
                           storageSize,
                           Branch.MASTER
                         )
-      } yield historyReader
+      } yield historyReader._1
     )(_.close())
   }
 
@@ -117,7 +115,6 @@ object Resources {
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F])] = {
     import coop.rchain.rholang.interpreter.storage._
-    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F])](
       for {
         space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize)

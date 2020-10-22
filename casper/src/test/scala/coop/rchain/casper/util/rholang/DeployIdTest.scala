@@ -39,7 +39,13 @@ class DeployIdTest extends FlatSpec with Matchers {
     val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
     val result =
       runtimeManager
-        .use(mgr => mgr.captureResults(mgr.emptyStateHash, d))
+        .use(
+          mgr =>
+            for {
+              hash <- mgr.emptyStateHash
+              res  <- mgr.captureResults(hash, d)
+            } yield res
+        )
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)

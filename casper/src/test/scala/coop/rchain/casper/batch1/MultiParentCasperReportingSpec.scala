@@ -31,14 +31,15 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
       for {
         reportingStore <- ReportMemStore
                            .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation]
-        reportingCasper = ReportingCasper.rhoReporter(node.rhoHistoryRepository, reportingStore)
-        deploy          <- ConstructDeploy.sourceDeployNowF(correctRholang)
-        signedBlock     <- node.addBlock(deploy)
-        _               = logEff.warns.isEmpty should be(true)
-        dag             <- node.casperEff.blockDag
-        estimate        <- node.casperEff.estimator(dag)
-        _               = estimate shouldBe IndexedSeq(signedBlock.blockHash)
-        trace           <- reportingCasper.trace(signedBlock.blockHash)
+        reportingCasper = ReportingCasper
+          .rhoReporter(reportingStore, node.dataPath.rspaceDir, 1024L * 1024L * 1024L)
+        deploy      <- ConstructDeploy.sourceDeployNowF(correctRholang)
+        signedBlock <- node.addBlock(deploy)
+        _           = logEff.warns.isEmpty should be(true)
+        dag         <- node.casperEff.blockDag
+        estimate    <- node.casperEff.estimator(dag)
+        _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
+        trace       <- reportingCasper.trace(signedBlock.blockHash)
         result = trace match {
           case Right(value) => value.head._2.foldLeft(0)(_ + _.length)
           case Left(_)      => 0

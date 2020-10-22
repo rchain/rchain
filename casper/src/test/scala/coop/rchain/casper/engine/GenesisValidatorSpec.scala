@@ -17,8 +17,7 @@ class GenesisValidatorSpec extends WordSpec {
 
   "GenesisCeremonyMaster" should {
     "respond on UnapprovedBlock messages with BlockApproval" in {
-      implicit val ctx = Scheduler.global
-      val fixture      = Setup()
+      val fixture = Setup()
       import fixture._
 
       implicit val engineCell: EngineCell[Task] =
@@ -45,8 +44,7 @@ class GenesisValidatorSpec extends WordSpec {
     }
 
     "should not respond to any other message" in {
-      implicit val ctx = Scheduler.global
-      val fixture      = Setup()
+      val fixture = Setup()
       import fixture._
 
       implicit val engineCell: EngineCell[Task] =

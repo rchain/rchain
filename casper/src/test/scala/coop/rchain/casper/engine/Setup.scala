@@ -27,7 +27,7 @@ import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
@@ -41,24 +41,13 @@ object Setup {
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
     val networkId                 = "test"
-    val scheduler                 = Scheduler.io("test")
+    implicit val scheduler        = Scheduler.io("test")
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
-    val (space, replay, _) = {
-      implicit val s = scheduler
-      Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
-    }
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task]((space, replay))(
-          Concurrent[Task],
-          log,
-          metrics,
-          span,
-          Parallel[Task]
-        )
-        .unsafeRunSync(scheduler)
+    val (runtime, replayRuntime) =
+      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
 
-    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
+    implicit val runtimeManager =
+      RuntimeManager.fromRuntimes(runtime, replayRuntime).unsafeRunSync(scheduler)
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)
