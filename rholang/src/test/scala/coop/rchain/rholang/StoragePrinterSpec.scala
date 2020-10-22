@@ -87,7 +87,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         for {
-          _ <- runtime.evaluate("@0!(Nil) | for(_ <- @1) { Nil }")
+          _      <- runtime.evaluate("@0!(Nil) | for(_ <- @1) { Nil }")
           deploy = mkDeploy("@1!(Nil) | @2!(Nil)")
           unmatchedSends <- StoragePrinter.prettyPrintUnmatchedSends(
                              deploy,

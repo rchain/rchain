@@ -25,6 +25,7 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
+import coop.rchain.casper.util.rholang.Resources.StoragePaths
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -37,7 +38,7 @@ import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -57,6 +58,7 @@ class TestNode[F[_]](
     val blockStoreDir: Path,
     blockProcessingLock: Semaphore[F],
     synchronyConstraintThreshold: Double,
+    val dataPath: StoragePaths,
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
     maxParentDepth: Option[Int] = None,
     shardId: String = "root",
@@ -412,6 +414,7 @@ object TestNode {
                    paths.blockStoreDir,
                    blockProcessingLock,
                    synchronyConstraintThreshold,
+                   paths,
                    maxNumberOfParents,
                    maxParentDepth,
                    isReadOnly = isReadOnly

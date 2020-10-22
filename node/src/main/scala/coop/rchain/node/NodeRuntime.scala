@@ -827,16 +827,15 @@ object NodeRuntime {
           case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
+      stateStorageFolder = casperConf.storage.resolve("v2")
       casperInitialized <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          space            <- RhoRuntime.setupRhoRSpace[F](casperConf.storage, casperConf.size)
-          rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty)
-          replaySpace      <- RhoRuntime.setupReplaySpace(casperConf.storage, casperConf.size)
-          replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty)
+          runtimes                       <- RhoRuntime.createRuntimes[F](stateStorageFolder, casperConf.size)
+          (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
                        implicit val kvm = casperStoreManager
@@ -851,7 +850,7 @@ object NodeRuntime {
                                             ]
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         casperConf.storage,
+                         stateStorageFolder,
                          casperConf.size
                        )
                      } else
@@ -869,7 +868,7 @@ object NodeRuntime {
           history <- {
             import coop.rchain.rholang.interpreter.storage._
             RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              casperConf.storage,
+              stateStorageFolder,
               casperConf.size,
               Branch.MASTER
             )

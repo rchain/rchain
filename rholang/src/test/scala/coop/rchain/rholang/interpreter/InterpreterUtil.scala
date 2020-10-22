@@ -10,11 +10,10 @@ object InterpreterUtil {
   def evaluate[F[_]: Sync](runtime: RhoRuntime[F], term: String)(
       implicit line: sourcecode.Line,
       file: sourcecode.File
-  ): F[Unit] = {
+  ): F[Unit] =
     runtime.evaluate(term).map {
       withClue(s"Evaluate was called at: ${file.value}:${line.value} and failed with: ") {
         _.errors shouldBe empty
       }
     }
-  }
 }

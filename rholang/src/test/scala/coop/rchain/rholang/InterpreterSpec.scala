@@ -139,7 +139,6 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val EvaluateResult(cost, errors) =
       mkRuntime[Task](tmpPrefix, mapSize)
         .use { runtime =>
-
           runtime.evaluate(sendRho, initialPhlo)
         }
         .runSyncUnsafe(maxDuration)
@@ -170,8 +169,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   private def execute(
       runtime: RhoRuntime[Task],
       source: String
-  ): Task[EvaluateResult] = {
+  ): Task[EvaluateResult] =
     runtime.evaluate(source)
-  }
 
 }

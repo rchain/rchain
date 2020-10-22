@@ -8,7 +8,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -39,13 +39,13 @@ import scala.concurrent.duration._
   * >>> itp.cleanUp()
   * }}}
   */
-class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler) {
+class Interactive private (runtime: RhoRuntime[Task])(implicit scheduler: Scheduler) {
   implicit private val rand = Blake2b512Random(128)
 
   private val prettyPrinter = PrettyPrinter()
 
   private val checkpoints = new mutable.HashMap[String, Checkpoint]()
-  checkpoints.update("empty", runtime.space.createCheckpoint().unsafeRunSync)
+  checkpoints.update("empty", runtime.createCheckpoint.unsafeRunSync)
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
@@ -55,7 +55,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
     eval(code)
-    val result = runtime.space
+    val result = runtime
       .getData(
         Par().copy(exprs = Seq(Expr(GString(name))))
       )
@@ -68,17 +68,17 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def pp(term: Par): String = prettyPrinter.buildString(term)
 
   def cleanUp(): Unit =
-    runtime.close().unsafeRunSync
+    runtime.close.unsafeRunSync
 
   def checkpoint(name: String): Unit =
-    checkpoints.update(name, runtime.space.createCheckpoint().unsafeRunSync)
+    checkpoints.update(name, runtime.createCheckpoint.unsafeRunSync)
   def getCheckpoint(name: String): Option[Checkpoint] = checkpoints.get(name)
 
   def restore(name: String): Boolean =
     checkpoints
       .get(name)
       .fold(false)(ch => {
-        runtime.space.reset(ch.root).unsafeRunSync
+        runtime.reset(ch.root).unsafeRunSync
         true
       })
 }
@@ -88,9 +88,9 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    val (space, replay, _) = Runtime
-      .setupRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
+    val space = RhoRuntime
+      .setupRhoRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
       .unsafeRunSync
-    new Interactive(Runtime.createWithEmptyCost[Task]((space, replay)).runSyncUnsafe(5.seconds))
+    new Interactive(RhoRuntime.createRhoRuntime[Task](space).runSyncUnsafe(5.seconds))
   }
 }

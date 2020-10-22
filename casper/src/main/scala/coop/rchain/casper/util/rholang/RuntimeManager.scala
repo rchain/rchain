@@ -60,6 +60,7 @@ trait RuntimeManager[F[_]] {
   ): F[Seq[(Seq[BindPattern], Par)]]
   def emptyStateHash: F[StateHash]
   def withRuntimeLock[A](f: RhoRuntime[F] => F[A]): F[A]
+  def withReplayRuntimeLock[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
 }
@@ -73,7 +74,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     Metrics.Source(CasperMetricsSource, "runtime-manager")
 
   override def emptyStateHash: F[StateHash] =
-    withRuntime(runtime => runtime.emptyStateHash)
+    withRuntime(runtime => runtime.emptyStateHashFixed)
   private def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
     Sync[F].bracket {
       import coop.rchain.metrics.implicits._
@@ -85,7 +86,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       } yield runtime
     }(f)(runtimeContainer.put)
 
-  private def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A] =
+  def withReplayRuntimeLock[A](f: ReplayRhoRuntime[F] => F[A]): F[A] =
     Sync[F].bracket {
       import coop.rchain.metrics.implicits._
       implicit val ms: Source = RuntimeManagerMetricsSource
@@ -106,7 +107,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       systemDeploy: S,
       processedSystemDeploy: ProcessedSystemDeploy
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
-    withReplayRuntime(
+    withReplayRuntimeLock(
       replayRuntime =>
         replayRuntime.replaySystemDeploy(stateHash)(systemDeploy, processedSystemDeploy)
     )
@@ -134,7 +135,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    withReplayRuntime(
+    withReplayRuntimeLock(
       replayRuntime =>
         replayRuntime
           .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
@@ -198,21 +199,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 object RuntimeManager {
 
   type StateHash = ByteString
-
-//  def fromRuntime[F[_]: Concurrent: Sync: Metrics: Span: Log](
-//      runtime: Runtime[F]
-//  ): F[RuntimeManager[F]] =
-//    for {
-//      _                <- runtime.space.clear()
-//      _                <- runtime.replaySpace.clear()
-//      _                <- Runtime.bootstrapRegistry(runtime)
-//      checkpoint       <- runtime.space.createCheckpoint()
-//      replayCheckpoint <- runtime.replaySpace.createCheckpoint()
-//      hash             = ByteString.copyFrom(checkpoint.root.bytes.toArray)
-//      replayHash       = ByteString.copyFrom(replayCheckpoint.root.bytes.toArray)
-//      _                = assert(hash == replayHash)
-//      runtime          <- MVar[F].of(runtime)
-//    } yield new RuntimeManagerImpl(hash, runtime)
 
   def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: RhoRuntime[F],

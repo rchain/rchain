@@ -7,7 +7,7 @@ import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 

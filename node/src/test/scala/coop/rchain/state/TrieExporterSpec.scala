@@ -4,7 +4,10 @@ import java.nio.file.{Path, Paths}
 
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rspace.RSpace
+import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -18,9 +21,16 @@ class TrieExporterSpec extends FlatSpec with Matchers {
 
   private def createExporterWithStores(dir: Path) =
     for {
-      rspace              <- Runtime.setupRSpace[Task](dir, 1073741824L)
-      (_, _, historyRepo) = rspace
-      exporter            <- historyRepo.exporter
+      history <- {
+        import coop.rchain.rholang.interpreter.storage._
+        RSpace.setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+          dir,
+          1073741824L,
+          Branch.MASTER
+        )
+      }
+      (historyRepo, _) = history
+      exporter         <- historyRepo.exporter
     } yield exporter
 
   val projParentDir  = Paths.get("../").toAbsolutePath

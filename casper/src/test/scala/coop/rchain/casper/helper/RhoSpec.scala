@@ -17,7 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, Runtime, SystemProcesses}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

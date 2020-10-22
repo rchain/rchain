@@ -92,7 +92,7 @@ object CostAccountingPropertyTest {
       runtime: RhoRuntime[F],
       par: Par
   ): F[EvaluateResult] = {
-    val term                       = PP().buildString(par)
+    val term = PP().buildString(par)
     runtime.evaluate(term)
   }
 

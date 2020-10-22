@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, RhoRuntime}
 import java.nio.file.{Files, Path}
 
 import coop.rchain.catscontrib.TaskContrib._
@@ -26,7 +26,7 @@ abstract class RhoBenchBaseState {
   def execute(bh: Blackhole): Unit = {
     val r = (for {
       result <- runTask
-      _      <- runtime.space.createCheckpoint()
+      _      <- runtime.createCheckpoint
     } yield result).unsafeRunSync
     bh.consume(r)
   }
@@ -35,11 +35,12 @@ abstract class RhoBenchBaseState {
   lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
   val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
-  var runtime: Runtime[Task]      = null
-  var setupTerm: Option[Par]      = None
-  var term: Par                   = _
-  var randSetup: Blake2b512Random = null
-  var randRun: Blake2b512Random   = null
+  var runtime: RhoRuntime[Task]             = null
+  var replayRuntime: ReplayRhoRuntime[Task] = null
+  var setupTerm: Option[Par]                = None
+  var term: Par                             = _
+  var randSetup: Blake2b512Random           = null
+  var randRun: Blake2b512Random             = null
 
   var runTask: Task[Unit] = null
 
@@ -48,16 +49,6 @@ abstract class RhoBenchBaseState {
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
   def rand: Blake2b512Random              = Blake2b512Random(128)
-
-  def createRuntime(): Runtime[Task] =
-    (for {
-      cost <- CostAccounting.emptyCost[Task]
-      sar  <- Runtime.setupRSpace[Task](dbDir, mapSize)
-      runtime <- {
-        implicit val c: _cost[Task] = cost
-        Runtime.create[Task]((sar._1, sar._2))
-      }
-    } yield (runtime)).unsafeRunSync
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
@@ -77,29 +68,28 @@ abstract class RhoBenchBaseState {
       case Right(par) => par
       case Left(err)  => throw err
     }
-    runtime = createRuntime()
-    runtime.cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
-    (for {
-      emptyCheckpoint <- runtime.space.createCheckpoint()
-      //make sure we always start from clean rspace & trie
-      _ <- runtime.replaySpace.clear()
-      _ <- runtime.replaySpace.reset(emptyCheckpoint.root)
-      _ <- runtime.space.clear()
-      _ <- runtime.space.reset(emptyCheckpoint.root)
-    } yield ()).unsafeRunSync
+    runtime = (for {
+      space <- RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize)
+      r     <- RhoRuntime.createRhoRuntime[Task](space)
+    } yield r).runSyncUnsafe()
+
+    replayRuntime = (for {
+      space <- RhoRuntime.setupReplaySpace[Task](dbDir, mapSize)
+      r     <- RhoRuntime.createReplayRhoRuntime[Task](space)
+    } yield r).runSyncUnsafe()
 
     randSetup = rand
     randRun = rand
     Await
       .result(
-        createTest(setupTerm)(runtime.reducer, randSetup).runToFuture,
+        createTest(setupTerm)(runtime, randSetup).runToFuture,
         Duration.Inf
       )
-    runTask = createTest(Some(term))(runtime.reducer, randRun)
+    runTask = createTest(Some(term))(runtime, randRun)
   }
 
   @TearDown
   def tearDown(): Unit =
-    runtime.close().unsafeRunSync
+    runtime.close.unsafeRunSync
 }
