@@ -359,7 +359,7 @@ lazy val node = (project in file("node"))
     /* Debian */
     debianPackageDependencies in Debian ++= Seq(
       "openjdk-11-jre-headless",
-      "openssl(>= 1.1.1h) | openssl(>= 1.1.1h)", //ubuntu & debian
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.1h)", //ubuntu & debian
       "bash (>= 2.05a-11)"
     ),
     /* Redhat */
