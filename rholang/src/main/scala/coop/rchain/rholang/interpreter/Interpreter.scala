@@ -26,7 +26,10 @@ trait Interpreter[F[_]] {
 }
 
 class InterpreterImpl[F[_]: Sync](implicit C: _cost[F]) extends Interpreter[F] {
+
+  // Internal helper exception to mark parser error
   case class ParserError(parseError: InterpreterError) extends Throwable
+
   override def injAttempt(
       reducer: Reduce[F],
       term: String,

@@ -56,12 +56,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     rm   <- Resources.mkRuntimeManagerAt[Task](dirs.rspaceDir)()
   } yield rm
 
-  val runtimeAndManager: Resource[Task, (interpreter.Runtime[Task], RuntimeManager[Task])] = for {
+  val runtimeAndManager: Resource[Task, (interpreter.RhoRuntime[Task], RuntimeManager[Task])] = for {
     dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    rhr  <- rholang.Resources.mkRuntimeAt[Task](dirs.rspaceDir)()
-    r    = rhr._1
-    rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntime[Task](r))
-  } yield (r, rm)
+    runtimes  <- rholang.Resources.mkRuntimesAt[Task](dirs.rspaceDir)()
+    rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2))
+  } yield (runtimes._1, rm)
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
@@ -129,12 +128,12 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
     runtimeManager.withRuntimeLock(
       runtime =>
-        runtime.blockData.set(BlockData(0, 0, genesisContext.validatorPks.head, 0)) >>
-          runtimeManager.playSystemDeploy(startState)(playSystemDeploy, runtime).attempt >>= {
+        runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0)) >>
+          runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
           case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
             assert(resultAssertion(playResult))
             runtimeManager
-              .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy, runtime)
+              .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy)
               .attempt
               .map {
                 case Right(Right(systemDeployReplayResult)) =>
@@ -363,7 +362,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             _             <- runtime.cost.set(initialPhlo)
             term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.data.term)
-            _             <- runtime.reducer.inj(term)
+            _             <- runtime.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft
 

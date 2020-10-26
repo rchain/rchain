@@ -1,7 +1,7 @@
 package coop.rchain.rholang
 
 import cats.effect.Bracket
-import coop.rchain.rholang.interpreter.InterpreterSyntax
+import coop.rchain.rholang.interpreter.RhoRuntimeSyntax
 
 package object interpreter {
 
@@ -11,4 +11,4 @@ package object interpreter {
   object syntax extends AllSyntaxRholang
 
 }
-trait AllSyntaxRholang extends InterpreterSyntax
+trait AllSyntaxRholang extends RhoRuntimeSyntax

@@ -39,10 +39,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
       costLog <- Resource.liftF(costLog[Task]())
       cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
+      space     <- Resource.liftF(RhoRuntime.setupRhoRSpace[Task](dir, 1024L * 1024 * 1024))
       runtime <- {
         implicit val c = cost
-        Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
+        Resource.make(RhoRuntime.createRhoRuntime[Task](space))(_.close)
       }
     } yield (runtime, costLog)
 
@@ -50,9 +50,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       .use {
         case (runtime, costL) =>
           costL.listen {
-            implicit val cost                 = runtime.cost
-            implicit val i: Interpreter[Task] = Interpreter.newIntrepreter[Task]
-            Interpreter[Task].evaluate(runtime, contract, Cost(initialPhlo.toLong))
+            runtime.evaluate(contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)

@@ -289,6 +289,34 @@ object RSpace {
     } yield (space, replay, historyReader)
   }
 
+  def createReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F],
+      spanF: Span[F],
+      par: Parallel[F]
+  ): F[IReplaySpace[F, C, P, A, K]] = {
+    val v2Dir = dataDir.resolve("v2")
+    for {
+      setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
+      (historyReader, store) = setup
+      replayStore            <- HotStore.empty(historyReader)(sk.toCodec, concurrent)
+      replay = new ReplayRSpace[F, C, P, A, K](
+        historyReader,
+        AtomicAny(replayStore),
+        Branch.REPLAY
+      )
+    } yield replay
+  }
+
   def create[F[_], C, P, A, K](
       dataDir: Path,
       mapSize: Long,

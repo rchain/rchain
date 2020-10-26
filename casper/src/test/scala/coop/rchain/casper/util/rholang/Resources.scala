@@ -14,8 +14,8 @@ import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
-import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
+import coop.rchain.rholang.Resources.{mkHistoryReposity, mkRuntimesAt, mkTempDir}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -38,8 +38,8 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtime        <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(runtime._1))
+      runtimes       <- mkRuntimesAt[F](storageDirectory)(storageSize)
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntimes(runtimes._1, runtimes._2))
     } yield runtimeManager
   }
 
@@ -55,9 +55,10 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      rhr            <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(rhr._1))
-    } yield (runtimeManager, rhr._2)
+      runtimes       <- mkRuntimesAt[F](storageDirectory)(storageSize)
+      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntimes(runtimes._1, runtimes._2))
+      history        <- mkHistoryReposity[F](storageDirectory, storageSize)
+    } yield (runtimeManager, history)
   }
 
   def mkBlockStoreAt[F[_]: Concurrent: Metrics: Sync: Log](path: Path): Resource[F, BlockStore[F]] =
