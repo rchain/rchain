@@ -45,7 +45,7 @@ object Dependencies {
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
   val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
   val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
-  val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "1.0.2"
+  val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "2.1.8"
   val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
   val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
