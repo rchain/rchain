@@ -7,7 +7,7 @@ object Dependencies {
   val circeVersion      = "0.13.0"
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.4"
-  val kamonVersion      = "1.1.5"
+  val kamonVersion      = "2.1.8"
   val catsVersion       = "2.1.1"
   val catsEffectVersion = "2.2.0"
   val catsMtlVersion    = "0.7.1"
@@ -43,10 +43,10 @@ object Dependencies {
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
-  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "1.0.1"
-  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "1.1.2"
+  val kamonSystemMetrics  = "io.kamon"                   %% "kamon-system-metrics"      % "2.1.8"
+  val kamonPrometheus     = "io.kamon"                   %% "kamon-prometheus"          % "2.1.8"
   val kamonInfluxDb       = "io.kamon"                   %% "kamon-influxdb"            % "2.1.8"
-  val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "1.0.0"
+  val kamonZipkin         = "io.kamon"                   %% "kamon-zipkin"              % "2.1.8"
   val lightningj          = ("org.lightningj"             % "lightningj"                % "0.5.2-Beta")
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.1"
