@@ -101,7 +101,7 @@ lazy val coverageSettings = Seq(
 )
 
 lazy val compilerSettings = CompilerSettings.options ++ Seq(
-  crossScalaVersions := Seq(scalaVersion.value, "2.13.1")
+  crossScalaVersions := Seq(scalaVersion.value)
 )
 
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
