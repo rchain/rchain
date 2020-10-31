@@ -8,7 +8,7 @@ from rchain.util import sign_deploy_data
 
 class HttpRequestException(Exception):
    def __init__(self, status_code: int, content: str):
-       super(HttpRequestException, self).__init__()
+       super().__init__()
        self.status_code = status_code
        self.content = content
 

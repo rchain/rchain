@@ -88,7 +88,7 @@ class LogsReMatch:
 
 class LogsReMatchWithResult(LogsReMatch):
     def __init__(self, node: 'Node', pattern: Pattern) -> None:
-        super(LogsReMatchWithResult, self).__init__(node, pattern)
+        super().__init__(node, pattern)
         self.result: Match
 
     def is_satisfied(self) -> bool:

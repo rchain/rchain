@@ -13,11 +13,12 @@ dataclasses = "*"
 mypy = "*"
 urllib3 = ">=1.24.2"
 ecdsa = "*"
-cryptography = "*"
+cryptography = ">=3.2"
 eth-hash = "*"
 pycryptodome = "*"
 pyrchain = "==0.3.7"
 requests = "*"
+importlib-metadata = "*"
 
 [dev-packages]
 python-language-server = "*"
