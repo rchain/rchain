@@ -767,14 +767,17 @@ object BlockAPI {
   }
 
   def isFinalized[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log](
-      hash: String
+      hash: String,
+      // We don't actually want to add a lock here. This lock is only fot temporary purpose.
+      // We should roll out a better plan soon.
+      lock: Semaphore[F]
   ): F[ApiErr[Boolean]] = {
     val errorMessage =
       "Could not check if block is finalized, casper instance was not available yet."
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[Boolean]](
         implicit casper =>
-          for {
+          lock.withPermit(for {
             lastFinalizedBlock <- casper.lastFinalizedBlock
             lastFinalizedBlockMetadata = BlockMetadata
               .fromBlock(lastFinalizedBlock, invalid = false)
@@ -797,7 +800,7 @@ object BlockAPI {
                            .contains(givenBlockMetadata)
                            .map(_.asRight[Error])
                      }
-          } yield result,
+          } yield result),
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )

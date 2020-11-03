@@ -222,7 +222,7 @@ object DeployGrpcServiceV1 {
         }
 
       def isFinalized(request: IsFinalizedQuery): Task[IsFinalizedResponse] =
-        defer(BlockAPI.isFinalized[F](request.hash)) { r =>
+        defer(BlockAPI.isFinalized[F](request.hash, blockApiLock)) { r =>
           import IsFinalizedResponse.Message
           import IsFinalizedResponse.Message._
           IsFinalizedResponse(r.fold[Message](Error, IsFinalized))

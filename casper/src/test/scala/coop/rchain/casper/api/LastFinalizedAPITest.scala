@@ -1,6 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.effect.Sync
+import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -29,8 +30,9 @@ class LastFinalizedAPITest
     with EitherValues
     with BlockGenerator
     with BlockDagStorageFixture {
-  val genesisParameters = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
-  val genesisContext    = buildGenesis(genesisParameters)
+  val genesisParameters           = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
+  val genesisContext              = buildGenesis(genesisParameters)
+  val lock: Task[Semaphore[Task]] = Semaphore[Task](1)
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
@@ -39,18 +41,19 @@ class LastFinalizedAPITest
       safetyOracle: SafetyOracle[Task],
       log: Log[Task]
   ): Task[Boolean] =
-    BlockAPI
-      .isFinalized[Task](ProtoUtil.hashString(block))(
-        Sync[Task],
-        engineCell,
-        safetyOracle,
-        blockStore,
-        log
-      )
-      .map(
-        _.right.value
-      )
-
+    lock >>= { l =>
+      BlockAPI
+        .isFinalized[Task](ProtoUtil.hashString(block), l)(
+          Sync[Task],
+          engineCell,
+          safetyOracle,
+          blockStore,
+          log
+        )
+        .map(
+          _.right.value
+        )
+    }
   /*
    * DAG Looks like this:
    *

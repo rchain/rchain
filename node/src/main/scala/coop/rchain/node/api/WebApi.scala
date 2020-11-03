@@ -1,5 +1,6 @@
 package coop.rchain.node.api
 
+import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
@@ -58,7 +59,7 @@ object WebApi {
       devMode: Boolean = false
   ) extends WebApi[F] {
     import WebApiSyntax._
-
+    val lock: F[Semaphore[F]] = Semaphore[F](1)
     def prepareDeploy(req: Option[PrepareRequest]): F[PrepareResponse] = {
       val seqNumber = BlockAPI
         .getLatestMessage[F]
@@ -121,7 +122,9 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
 
     def isFinalized(hash: String): F[Boolean] =
-      BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+      lock >>= { l =>
+        BlockAPI.isFinalized(hash, l).flatMap(_.liftToBlockApiErr)
+      }
   }
 
   // Rholang terms interesting for translation to JSON
