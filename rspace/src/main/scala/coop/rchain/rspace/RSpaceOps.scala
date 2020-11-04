@@ -105,6 +105,9 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     store.getContinuations(channels)
 
+  def getJoins(channel: C): F[Seq[Seq[C]]] =
+    store.getJoins(channel)
+
   protected[this] def consumeLockF(
       channels: Seq[C]
   )(

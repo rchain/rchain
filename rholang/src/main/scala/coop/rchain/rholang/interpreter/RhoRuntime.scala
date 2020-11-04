@@ -112,6 +112,8 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     */
   def getData(channel: Par): F[Seq[Datum[ListParWithRandom]]]
 
+  def getJoins(channel: Par): F[Seq[Seq[Par]]]
+
   /**
     * get data directly from history repository
     *
@@ -199,6 +201,8 @@ class RhoRuntimeImpl[F[_]: Sync](
       channels: Seq[Name]
   ): F[Seq[WaitingContinuation[BindPattern, TaggedContinuation]]] =
     space.getWaitingContinuations(channels)
+
+  override def getJoins(channel: Name): F[Seq[Seq[Name]]] = space.getJoins(channel)
 
   override def setBlockData(blockData: BlockData): F[Unit] = blockDataRef.set(blockData)
 
