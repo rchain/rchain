@@ -51,4 +51,26 @@ final class BlockDagRepresentationOps[F[_]: Sync](
         .map(_.toMap)
       )
   }
+
+  def invalidLatestMessages: F[Map[Validator, BlockHash]] = latestMessages.flatMap(
+    lm =>
+      invalidLatestMessages(lm.map {
+        case (validator, block) => (validator, block.blockHash)
+      })
+  )
+
+  def invalidLatestMessages(
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[Validator, BlockHash]] =
+    dag.invalidBlocks.map { invalidBlocks =>
+      latestMessagesHashes.filter {
+        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
+      }
+    }
+
+  def invalidBlocksMap: F[Map[BlockHash, Validator]] =
+    for {
+      ib <- dag.invalidBlocks
+      r  = ib.map(block => (block.blockHash, block.sender)).toMap
+    } yield r
 }

@@ -54,7 +54,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       latestMessagesHashes: Map[Validator, BlockHash]
   ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
     for {
-      invalidLatestMessages        <- ProtoUtil.invalidLatestMessages[F](dag, latestMessagesHashes)
+      invalidLatestMessages        <- dag.invalidLatestMessages(latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
       lca <- calculateLCA(
               dag,
