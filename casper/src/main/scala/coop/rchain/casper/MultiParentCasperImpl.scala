@@ -20,7 +20,7 @@ import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
-import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
+import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -32,9 +32,9 @@ import coop.rchain.crypto.signatures.Signed
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
+    // todo this should be read from chain, for now read from startup options
+    casperShardConf: CasperShardConf,
     approvedBlock: BlockMessage,
-    shardId: String,
-    finalizationRate: Int,
     blockProcessingLock: Semaphore[F],
     blockProcessingState: Ref[F, BlockProcessingState]
 )(
@@ -221,7 +221,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   }.timer("add-block-time")
 
   private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
-    lastFinalizedBlock.whenA(newBlock.body.state.blockNumber % finalizationRate == 0)
+    lastFinalizedBlock.whenA(
+      newBlock.body.state.blockNumber % casperShardConf.finalizationRate == 0
+    )
 
   /**
     * Check if there are blocks in CasperBuffer available with all dependencies met.
@@ -547,6 +549,91 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                   )
             )
     } yield ()
+  }
+
+  override def getSnapshot: F[CasperSnapshot[F]] = {
+    import cats.instances.list._
+
+    def getOnChainState(
+        b: BlockMessage
+    )(implicit runtimeManager: RuntimeManager[F]): F[OnChainCasperState] =
+      for {
+        av <- runtimeManager.getActiveValidators(b.body.state.postStateHash)
+        // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
+        bm          = b.body.state.bonds
+        shardConfig = casperShardConf
+      } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
+
+    for {
+      dag  <- BlockDagStorage[F].getRepresentation
+      tips <- Estimator[F].tips(dag, approvedBlock)
+
+      /**
+        * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
+        * have conflicting parents. With introducing block merge, all parents that share the same bonds map
+        * should be parents. Parents that have different bond maps are only one that cannot be merged in any way.
+        */
+      parents <- for {
+                  // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
+                  // bond maps that has biggest cumulative stake.
+                  blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
+                  parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
+                } yield parents
+      onChainState <- getOnChainState(parents.head)
+
+      /**
+        * We ensure that only the justifications given in the block are those
+        * which are bonded validators in the chosen parent. This is safe because
+        * any latest message not from a bonded validator will not change the
+        * final fork-choice.
+        */
+      justifications <- {
+        for {
+          lms <- dag.latestMessages
+          r = lms.toList
+            .map {
+              case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
+            }
+            .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
+        } yield r.toSet
+      }
+      parentMetas <- parents.traverse(b => dag.lookupUnsafe(b.blockHash))
+      maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
+      maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
+      deploysInScope <- {
+        val currentBlockNumber  = maxBlockNum + 1
+        val earliestBlockNumber = currentBlockNumber - onChainState.shardConf.deployLifespan
+        for {
+          result <- DagOps
+                     .bfTraverseF[F, BlockMetadata](parentMetas)(
+                       b =>
+                         ProtoUtil
+                           .getParentMetadatasAboveBlockNumber(
+                             b,
+                             earliestBlockNumber,
+                             dag
+                           )
+                     )
+                     .foldLeftF(Set.empty[Signed[DeployData]]) { (deploys, blockMetadata) =>
+                       for {
+                         block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
+                         blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
+                       } yield deploys ++ blockDeploys
+                     }
+        } yield result
+      }
+      invalidBlocks <- dag.invalidBlocksMap
+    } yield CasperSnapshot(
+      dag,
+      tips,
+      parents,
+      justifications,
+      invalidBlocks,
+      deploysInScope,
+      maxBlockNum,
+      maxSeqNums,
+      onChainState
+    )
   }
 }
 

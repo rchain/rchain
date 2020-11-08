@@ -32,9 +32,8 @@ class GenesisValidator[F[_]
   /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
+    casperShardConf: CasperShardConf,
     validatorId: ValidatorIdentity,
-    shardId: String,
-    finalizationRate: Int,
     blockApprover: BlockApproverProtocol
 ) extends Engine[F] {
   import Engine._
@@ -58,7 +57,11 @@ class GenesisValidator[F[_]
           ack(ub.candidate.block.blockHash) >> blockApprover
             .unapprovedBlockPacketHandler(peer, ub) >> {
             Engine
-              .transitionToInitializing(shardId, finalizationRate, Some(validatorId), init = noop)
+              .transitionToInitializing(
+                casperShardConf,
+                Some(validatorId),
+                init = noop
+              )
           }
         )
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)

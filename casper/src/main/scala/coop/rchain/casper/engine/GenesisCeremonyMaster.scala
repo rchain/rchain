@@ -53,8 +53,7 @@ object GenesisCeremonyMaster {
     /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      shardId: String,
-      finalizationRate: Int,
+      casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
       disableStateExporter: Boolean
   ): F[Unit] =
@@ -65,8 +64,7 @@ object GenesisCeremonyMaster {
       cont <- lastApprovedBlockO match {
                case None =>
                  waitingForApprovedBlockLoop[F](
-                   shardId,
-                   finalizationRate,
+                   casperShardConf,
                    validatorId,
                    disableStateExporter
                  )
@@ -77,9 +75,8 @@ object GenesisCeremonyMaster {
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
-                                ab,
-                                shardId,
-                                finalizationRate
+                                casperShardConf: CasperShardConf,
+                                ab
                               )
                    _ <- Engine
                          .transitionToRunning[F](
