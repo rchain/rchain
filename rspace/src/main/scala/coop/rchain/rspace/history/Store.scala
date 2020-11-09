@@ -91,12 +91,36 @@ object StoreInstances {
         }
       }
 
+      @SuppressWarnings(Array("org.wartremover.warts.Throw"))
       override def put[T](
           data: Seq[(Blake2b256Hash, T)],
           toBuffer: T => ByteBuffer
       ): F[Unit] = {
-        val rawData = data.map { case (k, v) => (k.bytes.toDirectByteBuffer, v) }
-        store.put(rawData, toBuffer)
+        // When buffer allocation for values is done for each value in the time of writing causes corruption of the database.
+        // https://github.com/rchain/rchain/issues/3122
+        // store.withWriteTxnF { txn =>
+        //   data.foreach {
+        //     case (key, value) =>
+        //       if (!dbi.put(txn, key.bytes.toDirectByteBuffer, toBuffer(value))) {
+        //         throw new RuntimeException("was not able to put data")
+        //       }
+        //   }
+        // }
+
+        // Buffers for key and value created outside of transaction.
+        // Why this helps (or why corruption happens) is not clear but this code will prevent corruption of the database.
+        val byteBuffers = data.map {
+          case (key, value) =>
+            (key.bytes.toDirectByteBuffer, toBuffer(value))
+        }
+        store.withWriteTxnF { txn =>
+          byteBuffers.foreach {
+            case (key, value) =>
+              if (!dbi.put(txn, key, value)) {
+                throw new RuntimeException("was not able to put data")
+              }
+          }
+        }
       }
 
       override def close(): F[Unit] = store.close()
