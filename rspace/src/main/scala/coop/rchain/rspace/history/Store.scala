@@ -3,20 +3,20 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import cats.implicits._
 import cats.effect.Sync
+import cats.implicits._
 import coop.rchain.lmdb.LMDBStore
-import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.rspace.Blake2b256Hash
-import org.lmdbjava.DbiFlags.MDB_CREATE
+import coop.rchain.shared.ByteVectorOps.RichByteVector
 import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
+import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.bits.BitVector
 
 trait Store[F[_]] {
   def get(key: Blake2b256Hash): F[Option[BitVector]]
   def put(key: Blake2b256Hash, value: BitVector): F[Unit]
-  def get(key: ByteBuffer): F[Option[ByteBuffer]]
+  def get(key: ByteBuffer): F[Option[BitVector]]
   def put(key: ByteBuffer, value: ByteBuffer): F[Unit]
   def put(data: Seq[(Blake2b256Hash, BitVector)]): F[Unit]
 
@@ -58,7 +58,7 @@ object StoreInstances {
         put(directKey, directValue)
       }
 
-      override def get(key: ByteBuffer): F[Option[ByteBuffer]] = store.get(key)
+      override def get(key: ByteBuffer): F[Option[BitVector]] = store.get(key)
 
       override def get[T](
           keys: Seq[Blake2b256Hash],
