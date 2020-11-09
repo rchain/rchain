@@ -420,7 +420,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- mgr.emptyStateHash
+              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
               res  <- mgr.captureResults(hash, deploy)
             } yield res
         )
@@ -430,7 +430,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- mgr.emptyStateHash
+              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
               res  <- mgr.captureResults(hash, deployNoRes)
             } yield res
         )
@@ -452,7 +452,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- mgr.emptyStateHash
+              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
               res  <- mgr.captureResults(hash, deploy)
             } yield res
         )
@@ -469,7 +469,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtimeManagerResource
         .use { m =>
           for {
-            hash <- m.emptyStateHash
+            hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
             afterHash <- computeState(m, term, genesis.body.state.postStateHash)
                           .map(_ => hash)
           } yield afterHash

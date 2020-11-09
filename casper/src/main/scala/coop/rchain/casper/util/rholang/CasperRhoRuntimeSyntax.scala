@@ -113,17 +113,6 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
     } yield ()
   }
 
-  /**
-    * This is a hard-coded value for `emptyStateHash`. Because of the value is actually the same all
-    * the time. For some situations, we can just use the value directly for better performance.
-    */
-  def emptyStateHashFixed: F[StateHash] =
-    ByteString
-      .copyFrom(
-        Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
-      )
-      .pure
-
   private def activateValidatorQuerySource: String =
     s"""
        # new return, rl(`rho:registry:lookup`), poSCh in {

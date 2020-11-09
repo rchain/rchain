@@ -37,7 +37,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
                    s"""new return, auth(`rho:rchain:deployerId`) in { return!(*auth) }""",
                    sec = sk
                  )
-        emptyStateHash <- mgr.emptyStateHash
+        emptyStateHash = RuntimeManager.emptyStateHashFixed
         result         <- mgr.captureResults(emptyStateHash, deploy)
         _              = result.size should be(1)
         _              = result.head should be(GDeployerId(pk): Par)

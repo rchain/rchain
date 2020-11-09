@@ -209,7 +209,7 @@ object InterpreterUtil {
       parentTuplespaces match {
         // For genesis, use empty trie's root hash
         case Seq() =>
-          runtimeManager.emptyStateHash
+          RuntimeManager.emptyStateHashFixed.pure[F]
 
         case Seq((_, parentStateHash)) =>
           parentStateHash.pure

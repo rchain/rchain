@@ -15,6 +15,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.Log
@@ -58,7 +59,6 @@ trait RuntimeManager[F[_]] {
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
-  def emptyStateHash: F[StateHash]
   def withRuntimeLock[A](f: RhoRuntime[F] => F[A]): F[A]
   def withReplayRuntimeLock[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
@@ -73,8 +73,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   private[this] val RuntimeManagerMetricsSource =
     Metrics.Source(CasperMetricsSource, "runtime-manager")
 
-  override def emptyStateHash: F[StateHash] =
-    withRuntime(runtime => runtime.emptyStateHashFixed)
   private def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
     Sync[F].bracket {
       import coop.rchain.metrics.implicits._
@@ -199,6 +197,18 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 object RuntimeManager {
 
   type StateHash = ByteString
+
+  /**
+    * This is a hard-coded value for `emptyStateHash` which is calculated by
+    * [[coop.rchain.casper.util.rholang.RhoRuntimeOps.emptyStateHash]].
+    * Because of the value is actually the same all
+    * the time. For some situations, we can just use the value directly for better performance.
+    */
+  val emptyStateHashFixed: StateHash =
+    ByteString
+      .copyFrom(
+        Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
+      )
 
   def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log](
       runtime: RhoRuntime[F],

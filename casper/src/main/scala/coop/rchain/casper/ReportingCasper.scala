@@ -216,7 +216,7 @@ object ReportingRuntime {
     def checkCreateDataDir: F[Unit] =
       for {
         notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- Sync[F].delay(Files.createDirectories(dataDir)).whenA(notexists)
+        _         <- Sync[F].delay(Files.createDirectories(dataDir)).whenA(notexists)
       } yield ()
 
     for {

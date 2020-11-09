@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
+import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
@@ -42,7 +43,7 @@ class DeployIdTest extends FlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- mgr.emptyStateHash
+              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
               res  <- mgr.captureResults(hash, d)
             } yield res
         )

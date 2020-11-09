@@ -183,7 +183,7 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      emptyStateHash            <- EitherT.right(runtimeManager.emptyStateHash)
+      emptyStateHash            <- EitherT.right(RuntimeManager.emptyStateHashFixed.pure[F])
       stateHash <- EitherT(
                     runtimeManager
                       .replayComputeState(emptyStateHash)(
