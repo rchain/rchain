@@ -10,7 +10,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime}
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -25,9 +25,9 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  lazy val sar = Runtime.setupRSpace[Task](dbDir, mapSize).unsafeRunSync
-  lazy val runtime: Runtime[Task] =
-    Runtime.createWithEmptyCost[Task]((sar._1, sar._2)).unsafeRunSync
+  lazy val space = RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize).unsafeRunSync
+  lazy val runtime: RhoRuntime[Task] =
+    RhoRuntime.createRhoRuntime[Task](space).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 
@@ -41,14 +41,11 @@ trait EvalBenchStateBase {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
-    //make sure we always start from clean rspace
-    runtime.replaySpace.clear()
-    runtime.space.clear()
   }
 
   @TearDown
   def tearDown(): Unit =
-    runtime.close().unsafeRunSync
+    runtime.close.unsafeRunSync
 
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(

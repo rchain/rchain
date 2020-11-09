@@ -11,7 +11,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.{RhoISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError

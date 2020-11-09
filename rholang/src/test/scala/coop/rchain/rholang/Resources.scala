@@ -8,11 +8,13 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.implicits._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rholang.interpreter.Runtime.{RhoHistoryRepository, RhoISpace, SystemProcess}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace}
+import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rspace
-import coop.rchain.rspace.RSpace
+import coop.rchain.rspace.{Match, RSpace}
+import coop.rchain.rspace.RSpace.setUp
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
@@ -63,32 +65,64 @@ object Resources {
   def mkRuntime[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       prefix: String,
       storageSize: Long = 1024 * 1024 * 1024L,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
     mkRuntimeWithHistory(prefix, storageSize, additionalSystemProcesses).map(_._1)
 
   def mkRuntimeWithHistory[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       prefix: String,
       storageSize: Long,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]]
-  )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
+      additionalSystemProcesses: Seq[Definition[F]]
+  )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
 
   def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](path: Path)(
       storageSize: Long = 1024 * 1024 * 1024L,
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(implicit scheduler: Scheduler): Resource[F, (Runtime[F], RhoHistoryRepository[F])] =
-    Resource.make[F, (Runtime[F], RhoHistoryRepository[F])](
-      Runtime.setupRSpace[F](path, storageSize) >>= {
-        case (space, replay, hr) =>
-          Runtime
-            .createWithEmptyCost[F](
-              (space, replay),
-              additionalSystemProcesses
-            )
-            .map((_, hr))
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] = {
+    import coop.rchain.rholang.interpreter.storage._
+    Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
+      for {
+        space   <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
+        runtime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                          path,
+                          storageSize,
+                          Branch.MASTER
+                        )
+      } yield (runtime, historyReader._1)
+    )(r => r._1.close >> r._2.close)
+  }
 
-      }
-    )(_._1.close())
+  def mkHistoryReposity[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
+      path: Path,
+      storageSize: Long = 1024 * 1024 * 1024L
+  ): Resource[F, RhoHistoryRepository[F]] = {
+    import coop.rchain.rholang.interpreter.storage._
+    Resource.make[F, RhoHistoryRepository[F]](
+      for {
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                          path,
+                          storageSize,
+                          Branch.MASTER
+                        )
+      } yield historyReader._1
+    )(_.close())
+  }
 
+  def mkRuntimesAt[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](path: Path)(
+      storageSize: Long = 1024 * 1024 * 1024L,
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+  )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F])] = {
+    import coop.rchain.rholang.interpreter.storage._
+    Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F])](
+      for {
+        space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
+        runtime     <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
+        replaySpace <- RhoRuntime.setupReplaySpace[F](path, storageSize)
+        replayRuntime <- RhoRuntime
+                          .createReplayRhoRuntime[F](replaySpace, additionalSystemProcesses)
+      } yield (runtime, replayRuntime)
+    )(r => r._1.close >> r._2.close)
+  }
 }

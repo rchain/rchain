@@ -10,10 +10,11 @@ import cats.implicits._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Resources
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
@@ -66,10 +67,8 @@ object RholangCLI {
     implicit val parF: Parallel[Task]    = Task.catsParallel
 
     val runtime = (for {
-      sarAndHR           <- Runtime.setupRSpace[Task](conf.dataDir(), conf.mapSize())
-      (space, replay, _) = sarAndHR
-      runtime            <- Runtime.createWithEmptyCost[Task]((space, replay))
-      _                  <- Runtime.bootstrapRegistry[Task](runtime)
+      space   <- RhoRuntime.setupRhoRSpace[Task](conf.dataDir(), conf.mapSize())
+      runtime <- RhoRuntime.createRhoRuntime[Task](space)
     } yield (runtime)).unsafeRunSync
 
     val problems = try {
@@ -100,7 +99,7 @@ object RholangCLI {
         List()
       }
     } finally {
-      runtime.close().unsafeRunSync
+      runtime.close.unsafeRunSync
     }
     if (!problems.isEmpty) {
       System.exit(1)
@@ -130,15 +129,15 @@ object RholangCLI {
   }
 
   private def printStorageContents[F[_]: Sync](
-      space: RhoISpace[F],
+      runtime: RhoRuntime[F],
       unmatchedSendsOnly: Boolean
   ): F[Unit] =
     Sync[F].delay {
       Console.println("\nStorage Contents:")
     } >> FlatMap[F]
       .ifM(unmatchedSendsOnly.pure[F])(
-        ifTrue = StoragePrinter.prettyPrintUnmatchedSends(space),
-        ifFalse = StoragePrinter.prettyPrint(space)
+        ifTrue = StoragePrinter.prettyPrintUnmatchedSends(runtime),
+        ifFalse = StoragePrinter.prettyPrint(runtime)
       )
       .map(Console.println)
 
@@ -155,7 +154,7 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
-  def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
+  def repl(runtime: RhoRuntime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
@@ -169,7 +168,7 @@ object RholangCLI {
 
   def processFile(
       conf: Conf,
-      runtime: Runtime[Task],
+      runtime: RhoRuntime[Task],
       fileName: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
@@ -196,9 +195,8 @@ object RholangCLI {
 
   }
 
-  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
-    implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source, Map.empty).map {
+  def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =
+    runtime.evaluate(source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -209,7 +207,6 @@ object RholangCLI {
             th.printStackTrace(Console.err)
         }
     }
-  }
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -252,7 +249,7 @@ object RholangCLI {
   }
 
   def evaluatePar(
-      runtime: Runtime[Task],
+      runtime: RhoRuntime[Task],
       source: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
@@ -264,15 +261,12 @@ object RholangCLI {
         _ <- Task.delay(if (!quiet) {
               printNormalizedTerm(par)
             })
-        result <- {
-          implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source, Map.empty)
-        }
+        result <- runtime.evaluate(source)
       } yield result
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime.space, unmatchedSendsOnly).unsafeRunSync
+        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync
       }
     }
   }

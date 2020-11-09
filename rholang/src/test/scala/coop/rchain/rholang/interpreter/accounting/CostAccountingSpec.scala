@@ -1,18 +1,22 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Parallel
 import cats.data.Chain
 import cats.effect._
+import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
-import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import monix.eval.Task
+import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
@@ -32,25 +36,29 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
       dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
       costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
+      space   <- Resource.liftF(RhoRuntime.setupRhoRSpace[Task](dir, 1024L * 1024 * 1024))
       runtime <- {
-        implicit val c = cost
-        Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
+        // naming noOpCostLog because want to override package scope noOpCostLog val
+        implicit val noOpCostLog: FunctorTell[Task, Chain[Cost]] = costLog
+        Resource.make(
+          RhoRuntime
+            .createRhoRuntime[Task](space, Seq.empty, false)
+        )(
+          _.close
+        )
       }
+
     } yield (runtime, costLog)
 
     resources
       .use {
         case (runtime, costL) =>
           costL.listen {
-            implicit val cost = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+            runtime.evaluate(contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)
@@ -64,40 +72,31 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
-      runtime <- {
-        implicit val c: _cost[Task] = cost
-        Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
-      }
-    } yield (runtime, costLog)
+      dir      <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      runtimes <- Resources.mkRuntimesAt[Task](dir)()
+    } yield runtimes
 
     resources
       .use {
-        case (runtime, _) =>
-          implicit val c: _cost[Task]         = runtime.cost
+        case (runtime, replayRuntime) =>
           implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-          Interpreter[Task].injAttempt(
-            runtime.reducer,
+          runtime.evaluate(
             term,
             initialPhlo,
             Map.empty
           )(rand) >>= { playResult =>
-            runtime.space.createCheckpoint() >>= {
+            runtime.createCheckpoint >>= {
               case Checkpoint(root, log) =>
-                runtime.replaySpace.rigAndReset(root, log) >>
-                  Interpreter[Task].injAttempt(
-                    runtime.replayReducer,
+                replayRuntime.rig(log) >>
+                  replayRuntime.reset(root) >>
+                  replayRuntime.evaluate(
                     term,
                     initialPhlo,
                     Map.empty
                   )(rand) >>= { replayResult =>
-                  runtime.replaySpace.checkReplayData().as((playResult, replayResult))
+                  replayRuntime.checkReplayData.as((playResult, replayResult))
                 }
             }
           }

@@ -19,7 +19,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared._
 
 /**
@@ -183,9 +183,10 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
+      emptyStateHash            <- EitherT.right(RuntimeManager.emptyStateHashFixed.pure[F])
       stateHash <- EitherT(
                     runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash)(
+                      .replayComputeState(emptyStateHash)(
                         blockDeploys,
                         List.empty,
                         BlockData.fromBlock(candidate.block),

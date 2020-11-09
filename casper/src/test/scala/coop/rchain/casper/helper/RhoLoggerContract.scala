@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 import coop.rchain.rholang.interpreter.{ContractCall, PrettyPrinter, RhoType}
 import coop.rchain.shared.{Log, LogSource}
 
@@ -11,7 +11,7 @@ object RhoLoggerContract {
 
   //TODO extract a `RhoPatterns[F]` algebra that will move passing the Span, the Dispatcher, and the Space parameters closer to the edge of the world
   def handleMessage[F[_]: Log: Concurrent: Span](
-      ctx: SystemProcess.Context[F]
+      ctx: ProcessContext[F]
   )(message: Seq[ListParWithRandom]): F[Unit] = {
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)
 

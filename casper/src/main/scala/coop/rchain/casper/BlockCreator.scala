@@ -20,7 +20,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Cell, Log, Time}
 import coop.rchain.casper.util.rholang.SystemDeployUtil
 

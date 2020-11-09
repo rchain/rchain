@@ -16,8 +16,9 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
 import monix.eval.Task
@@ -53,20 +54,20 @@ class CryptoChannelsSpec
   def clearStore(
       ackChannel: Par,
       timeout: Duration = 3.seconds
-  )(implicit env: Env[Par], reduce: Reduce[Task]): Unit = {
+  )(implicit env: Env[Par], runtime: RhoRuntime[Task]): Unit = {
     val consume: Par = Receive(
       Seq(ReceiveBind(Seq(EVar(Var(Wildcard(WildcardMsg())))), ackChannel)),
       Par()
     )
-    Await.ready(reduce.eval(consume).runToFuture, 3.seconds)
+    Await.ready(runtime.inj(consume, env).runToFuture, 3.seconds)
   }
 
   def assertStoreContains(
-      space: RhoISpace[Task]
+      runtime: RhoRuntime[Task]
   )(ackChannel: GString)(data: ListParWithRandom): Task[Assertion] = {
     val channel: Par = ackChannel
     for {
-      spaceMap <- space.toMap
+      spaceMap <- runtime.getHotChanges
       datum    = spaceMap(List(channel)).data.head
     } yield {
       assert(datum.a.pars == data.pars)
@@ -80,19 +81,19 @@ class CryptoChannelsSpec
       hashFn: Array[Byte] => Array[Byte],
       fixture: FixtureParam
   ): Any = {
-    implicit val (reduce, store) = fixture
+    implicit val runtime = fixture
 
     val hashChannel: Par = channelName match {
-      case "sha256Hash"     => Runtime.FixedChannels.SHA256_HASH
-      case "keccak256Hash"  => Runtime.FixedChannels.KECCAK256_HASH
-      case "blake2b256Hash" => Runtime.FixedChannels.BLAKE2B256_HASH
+      case "sha256Hash"     => FixedChannels.SHA256_HASH
+      case "keccak256Hash"  => FixedChannels.KECCAK256_HASH
+      case "blake2b256Hash" => FixedChannels.BLAKE2B256_HASH
     }
 
     val ackChannel                  = GString("x")
     implicit val emptyEnv: Env[Par] = Env[Par]()
 
     val storeContainsTest: ListParWithRandom => Task[Assertion] =
-      assertStoreContains(store)(ackChannel)(_)
+      assertStoreContains(runtime)(ackChannel)(_)
 
     forAll { par: Par =>
       val toByteArray: Array[Byte] = serialize(par)
@@ -105,7 +106,7 @@ class CryptoChannelsSpec
       // 1. meet with the system process in the tuplespace
       // 2. hash input array
       // 3. send result on supplied ack channel
-      (reduce.eval(send) >>
+      (runtime.inj(send) >>
         storeContainsTest(ListParWithRandom(Seq(expected), rand))).runSyncUnsafe(3.seconds)
       clearStore(ackChannel)
     }
@@ -131,9 +132,9 @@ class CryptoChannelsSpec
 
   "secp256k1Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      implicit val (reduce, space) = fixture
+      implicit val runtime = fixture
 
-      val secp256k1VerifyhashChannel = Runtime.FixedChannels.SECP256K1_VERIFY
+      val secp256k1VerifyhashChannel = FixedChannels.SECP256K1_VERIFY
 
       val pubKey = Base16.unsafeDecode(
         "04C591A8FF19AC9C4E4E5793673B83123437E975285E7B442F4EE2654DFFCA5E2D2103ED494718C697AC9AEBCFD19612E224DB46661011863ED2FC54E71861E2A6"
@@ -144,7 +145,7 @@ class CryptoChannelsSpec
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
       val storeContainsTest: ListParWithRandom => Task[Assertion] =
-        assertStoreContains(space)(ackChannel)
+        assertStoreContains(runtime)(ackChannel)
 
       forAll { par: Par =>
         val parByteArray: Array[Byte] = Keccak256.hash(serialize(par))
@@ -164,7 +165,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        (reduce.eval(send) >>
+        (runtime.inj(send) >>
           storeContainsTest(
             ListParWithRandom(Seq(Expr(GBool(true))), rand)
           )).runSyncUnsafe(3.seconds)
@@ -174,17 +175,17 @@ class CryptoChannelsSpec
 
   "ed25519Verify channel" should "verify integrity of the data and send result on ack channel" in {
     fixture =>
-      implicit val (reduce, space) = fixture
+      implicit val runtime = fixture
 
       implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
 
-      val ed25519VerifyChannel = Runtime.FixedChannels.ED25519_VERIFY;
+      val ed25519VerifyChannel = FixedChannels.ED25519_VERIFY;
       val (secKey, pubKey)     = Ed25519.newKeyPair
 
       val ackChannel                  = GString("x")
       implicit val emptyEnv: Env[Par] = Env[Par]()
       val storeContainsTest: ListParWithRandom => Task[Assertion] =
-        assertStoreContains(space)(ackChannel)
+        assertStoreContains(runtime)(ackChannel)
 
       forAll { par: Par =>
         val parByteArray: Array[Byte] = serialize(par)
@@ -204,7 +205,7 @@ class CryptoChannelsSpec
           persistent = false,
           BitSet()
         )
-        (reduce.eval(send) >> storeContainsTest(
+        (runtime.inj(send) >> storeContainsTest(
           ListParWithRandom(List(Expr(GBool(true))), rand)
         )).runSyncUnsafe(3.seconds)
         clearStore(ackChannel)
@@ -220,15 +221,15 @@ class CryptoChannelsSpec
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
 
     val runtime = (for {
-      sar     <- Runtime.setupRSpace[Task](dbDir, size)
-      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
+      space   <- RhoRuntime.setupRhoRSpace[Task](dbDir, size)
+      runtime <- RhoRuntime.createRhoRuntime[Task](space)
       _       <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
     try {
-      test((runtime.reducer, runtime.space))
+      test(runtime)
     } finally {
-      runtime.close().unsafeRunSync
+      runtime.close.unsafeRunSync
       dbDir.recursivelyDelete()
     }
   }
@@ -236,6 +237,6 @@ class CryptoChannelsSpec
   /** TODO(mateusz.gorski): once we refactor Rholang[AndScala]Dispatcher
     *  to push effect choice up until declaration site refactor to `Reduce[Coeval]`
     */
-  override type FixtureParam = (Reduce[Task], RhoISpace[Task])
+  override type FixtureParam = RhoRuntime[Task]
 
 }

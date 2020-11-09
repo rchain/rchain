@@ -13,7 +13,7 @@ import coop.rchain.casper.util.{BondsParser, ProtoUtil, RSpaceUtil, VaultParser}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.shared.PathOps.RichPath
 import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import coop.rchain.blockstorage.util.io.IOError
@@ -267,7 +267,7 @@ object GenesisTest {
     } yield genesisBlock
 
   def withRawGenResources(
-      body: (Runtime[Task], Path, LogicalTime[Task]) => Task[Unit]
+      body: ((RhoRuntime[Task], ReplayRhoRuntime[Task]), Path, LogicalTime[Task]) => Task[Unit]
   ): Task[Unit] = {
     val storePath                           = storageLocation
     val gp                                  = genesisPath
@@ -276,12 +276,12 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      sar     <- Runtime.setupRSpace[Task](storePath, storageSize)
-      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      result  <- body(runtime, genesisPath, time)
-      _       <- runtime.close()
-      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _       <- Sync[Task].delay { gp.recursivelyDelete() }
+      runtimes <- RhoRuntime.createRuntimes[Task](storePath, storageSize)
+      result   <- body(runtimes, genesisPath, time)
+      _        <- runtimes._1.close
+      _        <- runtimes._2.close
+      _        <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _        <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
@@ -290,8 +290,14 @@ object GenesisTest {
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       implicit val log = new LogStub[Task]
-      (runtime: Runtime[Task], genesisPath: Path, time: LogicalTime[Task]) =>
-        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+      (
+          runtimes: (RhoRuntime[Task], ReplayRhoRuntime[Task]),
+          genesisPath: Path,
+          time: LogicalTime[Task]
+      ) =>
+        RuntimeManager
+          .fromRuntimes(runtimes._1, runtimes._2)
+          .flatMap(body(_, genesisPath, log, time))
     }
 
   def taskTest[R](f: Task[R]): R =

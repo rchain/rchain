@@ -13,7 +13,8 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.models.{Match, MatchCase, _}
-import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
+import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._

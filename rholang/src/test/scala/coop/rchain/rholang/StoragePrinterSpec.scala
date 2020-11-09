@@ -1,13 +1,12 @@
 package coop.rchain.rholang
 
-import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil}
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -38,14 +37,11 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
       .use { runtime =>
         for {
           _ <- {
-            implicit val c = runtime.cost
-            Interpreter[Task].evaluate(
-              runtime,
-              "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }",
-              Map.empty[String, Par]
+            runtime.evaluate(
+              "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }"
             )
           }
-          pretty <- StoragePrinter.prettyPrintUnmatchedSends(runtime.space)
+          pretty <- StoragePrinter.prettyPrintUnmatchedSends(runtime)
           _      = assert(pretty == "@{1}!(Nil)")
         } yield ()
       }
@@ -91,10 +87,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix, mapSize)
       .use { runtime =>
         for {
-          _ <- {
-            implicit val c = runtime.cost
-            InterpreterUtil.evaluate[Task](runtime, "@0!(Nil) | for(_ <- @1) { Nil }")
-          }
+          _      <- runtime.evaluate("@0!(Nil) | for(_ <- @1) { Nil }")
           deploy = mkDeploy("@1!(Nil) | @2!(Nil)")
           unmatchedSends <- StoragePrinter.prettyPrintUnmatchedSends(
                              deploy,

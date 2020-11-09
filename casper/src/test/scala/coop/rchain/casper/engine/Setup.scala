@@ -25,10 +25,13 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.RSpace
+import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
@@ -37,35 +40,34 @@ import monix.execution.Scheduler
 
 object Setup {
   def apply() = new {
+    import coop.rchain.rholang.interpreter.storage._
+
     implicit val log              = new LogStub[Task]
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
     val networkId                 = "test"
-    val scheduler                 = Scheduler.io("test")
+    implicit val scheduler        = Scheduler.io("test")
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
-    val (space, replay, historyRepo) = {
-      implicit val s = scheduler
-      Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
-    }
+    val (runtime, replayRuntime) =
+      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
+
+    val history = RSpace
+      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+        runtimeDir,
+        1024L * 1024 * 1024L,
+        Branch.MASTER
+      )
+      .unsafeRunSync
+
+    val (historyRepo, _) = history
     val (exporter, importer) = {
-      implicit val s = scheduler
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task]((space, replay))(
-          Concurrent[Task],
-          log,
-          metrics,
-          span,
-          Parallel[Task]
-        )
-        .unsafeRunSync(scheduler)
-
-    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
+    implicit val runtimeManager =
+      RuntimeManager.fromRuntimes(runtime, replayRuntime).unsafeRunSync(scheduler)
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)

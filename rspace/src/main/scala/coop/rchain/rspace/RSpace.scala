@@ -289,6 +289,31 @@ object RSpace {
     } yield (space, replay, historyReader)
   }
 
+  def createReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F],
+      spanF: Span[F],
+      par: Parallel[F]
+  ): F[IReplaySpace[F, C, P, A, K]] =
+    for {
+      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, Branch.MASTER)
+      (historyReader, store) = setup
+      replay = new ReplayRSpace[F, C, P, A, K](
+        historyReader,
+        AtomicAny(store),
+        Branch.REPLAY
+      )
+    } yield replay
+
   def create[F[_], C, P, A, K](
       dataDir: Path,
       mapSize: Long,
@@ -308,10 +333,15 @@ object RSpace {
       spanF: Span[F],
       par: Parallel[F]
   ): F[ISpace[F, C, P, A, K]] =
-    setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
-      case (historyReader, store) =>
-        new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), branch)
-    }
+    for {
+      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, branch)
+      (historyReader, store) = setup
+      space = new RSpace[F, C, P, A, K](
+        historyReader,
+        AtomicAny(store),
+        branch
+      )
+    } yield space
 
   def setUp[F[_], C, P, A, K](
       dataDir: Path,
