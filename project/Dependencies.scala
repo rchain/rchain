@@ -37,6 +37,8 @@ object Dependencies {
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
   val http4sCirce         = "org.http4s"                 %% "http4s-circe"              % http4sVersion
   val http4sDSL           = "org.http4s"                 %% "http4s-dsl"                % http4sVersion
+  val http4sRho           = "org.http4s"                 %% "rho-swagger"               % "0.21.0-RC1"
+  val http4sSwagger       = "org.http4s"                 %% "rho-swagger-ui"            % "0.21.0-RC1"
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.3.1"
   val jline               = ("org.scala-lang"             % "jline"                     % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
@@ -78,7 +80,7 @@ object Dependencies {
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
-  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.4"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // format: on
@@ -95,6 +97,7 @@ object Dependencies {
     scalacheck,
     disciplineCore,
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
+    slf4j,
     "com.typesafe"             % "config"                 % "1.4.0",
     "org.typelevel"            %% "machinist"              % "0.6.5",
     "org.typelevel"            %% "catalysts-platform"     % "0.6",
@@ -102,7 +105,10 @@ object Dependencies {
     "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
     "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
-    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7",
+    "com.fasterxml.jackson.core" % "jackson-annotations"   % "2.11.1",
+    "com.fasterxml.jackson.core" % "jackson-databind"      % "2.11.1",
+    "org.scala-lang.modules" %% "scala-collection-compat" % "2.2.0"
   )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
@@ -119,7 +125,7 @@ object Dependencies {
     Seq(circeGeneric)
 
   private val http4sDependencies: Seq[ModuleID] =
-    Seq(http4sDSL, http4sBlazeServer, http4sCirce)
+    Seq(http4sDSL, http4sBlazeServer, http4sCirce, http4sRho, http4sSwagger)
 
   val protobufDependencies: Seq[ModuleID] =
     Seq(scalapbRuntime)
