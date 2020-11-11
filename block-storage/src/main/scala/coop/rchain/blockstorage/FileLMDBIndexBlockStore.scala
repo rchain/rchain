@@ -115,7 +115,7 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
   override def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     lock.withPermit(
       for {
-        indexEntryBytesOpt     <- index.get(blockHash.toDirectByteBuffer)
+        indexEntryBytesOpt     <- index.get_WARNING(blockHash.toDirectByteBuffer)
         indexEntryOpt          = indexEntryBytesOpt.map(IndexEntry.load)
         maybeBlockMessageProto <- indexEntryOpt.traverse(readBlockMessage)
       } yield maybeBlockMessageProto >>= (bmp => BlockMessage.from(bmp).toOption)
