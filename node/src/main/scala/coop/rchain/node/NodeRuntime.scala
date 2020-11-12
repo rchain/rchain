@@ -833,18 +833,12 @@ object NodeRuntime {
       }
       synchronyConstraintChecker = {
         implicit val bs = blockStore
-        implicit val es = estimator
-        implicit val sp = span
-        SynchronyConstraintChecker[F](
-          conf.casper.synchronyConstraintThreshold
-        )
+        SynchronyConstraintChecker[F]
       }
       lastFinalizedHeightConstraintChecker = {
         implicit val bs = blockStore
         implicit val lf = lastFinalizedStorage
-        LastFinalizedHeightConstraintChecker[F](
-          conf.casper.heightConstraintThreshold
-        )
+        LastFinalizedHeightConstraintChecker[F]
       }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
