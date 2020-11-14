@@ -327,26 +327,4 @@ object FileLMDBIndexBlockStore {
     } yield result
   }
 
-  def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
-      config: Config
-  ): F[StorageErr[BlockStore[F]]] =
-    for {
-      notExists <- Sync[F].delay(Files.notExists(config.indexPath))
-      _         <- if (notExists) Sync[F].delay(Files.createDirectories(config.indexPath)) else ().pure[F]
-      env <- Sync[F].delay {
-              val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
-              Env
-                .create(PROXY_SAFE)
-                .setMapSize(config.mapSize)
-                .setMaxDbs(config.maxDbs)
-                .setMaxReaders(config.maxReaders)
-                .open(config.indexPath.toFile, flags: _*)
-            }
-      result <- create[F](
-                 env,
-                 config.storagePath,
-                 config.approvedBlockPath,
-                 config.checkpointsDirPath
-               )
-    } yield result
 }

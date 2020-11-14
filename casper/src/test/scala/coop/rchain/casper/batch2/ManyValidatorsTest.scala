@@ -48,8 +48,10 @@ class ManyValidatorsTest
 
     val testProgram = runtimeManagerResource.use { implicit runtimeManager =>
       for {
-        blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-        blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+        blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+        blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage[Task](
+                            blockDagStorageDir
+                          )
         indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
         genesis <- createGenesis[Task](bonds = bonds)(
                     Monad[Task],
@@ -69,7 +71,9 @@ class ManyValidatorsTest
                 initialLatestMessages
               )
             }
-        newBlockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+        newBlockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage[Task](
+                               blockDagStorageDir
+                             )
         newIndexedBlockDagStorage <- IndexedBlockDagStorage.create(newBlockDagStorage)
         dag                       <- newIndexedBlockDagStorage.getRepresentation
         tips                      <- Estimator[Task].tips(dag, genesis)
