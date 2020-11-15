@@ -203,10 +203,8 @@ class NodeRuntime private[node] (
       * (if not available), others (like blockstore) relay on the structure being created for them (and will fail
       * if it does not exist). For now this small fix should suffice, but we should unify this.
       */
-    _             <- mkDirs(dataDir).toReaderT
-    _             <- mkDirs(blockstorePath).toReaderT
-    _             <- mkDirs(blockdagStoragePath).toReaderT
-    blockstoreEnv = Context.env(blockstorePath, nodeConf.storage.lmdbMapSizeBlockstore)
+    _ <- mkDirs(dataDir).toReaderT
+    _ <- mkDirs(blockdagStoragePath).toReaderT
     dagConfig = BlockDagFileStorage.Config(
       latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
       latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
@@ -259,7 +257,6 @@ class NodeRuntime private[node] (
                blockRetrieverEnv,
                nodeConf,
                dagConfig,
-               blockstoreEnv,
                casperConfig,
                cliConfig,
                blockstorePath,
@@ -725,7 +722,6 @@ object NodeRuntime {
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
       dagConfig: BlockDagFileStorage.Config,
-      blockstoreEnv: Env[ByteBuffer],
       casperConf: RuntimeConf,
       cliConf: RuntimeConf,
       blockstorePath: Path,
@@ -751,21 +747,41 @@ object NodeRuntime {
     )
   ] =
     for {
+      // In memory state for last approved block
       lab <- LastApprovedBlock.of[F]
-      blockStore <- FileLMDBIndexBlockStore
-                     .create[F](blockstoreEnv, blockstorePath)(
-                       Concurrent[F],
-                       Sync[F],
-                       Log[F],
-                       Metrics[F]
-                     )
-                     .map(_.right.get) // TODO handle errors
+
       span = if (conf.metrics.zipkin)
         diagnostics.effects
           .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
+
       // Key-value store manager / manages LMDB databases
       casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+
+      // Block storage
+      blockStore <- {
+        implicit val kvm = casperStoreManager
+        // Check if old file based block store exists
+        val oldBlockStoreExists = blockstorePath.resolve("storage").toFile.exists
+        // TODO: remove file based block store in future releases
+        def oldStorage = {
+          val blockstoreEnv = Context.env(blockstorePath, conf.storage.lmdbMapSizeBlockstore)
+          for {
+            blockStore <- FileLMDBIndexBlockStore
+                           .create[F](blockstoreEnv, blockstorePath)(
+                             Concurrent[F],
+                             Sync[F],
+                             Log[F],
+                             Metrics[F]
+                           )
+                           .map(_.right.get) // TODO handle errors
+          } yield blockStore
+        }
+        // Start block storage
+        if (oldBlockStoreExists) oldStorage else KeyValueBlockStore()
+      }
+
+      // Block DAG storage
       blockDagStorage <- {
         implicit val kvm = casperStoreManager
         for {

@@ -19,21 +19,30 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     dirPath: Path
 ) extends KeyValueStoreManager[F] {
 
+  // Giga and tera bytes
+  val gb = 1024L * 1024L * 1024L
+  val tb = 1024 * gb
+
   private case class LmdbEnvConfig(
       name: String,
       // Max LMDB environment (file) size
-      maxEnvSize: Long = 100L * 1024L * 1024L * 1024L
+      maxEnvSize: Long = 1 * gb
   )
 
-  // Config name is used as a subfolder for LMDB files
-  private val dagStorageEnvConfig  = LmdbEnvConfig(name = "dagstorage")
-  private val reportingEnvConfig   = LmdbEnvConfig(name = "reporting")
-  private val caserBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
+  // Config name is used as a sub-folder for LMDB files
+  private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
+  private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
+  // Temporary storage / cache
+  private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
+  private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
 
-  // Database name to store instance name mapping (subfolder for LMDB store)
+  // Database name to store instance name mapping (sub-folder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
   private val dbInstanceMapping: Map[String, LmdbEnvConfig] = Map[String, LmdbEnvConfig](
     // Block storage
+    ("blocks", blockStorageEnvConfig),
+    // Block metadata storage
+    ("blocks-approved", dagStorageEnvConfig),
     ("block-metadata", dagStorageEnvConfig),
     ("equivocation-tracker", dagStorageEnvConfig),
     ("latest-messages", dagStorageEnvConfig),
@@ -42,7 +51,7 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     // Reporting (trace) cache
     ("reporting-cache", reportingEnvConfig),
     // CasperBuffer
-    ("parents-map", caserBufferEnvConfig)
+    ("parents-map", casperBufferEnvConfig)
   )
 
   private case class StoreState(
