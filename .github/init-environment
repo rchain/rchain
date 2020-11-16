@@ -91,8 +91,8 @@ print_env()
 	if [[ ${GITHUB_ACTIONS-} == true ]]; then
 		# This is GitHub CI's way of exporting environment variables for further
 		# steps. For more information see
-		# https://help.github.com/en/actions/automating-your-workflow-with-github-actions/development-tools-for-github-actions#set-an-environment-variable-set-env
-		echo "::set-env name=$1::$2"
+		# https://docs.github.com/en/free-pro-team@latest/actions/reference/workflow-commands-for-github-actions#environment-files
+		echo "$1=$2" >> $GITHUB_ENV
 	else
 		# For `eval "$(this_script)"`.
 		echo "export $1=${2@Q}"
