@@ -774,7 +774,7 @@ object ProcNormalizeMatcher {
                            )
           remainderResult <- RemainderNormalizeMatcher
                               .normalizeMatchName[M](p.nameremainder_, formalsResults._2)
-          newEnv     = input.env.absorbFree(remainderResult._2)._1
+          newEnv     = input.env.absorbFree(remainderResult._2)
           boundCount = remainderResult._2.countNoWildcards
           bodyResult <- ProcNormalizeMatcher.normalizeMatch[M](
                          p.proc_,
@@ -948,7 +948,7 @@ object ProcNormalizeMatcher {
                           )
           bindCount  = mergedFrees.countNoWildcards
           binds      = receipts.map(receipt => receipt._1)
-          updatedEnv = input.env.absorbFree(mergedFrees)._1
+          updatedEnv = input.env.absorbFree(mergedFrees)
           bodyResult <- normalizeMatch[M](
                          p.proc_,
                          ProcVisitInputs(VectorPar(), updatedEnv, thisLevelFree)
@@ -1098,7 +1098,7 @@ object ProcNormalizeMatcher {
                                                       DeBruijnLevelMap.empty
                                                     )
                                                   )
-                                  caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
+                                  caseEnv    = input.env.absorbFree(patternResult.knownFree)
                                   boundCount = patternResult.knownFree.countNoWildcards
                                   caseBodyResult <- normalizeMatch[M](
                                                      caseBody,

@@ -7,7 +7,7 @@ final case class DeBruijnIndexMap[T](next: Int, env: Map[String, IndexContext[T]
   def put(binding: IdContext[T]): DeBruijnIndexMap[T] =
     binding match {
       case (varName, sort, sourcePosition) =>
-        DeBruijnIndexMap[T](next + 1, env + (varName -> IndexContext(next, sort, sourcePosition)))
+        DeBruijnIndexMap(next + 1, env + (varName -> IndexContext(next, sort, sourcePosition)))
     }
 
   // Returns the new map
@@ -16,27 +16,14 @@ final case class DeBruijnIndexMap[T](next: Int, env: Map[String, IndexContext[T]
 
   // Returns the new map, and a list of the shadowed variables
   // Takes a **Level** map, because we use that to track the Free Variables.
-  def absorbFree(
-      binders: DeBruijnLevelMap[T]
-  ): (DeBruijnIndexMap[T], List[(String, SourcePosition)]) = {
-    val finalNext  = next + binders.next
-    val adjustNext = next
-    binders.env.foldLeft((this, List[(String, SourcePosition)]())) {
-      case (
-          (db: DeBruijnIndexMap[T], shadowed: List[(String, SourcePosition)]),
-          (k: String, LevelContext(level, varType, sourcePosition))
-          ) => {
-        val shadowedNew = if (db.env.contains(k)) (k, sourcePosition) :: shadowed else shadowed
-        (
-          DeBruijnIndexMap(
-            finalNext,
-            db.env + (k -> IndexContext(level + adjustNext, varType, sourcePosition))
-          ),
-          shadowedNew
-        )
+  def absorbFree(binders: DeBruijnLevelMap[T]): DeBruijnIndexMap[T] =
+    DeBruijnIndexMap(
+      next + binders.next,
+      binders.env.foldLeft(env) {
+        case (accEnv, (name, LevelContext(level, typ, sourcePosition))) =>
+          accEnv + (name -> IndexContext(level + next, typ, sourcePosition))
       }
-    }
-  }
+    )
 
   def get(varName: String): Option[IndexContext[T]] =
     env.get(varName).map {

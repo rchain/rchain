@@ -27,52 +27,48 @@ final case class DeBruijnLevelMap[T](
     }
 
   // Returns the new map, and the first value assigned. Given that they're assigned contiguously
-  def put(bindings: List[(String, T, SourcePosition)]): DeBruijnLevelMap[T] =
+  def put(bindings: List[IdContext[T]]): DeBruijnLevelMap[T] =
     bindings.foldLeft(this)((map, binding) => map.put(binding))
 
   // Returns the new map, and a list of the shadowed variables
   def merge(binders: DeBruijnLevelMap[T]): (DeBruijnLevelMap[T], List[(String, SourcePosition)]) = {
-    val finalNext        = next + binders.next
-    val finalWildcards   = wildcards ++ binders.wildcards
-    val finalConnectives = logicalConnectives ++ binders.logicalConnectives
-    val adjustNext       = next
-    binders.env.foldLeft((this, List[(String, SourcePosition)]())) {
-      case (
-          (db: DeBruijnLevelMap[T], shadowed: List[(String, SourcePosition)]),
-          (k: String, LevelContext(level, varType, sourcePosition))
-          ) =>
-        val shadowedNew = if (db.env.contains(k)) (k, sourcePosition) :: shadowed else shadowed
+
+    val (accEnv, shadowed) = binders.env.foldLeft((env, List.empty[(String, SourcePosition)])) {
+      case ((accEnv, shadowed), (name, LevelContext(level, typ, sourcePosition))) =>
         (
-          DeBruijnLevelMap(
-            finalNext,
-            db.env + (k -> LevelContext(level + adjustNext, varType, sourcePosition)),
-            finalWildcards,
-            finalConnectives
-          ),
-          shadowedNew
+          accEnv + (name -> LevelContext(level + next, typ, sourcePosition)),
+          if (env.contains(name)) (name, sourcePosition) :: shadowed
+          else shadowed
         )
     }
+
+    (
+      DeBruijnLevelMap(
+        next + binders.next,
+        accEnv,
+        wildcards ++ binders.wildcards,
+        logicalConnectives ++ binders.logicalConnectives
+      ),
+      shadowed
+    )
   }
 
   // Returns the new map
-  def addWildcard(sourcePosition: SourcePosition): DeBruijnLevelMap[T] = {
-    val newWildcards: List[SourcePosition] = wildcards :+ sourcePosition
-    DeBruijnLevelMap(next, env, newWildcards, logicalConnectives)
-  }
+  def addWildcard(sourcePosition: SourcePosition): DeBruijnLevelMap[T] =
+    DeBruijnLevelMap(next, env, wildcards :+ sourcePosition, logicalConnectives)
 
-  def addLogicalConnective[C <: ConnectiveInstance](
-      connective: C,
+  def addLogicalConnective(
+      connective: ConnectiveInstance,
       sourcePosition: SourcePosition
-  ): DeBruijnLevelMap[T] = {
-    val newConnectives = logicalConnectives :+ ((connective, sourcePosition))
-    DeBruijnLevelMap(next, env, wildcards, newConnectives)
-  }
+  ): DeBruijnLevelMap[T] =
+    DeBruijnLevelMap(next, env, wildcards, logicalConnectives :+ ((connective, sourcePosition)))
 
   def get(varName: String): Option[LevelContext[T]] = env.get(varName)
 
   def count: Int = next + wildcards.length + logicalConnectives.length
 
   def countNoWildcards: Int = next
+
 }
 
 object DeBruijnLevelMap {
