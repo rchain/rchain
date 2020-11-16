@@ -69,21 +69,21 @@ object ParBuilder {
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.knownFree.count > 0) {
-            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
-              val topLevelFreeList = normalizedTerm.knownFree.env.map {
+            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.connectives.isEmpty) {
+              val topLevelFreeList = normalizedTerm.knownFree.levelBindings.map {
                 case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
               )
-            } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+            } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
                 if (conn.isConnAndBody) "/\\ (conjunction)"
                 else if (conn.isConnOrBody) "\\/ (disjunction)"
                 else if (conn.isConnNotBody) "~ (negation)"
                 else conn.toString
 
-              val connectives = normalizedTerm.knownFree.logicalConnectives
+              val connectives = normalizedTerm.knownFree.connectives
                 .map {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"

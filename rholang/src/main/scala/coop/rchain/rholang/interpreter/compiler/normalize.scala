@@ -79,7 +79,7 @@ object RemainderNormalizeMatcher {
         knownFree.get(pvv.var_) match {
           case None =>
             val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
-            (Option(Var(FreeVar(knownFree.next))), newBindingsPair).pure[M]
+            (Option(Var(FreeVar(knownFree.nextLevel))), newBindingsPair).pure[M]
           case Some(LevelContext(_, _, firstSourcePosition)) =>
             sync.raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
@@ -263,7 +263,7 @@ object NameNormalizeMatcher {
               case None =>
                 val newBindingsPair =
                   input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
-                NameVisitOutputs(EVar(FreeVar(input.knownFree.next)), newBindingsPair).pure[M]
+                NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)), newBindingsPair).pure[M]
               case Some(LevelContext(_, _, sourcePosition)) =>
                 err.raiseError(
                   UnexpectedReuseOfNameContextFree(
@@ -357,7 +357,7 @@ object ProcNormalizeMatcher {
       if (input.env.depth == 0) {
         Either
           .fromOption(
-            nameRes.knownFree.logicalConnectives
+            nameRes.knownFree.connectives
               .collectFirst {
                 case (_: ConnOrBody, sourcePosition) =>
                   PatternReceiveError(s"\\/ (disjunction) at $sourcePosition")
@@ -379,7 +379,7 @@ object ProcNormalizeMatcher {
             ProcVisitOutputs(
               input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.env.depth),
               input.knownFree
-                .addLogicalConnective(
+                .addConnective(
                   ConnNotBody(bodyResult.par),
                   SourcePosition(p.line_num, p.col_num)
                 )
@@ -406,7 +406,7 @@ object ProcNormalizeMatcher {
         } yield ProcVisitOutputs(
           input.par.prepend(resultConnective, input.env.depth),
           rightResult.knownFree
-            .addLogicalConnective(
+            .addConnective(
               resultConnective.connectiveInstance,
               SourcePosition(p.line_num, p.col_num)
             )
@@ -432,7 +432,7 @@ object ProcNormalizeMatcher {
         } yield ProcVisitOutputs(
           input.par.prepend(resultConnective, input.env.depth),
           input.knownFree
-            .addLogicalConnective(
+            .addConnective(
               resultConnective.connectiveInstance,
               SourcePosition(p.line_num, p.col_num)
             )
@@ -525,7 +525,7 @@ object ProcNormalizeMatcher {
                       )
                     ProcVisitOutputs(
                       input.par
-                        .prepend(EVar(FreeVar(input.knownFree.next)), input.env.depth)
+                        .prepend(EVar(FreeVar(input.knownFree.nextLevel)), input.env.depth)
                         .withConnectiveUsed(true),
                       newBindingsPair
                     ).pure[M]
@@ -549,7 +549,7 @@ object ProcNormalizeMatcher {
         }
 
       case p: PVarRef =>
-        input.env.getDeep(p.var_) match {
+        input.env.find(p.var_) match {
           case None =>
             sync.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
           case Some((IndexContext(idx, kind, sourcePosition), depth)) =>
@@ -675,7 +675,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(
                             VectorPar(),
-                            input.env.pushDown(),
+                            input.env.push(),
                             DeBruijnLevelMap.empty
                           )
                         )
@@ -752,7 +752,7 @@ object ProcNormalizeMatcher {
                                NameNormalizeMatcher
                                  .normalizeMatch[M](
                                    n,
-                                   NameVisitInputs(input.env.pushDown(), acc._2)
+                                   NameVisitInputs(input.env.push(), acc._2)
                                  )
                                  .flatMap { res =>
                                    failOnInvalidConnective(input.env.depth, res)
@@ -845,7 +845,7 @@ object ProcNormalizeMatcher {
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
-                    .normalizeMatch[M](n, NameVisitInputs(input.env.pushDown(), acc._2))
+                    .normalizeMatch[M](n, NameVisitInputs(input.env.push(), acc._2))
                     .flatMap { res =>
                       failOnInvalidConnective(input.env.depth, res)
                         .fold(err => Sync[M].raiseError[NameVisitOutputs](err), _.pure[M])
@@ -1033,7 +1033,7 @@ object ProcNormalizeMatcher {
             def at(variable: String, sourcePosition: SourcePosition): String =
               variable + " line: " + sourcePosition.row + ", column: " + sourcePosition.column
             val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
-            val freeVarsPositions = targetResult.knownFree.env.map {
+            val freeVarsPositions = targetResult.knownFree.levelBindings.map {
               case (n, LevelContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
             }
             wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
@@ -1061,7 +1061,7 @@ object ProcNormalizeMatcher {
                       s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
                     )
                   )
-                } else if (targetResult.knownFree.wildcards.nonEmpty || targetResult.knownFree.env.nonEmpty) {
+                } else if (targetResult.knownFree.wildcards.nonEmpty || targetResult.knownFree.levelBindings.nonEmpty) {
                   error(targetResult)
                 } else {
                   val newBundle: Bundle = targetResult.par.singleBundle() match {
@@ -1094,7 +1094,7 @@ object ProcNormalizeMatcher {
                                                     pattern,
                                                     ProcVisitInputs(
                                                       VectorPar(),
-                                                      input.env.pushDown(),
+                                                      input.env.push(),
                                                       DeBruijnLevelMap.empty
                                                     )
                                                   )

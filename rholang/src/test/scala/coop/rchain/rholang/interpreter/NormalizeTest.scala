@@ -1416,8 +1416,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       .withConnectiveUsed(true)
 
     result.par should be(expectedResult)
-    result.knownFree.env should be(inputs.knownFree.env)
-    result.knownFree.next should be(inputs.knownFree.next)
+    result.knownFree.levelBindings should be(inputs.knownFree.levelBindings)
+    result.knownFree.nextLevel should be(inputs.knownFree.nextLevel)
   }
 
   "PConjunction" should "delegate, and count any free variables inside" in {
@@ -1436,8 +1436,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       List(("x", ProcSort, SourcePosition(0, 0)), ("y", ProcSort, SourcePosition(0, 0)))
     )
 
-    result.knownFree.env should be(expectedFree.env)
-    result.knownFree.next should be(expectedFree.next)
+    result.knownFree.levelBindings should be(expectedFree.levelBindings)
+    result.knownFree.nextLevel should be(expectedFree.nextLevel)
   }
 
   "PDisjunction" should "delegate, but not count any free variables inside" in {
@@ -1451,8 +1451,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       .withConnectiveUsed(true)
 
     result.par should be(expectedResult)
-    result.knownFree.env should be(inputs.knownFree.env)
-    result.knownFree.next should be(inputs.knownFree.next)
+    result.knownFree.levelBindings should be(inputs.knownFree.levelBindings)
+    result.knownFree.nextLevel should be(inputs.knownFree.nextLevel)
   }
 
   "PVarRef" should "do a deep lookup in a match case" in {
