@@ -2,18 +2,20 @@ package coop.rchain.rholang.interpreter.compiler
 
 final case class IndexMapChain[T](chain: IndexedSeq[DeBruijnIndexMap[T]]) {
 
-  def put(binding: (String, T, Int, Int)): IndexMapChain[T] =
+  def put(binding: (String, T, SourcePosition)): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).put(binding)))
 
-  def put(bindings: List[(String, T, Int, Int)]): IndexMapChain[T] =
+  def put(bindings: List[(String, T, SourcePosition)]): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).put(bindings)))
 
-  def absorbFree(binders: DeBruijnLevelMap[T]): (IndexMapChain[T], List[(String, Int, Int)]) = {
+  def absorbFree(
+      binders: DeBruijnLevelMap[T]
+  ): (IndexMapChain[T], List[(String, SourcePosition)]) = {
     val (headAbsorbed, shadowed) = chain.head.absorbFree(binders)
     (IndexMapChain(chain.updated(0, headAbsorbed)), shadowed)
   }
 
-  def get(varName: String): Option[(Int, T, Int, Int)] = chain.head.get(varName)
+  def get(varName: String): Option[(Int, T, SourcePosition)] = chain.head.get(varName)
 
   def count: Int =
     chain.head.count
@@ -24,8 +26,8 @@ final case class IndexMapChain[T](chain: IndexedSeq[DeBruijnIndexMap[T]]) {
   def pushDown(): IndexMapChain[T] =
     IndexMapChain(DeBruijnIndexMap.empty[T] +: chain)
 
-  def getDeep(varName: String): Option[((Int, T, Int, Int), Int)] = {
-    def getDeepLoop(varName: String, depth: Int): Option[((Int, T, Int, Int), Int)] =
+  def getDeep(varName: String): Option[((Int, T, SourcePosition), Int)] = {
+    def getDeepLoop(varName: String, depth: Int): Option[((Int, T, SourcePosition), Int)] =
       if (depth < chain.size) {
         chain(depth).get(varName) match {
           case Some(result) => Some((result, depth))

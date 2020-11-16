@@ -70,17 +70,19 @@ object RemainderNormalizeMatcher {
   ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
-        (Option(Var(Wildcard(Var.WildcardMsg()))), knownFree.addWildcard(pvw.line_num, pvw.col_num))
-          .pure[M]
+        (
+          Option(Var(Wildcard(Var.WildcardMsg()))),
+          knownFree.addWildcard(SourcePosition(pvw.line_num, pvw.col_num))
+        ).pure[M]
       case pvv: ProcVarVar =>
+        val sourcePosition = SourcePosition(pvv.line_num, pvv.col_num)
         knownFree.get(pvv.var_) match {
           case None =>
-            val newBindingsPair =
-              knownFree.put((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
+            val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
             (Option(Var(FreeVar(knownFree.next))), newBindingsPair).pure[M]
-          case Some((_, _, line, col)) =>
+          case Some((_, _, firstSourcePosition)) =>
             sync.raiseError(
-              UnexpectedReuseOfProcContextFree(pvv.var_, line, col, pvv.line_num, pvv.col_num)
+              UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
             )
         }
     }
@@ -243,25 +245,32 @@ object NameNormalizeMatcher {
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
-        val wildcardBindResult = input.knownFree.addWildcard(wc.line_num, wc.col_num)
+        val wildcardBindResult =
+          input.knownFree.addWildcard(SourcePosition(wc.line_num, wc.col_num))
         NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[M]
       case n: NameVar =>
         input.env.get(n.var_) match {
-          case Some((level, NameSort, _, _)) => {
+          case Some((level, NameSort, _)) => {
             NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[M]
           }
-          case Some((_, ProcSort, line, col)) => {
-            err.raiseError(UnexpectedNameContext(n.var_, line, col, n.line_num, n.col_num))
+          case Some((_, ProcSort, sourcePosition)) => {
+            err.raiseError(
+              UnexpectedNameContext(n.var_, sourcePosition, SourcePosition(n.line_num, n.col_num))
+            )
           }
           case None => {
             input.knownFree.get(n.var_) match {
               case None =>
                 val newBindingsPair =
-                  input.knownFree.put((n.var_, NameSort, n.line_num, n.col_num))
+                  input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
                 NameVisitOutputs(EVar(FreeVar(input.knownFree.next)), newBindingsPair).pure[M]
-              case Some((_, _, line, col)) =>
+              case Some((_, _, sourcePosition)) =>
                 err.raiseError(
-                  UnexpectedReuseOfNameContextFree(n.var_, line, col, n.line_num, n.col_num)
+                  UnexpectedReuseOfNameContextFree(
+                    n.var_,
+                    sourcePosition,
+                    SourcePosition(n.line_num, n.col_num)
+                  )
                 )
             }
           }
@@ -350,10 +359,10 @@ object ProcNormalizeMatcher {
           .fromOption(
             nameRes.knownFree.logicalConnectives
               .collectFirst {
-                case (_: ConnOrBody, line, col) =>
-                  PatternReceiveError(s"\\/ (disjunction) at $line:$col")
-                case (_: ConnNotBody, line, col) =>
-                  PatternReceiveError(s"~ (negation) at $line:$col")
+                case (_: ConnOrBody, sourcePosition) =>
+                  PatternReceiveError(s"\\/ (disjunction) at $sourcePosition")
+                case (_: ConnNotBody, sourcePosition) =>
+                  PatternReceiveError(s"~ (negation) at $sourcePosition")
               },
             nameRes
           )
@@ -370,7 +379,10 @@ object ProcNormalizeMatcher {
             ProcVisitOutputs(
               input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.env.depth),
               input.knownFree
-                .addLogicalConnective(ConnNotBody(bodyResult.par), p.line_num, p.col_num)
+                .addLogicalConnective(
+                  ConnNotBody(bodyResult.par),
+                  SourcePosition(p.line_num, p.col_num)
+                )
             )
         )
 
@@ -394,7 +406,10 @@ object ProcNormalizeMatcher {
         } yield ProcVisitOutputs(
           input.par.prepend(resultConnective, input.env.depth),
           rightResult.knownFree
-            .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
+            .addLogicalConnective(
+              resultConnective.connectiveInstance,
+              SourcePosition(p.line_num, p.col_num)
+            )
         )
 
       case p: PDisjunction =>
@@ -417,7 +432,10 @@ object ProcNormalizeMatcher {
         } yield ProcVisitOutputs(
           input.par.prepend(resultConnective, input.env.depth),
           input.knownFree
-            .addLogicalConnective(resultConnective.connectiveInstance, p.line_num, p.col_num)
+            .addLogicalConnective(
+              resultConnective.connectiveInstance,
+              SourcePosition(p.line_num, p.col_num)
+            )
         )
 
       case p: PSimpleType =>
@@ -485,34 +503,38 @@ object ProcNormalizeMatcher {
         p.procvar_ match {
           case pvv: ProcVarVar =>
             input.env.get(pvv.var_) match {
-              case Some((level, ProcSort, _, _)) =>
+              case Some((level, ProcSort, _)) =>
                 ProcVisitOutputs(
                   input.par.prepend(EVar(BoundVar(level)), input.env.depth),
                   input.knownFree
                 ).pure[M]
-              case Some((_, NameSort, line, col)) =>
+              case Some((_, NameSort, sourcePosition)) =>
                 sync.raiseError(
-                  UnexpectedProcContext(pvv.var_, line, col, pvv.line_num, pvv.col_num)
+                  UnexpectedProcContext(
+                    pvv.var_,
+                    sourcePosition,
+                    SourcePosition(pvv.line_num, pvv.col_num)
+                  )
                 )
               case None =>
                 input.knownFree.get(pvv.var_) match {
                   case None =>
                     val newBindingsPair =
-                      input.knownFree.put((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
+                      input.knownFree.put(
+                        (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
+                      )
                     ProcVisitOutputs(
                       input.par
                         .prepend(EVar(FreeVar(input.knownFree.next)), input.env.depth)
                         .withConnectiveUsed(true),
                       newBindingsPair
                     ).pure[M]
-                  case Some((_, _, line, col)) =>
+                  case Some((_, _, firstSourcePosition)) =>
                     sync.raiseError(
                       UnexpectedReuseOfProcContextFree(
                         pvv.var_,
-                        line,
-                        col,
-                        pvv.line_num,
-                        pvv.col_num
+                        firstSourcePosition,
+                        SourcePosition(pvv.line_num, pvv.col_num)
                       )
                     )
                 }
@@ -522,7 +544,7 @@ object ProcNormalizeMatcher {
               input.par
                 .prepend(EVar(Wildcard(Var.WildcardMsg())), input.env.depth)
                 .withConnectiveUsed(true),
-              input.knownFree.addWildcard(p.line_num, p.col_num)
+              input.knownFree.addWildcard(SourcePosition(p.line_num, p.col_num))
             ).pure[M]
         }
 
@@ -530,7 +552,7 @@ object ProcNormalizeMatcher {
         input.env.getDeep(p.var_) match {
           case None =>
             sync.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
-          case Some(((idx, kind, line, col), depth)) =>
+          case Some(((idx, kind, sourcePosition), depth)) =>
             kind match {
               case ProcSort =>
                 p.varrefkind_ match {
@@ -541,7 +563,13 @@ object ProcNormalizeMatcher {
                       input.knownFree
                     ).pure[M]
                   case _ =>
-                    sync.raiseError(UnexpectedProcContext(p.var_, line, col, p.line_num, p.col_num))
+                    sync.raiseError(
+                      UnexpectedProcContext(
+                        p.var_,
+                        sourcePosition,
+                        SourcePosition(p.line_num, p.col_num)
+                      )
+                    )
                 }
               case NameSort =>
                 p.varrefkind_ match {
@@ -552,7 +580,13 @@ object ProcNormalizeMatcher {
                       input.knownFree
                     ).pure[M]
                   case _ =>
-                    sync.raiseError(UnexpectedNameContext(p.var_, line, col, p.line_num, p.col_num))
+                    sync.raiseError(
+                      UnexpectedNameContext(
+                        p.var_,
+                        sourcePosition,
+                        SourcePosition(p.line_num, p.col_num)
+                      )
+                    )
                 }
             }
         }
@@ -900,16 +934,14 @@ object ProcNormalizeMatcher {
                             (env, receipt) =>
                               env.merge(receipt._2) match {
                                 case (newEnv, Nil) => (newEnv: DeBruijnLevelMap[VarSort]).pure[M]
-                                case (_, (shadowingVar, line, col) :: _) =>
-                                  val Some((_, _, firstUsageLine, firstUsageCol)) =
+                                case (_, (shadowingVar, sourcePosition) :: _) =>
+                                  val Some((_, _, firstSourcePosition)) =
                                     env.get(shadowingVar)
                                   sync.raiseError(
                                     UnexpectedReuseOfNameContextFree(
                                       shadowingVar,
-                                      firstUsageLine,
-                                      firstUsageCol,
-                                      line,
-                                      col
+                                      firstSourcePosition,
+                                      sourcePosition
                                     )
                                   )
                               }
@@ -968,7 +1000,7 @@ object ProcNormalizeMatcher {
         // This sorts the None's first, and the uris by lexicographical order.
         // We do this here because the sorting affects the numbering of variables inside the body.
         val sortBindings       = newTaggedBindings.sortBy(row => row._1)
-        val newBindings        = sortBindings.map(row => (row._2, row._3, row._4, row._5))
+        val newBindings        = sortBindings.map(row => (row._2, row._3, SourcePosition(row._4, row._5)))
         val uris               = sortBindings.flatMap(row => row._1)
         val newEnv             = input.env.put(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
@@ -998,13 +1030,11 @@ object ProcNormalizeMatcher {
       case b: PBundle =>
         def error(targetResult: ProcVisitOutputs): M[ProcVisitOutputs] = {
           val errMsg = {
-            def at(variable: String, l: Int, col: Int): String =
-              s"$variable line: $l, column: $col"
-            val wildcardsPositions = targetResult.knownFree.wildcards.map {
-              case (l, col) => at("", l, col)
-            }
+            def at(variable: String, sourcePosition: SourcePosition): String =
+              variable + " line: " + sourcePosition.row + ", column: " + sourcePosition.column
+            val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
             val freeVarsPositions = targetResult.knownFree.env.map {
-              case (n, (_, _, line, col)) => at(s"`$n`", line, col)
+              case (n, (_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
             }
             wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
               freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")

@@ -71,7 +71,7 @@ object ParBuilder {
           if (normalizedTerm.knownFree.count > 0) {
             if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
               val topLevelFreeList = normalizedTerm.knownFree.env.map {
-                case (name, (_, _, line, col)) => s"$name at $line:$col"
+                case (name, (_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
@@ -85,14 +85,14 @@ object ParBuilder {
 
               val connectives = normalizedTerm.knownFree.logicalConnectives
                 .map {
-                  case (connType, line, col) =>
-                    s"${connectiveInstanceToString(connType)} at $line:$col"
+                  case (connType, sourcePosition) =>
+                    s"${connectiveInstanceToString(connType)} at $sourcePosition"
                 }
                 .mkString("", ", ", "")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
-              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
-                case (line, col) => s"_ (wildcard) at $line:$col"
+              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
+                s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
