@@ -78,7 +78,7 @@ object RemainderNormalizeMatcher {
           case None =>
             val newBindingsPair =
               knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
-            (Option(Var(FreeVar(newBindingsPair._2))), newBindingsPair._1).pure[M]
+            (Option(Var(FreeVar(knownFree.next))), newBindingsPair).pure[M]
           case Some((_, _, line, col)) =>
             sync.raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, line, col, pvv.line_num, pvv.col_num)
@@ -259,7 +259,7 @@ object NameNormalizeMatcher {
               case None =>
                 val newBindingsPair =
                   input.knownFree.newBinding((n.var_, NameSort, n.line_num, n.col_num))
-                NameVisitOutputs(EVar(FreeVar(newBindingsPair._2)), newBindingsPair._1).pure[M]
+                NameVisitOutputs(EVar(FreeVar(input.knownFree.next)), newBindingsPair).pure[M]
               case Some((_, _, line, col)) =>
                 err.raiseError(
                   UnexpectedReuseOfNameContextFree(n.var_, line, col, n.line_num, n.col_num)
@@ -502,9 +502,9 @@ object ProcNormalizeMatcher {
                       input.knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
                     ProcVisitOutputs(
                       input.par
-                        .prepend(EVar(FreeVar(newBindingsPair._2)), input.env.depth)
+                        .prepend(EVar(FreeVar(input.knownFree.next)), input.env.depth)
                         .withConnectiveUsed(true),
-                      newBindingsPair._1
+                      newBindingsPair
                     ).pure[M]
                   case Some((_, _, line, col)) =>
                     sync.raiseError(
