@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
-class IndexMapChain[T](val chain: IndexedSeq[DeBruijnIndexMap[T]]) {
-  def this() = this(IndexedSeq(DeBruijnIndexMap[T]()))
+final case class IndexMapChain[T](chain: IndexedSeq[DeBruijnIndexMap[T]]) {
 
   def newBinding(binding: (String, T, Int, Int)): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).newBinding(binding)))
@@ -23,7 +22,7 @@ class IndexMapChain[T](val chain: IndexedSeq[DeBruijnIndexMap[T]]) {
     chain.size - 1
 
   def pushDown(): IndexMapChain[T] =
-    IndexMapChain(DeBruijnIndexMap[T]() +: chain)
+    IndexMapChain(DeBruijnIndexMap.empty[T] +: chain)
 
   def getDeep(varName: String): Option[((Int, T, Int, Int), Int)] = {
     def getDeepLoop(varName: String, depth: Int): Option[((Int, T, Int, Int), Int)] =
@@ -40,12 +39,5 @@ class IndexMapChain[T](val chain: IndexedSeq[DeBruijnIndexMap[T]]) {
 }
 
 object IndexMapChain {
-  def apply[T](chain: IndexedSeq[DeBruijnIndexMap[T]]): IndexMapChain[T] =
-    new IndexMapChain[T](chain)
-
-  def apply[T](): IndexMapChain[T] =
-    new IndexMapChain[T]()
-
-  def unapply[T](ic: IndexMapChain[T]): Option[IndexedSeq[DeBruijnIndexMap[T]]] =
-    Some(ic.chain)
+  def empty[T]: IndexMapChain[T] = IndexMapChain(IndexedSeq(DeBruijnIndexMap.empty))
 }

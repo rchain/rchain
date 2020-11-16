@@ -7,11 +7,11 @@ import coop.rchain.models.Connective.ConnectiveInstance
 // This way you don't have to re-number the map, you just calculate the index on
 // get.
 // Parameterized over T, the kind of typing discipline we are enforcing.
-class DeBruijnLevelMap[T](
-    val next: Int,
-    val env: Map[String, (Int, T, Int, Int)],
-    val wildcards: List[(Int, Int)],
-    val logicalConnectives: List[(ConnectiveInstance, Int, Int)]
+final case class DeBruijnLevelMap[T](
+    next: Int,
+    env: Map[String, (Int, T, Int, Int)],
+    wildcards: List[(Int, Int)],
+    logicalConnectives: List[(ConnectiveInstance, Int, Int)]
 ) {
 
   def newBinding(binding: (String, T, Int, Int)): (DeBruijnLevelMap[T], Int) =
@@ -80,19 +80,5 @@ class DeBruijnLevelMap[T](
 }
 
 object DeBruijnLevelMap {
-  def apply[T](
-      next: Int,
-      env: Map[String, (Int, T, Int, Int)],
-      wildcards: List[(Int, Int)],
-      logicalConnectives: List[(ConnectiveInstance, Int, Int)]
-  ): DeBruijnLevelMap[T] =
-    new DeBruijnLevelMap(next, env, wildcards, logicalConnectives)
-
-  def apply[T](): DeBruijnLevelMap[T] =
-    new DeBruijnLevelMap[T](
-      0,
-      Map[String, (Int, T, Int, Int)](),
-      List[(Int, Int)](),
-      List[(ConnectiveInstance, Int, Int)]()
-    )
+  def empty[T]: DeBruijnLevelMap[T] = DeBruijnLevelMap[T](0, Map.empty, List.empty, List.empty)
 }

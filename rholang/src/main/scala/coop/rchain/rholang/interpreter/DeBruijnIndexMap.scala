@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 // This is an index map. Note that the internal environment is the same as the
 // level map, but we calculate the correct index on get.
-class DeBruijnIndexMap[T](val next: Int, val env: Map[String, (Int, T, Int, Int)]) {
+final case class DeBruijnIndexMap[T](next: Int, env: Map[String, (Int, T, Int, Int)]) {
 
   def newBinding(binding: (String, T, Int, Int)): DeBruijnIndexMap[T] =
     binding match {
@@ -45,11 +45,5 @@ class DeBruijnIndexMap[T](val next: Int, val env: Map[String, (Int, T, Int, Int)
 }
 
 object DeBruijnIndexMap {
-  def apply[T](next: Int, env: Map[String, (Int, T, Int, Int)]): DeBruijnIndexMap[T] =
-    new DeBruijnIndexMap(next, env)
-
-  def apply[T](): DeBruijnIndexMap[T] = new DeBruijnIndexMap[T](0, Map.empty)
-
-  def unapply[T](db: DeBruijnIndexMap[T]): Option[(Int, Map[String, (Int, T, Int, Int)])] =
-    Some((db.next, db.env))
+  def empty[T]: DeBruijnIndexMap[T] = DeBruijnIndexMap[T](0, Map.empty)
 }

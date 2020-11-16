@@ -365,7 +365,7 @@ object ProcNormalizeMatcher {
       case p: PNegation =>
         normalizeMatch[M](
           p.proc_,
-          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
+          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
         ).map(
           bodyResult =>
             ProcVisitOutputs(
@@ -402,11 +402,11 @@ object ProcNormalizeMatcher {
         for {
           leftResult <- normalizeMatch[M](
                          p.proc_1,
-                         ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
+                         ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
                        )
           rightResult <- normalizeMatch[M](
                           p.proc_2,
-                          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
+                          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
                         )
           lp = leftResult.par
           resultConnective = lp.singleConnective() match {
@@ -643,7 +643,7 @@ object ProcNormalizeMatcher {
                           ProcVisitInputs(
                             VectorPar(),
                             input.env.pushDown(),
-                            DeBruijnLevelMap[VarSort]()
+                            DeBruijnLevelMap.empty
                           )
                         )
         } yield ProcVisitOutputs(
@@ -710,7 +710,7 @@ object ProcNormalizeMatcher {
                                 p.name_,
                                 NameVisitInputs(input.env, input.knownFree)
                               )
-          initAcc = (Vector[Par](), DeBruijnLevelMap[VarSort](), BitSet())
+          initAcc = (Vector[Par](), DeBruijnLevelMap.empty[VarSort], BitSet())
           // Note that we go over these in the order they were given and reverse
           // down below. This is because it makes more sense to number the free
           // variables in the order given, rather than in reverse.
@@ -808,7 +808,7 @@ object ProcNormalizeMatcher {
         ): M[Vector[(Vector[Par], Par, Option[Var], DeBruijnLevelMap[VarSort], BitSet)]] =
           bindings.traverse {
             case (names: List[Name], chan: Par, nr: NameRemainder) => {
-              val initAcc = (Vector[Par](), DeBruijnLevelMap[VarSort](), BitSet())
+              val initAcc = (Vector[Par](), DeBruijnLevelMap.empty[VarSort], BitSet())
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
@@ -897,7 +897,7 @@ object ProcNormalizeMatcher {
                 .raiseError[M, Unit]
                 .whenA(hasSameChannels)
           mergedFrees <- receipts.toList
-                          .foldM[M, DeBruijnLevelMap[VarSort]](DeBruijnLevelMap[VarSort]())(
+                          .foldM[M, DeBruijnLevelMap[VarSort]](DeBruijnLevelMap.empty)(
                             (env, receipt) =>
                               env.merge(receipt._2) match {
                                 case (newEnv, Nil) => (newEnv: DeBruijnLevelMap[VarSort]).pure[M]
@@ -1066,7 +1066,7 @@ object ProcNormalizeMatcher {
                                                     ProcVisitInputs(
                                                       VectorPar(),
                                                       input.env.pushDown(),
-                                                      DeBruijnLevelMap[VarSort]()
+                                                      DeBruijnLevelMap.empty
                                                     )
                                                   )
                                   caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
