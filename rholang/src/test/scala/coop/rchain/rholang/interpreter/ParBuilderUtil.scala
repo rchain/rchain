@@ -4,6 +4,7 @@ import java.io.{Reader, StringReader}
 
 import cats.effect.Sync
 import coop.rchain.models.Par
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import monix.eval.Coeval
 

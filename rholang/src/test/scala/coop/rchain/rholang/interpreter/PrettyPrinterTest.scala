@@ -5,6 +5,7 @@ import java.io.StringReader
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
+import coop.rchain.rholang.interpreter.compiler.{BoolNormalizeMatcher, GroundNormalizeMatcher, NameNormalizeMatcher, NameSort, NameVisitInputs, ProcNormalizeMatcher, ProcSort, ProcVisitInputs, VarSort}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{Assertion, FlatSpec, Matchers}

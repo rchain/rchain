@@ -1,7 +1,7 @@
 package coop.rchain.rholang.build
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.{NormalizerEnv, Par}
-import coop.rchain.rholang.interpreter.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import monix.eval.Coeval
 import shapeless.HNil
 

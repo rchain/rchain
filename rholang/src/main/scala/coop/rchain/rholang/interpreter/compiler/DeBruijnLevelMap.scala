@@ -1,4 +1,5 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
+
 import coop.rchain.models.Connective.ConnectiveInstance
 
 // Parameterized over T, the kind of typing discipline we are enforcing.

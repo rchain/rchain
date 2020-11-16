@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
 
 import java.io.{Reader, StringReader}
 
@@ -9,8 +9,8 @@ import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
 trait ParBuilder[F[_]] {
   def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]

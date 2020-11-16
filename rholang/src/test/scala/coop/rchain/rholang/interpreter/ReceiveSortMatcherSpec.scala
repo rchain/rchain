@@ -6,6 +6,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import monix.eval.Coeval
 import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, ReceiveBindsSortMatcher, VarSort}
 
 class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   val emptyMap = DeBruijnLevelMap[VarSort]()

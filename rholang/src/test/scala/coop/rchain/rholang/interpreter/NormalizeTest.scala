@@ -2,13 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
-  Bundle => AbsynBundle,
-  Ground => AbsynGround,
-  KeyValuePair => AbsynKeyValuePair,
-  Send => AbsynSend,
-  _
-}
+import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{Bundle => AbsynBundle, Ground => AbsynGround, KeyValuePair => AbsynKeyValuePair, Send => AbsynSend, _}
 import org.scalatest._
 import coop.rchain.models.rholang.sorter.ordering._
 
@@ -21,6 +15,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits
 import errors._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.compiler.{BoolNormalizeMatcher, GroundNormalizeMatcher, NameNormalizeMatcher, NameSort, NameVisitInputs, ProcNormalizeMatcher, ProcSort, ProcVisitInputs, VarSort}
 import monix.eval.Coeval
 
 class BoolMatcherSpec extends FlatSpec with Matchers {

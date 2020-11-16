@@ -7,6 +7,7 @@ import coop.rchain.catscontrib._
 import coop.rchain.models.Par
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Interpreter._
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{Runtime, _}

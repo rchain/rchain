@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
 
 final case class IndexMapChain[T](chain: IndexedSeq[DeBruijnIndexMap[T]]) {
 

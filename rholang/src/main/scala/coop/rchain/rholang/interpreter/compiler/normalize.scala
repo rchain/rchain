@@ -1,8 +1,8 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
 
 import cats.effect.Sync
-import cats.{Applicative, MonadError}
 import cats.implicits._
+import cats.{Applicative, MonadError}
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -16,7 +16,6 @@ import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Send => AbsynSend,
   _
 }
-import coop.rchain.shared.ByteStringOps.RichByteArray
 import monix.eval.Coeval
 
 import scala.collection.convert.ImplicitConversionsToScala._

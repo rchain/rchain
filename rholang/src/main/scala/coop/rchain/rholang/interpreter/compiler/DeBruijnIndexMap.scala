@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
 
 // This is an index map. Note that the internal environment is the same as the
 // level map, but we calculate the correct index on get.
