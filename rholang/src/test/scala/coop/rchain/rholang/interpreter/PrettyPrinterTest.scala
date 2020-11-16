@@ -50,7 +50,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
   val inputs = ProcVisitInputs(
     Par(),
     IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
-    DebruijnLevelMap[VarSort]()
+    DeBruijnLevelMap[VarSort]()
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
@@ -134,7 +134,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain[VarSort](), DeBruijnLevelMap[VarSort]())
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "New" should "use 0-based indexing" in {
@@ -921,7 +921,7 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs                                   = NameVisitInputs(IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+  val inputs                                   = NameVisitInputs(IndexMapChain[VarSort](), DeBruijnLevelMap[VarSort]())
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "Print" in {

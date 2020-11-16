@@ -65,7 +65,7 @@ object ParBuilder {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+          ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DeBruijnLevelMap[VarSort]())
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.knownFree.count > 0) {

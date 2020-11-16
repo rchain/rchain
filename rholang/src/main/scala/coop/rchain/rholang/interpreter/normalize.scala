@@ -66,9 +66,9 @@ object GroundNormalizeMatcher {
 }
 
 object RemainderNormalizeMatcher {
-  def handleProcVar[M[_]](pv: ProcVar, knownFree: DebruijnLevelMap[VarSort])(
+  def handleProcVar[M[_]](pv: ProcVar, knownFree: DeBruijnLevelMap[VarSort])(
       implicit sync: Sync[M]
-  ): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+  ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
         (Option(Var(Wildcard(Var.WildcardMsg()))), knownFree.addWildcard(pvw.line_num, pvw.col_num))
@@ -86,18 +86,18 @@ object RemainderNormalizeMatcher {
         }
     }
 
-  def normalizeMatchProc[M[_]](r: ProcRemainder, knownFree: DebruijnLevelMap[VarSort])(
+  def normalizeMatchProc[M[_]](r: ProcRemainder, knownFree: DeBruijnLevelMap[VarSort])(
       implicit err: Sync[M]
-  ): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+  ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     r match {
       case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[M]
       case pr: ProcRemainderVar =>
         handleProcVar[M](pr.procvar_, knownFree)
     }
 
-  def normalizeMatchName[M[_]](nr: NameRemainder, knownFree: DebruijnLevelMap[VarSort])(
+  def normalizeMatchName[M[_]](nr: NameRemainder, knownFree: DeBruijnLevelMap[VarSort])(
       implicit err: Sync[M]
-  ): M[(Option[Var], DebruijnLevelMap[VarSort])] =
+  ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     nr match {
       case _: NameRemainderEmpty => (None: Option[Var], knownFree).pure[M]
       case nr: NameRemainderVar =>
@@ -111,7 +111,7 @@ object CollectionNormalizeMatcher {
       env: Map[String, Par]
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
-        knownFree: DebruijnLevelMap[VarSort],
+        knownFree: DeBruijnLevelMap[VarSort],
         listproc: List[Proc],
         constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => T
     )(implicit toExpr: T => Expr): M[CollectVisitOutputs] = {
@@ -139,7 +139,7 @@ object CollectionNormalizeMatcher {
     }
 
     def foldMatchMap(
-        knownFree: DebruijnLevelMap[VarSort],
+        knownFree: DeBruijnLevelMap[VarSort],
         remainder: Option[Var],
         listProc: List[AbsynKeyValuePair]
     ) = {
@@ -365,7 +365,7 @@ object ProcNormalizeMatcher {
       case p: PNegation =>
         normalizeMatch[M](
           p.proc_,
-          ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]())
+          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
         ).map(
           bodyResult =>
             ProcVisitOutputs(
@@ -402,11 +402,11 @@ object ProcNormalizeMatcher {
         for {
           leftResult <- normalizeMatch[M](
                          p.proc_1,
-                         ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]())
+                         ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
                        )
           rightResult <- normalizeMatch[M](
                           p.proc_2,
-                          ProcVisitInputs(VectorPar(), input.env, DebruijnLevelMap[VarSort]())
+                          ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap[VarSort]())
                         )
           lp = leftResult.par
           resultConnective = lp.singleConnective() match {
@@ -643,7 +643,7 @@ object ProcNormalizeMatcher {
                           ProcVisitInputs(
                             VectorPar(),
                             input.env.pushDown(),
-                            DebruijnLevelMap[VarSort]()
+                            DeBruijnLevelMap[VarSort]()
                           )
                         )
         } yield ProcVisitOutputs(
@@ -710,7 +710,7 @@ object ProcNormalizeMatcher {
                                 p.name_,
                                 NameVisitInputs(input.env, input.knownFree)
                               )
-          initAcc = (Vector[Par](), DebruijnLevelMap[VarSort](), BitSet())
+          initAcc = (Vector[Par](), DeBruijnLevelMap[VarSort](), BitSet())
           // Note that we go over these in the order they were given and reverse
           // down below. This is because it makes more sense to number the free
           // variables in the order given, rather than in reverse.
@@ -782,7 +782,7 @@ object ProcNormalizeMatcher {
 
         // We split this into parts. First we process all the sources, then we process all the bindings.
         def processSources(sources: List[(List[Name], Name, NameRemainder)]): M[
-          (Vector[(List[Name], Par, NameRemainder)], DebruijnLevelMap[VarSort], BitSet, Boolean)
+          (Vector[(List[Name], Par, NameRemainder)], DeBruijnLevelMap[VarSort], BitSet, Boolean)
         ] = {
           val initAcc =
             (Vector[(List[Name], Par, NameRemainder)](), input.knownFree, BitSet(), false)
@@ -805,10 +805,10 @@ object ProcNormalizeMatcher {
 
         def processBindings(
             bindings: Vector[(List[Name], Par, NameRemainder)]
-        ): M[Vector[(Vector[Par], Par, Option[Var], DebruijnLevelMap[VarSort], BitSet)]] =
+        ): M[Vector[(Vector[Par], Par, Option[Var], DeBruijnLevelMap[VarSort], BitSet)]] =
           bindings.traverse {
             case (names: List[Name], chan: Par, nr: NameRemainder) => {
-              val initAcc = (Vector[Par](), DebruijnLevelMap[VarSort](), BitSet())
+              val initAcc = (Vector[Par](), DeBruijnLevelMap[VarSort](), BitSet())
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
@@ -897,10 +897,10 @@ object ProcNormalizeMatcher {
                 .raiseError[M, Unit]
                 .whenA(hasSameChannels)
           mergedFrees <- receipts.toList
-                          .foldM[M, DebruijnLevelMap[VarSort]](DebruijnLevelMap[VarSort]())(
+                          .foldM[M, DeBruijnLevelMap[VarSort]](DeBruijnLevelMap[VarSort]())(
                             (env, receipt) =>
                               env.merge(receipt._2) match {
-                                case (newEnv, Nil) => (newEnv: DebruijnLevelMap[VarSort]).pure[M]
+                                case (newEnv, Nil) => (newEnv: DeBruijnLevelMap[VarSort]).pure[M]
                                 case (_, (shadowingVar, line, col) :: _) =>
                                   val Some((_, _, firstUsageLine, firstUsageCol)) =
                                     env.get(shadowingVar)
@@ -1066,7 +1066,7 @@ object ProcNormalizeMatcher {
                                                     ProcVisitInputs(
                                                       VectorPar(),
                                                       input.env.pushDown(),
-                                                      DebruijnLevelMap[VarSort]()
+                                                      DeBruijnLevelMap[VarSort]()
                                                     )
                                                   )
                                   caseEnv    = input.env.absorbFree(patternResult.knownFree)._1
@@ -1122,16 +1122,16 @@ object ProcNormalizeMatcher {
 final case class ProcVisitInputs(
     par: Par,
     env: IndexMapChain[VarSort],
-    knownFree: DebruijnLevelMap[VarSort]
+    knownFree: DeBruijnLevelMap[VarSort]
 )
 // Returns the update Par and an updated map of free variables.
-final case class ProcVisitOutputs(par: Par, knownFree: DebruijnLevelMap[VarSort])
+final case class ProcVisitOutputs(par: Par, knownFree: DeBruijnLevelMap[VarSort])
 
-final case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DebruijnLevelMap[VarSort])
-final case class NameVisitOutputs(chan: Par, knownFree: DebruijnLevelMap[VarSort])
+final case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DeBruijnLevelMap[VarSort])
+final case class NameVisitOutputs(chan: Par, knownFree: DeBruijnLevelMap[VarSort])
 
 final case class CollectVisitInputs(
     env: IndexMapChain[VarSort],
-    knownFree: DebruijnLevelMap[VarSort]
+    knownFree: DeBruijnLevelMap[VarSort]
 )
-final case class CollectVisitOutputs(expr: Expr, knownFree: DebruijnLevelMap[VarSort])
+final case class CollectVisitOutputs(expr: Expr, knownFree: DeBruijnLevelMap[VarSort])
