@@ -675,7 +675,7 @@ object ProcNormalizeMatcher {
                           p.proc_2,
                           ProcVisitInputs(
                             VectorPar(),
-                            input.env.push(),
+                            input.env.push,
                             DeBruijnLevelMap.empty
                           )
                         )
@@ -752,7 +752,7 @@ object ProcNormalizeMatcher {
                                NameNormalizeMatcher
                                  .normalizeMatch[M](
                                    n,
-                                   NameVisitInputs(input.env.push(), acc._2)
+                                   NameVisitInputs(input.env.push, acc._2)
                                  )
                                  .flatMap { res =>
                                    failOnInvalidConnective(input.env.depth, res)
@@ -845,7 +845,7 @@ object ProcNormalizeMatcher {
               names
                 .foldM(initAcc)((acc, n: Name) => {
                   NameNormalizeMatcher
-                    .normalizeMatch[M](n, NameVisitInputs(input.env.push(), acc._2))
+                    .normalizeMatch[M](n, NameVisitInputs(input.env.push, acc._2))
                     .flatMap { res =>
                       failOnInvalidConnective(input.env.depth, res)
                         .fold(err => Sync[M].raiseError[NameVisitOutputs](err), _.pure[M])
@@ -1094,7 +1094,7 @@ object ProcNormalizeMatcher {
                                                     pattern,
                                                     ProcVisitInputs(
                                                       VectorPar(),
-                                                      input.env.push(),
+                                                      input.env.push,
                                                       DeBruijnLevelMap.empty
                                                     )
                                                   )

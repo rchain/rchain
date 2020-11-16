@@ -70,7 +70,7 @@ final case class DeBruijnLevelMap[T](
       nextLevel,
       levelBindings,
       wildcards,
-      connectives :+ (connective, sourcePosition)
+      connectives :+ ((connective, sourcePosition))
     )
 
   def count: Int = nextLevel + wildcards.length + connectives.length
