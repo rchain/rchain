@@ -1,7 +1,15 @@
 package coop.rchain.rholang.interpreter.compiler
 
-// This is an index map. Note that the internal environment is the same as the
-// level map, but we calculate the correct index on get.
+/**
+  *
+  * A structure for keeping track of bound variables. The internal environment is the same as
+  * DeBruijnLevelMap, but here we calculate the correct index on get. This way, we don't have to
+  * reindex the map.
+  *
+  * @param nextIndex The DeBruijn index assigned to the next variable added to the map.
+  * @param indexBindings A map of names to DeBruijn indices.
+  * @tparam T The typing discipline we're enforcing
+  */
 final case class DeBruijnIndexMap[T](nextIndex: Int, indexBindings: Map[String, IndexContext[T]]) {
 
   def get(name: String): Option[IndexContext[T]] =
@@ -19,12 +27,10 @@ final case class DeBruijnIndexMap[T](nextIndex: Int, indexBindings: Map[String, 
         )
     }
 
-  // Returns the new map
   def put(bindings: List[IdContext[T]]): DeBruijnIndexMap[T] =
     bindings.foldLeft(this)((indexMap, binding) => indexMap.put(binding))
 
-  // Returns the new map, and a list of the shadowed variables
-  // Takes a **Level** map, because we use that to track the Free Variables.
+  // Takes a level map because we use that to track the free Variables.
   def absorbFree(levelMap: DeBruijnLevelMap[T]): DeBruijnIndexMap[T] =
     DeBruijnIndexMap(
       nextIndex + levelMap.nextLevel,

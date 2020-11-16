@@ -1,5 +1,14 @@
 package coop.rchain.rholang.interpreter.compiler
 
+/**
+  *
+  * A structure for keeping track of bound variables. Every time we go under a binding construct
+  * (e.g. match or receive), we add a fresh index map to the top of the chain. For a language like
+  * Java, each index map would represent a method's local variables.
+  *
+  * @param chain A list of bound variable maps.
+  * @tparam T The typing discipline we're enforcing.
+  */
 final case class IndexMapChain[T](chain: Vector[DeBruijnIndexMap[T]]) {
 
   def get(name: String): Option[IndexContext[T]] = chain.head.get(name)

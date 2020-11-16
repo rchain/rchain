@@ -2,12 +2,16 @@ package coop.rchain.rholang.interpreter.compiler
 
 import coop.rchain.models.Connective.ConnectiveInstance
 
-// Parameterized over T, the kind of typing discipline we are enforcing.
-
-// An index map is implemented as a level map that calculates the index on get.
-// This way you don't have to re-number the map, you just calculate the index on
-// get.
-// Parameterized over T, the kind of typing discipline we are enforcing.
+/**
+  *
+  * A structure to keep track of free variables, which are assigned DeBruijn levels (0 based).
+  *
+  * @param nextLevel The DeBruijn level assigned to the next variable name added to the map.
+  * @param levelBindings A map of names to DeBruijn levels.
+  * @param wildcards A list of the positions of _ patterns.
+  * @param connectives A list of the positions of logical connectives.
+  * @tparam T The typing discipline we're enforcing.
+  */
 final case class DeBruijnLevelMap[T](
     nextLevel: Int,
     levelBindings: Map[String, LevelContext[T]],
@@ -28,7 +32,6 @@ final case class DeBruijnLevelMap[T](
         )
     }
 
-  // Returns the new map, and the first value assigned. Given that they're assigned contiguously
   def put(bindings: List[IdContext[T]]): DeBruijnLevelMap[T] =
     bindings.foldLeft(this)((levelMap, binding) => levelMap.put(binding))
 
