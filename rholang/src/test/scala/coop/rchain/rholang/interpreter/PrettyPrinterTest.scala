@@ -49,7 +49,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
     Par(),
-    IndexMapChain[VarSort]().newBindings(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
+    IndexMapChain[VarSort]().put(List(("P", ProcSort, 0, 0), ("x", NameSort, 0, 0))),
     DeBruijnLevelMap[VarSort]()
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
@@ -448,7 +448,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   val pvar = new PVar(new ProcVarVar("x"))
   "PVar" should "Print with fresh identifier" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pvar, boundInputs).value.par
@@ -473,7 +473,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PEval" should "Print eval with fresh identifier" in {
     val pEval       = new PEval(new NameVar("x"))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
@@ -485,7 +485,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val pEval = new PEval(
       new NameQuote(new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x"))))
     )
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
@@ -547,7 +547,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     sentData.add(new PGround(new GroundInt("7")))
     sentData.add(new PGround(new GroundInt("8")))
     val pSend       = new PSend(new NameVar("x"), new SendSingle(), sentData)
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, boundInputs).value.par
@@ -568,7 +568,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PPar" should "Print" in {
     val parDoubleBound = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
-    val boundInputs    = inputs.copy(env = inputs.env.newBinding(("x", ProcSort, 0, 0)))
+    val boundInputs    = inputs.copy(env = inputs.env.put(("x", ProcSort, 0, 0)))
     val result = PrettyPrinter(0, 1).buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleBound, boundInputs).value.par
     )
@@ -935,7 +935,7 @@ class NamePrinterSpec extends FlatSpec with Matchers {
   val nvar = new NameVar("x")
 
   "NameVar" should "Print" in {
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value.chan
@@ -947,7 +947,7 @@ class NamePrinterSpec extends FlatSpec with Matchers {
 
   "NameQuote" should "Print" in {
     val nqeval      = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs = inputs.copy(env = inputs.env.newBinding(("x", NameSort, 0, 0)))
+    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, 0, 0)))
     val result =
       PrettyPrinter(0, 1).buildString(
         NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value.chan

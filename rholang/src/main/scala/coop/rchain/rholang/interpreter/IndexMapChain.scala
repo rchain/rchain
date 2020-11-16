@@ -2,11 +2,11 @@ package coop.rchain.rholang.interpreter
 
 final case class IndexMapChain[T](chain: IndexedSeq[DeBruijnIndexMap[T]]) {
 
-  def newBinding(binding: (String, T, Int, Int)): IndexMapChain[T] =
-    IndexMapChain(chain.updated(0, chain(0).newBinding(binding)))
+  def put(binding: (String, T, Int, Int)): IndexMapChain[T] =
+    IndexMapChain(chain.updated(0, chain(0).put(binding)))
 
-  def newBindings(bindings: List[(String, T, Int, Int)]): IndexMapChain[T] =
-    IndexMapChain(chain.updated(0, chain(0).newBindings(bindings)))
+  def put(bindings: List[(String, T, Int, Int)]): IndexMapChain[T] =
+    IndexMapChain(chain.updated(0, chain(0).put(bindings)))
 
   def absorbFree(binders: DeBruijnLevelMap[T]): (IndexMapChain[T], List[(String, Int, Int)]) = {
     val (headAbsorbed, shadowed) = chain.head.absorbFree(binders)

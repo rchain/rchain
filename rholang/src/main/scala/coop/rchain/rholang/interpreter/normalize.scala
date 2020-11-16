@@ -77,7 +77,7 @@ object RemainderNormalizeMatcher {
         knownFree.get(pvv.var_) match {
           case None =>
             val newBindingsPair =
-              knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
+              knownFree.put((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
             (Option(Var(FreeVar(knownFree.next))), newBindingsPair).pure[M]
           case Some((_, _, line, col)) =>
             sync.raiseError(
@@ -258,7 +258,7 @@ object NameNormalizeMatcher {
             input.knownFree.get(n.var_) match {
               case None =>
                 val newBindingsPair =
-                  input.knownFree.newBinding((n.var_, NameSort, n.line_num, n.col_num))
+                  input.knownFree.put((n.var_, NameSort, n.line_num, n.col_num))
                 NameVisitOutputs(EVar(FreeVar(input.knownFree.next)), newBindingsPair).pure[M]
               case Some((_, _, line, col)) =>
                 err.raiseError(
@@ -499,7 +499,7 @@ object ProcNormalizeMatcher {
                 input.knownFree.get(pvv.var_) match {
                   case None =>
                     val newBindingsPair =
-                      input.knownFree.newBinding((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
+                      input.knownFree.put((pvv.var_, ProcSort, pvv.line_num, pvv.col_num))
                     ProcVisitOutputs(
                       input.par
                         .prepend(EVar(FreeVar(input.knownFree.next)), input.env.depth)
@@ -971,7 +971,7 @@ object ProcNormalizeMatcher {
         val sortBindings       = newTaggedBindings.sortBy(row => row._1)
         val newBindings        = sortBindings.map(row => (row._2, row._3, row._4, row._5))
         val uris               = sortBindings.flatMap(row => row._1)
-        val newEnv             = input.env.newBindings(newBindings.toList)
+        val newEnv             = input.env.put(newBindings.toList)
         val newCount           = newEnv.count - input.env.count
         val requiresDeployId   = uris.contains(deployIdUri)
         val requiresDeployerId = uris.contains(deployerIdUri)

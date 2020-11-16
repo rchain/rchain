@@ -14,7 +14,7 @@ final case class DeBruijnLevelMap[T](
     logicalConnectives: List[(ConnectiveInstance, Int, Int)]
 ) {
 
-  def newBinding(binding: (String, T, Int, Int)): DeBruijnLevelMap[T] =
+  def put(binding: (String, T, Int, Int)): DeBruijnLevelMap[T] =
     binding match {
       case (varName, sort, line, col) =>
         DeBruijnLevelMap[T](
@@ -26,8 +26,8 @@ final case class DeBruijnLevelMap[T](
     }
 
   // Returns the new map, and the first value assigned. Given that they're assigned contiguously
-  def newBindings(bindings: List[(String, T, Int, Int)]): DeBruijnLevelMap[T] =
-    bindings.foldLeft(this)((map, binding) => map.newBinding(binding))
+  def put(bindings: List[(String, T, Int, Int)]): DeBruijnLevelMap[T] =
+    bindings.foldLeft(this)((map, binding) => map.put(binding))
 
   // Returns the new map, and a list of the shadowed variables
   def merge(binders: DeBruijnLevelMap[T]): (DeBruijnLevelMap[T], List[(String, Int, Int)]) = {

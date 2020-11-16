@@ -4,15 +4,15 @@ package coop.rchain.rholang.interpreter
 // level map, but we calculate the correct index on get.
 final case class DeBruijnIndexMap[T](next: Int, env: Map[String, (Int, T, Int, Int)]) {
 
-  def newBinding(binding: (String, T, Int, Int)): DeBruijnIndexMap[T] =
+  def put(binding: (String, T, Int, Int)): DeBruijnIndexMap[T] =
     binding match {
       case (varName, sort, line, col) =>
         DeBruijnIndexMap[T](next + 1, env + (varName -> ((next, sort, line, col))))
     }
 
   // Returns the new map
-  def newBindings(bindings: List[(String, T, Int, Int)]): DeBruijnIndexMap[T] =
-    bindings.foldLeft(this)((map, binding) => map.newBinding(binding))
+  def put(bindings: List[(String, T, Int, Int)]): DeBruijnIndexMap[T] =
+    bindings.foldLeft(this)((map, binding) => map.put(binding))
 
   // Returns the new map, and a list of the shadowed variables
   // Takes a **Level** map, because we use that to track the Free Variables.
