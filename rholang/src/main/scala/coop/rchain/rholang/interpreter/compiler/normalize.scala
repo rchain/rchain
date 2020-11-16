@@ -80,7 +80,7 @@ object RemainderNormalizeMatcher {
           case None =>
             val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
             (Option(Var(FreeVar(knownFree.next))), newBindingsPair).pure[M]
-          case Some((_, _, firstSourcePosition)) =>
+          case Some(LevelContext(_, _, firstSourcePosition)) =>
             sync.raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
             )
@@ -250,10 +250,10 @@ object NameNormalizeMatcher {
         NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[M]
       case n: NameVar =>
         input.env.get(n.var_) match {
-          case Some((level, NameSort, _)) => {
+          case Some(IndexContext(level, NameSort, _)) => {
             NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[M]
           }
-          case Some((_, ProcSort, sourcePosition)) => {
+          case Some(IndexContext(_, ProcSort, sourcePosition)) => {
             err.raiseError(
               UnexpectedNameContext(n.var_, sourcePosition, SourcePosition(n.line_num, n.col_num))
             )
@@ -264,7 +264,7 @@ object NameNormalizeMatcher {
                 val newBindingsPair =
                   input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
                 NameVisitOutputs(EVar(FreeVar(input.knownFree.next)), newBindingsPair).pure[M]
-              case Some((_, _, sourcePosition)) =>
+              case Some(LevelContext(_, _, sourcePosition)) =>
                 err.raiseError(
                   UnexpectedReuseOfNameContextFree(
                     n.var_,
@@ -503,12 +503,12 @@ object ProcNormalizeMatcher {
         p.procvar_ match {
           case pvv: ProcVarVar =>
             input.env.get(pvv.var_) match {
-              case Some((level, ProcSort, _)) =>
+              case Some(IndexContext(level, ProcSort, _)) =>
                 ProcVisitOutputs(
                   input.par.prepend(EVar(BoundVar(level)), input.env.depth),
                   input.knownFree
                 ).pure[M]
-              case Some((_, NameSort, sourcePosition)) =>
+              case Some(IndexContext(_, NameSort, sourcePosition)) =>
                 sync.raiseError(
                   UnexpectedProcContext(
                     pvv.var_,
@@ -529,7 +529,7 @@ object ProcNormalizeMatcher {
                         .withConnectiveUsed(true),
                       newBindingsPair
                     ).pure[M]
-                  case Some((_, _, firstSourcePosition)) =>
+                  case Some(LevelContext(_, _, firstSourcePosition)) =>
                     sync.raiseError(
                       UnexpectedReuseOfProcContextFree(
                         pvv.var_,
@@ -552,7 +552,7 @@ object ProcNormalizeMatcher {
         input.env.getDeep(p.var_) match {
           case None =>
             sync.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
-          case Some(((idx, kind, sourcePosition), depth)) =>
+          case Some((IndexContext(idx, kind, sourcePosition), depth)) =>
             kind match {
               case ProcSort =>
                 p.varrefkind_ match {
@@ -935,7 +935,7 @@ object ProcNormalizeMatcher {
                               env.merge(receipt._2) match {
                                 case (newEnv, Nil) => (newEnv: DeBruijnLevelMap[VarSort]).pure[M]
                                 case (_, (shadowingVar, sourcePosition) :: _) =>
-                                  val Some((_, _, firstSourcePosition)) =
+                                  val Some(LevelContext(_, _, firstSourcePosition)) =
                                     env.get(shadowingVar)
                                   sync.raiseError(
                                     UnexpectedReuseOfNameContextFree(
@@ -1034,7 +1034,7 @@ object ProcNormalizeMatcher {
               variable + " line: " + sourcePosition.row + ", column: " + sourcePosition.column
             val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
             val freeVarsPositions = targetResult.knownFree.env.map {
-              case (n, (_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
+              case (n, LevelContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
             }
             wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
               freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")

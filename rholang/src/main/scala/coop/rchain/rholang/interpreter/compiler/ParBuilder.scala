@@ -71,7 +71,7 @@ object ParBuilder {
           if (normalizedTerm.knownFree.count > 0) {
             if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
               val topLevelFreeList = normalizedTerm.knownFree.env.map {
-                case (name, (_, _, sourcePosition)) => s"$name at $sourcePosition"
+                case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))

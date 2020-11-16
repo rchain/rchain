@@ -10,17 +10,17 @@ import coop.rchain.models.Connective.ConnectiveInstance
 // Parameterized over T, the kind of typing discipline we are enforcing.
 final case class DeBruijnLevelMap[T](
     next: Int,
-    env: Map[String, (Int, T, SourcePosition)],
+    env: Map[String, LevelContext[T]],
     wildcards: List[SourcePosition],
     logicalConnectives: List[(ConnectiveInstance, SourcePosition)]
 ) {
 
-  def put(binding: (String, T, SourcePosition)): DeBruijnLevelMap[T] =
+  def put(binding: IdContext[T]): DeBruijnLevelMap[T] =
     binding match {
       case (varName, sort, sourcePosition) =>
         DeBruijnLevelMap[T](
           next + 1,
-          env + (varName -> ((next, sort, sourcePosition))),
+          env + (varName -> LevelContext(next, sort, sourcePosition)),
           wildcards,
           logicalConnectives
         )
@@ -39,13 +39,13 @@ final case class DeBruijnLevelMap[T](
     binders.env.foldLeft((this, List[(String, SourcePosition)]())) {
       case (
           (db: DeBruijnLevelMap[T], shadowed: List[(String, SourcePosition)]),
-          (k: String, (level: Int, varType: T @unchecked, sourcePosition))
+          (k: String, LevelContext(level, varType, sourcePosition))
           ) =>
         val shadowedNew = if (db.env.contains(k)) (k, sourcePosition) :: shadowed else shadowed
         (
           DeBruijnLevelMap(
             finalNext,
-            db.env + (k -> ((level + adjustNext, varType, sourcePosition))),
+            db.env + (k -> LevelContext(level + adjustNext, varType, sourcePosition)),
             finalWildcards,
             finalConnectives
           ),
@@ -68,9 +68,10 @@ final case class DeBruijnLevelMap[T](
     DeBruijnLevelMap(next, env, wildcards, newConnectives)
   }
 
-  def get(varName: String): Option[(Int, T, SourcePosition)] = env.get(varName)
+  def get(varName: String): Option[LevelContext[T]] = env.get(varName)
 
-  def count: Int            = next + wildcards.length + logicalConnectives.length
+  def count: Int = next + wildcards.length + logicalConnectives.length
+
   def countNoWildcards: Int = next
 }
 
