@@ -1,26 +1,22 @@
 package coop.rchain.node
 
 import java.net.InetSocketAddress
-import java.util.concurrent.TimeUnit
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.catscontrib._
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.node.model.repl._
 import coop.rchain.shared._
 import io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.ProtoReflectionService
-import io.netty.channel.local.LocalAddress
-import monix.eval.Task
 import monix.execution.Scheduler
 
 import scala.concurrent.duration.FiniteDuration
 
 package object api {
 
-  def acquireInternalServer(
+  def acquireInternalServer[F[_]: Sync](
       host: String,
       port: Int,
       grpcExecutor: Scheduler,
@@ -34,8 +30,8 @@ package object api {
       maxConnectionIdle: FiniteDuration,
       maxConnectionAge: FiniteDuration,
       maxConnectionAgeGrace: FiniteDuration
-  ): Task[Server[Task]] =
-    GrpcServer[Task](
+  ): F[Server[F]] =
+    GrpcServer[F](
       NettyServerBuilder
         .forAddress(new InetSocketAddress(host, port))
         .executor(grpcExecutor)
@@ -62,7 +58,7 @@ package object api {
         .build
     )
 
-  def acquireExternalServer[F[_]: Concurrent: Log: Taskable](
+  def acquireExternalServer[F[_]: Concurrent: Log](
       host: String,
       port: Int,
       grpcExecutor: Scheduler,

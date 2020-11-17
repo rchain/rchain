@@ -1,31 +1,31 @@
 package coop.rchain.node.api
 
-import cats.effect.concurrent.Semaphore
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.effect.concurrent.Semaphore
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._
-import EngineCell._
+import coop.rchain.casper.api.BlockAPI
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.protocol.propose.v1.{ProposeResponse, ProposeServiceV1GrpcMonix}
+import coop.rchain.casper.protocol.{PrintUnmatchedSendsQuery, ServiceError}
 import coop.rchain.casper.{
   LastFinalizedHeightConstraintChecker,
   SafetyOracle,
   SynchronyConstraintChecker
 }
-import coop.rchain.casper.api.BlockAPI
-import coop.rchain.casper.protocol.{PrintUnmatchedSendsQuery, ServiceError}
-import coop.rchain.casper.protocol.propose.v1.{ProposeResponse, ProposeServiceV1GrpcMonix}
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.StacksafeMessage
-import coop.rchain.shared._
+import coop.rchain.monix.Monixable
 import coop.rchain.shared.ThrowableOps._
+import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
-  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Metrics: Taskable: Span: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
+
+  def apply[F[_]: Monixable: Concurrent: BlockStore: SafetyOracle: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Metrics: Span](
       blockApiLock: Semaphore[F]
   )(
       implicit worker: Scheduler
@@ -37,10 +37,10 @@ object ProposeGrpcServiceV1 {
       )(
           response: Either[ServiceError, A] => R
       ): Task[R] =
-        Task
-          .defer(task.toTask)
+        task.toTask
           .executeOn(worker)
-          .attemptAndLog
+          .fromTask
+          .logOnError("Propose service method error.")
           .attempt
           .map(
             _.fold(
@@ -48,6 +48,7 @@ object ProposeGrpcServiceV1 {
               r => response(r.leftMap(e => ServiceError(Seq(e))))
             )
           )
+          .toTask
 
       def propose(request: PrintUnmatchedSendsQuery): Task[ProposeResponse] =
         defer(BlockAPI.createBlock[F](blockApiLock, request.printUnmatchedSends)) { r =>
