@@ -23,7 +23,9 @@ import scala.collection.immutable.{BitSet, Vector}
 import scala.util.Try
 
 sealed trait VarSort
+
 case object ProcSort extends VarSort
+
 case object NameSort extends VarSort
 
 object BoolNormalizeMatcher {
@@ -50,12 +52,14 @@ object GroundNormalizeMatcher {
       case gs: GroundString => Expr(GString(stripString(gs.stringliteral_))).pure[M]
       case gu: GroundUri    => Expr(GUri(stripUri(gu.uriliteral_))).pure[M]
     }
+
   // This is necessary to remove the backticks. We don't use a regular
   // expression because they're always there.
   def stripUri(raw: String): String = {
     require(raw.length >= 2)
     raw.substring(1, raw.length - 1)
   }
+
   // Similarly, we need to remove quotes from strings, since we are using
   // a custom string token
   def stripString(raw: String): String = {
@@ -290,6 +294,7 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
   // FIXME before adding any more implicits, or fields to the `*VisitInputs` classes, make the normalizer use
   // ApplicativeAsk / MonadState instead
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
       env: Map[String, Par]
@@ -1009,6 +1014,7 @@ object ProcNormalizeMatcher {
 
         def missingEnvElement(name: String, uri: String) =
           NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
+
         if (requiresDeployId && env.get(deployIdUri).forall(_.singleDeployId().isEmpty))
           missingEnvElement("DeployId", deployIdUri).raiseError[M, ProcVisitOutputs]
         else if (requiresDeployerId && env.get(deployerIdUri).forall(_.singleDeployerId().isEmpty))
@@ -1032,6 +1038,7 @@ object ProcNormalizeMatcher {
           val errMsg = {
             def at(variable: String, sourcePosition: SourcePosition): String =
               variable + " line: " + sourcePosition.row + ", column: " + sourcePosition.column
+
             val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
             val freeVarsPositions = targetResult.knownFree.levelBindings.map {
               case (n, LevelContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
@@ -1128,6 +1135,16 @@ object ProcNormalizeMatcher {
         )
       }
 
+      case p: PLet =>
+        p.listdecl_.toList.reverse.foldM(p.proc_) {
+          case (proc, decl: DeclarationImpl) =>
+            val listCase = new ListCase()
+            listCase.add(new CaseImpl(decl.proc_1, proc))
+            (new PMatch(decl.proc_2, listCase): Proc).pure[M]
+          case _ =>
+            BugFoundError("Unexpected declaration implementation").raiseError[M, Proc]
+        } >>= (normalizeMatch(_, input))
+
       case p: PIf =>
         normalizeIfElse(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
           .map(n => n.copy(par = n.par ++ input.par))
@@ -1153,14 +1170,17 @@ final case class ProcVisitInputs(
     env: IndexMapChain[VarSort],
     knownFree: DeBruijnLevelMap[VarSort]
 )
+
 // Returns the update Par and an updated map of free variables.
 final case class ProcVisitOutputs(par: Par, knownFree: DeBruijnLevelMap[VarSort])
 
 final case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DeBruijnLevelMap[VarSort])
+
 final case class NameVisitOutputs(chan: Par, knownFree: DeBruijnLevelMap[VarSort])
 
 final case class CollectVisitInputs(
     env: IndexMapChain[VarSort],
     knownFree: DeBruijnLevelMap[VarSort]
 )
+
 final case class CollectVisitOutputs(expr: Expr, knownFree: DeBruijnLevelMap[VarSort])

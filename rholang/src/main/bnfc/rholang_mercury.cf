@@ -64,6 +64,7 @@ PContr.          Proc2  ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" 
 PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
 PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
+PLet.            Proc2  ::= "let" [Decl] "in" "{" Proc "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
 PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
@@ -72,6 +73,10 @@ PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
 PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
+
+-- Single Declaration
+DeclarationImpl. Decl ::= Proc13 "=" Proc4 ;
+separator nonempty Decl "," ;
 
 -- Process variables
 ProcVarWildcard. ProcVar ::= "_" ;
