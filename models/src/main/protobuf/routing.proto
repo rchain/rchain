@@ -7,11 +7,11 @@ package routing;
 // make a scalapb directory in this file's location and place it inside
 
 import "scalapb/scalapb.proto";
-import "CasperMessage.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.comm.protocol.routing"
   flat_package: true
+  preserve_unknown_fields: false
 };
 
 message Node {
