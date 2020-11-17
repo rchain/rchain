@@ -1,0 +1,17 @@
+new stdout(`rho:io:stdout`) in {
+
+  // prints 12
+  let a = 1 * 2 * 3, b = 1 + 2 + 3 in {
+    stdout!(a + b)
+  }
+
+  // prints (1, 2, 3)
+  | let [a, b, c] = [1, 2, 3] in {
+    stdout!((a, b, c))
+  }
+
+  // prints (1, 2)
+  | let {[1, 2] \/ ["a", "b"]} /\ [x, y] = [1, 2] in {
+    stdout!((x, y))
+  }
+}
