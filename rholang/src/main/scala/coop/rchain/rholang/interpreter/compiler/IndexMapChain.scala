@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.compiler
 
+import cats.syntax.all._
+
 /**
   *
   * A structure for keeping track of bound variables. Every time we go under a binding construct
@@ -13,14 +15,11 @@ final case class IndexMapChain[T](chain: Vector[DeBruijnIndexMap[T]]) {
 
   def get(name: String): Option[IndexContext[T]] = chain.head.get(name)
 
-  def find(name: String): Option[(IndexContext[T], Int)] = {
-    import cats.implicits.catsStdInstancesForVector
-    import cats.Foldable.ops.toAllFoldableOps
+  def find(name: String): Option[(IndexContext[T], Int)] =
     chain.zipWithIndex.collectFirstSome {
       case (indexMap, depth) =>
         indexMap.get(name).map((_, depth))
     }
-  }
 
   def put(binding: IdContext[T]): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).put(binding)))
