@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.{
   AggregateError,
   InterpreterError,
