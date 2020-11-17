@@ -1,19 +1,17 @@
 package coop.rchain.casper
 
-import cats.Applicative
+import cats.{Applicative, Id}
 import cats.effect.Sync
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.option._
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.casper.protocol.{BlockMessage, Body, Header, Signature}
+import com.google.protobuf.ByteString
+import coop.rchain.casper.protocol.{BlockMessage, Signature}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.ProtoUtil.{hashByteArrays, hashSignedBlock}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{EnvVars, Log, LogSource}
 
 final case class ValidatorIdentity(
@@ -50,7 +48,7 @@ object ValidatorIdentity {
   private val RNodeValidatorPasswordEnvVar  = "RNODE_VALIDATOR_PASSWORD"
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  def apply[F[_]: Applicative](
+  def apply(
       privateKey: PrivateKey
   ): ValidatorIdentity = {
     val publicKey = Secp256k1.toPublic(privateKey)
