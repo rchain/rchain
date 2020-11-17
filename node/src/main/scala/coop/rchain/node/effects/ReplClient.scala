@@ -4,15 +4,16 @@ import java.io.{Closeable, FileNotFoundException}
 import java.nio.file._
 import java.util.concurrent.TimeUnit
 
+import cats.effect.Sync
+
 import scala.io.Source
-
-import cats.implicits._
-
+import cats.syntax.all._
+import coop.rchain.monix.Monixable
 import coop.rchain.node.model.repl._
 import coop.rchain.shared.Resources
-
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import monix.eval.Task
+import coop.rchain.shared.syntax._
 
 trait ReplClient[F[_]] {
   def run(line: String): F[Either[Throwable, String]]
@@ -26,8 +27,8 @@ object ReplClient {
   def apply[F[_]](implicit ev: ReplClient[F]): ReplClient[F] = ev
 }
 
-class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
-    extends ReplClient[Task]
+class GrpcReplClient[F[_]: Monixable: Sync](host: String, port: Int, maxMessageSize: Int)
+    extends ReplClient[F]
     with Closeable {
 
   private val channel: ManagedChannel =
@@ -39,9 +40,10 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = ReplGrpcMonix.stub(channel)
 
-  def run(line: String): Task[Either[Throwable, String]] =
+  def run(line: String): F[Either[Throwable, String]] =
     stub
       .run(CmdRequest(line))
+      .fromTask
       .map(_.output)
       .attempt
       .map(_.leftMap(processError))
@@ -49,19 +51,22 @@ class GrpcReplClient(host: String, port: Int, maxMessageSize: Int)
   def eval(
       fileNames: List[String],
       unmatchedSends: Boolean
-  ): Task[List[Either[Throwable, String]]] =
-    fileNames
-      .traverse(eval(_, unmatchedSends))
+  ): F[List[Either[Throwable, String]]] = {
+    import cats.instances.list._
 
-  def eval(fileName: String, printUnmatchedSendsOnly: Boolean): Task[Either[Throwable, String]] = {
+    fileNames.traverse(eval(_, unmatchedSends))
+  }
+
+  def eval(fileName: String, printUnmatchedSendsOnly: Boolean): F[Either[Throwable, String]] = {
     val filePath = Paths.get(fileName)
     if (Files.exists(filePath))
       stub
         .eval(EvalRequest(readContent(filePath), printUnmatchedSendsOnly))
+        .fromTask
         .map(_.output)
         .attempt
         .map(_.leftMap(processError))
-    else Task.now(Left(new FileNotFoundException("File not found")))
+    else Sync[F].delay(new FileNotFoundException("File not found").asLeft)
   }
 
   private def readContent(filePath: Path): String =
