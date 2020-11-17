@@ -171,7 +171,7 @@ object GrpcTransportReceiver {
     val server = NettyServerBuilder
       .forPort(port)
       .executor(scheduler)
-      .maxMessageSize(maxMessageSize)
+      .maxInboundMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
       .addService(RoutingGrpcMonix.bindService(service, scheduler))
       .intercept(new SslSessionServerInterceptor(networkId))

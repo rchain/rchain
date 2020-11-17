@@ -39,7 +39,7 @@ package object api {
       NettyServerBuilder
         .forAddress(new InetSocketAddress(host, port))
         .executor(grpcExecutor)
-        .maxMessageSize(maxMessageSize)
+        .maxInboundMessageSize(maxMessageSize)
         .addService(
           ReplGrpcMonix.bindService(replGrpcService, grpcExecutor)
         )
@@ -79,7 +79,7 @@ package object api {
       NettyServerBuilder
         .forAddress(new InetSocketAddress(host, port))
         .executor(grpcExecutor)
-        .maxMessageSize(maxMessageSize)
+        .maxInboundMessageSize(maxMessageSize)
         .addService(
           DeployServiceV1GrpcMonix
             .bindService(deployGrpcService, grpcExecutor)
