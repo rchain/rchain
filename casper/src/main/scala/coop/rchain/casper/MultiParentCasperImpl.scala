@@ -34,7 +34,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     validatorId: Option[ValidatorIdentity],
     // todo this should be read from chain, for now read from startup options
     casperShardConf: CasperShardConf,
-    approvedBlock: BlockMessage,
+    approvedBlock: BlockMessage
 )(
     implicit casperBuffer: CasperBufferStorage[F],
     metricsF: Metrics[F],
@@ -68,7 +68,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     * Check if there are blocks in CasperBuffer available with all dependencies met.
     * @return First from the set of available blocks
     */
-  override def getReadyToBeAdded: F[List[BlockMessage]] = {
+  override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = {
     import cats.instances.list._
     for {
       pendants       <- CasperBufferStorage[F].getPendants

@@ -67,7 +67,7 @@ trait Casper[F[_]] {
       status: InvalidBlock,
       dag: BlockDagRepresentation[F]
   ): F[BlockDagRepresentation[F]]
-  def getReadyToBeAdded: F[List[BlockMessage]]
+  def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
