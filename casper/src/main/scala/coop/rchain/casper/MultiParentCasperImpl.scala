@@ -41,7 +41,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     spanF: Span[F],
     runtimeManager: RuntimeManager[F]
 ) extends MultiParentCasper[F] {
-  import MultiParentCasper.MetricsSource
   import MultiParentCasperImpl._
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -50,14 +49,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   // TODO: Extract hardcoded version from shard config
   private val version = 1L
 
-  private[this] val CreateBlockMetricsSource =
-    Metrics.Source(CasperMetricsSource, "create-block")
+  def getValidator: F[Option[ValidatorIdentity]] = validatorId.pure[F]
 
   def getVersion: F[Long] = version.pure[F]
 
   def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
-
-  def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
   private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
     lastFinalizedBlock.whenA(
@@ -113,36 +109,6 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock)
-
-  def createBlock: F[CreateBlockStatus] = spanF.trace(CreateBlockMetricsSource) {
-    (validatorId match {
-      case Some(validatorIdentity) =>
-        BlockDagStorage[F].getRepresentation
-          .flatMap { dag =>
-            BlockCreator
-              .createBlock(
-                dag,
-                approvedBlock,
-                validatorIdentity,
-                shardId,
-                version,
-                deployLifespan,
-                runtimeManager
-              )
-          }
-          .flatMap {
-            case c: Created =>
-              spanF.mark("block-store-put") >>
-                BlockStore[F].put(c.block) >>
-                BlockRetriever[F].ackReceive(c.block.blockHash) >>
-                EventPublisher[F]
-                  .publish(MultiParentCasperImpl.createdEvent(c))
-                  .as[CreateBlockStatus](c)
-            case o: CreateBlockStatus => o.pure
-          }
-      case None => CreateBlockStatus.readOnlyMode.pure
-    }).timer("create-block-time")
-  }
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
@@ -415,8 +381,8 @@ object MultiParentCasperImpl {
     )
   }
 
-  def createdEvent(cbs: Created): RChainEvent = {
-    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(cbs.block)
+  def createdEvent(b: BlockMessage): RChainEvent = {
+    val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(b)
     RChainEvent.blockCreated(
       blockHash,
       parents,
@@ -428,8 +394,6 @@ object MultiParentCasperImpl {
   }
 
   private def blockEvent(block: BlockMessage) = {
-    import cats.instances.list._
-    import cats.instances.option._
 
     val blockHash = block.blockHash.base16String
     val parentHashes =

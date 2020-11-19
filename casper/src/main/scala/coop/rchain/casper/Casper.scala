@@ -55,9 +55,8 @@ trait Casper[F[_]] {
   def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
-  def createBlock: F[CreateBlockStatus]
   def getApprovedBlock: F[BlockMessage]
-  def getValidator: F[Option[PublicKey]]
+  def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
   def validate(b: BlockMessage, dag: BlockDagRepresentation[F]): F[Either[BlockError, ValidBlock]]
@@ -152,7 +151,7 @@ sealed abstract class MultiParentCasperInstances {
       new MultiParentCasperImpl(
         validatorId,
         casperShardConf,
-        approvedBlock,
+        approvedBlock
       )
     }
 }
