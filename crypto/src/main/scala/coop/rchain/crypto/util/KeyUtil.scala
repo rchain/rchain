@@ -6,22 +6,20 @@ import java.nio.file.Path
 import java.security.KeyFactory
 import java.security.spec.ECPublicKeySpec
 
-import cats.effect.Resource
-import cats.implicits._
-import coop.rchain.crypto.{PrivateKey, PublicKey}
+import cats.effect.{Resource, Sync}
+import cats.syntax.all._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
-import monix.eval.Task
-import org.bouncycastle.jce.ECNamedCurveTable
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+import org.bouncycastle.jce.{ECNamedCurveTable, ECPointUtil}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.jce.spec.{ECNamedCurveSpec, ECPrivateKeySpec}
 import org.bouncycastle.openssl.jcajce.{JcaMiscPEMGenerator, JcaPEMWriter, JcePEMEncryptorBuilder}
-import org.bouncycastle.jce.ECPointUtil
 import org.bouncycastle.util.io.pem.PemObject
 
 object KeyUtil {
 
-  def writeKeys(
+  def writeKeys[F[_]: Sync](
       sk: PrivateKey,
       pk: PublicKey,
       sigAlgorithm: SignaturesAlg,
@@ -29,7 +27,7 @@ object KeyUtil {
       privateKeyPemPath: Path,
       publicKeyPemPath: Path,
       publicKeyHexPath: Path
-  ): Task[Unit] = {
+  ): F[Unit] = {
     // Equivalent of using
     // 1. `openssl ec -in key.pem -out privateKey.pem -aes256`
     // 2. `openssl ec -in privateKey.pem -pubout >> publicKey.pem`
@@ -53,11 +51,11 @@ object KeyUtil {
                      val privateKeySpec = new ECPrivateKeySpec(s, ecParameterSpec)
                      val pubKeySpec     = new ECPublicKeySpec(ecPoint, params)
                      val keyFactory     = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider())
-                     (
+                     Sync[F].delay(
                        keyFactory.generatePrivate(privateKeySpec),
                        keyFactory.generatePublic(pubKeySpec)
-                     ).pure[Task]
-                   case _ => Task.raiseError(new Exception("Invalid algorithm"))
+                     )
+                   case _ => Sync[F].raiseError(new Exception("Invalid algorithm"))
                  }
       (privateKey, publicKey) = keyPairs
       privatePemGenerator     = new JcaMiscPEMGenerator(privateKey, encryptor)
@@ -69,20 +67,22 @@ object KeyUtil {
       _                       <- writeKey(publicKeyHexPath, Base16.encode(pk.bytes) + "\n")
     } yield ()
   }
-  private def writePem(path: Path, pemObject: PemObject) =
+
+  private def writePem[F[_]: Sync](path: Path, pemObject: PemObject) =
     Resource
       .make(
-        Task.delay(new JcaPEMWriter(new FileWriter(path.toFile)))
-      )(writer => Task.delay(writer.close()))
+        Sync[F].delay(new JcaPEMWriter(new FileWriter(path.toFile)))
+      )(writer => Sync[F].delay(writer.close()))
       .use { writer =>
-        Task.delay(writer.writeObject(pemObject))
+        Sync[F].delay(writer.writeObject(pemObject))
       }
-  private def writeKey(path: Path, key: String) =
+
+  private def writeKey[F[_]: Sync](path: Path, key: String) =
     Resource
       .make(
-        Task.delay(new FileWriter(path.toFile))
-      )(writer => Task.delay(writer.close()))
+        Sync[F].delay(new FileWriter(path.toFile))
+      )(writer => Sync[F].delay(writer.close()))
       .use { writer =>
-        Task.delay(writer.write(key))
+        Sync[F].delay(writer.write(key))
       }
 }

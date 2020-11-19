@@ -1,16 +1,18 @@
 package coop.rchain.models
+
 import cats.effect.Sync
-import cats.implicits._
-import cats.{Applicative, Monad}
+import cats.instances.list._
+import cats.syntax.all._
 import com.google.protobuf.Descriptors.FieldDescriptor
+import com.google.protobuf.WireFormat.FieldType
 import com.google.protobuf.{ByteString, CodedOutputStream, Descriptors, MessageLite}
 import monix.eval.Coeval
-import scalapb.compiler.{DescriptorPimps, GeneratorParams, Types}
 import scalapb.WireType
+import scalapb.compiler.Types
 
-object ProtoM extends DescriptorPimps {
+import scala.collection.JavaConverters._
 
-  def params: GeneratorParams = ??? //required by DescriptorPimps, but we don't use it transitively
+object ProtoM {
 
   def toByteArray(message: StacksafeMessage[_]): Coeval[Array[Byte]] =
     for {
@@ -29,19 +31,14 @@ object ProtoM extends DescriptorPimps {
     val descriptor      = companion.javaDescriptor
     val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
     for {
-      _ <- raiseUnsupportedIf[Coeval](
-            descriptor.preservesUnknownFields,
-            "Unknown fields are not supported"
-          )
-      _ <- descriptor.fields
+      _ <- descriptor.getFields.asScala.toList
             .sortBy(_.getNumber)
-            .toList
-            .traverse[Coeval, Unit](f => {
+            .traverse(f => {
               val fieldValue = message.getFieldByNumber(f.getNumber)
               val default    = defaultInstance.getFieldByNumber(f.getNumber)
               if (fieldValue != default)
                 writeField(out, fieldValue, f)
-              else Monad[Coeval].pure(())
+              else ().pure[Coeval]
             })
     } yield ()
   }
@@ -53,14 +50,8 @@ object ProtoM extends DescriptorPimps {
   ): Coeval[Unit] =
     if (field.isRepeated) {
       writeRepeatedField(out, value, field)
-    } else if (field.isRequired || field.isSingular || field.isOptional) {
-      writeSingleField(out, value, field)
     } else {
-      Sync[Coeval].raiseError(
-        new RuntimeException(
-          "This cannot be! A field that's none of: repeated, required, singluar, optional. Did protobuf spec change?"
-        )
-      )
+      writeSingleField(out, value, field)
     }
 
   private def writeRepeatedField(
@@ -79,14 +70,14 @@ object ProtoM extends DescriptorPimps {
       value: Any,
       field: Descriptors.FieldDescriptor
   ): Coeval[Unit] =
-    if (field.isMessage) {
+    if (field.getLiteType == FieldType.MESSAGE) {
       for {
         _         <- writeTag(out, field, WireType.WIRETYPE_LENGTH_DELIMITED)
         valueSize <- value.asInstanceOf[StacksafeMessage[_]].serializedSizeM.get
         _         <- writeUInt32NoTag(out, valueSize)
         _         <- writeTo(out, value.asInstanceOf[StacksafeMessage[_]])
       } yield ()
-    } else if (field.isEnum)
+    } else if (field.getLiteType == FieldType.ENUM)
       Sync[Coeval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
@@ -151,16 +142,12 @@ object ProtoM extends DescriptorPimps {
     val descriptor      = companion.javaDescriptor
     val defaultInstance = companion.defaultInstance.asInstanceOf[StacksafeMessage[_]]
     for {
-      _ <- raiseUnsupportedIf[Coeval](
-            descriptor.preservesUnknownFields,
-            "Unknown fields are not supported"
-          )
-      fieldSizes <- descriptor.fields.toList.traverse[Coeval, Int](f => {
+      fieldSizes <- descriptor.getFields.asScala.toList.traverse(f => {
                      val fieldValue = message.getFieldByNumber(f.getNumber)
                      val default    = defaultInstance.getFieldByNumber(f.getNumber)
                      if (fieldValue != default)
                        fieldSize(fieldValue, f)
-                     else Monad[Coeval].pure(0)
+                     else 0.pure[Coeval]
                    })
     } yield fieldSizes.sum
   }
@@ -168,14 +155,8 @@ object ProtoM extends DescriptorPimps {
   private def fieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
     if (field.isRepeated) {
       repeatedSize(value, field)
-    } else if (field.isRequired || field.isSingular || field.isOptional) {
-      singleFieldSize(value, field)
     } else {
-      Sync[Coeval].raiseError(
-        new RuntimeException(
-          "This cannot be! A field that's none of: repeated, required, singluar, optional. Did protobuf spec change?"
-        )
-      )
+      singleFieldSize(value, field)
     }
 
   private def repeatedSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
@@ -183,26 +164,24 @@ object ProtoM extends DescriptorPimps {
       _ <- raiseUnsupportedIf[Coeval](field.isPacked, "Packed fields are unsupported")
 
       container = value.asInstanceOf[Seq[Any]].toList
-      // format: off
       containerSize <- Types.fixedSize(field.getType) match {
-        case Some(size) =>
-          val tagSize = CodedOutputStream.computeTagSize(field.getNumber)
-          Applicative[Coeval].pure(((size + tagSize) * container.size))
-        case None =>
-          val elementSizes: Coeval[List[Int]] = container.traverse(singleFieldSize(_, field))
-          elementSizes.map(_.sum)
-      }
-      // format: on
+                        case Some(size) =>
+                          val tagSize = CodedOutputStream.computeTagSize(field.getNumber)
+                          ((size + tagSize) * container.size).pure[Coeval]
+                        case None =>
+                          val elementSizes = container.traverse(singleFieldSize(_, field))
+                          elementSizes.map(_.sum)
+                      }
     } yield containerSize
 
   private def singleFieldSize(value: Any, field: Descriptors.FieldDescriptor): Coeval[Int] =
-    if (field.isMessage) {
+    if (field.getLiteType == FieldType.MESSAGE) {
       for {
         valueSize     <- value.asInstanceOf[StacksafeMessage[_]].serializedSizeM.get
         valueSizeSize = CodedOutputStream.computeUInt32SizeNoTag(valueSize)
         tagSize       = CodedOutputStream.computeTagSize(field.getNumber)
       } yield tagSize + valueSizeSize + valueSize
-    } else if (field.isEnum)
+    } else if (field.getLiteType == FieldType.ENUM)
       Sync[Coeval].raiseError(
         new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
@@ -238,7 +217,7 @@ object ProtoM extends DescriptorPimps {
         case UINT32   => computeUInt32Size     (field.getNumber, value.asInstanceOf[Int])
         case ENUM     => throw new UnsupportedOperationException(
           s"Enums are not supported, got $value of type ${value.getClass}"
-        )          
+        )
         case SFIXED32 => computeSFixed32Size   (field.getNumber, value.asInstanceOf[Int])
         case SFIXED64 => computeSFixed64Size   (field.getNumber, value.asInstanceOf[Long])
         case SINT32   => computeSInt32Size     (field.getNumber, value.asInstanceOf[Int])
@@ -251,6 +230,6 @@ object ProtoM extends DescriptorPimps {
     if (condition) {
       Sync[M].raiseError(new UnsupportedOperationException(message))
     } else {
-      Applicative[M].pure(())
+      ().pure[M]
     }
 }

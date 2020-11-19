@@ -19,6 +19,7 @@ option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol.deploy.v1"
   flat_package: true
   single_file: true
+  preserve_unknown_fields: false
 };
 
 // Use `doDeploy` to queue deployments of Rholang code and then

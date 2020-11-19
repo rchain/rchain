@@ -1,5 +1,6 @@
 package coop.rchain
 
+import coop.rchain.monix.MonixableSyntax
 import coop.rchain.store.{KeyValueStoreManagerSyntax, KeyValueStoreSyntax, KeyValueTypedStoreSyntax}
 
 package object shared {
@@ -14,3 +15,4 @@ trait AllSyntaxShared
     extends KeyValueStoreSyntax
     with KeyValueTypedStoreSyntax
     with KeyValueStoreManagerSyntax
+    with MonixableSyntax

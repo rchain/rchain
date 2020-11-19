@@ -1,10 +1,10 @@
 package coop.rchain.node.diagnostics
 
 import cats.effect.{ExitCase, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl.ApplicativeLocal
-import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}

@@ -2,32 +2,29 @@ package coop.rchain.node.api
 
 import cats.data.State
 import cats.effect.Concurrent
-import cats.effect.concurrent.Semaphore
-import cats.implicits._
 import cats.mtl.implicits._
-
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.deploy.v1._
-import coop.rchain.casper.SafetyOracle
+import coop.rchain.casper.{ReportingCasper, SafetyOracle}
 import coop.rchain.casper.api._
+import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.Taskable
+import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
+import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.ThrowableOps._
-
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
-import coop.rchain.casper.{ReportingCasper, _}
+
 object DeployGrpcServiceV1 {
-  def instance[F[_]: Concurrent: Log: SafetyOracle: BlockStore: Taskable: Span: EngineCell](
-      blockApiLock: Semaphore[F],
+
+  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
       reportingCasper: ReportingCasper[F],
       devMode: Boolean = false
@@ -41,10 +38,10 @@ object DeployGrpcServiceV1 {
       )(
           response: Either[ServiceError, A] => R
       ): Task[R] =
-        Task
-          .defer(task.toTask)
+        task.toTask
           .executeOn(worker)
-          .attemptAndLog
+          .fromTask
+          .logOnError("Deploy service method error.")
           .attempt
           .map(
             _.fold(
@@ -52,14 +49,15 @@ object DeployGrpcServiceV1 {
               r => response(r.leftMap(e => ServiceError(Seq(e))))
             )
           )
+          .toTask
 
       private def deferList[A, R <: StacksafeMessage[R]](task: F[List[A]])(
           response: Either[ServiceError, A] => R
       ): Task[List[R]] =
-        Task
-          .defer(task.toTask)
+        task.toTask
           .executeOn(worker)
-          .attemptAndLog
+          .fromTask
+          .logOnError("Deploy service method error.")
           .attempt
           .map(
             _.fold(
@@ -67,6 +65,7 @@ object DeployGrpcServiceV1 {
               _.map(r => response(r.asRight[ServiceError]))
             )
           )
+          .toTask
 
       def doDeploy(request: DeployDataProto): Task[DeployResponse] =
         DeployData
