@@ -60,7 +60,7 @@ object Dependencies {
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
-  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
+  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.1"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.5" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
