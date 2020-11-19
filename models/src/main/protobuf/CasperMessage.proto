@@ -17,6 +17,7 @@ option (scalapb.options) = {
   flat_package: true
   single_file: true
   preamble: "sealed trait CasperMessageProto"
+  preserve_unknown_fields: false
 };
 
 message HasBlockRequestProto {

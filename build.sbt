@@ -172,7 +172,7 @@ lazy val casper = (project in file("casper"))
     shared       % "compile->compile;test->test",
     graphz,
     crypto,
-    models   % "compile->compile;test->test",
+    models % "compile->compile;test->test",
     rspace,
     rholang % "compile->compile;test->test"
   )
@@ -196,9 +196,9 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
+      PB.gens.java                                      -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen()                        -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -234,10 +234,8 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      coop.rchain.scalapb.StacksafeScalapbGenerator
-        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators
-        .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+      coop.rchain.scalapb.gen(flatPackage = true, grpc = false) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen()                                -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", rspace)
@@ -271,9 +269,10 @@ lazy val node = (project in file("node"))
         pureconfig
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
+      PB.gens.java -> (sourceManaged in Compile).value / "protobuf",
+      scalapb
+        .gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.gen()                   -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",

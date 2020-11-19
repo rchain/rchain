@@ -1,24 +1,24 @@
 package coop.rchain.comm
 
+import cats.effect.Sync
+import com.google.protobuf.ByteString
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.metrics.Metrics
-
-import com.google.protobuf.ByteString
+import coop.rchain.monix.Monixable
 import io.grpc.netty.NettyServerBuilder
-import monix.eval.Task
 import monix.execution.Scheduler
 
 package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer(
+  def acquireKademliaRPCServer[F[_]: Monixable: Sync](
       networkId: String,
       port: Int,
-      pingHandler: PeerNode => Task[Unit],
-      lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
-  )(implicit scheduler: Scheduler): Task[Server[Task]] =
-    GrpcServer[Task](
+      pingHandler: PeerNode => F[Unit],
+      lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
+  )(implicit scheduler: Scheduler): F[Server[F]] =
+    GrpcServer[F](
       NettyServerBuilder
         .forPort(port)
         .executor(scheduler)

@@ -1,26 +1,21 @@
 package coop.rchain.scalapb
 
-import com.google.protobuf.Descriptors.{
-  Descriptor,
-  FieldDescriptor,
-  FileDescriptor,
-  OneofDescriptor
-}
+import com.google.protobuf.Descriptors.FieldDescriptor.Type
+import com.google.protobuf.Descriptors._
 import com.google.protobuf.ExtensionRegistry
-import com.google.protobuf.compiler.PluginProtos.{CodeGeneratorRequest, CodeGeneratorResponse}
-import protocbridge.{Artifact, JvmGenerator, ProtocCodeGenerator}
+import protocbridge.{Artifact, JvmGenerator}
+import protocgen.{CodeGenApp, CodeGenRequest, CodeGenResponse}
 import scalapb.compiler._
 import scalapb.options.compiler.Scalapb
 
-object StacksafeScalapbGenerator extends ProtocCodeGenerator {
-
-  //copied and adapted from scalapb pakage object
-  def gen(
+object gen {
+  def apply(
       flatPackage: Boolean = false,
       javaConversions: Boolean = false,
       grpc: Boolean = true,
       singleLineToProtoString: Boolean = false,
-      asciiFormatToString: Boolean = false
+      asciiFormatToString: Boolean = false,
+      noLenses: Boolean = false
   ): (JvmGenerator, Seq[String]) =
     (
       JvmGenerator("scala", StacksafeScalapbGenerator),
@@ -29,19 +24,16 @@ object StacksafeScalapbGenerator extends ProtocCodeGenerator {
         "java_conversions"            -> javaConversions,
         "grpc"                        -> grpc,
         "single_line_to_proto_string" -> singleLineToProtoString,
-        "ascii_format_to_string"      -> asciiFormatToString
+        "ascii_format_to_string"      -> asciiFormatToString,
+        "no_lenses"                   -> noLenses
       ).collect { case (name, v) if v => name }
     )
+}
 
-  //Copied and adpated from scalapb.ScalaPbCodeGenerator
-  def run(req: Array[Byte]): Array[Byte] = {
-    val registry = ExtensionRegistry.newInstance()
+object StacksafeScalapbGenerator extends CodeGenApp {
+  override def registerExtensions(registry: ExtensionRegistry): Unit =
     Scalapb.registerAllExtensions(registry)
-    val request = CodeGeneratorRequest.parseFrom(req, registry)
-    StacksafeProtobufGenerator.handleCodeGeneratorRequest(request).toByteArray
-  }
 
-  //Copied and adpated from scalapb.ScalaPbCodeGenerator
   override def suggestedDependencies: Seq[Artifact] = Seq(
     Artifact(
       "com.thesamet.scalapb",
@@ -50,84 +42,62 @@ object StacksafeScalapbGenerator extends ProtocCodeGenerator {
       crossVersion = true
     )
   )
-}
 
-//copied and adapted from scalapb.compiler.ProtobufGenerator companion object
-object StacksafeProtobufGenerator {
-
-  import scala.collection.JavaConverters._
-
-  def parseParameters(params: String): Either[String, GeneratorParams] =
-    params
-      .split(",")
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .foldLeft[Either[String, GeneratorParams]](Right(GeneratorParams())) {
-        case (Right(params), "java_conversions") => Right(params.copy(javaConversions = true))
-        case (Right(params), "flat_package")     => Right(params.copy(flatPackage = true))
-        case (Right(params), "grpc")             => Right(params.copy(grpc = true))
-        case (Right(params), "single_line_to_proto_string") =>
-          Right(params.copy(singleLineToProtoString = true))
-        case (Right(params), "ascii_format_to_string") =>
-          Right(params.copy(asciiFormatToString = true))
-        case (Right(params), p) => Left(s"Unrecognized parameter: '$p'")
-        case (x, _)             => x
-      }
-
-  def handleCodeGeneratorRequest(request: CodeGeneratorRequest): CodeGeneratorResponse = {
-    val b = CodeGeneratorResponse.newBuilder
-    parseParameters(request.getParameter) match {
+  // Adapted from scalapb ProtobufGenerator
+  // https://github.com/scalapb/ScalaPB/blob/v0.10.8/compiler-plugin/src/main/scala/scalapb/compiler/ProtobufGenerator.scala#L1732
+  def process(request: CodeGenRequest): CodeGenResponse =
+    ProtobufGenerator.parseParameters(request.parameter) match {
       case Right(params) =>
         try {
-          val generator = new StacksafeProtobufGenerator(params)
-          import generator.FileDescriptorPimp
-          val filesByName: Map[String, FileDescriptor] =
-            request.getProtoFileList.asScala.foldLeft[Map[String, FileDescriptor]](Map.empty) {
-              case (acc, fp) =>
-                val deps = fp.getDependencyList.asScala.map(acc)
-                acc + (fp.getName -> FileDescriptor.buildFrom(fp, deps.toArray))
-            }
-          val validator = new ProtoValidation(params)
-          filesByName.values.foreach(validator.validateFile)
-          request.getFileToGenerateList.asScala.foreach { name =>
-            val file = filesByName(name)
-            val responseFiles =
-              if (file.scalaOptions.getSingleFile)
-                generator.generateSingleScalaFileForFileDescriptor(file)
-              else generator.generateMultipleScalaFilesForFileDescriptor(file)
-            b.addAllFile(responseFiles.asJava)
+          val implicits = new DescriptorImplicits(params, request.allProtos)
+          // Inserted custom printer
+          val generator = new StacksafeMessagePrinter(params, implicits)
+          val validator = new ProtoValidation(implicits)
+          validator.validateFiles(request.allProtos)
+          import implicits.FileDescriptorPimp
+          val files = request.filesToGenerate.flatMap { file =>
+            if (file.scalaOptions.getSingleFile)
+              generator.generateSingleScalaFileForFileDescriptor(file)
+            else generator.generateMultipleScalaFilesForFileDescriptor(file)
           }
+          CodeGenResponse.succeed(files)
         } catch {
           case e: GeneratorException =>
-            b.setError(e.message)
+            CodeGenResponse.fail(e.message)
         }
       case Left(error) =>
-        b.setError(error)
+        CodeGenResponse.fail(error)
     }
-    b.build
-  }
-
 }
 
-//copied and adapted from scalapb.compiler.ProtobufGenerator
-class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenerator(params) {
+class StacksafeMessagePrinter(
+    params: GeneratorParams,
+    implicits: DescriptorImplicits
+) extends ProtobufGenerator(params, implicits) {
 
+  import DescriptorImplicits.AsSymbolPimp
+  import implicits._
+
+  // Override printing of the whole message
   override def printMessage(printer: FunctionalPrinter, message: Descriptor): FunctionalPrinter = {
-    val value = super.printMessage(printer, message).result()
+    val value     = super.printMessage(printer, message).result()
+    val scalaType = message.scalaType.name
+    val lensDef   = s"scalapb.lenses.Updatable[${scalaType}]"
     val extended = value.replace(
-      " extends scalapb.GeneratedMessage with scalapb.Message[",
-      " extends coop.rchain.models.StacksafeMessage["
+      s"extends scalapb.GeneratedMessage with $lensDef",
+      s"extends coop.rchain.models.StacksafeMessage[$scalaType] with $lensDef"
     )
     new FunctionalPrinter(Vector(extended), printer.indentLevel)
   }
 
+  // Override size calculation
   override def generateSerializedSize(
       message: Descriptor
   )(fp: FunctionalPrinter): FunctionalPrinter = {
 
     //we piggy-back on this method to emit a stacksafe equals and hashCode overrides
-    val withEquals            = generateEqualsOverride(message)(fp.newline)
-    val withEqualsAndHashCode = generateHashCodeOverride(message)(withEquals)
+    val withEquals            = generateEqualsOverride(message, fp.newline)
+    val withEqualsAndHashCode = generateHashCodeOverride(message, withEquals)
 
     super
       .generateSerializedSize(message)(withEqualsAndHashCode)
@@ -144,38 +114,37 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       .add("}")
   }
 
-  private def generateEqualsOverride(message: Descriptor)(fp: FunctionalPrinter) = {
-    val myFullScalaName = message.scalaTypeNameWithMaybeRoot(message)
+  private def generateEqualsOverride(
+      message: Descriptor,
+      fp: FunctionalPrinter
+  ): FunctionalPrinter = {
+    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
     fp.add(
         s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
       )
       .newline
   }
 
-  private def generateHashCodeOverride(message: Descriptor)(fp: FunctionalPrinter) = {
-    val myFullScalaName = message.scalaTypeNameWithMaybeRoot(message)
-    fp.add(
+  private def generateHashCodeOverride(
+      message: Descriptor,
+      fp: FunctionalPrinter
+  ): FunctionalPrinter = {
+    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
+
+    val printer = fp
+      .add(
         s"override def hashCode(): Int = coop.rchain.models.HashM[$myFullScalaName].hash[monix.eval.Coeval](this).value"
       )
-      .newline
+
+    // In new version of scalapb (0.10.8) `merge` method is moved to companion object
+    //  so it's added here to be a member method.
+    generateMergeM(message)(printer)
   }
 
-  override def generateMergeFrom(
-      message: Descriptor
-  )(originalPrinter: FunctionalPrinter): FunctionalPrinter = {
-
-    val printer = super.generateMergeFrom(message)(originalPrinter)
-
-    generateMergeFromM(message)(printer)
-  }
-
-  private def generateMergeFromM(
-      message: Descriptor
-  )(printer: FunctionalPrinter): FunctionalPrinter = {
-
+  // Generated as member method
+  private def generateMergeM(message: Descriptor)(printer: FunctionalPrinter): FunctionalPrinter = {
     import scala.collection.JavaConverters._
-
-    val myFullScalaName = message.scalaTypeNameWithMaybeRoot(message)
+    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
     val requiredFieldMap: Map[FieldDescriptor, Int] =
       message.fields.filter(_.isRequired).zipWithIndex.toMap
     printer.newline
@@ -185,7 +154,7 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       .indent
       .newline
       .add("import cats.effect.Sync")
-      .add("import cats.implicits._")
+      .add("import cats.syntax.all._")
       .newline
       .add("Sync[F].defer {")
       .indent
@@ -207,7 +176,7 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       }
       .when(requiredFieldMap.nonEmpty) { fp =>
         // Sets the bit 0...(n-1) inclusive to 1.
-        def hexBits(n: Int): String = "0x%xL".format((0 to (n - 1)).map(i => (1L << i)).sum)
+        def hexBits(n: Int): String = "0x%xL".format((0 until n).map(i => (1L << i)).sum)
         val requiredFieldCount      = requiredFieldMap.size
         val fullWords               = (requiredFieldCount - 1) / 64
         val bits: Seq[String] = (1 to fullWords).map(_ => hexBits(64)) :+ hexBits(
@@ -220,27 +189,25 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       }
       .print(message.getOneofs.asScala)(
         (printer, oneof) =>
-          printer.add(s"var __${oneof.scalaName} = this.${oneof.scalaName.asSymbol}")
+          printer.add(s"var __${oneof.scalaName.name} = this.${oneof.scalaName.nameSymbol}")
       )
-      .addStringMargin(s"""var _done__ = false
-           |
-           |Sync[F].whileM_ (Sync[F].delay { !_done__ }) {
-           |  for {
-           |    _tag__ <- Sync[F].delay { _input__.readTag() }
-           |    _ <- _tag__ match {
-           |      case 0 => Sync[F].delay { _done__ = true }""")
+      .add(s"""var _done__ = false
+              |
+              |Sync[F].whileM_ (Sync[F].delay { !_done__ }) {
+              |  for {
+              |    _tag__ <- Sync[F].delay { _input__.readTag() }
+              |    _ <- _tag__ match {
+              |      case 0 => Sync[F].delay { _done__ = true }""".stripMargin)
       .print(message.fields) { (printer, field) =>
         val p = {
-
           val newValBaseF = if (field.isMessage) {
             val defInstance =
-              s"${field.getMessageType.scalaTypeNameWithMaybeRoot(message)}.defaultInstance"
+              s"${field.getMessageType.scalaType.fullNameWithMaybeRoot(message)}.defaultInstance"
             val baseInstance =
               if (field.isRepeated) defInstance
               else {
                 val expr =
-                  if (field.isInOneof)
-                    fieldAccessorSymbol(field)
+                  if (field.isInOneof) fieldAccessorSymbol(field)
                   else s"__${field.scalaName}"
                 val mappedType =
                   toBaseFieldType(field).apply(expr, field.enclosingType)
@@ -251,6 +218,8 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
             s"coop.rchain.models.SafeParser.readMessage(_input__, $baseInstance)"
           } else if (field.isEnum)
             throw new UnsupportedOperationException("Enums are not supported")
+          else if (field.getType == Type.STRING)
+            s"Sync[F].delay { _input__.readStringRequireUtf8() }"
           else s"Sync[F].delay { _input__.read${Types.capitalizedType(field.getType)}() }"
 
           val customVal = toCustomType(field)("readValue")
@@ -258,18 +227,18 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
           val updateOp =
             if (field.supportsPresence) s"__${field.scalaName} = Option(customTypeValue)"
             else if (field.isInOneof) {
-              s"__${field.getContainingOneof.scalaName} = ${field.oneOfTypeName}(customTypeValue)"
+              s"__${field.getContainingOneof.scalaName.name} = ${field.oneOfTypeName.fullName}(customTypeValue)"
             } else if (field.isRepeated) s"__${field.scalaName} += customTypeValue"
             else s"__${field.scalaName} = customTypeValue"
 
           printer
-            .addStringMargin(
+            .add(
               s"""      case ${(field.getNumber << 3) + Types.wireType(field.getType)} =>
                  |        for {
                  |          readValue       <- $newValBaseF
                  |          customTypeValue =  $customVal
                  |          _               <- Sync[F].delay { $updateOp }
-                 |        } yield ()"""
+                 |        } yield ()""".stripMargin
             )
             .when(field.isRequired) { _ =>
               throw new UnsupportedOperationException("Required fields are not supported")
@@ -285,8 +254,8 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
       )
       .add("    }")
       .add("  } yield ()")
-      .add(s"}.map { _ => $myFullScalaName(")
-      .indent
+      .add("}")
+      .add(s".map { _ => $myFullScalaName(")
       .addWithDelimiter(",")(
         (message.fieldsWithoutOneofs ++ message.getOneofs.asScala).map {
           case e: FieldDescriptor if e.isRepeated =>
@@ -294,13 +263,14 @@ class StacksafeProtobufGenerator(params: GeneratorParams) extends ProtobufGenera
           case e: FieldDescriptor =>
             s"  ${e.scalaName.asSymbol} = __${e.scalaName}"
           case e: OneofDescriptor =>
-            s"  ${e.scalaName.asSymbol} = __${e.scalaName}"
-        } ++ (if (message.preservesUnknownFields) Seq("  unknownFields = _unknownFields__.result()")
+            s"  ${e.scalaName.nameSymbol} = __${e.scalaName.name}"
+        } ++ (if (message.preservesUnknownFields)
+                Seq(
+                  "  unknownFields = if (_unknownFields__ == null) this.unknownFields else _unknownFields__.result()"
+                )
               else Seq())
       )
-      .add(")")
-      .outdent
-      .add("}")
+      .add(")}")
       .outdent
       .add("}")
       .outdent

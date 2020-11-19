@@ -3,7 +3,7 @@ package coop.rchain.grpc
 import java.util.concurrent.TimeUnit
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 
 import coop.rchain.catscontrib.ski.kp
 

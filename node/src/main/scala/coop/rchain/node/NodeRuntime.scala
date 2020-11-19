@@ -1,90 +1,77 @@
 package coop.rchain.node
 
-import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 
-import scala.concurrent.duration._
-import cats._
+import cats.{~>, Parallel}
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
-import cats.implicits._
+import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.syntax.all._
 import cats.mtl._
-import cats.tagless.implicits._
+import cats.syntax.all._
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.{ReportingCasper, engine, _}
-import coop.rchain.casper.engine.{BlockRetriever, _}
 import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine.{BlockRetriever, _}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.{ReportingCasper, engine, _}
 import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib.Taskable
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
-import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.node.NodeRuntime.{apply => _, _}
-import coop.rchain.node.api.WebApi.WebApiImpl
+import coop.rchain.monix.Monixable
+import coop.rchain.node.NodeRuntime._
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
-import coop.rchain.node.api.{
-  acquireExternalServer,
-  acquireInternalServer,
-  AdminWebApi,
-  DeployGrpcServiceV1,
-  ProposeGrpcServiceV1,
-  ReplGrpcService,
-  WebApi
-}
+import coop.rchain.node.api.WebApi.WebApiImpl
+import coop.rchain.node.api._
 import coop.rchain.node.configuration.NodeConf
+import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.diagnostics.{
   BatchInfluxDBReporter,
   NewPrometheusReporter,
   Trace,
   UdpInfluxDBReporter
 }
-import coop.rchain.node.diagnostics.Trace.TraceId
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
-import coop.rchain.shared._
 import coop.rchain.shared.PathOps._
+import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
-import io.grpc.ManagedChannel
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
-import monix.eval.Task
 import monix.execution.Scheduler
-import org.lmdbjava.Env
+
+import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-class NodeRuntime private[node] (
+class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShift: LocalEnvironment: Log: EventLog] private[node] (
     nodeConf: NodeConf,
     kamonConf: Config,
     id: NodeIdentifier,
     scheduler: Scheduler
-)(
-    implicit log: Log[Task],
-    eventLog: EventLog[Task]
 ) {
 
   private[this] val loopScheduler =
@@ -104,11 +91,6 @@ class NodeRuntime private[node] (
   private val casperStoragePath        = rspacePath.resolve("casper")
   private val storageSize              = nodeConf.storage.lmdbMapSizeRspace
 
-  implicit class RichTask[A](t: Task[A]) {
-    def toReaderT: TaskEnv[A] =
-      ReaderT.liftF(t)
-  }
-
   /**
     * Main node entry. It will:
     * 1. set up configurations
@@ -116,218 +98,189 @@ class NodeRuntime private[node] (
     * 3. run the node program.
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
-  val main: TaskEnv[Unit] = for {
-    // 1. fetch local peer node
-    local <- WhoAmI
-              .fetchLocalPeerNode[Task](
-                nodeConf.protocolServer.host,
-                nodeConf.protocolServer.port,
-                nodeConf.peersDiscovery.port,
-                nodeConf.protocolServer.noUpnp,
-                id
-              )
-              .toReaderT
+  def main: F[Unit] = {
+    for {
+      // 1. fetch local peer node
+      local <- WhoAmI
+                .fetchLocalPeerNode[F](
+                  nodeConf.protocolServer.host,
+                  nodeConf.protocolServer.port,
+                  nodeConf.peersDiscovery.port,
+                  nodeConf.protocolServer.noUpnp,
+                  id
+                )
 
-    // 3. create instances of typeclasses
-    metrics       = diagnostics.effects.metrics[Task]
-    time          = effects.time[Task]
-    commTmpFolder = nodeConf.storage.dataDir.resolve("tmp").resolve("comm")
-    _ <- commTmpFolder.toFile
-          .exists()
-          .fold(
-            commTmpFolder.deleteDirectory[Task](),
-            Task.unit
+      // 3. create instances of typeclasses
+      metrics       = diagnostics.effects.metrics[F]
+      time          = effects.time[F]
+      commTmpFolder = nodeConf.storage.dataDir.resolve("tmp").resolve("comm")
+      _ <- commTmpFolder.toFile
+            .exists()
+            .fold(
+              commTmpFolder.deleteDirectory[F](),
+              ().pure[F]
+            )
+
+      transport <- {
+        implicit val s = scheduler
+        implicit val m = metrics
+        effects
+          .transportClient[F](
+            //TODO refactor to accept ProtocolClient, tls and storage configs
+            nodeConf.protocolClient.networkId,
+            nodeConf.tls.certificatePath,
+            nodeConf.tls.keyPath,
+            nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
+            nodeConf.protocolClient.grpcStreamChunkSize.toInt,
+            commTmpFolder,
+            grpcScheduler
           )
-          .toReaderT
+      }
 
-    clientChannelsCache <- Ref
-                            .of[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel]]](
-                              Map.empty
-                            )
-                            .toReaderT
-    transport <- effects
-                  .transportClient(
-                    //TODO refactor to accept ProtocolClient, tls and storage configs
-                    nodeConf.protocolClient.networkId,
-                    nodeConf.tls.certificatePath,
-                    nodeConf.tls.keyPath,
-                    nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
-                    nodeConf.protocolClient.grpcStreamChunkSize.toInt,
-                    commTmpFolder,
-                    clientChannelsCache
-                  )(grpcScheduler, log, metrics)
-                  .toReaderT
-    rpConnections <- effects.rpConnections[Task].toReaderT
-    initPeer      = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
-    peerNode      = rpConf(local, initPeer)
-    rpConfState   = effects.rpConfState[Task](peerNode)
-    peerNodeAsk   = effects.peerNodeAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    rpConfAsk     = effects.rpConfAsk[Task](Monad[Task], Sync[Task], rpConfState)
-    requestedBlocks <- Ref
-                        .of[Task, Map[BlockHash, engine.BlockRetriever.RequestState]](Map.empty)
-                        .toReaderT
-    commUtil = CommUtil.of[Task](
-      Concurrent[Task],
-      transport,
-      rpConfAsk,
-      rpConnections,
-      log,
-      time
-    )
-    blockRetriever = BlockRetriever.of[Task](
-      Monad[Task],
-      requestedBlocks,
-      log,
-      time,
-      rpConfAsk,
-      transport,
-      commUtil,
-      metrics
-    )
+      rpConnections   <- effects.rpConnections[F]
+      initPeer        = if (nodeConf.standalone) None else Some(nodeConf.protocolClient.bootstrap)
+      peerNode        = rpConf(local, initPeer)
+      rpConfState     = effects.rpConfState[F](peerNode)
+      peerNodeAsk     = effects.peerNodeAsk[F](Sync[F], rpConfState)
+      rpConfAsk       = effects.rpConfAsk[F](Sync[F], rpConfState)
+      requestedBlocks <- Ref.of[F, Map[BlockHash, engine.BlockRetriever.RequestState]](Map.empty)
 
-    kademliaRPC = effects.kademliaRPC(
-      nodeConf.protocolServer.networkId,
-      nodeConf.protocolClient.networkTimeout,
-      nodeConf.protocolServer.allowPrivateAddresses
-    )(
-      grpcScheduler,
-      peerNodeAsk,
-      metrics
-    )
-    kademliaStore = effects.kademliaStore(id)(kademliaRPC, metrics)
-    _             <- initPeer.fold(Task.unit)(p => kademliaStore.updateLastSeen(p)).toReaderT
-    nodeDiscovery = effects.nodeDiscovery(id)(Monad[Task], kademliaStore, kademliaRPC)
+      commUtil = {
+        implicit val tr = transport
+        implicit val cn = rpConfAsk
+        implicit val cc = rpConnections
+        implicit val ti = time
+        CommUtil.of[F]
+      }
 
-    /**
-      * We need to come up with a consistent way with folder creation. Some layers create folder on their own
-      * (if not available), others (like blockstore) relay on the structure being created for them (and will fail
-      * if it does not exist). For now this small fix should suffice, but we should unify this.
-      */
-    _ <- mkDirs(dataDir).toReaderT
-    _ <- mkDirs(blockdagStoragePath).toReaderT
-    dagConfig = BlockDagFileStorage.Config(
-      latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
-      latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
-      blockMetadataLogPath = blockdagStoragePath.resolve("blockMetadataLogPath"),
-      blockMetadataCrcPath = blockdagStoragePath.resolve("blockMetadataCrcPath"),
-      equivocationsTrackerLogPath = blockdagStoragePath.resolve("equivocationsTrackerLogPath"),
-      equivocationsTrackerCrcPath = blockdagStoragePath.resolve("equivocationsTrackerCrcPath"),
-      invalidBlocksLogPath = blockdagStoragePath.resolve("invalidBlocksLogPath"),
-      invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
-      blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
-      blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
-      checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
-      blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
-      mapSize = nodeConf.storage.lmdbMapSizeBlockdagstore,
-      latestMessagesLogMaxSizeFactor = 10
-    )
-    deployStorageConfig = LMDBDeployStorage.Config(
-      storagePath = deployStoragePath,
-      mapSize = nodeConf.storage.lmdbMapSizeDeploystore
-    )
-    casperConfig = RuntimeConf(casperStoragePath, storageSize)
-    cliConfig    = RuntimeConf(rspacePath, 800L * 1024L * 1024L) // 800MB for cli
+      blockRetriever = {
+        implicit val me = metrics
+        implicit val tr = transport
+        implicit val ti = time
+        implicit val cn = rpConfAsk
+        implicit val cu = commUtil
+        implicit val rb = requestedBlocks
+        BlockRetriever.of[F]
+      }
 
-    rpConfAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, RPConf](rpConfAsk)
-    rpConfStateEnv = effects.readerTMonadState[Task, NodeCallCtx, RPConf](
-      rpConfState
-    )
-    peerNodeAskEnv = effects.readerTApplicativeAsk[Task, NodeCallCtx, PeerNode](
-      peerNodeAsk
-    )
-    metricsEnv        = Metrics.readerTMetrics[Task, NodeCallCtx](metrics)
-    transportEnv      = transport.mapK(taskToEnv)
-    timeEnv           = time.mapK(taskToEnv)
-    logEnv            = log.mapK(taskToEnv)
-    eventLogEnv       = eventLog.mapK(taskToEnv)
-    nodeDiscoveryEnv  = nodeDiscovery.mapK(taskToEnv)
-    rpConnectionsEnv  = Cell.readerT[Task, NodeCallCtx, Connections](rpConnections)
-    commUtilEnv       = commUtil.mapK(taskToEnv)
-    blockRetrieverEnv = blockRetriever.mapK(taskToEnv)
-    taskableEnv = new Taskable[TaskEnv] {
-      override def toTask[A](fa: TaskEnv[A]): Task[A] = fa.run(NodeCallCtx.init)
-    }
-    localEnvironment = cats.mtl.instances.all.localReader[Task, NodeCallCtx]
-    eventBus         <- RchainEvents.readerTInstance[Task, NodeCallCtx]
-    result <- NodeRuntime.setupNodeProgramF[TaskEnv](
-               rpConnectionsEnv,
-               rpConfAskEnv,
-               rpConfStateEnv,
-               commUtilEnv,
-               blockRetrieverEnv,
-               nodeConf,
-               dagConfig,
-               casperConfig,
-               cliConfig,
-               blockstorePath,
-               lastFinalizedStoragePath,
-               rspaceScheduler,
-               scheduler,
-               eventBus,
-               deployStorageConfig
-             )(
-               metricsEnv,
-               transportEnv,
-               Sync[TaskEnv],
-               Concurrent[TaskEnv],
-               timeEnv,
-               logEnv,
-               eventLogEnv,
-               ContextShift[TaskEnv],
-               Parallel[TaskEnv],
-               taskableEnv,
-               localEnvironment
-             )
-    (
-      blockStore,
-      blockDagStorage,
-      runtimeCleanup,
-      packetHandler,
-      apiServers,
-      casperLoop,
-      updateForkChoiceLoop,
-      engineInit,
-      casperLaunch,
-      reportingCasper,
-      webApi,
-      adminWebApi
-    ) = result
+      kademliaRPC = {
+        implicit val s = grpcScheduler
+        implicit val m = metrics
+        implicit val p = peerNodeAsk
+        effects.kademliaRPC(
+          nodeConf.protocolServer.networkId,
+          nodeConf.protocolClient.networkTimeout,
+          nodeConf.protocolServer.allowPrivateAddresses
+        )
+      }
 
-    // 4. launch casper
-    _ <- casperLaunch.launch()
+      kademliaStore = {
+        implicit val k = kademliaRPC
+        implicit val m = metrics
+        effects.kademliaStore(id)
+      }
 
-    // 5. run the node program.
-    program = nodeProgram(
-      apiServers,
-      casperLoop,
-      updateForkChoiceLoop,
-      engineInit,
-      runtimeCleanup,
-      reportingCasper,
-      webApi,
-      adminWebApi
-    )(
-      logEnv,
-      timeEnv,
-      rpConfStateEnv,
-      rpConfAsk,
-      rpConfAskEnv,
-      peerNodeAskEnv,
-      metrics,
-      metricsEnv,
-      transportEnv,
-      kademliaStore,
-      nodeDiscovery,
-      nodeDiscoveryEnv,
-      rpConnections,
-      rpConnectionsEnv,
-      blockStore,
-      packetHandler,
-      eventLogEnv,
-      eventBus
-    )
-    _ <- handleUnrecoverableErrors(program)
-  } yield ()
+      _             <- initPeer.fold(().pure[F])(p => kademliaStore.updateLastSeen(p))
+      nodeDiscovery = effects.nodeDiscovery(id)(Sync[F], kademliaStore, kademliaRPC)
+
+      /**
+        * We need to come up with a consistent way with folder creation. Some layers create folder on their own
+        * (if not available), others (like blockstore) relay on the structure being created for them (and will fail
+        * if it does not exist). For now this small fix should suffice, but we should unify this.
+        */
+      _ <- mkDirs(dataDir)
+      _ <- mkDirs(blockdagStoragePath)
+
+      dagConfig = BlockDagFileStorage.Config(
+        latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
+        latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
+        blockMetadataLogPath = blockdagStoragePath.resolve("blockMetadataLogPath"),
+        blockMetadataCrcPath = blockdagStoragePath.resolve("blockMetadataCrcPath"),
+        equivocationsTrackerLogPath = blockdagStoragePath.resolve("equivocationsTrackerLogPath"),
+        equivocationsTrackerCrcPath = blockdagStoragePath.resolve("equivocationsTrackerCrcPath"),
+        invalidBlocksLogPath = blockdagStoragePath.resolve("invalidBlocksLogPath"),
+        invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
+        blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
+        blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
+        checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
+        blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
+        mapSize = nodeConf.storage.lmdbMapSizeBlockdagstore
+      )
+      deployStorageConfig = LMDBDeployStorage.Config(
+        storagePath = deployStoragePath,
+        mapSize = nodeConf.storage.lmdbMapSizeDeploystore
+      )
+      casperConfig = RuntimeConf(casperStoragePath, storageSize)
+      cliConfig    = RuntimeConf(rspacePath, 800L * 1024L * 1024L) // 800MB for cli
+
+      eventBus <- RchainEvents[F]
+
+      result <- {
+        implicit val tr = transport
+        implicit val ti = time
+        implicit val me = metrics
+        NodeRuntime.setupNodeProgram[F](
+          rpConnections,
+          rpConfAsk,
+          commUtil,
+          blockRetriever,
+          nodeConf,
+          dagConfig,
+          casperConfig,
+          cliConfig,
+          blockstorePath,
+          lastFinalizedStoragePath,
+          rspaceScheduler,
+          scheduler,
+          eventBus,
+          deployStorageConfig
+        )
+      }
+      (
+        blockStore,
+        runtimeCleanup,
+        packetHandler,
+        apiServers,
+        casperLoop,
+        updateForkChoiceLoop,
+        engineInit,
+        casperLaunch,
+        reportingCasper,
+        webApi,
+        adminWebApi
+      ) = result
+
+      // 4. launch casper
+      _ <- casperLaunch.launch()
+
+      // 5. run the node program.
+      program = {
+        implicit val tr = transport
+        implicit val cn = rpConfAsk
+        implicit val cc = rpConnections
+        implicit val cs = rpConfState
+        implicit val pn = peerNodeAsk
+        implicit val ks = kademliaStore
+        implicit val nd = nodeDiscovery
+        implicit val bs = blockStore
+        implicit val ph = packetHandler
+        implicit val eb = eventBus
+        implicit val mt = metrics
+        implicit val ti = time
+        nodeProgram(
+          apiServers,
+          casperLoop,
+          updateForkChoiceLoop,
+          engineInit,
+          runtimeCleanup,
+          reportingCasper,
+          webApi,
+          adminWebApi
+        )
+      }
+      _ <- handleUnrecoverableErrors(program)
+    } yield ()
+  }
 
   private def rpConf(local: PeerNode, bootstrapNode: Option[PeerNode]) =
     RPConf(
@@ -340,247 +293,227 @@ class NodeRuntime private[node] (
     )
 
   // TODO this should use existing algebra
-  private def mkDirs(path: Path): Task[Unit] =
-    Sync[Task].delay(Files.createDirectories(path))
+  private def mkDirs(path: Path): F[Unit] =
+    Sync[F].delay(Files.createDirectories(path))
 
   private def nodeProgram(
       apiServers: APIServers,
-      casperLoop: CasperLoop[TaskEnv],
-      updateForkChoiceLoop: CasperLoop[TaskEnv],
-      engineInit: EngineInit[TaskEnv],
-      runtimeCleanup: Cleanup[TaskEnv],
-      reportingCasper: ReportingCasper[TaskEnv],
-      webApi: WebApi[TaskEnv],
-      adminWebApi: AdminWebApi[TaskEnv]
+      casperLoop: CasperLoop[F],
+      updateForkChoiceLoop: CasperLoop[F],
+      engineInit: EngineInit[F],
+      runtimeCleanup: Cleanup[F],
+      reportingCasper: ReportingCasper[F],
+      webApi: WebApi[F],
+      adminWebApi: AdminWebApi[F]
   )(
       implicit
-      logEnv: Log[TaskEnv],
-      timeEnv: Time[TaskEnv],
-      rpConfState: RPConfState[TaskEnv],
-      rpConfAsk: RPConfAsk[Task],
-      rpConfAskEnv: RPConfAsk[TaskEnv],
-      peerNodeAsk: PeerNodeAsk[TaskEnv],
-      metrics: Metrics[Task],
-      metricsEnv: Metrics[TaskEnv],
-      transport: TransportLayer[TaskEnv],
-      kademliaStore: KademliaStore[Task],
-      nodeDiscoveryTask: NodeDiscovery[Task],
-      nodeDiscovery: NodeDiscovery[TaskEnv],
-      rpConnections: ConnectionsCell[Task],
-      rpConnectionsEnv: ConnectionsCell[TaskEnv],
-      blockStore: BlockStore[TaskEnv],
-      packetHandler: PacketHandler[TaskEnv],
-      eventLog: EventLog[TaskEnv],
-      consumer: EventConsumer[Task]
-  ): TaskEnv[Unit] = {
+      time: Time[F],
+      rpConfState: RPConfState[F],
+      rpConfAsk: RPConfAsk[F],
+      peerNodeAsk: PeerNodeAsk[F],
+      metrics: Metrics[F],
+      transport: TransportLayer[F],
+      kademliaStore: KademliaStore[F],
+      nodeDiscovery: NodeDiscovery[F],
+      rpConnections: ConnectionsCell[F],
+      blockStore: BlockStore[F],
+      packetHandler: PacketHandler[F],
+      consumer: EventConsumer[F]
+  ): F[Unit] = {
 
-    val info: TaskEnv[Unit] =
-      if (nodeConf.standalone) Log[TaskEnv].info(s"Starting stand-alone node.")
+    val info: F[Unit] =
+      if (nodeConf.standalone) Log[F].info(s"Starting stand-alone node.")
       else
-        Log[TaskEnv].info(
+        Log[F].info(
           s"Starting node that will bootstrap from ${nodeConf.protocolClient.bootstrap}"
         )
 
-    val dynamicIpCheck: TaskEnv[Unit] =
+    val dynamicIpCheck: F[Unit] =
       if (nodeConf.protocolServer.dynamicIp)
         for {
           local <- peerNodeAsk.ask
           newLocal <- WhoAmI
-                       .checkLocalPeerNode[TaskEnv](
+                       .checkLocalPeerNode[F](
                          nodeConf.protocolServer.port,
                          nodeConf.peersDiscovery.port,
                          local
                        )
-          _ <- newLocal.fold(Task.unit.toReaderT) { pn =>
+          _ <- newLocal.fold(().pure[F]) { pn =>
                 Connect
-                  .resetConnections[TaskEnv]
+                  .resetConnections[F]
                   .flatMap(kp(rpConfState.modify(_.copy(local = pn))))
               }
         } yield ()
-      else Task.unit.toReaderT
+      else ().pure[F]
 
-    val nodeDiscoveryLoop: TaskEnv[Unit] =
+    val nodeDiscoveryLoop: F[Unit] =
       for {
-        _ <- NodeDiscovery[TaskEnv].discover
-        _ <- Connect.findAndConnect[TaskEnv](Connect.connect[TaskEnv])
-        _ <- timeEnv.sleep(20.seconds)
+        _ <- NodeDiscovery[F].discover
+        _ <- Connect.findAndConnect[F](Connect.connect[F])
+        _ <- time.sleep(20.seconds)
       } yield ()
 
-    val clearConnectionsLoop: TaskEnv[Unit] =
+    val clearConnectionsLoop: F[Unit] =
       for {
         _ <- dynamicIpCheck
-        _ <- Connect.clearConnections[TaskEnv]
-        _ <- timeEnv.sleep(10.minutes)
+        _ <- Connect.clearConnections[F]
+        _ <- time.sleep(10.minutes)
       } yield ()
 
-    def waitForFirstConnection: TaskEnv[Unit] =
+    def waitForFirstConnection: F[Unit] =
       for {
-        _ <- timeEnv.sleep(10.second)
-        _ <- ConnectionsCell[TaskEnv].read
+        _ <- time.sleep(10.second)
+        _ <- ConnectionsCell[F].read
               .map(_.isEmpty)
-              .ifM(waitForFirstConnection, ().pure[TaskEnv])
+              .ifM(waitForFirstConnection, ().pure[F])
       } yield ()
 
     for {
-      _     <- info
-      local <- peerNodeAsk.ask
-      host  = local.endpoint.host
-      servers <- acquireServers(apiServers, reportingCasper, webApi, adminWebApi)(
-                  kademliaStore,
-                  nodeDiscoveryTask,
-                  rpConnections,
-                  Concurrent[Task],
-                  metrics,
-                  rpConfAsk,
-                  consumer
-                ).toReaderT
-      _ <- addShutdownHook(servers, runtimeCleanup, blockStore)
-      _ <- servers.externalApiServer.start.toReaderT
+      _       <- info
+      local   <- peerNodeAsk.ask
+      host    = local.endpoint.host
+      servers <- acquireServers(apiServers, reportingCasper, webApi, adminWebApi)
+      _       <- addShutdownHook(servers, runtimeCleanup, blockStore)
+      _       <- servers.externalApiServer.start
 
-      _ <- Log[TaskEnv].info(
+      _ <- Log[F].info(
             s"External API server started at ${nodeConf.apiServer.host}:${servers.externalApiServer.port}"
           )
-      _ <- servers.internalApiServer.start.toReaderT
+      _ <- servers.internalApiServer.start
 
-      _ <- Log[TaskEnv].info(
+      _ <- Log[F].info(
             s"Internal API server started at ${nodeConf.apiServer.host}:${servers.internalApiServer.port}"
           )
-      _ <- servers.kademliaRPCServer.start.toReaderT
+      _ <- servers.kademliaRPCServer.start
 
       // HTTP server is started immediately on `acquireServers`
-      _ <- Log[TaskEnv].info(
+      _ <- Log[F].info(
             s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
           )
 
-      _ <- Log[TaskEnv].info(
+      _ <- Log[F].info(
             s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
           )
 
-      _ <- Log[TaskEnv].info(
+      _ <- Log[F].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
       _ <- servers.transportServer
             .start(
-              pm => HandleMessages.handle[TaskEnv](pm).run(NodeCallCtx.init),
-              blob =>
-                packetHandler
-                  .handlePacket(blob.sender, blob.packet)
-                  .run(NodeCallCtx.init)
+              HandleMessages.handle[F](_),
+              blob => packetHandler.handlePacket(blob.sender, blob.packet)
             )
-            .toReaderT
       address = local.toAddress
-      _       <- Log[TaskEnv].info(s"Listening for traffic on $address.")
-      _       <- EventLog[TaskEnv].publish(Event.NodeStarted(address))
-      _ <- Task
-            .defer(nodeDiscoveryLoop.forever.run(NodeCallCtx.init))
+      _       <- Log[F].info(s"Listening for traffic on $address.")
+      _       <- EventLog[F].publish(Event.NodeStarted(address))
+      _ <- Sync[F]
+            .defer(nodeDiscoveryLoop.forever)
+            .toTask
             .executeOn(loopScheduler)
+            .fromTask
             .start
-            .toReaderT
-      _ <- Task
-            .defer(clearConnectionsLoop.forever.run(NodeCallCtx.init))
+      _ <- Sync[F]
+            .defer(clearConnectionsLoop.forever)
+            .toTask
             .executeOn(loopScheduler)
+            .fromTask
             .start
-            .toReaderT
-      _ <- if (nodeConf.standalone) ().pure[TaskEnv]
-          else Log[TaskEnv].info(s"Waiting for first connection.") >> waitForFirstConnection
-      _ <- Concurrent[TaskEnv].start(engineInit)
-      _ <- Task
-            .defer(casperLoop.forever.run(NodeCallCtx.init))
+      _ <- if (nodeConf.standalone) ().pure[F]
+          else Log[F].info(s"Waiting for first connection.") >> waitForFirstConnection
+      _ <- Concurrent[F].start(engineInit)
+      _ <- Sync[F]
+            .defer(casperLoop.forever)
+            .toTask
             .executeOn(loopScheduler)
+            .fromTask
             .start
-            .toReaderT
-      _ <- Task
-            .defer(updateForkChoiceLoop.forever.run(NodeCallCtx.init))
+      _ <- Sync[F]
+            .defer(updateForkChoiceLoop.forever)
+            .toTask
             .executeOn(loopScheduler)
-            .toReaderT
+            .fromTask
     } yield ()
   }
 
   def addShutdownHook(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv],
-      blockStore: BlockStore[TaskEnv]
-  )(implicit log: Log[TaskEnv]): TaskEnv[Unit] =
-    Task
-      .delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore)))
-      .as(())
-      .toReaderT
+      runtimeCleanup: Cleanup[F],
+      blockStore: BlockStore[F]
+  ): F[Unit] =
+    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore))).void
 
   def clearResources(
       servers: Servers,
-      runtimeCleanup: Cleanup[TaskEnv],
-      blockStore: BlockStore[TaskEnv]
-  )(implicit log: Log[TaskEnv]): Unit =
-    (for {
-      _ <- Log[TaskEnv].info("Shutting down API servers...")
-      _ <- servers.externalApiServer.stop.toReaderT
-      _ <- servers.internalApiServer.stop.toReaderT
-      _ <- Log[TaskEnv].info("Shutting down Kademlia RPC server...")
-      _ <- servers.kademliaRPCServer.stop.toReaderT
-      _ <- Log[TaskEnv].info("Shutting down transport layer...")
-      _ <- servers.transportServer.stop().toReaderT
-      _ <- Log[TaskEnv].info("Shutting down HTTP server....")
-      _ <- Task.delay(Kamon.stopAllReporters()).toReaderT
-      _ <- servers.httpServer.cancel.attempt.toReaderT
+      runtimeCleanup: Cleanup[F],
+      blockStore: BlockStore[F]
+  ): Unit = {
+    val shutdown = for {
+      _ <- Log[F].info("Shutting down API servers...")
+      _ <- servers.externalApiServer.stop
+      _ <- servers.internalApiServer.stop
+      _ <- Log[F].info("Shutting down Kademlia RPC server...")
+      _ <- servers.kademliaRPCServer.stop
+      _ <- Log[F].info("Shutting down transport layer...")
+      _ <- servers.transportServer.stop()
+      _ <- Log[F].info("Shutting down HTTP server....")
+      _ <- Sync[F].delay(Kamon.stopAllReporters())
+      _ <- servers.httpServer.cancel.attempt
       _ <- runtimeCleanup.close()
-      _ <- Log[TaskEnv].info("Bringing BlockStore down ...")
+      _ <- Log[F].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
-      _ <- Log[TaskEnv].info("Goodbye.")
-    } yield ()).run(NodeCallCtx.init).unsafeRunSync(scheduler)
+      _ <- Log[F].info("Goodbye.")
+    } yield ()
 
-  private def exit0: Task[Unit] = Task.delay(System.exit(0))
+    shutdown.toTask.unsafeRunSync(scheduler)
+  }
+
+  private def exit0: F[Unit] = Sync[F].delay(System.exit(0))
 
   /**
     * Handles unrecoverable errors in program. Those are errors that should not happen in properly
     * configured enviornment and they mean immediate termination of the program
     */
-  private def handleUnrecoverableErrors(prog: TaskEnv[Unit]): TaskEnv[Unit] =
-    prog.mapF(_.onErrorHandleWith { th =>
-      log.error("Caught unhandable error. Exiting. Stacktrace below.") >> Task.delay {
-        th.printStackTrace()
-      }
-    } >> exit0.as(Right(())))
+  private def handleUnrecoverableErrors(prog: F[Unit]): F[Unit] =
+    prog.handleErrorWith { ex =>
+      Log[F].error("Caught unhandable error. Exiting. Stacktrace below.", ex)
+    } >> exit0.void
 
   case class Servers(
-      kademliaRPCServer: Server[Task],
-      transportServer: TransportServer,
-      externalApiServer: Server[Task],
-      internalApiServer: Server[Task],
-      httpServer: Fiber[Task, Unit],
-      adminHttpServer: Fiber[Task, Unit]
+      kademliaRPCServer: Server[F],
+      transportServer: TransportServer[F],
+      externalApiServer: Server[F],
+      internalApiServer: Server[F],
+      httpServer: Fiber[F, Unit],
+      adminHttpServer: Fiber[F, Unit]
   )
 
   def acquireServers(
       apiServers: APIServers,
-      reportingCasper: ReportingCasper[TaskEnv],
-      webApi: WebApi[TaskEnv],
-      adminWebApi: AdminWebApi[TaskEnv]
+      reportingCasper: ReportingCasper[F],
+      webApi: WebApi[F],
+      adminWebApi: AdminWebApi[F]
   )(
       implicit
-      kademliaStore: KademliaStore[Task],
-      nodeDiscovery: NodeDiscovery[Task],
-      connectionsCell: ConnectionsCell[Task],
-      concurrent: Concurrent[Task],
-      metrics: Metrics[Task],
-      rPConfAsk: RPConfAsk[Task],
-      consumer: EventConsumer[Task]
-  ): Task[Servers] = {
+      kademliaStore: KademliaStore[F],
+      nodeDiscovery: NodeDiscovery[F],
+      connectionsCell: ConnectionsCell[F],
+      metrics: Metrics[F],
+      rPConfAsk: RPConfAsk[F],
+      consumer: EventConsumer[F]
+  ): F[Servers] = {
     implicit val s: Scheduler = scheduler
     for {
       kademliaRPCServer <- discovery
                             .acquireKademliaRPCServer(
                               nodeConf.protocolServer.networkId,
                               nodeConf.peersDiscovery.port,
-                              KademliaHandleRPC.handlePing[Task],
-                              KademliaHandleRPC.handleLookup[Task]
-                            )(grpcScheduler)
+                              KademliaHandleRPC.handlePing[F],
+                              KademliaHandleRPC.handleLookup[F]
+                            )
 
-      transportServer <- Task
+      transportServer <- Sync[F]
                           .delay(
                             GrpcTransportServer.acquireServer(
-                              //conf.protocolServer
-                              //conf.tls
-                              //conf.storage
                               nodeConf.protocolServer.networkId,
                               nodeConf.protocolServer.port,
                               nodeConf.tls.certificatePath,
@@ -589,11 +522,10 @@ class NodeRuntime private[node] (
                               nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
                               nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
                               nodeConf.protocolServer.maxMessageConsumers
-                            )(grpcScheduler, rPConfAsk, log, metrics)
+                            )
                           )
 
-      externalApiServer <- acquireExternalServer[Task](
-                            //conf.apiServer
+      externalApiServer <- acquireExternalServer[F](
                             nodeConf.apiServer.host,
                             nodeConf.apiServer.portGrpcExternal,
                             grpcScheduler,
@@ -606,7 +538,7 @@ class NodeRuntime private[node] (
                             nodeConf.apiServer.maxConnectionAge,
                             nodeConf.apiServer.maxConnectionAgeGrace
                           )
-      internalApiServer <- acquireInternalServer(
+      internalApiServer <- acquireInternalServer[F](
                             nodeConf.apiServer.host,
                             nodeConf.apiServer.portGrpcInternal,
                             grpcScheduler,
@@ -623,7 +555,7 @@ class NodeRuntime private[node] (
                           )
 
       prometheusReporter = new NewPrometheusReporter()
-      httpServerFiber = aquireHttpServer(
+      httpServerFiber = aquireHttpServer[F](
         nodeConf.apiServer.enableReporting,
         nodeConf.apiServer.host,
         nodeConf.apiServer.portHttp,
@@ -631,16 +563,16 @@ class NodeRuntime private[node] (
         reportingCasper,
         webApi,
         nodeConf.apiServer.maxConnectionIdle
-      )(nodeDiscovery, connectionsCell, concurrent, rPConfAsk, consumer, s, log)
+      )
       httpFiber <- httpServerFiber.start
-      adminHttpServerFiber = aquireAdminHttpServer(
+      adminHttpServerFiber = aquireAdminHttpServer[F](
         nodeConf.apiServer.host,
         nodeConf.apiServer.portAdminHttp,
         adminWebApi,
         nodeConf.apiServer.maxConnectionIdle
-      )(concurrent, consumer, s)
+      )
       adminHttpFiber <- adminHttpServerFiber.start
-      _ <- Task.delay {
+      _ <- Sync[F].delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
             if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
             if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
@@ -662,16 +594,13 @@ class NodeRuntime private[node] (
 final case class NodeCallCtx(trace: TraceId) {
   def next: NodeCallCtx = this.copy(trace = Trace.next)
 }
+
 object NodeCallCtx {
   def init: NodeCallCtx = NodeCallCtx(Trace.next)
 }
 
 object NodeRuntime {
-  type TaskEnv[A]             = ReaderT[Task, NodeCallCtx, A]
   type LocalEnvironment[F[_]] = ApplicativeLocal[F, NodeCallCtx]
-
-  val taskToEnv: Task ~> TaskEnv = λ[Task ~> TaskEnv](ReaderT.liftF(_))
-  val envToTask: TaskEnv ~> Task = λ[TaskEnv ~> Task](_.run(NodeCallCtx.init))
 
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
@@ -681,14 +610,89 @@ object NodeRuntime {
       size: Long
   )
 
-  def apply(
+  def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log: EventLog](
       nodeConf: NodeConf,
       kamonConf: Config
-  )(implicit scheduler: Scheduler, log: Log[Task], eventLog: EventLog[Task]): Task[NodeRuntime] =
+  )(implicit scheduler: Scheduler): F[Unit] = {
+
+    /**
+      * Current implementation of Span uses ReaderT layer to hold the local state for tracing.
+      *
+      * To be able to instantiate NodeRuntime dependencies we need ReaderT implementation for each of them.
+      * If it's possible to construct FunctorK implementation like we have for Log then this can be used as a
+      * more general implementation.
+      */
+    type TaskEnv[A] = ReaderT[F, NodeCallCtx, A]
+
+    // Conversions from/to ReaderT and F
+    val taskToEnv: F ~> TaskEnv = λ[F ~> TaskEnv](ReaderT.liftF(_))
+    val envToTask: TaskEnv ~> F = λ[TaskEnv ~> F](x => x.run(NodeCallCtx.init))
+
+    implicit val localEnvironment = cats.mtl.instances.all.localReader[F, NodeCallCtx]
+
+    /**
+      * Implementation for ConcurrentEffect for ReaderT cannot be constructed automatically so it's
+      * wired up here from existing Concurrent[ReaderT[F, S, ?]] and ConcurrentEffect[F] implementations.
+      *
+      * `runCancelable`` and `runAsync` are newly provided.
+      */
+    implicit val ce = new ConcurrentEffect[TaskEnv] {
+      val c = Concurrent[TaskEnv]
+      val t = ConcurrentEffect[F]
+
+      // ConcurrentEffect
+      override def runCancelable[A](fa: TaskEnv[A])(
+          cb: Either[Throwable, A] => IO[Unit]
+      ): SyncIO[CancelToken[TaskEnv]] =
+        t.runCancelable(envToTask(fa))(cb).map(taskToEnv(_))
+      override def runAsync[A](
+          fa: TaskEnv[A]
+      )(cb: Either[Throwable, A] => IO[Unit]): SyncIO[Unit] =
+        t.runAsync(envToTask(fa))(cb)
+      // Async
+      override def async[A](k: (Either[Throwable, A] => Unit) => Unit): TaskEnv[A] = c.async(k)
+      override def asyncF[A](k: (Either[Throwable, A] => Unit) => TaskEnv[Unit]): TaskEnv[A] =
+        c.asyncF(k)
+      // Concurrent
+      override def start[A](fa: TaskEnv[A]): TaskEnv[Fiber[TaskEnv, A]] = c.start(fa)
+      override def racePair[A, B](
+          fa: TaskEnv[A],
+          fb: TaskEnv[B]
+      ): TaskEnv[Either[(A, Fiber[TaskEnv, B]), (Fiber[TaskEnv, A], B)]] = c.racePair(fa, fb)
+      override def suspend[A](thunk: => TaskEnv[A]): TaskEnv[A]          = c.suspend(thunk)
+      override def bracketCase[A, B](acquire: TaskEnv[A])(use: A => TaskEnv[B])(
+          release: (A, ExitCase[Throwable]) => TaskEnv[Unit]
+      ): TaskEnv[B]                                        = c.bracketCase(acquire)(use)(release)
+      override def raiseError[A](e: Throwable): TaskEnv[A] = c.raiseError(e)
+      override def handleErrorWith[A](fa: TaskEnv[A])(f: Throwable => TaskEnv[A]): TaskEnv[A] =
+        c.handleErrorWith(fa)(f)
+      override def flatMap[A, B](fa: TaskEnv[A])(f: A => TaskEnv[B]): TaskEnv[B] =
+        c.flatMap(fa)(f)
+      override def tailRecM[A, B](a: A)(f: A => TaskEnv[Either[A, B]]): TaskEnv[B] =
+        c.tailRecM(a)(f)
+      override def pure[A](x: A): TaskEnv[A] = c.pure(x)
+    }
+
+    /**
+      * ReaderT instances for NodeRuntime dependencies. Implementations for Log and EventLog are created "manually"
+      * although they can be generated with cats.tagless @autoFunctorK macros but support is missing for IntelliJ.
+      * https://github.com/typelevel/cats-tagless/issues/60 (Cheers, Marcin!!)
+      */
+    implicit val lg: Log[TaskEnv]       = Log[F].mapK(taskToEnv)
+    implicit val el: EventLog[TaskEnv]  = EventLog[F].mapK(taskToEnv)
+    implicit val tm: Timer[TaskEnv]     = Timer[F].mapK(taskToEnv)
+    implicit val mn: Monixable[TaskEnv] = Monixable[F].mapK(taskToEnv, NodeCallCtx.init)
+
     for {
-      id      <- NodeEnvironment.create(nodeConf)
-      runtime <- Task.delay(new NodeRuntime(nodeConf, kamonConf, id, scheduler))
-    } yield runtime
+      id <- NodeEnvironment.create[F](nodeConf)
+
+      // Create NodeRuntime instance
+      runtime = new NodeRuntime[TaskEnv](nodeConf, kamonConf, id, scheduler)
+
+      // Run reader layer with initial state
+      _ <- runtime.main.run(NodeCallCtx.init)
+    } yield ()
+  }
 
   trait Cleanup[F[_]] {
     def close(): F[Unit]
@@ -714,10 +718,9 @@ object NodeRuntime {
         } yield ()
     }
 
-  def setupNodeProgramF[F[_]: Metrics: TransportLayer: Sync: Concurrent: Time: Log: EventLog: ContextShift: Parallel: Taskable: LocalEnvironment](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
-      rpConfState: MonadState[F, RPConf],
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
@@ -733,7 +736,6 @@ object NodeRuntime {
   ): F[
     (
         BlockStore[F],
-        BlockDagStorage[F],
         Cleanup[F],
         PacketHandler[F],
         APIServers,
@@ -807,29 +809,32 @@ object NodeRuntime {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
       }
-      lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](
-        conf.casper.faultToleranceThreshold
-      )(
-        Sync[F],
-        Log[F],
-        Concurrent[F],
-        blockStore,
-        blockDagStorage,
-        oracle,
-        deployStorage
-      )
-      synchronyConstraintChecker = SynchronyConstraintChecker[F](
-        conf.casper.synchronyConstraintThreshold
-      )(Sync[F], blockStore, Log[F])
-      lastFinalizedHeightConstraintChecker = LastFinalizedHeightConstraintChecker[F](
-        conf.casper.heightConstraintThreshold
-      )(Sync[F], lastFinalizedStorage, blockStore, Log[F])
-      estimator = Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)(
-        Sync[F],
-        Log[F],
-        Metrics[F],
-        span
-      )
+      lastFinalizedBlockCalculator = {
+        implicit val bs = blockStore
+        implicit val da = blockDagStorage
+        implicit val or = oracle
+        implicit val ds = deployStorage
+        LastFinalizedBlockCalculator[F](
+          conf.casper.faultToleranceThreshold
+        )
+      }
+      synchronyConstraintChecker = {
+        implicit val bs = blockStore
+        SynchronyConstraintChecker[F](
+          conf.casper.synchronyConstraintThreshold
+        )
+      }
+      lastFinalizedHeightConstraintChecker = {
+        implicit val bs = blockStore
+        implicit val lf = lastFinalizedStorage
+        LastFinalizedHeightConstraintChecker[F](
+          conf.casper.heightConstraintThreshold
+        )
+      }
+      estimator = {
+        implicit val sp = span
+        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
+      }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -914,32 +919,29 @@ object NodeRuntime {
         )
       }*/
       blockApiLock <- Semaphore[F](1)
-      apiServers = NodeRuntime
-        .acquireAPIServers[F](
-          evalRuntime,
-          blockApiLock,
-          scheduler,
-          conf.apiServer.maxBlocksLimit,
-          conf.devMode
-        )(
-          blockStore,
-          oracle,
-          Concurrent[F],
-          Metrics[F],
-          span,
-          engineCell,
-          Log[F],
-          Taskable[F],
-          synchronyConstraintChecker,
-          lastFinalizedHeightConstraintChecker,
-          reportingCasper
-        )
+      apiServers = {
+        implicit val bs = blockStore
+        implicit val ec = engineCell
+        implicit val or = oracle
+        implicit val sp = span
+        implicit val sc = synchronyConstraintChecker
+        implicit val lh = lastFinalizedHeightConstraintChecker
+        implicit val rc = reportingCasper
+        NodeRuntime
+          .acquireAPIServers[F](
+            evalRuntime,
+            blockApiLock,
+            scheduler,
+            conf.apiServer.maxBlocksLimit,
+            conf.devMode
+          )
+      }
       casperLoop = {
         implicit val br = blockRetriever
         for {
           engine <- engineCell.read
           // Fetch dependencies from CasperBuffer
-          _ <- engine.withCasper(_.fetchDependencies, Applicative[F].unit)
+          _ <- engine.withCasper(_.fetchDependencies, ().pure[F])
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
@@ -979,7 +981,6 @@ object NodeRuntime {
       }
     } yield (
       blockStore,
-      blockDagStorage,
       runtimeCleanup,
       packetHandler,
       apiServers,
@@ -998,7 +999,7 @@ object NodeRuntime {
       deploy: DeployServiceV1GrpcMonix.DeployService
   )
 
-  def acquireAPIServers[F[_]](
+  def acquireAPIServers[F[_]: Monixable](
       runtime: Runtime[F],
       blockApiLock: Semaphore[F],
       scheduler: Scheduler,
@@ -1013,16 +1014,15 @@ object NodeRuntime {
       span: Span[F],
       engineCell: EngineCell[F],
       logF: Log[F],
-      taskable: Taskable[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
       lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
       reportingCasper: ReportingCasper[F]
   ): APIServers = {
     implicit val s: Scheduler = scheduler
-    val repl                  = ReplGrpcService.instance(runtime, s)
+    val repl                  = ReplGrpcService(runtime, s)
     val deploy =
-      DeployGrpcServiceV1.instance(blockApiLock, apiMaxBlocksLimit, reportingCasper, devMode)
-    val propose = ProposeGrpcServiceV1.instance(blockApiLock)
+      DeployGrpcServiceV1(apiMaxBlocksLimit, reportingCasper, devMode)
+    val propose = ProposeGrpcServiceV1(blockApiLock)
     APIServers(repl, propose, deploy)
   }
 }

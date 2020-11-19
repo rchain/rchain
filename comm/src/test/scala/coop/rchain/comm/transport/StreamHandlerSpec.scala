@@ -184,7 +184,7 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside with BeforeAnd
     val packet  = Packet(typeId, ByteString.copyFrom(content))
     val sender  = peerNode("sender")
     val blob    = Blob(sender, packet)
-    Chunker.chunkIt(networkId, blob, messageSize)
+    Chunker.chunkIt[Task](networkId, blob, messageSize)
   }
 
   private def peerNode(name: String): PeerNode =
