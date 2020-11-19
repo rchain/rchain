@@ -168,8 +168,6 @@ object Validate {
     (for {
       _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
       _ <- EitherT(Validate.blockHash(block))
-      _ <- EitherT.liftF(Span[F].mark("before-missing-blocks-validation"))
-      _ <- EitherT(Validate.missingBlocks(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
@@ -191,25 +189,6 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
       s <- EitherT(Validate.shardIdentifier(block, shardId))
     } yield s).value
-
-  /**
-    * Works with either efficient justifications or full explicit justifications
-    */
-  def missingBlocks[F[_]: Monad: Log](
-      block: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[ValidBlockProcessing] = {
-    import cats.instances.list._
-
-    for {
-      parentsPresent <- ProtoUtil.parentHashes(block).forallM(p => dag.contains(p))
-      justificationsPresent <- block.justifications
-                                .forallM(j => dag.contains(j.latestBlockHash))
-      result = if (parentsPresent && justificationsPresent) {
-        BlockStatus.valid.asRight[BlockError]
-      } else BlockStatus.missingBlocks.asLeft[ValidBlock]
-    } yield result
-  }
 
   /**
     * Validate no deploy with the same sig has been produced in the chain
