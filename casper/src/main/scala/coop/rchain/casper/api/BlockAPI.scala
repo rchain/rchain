@@ -116,6 +116,42 @@ object BlockAPI {
     )
   }
 
+  // Get result of the propose
+  def getProposeResult[F[_]: Concurrent: Log](
+      proposerState: Ref[F, ProposerState[F]]
+  ): F[ApiErr[String]] =
+    for {
+      pr <- proposerState.get.map(_.currProposeResult)
+      r <- pr match {
+            // return latest propose result
+            case None =>
+              for {
+                result <- proposerState.get.map(
+                           _.latestProposeResult.getOrElse(ProposeResult.notEnoughBlocks, None)
+                         )
+                msg = result._2 match {
+                  case Some(block) =>
+                    s"Success! Block ${block.blockHash.base16String} created and added."
+                      .asRight[Error]
+                  case None => s"${result._1.proposeStatus.show}".asLeft[String]
+                }
+              } yield msg
+            // wait for current propose to finish and return result
+            case Some(resultDef) =>
+              for {
+                // this will hang API call until propose is complete, and then return result
+                // TODO cancel this get when connection drops
+                result <- resultDef.get
+                msg = result._2 match {
+                  case Some(block) =>
+                    s"Success! Block ${block.blockHash.base16String} created and added."
+                      .asRight[Error]
+                  case None => s"${result._1.proposeStatus.show}".asLeft[String]
+                }
+              } yield msg
+          }
+    } yield r
+
   def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
       listeningName: Par,
