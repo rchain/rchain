@@ -30,7 +30,7 @@ object Dependencies {
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
-  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.2"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.4.4"
   val guava               = "com.google.guava"            % "guava"                     % "30.0-jre"
