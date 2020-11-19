@@ -1,33 +1,25 @@
 package coop.rchain.node.web
 
-import cats.data.ReaderT
-import io.circe.generic.semiauto._
-import io.circe._
-import io.circe.syntax._
-import org.http4s.circe._
 import com.google.protobuf.ByteString
-import org.http4s.{EntityBody, _}
-import org.scalatest._
-import coop.rchain.crypto.codec._
-import coop.rchain.crypto.signatures.Signed
-import coop.rchain.node.NodeRuntime
 import coop.rchain.casper.protocol.{
   BlockInfo,
   BondInfo,
-  DeployData,
   DeployInfo,
   JustificationInfo,
   LightBlockInfo
 }
-import coop.rchain.node.NodeRuntime.TaskEnv
-import coop.rchain.node.api.WebApi
+import coop.rchain.crypto.codec._
 import coop.rchain.node.api.WebApi._
+import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.shared.Log
-import coop.rchain.node.api.AdminWebApi
-import coop.rchain.node.api.AdminWebApi._
 import io.circe.Decoder.Result
+import io.circe._
+import io.circe.generic.semiauto._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.http4s._
+import org.http4s.circe._
+import org.scalatest._
 
 class WebApiRoutesTest extends FlatSpec with Matchers {
   val blockHash        = "blockhash"
@@ -107,12 +99,8 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   val deployRet        = "Success!\\nDeployId is: 111111111111"
   val dataAtLength     = 5
 
-  implicit class RichTask[A](t: Task[A]) {
-    def toReaderT: TaskEnv[A] =
-      ReaderT.liftF(t)
-  }
-  def genWebApi: WebApi[TaskEnv] = new WebApi[TaskEnv] {
-    override def status: TaskEnv[WebApi.ApiStatus] =
+  def genWebApi: WebApi[Task] = new WebApi[Task] {
+    override def status: Task[WebApi.ApiStatus] =
       Task
         .delay(
           ApiStatus(
@@ -120,23 +108,21 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
             message = "OK"
           )
         )
-        .toReaderT
 
     override def prepareDeploy(
         request: Option[WebApi.PrepareRequest]
-    ): TaskEnv[WebApi.PrepareResponse] =
+    ): Task[WebApi.PrepareResponse] =
       Task
         .delay({
           val names     = prepareNames
           val seqNumber = prepareSeqNumber
           WebApi.PrepareResponse(names, seqNumber)
         })
-        .toReaderT
 
-    override def deploy(request: DeployRequest): TaskEnv[String] =
-      Task.delay(deployRet).toReaderT
+    override def deploy(request: DeployRequest): Task[String] =
+      Task.delay(deployRet)
 
-    override def listenForDataAtName(request: WebApi.DataRequest): TaskEnv[WebApi.DataResponse] =
+    override def listenForDataAtName(request: WebApi.DataRequest): Task[WebApi.DataResponse] =
       Task
         .delay({
           val exprs = exPRS
@@ -145,35 +131,34 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
           val data           = List[WebApi.RhoExprWithBlock](exprsWithBlock)
           WebApi.DataResponse(data, dataAtLength)
         })
-        .toReaderT
 
-    override def lastFinalizedBlock: TaskEnv[BlockInfo] = Task.delay(blockInfo).toReaderT
+    override def lastFinalizedBlock: Task[BlockInfo] = Task.delay(blockInfo)
 
-    override def getBlock(hash: String): TaskEnv[BlockInfo] = Task.delay(blockInfo).toReaderT
+    override def getBlock(hash: String): Task[BlockInfo] = Task.delay(blockInfo)
 
-    override def getBlocks(depth: Int): TaskEnv[List[LightBlockInfo]] =
-      Task.delay(List(lightBlock)).toReaderT
+    override def getBlocks(depth: Int): Task[List[LightBlockInfo]] =
+      Task.delay(List(lightBlock))
 
-    override def findDeploy(deployId: String): TaskEnv[LightBlockInfo] =
-      Task.delay(lightBlock).toReaderT
+    override def findDeploy(deployId: String): Task[LightBlockInfo] =
+      Task.delay(lightBlock)
 
     // TODO: https://rchain.atlassian.net/browse/RCHAIN-4018
     override def exploratoryDeploy(
         term: String,
         blockHash: Option[String],
         usePreStateHash: Boolean
-    ): TaskEnv[ExploratoryDeployResponse] = ???
+    ): Task[ExploratoryDeployResponse] = ???
 
     override def getBlocksByHeights(
         startBlockNumber: Long,
         endBlockNumber: Long
-    ): TaskEnv[List[LightBlockInfo]] = ???
+    ): Task[List[LightBlockInfo]] = ???
 
-    override def isFinalized(hash: String): TaskEnv[Boolean] = ???
+    override def isFinalized(hash: String): Task[Boolean] = ???
   }
 
-  def genAdminWebApi: AdminWebApi[TaskEnv] = new AdminWebApi[TaskEnv] {
-    override def propose: TaskEnv[String] = Task.delay("").toReaderT
+  def genAdminWebApi: AdminWebApi[Task] = new AdminWebApi[Task] {
+    override def propose: Task[String] = Task.delay("")
   }
 
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {
@@ -200,14 +185,14 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   implicit val decodeDataResponse: Decoder[DataResponse]         = deriveDecoder[DataResponse]
   implicit val decodePrepareResponse: Decoder[PrepareResponse]   = deriveDecoder[PrepareResponse]
   implicit val encodePrepareRequest: Encoder[PrepareRequest]     = deriveEncoder[PrepareRequest]
-  implicit val et                                                = NodeRuntime.envToTask
   implicit val log                                               = new Log.NOPLog[Task]
+  implicit val taskId                                            = natId[Task]
 
   val api   = genWebApi
-  val route = WebApiRoutes.service[Task, TaskEnv](api)
+  val route = WebApiRoutes.service[Task, Task](api)
 
   val adminApi   = genAdminWebApi
-  val adminRoute = AdminWebApiRoutes.service[Task, TaskEnv](adminApi)
+  val adminRoute = AdminWebApiRoutes.service[Task, Task](adminApi)
 
   "GET getBlock" should "detailed block info" in {
     val resp     = route.run(Request[Task](method = Method.GET, uri = Uri(path = "block/" + blockHash)))
