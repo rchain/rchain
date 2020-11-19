@@ -1,18 +1,21 @@
 package coop.rchain.casper.api
 
 import cats.Monad
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
+import coop.rchain.casper.blocks.proposer.{ProposeResult, Proposer}
+import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
@@ -31,6 +34,7 @@ import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
+import fs2.concurrent.Queue
 
 import scala.collection.immutable
 
@@ -88,81 +92,26 @@ object BlockAPI {
     ))
   }
 
-  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
-      blockApiLock: Semaphore[F],
+  def createBlock[F[_]: Concurrent: EngineCell: Log](
+      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
       printUnmatchedSends: Boolean = false
   ): F[ApiErr[String]] = {
-    def logWarning(err: String) = Log[F].warn(s"Error: $err") >> err.asLeft[String].pure[F]
+    def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
+    def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
+    def logWarn(msg: String)   = Log[F].warn(msg) >> msg.asLeft[String].pure[F]
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[String]](
-        casper => {
-          Sync[F].bracket(blockApiLock.tryAcquire) {
-            case true => {
-              implicit val ms     = BlockAPIMetricsSource
-              val syncCheckFailed = logWarning("Must wait for more blocks from other validators")
-              val lfhcCheckFailed = logWarning("Too far ahead of the last finalized block")
-              val validatorCheckFailed = new IllegalStateException(
-                "Read only node cannot create a block"
-              ).raiseError[F, PublicKey]
-              for {
-                maybeValidator  <- casper.getValidator
-                validatorPubKey <- maybeValidator.fold(validatorCheckFailed)(_.pure[F])
-                validator       = ByteString.copyFrom(validatorPubKey.bytes)
-                genesis         <- casper.getApprovedBlock
-                dag             <- casper.blockDag
-                runtimeManager  <- casper.getRuntimeManager
-                checkSynchronyConstraint = SynchronyConstraintChecker[F]
-                  .check(
-                    dag,
-                    runtimeManager,
-                    genesis,
-                    validator
-                  )
-                checkLastFinalizedHeightConstraint = LastFinalizedHeightConstraintChecker[F]
-                  .check(dag, genesis, validator)
-                createBlock = (for {
-                  _          <- Metrics[F].incrementCounter("propose")
-                  maybeBlock <- casper.createBlock
-                  result <- maybeBlock match {
-                             case err: NoBlock =>
-                               s"Error while creating block: $err".asLeft[String].pure[F]
-                             case Created(block) =>
-                               Log[F]
-                                 .info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
-                                 casper.addBlock(block) >>= (addResponse(
-                                 _,
-                                 block,
-                                 casper,
-                                 printUnmatchedSends
-                               ))
-                           }
-                } yield result)
-                  .timer("propose-total-time")
-                  .attempt
-                  .map(
-                    _.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight
-                  )
-                  .flatMap {
-                    case Left(error) =>
-                      logWarning(error) <* Metrics[F].incrementCounter("propose-failed")
-                    case result => result.pure[F]
-                  }
-                result <- checkSynchronyConstraint.ifM(
-                           checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
-                           syncCheckFailed
-                         )
-              } yield result
-            }
-            case false =>
-              "Error: There is another propose in progress.".asLeft[String].pure[F]
-          } {
-            case true =>
-              blockApiLock.release
-            case false =>
-              ().pure[F]
-          }
-        },
-        default = logWarning("Could not create block, casper instance was not available yet.")
+        casper =>
+          for {
+            proposeIDDef <- Deferred[F, Option[Int]]
+            _            <- proposerQueue.enqueue1((casper, proposeIDDef))
+            // wait till propose pipe assign proposeID to propose and resolve proposeIDDef
+            r <- proposeIDDef.get.flatMap {
+                  case Some(r) => logSucess(s"Success: proposing block with seqNum ${r}")
+                  case None    => logDebug(s"Failure: another propose is in progress")
+                }
+          } yield r,
+        default = logWarn("Failure: casper instance is not available.")
       )
     )
   }
@@ -699,47 +648,47 @@ object BlockAPI {
       case None             => none[BlockMessage]
     }
 
-  private def addResponse[F[_]: Concurrent](
-      status: ValidBlockProcessing,
-      block: BlockMessage,
-      casper: MultiParentCasper[F],
-      printUnmatchedSends: Boolean
-  ): F[ApiErr[String]] =
-    status
-      .map { _ =>
-        val hash    = block.blockHash.base16String
-        val deploys = block.body.deploys.map(_.deploy)
-        val maybeUnmatchedSendsOutputF =
-          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
-          else none[String].pure[F]
-        maybeUnmatchedSendsOutputF >>= (
-            maybeOutput =>
-              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
-                .asRight[Error]
-                .pure[F]
-          )
-      }
-      .leftMap {
-        case _: InvalidBlock =>
-          s"Failure! Invalid block: $status".asLeft[String].pure[F]
-        case BlockError.BlockException(ex) =>
-          s"Error during block processing: $ex".asLeft[String].pure[F]
-        case BlockError.Processed =>
-          "No action taken since other thread has already processed the block."
-            .asLeft[String]
-            .pure[F]
-        case BlockError.CasperIsBusy =>
-          s"Casper put block in the queue: $status".asLeft[String].pure[F]
-      }
-      .merge
+//  private def addResponse[F[_]: Concurrent](
+//      status: ValidBlockProcessing,
+//      block: BlockMessage,
+//      casper: MultiParentCasper[F],
+//      printUnmatchedSends: Boolean
+//  ): F[ApiErr[String]] =
+//    status
+//      .map { _ =>
+//        val hash    = block.blockHash.base16String
+//        val deploys = block.body.deploys.map(_.deploy)
+//        val maybeUnmatchedSendsOutputF =
+//          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
+//          else none[String].pure[F]
+//        maybeUnmatchedSendsOutputF >>= (
+//            maybeOutput =>
+//              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
+//                .asRight[Error]
+//                .pure[F]
+//          )
+//      }
+//      .leftMap {
+//        case _: InvalidBlock =>
+//          s"Failure! Invalid block: $status".asLeft[String].pure[F]
+//        case BlockError.BlockException(ex) =>
+//          s"Error during block processing: $ex".asLeft[String].pure[F]
+//        case BlockError.Processed =>
+//          "No action taken since other thread has already processed the block."
+//            .asLeft[String]
+//            .pure[F]
+//        case BlockError.CasperIsBusy =>
+//          s"Casper put block in the queue: $status".asLeft[String].pure[F]
+//      }
+//      .merge
 
-  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
-      casper: MultiParentCasper[F],
-      deploys: Seq[Signed[DeployData]]
-  ): F[String] =
-    casper.getRuntimeManager >>= (
-      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
-    )
+//  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
+//      casper: MultiParentCasper[F],
+//      deploys: Seq[Signed[DeployData]]
+//  ): F[String] =
+//    casper.getRuntimeManager >>= (
+//      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
+//    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
@@ -881,7 +830,7 @@ object BlockAPI {
             validatorOpt     <- casper.getValidator
             validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
             dag              <- casper.blockDag
-            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.bytes))
+            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
             latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
           } yield latestMessage.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)

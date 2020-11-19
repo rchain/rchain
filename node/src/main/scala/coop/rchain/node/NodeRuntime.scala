@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.syntax.all._
 import cats.mtl._
 import cats.syntax.all._
@@ -17,12 +17,14 @@ import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedKeyValueStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.blocks.BlockProcessor
-import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.blocks.proposer.Proposer
+import coop.rchain.casper.{ReportingCasper, engine, _}
 import coop.rchain.casper.engine.{BlockRetriever, _}
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.state.instances.BlockStateManagerImpl
+import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -53,7 +55,7 @@ import coop.rchain.node.diagnostics.{
   UdpInfluxDBReporter
 }
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
-import coop.rchain.node.instances.BlockProcessorInstance
+import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web._
@@ -248,6 +250,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         reportingCasper,
         webApi,
         adminWebApi,
+        proposerOpt,
+        proposerQueue,
+        proposerStateRef,
         blockProcessor,
         blockProcessorState,
         blockProcessorQueue
@@ -279,6 +284,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           reportingCasper,
           webApi,
           adminWebApi,
+          proposerOpt,
+          proposerQueue,
+          proposerStateRef,
           blockProcessor,
           blockProcessorState,
           blockProcessorQueue
@@ -311,6 +319,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       reportingCasper: ReportingCasper[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
+      proposer: Option[Proposer[F]],
+      proposeRequestsQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      proposerStateRef: Ref[F, ProposerState[F]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
       incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
@@ -448,6 +459,16 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             .executeOn(scheduler)
             .fromTask
             .start
+      _ <- Log[F].info("Starting proposer.")
+      _ <- ProposerInstance
+            .create[F](proposeRequestsQueue, proposer.get, proposerStateRef)
+            .compile
+            .drain
+            .toTask
+            .executeOn(scheduler)
+            .fromTask
+            .start
+            .whenA(proposer.isDefined)
       _ <- Sync[F]
             .defer(updateForkChoiceLoop.forever)
             .toTask
@@ -768,6 +789,10 @@ object NodeRuntime {
         ReportingCasper[F],
         WebApi[F],
         AdminWebApi[F],
+        Option[Proposer[F]],
+        Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+        // TODO move towards having a single node state
+        Ref[F, ProposerState[F]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
         Queue[F, (Casper[F], BlockMessage)]
@@ -946,6 +971,30 @@ object NodeRuntime {
         implicit val cb = casperBufferStorage
         BlockProcessor[F]
       }
+      validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
+                               conf.casper.validatorPrivateKey
+                             )
+      // Propose request is a tuple - Casper plus deferred proposeID that will be resolved by proposer
+      proposerQueue    <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
+      proposerStateRef <- Ref.of[F, ProposerState[F]](ProposerState[F]())
+      proposer = validatorIdentityOpt match {
+        case Some(validatorIdentity) => {
+          implicit val rm     = runtimeManager
+          implicit val bs     = blockStore
+          implicit val lf     = lastFinalizedStorage
+          implicit val bd     = blockDagStorage
+          implicit val sc     = synchronyConstraintChecker
+          implicit val lfhscc = lastFinalizedHeightConstraintChecker
+          implicit val sp     = span
+          implicit val e      = estimator
+          implicit val ds     = deployStorage
+          implicit val br     = blockRetriever
+          implicit val cu     = commUtil
+          implicit val eb     = eventPublisher
+          Proposer[F](validatorIdentity).some
+        }
+        case None => None
+      }
       casperLaunch = {
         implicit val bs     = blockStore
         implicit val bd     = blockDagStorage
@@ -1005,7 +1054,8 @@ object NodeRuntime {
         NodeRuntime
           .acquireAPIServers[F](
             evalRuntime,
-            blockApiLock,
+            if (proposer.isDefined) proposerQueue.some else None,
+            if (proposer.isDefined) proposerStateRef.some else None,
             scheduler,
             conf.apiServer.maxBlocksLimit,
             conf.devMode
@@ -1053,7 +1103,11 @@ object NodeRuntime {
         implicit val sp     = span
         implicit val sc     = synchronyConstraintChecker
         implicit val lfhscc = lastFinalizedHeightConstraintChecker
-        new AdminWebApiImpl[F](blockApiLock, rnodeStateManager)
+        new AdminWebApiImpl[F](
+          if (proposer.isDefined) proposerQueue.some else None,
+          if (proposer.isDefined) proposerStateRef.some else None,
+          rnodeStateManager
+        )
       }
     } yield (
       blockStore,
@@ -1067,6 +1121,9 @@ object NodeRuntime {
       reportingCasper,
       webApi,
       adminWebApi,
+      proposer,
+      proposerQueue,
+      proposerStateRef,
       blockProcessor,
       blockProcessorStateRef,
       blockProcessorQueue
@@ -1080,7 +1137,8 @@ object NodeRuntime {
 
   def acquireAPIServers[F[_]: Monixable](
       runtime: RhoRuntime[F],
-      blockApiLock: Semaphore[F],
+      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]],
+      proposerStateRef: Option[Ref[F, ProposerState[F]]],
       scheduler: Scheduler,
       apiMaxBlocksLimit: Int,
       devMode: Boolean
@@ -1101,7 +1159,7 @@ object NodeRuntime {
     val repl                  = ReplGrpcService(runtime, s)
     val deploy =
       DeployGrpcServiceV1(apiMaxBlocksLimit, reportingCasper, devMode)
-    val propose = ProposeGrpcServiceV1(blockApiLock)
+    val propose = ProposeGrpcServiceV1(proposerQueue, proposerStateRef)
     APIServers(repl, propose, deploy)
   }
 }
