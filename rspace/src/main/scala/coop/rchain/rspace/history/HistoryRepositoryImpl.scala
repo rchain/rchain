@@ -1,13 +1,16 @@
 package coop.rchain.rspace.history
 
-import java.nio.charset.StandardCharsets
-
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.typesafe.scalalogging.Logger
+import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
+import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.history.HistoryRepositoryImpl._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.merger.StateMerger
+import coop.rchain.rspace.merger.instances.StateMergerImpl.StateMergerImpl
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{
   internal,
@@ -24,95 +27,79 @@ import coop.rchain.rspace.{
 }
 import coop.rchain.shared.Serialize
 import scodec.Codec
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.ByteVector
 
 final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdStore[F],
     rspaceExporter: RSpaceExporter[F],
-    rspaceImporter: RSpaceImporter[F]
+    rspaceImporter: RSpaceImporter[F],
+    // Map channel hash in event log -> channel hash in history
+    // We need to maintain this for event log merge
+    channelHashesStore: ChannelStore[F, C],
+    sc: Serialize[C]
 )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K])
     extends HistoryRepository[F, C, P, A, K] {
-  val joinSuffixBits                = BitVector("-joins".getBytes(StandardCharsets.UTF_8))
-  val dataSuffixBits                = BitVector("-data".getBytes(StandardCharsets.UTF_8))
-  val continuationSuffixBits        = BitVector("-continuation".getBytes(StandardCharsets.UTF_8))
-  val codecJoin: Codec[Seq[Seq[C]]] = codecSeq(codecSeq(codecC))
 
   implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
   private def fetchData(key: Blake2b256Hash): F[Option[PersistedData]] =
-    history.find(key.bytes.toSeq.toList).flatMap {
-      case (trie, _) =>
-        trie match {
-          case LeafPointer(dataHash) => leafStore.get(dataHash)
-          case EmptyPointer          => Applicative[F].pure(None)
-          case _ =>
-            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+    HistoryRepositoryImpl.fetchData[F](key, history, leafStore)
 
-        }
-    }
+  override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
+    channelHashesStore.getChannelHash(hash)
 
-  private def hashWithSuffix(bits: BitVector, suffix: BitVector): Blake2b256Hash = {
-    val suffixed = bits ++ suffix
-    Blake2b256Hash.create(suffixed.toByteVector)
-  }
+  override def putChannelHash(channel: C): F[Unit] = channelHashesStore.putChannelHash(channel)
 
-  private def hashJoinsChannel(channel: C): Blake2b256Hash =
-    hashWithSuffix(codecC.encode(channel).get, joinSuffixBits)
+  override def putContinuationHash(channels: Seq[C]): F[Unit] =
+    channelHashesStore.putContinuationHash(channels)
 
-  private def hashContinuationsChannels(channels: Seq[C]): Blake2b256Hash = {
-    val chs = channels
-      .map(c => serializeC.encode(c))
-      .sorted(util.ordByteVector)
-    val channelsBits = codecSeq(codecByteVector).encode(chs).get
-    hashWithSuffix(channelsBits, continuationSuffixBits)
-  }
-
-  private def hashDataChannel(channel: C): Blake2b256Hash =
-    hashWithSuffix(codecC.encode(channel).get, dataSuffixBits)
-
-  def decode[R](bv: ByteVector)(implicit codecR: Codec[R]): Seq[R] =
-    Codec.decode[Seq[R]](bv.bits).get.value
-
-  override def getJoins(channel: C): F[Seq[Seq[C]]] =
-    fetchData(hashJoinsChannel(channel)).flatMap {
+  override def getJoins(hash: Blake2b256Hash): F[Seq[Seq[C]]] =
+    fetchData(hash).flatMap {
       case Some(JoinsLeaf(bytes)) =>
         decodeJoins[C](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[Seq[C]]](
           new RuntimeException(
-            s"Found unexpected leaf while looking for joins at key $channel, data: $p"
+            s"Found unexpected leaf while looking for continuations at key $hash, data: $p"
           )
         )
       case None => Seq.empty[Seq[C]].pure[F]
     }
 
-  override def getData(channel: C): F[Seq[internal.Datum[A]]] =
-    fetchData(hashDataChannel(channel)).flatMap {
+  override def getJoins(channel: C): F[Seq[Seq[C]]] =
+    getJoins(hashJoinsChannel(channel, codecC))
+
+  override def getData(channelHash: Blake2b256Hash): F[Seq[Datum[A]]] =
+    fetchData(channelHash).flatMap {
       case Some(DataLeaf(bytes)) =>
         decodeSorted[internal.Datum[A]](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[internal.Datum[A]]](
           new RuntimeException(
-            s"Found unexpected leaf while looking for data at key $channel, data: $p"
+            s"Found unexpected leaf while looking for data at key $channelHash, data: $p"
           )
         )
       case None => Seq.empty[internal.Datum[A]].pure[F]
     }
+  override def getData(channel: C): F[Seq[internal.Datum[A]]] =
+    getData(hashDataChannel(channel, codecC))
 
-  override def getContinuations(channels: Seq[C]): F[Seq[internal.WaitingContinuation[P, K]]] =
-    fetchData(hashContinuationsChannels(channels)).flatMap {
+  override def getContinuations(hash: Blake2b256Hash): F[Seq[WaitingContinuation[P, K]]] =
+    fetchData(hash).flatMap {
       case Some(ContinuationsLeaf(bytes)) =>
         decodeSorted[internal.WaitingContinuation[P, K]](bytes).pure[F]
       case Some(p) =>
         Sync[F].raiseError[Seq[internal.WaitingContinuation[P, K]]](
           new RuntimeException(
-            s"Found unexpected leaf while looking for continuations at key $channels, data: $p"
+            s"Found unexpected leaf while looking for continuations at key $hash, data: $p"
           )
         )
       case None => Seq.empty[internal.WaitingContinuation[P, K]].pure[F]
     }
+  override def getContinuations(channels: Seq[C]): F[Seq[internal.WaitingContinuation[P, K]]] =
+    getContinuations(hashContinuationsChannels(channels, serializeC))
 
   type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
 
@@ -129,44 +116,63 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.map {
       case i: InsertData[C, A] =>
-        val key  = hashDataChannel(i.channel).bytes
+        val key  = hashDataChannel(i.channel, codecC).bytes
         val data = encodeData(i.data)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[C, P, K] =>
-        val key  = hashContinuationsChannels(i.channels).bytes
+        val key  = hashContinuationsChannels(i.channels, serializeC).bytes
         val data = encodeContinuations(i.continuations)
         s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
       case i: InsertJoins[C] =>
-        val key  = hashJoinsChannel(i.channel).bytes
+        val key  = hashJoinsChannel(i.channel, codecC).bytes
         val data = encodeJoins(i.joins)
         s"${key.toHex};insert-join;${data.length}"
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel).bytes
+        val key = hashDataChannel(d.channel, codecC).bytes
         s"${key.toHex};delete-data;0"
       case d: DeleteContinuations[C] =>
-        val key = hashContinuationsChannels(d.channels).bytes
+        val key = hashContinuationsChannels(d.channels, serializeC).bytes
         s"${key.toHex};delete-continuation;0"
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel).bytes
+        val key = hashJoinsChannel(d.channel, codecC).bytes
         s"${key.toHex};delete-join;0"
     }
 
-  private def transformAndStore(hotStoreActions: List[HotStoreAction]): F[List[HistoryAction]] =
+  private def transformAndStore(hotStoreActions: List[HotStoreAction]): F[List[HistoryAction]] = {
+    import cats.instances.list._
     for {
       transformedActions <- Sync[F].delay(hotStoreActions.map(transform))
       historyActions     <- storeLeaves(transformedActions)
+      _                  <- hotStoreActions.traverse(storeChannelHash)
     } yield historyActions
+  }
+
+  private def storeChannelHash(action: HotStoreAction) =
+    action match {
+      case i: InsertData[C, A] =>
+        channelHashesStore.putChannelHash(i.channel)
+      case i: InsertContinuations[C, P, K] =>
+        channelHashesStore.putContinuationHash(i.channels)
+      case i: InsertJoins[C] =>
+        channelHashesStore.putChannelHash(i.channel)
+      case d: DeleteData[C] =>
+        channelHashesStore.putChannelHash(d.channel)
+      case d: DeleteContinuations[C] =>
+        channelHashesStore.putContinuationHash(d.channels)
+      case d: DeleteJoins[C] =>
+        channelHashesStore.putChannelHash(d.channel)
+    }
 
   private def transform(action: HotStoreAction): Result =
     action match {
       case i: InsertData[C, A] =>
-        val key      = hashDataChannel(i.channel)
+        val key      = hashDataChannel(i.channel, codecC)
         val data     = encodeData(i.data)
         val dataLeaf = DataLeaf(data)
         val dataHash = Blake2b256Hash.create(data)
         (dataHash, Some(dataLeaf), InsertAction(key.bytes.toSeq.toList, dataHash))
       case i: InsertContinuations[C, P, K] =>
-        val key               = hashContinuationsChannels(i.channels)
+        val key               = hashContinuationsChannels(i.channels, serializeC)
         val data              = encodeContinuations(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsHash = Blake2b256Hash.create(data)
@@ -176,19 +182,19 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
           InsertAction(key.bytes.toSeq.toList, continuationsHash)
         )
       case i: InsertJoins[C] =>
-        val key       = hashJoinsChannel(i.channel)
+        val key       = hashJoinsChannel(i.channel, codecC)
         val data      = encodeJoins(i.joins)
         val joinsLeaf = JoinsLeaf(data)
         val joinsHash = Blake2b256Hash.create(data)
         (joinsHash, Some(joinsLeaf), InsertAction(key.bytes.toSeq.toList, joinsHash))
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel)
+        val key = hashDataChannel(d.channel, codecC)
         (key, None, DeleteAction(key.bytes.toSeq.toList))
       case d: DeleteContinuations[C] =>
-        val key = hashContinuationsChannels(d.channels)
+        val key = hashContinuationsChannels(d.channels, serializeC)
         (key, None, DeleteAction(key.bytes.toSeq.toList))
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel)
+        val key = hashJoinsChannel(d.channel, codecC)
         (key, None, DeleteAction(key.bytes.toSeq.toList))
     }
 
@@ -206,34 +212,63 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
       next           <- history.process(historyActions)
       _              <- rootsRepository.commit(next.root)
       _              <- measure(actions)
-    } yield this.copy(history = next)
+    } yield this.copy(history = next, channelHashesStore = channelHashesStore)
   }
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
-    } yield this.copy(history = next)
+    } yield this.copy(history = next, channelHashesStore = channelHashesStore)
 
   override def close(): F[Unit] =
     for {
       _ <- leafStore.close()
       _ <- rootsRepository.close()
       _ <- history.close()
+      _ <- channelHashesStore.close
     } yield ()
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
 
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
+
+  override def stateMerger: F[StateMerger[F]] =
+    for {
+      joinMap <- Ref.of[F, Map[Blake2b256Hash, Seq[Seq[C]]]](Map.empty)
+    } yield new StateMergerImpl[F, C, P, A, K](
+      this,
+      history,
+      leafStore,
+      rootsRepository,
+      sc,
+      joinMap
+    )
+
 }
 
 object HistoryRepositoryImpl {
+  def fetchData[F[_]: Sync](
+      key: Blake2b256Hash,
+      history: History[F],
+      leafStore: ColdStore[F]
+  ): F[Option[PersistedData]] =
+    history.find(key.bytes.toSeq.toList).flatMap {
+      case (trie, _) =>
+        trie match {
+          case LeafPointer(dataHash) => leafStore.get(dataHash)
+          case EmptyPointer          => Applicative[F].pure(None)
+          case _ =>
+            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
+        }
+    }
   val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
 
   def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
     codecSeqByteVector.decode(data.bits).get.value.map(bv => codec.decode(bv.bits).get.value)
 
-  private def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
+  def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
     codecSeqByteVector
       .encode(
         data
