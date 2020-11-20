@@ -11,11 +11,9 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.syntax.RSpaceExporterExt
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
-import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.ByteVectorOps._
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Log, Stopwatch, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}
 import scodec.bits.ByteVector
@@ -153,7 +151,7 @@ object LastFinalizedStateTupleSpaceRequester {
 
                 // Validation for received tuple space items.
                 val validationProcess = Stream.eval {
-                  Lib.time("VALIDATE STATE CHUNK")(
+                  Stopwatch.time(Log[F].info(_))("Validate received state items")(
                     validateTupleSpaceItems(
                       historyItemsBytes,
                       dataItemsBytes,
@@ -167,14 +165,14 @@ object LastFinalizedStateTupleSpaceRequester {
 
                 // Save history items to store.
                 val historySaveProcess = Stream.eval {
-                  Lib.time("IMPORT HISTORY")(
+                  Stopwatch.time(Log[F].info(_))("Import history items")(
                     importer.setHistoryItems[ByteVector](historyItemsBytes, _.toDirectByteBuffer)
                   )
                 }
 
                 // Save data items to store.
                 val dataSaveProcess = Stream.eval {
-                  Lib.time("IMPORT DATA")(
+                  Stopwatch.time(Log[F].info(_))("Import data items")(
                     importer.setDataItems[ByteVector](dataItemsBytes, _.toDirectByteBuffer)
                   )
                 }
@@ -189,7 +187,7 @@ object LastFinalizedStateTupleSpaceRequester {
 //                    _                                 <- Log[F].warn("START WRITE VALIDATION ------------------------")
 //                    items                             <- exporter.getHistoryAndData(startPath, 0, pageSize, ByteVector(_))
 //                    (readHistoryItems, readDataItems) = items
-//                    _ <- Lib.time("VALIDATE WRITTEN DATA")(
+//                    _ <- LogTimer.time(Log[F].info)("Validate written state")(
 //                          validateTupleSpaceItems(
 //                            readHistoryItems.items,
 //                            readDataItems.items,

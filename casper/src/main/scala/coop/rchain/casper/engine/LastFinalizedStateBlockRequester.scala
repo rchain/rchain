@@ -6,7 +6,6 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.{Log, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}

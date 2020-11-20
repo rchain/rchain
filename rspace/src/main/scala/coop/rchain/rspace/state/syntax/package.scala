@@ -7,6 +7,7 @@ import cats.effect.{Concurrent, Sync}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
 import coop.rchain.rspace.state.exporters.{RSpaceExporterDisk, RSpaceExporterItems}
+import coop.rchain.shared.Log
 import scodec.Codec
 
 package object syntax {
@@ -24,7 +25,7 @@ package object syntax {
         skip: Int,
         take: Int,
         fromBuffer: ByteBuffer => Value
-    )(implicit m: Sync[F]): F[StoreItems[Blake2b256Hash, Value]] =
+    )(implicit m: Sync[F], l: Log[F]): F[StoreItems[Blake2b256Hash, Value]] =
       RSpaceExporterItems.getHistory(exporter, startPath, skip, take, fromBuffer)
 
     def getData[Value](
@@ -32,7 +33,7 @@ package object syntax {
         skip: Int,
         take: Int,
         fromBuffer: ByteBuffer => Value
-    )(implicit m: Sync[F]): F[StoreItems[Blake2b256Hash, Value]] =
+    )(implicit m: Sync[F], l: Log[F]): F[StoreItems[Blake2b256Hash, Value]] =
       RSpaceExporterItems.getData(exporter, startPath, skip, take, fromBuffer)
 
     def getHistoryAndData[Value](
@@ -41,7 +42,8 @@ package object syntax {
         take: Int,
         fromBuffer: ByteBuffer => Value
     )(
-        implicit m: Sync[F]
+        implicit m: Sync[F],
+        l: Log[F]
     ): F[(StoreItems[Blake2b256Hash, Value], StoreItems[Blake2b256Hash, Value])] =
       RSpaceExporterItems.getHistoryAndData(exporter, startPath, skip, take, fromBuffer)
 
@@ -49,6 +51,7 @@ package object syntax {
 
     def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
         implicit m: Concurrent[F],
+        l: Log[F],
         codecC: Codec[C],
         codecP: Codec[P],
         codecA: Codec[A],

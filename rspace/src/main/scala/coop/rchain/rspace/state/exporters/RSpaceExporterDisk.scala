@@ -7,17 +7,17 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
+import coop.rchain.rspace.state.syntax._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.shared.{Log, Stopwatch}
 import fs2.Stream
 import scodec.Codec
 import scodec.bits.ByteVector
 
 object RSpaceExporterDisk {
-  import coop.rchain.rspace.state.syntax._
-  import coop.rchain.rspace.util.Lib._
 
-  def writeToDisk[F[_]: Concurrent, C, P, A, K](
+  def writeToDisk[F[_]: Concurrent: Log, C, P, A, K](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
@@ -28,9 +28,8 @@ object RSpaceExporterDisk {
         p: Param
     ): F[Either[Param, Unit]] = {
       val (startPath, chunk) = p
-      println(s"PART ${chunk}")
-      val skip      = 0
-      val exportAll = exporter.getHistoryAndData(startPath, skip, chunkSize, ByteVector(_))
+      val skip               = 0
+      val exportAll          = exporter.getHistoryAndData(startPath, skip, chunkSize, ByteVector(_))
       for {
         inputs                      <- exportAll
         (inputHistory, inputValues) = inputs
@@ -40,7 +39,7 @@ object RSpaceExporterDisk {
         dataItems    = inputValues.items.toVector
 
         // Validate items
-        validationProcess = time("Validate state items")(
+        validationProcess = Stopwatch.time(Log[F].info(_))("Validate state items")(
           RSpaceImporter.validateStateItems[F, C, P, A, K](
             historyItems,
             dataItems,
@@ -54,17 +53,15 @@ object RSpaceExporterDisk {
         // Restore operations / run in parallel
         _ <- Stream(
               validationProcess,
-              time("COMPLETE LMDB HISTORY WRITE")(
+              Stopwatch.time(Log[F].info(_))("Write history items")(
                 historyStore.put[ByteVector](historyItems, _.toDirectByteBuffer)
               ),
-              time("COMPLETE LMDB VALUES WRITE")(
+              Stopwatch.time(Log[F].info(_))("Write data items")(
                 dataStore.put[ByteVector](dataItems, _.toDirectByteBuffer)
               )
             ).map(Stream.eval).parJoinUnbounded.compile.drain
 
-        _ = println(s"LAST PATH: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
-
-        _ = println("")
+        _ = Log[F].info(s"Last path: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
 
         receivedSize = historyItems.size
         isEnd        = receivedSize < chunkSize
@@ -75,7 +72,7 @@ object RSpaceExporterDisk {
       // Lmdb restore history
       lmdbHistoryStore <- mkLmdbInstance(dirPath.resolve("history"))
       lmdbDataStore    <- mkLmdbInstance(dirPath.resolve("cold"))
-      _ <- time("RESTORE COMPLETE")(
+      _ <- Stopwatch.time(Log[F].info(_))("Restore complete")(
             Monad[F]
               .tailRecM((Seq((root, none[Byte])), 0))(
                 writeChunkRec(lmdbHistoryStore, lmdbDataStore)
