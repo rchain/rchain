@@ -131,6 +131,10 @@ final case class Consume private (
     s"Consume(channels: ${channelsHashes.toString}, hash: ${hash.toString}, persistent: $persistent)"
 }
 
+final case class EventGroup(produces: Set[Produce], consumes: Set[Consume], comms: Set[COMM]) {
+  def events: Seq[Event] = produces.toSeq ++ consumes.toSeq ++ comms.toSeq
+}
+
 object Consume {
 
   def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
