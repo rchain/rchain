@@ -54,7 +54,7 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.3.11",
+  scapegoatVersion in ThisBuild := "1.4.6",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
@@ -197,9 +197,9 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value,
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value
+      PB.gens.java                                      -> (sourceManaged in Compile).value,
+      scalapb.gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen()                        -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -235,10 +235,8 @@ lazy val models = (project in file("models"))
       scalapbRuntimegGrpc
     ),
     PB.targets in Compile := Seq(
-      coop.rchain.scalapb.StacksafeScalapbGenerator
-        .gen(flatPackage = true) -> (sourceManaged in Compile).value,
-      grpcmonix.generators
-        .GrpcMonixGenerator(flatPackage = true) -> (sourceManaged in Compile).value
+      coop.rchain.scalapb.gen(flatPackage = true, grpc = false) -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen()                                -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", rspace)
@@ -272,9 +270,10 @@ lazy val node = (project in file("node"))
         pureconfig
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java                              -> (sourceManaged in Compile).value / "protobuf",
-      scalapb.gen(javaConversions = true)       -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.GrpcMonixGenerator() -> (sourceManaged in Compile).value / "protobuf"
+      PB.gens.java -> (sourceManaged in Compile).value / "protobuf",
+      scalapb
+        .gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.gen()                   -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
@@ -360,7 +359,7 @@ lazy val node = (project in file("node"))
     /* Debian */
     debianPackageDependencies in Debian ++= Seq(
       "openjdk-11-jre-headless",
-      "openssl(>= 1.0.2g) | openssl(>= 1.1.0f)", //ubuntu & debian
+      "openssl(>= 1.0.2g) | openssl(>= 1.1.1h)", //ubuntu & debian
       "bash (>= 2.05a-11)"
     ),
     /* Redhat */
@@ -452,7 +451,6 @@ lazy val blockStorage = (project in file("block-storage"))
     name := "block-storage",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
-      lmdbjava,
       catsCore,
       catsEffect,
       catsMtl

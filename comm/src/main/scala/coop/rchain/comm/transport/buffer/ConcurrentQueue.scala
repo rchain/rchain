@@ -4,11 +4,14 @@ import java.util
 
 import scala.collection.mutable
 import scala.math.ceil
-
 import monix.execution.internal.atomic.UnsafeAccess
-import org.jctools.queues._
-import org.jctools.queues.MessagePassingQueue.Consumer
-import org.jctools.queues.atomic.MpscAtomicArrayQueue
+import monix.execution.internal.jctools.queues.MessagePassingQueue.Consumer
+import monix.execution.internal.jctools.queues.atomic.MpscAtomicArrayQueue
+import monix.execution.internal.jctools.queues.{
+  MessagePassingQueue,
+  MpscArrayQueue,
+  MpscChunkedArrayQueue
+}
 
 /**
   * This code has been copied from the Monix codebase because unfortunately

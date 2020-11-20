@@ -2,10 +2,10 @@ package coop.rchain.lmdb
 
 import java.nio.ByteBuffer
 
-import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.shared.Resources.withResource
 import org.lmdbjava.{CursorIterable, Dbi, Env, Txn}
+import scodec.bits.BitVector
 
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
@@ -37,10 +37,16 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       withTxn(env.txnWrite)(f)
     }
 
-  def get(key: ByteBuffer): F[Option[ByteBuffer]] =
+  def get(key: ByteBuffer): F[Option[BitVector]] =
     withReadTxnF { txn =>
-      dbi.get(txn, key)
-    }.map(v => Option(v))
+      Option(dbi.get(txn, key)).map(BitVector(_))
+    }
+
+  // TODO: Remove this method. Returned byte buffer is deallocated after transaction is closed which can cause corrupted read.
+  def get_WARNING(key: ByteBuffer): F[Option[ByteBuffer]] =
+    withReadTxnF { txn =>
+      Option(dbi.get(txn, key))
+    }
 
   def get[V](key: Seq[ByteBuffer], fromBuffer: ByteBuffer => V): F[Seq[Option[V]]] =
     withReadTxnF { txn =>
@@ -64,17 +70,6 @@ final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer
       kvPairs.foreach {
         case (key, value) =>
           if (!dbi.put(txn, key, value)) {
-            throw new RuntimeException("was not able to put data")
-          }
-      }
-    }
-
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def put[T](kvPairs: Seq[(ByteBuffer, T)], toBuffer: T => ByteBuffer): F[Unit] =
-    withWriteTxnF { txn =>
-      kvPairs.foreach {
-        case (key, value) =>
-          if (!dbi.put(txn, key, toBuffer(value))) {
             throw new RuntimeException("was not able to put data")
           }
       }

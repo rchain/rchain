@@ -206,7 +206,7 @@ class Node:
                 return client.show_block(hash)
             except RClientException as e:
                 message = e.args[0]
-                raise GetBlockError(('show-block',), 1, message)
+                raise GetBlockError(('show-block',), 1, message) from e
 
     # Too low level -- do not use directly.  Prefer shell_out() instead.
     def _exec_run_with_timeout(self, cmd: Tuple[str, ...], stderr: bool = True) -> Tuple[int, str]:
@@ -222,8 +222,8 @@ class Node:
 
         try:
             exit_code, output = control_queue.get(True, self.command_timeout)
-        except queue.Empty:
-            raise CommandTimeoutError(cmd, self.command_timeout)
+        except queue.Empty as e:
+            raise CommandTimeoutError(cmd, self.command_timeout) from e
         finally:
             process.terminate()
 
@@ -259,7 +259,7 @@ class Node:
         except RClientException as e:
             message = e.args[0]
             if "Parsing error" in message:
-                raise ParsingError(command=("propose", ), exit_code=1, output=message)
+                raise ParsingError(command=("propose", ), exit_code=1, output=message) from e
             # TODO out of phlogiston error
             raise e
 
@@ -281,7 +281,7 @@ class Node:
         except RClientException as e:
             message = e.args[0]
             if "Parsing error" in message:
-                raise ParsingError(command=("propose", ), exit_code=1, output=message)
+                raise ParsingError(command=("propose", ), exit_code=1, output=message) from e
             # TODO out of phlogiston error
             raise e
 
@@ -296,11 +296,11 @@ class Node:
         except RClientException as e:
             message = e.args[0]
             if "Must wait for more blocks from other validators" in message:
-                raise SynchronyConstraintError(command=('propose',), exit_code=1, output=message)
+                raise SynchronyConstraintError(command=('propose',), exit_code=1, output=message) from e
             if "ReadOnlyMode" in message:
-                raise NotAnActiveValidatorError(command=('propose',), exit_code=1, output=message)
+                raise NotAnActiveValidatorError(command=('propose',), exit_code=1, output=message) from e
             if "Validator does not have a latest message" in message:
-                raise ValidatorNotContainsLatestMes(command=('propose',), exit_code=1, output=message)
+                raise ValidatorNotContainsLatestMes(command=('propose',), exit_code=1, output=message) from e
             raise e
 
     def last_finalized_block(self) -> BlockInfo:

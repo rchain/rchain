@@ -12,6 +12,7 @@ option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol"
   flat_package: true
   single_file: true
+  preserve_unknown_fields: false
 };
 
 message PrintUnmatchedSendsQuery {
