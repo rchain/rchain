@@ -76,9 +76,9 @@ object Dependencies {
   val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
-  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.20"
+  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M2"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.21"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
