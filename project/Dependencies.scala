@@ -55,7 +55,7 @@ object Dependencies {
   val monix               = "io.monix"                   %% "monix"                     % "3.2.2"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.0-M1"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.1"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.3.0-SNAP2" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
