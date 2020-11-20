@@ -85,7 +85,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
             """.stripMargin
               )
 
-          tupleSpace <- runtime.space.toMap
+          tupleSpace <- runtime.getHotChanges
         } yield tupleSpace
       }
       .runSyncUnsafe(maxDuration)
