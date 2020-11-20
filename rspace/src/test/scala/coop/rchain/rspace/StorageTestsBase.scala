@@ -21,7 +21,7 @@ import coop.rchain.rspace.history.{
   StoreConfig
 }
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import org.scalatest._
 
 import scala.concurrent.ExecutionContext
@@ -66,7 +66,13 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   protected def setupTestingSpace[S, STORE](
       createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]
-  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): S = {
+  )(
+      implicit codecC: Codec[C],
+      codecP: Codec[P],
+      codecA: Codec[A],
+      codecK: Codec[K],
+      serializedC: Serialize[C]
+  ): S = {
     val branch = Branch("inmem")
 
     val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
@@ -84,7 +90,8 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     val config = LMDBRSpaceStorageConfig(
       storeConfig("cold"),
       storeConfig("history"),
-      storeConfig("roots")
+      storeConfig("roots"),
+      storeConfig("channelHash")
     )
 
     run(for {

@@ -1297,7 +1297,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     val config = LMDBRSpaceStorageConfig(
       storeConfig("cold"),
       storeConfig("history"),
-      storeConfig("roots")
+      storeConfig("roots"),
+      storeConfig("channelHash")
     )
 
     implicit val cc = sc.toSizeHeadCodec

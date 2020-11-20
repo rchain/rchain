@@ -3,7 +3,9 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import java.nio.file.{Files, Path}
 
+import cats.effect.concurrent.Ref
 import coop.rchain.rspace.{
+  Blake2b256Hash,
   DeleteContinuations,
   DeleteData,
   DeleteJoins,
@@ -22,6 +24,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import org.lmdbjava.EnvFlags
@@ -57,13 +60,17 @@ class LMDBHistoryRepositoryGenerativeSpec
       emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
       importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      channelLMDBStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      channelStore     = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
           rootRepository,
           coldStore,
           exporter,
-          importer
+          importer,
+          channelStore,
+          stringSerialize
         )
     } yield repository
 
@@ -78,15 +85,24 @@ class InmemHistoryRepositoryGenerativeSpec
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
-    val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
-      HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
+    for {
+      channelStore <- Sync[Task].pure {
+                       new ChannelStoreImpl[Task, String](
+                         inMemStore,
+                         stringSerialize,
+                         codecString
+                       )
+                     }
+      r = HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
         inMemColdStore,
         emptyExporter,
-        emptyImporter
+        emptyImporter,
+        channelStore,
+        stringSerialize
       )
-    repository.pure[Task]
+    } yield r
   }
 }
 

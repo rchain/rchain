@@ -78,13 +78,14 @@ object Resources {
 
   def mkRuntimeAt[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](path: Path)(
       storageSize: Long = 1024 * 1024 * 1024L,
-      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      initRegistry: Boolean = true
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
         space   <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
-        runtime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
+        runtime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                           path,
                           storageSize,
