@@ -14,8 +14,8 @@ object Dependencies {
   val slf4jVersion      = "1.7.25"
 
   // format: off
-  val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.66"
-  val bouncyPkixCastle    = "org.bouncycastle"            % "bcpkix-jdk15on"            % "1.66"
+  val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.67"
+  val bouncyPkixCastle    = "org.bouncycastle"            % "bcpkix-jdk15on"            % "1.67"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
