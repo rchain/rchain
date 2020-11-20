@@ -34,10 +34,16 @@ object StackSafetySpec extends Assertions {
       } catch {
         case _: StackOverflowError => i
       }
+
     println("About to find max recursion depth for this test run")
+
     val maxDepth = count(0)
-    println(s"Max recursion depth is $maxDepth")
-    maxDepth
+    println(s"Calculated max recursion depth is $maxDepth")
+
+    // Because of OOM errors on CI depth recursion is limited
+    val maxDepthLimited = Math.min(1500, maxDepth)
+    println(s"Used recursion depth is limited to $maxDepthLimited")
+    maxDepthLimited
   }
 
   //this wrapper allows the test suite to continue with other tests after a SOE is spotted
@@ -95,8 +101,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
     checkAll(hugeBinOp(" ++ ", "[1]"))
   }
 
-  //Fixme - sometimes fails with OOM in Github actions. To not disturb, ignored temporarily
-  ignore should "handle a huge nested list" in {
+  it should "handle a huge nested list" in {
     checkAll(hugeNested("[", "", "]"))
   }
 
