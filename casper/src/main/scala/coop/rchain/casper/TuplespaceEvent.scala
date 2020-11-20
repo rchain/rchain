@@ -39,6 +39,7 @@ object TuplespaceEvent {
 
   def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
     case Consume(singleChannelHash :: Nil, _, _) =>
+      // ???????????????? it is possible that the consume is peek
       Some(singleChannelHash -> TuplespaceEvent(toOperation(consume, false), None))
     case _ => None
   }
