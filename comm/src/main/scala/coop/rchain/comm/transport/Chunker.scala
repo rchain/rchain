@@ -1,14 +1,14 @@
 package coop.rchain.comm.transport
 
+import cats.effect.Sync
+import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.shared.Compression._
-import coop.rchain.comm.protocol.routing._
-import monix.eval._
 
 object Chunker {
 
-  def chunkIt(networkId: String, blob: Blob, maxMessageSize: Int): Task[Iterator[Chunk]] =
-    Task.delay {
+  def chunkIt[F[_]: Sync](networkId: String, blob: Blob, maxMessageSize: Int): F[Iterator[Chunk]] =
+    Sync[F].delay {
       val raw      = blob.packet.content.toByteArray
       val kb500    = 1024 * 500
       val compress = raw.length > kb500

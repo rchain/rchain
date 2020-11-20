@@ -5,7 +5,6 @@ syntax = "proto3";
 package casper;
 
 import "CasperMessage.proto";
-import "google/protobuf/empty.proto";
 
 // If you are building for other languages "scalapb.proto"
 // can be manually obtained here:
@@ -20,6 +19,7 @@ option (scalapb.options) = {
   flat_package: true
   single_file: true
   preamble: "sealed trait ReportEventProto"
+  preserve_unknown_fields: false
 };
 
 message FindDeployQuery {

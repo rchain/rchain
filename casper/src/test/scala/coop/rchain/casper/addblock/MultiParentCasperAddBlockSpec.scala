@@ -224,7 +224,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         block            <- node.createBlock(basicDeployData)
         dag              <- node.blockDagStorage.getRepresentation
         (sk, pk)         = Secp256k1.newKeyPair
-        validatorId      = ValidatorIdentity[Effect](sk)
+        validatorId      = ValidatorIdentity(sk)
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
@@ -558,7 +558,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       for {
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        block = ValidatorIdentity[Effect](defaultValidatorSks(1)).signBlock(
+        block = ValidatorIdentity(defaultValidatorSks(1)).signBlock(
           blockThatPointsToInvalidBlock
         )
       } yield block

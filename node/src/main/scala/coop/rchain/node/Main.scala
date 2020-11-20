@@ -3,20 +3,22 @@ package coop.rchain.node
 import java.io.File
 import java.nio.file.Path
 
-import cats.implicits._
-import cats.effect.{Resource, Sync}
+import cats.Parallel
+import cats.effect._
+import cats.syntax.all._
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
+import coop.rchain.monix.Monixable
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
-import coop.rchain.shared.{EnvVars, _}
+import coop.rchain.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
@@ -28,19 +30,6 @@ import scala.tools.jline.console.completer.StringsCompleter
 
 object Main {
 
-  implicit private val logSource: LogSource     = LogSource(this.getClass)
-  implicit private val log: Log[Task]           = effects.log
-  implicit private val eventLog: EventLog[Task] = EventLog.eventLogger
-
-  // Main scheduler for all CPU bounded tasks
-  // Should always be passed as implicit dependency.
-  // All other schedulers should be explicit.
-  implicit val scheduler: Scheduler = Scheduler.computation(
-    Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
-    "node-runner",
-    reporter = UncaughtExceptionLogger
-  )
-
   /**
     * Main entry point
     * @param args input args
@@ -51,7 +40,18 @@ object Main {
     Thread.setDefaultUncaughtExceptionHandler((thread, ex) => {
       LoggerFactory.getLogger(getClass).error("Unhandled exception in thread " + thread.getName, ex)
     })
+
+    // Main scheduler for all CPU bounded tasks
+    // Should always be passed as implicit dependency.
+    // All other schedulers should be explicit.
+    implicit val scheduler: Scheduler = Scheduler.computation(
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors(), 2),
+      "node-runner",
+      reporter = UncaughtExceptionLogger
+    )
     implicit val console: ConsoleIO[Task] = consoleIO
+    implicit val log: Log[Task]           = effects.log
+    implicit val eventLog: EventLog[Task] = EventLog.eventLogger
 
     // Ensure terminal is restored on exit
     sys.addShutdownHook {
@@ -62,44 +62,40 @@ object Main {
     val options = commandline.Options(args)
     if (options.subcommand.contains(options.run))
       // Start the node
-      startNode(options).unsafeRunSync
+      startNode[Task](options).unsafeRunSync
     //or
     else
       // Execute CLI command
-      Task.defer(runCLI(options)).unsafeRunSync
+      runCLI[Task](options).unsafeRunSync
   }
 
   /**
     * Starts RNode instance
     * @param options command line options
-    * @param console console
     */
-  private def startNode(options: commandline.Options)(
-      implicit
-      console: ConsoleIO[Task]
-  ): Task[Unit] = {
+  private def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log: EventLog](
+      options: commandline.Options
+  )(implicit s: Scheduler): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
     val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
     // This system variable is used in Logger config file `node/src/main/resources/logback.xml`
     val _ = System.setProperty("rnode.data.dir", nodeConf.storage.dataDir.toString)
 
-    Task
-      .defer({
-        // and start node
-        // TODO : Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
-        // https://www.slf4j.org/legacy.html#jul-to-slf4j
-        SLF4JBridgeHandler.removeHandlersForRootLogger()
-        SLF4JBridgeHandler.install()
-        for {
-          _               <- checkHost(nodeConf)
-          confWithPorts   <- checkPorts(nodeConf)
-          confWithDecrypt <- loadPrivateKeyFromFile(confWithPorts)
-          _               <- log.info(VersionInfo.get)
-          _               <- logConfiguration(confWithDecrypt, profile, configFile, options)
-          runtime         <- NodeRuntime(confWithDecrypt, kamonConf)
-          _               <- runtime.main.run(NodeCallCtx.init)
-        } yield ()
-      })
+    // and start node
+    // TODO : Enable it earlier once we have JDK with https://bugs.openjdk.java.net/browse/JDK-8218960 fixed
+    // https://www.slf4j.org/legacy.html#jul-to-slf4j
+    SLF4JBridgeHandler.removeHandlersForRootLogger()
+    SLF4JBridgeHandler.install()
+    for {
+      _               <- checkHost[F](nodeConf)
+      confWithPorts   <- checkPorts[F](nodeConf)
+      confWithDecrypt <- loadPrivateKeyFromFile[F](confWithPorts)
+      _               <- Log[F].info(VersionInfo.get)
+      _               <- logConfiguration[F](confWithDecrypt, profile, configFile, options)
+
+      // Create node runtime
+      _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
+    } yield ()
   }
 
   /**
@@ -107,36 +103,38 @@ object Main {
     * @param options command line options
     * @param console console
     */
-  private def runCLI(options: commandline.Options)(
+  private def runCLI[F[_]: Monixable: Sync: Timer](options: commandline.Options)(
       implicit
-      console: ConsoleIO[Task]
-  ): Task[Unit] = {
+      console: ConsoleIO[F]
+  ): F[Unit] = {
     // Clients for executing gRPC calls on remote RNode instance
-    implicit val replServiceClient: GrpcReplClient =
-      new GrpcReplClient(
+    implicit val replServiceClient: GrpcReplClient[F] =
+      new GrpcReplClient[F](
         options.grpcHost(),
         options.grpcPort(),
         options.grpcMaxRecvMessageSize()
       )
-    implicit val deployServiceClient: GrpcDeployService =
-      new GrpcDeployService(
+    implicit val deployServiceClient: GrpcDeployService[F] =
+      new GrpcDeployService[F](
         options.grpcHost(),
         options.grpcPort(),
         options.grpcMaxRecvMessageSize()
       )
-    implicit val proposeServiceClient: GrpcProposeService =
-      new GrpcProposeService(
+    implicit val proposeServiceClient: GrpcProposeService[F] =
+      new GrpcProposeService[F](
         options.grpcHost(),
         options.grpcPort(),
         options.grpcMaxRecvMessageSize()
       )
 
-    implicit val time: Time[Task] = effects.time
+    implicit val time: Time[F] = effects.time
+
+    import cats.instances.option._
 
     val program = subcommand(options) match {
       case Eval(files, printUnmatchedSendsOnly) =>
-        new ReplRuntime().evalProgram[Task](files, printUnmatchedSendsOnly)
-      case Repl => new ReplRuntime().replProgram[Task].as(())
+        new ReplRuntime().evalProgram[F](files, printUnmatchedSendsOnly)
+      case Repl => new ReplRuntime().replProgram[F].as(())
       case Deploy(
           phlo,
           phloPrice,
@@ -147,13 +145,13 @@ object Main {
           ) =>
         val getPrivateKey =
           maybePrivateKey
-            .map(_.pure[Task])
-            .orElse(maybePrivateKeyPath.map(decryptKeyFromCon))
+            .map(_.pure[F])
+            .orElse(maybePrivateKeyPath.map(decryptKeyFromCon[F]))
             .sequence
         for {
           privateKey <- getPrivateKey
-          _ <- privateKey.fold(Task.raiseError[Unit](new Exception("Private key is missing")))(
-                DeployRuntime.deployFileProgram[Task](
+          _ <- privateKey.fold(Sync[F].raiseError[Unit](new Exception("Private key is missing")))(
+                DeployRuntime.deployFileProgram[F](
                   phlo,
                   phloPrice,
                   validAfterBlock,
@@ -162,23 +160,23 @@ object Main {
                 )
               )
         } yield ()
-      case FindDeploy(deployId)         => DeployRuntime.findDeploy[Task](deployId)
-      case Propose(printUnmatchedSends) => DeployRuntime.propose[Task](printUnmatchedSends)
-      case ShowBlock(hash)              => DeployRuntime.getBlock[Task](hash)
-      case ShowBlocks(depth)            => DeployRuntime.getBlocks[Task](depth)
+      case FindDeploy(deployId)         => DeployRuntime.findDeploy[F](deployId)
+      case Propose(printUnmatchedSends) => DeployRuntime.propose[F](printUnmatchedSends)
+      case ShowBlock(hash)              => DeployRuntime.getBlock[F](hash)
+      case ShowBlocks(depth)            => DeployRuntime.getBlocks[F](depth)
       case VisualizeDag(depth, showJustificationLines) =>
-        DeployRuntime.visualizeDag[Task](depth, showJustificationLines)
-      case MachineVerifiableDag  => DeployRuntime.machineVerifiableDag[Task]
-      case DataAtName(name)      => DeployRuntime.listenForDataAtName[Task](name)
-      case ContAtName(names)     => DeployRuntime.listenForContinuationAtName[Task](names)
+        DeployRuntime.visualizeDag[F](depth, showJustificationLines)
+      case MachineVerifiableDag  => DeployRuntime.machineVerifiableDag[F]
+      case DataAtName(name)      => DeployRuntime.listenForDataAtName[F](name)
+      case ContAtName(names)     => DeployRuntime.listenForContinuationAtName[F](names)
       case Keygen(path)          => generateKey(path)
-      case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[Task]
-      case IsFinalized(hash)     => DeployRuntime.isFinalized[Task](hash)
-      case BondStatus(publicKey) => DeployRuntime.bondStatus[Task](publicKey)
-      case _                     => Task.delay(options.printHelp())
+      case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[F]
+      case IsFinalized(hash)     => DeployRuntime.isFinalized[F](hash)
+      case BondStatus(publicKey) => DeployRuntime.bondStatus[F](publicKey)
+      case _                     => Sync[F].delay(options.printHelp())
     }
 
-    Task.delay(
+    Sync[F].delay(
       sys.addShutdownHook {
         proposeServiceClient.close()
         replServiceClient.close()
@@ -222,30 +220,28 @@ object Main {
       case _                                  => Help
     }
 
-  private def decryptKeyFromCon(
+  private def decryptKeyFromCon[F[_]: Sync: ConsoleIO](
       encryptedPrivateKeyPath: Path
-  )(implicit console: ConsoleIO[Task]): Task[PrivateKey] =
+  ): F[PrivateKey] =
     for {
       password   <- getValidatorPassword
-      privateKey <- Secp256k1.parsePemFile[Task](encryptedPrivateKeyPath, password)
+      privateKey <- Secp256k1.parsePemFile[F](encryptedPrivateKeyPath, password)
     } yield privateKey
 
-  private def generateKey(
-      path: Path
-  )(implicit console: ConsoleIO[Task]): Task[Unit] =
+  private def generateKey[F[_]: Sync: ConsoleIO](path: Path): F[Unit] =
     for {
-      password       <- ConsoleIO[Task].readPassword("Enter password for keyfile: ")
-      passwordRepeat <- ConsoleIO[Task].readPassword("Repeat password: ")
+      password       <- ConsoleIO[F].readPassword("Enter password for keyfile: ")
+      passwordRepeat <- ConsoleIO[F].readPassword("Repeat password: ")
       _ <- if (password != passwordRepeat) {
-            ConsoleIO[Task].println("Passwords do not match. Try again:") >> generateKey(path)
+            ConsoleIO[F].println("Passwords do not match. Try again:") >> generateKey(path)
           } else if (password.isEmpty) {
-            ConsoleIO[Task].println("Password is empty. Try again:") >> generateKey(path)
+            ConsoleIO[F].println("Password is empty. Try again:") >> generateKey(path)
           } else {
             for {
               sigAlgorithm <- SignaturesAlg(Secp256k1.name)
-                               .map(_.pure[Task])
+                               .map(_.pure[F])
                                .getOrElse(
-                                 Task
+                                 Sync[F]
                                    .raiseError(new IllegalStateException("Invalid algorithm name"))
                                )
               (sk, pk) = sigAlgorithm.newKeyPair
@@ -253,7 +249,7 @@ object Main {
               privatePemKeyPath = path.resolve("rnode.key")
               publicPemKeyPath  = path.resolve("rnode.pub.pem")
               publicKeyHexFile  = path.resolve("rnode.pub.hex")
-              _ <- KeyUtil.writeKeys(
+              _ <- KeyUtil.writeKeys[F](
                     sk,
                     pk,
                     sigAlgorithm,
@@ -262,7 +258,7 @@ object Main {
                     publicPemKeyPath,
                     publicKeyHexFile
                   )
-              _ <- ConsoleIO[Task].println(
+              _ <- ConsoleIO[F].println(
                     s"\nSuccess!\n" +
                       s"Private key file (encrypted PEM format):  ${privatePemKeyPath.toAbsolutePath}\n" +
                       s"Public  key file (PEM format):            ${publicPemKeyPath.toAbsolutePath}\n" +
@@ -276,114 +272,112 @@ object Main {
 
   /**
     * Reads validator password from RNODE_VALIDATOR_PASSWORD env variable, if not set - asks for console
-    * @param console
-    * @return
     */
-  def getValidatorPassword(implicit console: ConsoleIO[Task]): Task[String] =
+  def getValidatorPassword[F[_]: Sync: ConsoleIO]: F[String] =
     sys.env.get(RNodeValidatorPasswordEnvVar) match {
       case Some(password) =>
-        if (password.length > 0) password.pure[Task] else requestForPassword
-      case None => requestForPassword
+        if (password.length > 0) password.pure[F] else requestForPassword[F]
+      case None => requestForPassword[F]
     }
 
-  def requestForPassword(implicit console: ConsoleIO[Task]): Task[String] =
-    console
-      .readPassword(
-        "Variable RNODE_VALIDATOR_PASSWORD is not set, please enter password for keyfile. \n" +
-          "Password for keyfile: "
-      )
+  def requestForPassword[F[_]: ConsoleIO]: F[String] =
+    ConsoleIO[F].readPassword(
+      "Variable RNODE_VALIDATOR_PASSWORD is not set, please enter password for keyfile. \n" +
+        "Password for keyfile: "
+    )
 
   /**
     * Loads validator key from file into configuration.
     * If key file is supplied by user, it overrides plain text private key
     * @param conf Node configuration instance
-    * @param console
     * @return
     */
-  private def loadPrivateKeyFromFile(
-      conf: NodeConf
-  )(implicit console: ConsoleIO[Task]): Task[NodeConf] =
+  private def loadPrivateKeyFromFile[F[_]: Sync: ConsoleIO](conf: NodeConf): F[NodeConf] =
     conf.casper.validatorPrivateKeyPath match {
       case Some(privateKeyPath) =>
         for {
-          privateKeyBase16 <- decryptKeyFromCon(privateKeyPath).map(sk => Base16.encode(sk.bytes))
+          privateKeyBase16 <- decryptKeyFromCon[F](privateKeyPath)
+                               .map(sk => Base16.encode(sk.bytes))
         } yield conf.copy(casper = conf.casper.copy(validatorPrivateKey = Some(privateKeyBase16)))
-      case _ => conf.pure[Task]
+      case _ => conf.pure[F]
     }
 
-  private def checkHost(conf: NodeConf): Task[Unit] = {
+  private def checkHost[F[_]: Sync: Log](conf: NodeConf): F[Unit] = {
     import coop.rchain.comm._
-    conf.protocolServer.host.fold(Task.unit) { h =>
-      Task
-        .now(conf.protocolServer.allowPrivateAddresses)
-        .ifM(isValidInetAddress[Task](h), isValidPublicInetAddress[Task](h))
+    conf.protocolServer.host.fold(().pure[F]) { h =>
+      Sync[F]
+        .delay(conf.protocolServer.allowPrivateAddresses)
+        .ifM(isValidInetAddress[F](h), isValidPublicInetAddress[F](h))
         .ifM(
-          Task.unit,
+          ().pure[F],
           for {
-            _ <- log.error(
+            _ <- Log[F].error(
                   s"Kademlia hostname '$h' is not valid or it does not resolve to a public IP address"
                 )
-            _ <- log.error("Hint: Run me with --allow-private-addresses in private networks")
-            _ <- Task.raiseError[Unit](new Exception("Invalid Kademlia hostname"))
+            _ <- Log[F].error("Hint: Run me with --allow-private-addresses in private networks")
+            _ <- Sync[F].raiseError[Unit](new Exception("Invalid Kademlia hostname"))
           } yield ()
         )
     }
   }
 
-  private def checkPorts(conf: NodeConf): Task[NodeConf] = {
-    def getFreePort: Task[Int] =
+  private def checkPorts[F[_]: Sync: Log](conf: NodeConf): F[NodeConf] = {
+    def getFreePort: F[Int] =
       Resource
         .fromAutoCloseable(
-          Task.delay(new java.net.ServerSocket(0))
+          Sync[F].delay(new java.net.ServerSocket(0))
         )
         .use { socket =>
-          Task.delay {
+          Sync[F].delay {
             socket.setReuseAddress(true)
             socket.getLocalPort
           }
         }
 
-    def isLocalPortAvailable(port: Int): Task[Boolean] =
-      Task
+    def isLocalPortAvailable(port: Int): F[Boolean] =
+      Sync[F]
         .delay(new java.net.ServerSocket(port).close())
         .attempt
         .map(_.isRight)
         .ifM(
-          true.pure[Task],
-          log.error(s"Port $port is already in use!").as(false)
+          true.pure[F],
+          Log[F].error(s"Port $port is already in use!").as(false)
         )
 
-    def checkRChainProtocolPort(configuration: NodeConf): Task[NodeConf] =
+    def checkRChainProtocolPort(configuration: NodeConf): F[NodeConf] =
       isLocalPortAvailable(configuration.protocolServer.port).ifM(
-        configuration.pure[Task],
+        configuration.pure[F],
         if (configuration.protocolServer.useRandomPorts)
           for {
             port <- getFreePort
-            _    <- log.info(s"Using random port $port as RChain Protocol port")
+            _    <- Log[F].info(s"Using random port $port as RChain Protocol port")
           } yield configuration.copy(
             protocolServer = configuration.protocolServer.copy(port = port)
           )
         else
-          log.error(
+          Log[F].error(
             "Hint: Run me with --use-random-ports to use a random port for RChain Protocol port"
-          ) >> Task.raiseError(new Exception("Invalid RChain Protocol port"))
+          ) >> Sync[F].raiseError(new Exception("Invalid RChain Protocol port"))
       )
 
-    def checkKademliaPort(configuration: NodeConf): Task[NodeConf] =
+    def checkKademliaPort(configuration: NodeConf): F[NodeConf] =
       isLocalPortAvailable(configuration.peersDiscovery.port).ifM(
-        configuration.pure[Task],
+        configuration.pure[F],
         if (configuration.protocolServer.useRandomPorts)
           for {
             port <- getFreePort
-            _    <- log.info(s"Using random port $port as Kademlia port")
+            _    <- Log[F].info(s"Using random port $port as Kademlia port")
           } yield configuration.copy(
             peersDiscovery = configuration.peersDiscovery.copy(port = port)
           )
         else
-          log.error(
+          Log[F].error(
             "Hint: Run me with --use-random-ports to use a random port for Kademlia port"
-          ) >> Task.raiseError(new Exception("Invalid Kademlia port"))
+          ) >> Sync[F].raiseError(new Exception("Invalid Kademlia port"))
       )
+
+    import cats.instances.list._
+    import cats.instances.tuple._
 
     for {
       portsAvailability <- List(
@@ -396,9 +390,9 @@ object Main {
       unavailablePorts = portsAvailability.filter(!_._2).map(_._1)
 
       _ <- if (unavailablePorts.isEmpty)
-            Task.unit
+            ().pure[F]
           else
-            Task.raiseError(
+            Sync[F].raiseError(
               new Exception(
                 s"Required ports are already in use: ${unavailablePorts.mkString(", ")}"
               )
@@ -409,27 +403,19 @@ object Main {
     } yield kademliaPortConf
   }
 
-  private def logConfiguration(
+  private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
       profile: Profile,
       configFile: Option[File],
       options: commandline.Options
-  ): Task[Unit] =
-    Task
-      .sequence(
-        Seq(
-          log.info(s"Starting with profile ${profile.name}"),
-          if (configFile.isEmpty)
-            log.warn("No configuration file found, using defaults")
-          else
-            log.info(s"Using configuration file: ${configFile.get.getAbsolutePath}"),
-          log.info(s"Running on network: ${conf.protocolServer.networkId}")
-        )
-      )
-      .void
+  ): F[Unit] =
+    Log[F].info(s"Starting with profile ${profile.name}") *>
+      (if (configFile.isEmpty) Log[F].warn("No configuration file found, using defaults")
+       else Log[F].info(s"Using configuration file: ${configFile.get.getAbsolutePath}")) *>
+      Log[F].info(s"Running on network: ${conf.protocolServer.networkId}")
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  private def consoleIO: ConsoleIO[Task] = {
+  private def consoleIO[F[_]: Sync]: ConsoleIO[F] = {
     val console = new ConsoleReader()
     console.setHistoryEnabled(true)
     if (TerminalMode.readMode)

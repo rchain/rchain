@@ -59,7 +59,8 @@ class TcpTransportLayerSpec
         maxMessageSize,
         tempFolder,
         100,
-        Ref.unsafe[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel]]](Map.empty)
+        Ref.unsafe[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel[Task]]]](Map.empty),
+        scheduler
       )
     )
 

@@ -98,7 +98,7 @@ trait FromPacket[Tag <: PacketTypeTag] {
 }
 
 object FromPacket {
-  def protoImpl[Tag <: PacketTypeTag, A <: GeneratedMessage with Message[A]](
+  def protoImpl[Tag <: PacketTypeTag, A <: GeneratedMessage](
       implicit companion: GeneratedMessageCompanion[A],
       witness0: ValueOf[Tag]
   ): FromPacket[Tag] { type To = A } = new FromPacket[Tag] {
@@ -124,7 +124,7 @@ object ToPacket {
     override val witness                             = witness0
     protected override def content(a: A): ByteString = a.toByteString
   }
-  implicit def protoSerde[Tag0 <: PacketTypeTag, A0 <: GeneratedMessage with Message[A0]](
+  implicit def protoSerde[Tag0 <: PacketTypeTag, A0 <: GeneratedMessage](
       implicit de: FromPacket[Tag0] { type To = A0 }
   ): ToPacket[A0] { type Tag = Tag0 } = protoMessageImpl[A0, Tag0](de.witness)
 }

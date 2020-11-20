@@ -65,7 +65,7 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
   private[this] def getBlockNumber(blockHash: BlockHash): F[Option[Long]] =
     for {
-      blockNumberBytesOpt <- blockNumberIndex.get(blockHash.toDirectByteBuffer)
+      blockNumberBytesOpt <- blockNumberIndex.get_WARNING(blockHash.toDirectByteBuffer)
     } yield blockNumberBytesOpt.map(_.getLong)
 
   private[this] def putBlockNumber(blockHash: BlockHash, blockNumber: Long): F[Unit] =

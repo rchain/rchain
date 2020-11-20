@@ -106,7 +106,7 @@ class ValidateTest
       sender           = ByteString.copyFrom(pk.bytes)
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      result           = ValidatorIdentity[Task](sk).signBlock(block.copy(seqNum = seqNum))
+      result           = ValidatorIdentity(sk).signBlock(block.copy(seqNum = seqNum))
     } yield result
   }
 
@@ -545,7 +545,7 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        signedBlock = ValidatorIdentity[Task](sk).signBlock(
+        signedBlock = ValidatorIdentity(sk).signBlock(
           block.withBlockNumber(17).copy(seqNum = 1)
         )
         _ <- Validate.blockSummary[Task](
@@ -751,7 +751,7 @@ class ValidateTest
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ValidatorIdentity[Task](sk)
+        genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.formatOfFields[Task](genesis) shouldBeF true
         _ <- Validate.formatOfFields[Task](genesis.copy(blockHash = ByteString.EMPTY)) shouldBeF false
@@ -776,7 +776,7 @@ class ValidateTest
         dag              <- blockDagStorage.getRepresentation
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-        genesis = ValidatorIdentity[Task](sk)
+        genesis = ValidatorIdentity(sk)
           .signBlock(context.genesisBlock.copy(seqNum = seqNum))
         _ <- Validate.blockHash[Task](genesis) shouldBeF Right(Valid)
         result <- Validate.blockHash[Task](
@@ -793,7 +793,7 @@ class ValidateTest
       dag              <- blockDagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
-      genesis = ValidatorIdentity[Task](sk).signBlock(
+      genesis = ValidatorIdentity(sk).signBlock(
         context.genesisBlock.copy(seqNum = seqNum)
       )
       _      <- Validate.version[Task](genesis, -1) shouldBeF false

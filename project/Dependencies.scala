@@ -6,16 +6,16 @@ object Dependencies {
 
   val circeVersion      = "0.13.0"
   val enumeratumVersion = "1.5.13"
-  val http4sVersion     = "0.21.4"
+  val http4sVersion     = "0.21.9"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "2.1.1"
+  val catsVersion       = "2.2.0"
   val catsEffectVersion = "2.2.0"
   val catsMtlVersion    = "0.7.1"
   val slf4jVersion      = "1.7.25"
 
   // format: off
-  val bouncyProvCastle    = "org.bouncycastle"           % "bcprov-jdk15on"             % "1.66"
-  val bouncyPkixCastle    = "org.bouncycastle"           % "bcpkix-jdk15on"             % "1.66"
+  val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.66"
+  val bouncyPkixCastle    = "org.bouncycastle"            % "bcpkix-jdk15on"            % "1.66"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
@@ -23,14 +23,16 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.11"
-  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
+  val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.0.0"
+  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.12"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
+  val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.4.4"
   val guava               = "com.google.guava"            % "guava"                     % "24.1.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
@@ -40,6 +42,7 @@ object Dependencies {
   val jaxb                = "javax.xml.bind"              % "jaxb-api"                  % "2.3.1"
   val jline               = ("org.scala-lang"             % "jline"                     % "2.10.7")
     .exclude("org.fusesource.jansi", "jansi")
+  val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
   // see https://jitpack.io/#rchain/kalium
   val kalium              = "com.github.rchain"           % "kalium"                    % "0.8.1"
   val kamonCore           = "io.kamon"                   %% "kamon-core"                % kamonVersion
@@ -51,8 +54,11 @@ object Dependencies {
     .intransitive() //we only use the lib for one util class (org.lightningj.util.ZBase32) that has no dependencies
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
+  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
-  val monix               = "io.monix"                   %% "monix"                     % "3.2.2"
+  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
+  val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
+  val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"
@@ -64,46 +70,49 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.10.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.10.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.31.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
   val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.18"
-  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
-  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
-  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.20"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
-  val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
+  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
-  val julToSlf4j          = "org.slf4j"                   % "jul-to-slf4j"              % slf4jVersion
-  val pureconfig          = "com.github.pureconfig"       %% "pureconfig"               % "0.13.0"
-  val fs2Core             = "co.fs2"                      %% "fs2-core"                 % "2.3.0"
-  val catsRetry           = "com.github.cb372"            %% "cats-retry"               % "2.0.0"
+  val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   // format: on
 
   val overrides = Seq(
     catsCore,
     catsEffect,
     catsLawsTest,
-    shapeless,
-    guava,
-    scodecBits,
-    scalacheck,
     disciplineCore,
+    fs2Core,
+    guava,
+    scalacheck,
+    scodecBits,
+    shapeless,
+    // Added to resolve conflicts in scalapb plugin v0.10.8
+    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
+    "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
+    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.2.0",
+    // Strange version conflict, it requires the same version but in square brackets (range?).
+    // e.g. io.grpc:grpc-core:1.30.2 ([1.30.2] wanted)
+    // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
+    "io.grpc"  % "grpc-api"          % "1.30.2",
+    "io.grpc"  % "grpc-core"         % "1.30.2",
+    "io.netty" % "netty-codec-http2" % "4.1.48.Final",
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
-    "com.typesafe"             % "config"                  % "1.4.0",
-    "org.typelevel"            %% "machinist"              % "0.6.5",
-    "org.typelevel"            %% "catalysts-platform"     % "0.6",
-    "com.lihaoyi"              %% "sourcecode"             % "0.1.4",
-    "org.scala-lang.modules"   %% "scala-xml"              % "1.1.0",
+    "com.github.jnr"           % "jnr-ffi"                 % "2.1.15",
+    "com.google.errorprone"    % "error_prone_annotations" % "2.3.4",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
-    "com.google.errorprone"    % "error_prone_annotations" % "2.1.2",
-    "com.github.jnr"           % "jnr-ffi"                 % "2.1.7"
+    "com.lihaoyi"              %% "sourcecode"             % "0.2.1",
+    "org.scala-lang.modules"   %% "scala-xml"              % "1.3.0",
+    "com.typesafe"             % "config"                  % "1.4.0"
   )
 
   private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
