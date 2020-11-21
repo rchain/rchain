@@ -14,6 +14,8 @@ import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 
+import scala.concurrent.duration.FiniteDuration
+
 class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
 
   val fixture = Setup()
@@ -46,7 +48,16 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
     implicit val casper    = NoOpsCasperEffect[Task]().unsafeRunSync
     implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
 
-    val engine = new Running[Task](casper, approvedBlock, None, Task.unit, true)
+    val engine =
+      new Running[Task](
+        fixture.blockProcessingQueue,
+        fixture.blockProcessingState,
+        casper,
+        approvedBlock,
+        None,
+        Task.unit,
+        true
+      )
 
     // Need to have well-formed block here. Do we have that API in tests?
     "respond to BlockMessage messages " in {
@@ -54,9 +65,11 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
 
       val signedBlockMessage = validatorId.signBlock(blockMessage)
       val test: Task[Unit] = for {
-        _               <- engine.handle(local, signedBlockMessage)
-        blockIsInCasper <- casper.contains(signedBlockMessage.blockHash)
-        _               = assert(blockIsInCasper)
+        _ <- engine.handle(local, signedBlockMessage)
+        blockIsInqueue <- blockProcessingQueue.dequeue1.map(
+                           _._2.blockHash == signedBlockMessage.blockHash
+                         )
+        _ = assert(blockIsInqueue)
       } yield ()
 
       test.unsafeRunSync

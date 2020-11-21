@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.metrics
@@ -65,6 +66,13 @@ object Resources {
     Resource.make(
       BlockDagStorageTestFixture.createBlockStorage[F](path)
     )(_.close())
+
+  def mkLastFinalizedStorage[F[_]: Concurrent: Metrics: Sync: Log](
+      path: Path
+  ): Resource[F, LastFinalizedStorage[F]] =
+    Resource.liftF(
+      LastFinalizedFileStorage.make[F](path)
+    )
 
   def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
       path: Path

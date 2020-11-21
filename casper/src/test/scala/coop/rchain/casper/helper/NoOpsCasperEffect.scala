@@ -1,25 +1,19 @@
 package coop.rchain.casper.helper
 
-import cats.effect.{Resource, Sync}
+import cats.Applicative
+import cats.effect.Sync
 import cats.implicits._
-import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper._
-import coop.rchain.casper.DeployError
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
-import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{BlockStatus, CreateBlockStatus, MultiParentCasper}
-import coop.rchain.crypto.PublicKey
+import coop.rchain.casper.{BlockStatus, DeployError, MultiParentCasper, _}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
-import monix.eval.Task
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -40,14 +34,13 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     Applicative[F].pure(Right(ByteString.EMPTY))
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
-  def createBlock: F[CreateBlockStatus]                               = CreateBlockStatus.noNewDeploys.pure[F]
   def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
   def lastFinalizedBlock: F[BlockMessage]                             = getRandomBlock().pure[F]
   def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
   def fetchDependencies: F[Unit]                                      = ().pure[F]
   def getApprovedBlock: F[BlockMessage]                               = getRandomBlock().pure[F]
-  def getValidator: F[Option[PublicKey]]                              = none.pure[F]
+  def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
   def getVersion: F[Long]                                             = 1L.pure[F]
   def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
@@ -57,8 +50,18 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
-  def getBlockProcessingState: F[BlockProcessingState] =
-    BlockProcessingState(Set.empty[BlockHash], Set.empty[BlockHash]).pure[F]
+  override def getSnapshot: F[CasperSnapshot[F]] = ???
+  override def validate(
+      b: BlockMessage,
+      dag: BlockDagRepresentation[F]
+  ): F[Either[BlockError, ValidBlock]]                                             = ???
+  override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] = ???
+  override def handleInvalidBlock(
+      block: BlockMessage,
+      status: InvalidBlock,
+      dag: BlockDagRepresentation[F]
+  ): F[BlockDagRepresentation[F]]                                 = ???
+  override def getDependencyFreeFromBuffer: F[List[BlockMessage]] = ???
 }
 
 object NoOpsCasperEffect {

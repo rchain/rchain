@@ -46,8 +46,9 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       // interval and duration don't really matter since we don't require and signs from validators
       val initializingEngine =
         new Initializing[Task](
-          shardId,
-          finalizationRate,
+          fixture.blockProcessingQueue,
+          fixture.blockProcessingState,
+          fixture.casperShardConf,
           Some(validatorId),
           theInit,
           blockResponseQueue,

@@ -28,7 +28,7 @@ object ProposerInstance {
     // propose permit
       .eval(for {
         lock    <- Semaphore[F](1)
-        trigger <- MVar[F].of()
+        trigger <- MVar[F].of(())
       } yield (lock, trigger))
       .flatMap {
         case (lock, trigger) =>
@@ -40,7 +40,7 @@ object ProposerInstance {
                 // if propose is in progress - resolve proposeID to None and stop here.
                 // Cock the trigger, so propose is called again after the one that occupies the lock finishes.
                 .evalFilter { v =>
-                  (proposeIDDef.complete(None) >> trigger.tryPut()).unlessA(v).as(v)
+                  (proposeIDDef.complete(None) >> trigger.tryPut(())).unlessA(v).as(v)
                 }
                 // execute propose
                 .evalMap { _ =>

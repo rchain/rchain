@@ -10,6 +10,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.shared.{Cell, EventPublisher}
+import fs2.concurrent.Queue
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -53,8 +54,9 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         c1 = abp.run().startAndForget.runToFuture
         c2 = GenesisCeremonyMaster
           .waitingForApprovedBlockLoop[Task](
-            shardId,
-            finalizationRate,
+            fixture.blockProcessingQueue,
+            fixture.blockProcessingState,
+            fixture.casperShardConf,
             Some(validatorId),
             disableStateExporter = true
           )
