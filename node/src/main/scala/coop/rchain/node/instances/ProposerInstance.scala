@@ -29,6 +29,8 @@ object ProposerInstance {
       .eval(for {
         lock    <- Semaphore[F](1)
         trigger <- MVar[F].of(())
+        // initial position for propose trigger - inactive
+        _ <- trigger.take
       } yield (lock, trigger))
       .flatMap {
         case (lock, trigger) =>

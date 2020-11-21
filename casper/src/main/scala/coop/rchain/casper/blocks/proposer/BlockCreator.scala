@@ -88,11 +88,11 @@ object BlockCreator {
         } yield slashingDeploys
 
       def prepareDummyDeploy(blockNumber: Long): Seq[Signed[DeployData]] = dummyDeployOpt match {
-        case Some(d) =>
+        case Some((privateKey, term)) =>
           Seq(
             ConstructDeploy.sourceDeployNow(
-              source = d._2,
-              sec = d._1,
+              source = term,
+              sec = privateKey,
               vabn = blockNumber - 1
             )
           )

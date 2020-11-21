@@ -177,7 +177,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     )
 
     val autopropose = opt[Flag](
-      descr = "make node automatically trying to propose block after each new block added"
+      descr =
+        "Make node automatically trying to propose block after new block added or new deploy received."
     )
 
     val noUpnp = opt[Flag](
