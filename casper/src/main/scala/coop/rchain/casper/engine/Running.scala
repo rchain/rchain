@@ -276,7 +276,7 @@ object Running {
       skip: Int,
       take: Int
   ): F[Unit] = {
-    import coop.rchain.rspace.state.syntax._
+    import coop.rchain.rspace.syntax._
     for {
       // Export chunk of store items from RSpace
       exportedItems <- RSpaceStateManager[F].exporter.getHistoryAndData(

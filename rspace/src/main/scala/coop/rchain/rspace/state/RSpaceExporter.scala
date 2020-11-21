@@ -1,7 +1,6 @@
 package coop.rchain.rspace.state
 
 import cats.Monad
-import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history._

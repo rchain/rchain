@@ -12,7 +12,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.syntax._
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task

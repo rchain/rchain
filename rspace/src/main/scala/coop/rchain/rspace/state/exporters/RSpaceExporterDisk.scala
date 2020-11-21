@@ -7,7 +7,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
-import coop.rchain.rspace.state.syntax._
+import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.shared.{Log, Stopwatch}
