@@ -8,11 +8,12 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{Header, _}
-import coop.rchain.casper.util.ProtoUtil
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -37,8 +38,8 @@ object BlockCreator {
    */
   def create[F[_]: Sync: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
-      validatorIdentity: ValidatorIdentity
-      //dummyDeployOpt: Option[(PrivateKey, String)] = None
+      validatorIdentity: ValidatorIdentity,
+      dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -86,30 +87,31 @@ object BlockCreator {
               )
         } yield slashingDeploys
 
-      // TODO enable this when adding dummy deploys
-//      val prepareDummyDeploy: Seq[Signed[DeployData]] = dummyDeployOpt match {
-//        case Some(d) =>
-//          cs.getMaxBlockNumber >>= {vabn => Seq(
-//            ConstructDeploy.sourceDeployNow(
-//              source = d._2,
-//              sec = d._1,
-//              validAfterBlockNumber = vabn
-//            ))}
-//        case None => Seq.empty[Signed[DeployData]]
-//      }
+      def prepareDummyDeploy(blockNumber: Long): Seq[Signed[DeployData]] = dummyDeployOpt match {
+        case Some(d) =>
+          Seq(
+            ConstructDeploy.sourceDeployNow(
+              source = d._2,
+              sec = d._1,
+              vabn = blockNumber - 1
+            )
+          )
+        case None => Seq.empty[Signed[DeployData]]
+      }
 
       for {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
         userDeploys     <- prepareUserDeploys(nextBlockNum)
+        dummyDeploys    = prepareDummyDeploy(nextBlockNum)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys = userDeploys -- s.deploysInScope //++ prepareDummyDeploy
+        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
               for {
                 now           <- Time[F].currentMillis

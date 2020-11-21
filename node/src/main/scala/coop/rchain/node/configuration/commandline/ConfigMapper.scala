@@ -22,7 +22,6 @@ object ConfigMapper {
       val run = options.run
       val add = addToMap()
       add("standalone", run.standalone)
-      add("dev-mode", run.devMode)
       add("protocol-server.network-id", run.networkId)
       add("protocol-server.dynamic-ip", run.dynamicIp)
       add("protocol-server.no-upnp", run.noUpnp)
@@ -122,6 +121,10 @@ object ConfigMapper {
       add("metrics.influxdb-udp", run.influxdbUdp)
       add("metrics.zipkin", run.zipkin)
       add("metrics.sigar", run.sigar)
+
+      add("dev-mode", run.devMode)
+      add("dev.deployer-private-key", run.deployerPrivateKey)
+
       //TODO remove
       //add(keys.KnownValidatorsFile, run.knownValidators
     }

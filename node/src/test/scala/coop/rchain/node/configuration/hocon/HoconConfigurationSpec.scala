@@ -10,6 +10,7 @@ import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.node.configuration.{
   ApiServer,
+  DevConf,
   Metrics,
   NodeConf,
   PeersDiscovery,
@@ -162,7 +163,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         influxdbUdp = false,
         zipkin = false,
         sigar = false
-      )
+      ),
+      dev = DevConf(deployerPrivateKey = None)
     )
     config shouldEqual expectedConfig
   }
