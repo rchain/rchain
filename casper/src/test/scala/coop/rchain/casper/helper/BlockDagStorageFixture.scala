@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.zip.CRC32
 
 import cats.effect.{Concurrent, Resource, Sync}
-import cats.syntax.functor._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{
@@ -21,13 +21,10 @@ import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.lmdbjava.{Env, EnvFlags}
-import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.scalatest.{BeforeAndAfter, Suite}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
@@ -65,8 +62,10 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
         implicit val metrics = new MetricsNOP[Task]()
         implicit val log     = Log.log[Task]
         for {
-          blockStore             <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
-          blockDagStorage        <- BlockDagStorageTestFixture.createBlockDagStorage(blockDagStorageDir)
+          blockStore <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStorageDir)
+          blockDagStorage <- BlockDagStorageTestFixture.createBlockDagStorage[Task](
+                              blockDagStorageDir
+                            )
           indexedBlockDagStorage <- IndexedBlockDagStorage.create(blockDagStorage)
           result                 <- f(blockStore)(indexedBlockDagStorage)
         } yield result
@@ -107,52 +106,29 @@ object BlockDagStorageTestFixture {
     Files.write(latestMessagesCrc, crcByteBuffer.array())
   }
 
-  def env(
-      path: Path,
-      mapSize: Long,
-      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
-  ): Env[ByteBuffer] =
-    Env
-      .create(PROXY_SAFE)
-      .setMapSize(mapSize)
-      .setMaxDbs(8)
-      .setMaxReaders(126)
-      .open(path.toFile, flags: _*)
-
   val mapSize: Long = 1024L * 1024L * 1024L
 
-  def createBlockStorage[F[_]: Concurrent: Metrics: Sync: Log](
+  def createBlockStorage[F[_]: Concurrent: Log](
       blockStorageDir: Path
-  ): F[BlockStore[F]] = {
-    val env = Context.env(blockStorageDir, mapSize)
-    FileLMDBIndexBlockStore.create[F](env, blockStorageDir).map(_.right.get)
-  }
-
-  def createBlockDagStorage(blockDagStorageDir: Path)(
-      implicit log: Log[Task],
-      metrics: Metrics[Task]
-  ): Task[BlockDagStorage[Task]] =
+  ): F[BlockStore[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagStorageDir)
+      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
+      blockStore <- {
+        implicit val kvm = storeManager
+        KeyValueBlockStore[F]()
+      }
+    } yield blockStore
+
+  def createBlockDagStorage[F[_]: Concurrent](blockDagStorageDir: Path)(
+      implicit log: Log[F],
+      metrics: Metrics[F]
+  ): F[BlockDagStorage[F]] =
+    for {
+      storeManager <- RNodeKeyValueStoreManager[F](blockDagStorageDir)
       blockDagStorage <- {
         implicit val kvm = storeManager
-        BlockDagKeyValueStorage.create[Task]
+        BlockDagKeyValueStorage.create[F]
       }
     } yield blockDagStorage
 
-  def createDirectories[F[_]: Concurrent]: Resource[F, (Path, Path)] =
-    Resource.make[F, (Path, Path)] {
-      Sync[F].delay {
-        (
-          Files.createTempDirectory("casper-block-storage-test-"),
-          Files.createTempDirectory("casper-block-dag-storage-test-")
-        )
-      }
-    } {
-      case (blockStoreDir, blockDagDir) =>
-        Sync[F].delay {
-          blockStoreDir.recursivelyDelete()
-          blockDagDir.recursivelyDelete()
-        }
-    }
 }

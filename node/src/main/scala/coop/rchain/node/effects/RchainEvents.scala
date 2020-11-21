@@ -1,7 +1,7 @@
 package coop.rchain.node.effects
 
-import cats.data.ReaderT
 import cats.effect.{Concurrent, Sync}
+import cats.syntax.all._
 import coop.rchain.shared.{EventPublisher, RChainEvent}
 import fs2.concurrent.Queue
 import fs2.{Stream => FS2Stream}
@@ -17,16 +17,14 @@ object EventConsumer {
 trait RchainEvents[F[_], G[_]] extends EventPublisher[F] with EventConsumer[G]
 
 object RchainEvents {
-  def readerTInstance[F[_]: Sync: Concurrent, E]: ReaderT[F, E, RchainEvents[ReaderT[F, E, ?], F]] =
-    for {
-      q <- Queue.in[ReaderT[F, E, ?]].circularBuffer[F, RChainEvent](1)
-    } yield new RchainEvents[ReaderT[F, E, ?], F] {
-      override def publish(e: => RChainEvent): ReaderT[F, E, Unit] = ReaderT.liftF(
-        q.enqueue1(e)
-      )
 
-      override def consume: FS2Stream[F, RChainEvent] =
-        q.dequeue
+  def apply[F[_]: Sync: Concurrent]: F[RchainEvents[F, F]] =
+    for {
+      q <- Queue.in[F].circularBuffer[F, RChainEvent](1)
+    } yield new RchainEvents[F, F] {
+      override def publish(e: => RChainEvent): F[Unit] = q.enqueue1(e)
+
+      override def consume: FS2Stream[F, RChainEvent] = q.dequeue
     }
 
 }

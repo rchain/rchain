@@ -3,14 +3,17 @@ package coop.rchain.casper.util.comm
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import scala.util.Either
-import cats.implicits._
+import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.either.implicits._
+import coop.rchain.monix.Monixable
+import coop.rchain.shared.syntax._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import monix.eval.Task
+
+import scala.util.Either
 
 trait DeployService[F[_]] {
   def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]]
@@ -32,8 +35,8 @@ object DeployService {
   def apply[F[_]](implicit ev: DeployService[F]): DeployService[F] = ev
 }
 
-class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
-    extends DeployService[Task]
+class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessageSize: Int)
+    extends DeployService[F]
     with Closeable {
 
   private val channel: ManagedChannel =
@@ -45,53 +48,58 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = DeployServiceV1GrpcMonix.stub(channel)
 
-  def deploy(d: Signed[DeployData]): Task[Either[Seq[String], String]] =
+  def deploy(d: Signed[DeployData]): F[Either[Seq[String], String]] =
     stub
       .doDeploy(DeployData.toProto(d))
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.result
       )
 
-  def getBlock(q: BlockQuery): Task[Either[Seq[String], String]] =
+  def getBlock(q: BlockQuery): F[Either[Seq[String], String]] =
     stub
       .getBlock(q)
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
       )
 
-  def findDeploy(q: FindDeployQuery): Task[Either[Seq[String], String]] =
+  def findDeploy(q: FindDeployQuery): F[Either[Seq[String], String]] =
     stub
       .findDeploy(q)
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
       )
 
-  def visualizeDag(q: VisualizeDagQuery): Task[Either[Seq[String], String]] =
+  def visualizeDag(q: VisualizeDagQuery): F[Either[Seq[String], String]] =
     stub
       .visualizeDag(q)
-      .mapEval(_.pure[Task].toEitherF(_.message.error, _.message.content))
+      .mapEval(_.pure[F].toTask.toEitherF(_.message.error, _.message.content))
       .toListL
+      .fromTask
       .map { bs =>
         val (l, r) = bs.partition(_.isLeft)
         if (l.isEmpty) Right(r.map(_.right.get).mkString)
         else Left(l.flatMap(_.left.get))
       }
 
-  def machineVerifiableDag(q: MachineVerifyQuery): Task[Either[Seq[String], String]] =
+  def machineVerifiableDag(q: MachineVerifyQuery): F[Either[Seq[String], String]] =
     stub
       .machineVerifiableDag(q)
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.content
       )
 
-  def getBlocks(q: BlocksQuery): Task[Either[Seq[String], String]] =
+  def getBlocks(q: BlocksQuery): F[Either[Seq[String], String]] =
     stub
       .getBlocks(q)
-      .mapEval(_.pure[Task].toEitherF(_.message.error, _.message.blockInfo))
+      .mapEval(_.pure[F].toTask.toEitherF(_.message.error, _.message.blockInfo))
       .map(_.map { bi =>
         s"""
          |------------- block ${bi.blockNumber} ---------------
@@ -100,6 +108,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
          |""".stripMargin
       })
       .toListL
+      .fromTask
       .map { bs =>
         val (l, r) = bs.partition(_.isLeft)
         if (l.isEmpty) {
@@ -114,9 +123,10 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   def listenForDataAtName(
       request: DataAtNameQuery
-  ): Task[Either[Seq[String], Seq[DataWithBlockInfo]]] =
+  ): F[Either[Seq[String], Seq[DataWithBlockInfo]]] =
     stub
       .listenForDataAtName(request)
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.payload.map(_.blockInfo)
@@ -124,25 +134,29 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
 
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
-  ): Task[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]] =
+  ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]] =
     stub
       .listenForContinuationAtName(request)
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.payload.map(_.blockResults)
       )
 
-  def lastFinalizedBlock: Task[Either[Seq[String], String]] =
+  def lastFinalizedBlock: F[Either[Seq[String], String]] =
     stub
       .lastFinalizedBlock(LastFinalizedBlockQuery())
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.blockInfo.map(_.toProtoString)
       )
 
-  def isFinalized(request: IsFinalizedQuery): Task[Either[Seq[String], String]] =
+  def isFinalized(request: IsFinalizedQuery): F[Either[Seq[String], String]] = {
+    import cats.instances.either._
     stub
       .isFinalized(request)
+      .fromTask
       .toEitherF(_.message.error, _.message.isFinalized)
       .map(
         _.ifM(
@@ -150,10 +164,13 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
           Seq("Block is not finalized").asLeft
         )
       )
+  }
 
-  def bondStatus(request: BondStatusQuery): Task[Either[Seq[String], String]] =
+  def bondStatus(request: BondStatusQuery): F[Either[Seq[String], String]] = {
+    import cats.instances.either._
     stub
       .bondStatus(request)
+      .fromTask
       .toEitherF(_.message.error, _.message.isBonded)
       .map(
         _.ifM(
@@ -161,6 +178,7 @@ class GrpcDeployService(host: String, port: Int, maxMessageSize: Int)
           Seq("Validator is not bonded").asLeft
         )
       )
+  }
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {

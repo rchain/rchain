@@ -58,10 +58,11 @@ def get_node_id_str(key: _EllipticCurvePrivateKey) -> str:
 
 class TransportServer(TransportLayerServicer):
     def __init__(self, node: Node, networkId: str, return_queue: Queue):
+        super().__init__()
         self.node = node
         self.header = Header(sender=self.node, networkId=networkId)
         self.return_queue = return_queue
-        super(TransportServer, self).__init__()
+        super().__init__()
 
     def Send(self, request: TLRequest, context: grpc.ServicerContext) -> TLResponse:
         return TLResponse(noResponse=Ack(header=self.header))
@@ -131,8 +132,8 @@ class NodeClient:
         self.send_request(request, rnode)
         try:
             return self.return_queue.get(timeout=self._receive_timeout)
-        except Empty:
-            raise BlockNotFound(block_hash, rnode)
+        except Empty as e:
+            raise BlockNotFound(block_hash, rnode) from e
 
     def send_request(self, request: TLRequest, rnode: RNode) -> None:
         credential = grpc.ssl_channel_credentials(rnode.get_node_pem_cert(), self.node_pem_key, self.node_pem_cert)

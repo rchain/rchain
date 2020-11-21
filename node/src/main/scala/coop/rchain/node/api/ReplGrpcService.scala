@@ -1,25 +1,24 @@
 package coop.rchain.node.api
 
 import cats.effect.Sync
-import cats.implicits._
-import coop.rchain.catscontrib.Catscontrib._
-import coop.rchain.catscontrib._
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
+import coop.rchain.monix.Monixable
 import coop.rchain.node.model.repl._
+import coop.rchain.rholang.interpreter.Interpreter._
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{RhoRuntime, _}
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object ReplGrpcService {
-  def instance[F[_]: Sync: Taskable](
-      runtime: RhoRuntime[F],
-      worker: Scheduler
-  ): ReplGrpcMonix.Repl =
+
+  def apply[F[_]: Monixable: Sync](runtime: RhoRuntime[F], worker: Scheduler): ReplGrpcMonix.Repl =
     new ReplGrpcMonix.Repl {
       def exec(source: String, printUnmatchedSendsOnly: Boolean = false): F[ReplResponse] =
         Sync[F]
@@ -59,7 +58,7 @@ object ReplGrpcService {
           .map(ReplResponse(_))
 
       private def defer[A](task: F[A]): Task[A] =
-        Task.defer(task.toTask).executeOn(worker)
+        task.toTask.executeOn(worker)
 
       def run(request: CmdRequest): Task[ReplResponse] =
         defer(exec(request.line))

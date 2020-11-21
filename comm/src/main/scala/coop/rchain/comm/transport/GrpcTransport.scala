@@ -1,34 +1,23 @@
 package coop.rchain.comm.transport
 
-import scala.util.{Either, Left, Right}
-
-import cats.data.ReaderT
-import cats.syntax.either._
-import cats.syntax.option._
-
-import coop.rchain.catscontrib.ski._
+import cats.effect.Sync
+import cats.syntax.all._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.{RoutingGrpcMonix, _}
-import coop.rchain.comm.CommError._
-import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.Metrics
-
+import coop.rchain.metrics.implicits._
+import coop.rchain.monix.Monixable
+import coop.rchain.shared.syntax._
 import io.grpc.{Status, StatusRuntimeException}
-import monix.eval.Task
 import monix.reactive.Observable
+
+import scala.util.{Either, Left, Right}
 
 object GrpcTransport {
 
-  type Request[A] = ReaderT[Task, RoutingGrpcMonix.TransportLayer, CommErr[A]]
   implicit private val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
-
-  private def transport(
-      peer: PeerNode
-  )(
-      request: RoutingGrpcMonix.TransportLayer => Task[TLResponse]
-  ): Request[Unit] =
-    ReaderT(stub => request(stub).attempt.map(processResponse(peer, _)))
 
   private object PeerUnavailable {
     def unapply(e: Throwable): Boolean =
@@ -95,15 +84,35 @@ object GrpcTransport {
         case e                     => protocolException(e)
       }
 
-  def send(peer: PeerNode, msg: Protocol)(implicit metrics: Metrics[Task]): Request[Unit] =
+  def send[F[_]: Monixable: Sync](
+      transport: RoutingGrpcMonix.TransportLayer,
+      peer: PeerNode,
+      msg: Protocol
+  )(
+      implicit metrics: Metrics[F]
+  ): F[CommErr[Unit]] =
     for {
-      _      <- ReaderT.liftF(metrics.incrementCounter("send"))
-      result <- transport(peer)(_.send(TLRequest(msg.some)).timer("send-time"))
+      _ <- metrics.incrementCounter("send")
+      result <- transport
+                 .send(TLRequest(msg.some))
+                 .fromTask
+                 .attempt
+                 .timer("send-time")
+                 .map(processResponse(peer, _))
     } yield result
 
-  def stream(networkId: String, peer: PeerNode, blob: Blob, packetChunkSize: Int): Request[Unit] =
-    ReaderT(
-      _.stream(Observable.fromIterator(Chunker.chunkIt(networkId, blob, packetChunkSize))).attempt
-        .map(r => processResponse(peer, r))
-    )
+  def stream[F[_]: Monixable: Sync](
+      transport: RoutingGrpcMonix.TransportLayer,
+      peer: PeerNode,
+      networkId: String,
+      blob: Blob,
+      packetChunkSize: Int
+  ): F[CommErr[Unit]] = {
+    val chunkIt = Chunker.chunkIt[F](networkId, blob, packetChunkSize)
+    transport
+      .stream(Observable.fromIterator(chunkIt.toTask))
+      .fromTask
+      .attempt
+      .map(processResponse(peer, _))
+  }
 }

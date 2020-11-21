@@ -1,15 +1,16 @@
 package coop.rchain.comm.discovery
 
-import cats.implicits._
-
+import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.comm.PeerNode
-
+import coop.rchain.monix.Monixable
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 
-class GrpcKademliaRPCServer(
+class GrpcKademliaRPCServer[F[_]: Monixable: Sync](
     networkId: String,
-    pingHandler: PeerNode => Task[Unit],
-    lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
+    pingHandler: PeerNode => F[Unit],
+    lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
 ) extends KademliaGrpcMonix.KademliaRPCService {
 
   def sendLookup(lookup: Lookup): Task[LookupResponse] =
@@ -18,12 +19,13 @@ class GrpcKademliaRPCServer(
       val sender: PeerNode = toPeerNode(lookup.sender.get)
       lookupHandler(sender, id)
         .map(peers => LookupResponse().withNodes(peers.map(toNode)).withNetworkId(networkId))
-    } else Task.now(LookupResponse().withNodes(Nil))
+        .toTask
+    } else Sync[F].delay(LookupResponse().withNodes(Nil)).toTask
 
   def sendPing(ping: Ping): Task[Pong] =
     if (ping.networkId == networkId) {
       val sender: PeerNode = toPeerNode(ping.sender.get)
-      pingHandler(sender).as(Pong().withNetworkId(networkId))
-    } else Task.now(Pong().withNetworkId(networkId))
+      pingHandler(sender).toTask.as(Pong().withNetworkId(networkId))
+    } else Sync[F].delay(Pong().withNetworkId(networkId)).toTask
 
 }

@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler
 
 import java.io.{Reader, StringReader}
 
@@ -9,8 +9,8 @@ import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
 trait ParBuilder[F[_]] {
   def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
@@ -65,34 +65,34 @@ object ParBuilder {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), IndexMapChain[VarSort](), DebruijnLevelMap[VarSort]())
+          ProcVisitInputs(VectorPar(), IndexMapChain.empty, DeBruijnLevelMap.empty)
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.knownFree.count > 0) {
-            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.logicalConnectives.isEmpty) {
-              val topLevelFreeList = normalizedTerm.knownFree.env.map {
-                case (name, (_, _, line, col)) => s"$name at $line:$col"
+            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.connectives.isEmpty) {
+              val topLevelFreeList = normalizedTerm.knownFree.levelBindings.map {
+                case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
               )
-            } else if (normalizedTerm.knownFree.logicalConnectives.nonEmpty) {
+            } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
                 if (conn.isConnAndBody) "/\\ (conjunction)"
                 else if (conn.isConnOrBody) "\\/ (disjunction)"
                 else if (conn.isConnNotBody) "~ (negation)"
                 else conn.toString
 
-              val connectives = normalizedTerm.knownFree.logicalConnectives
+              val connectives = normalizedTerm.knownFree.connectives
                 .map {
-                  case (connType, line, col) =>
-                    s"${connectiveInstanceToString(connType)} at $line:$col"
+                  case (connType, sourcePosition) =>
+                    s"${connectiveInstanceToString(connType)} at $sourcePosition"
                 }
                 .mkString("", ", ", "")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
-              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map {
-                case (line, col) => s"_ (wildcard) at $line:$col"
+              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
+                s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))

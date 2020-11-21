@@ -17,6 +17,7 @@ option (scalapb.options) = {
   import: "coop.rchain.models.BitSetBytesMapper.bitSetBytesMapper"
   import: "coop.rchain.models.ParSetTypeMapper.parSetESetTypeMapper"
   import: "coop.rchain.models.ParMapTypeMapper.parMapEMapTypeMapper"
+  preserve_unknown_fields: false
 };
 
 /**

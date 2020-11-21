@@ -3,14 +3,15 @@ package coop.rchain.casper.util.comm
 import java.io.Closeable
 import java.util.concurrent.TimeUnit
 
-import scala.util.Either
-
+import cats.effect.Sync
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.models.either.implicits._
-
+import coop.rchain.monix.Monixable
+import coop.rchain.shared.syntax._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
-import monix.eval.Task
+
+import scala.util.Either
 
 trait ProposeService[F[_]] {
   def propose(printUnmatchedSends: Boolean): F[Either[Seq[String], String]]
@@ -20,8 +21,8 @@ object ProposeService {
   def apply[F[_]](implicit ev: ProposeService[F]): ProposeService[F] = ev
 }
 
-class GrpcProposeService(host: String, port: Int, maxMessageSize: Int)
-    extends ProposeService[Task]
+class GrpcProposeService[F[_]: Monixable: Sync](host: String, port: Int, maxMessageSize: Int)
+    extends ProposeService[F]
     with Closeable {
 
   private val channel: ManagedChannel =
@@ -33,9 +34,10 @@ class GrpcProposeService(host: String, port: Int, maxMessageSize: Int)
 
   private val stub = ProposeServiceV1GrpcMonix.stub(channel)
 
-  def propose(printUnmatchedSends: Boolean): Task[Either[Seq[String], String]] =
+  def propose(printUnmatchedSends: Boolean): F[Either[Seq[String], String]] =
     stub
       .propose(PrintUnmatchedSendsQuery(printUnmatchedSends))
+      .fromTask
       .toEitherF(
         _.message.error,
         _.message.result

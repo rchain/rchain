@@ -16,11 +16,11 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
-import coop.rchain.rholang.interpreter.ParBuilder
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import monix.eval.Coeval
 
 object InterpreterUtil {

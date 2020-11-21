@@ -1,6 +1,6 @@
 package coop.rchain.shared
 
-import cats.tagless._
+import cats.~>
 
 sealed trait Event
 object Event {
@@ -12,9 +12,6 @@ object Event {
   final case class SentApprovedBlock(blockHash: String)                     extends Event
 }
 
-@autoFunctorK
-@autoSemigroupalK
-@autoProductNK
 trait EventLog[F[_]] {
   def publish(event: Event): F[Unit]
 }
@@ -26,6 +23,13 @@ object EventLog {
 
   def eventLogger[F[_]: Log]: EventLog[F] =
     (event: Event) => Log[F].info(event.getClass.getSimpleName.stripSuffix("$"))
+
+  // FunctorK
+  implicit class EventLogMapKOps[F[_]](val el: EventLog[F]) extends AnyVal {
+    def mapK[G[_]](nt: F ~> G): EventLog[G] = new EventLog[G] {
+      override def publish(event: Event): G[Unit] = nt(el.publish(event))
+    }
+  }
 }
 
 class EventLogger() // Dummy class for the logger name

@@ -1,20 +1,19 @@
 package coop.rchain.comm.transport
 
-import scala.collection.mutable
-import scala.util.Random
-
+import com.google.protobuf.ByteString
+import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.metrics.Metrics
-import coop.rchain.comm.CommError._
-
-import com.google.protobuf.ByteString
 import io.grpc.{Status, StatusRuntimeException}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 import org.scalatest._
+
+import scala.collection.mutable
+import scala.util.Random
 
 class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
 
@@ -71,7 +70,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       "send and receive Unit" in {
         val response   = ack
         val stub       = new TestTransportLayer(Task.now(response))
-        val result     = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
+        val result     = GrpcTransport.send[Task](stub, peerRemote, msg).attempt.runSyncUnsafe()
         val unit: Unit = ()
 
         inside(result) {
@@ -87,7 +86,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       "fail with an InternalCommunicationError" in {
         val response = internalServerError("Test error")
         val stub     = new TestTransportLayer(Task.now(response))
-        val result   = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
+        val result   = GrpcTransport.send[Task](stub, peerRemote, msg).attempt.runSyncUnsafe()
 
         inside(result) {
           case Right(Left(p)) =>
@@ -102,7 +101,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
     "server is unavailable" should {
       "fail with a PeerUnavailable" in {
         val stub   = new TestTransportLayer(Task.raiseError(unavailableThrowable))
-        val result = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
+        val result = GrpcTransport.send[Task](stub, peerRemote, msg).attempt.runSyncUnsafe()
 
         inside(result) {
           case Right(Left(p)) =>
@@ -117,7 +116,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
     "timeout" should {
       "fail with a TimeOut" in {
         val stub   = new TestTransportLayer(Task.raiseError(timeoutThrowable))
-        val result = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
+        val result = GrpcTransport.send[Task](stub, peerRemote, msg).attempt.runSyncUnsafe()
 
         inside(result) {
           case Right(Left(p)) =>
@@ -132,7 +131,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
     "any other exception" should {
       "fail with a ProtocolException" in {
         val stub   = new TestTransportLayer(Task.raiseError(testThrowable))
-        val result = GrpcTransport.send(peerRemote, msg).run(stub).attempt.runSyncUnsafe()
+        val result = GrpcTransport.send[Task](stub, peerRemote, msg).attempt.runSyncUnsafe()
 
         inside(result) {
           case Right(Left(p)) =>
@@ -158,11 +157,10 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
       "deliver a list of Chuncks" in {
         val stub   = new TestTransportLayer(Task.raiseError(testThrowable))
         val blob   = Blob(peerLocal, Packet("N/A", bigContent))
-        val chunks = Chunker.chunkIt(networkId, blob, messageSize).runSyncUnsafe().toList
+        val chunks = Chunker.chunkIt[Task](networkId, blob, messageSize).runSyncUnsafe().toList
         val result =
           GrpcTransport
-            .stream(networkId, peerRemote, blob, messageSize)
-            .run(stub)
+            .stream[Task](stub, peerRemote, networkId, blob, messageSize)
             .attempt
             .runSyncUnsafe()
 

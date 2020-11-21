@@ -11,15 +11,15 @@ import scala.tools.jline.console._
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.mtl._
 import cats.implicits._
-import cats.{Applicative, Monad}
+import cats.{Applicative, Monad, Parallel}
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
+import coop.rchain.monix.Monixable
 import coop.rchain.shared._
-import io.grpc.ManagedChannel
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
@@ -28,11 +28,8 @@ package object effects {
 
   def log: Log[Task] = Log.log
 
-  def kademliaStore(id: NodeIdentifier)(
-      implicit
-      kademliaRPC: KademliaRPC[Task],
-      metrics: Metrics[Task]
-  ): KademliaStore[Task] = KademliaStore.table(id)
+  def kademliaStore[F[_]: Sync: KademliaRPC: Metrics](id: NodeIdentifier): KademliaStore[F] =
+    KademliaStore.table[F](id)
 
   def nodeDiscovery[F[_]: Monad](id: NodeIdentifier)(
       implicit
@@ -47,27 +44,23 @@ package object effects {
       def sleep(duration: FiniteDuration): F[Unit] = timer.sleep(duration)
     }
 
-  def kademliaRPC(networkId: String, timeout: FiniteDuration, allowPrivateAddresses: Boolean)(
-      implicit
-      scheduler: Scheduler,
-      peerNodeAsk: PeerNodeAsk[Task],
-      metrics: Metrics[Task]
-  ): KademliaRPC[Task] = new GrpcKademliaRPC(networkId, timeout, allowPrivateAddresses)
+  def kademliaRPC[F[_]: Monixable: Sync: PeerNodeAsk: Metrics](
+      networkId: String,
+      timeout: FiniteDuration,
+      allowPrivateAddresses: Boolean
+  )(implicit scheduler: Scheduler): KademliaRPC[F] =
+    new GrpcKademliaRPC(networkId, timeout, allowPrivateAddresses)
 
-  def transportClient(
+  def transportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
       networkId: String,
       certPath: Path,
       keyPath: Path,
       maxMessageSize: Int,
       packetChunkSize: Int,
       folder: Path,
-      channels: Ref[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel]]]
-  )(
-      implicit scheduler: Scheduler,
-      log: Log[Task],
-      metrics: Metrics[Task]
-  ): Task[TransportLayer[Task]] =
-    Task.delay {
+      ioScheduler: Scheduler
+  )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
+    Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
       val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
       val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
       new GrpcTransportClient(
@@ -77,12 +70,14 @@ package object effects {
         maxMessageSize,
         packetChunkSize,
         folder,
-        100,
-        channels
-      )
+        clientQueueSize = 100,
+        channels,
+        ioScheduler
+      ): TransportLayer[F]
     }
 
-  def consoleIO(consoleReader: ConsoleReader): ConsoleIO[Task] = new JLineConsoleIO(consoleReader)
+  def consoleIO[F[_]: Sync](consoleReader: ConsoleReader): ConsoleIO[F] =
+    new JLineConsoleIO(consoleReader)
 
   def rpConnections[F[_]: Concurrent]: F[ConnectionsCell[F]] =
     Cell.mvarCell[F, Connections](Connections.empty)
@@ -90,7 +85,7 @@ package object effects {
   def rpConfState[F[_]: Monad: Sync](conf: RPConf): MonadState[F, RPConf] =
     new AtomicMonadState[F, RPConf](AtomicAny(conf))
 
-  def rpConfAsk[F[_]: Monad: Sync](
+  def rpConfAsk[F[_]: Monad](
       implicit state: MonadState[F, RPConf]
   ): ApplicativeAsk[F, RPConf] =
     new DefaultApplicativeAsk[F, RPConf] {
@@ -98,7 +93,7 @@ package object effects {
       def ask: F[RPConf]              = state.get
     }
 
-  def peerNodeAsk[F[_]: Monad: Sync](
+  def peerNodeAsk[F[_]: Monad](
       implicit state: MonadState[F, RPConf]
   ): ApplicativeAsk[F, PeerNode] =
     new DefaultApplicativeAsk[F, PeerNode] {
@@ -106,7 +101,7 @@ package object effects {
       def ask: F[PeerNode]            = state.get.map(_.local)
     }
 
-  def readerTApplicativeAsk[F[_]: Monad: Sync, E, B](
+  def readerTApplicativeAsk[F[_]: Monad, E, B](
       askF: ApplicativeAsk[F, B]
   ): ApplicativeAsk[ReaderT[F, E, ?], B] =
     new ApplicativeAsk[ReaderT[F, E, ?], B] {

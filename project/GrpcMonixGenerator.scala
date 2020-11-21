@@ -2,49 +2,88 @@ package grpcmonix.generators
 
 import com.google.protobuf.Descriptors._
 import com.google.protobuf.ExtensionRegistry
-import com.google.protobuf.compiler.PluginProtos.{CodeGeneratorRequest, CodeGeneratorResponse}
+import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse
+import protocbridge.{Artifact, JvmGenerator}
+import protocgen.{CodeGenApp, CodeGenRequest, CodeGenResponse}
 import scalapb.compiler.FunctionalPrinter.PrinterEndo
-import scalapb.compiler.{
-  DescriptorPimps,
-  FunctionalPrinter,
-  GeneratorParams,
-  ProtobufGenerator,
-  StreamType
-}
+import scalapb.compiler._
 import scalapb.options.compiler.Scalapb
 
 import scala.collection.JavaConverters._
 
-object GrpcMonixGenerator {
-  def apply(flatPackage: Boolean = false): GrpcMonixGenerator = {
-    val params = GeneratorParams().copy(flatPackage = flatPackage)
-    new GrpcMonixGenerator(params)
-  }
+object gen {
+  def apply(
+      flatPackage: Boolean = false,
+      javaConversions: Boolean = false,
+      grpc: Boolean = true,
+      singleLineToProtoString: Boolean = false,
+      asciiFormatToString: Boolean = false,
+      noLenses: Boolean = false
+  ): (JvmGenerator, Seq[String]) =
+    (
+      JvmGenerator("scala", GrpcMonixGenerator),
+      Seq(
+        "flat_package"                -> flatPackage,
+        "java_conversions"            -> javaConversions,
+        "grpc"                        -> grpc,
+        "single_line_to_proto_string" -> singleLineToProtoString,
+        "ascii_format_to_string"      -> asciiFormatToString,
+        "no_lenses"                   -> noLenses
+      ).collect { case (name, v) if v => name }
+    )
 }
 
-class GrpcMonixGenerator(override val params: GeneratorParams)
-    extends protocbridge.ProtocCodeGenerator
-    with DescriptorPimps {
-  def run(requestBytes: Array[Byte]): Array[Byte] = {
-    // Read scalapb.options (if present) in .proto files
-    val registry = ExtensionRegistry.newInstance()
+object GrpcMonixGenerator extends CodeGenApp {
+  override def registerExtensions(registry: ExtensionRegistry): Unit =
     Scalapb.registerAllExtensions(registry)
-    val b       = CodeGeneratorResponse.newBuilder
-    val request = CodeGeneratorRequest.parseFrom(requestBytes, registry)
 
-    val fileDescByName: Map[String, FileDescriptor] =
-      request.getProtoFileList.asScala.foldLeft[Map[String, FileDescriptor]](Map.empty) {
-        case (acc, fp) =>
-          val deps = fp.getDependencyList.asScala.map(acc)
-          acc + (fp.getName -> FileDescriptor.buildFrom(fp, deps.toArray))
-      }
+  override def suggestedDependencies: Seq[Artifact] = Seq(
+    Artifact(
+      "com.thesamet.scalapb",
+      "scalapb-runtime",
+      scalapb.compiler.Version.scalapbVersion,
+      crossVersion = true
+    )
+  )
 
-    request.getFileToGenerateList.asScala.foreach { name =>
-      val fileDesc     = fileDescByName(name)
-      val responseFile = generateFile(fileDesc)
-      b.addFile(responseFile)
+  // Adapted from scalapb ProtobufGenerator and old (unmaintained) gRPC monix scalapb plugin
+  // - https://github.com/scalapb/ScalaPB/blob/v0.10.8/compiler-plugin/src/main/scala/scalapb/compiler/ProtobufGenerator.scala#L1732
+  // - https://github.com/btlines/grpcmonix
+  def process(request: CodeGenRequest): CodeGenResponse =
+    ProtobufGenerator.parseParameters(request.parameter) match {
+      case Right(params) =>
+        try {
+          val implicits = new DescriptorImplicits(params, request.allProtos)
+          // Inserted custom printer
+          val generator = new GrpcMonixGenerator(implicits)
+          val validator = new ProtoValidation(implicits)
+          validator.validateFiles(request.allProtos)
+          val files = request.filesToGenerate
+            .filter { file =>
+              file.getServices.asScala.nonEmpty
+            }
+            .map { file =>
+              generator.generateFile(file)
+            }
+          CodeGenResponse.succeed(files)
+        } catch {
+          case e: GeneratorException =>
+            CodeGenResponse.fail(e.message)
+        }
+      case Left(error) =>
+        CodeGenResponse.fail(error)
     }
-    b.build.toByteArray
+}
+
+class GrpcMonixGenerator(implicits: DescriptorImplicits) {
+
+  import implicits._
+
+  implicit class FileExt(val file: FileDescriptor) {
+    def objectName = {
+      val className = file.javaOuterClassName.replace("OuterClass", "")
+      s"${className}GrpcMonix"
+    }
   }
 
   private[this] def grpcObserver(typeName: String) = s"StreamObserver[$typeName]"
@@ -61,19 +100,17 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       case StreamType.Bidirectional   => "BIDI_STREAMING"
     }
 
-    def marshaller(typeName: String) = s"new Marshaller($typeName)"
-
     printer
       .add(
-        s"val ${method.descriptorName}: MethodDescriptor[${method.scalaIn}, ${method.scalaOut}] ="
+        s"val ${method.grpcDescriptor.name}: MethodDescriptor[${method.inputType.scalaType}, ${method.outputType.scalaType}] ="
       )
       .indent
       .add("MethodDescriptor.newBuilder()")
       .addIndented(
         s".setType(MethodDescriptor.MethodType.$methodType)",
         s""".setFullMethodName(MethodDescriptor.generateFullMethodName("${method.getService.getFullName}", "${method.getName}"))""",
-        s".setRequestMarshaller(new Marshaller(${method.scalaIn}))",
-        s".setResponseMarshaller(new Marshaller(${method.scalaOut}))",
+        s".setRequestMarshaller(new Marshaller(${method.inputType.scalaType}))",
+        s".setResponseMarshaller(new Marshaller(${method.outputType.scalaType}))",
         ".build()"
       )
       .outdent
@@ -84,11 +121,11 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       s"""val SERVICE: _root_.io.grpc.ServiceDescriptor = _root_.io.grpc.ServiceDescriptor.newBuilder("${service.getFullName}")"""
     ).indent
       .add(
-        s".setSchemaDescriptor(new ConcreteProtoFileDescriptorSupplier(${service.getFile.fileDescriptorObjectFullName}.javaDescriptor))"
+        s".setSchemaDescriptor(new ConcreteProtoFileDescriptorSupplier(${service.getFile.fileDescriptorObject.fullName}.javaDescriptor))"
       )
       .print(service.methods) {
         case (printer, method) =>
-          printer.add(s".addMethod(${method.descriptorName})")
+          printer.add(s".addMethod(${method.grpcDescriptor.name})")
       }
       .add(".build()")
       .outdent
@@ -96,13 +133,13 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
   private[this] def serviceMethodSignature(method: MethodDescriptor) =
     s"def ${method.name}" + (method.streamType match {
       case StreamType.Unary =>
-        s"(request: ${method.scalaIn}): ${task(method.scalaOut)}"
+        s"(request: ${method.inputType.scalaType}): ${task(method.outputType.scalaType)}"
       case StreamType.ClientStreaming =>
-        s"(input: Observable[${method.scalaIn}]): ${task(method.scalaOut)}"
+        s"(input: Observable[${method.inputType.scalaType}]): ${task(method.outputType.scalaType)}"
       case StreamType.ServerStreaming =>
-        s"(request: ${method.scalaIn}): Observable[${method.scalaOut}]"
+        s"(request: ${method.inputType.scalaType}): Observable[${method.outputType.scalaType}]"
       case StreamType.Bidirectional =>
-        s"(input: Observable[${method.scalaIn}]): Observable[${method.scalaOut}]"
+        s"(input: Observable[${method.inputType.scalaType}]): Observable[${method.outputType.scalaType}]"
     })
 
   private[this] def serviceTrait(service: ServiceDescriptor): PrinterEndo = { printer =>
@@ -123,9 +160,18 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       .add(s"object ${service.getName} extends ${serviceCompanion(service.getName)} {")
       .indent
       .add(s"implicit def serviceCompanion: ${serviceCompanion(service.getName)} = this")
+      .add(s"def javaDescriptor: ServiceDescriptor = ${service.javaDescriptorSource}")
       .add(
-        s"def javaDescriptor: ServiceDescriptor = ${fileDesc.fileDescriptorObjectFullName}.javaDescriptor.getServices().get(0)"
+        s"def scalaDescriptor: scalapb.descriptors.ServiceDescriptor = ${service.scalaDescriptorSource}"
       )
+      .add(
+        s"def bindService(serviceImpl: ${service.getName}, executionContext: scala.concurrent.ExecutionContext): ServerServiceDefinition ="
+      )
+      .indent
+      .add(
+        s"${fileDesc.objectName}.bindService(serviceImpl, Scheduler(executionContext))"
+      )
+      .outdent
       .outdent
       .add("}")
   }
@@ -162,7 +208,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
           .add("guavaFutureToMonixTask(")
           .indent
           .add(
-            s"ClientCalls.futureUnaryCall(channel.newCall(${method.descriptorName}, options), request)"
+            s"ClientCalls.futureUnaryCall(channel.newCall(${method.grpcDescriptor.name}, options), request)"
           )
           .outdent
           .add(")")
@@ -171,14 +217,14 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
         printer
           .add(s"override ${serviceMethodSignature(method)} = ")
           .indent
-          .add(s"${liftByGrpcOperator(method.scalaIn, method.scalaOut)}(")
+          .add(s"${liftByGrpcOperator(method.inputType.scalaType, method.outputType.scalaType)}(")
           .indent
           .add("input,")
           .add(s"outputObserver =>")
           .indent
           .add("ClientCalls.asyncClientStreamingCall(")
           .indent
-          .add(s"channel.newCall(${method.descriptorName}, options),")
+          .add(s"channel.newCall(${method.grpcDescriptor.name}, options),")
           .add("outputObserver")
           .outdent
           .add(")")
@@ -190,17 +236,17 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
         printer
           .add(s"override ${serviceMethodSignature(method)} = ")
           .indent
-          .add(s"Observable.fromReactivePublisher(new PublisherR[${method.scalaOut}] {")
+          .add(s"Observable.fromReactivePublisher(new PublisherR[${method.outputType.scalaType}] {")
           .indent
           .add(
-            s"override def subscribe(subscriber: SubscriberR[_ >: ${method.scalaOut}]): Unit = {"
+            s"override def subscribe(subscriber: SubscriberR[_ >: ${method.outputType.scalaType}]): Unit = {"
           )
           .indent
           .add("ClientCalls.asyncServerStreamingCall(")
           .addIndented(
-            s"channel.newCall(${method.descriptorName}, options),",
+            s"channel.newCall(${method.grpcDescriptor.name}, options),",
             "request,",
-            s"reactiveSubscriberToGrpcObserver[${method.scalaOut}](subscriber)"
+            s"reactiveSubscriberToGrpcObserver[${method.outputType.scalaType}](subscriber)"
           )
           .add(")")
           .outdent
@@ -212,14 +258,14 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
         printer
           .add(s"override ${serviceMethodSignature(method)} = ")
           .indent
-          .add(s"${liftByGrpcOperator(method.scalaIn, method.scalaOut)}(")
+          .add(s"${liftByGrpcOperator(method.inputType.scalaType, method.outputType.scalaType)}(")
           .indent
           .add("input,")
           .add("outputObserver =>")
           .indent
           .add("ClientCalls.asyncBidiStreamingCall(")
           .indent
-          .add(s"channel.newCall(${method.descriptorName}, options),")
+          .add(s"channel.newCall(${method.grpcDescriptor.name}, options),")
           .add("outputObserver")
           .outdent
           .add(")")
@@ -259,18 +305,19 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       case StreamType.Bidirectional   => "ServerCalls.asyncBidiStreamingCall"
     }
     val serverMethod = method.streamType match {
-      case StreamType.Unary => s"ServerCalls.UnaryMethod[${method.scalaIn}, ${method.scalaOut}]"
+      case StreamType.Unary =>
+        s"ServerCalls.UnaryMethod[${method.inputType.scalaType}, ${method.outputType.scalaType}]"
       case StreamType.ClientStreaming =>
-        s"ServerCalls.ClientStreamingMethod[${method.scalaIn}, ${method.scalaOut}]"
+        s"ServerCalls.ClientStreamingMethod[${method.inputType.scalaType}, ${method.outputType.scalaType}]"
       case StreamType.ServerStreaming =>
-        s"ServerCalls.ServerStreamingMethod[${method.scalaIn}, ${method.scalaOut}]"
+        s"ServerCalls.ServerStreamingMethod[${method.inputType.scalaType}, ${method.outputType.scalaType}]"
       case StreamType.Bidirectional =>
-        s"ServerCalls.BidiStreamingMethod[${method.scalaIn}, ${method.scalaOut}]"
+        s"ServerCalls.BidiStreamingMethod[${method.inputType.scalaType}, ${method.outputType.scalaType}]"
     }
     val impl: PrinterEndo = method.streamType match {
       case StreamType.Unary =>
         _.add(
-          s"override def invoke(request: ${method.scalaIn}, observer: ${grpcObserver(method.scalaOut)}): Unit ="
+          s"override def invoke(request: ${method.inputType.scalaType}, observer: ${grpcObserver(method.outputType.scalaType)}): Unit ="
         ).indent
           .add(
             s"serviceImpl.${method.name}(request).runAsync(grpcObserverToMonixCallback(observer))(scheduler)"
@@ -278,10 +325,12 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
           .outdent
       case StreamType.ClientStreaming =>
         _.add(
-          s"override def invoke(observer: ${grpcObserver(method.scalaOut)}): ${grpcObserver(method.scalaIn)} = {"
+          s"override def invoke(observer: ${grpcObserver(method.outputType.scalaType)}): ${grpcObserver(method.inputType.scalaType)} = {"
         ).indent
           .add("val outputSubscriber = grpcObserverToMonixSubscriber(observer, scheduler)")
-          .add(s"val inputSubscriber = ${unliftByTransformer(method.scalaIn, method.scalaOut)}(")
+          .add(
+            s"val inputSubscriber = ${unliftByTransformer(method.inputType.scalaType, method.outputType.scalaType)}("
+          )
           .indent
           .add(
             s"inputObservable => Observable.fromTask(serviceImpl.${method.name}(inputObservable)),"
@@ -294,7 +343,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
           .add("}")
       case StreamType.ServerStreaming =>
         _.add(
-          s"override def invoke(request: ${method.scalaIn}, observer: ${grpcObserver(method.scalaOut)}): Unit = "
+          s"override def invoke(request: ${method.inputType.scalaType}, observer: ${grpcObserver(method.outputType.scalaType)}): Unit = "
         ).indent
           .add(
             s"serviceImpl.${method.name}(request).subscribe(grpcObserverToMonixSubscriber(observer, scheduler))"
@@ -302,10 +351,12 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
           .outdent
       case StreamType.Bidirectional =>
         _.add(
-          s"override def invoke(observer: ${grpcObserver(method.scalaOut)}): ${grpcObserver(method.scalaIn)} = {"
+          s"override def invoke(observer: ${grpcObserver(method.outputType.scalaType)}): ${grpcObserver(method.inputType.scalaType)} = {"
         ).indent
           .add("val outputSubscriber = grpcObserverToMonixSubscriber(observer, scheduler)")
-          .add(s"val inputSubscriber = ${unliftByTransformer(method.scalaIn, method.scalaOut)}(")
+          .add(
+            s"val inputSubscriber = ${unliftByTransformer(method.inputType.scalaType, method.outputType.scalaType)}("
+          )
           .indent
           .add(s"inputObservable => serviceImpl.${method.name}(inputObservable),")
           .add("outputSubscriber")
@@ -319,7 +370,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
     printer
       .add(".addMethod(")
       .indent
-      .add(s"${method.descriptorName},")
+      .add(s"${method.grpcDescriptor.name},")
       .add(s"$call(")
       .indent
       .add(s"new $serverMethod {")
@@ -337,21 +388,17 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
     printer
       .add(s"def javaDescriptor: ServiceDescriptor = ")
       .indent
-      .add(
-        s"${service.getFile.fileDescriptorObjectFullName}.javaDescriptor.getServices().get(${service.getIndex})"
-      )
+      .add(service.javaDescriptorSource)
       .outdent
   }
 
   def generateFile(fileDesc: FileDescriptor): CodeGeneratorResponse.File = {
     val b = CodeGeneratorResponse.File.newBuilder()
 
-    val objectName = fileDesc.fileDescriptorObjectName
-      .substring(0, fileDesc.fileDescriptorObjectName.length - 5) + "GrpcMonix"
+    b.setName(s"${fileDesc.scalaDirectory}/${fileDesc.objectName}.scala")
 
-    b.setName(s"${fileDesc.scalaDirectory}/$objectName.scala")
     val fp = FunctionalPrinter()
-      .add(s"package ${fileDesc.scalaPackageName}")
+      .add(s"package ${fileDesc.scalaPackage.fullName}")
       .newline
       .add("import _root_.com.google.protobuf.Descriptors.ServiceDescriptor")
       .add(
@@ -369,7 +416,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
         "import _root_.org.reactivestreams.{ Publisher => PublisherR, Subscriber => SubscriberR }"
       )
       .newline
-      .add(s"object $objectName {")
+      .add(s"object ${fileDesc.objectName} {")
       .indent
       .newline
       .print(fileDesc.getServices.asScala) {
@@ -398,6 +445,7 @@ class GrpcMonixGenerator(override val params: GeneratorParams)
       .newline
 
     b.setContent(fp.result)
+
     b.build
   }
 }
