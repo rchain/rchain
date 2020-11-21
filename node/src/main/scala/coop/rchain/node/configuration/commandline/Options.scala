@@ -176,6 +176,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "ID of the RChain network to connect to."
     )
 
+    val autopropose = opt[Flag](
+      descr = "make node automatically trying to propose block after each new block added"
+    )
+
     val noUpnp = opt[Flag](
       descr = "Use this flag to disable UPnP."
     )
