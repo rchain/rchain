@@ -133,8 +133,8 @@ object Engine {
       enableStateExporter: Boolean = false
   ): F[Unit] =
     for {
-      blockResponseQueue <- Queue.unbounded[F, BlockMessage]
-      stateResponseQueue <- Queue.unbounded[F, StoreItemsMessage]
+      blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
+      stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
       _ <- EngineCell[F].set(
             new Initializing(
               shardId,
