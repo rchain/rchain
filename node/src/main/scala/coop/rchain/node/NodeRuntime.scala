@@ -434,7 +434,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       blockProcessorStream = BlockProcessorInstance.create(
         incomingBlocksQueue,
         blockProcessor,
-        blockProcessingState
+        blockProcessingState,
+        proposeRequestsQueue,
+        nodeConf.autopropose
       )
 
       proposerStream = if (proposer.isDefined)
