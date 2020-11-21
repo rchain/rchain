@@ -1,7 +1,7 @@
 package coop.rchain.node.instances
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.instances.list._
 import cats.syntax.all._
 import coop.rchain.casper.blocks.BlockProcessor
@@ -24,7 +24,9 @@ object BlockProcessorInstance {
   def create[F[_]: Concurrent: Log](
       blocksQueue: Queue[F, (Casper[F], BlockMessage)],
       blockProcessor: BlockProcessor[F],
-      state: Ref[F, Set[BlockHash]]
+      state: Ref[F, Set[BlockHash]],
+      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      autopropose: Boolean
   ): Stream[F, (Casper[F], BlockMessage, ValidBlockProcessing)] = {
 
     // Node can handle `parallelism` blocks in parallel, or they will be queued
@@ -86,6 +88,13 @@ object BlockProcessorInstance {
                       .traverse(b => blocksQueue.enqueue1(c, b))
                 _ <- logFinished
               } yield ()
+            }
+            .evalTap { v =>
+              // we don't care about result of propose here, whether its started or not.
+              // so let deferred be not used
+              (Deferred[F, Option[Int]] >>= { d =>
+                proposerQueue.enqueue1((v._1, d))
+              }).whenA(autopropose)
             }
             // ensure to remove hash from state
             .onFinalize(state.update(s => s - b.blockHash))

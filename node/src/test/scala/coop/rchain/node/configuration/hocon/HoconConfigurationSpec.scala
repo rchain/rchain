@@ -51,6 +51,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = false,
+      autopropose = false,
       devMode = false,
       protocolServer = ProtocolServer(
         networkId = "testnet",
