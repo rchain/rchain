@@ -14,6 +14,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Time}
 import fs2.Stream
@@ -114,12 +115,13 @@ object Proposer {
     /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
   (
-      validatorIdentity: ValidatorIdentity
+      validatorIdentity: ValidatorIdentity,
+      dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
     val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
-      BlockCreator.create(s, validatorIdentity)
+      BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
 
     val validateBlock = (casper: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
       casper.validate(b, s.dag)

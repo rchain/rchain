@@ -38,6 +38,8 @@ import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -1006,19 +1008,25 @@ object NodeRuntime {
       proposerStateRef <- Ref.of[F, ProposerState[F]](ProposerState[F]())
       proposer = validatorIdentityOpt match {
         case Some(validatorIdentity) => {
-          implicit val rm     = runtimeManager
-          implicit val bs     = blockStore
-          implicit val lf     = lastFinalizedStorage
-          implicit val bd     = blockDagStorage
-          implicit val sc     = synchronyConstraintChecker
-          implicit val lfhscc = lastFinalizedHeightConstraintChecker
-          implicit val sp     = span
-          implicit val e      = estimator
-          implicit val ds     = deployStorage
-          implicit val br     = blockRetriever
-          implicit val cu     = commUtil
-          implicit val eb     = eventPublisher
-          Proposer[F](validatorIdentity).some
+          implicit val rm         = runtimeManager
+          implicit val bs         = blockStore
+          implicit val lf         = lastFinalizedStorage
+          implicit val bd         = blockDagStorage
+          implicit val sc         = synchronyConstraintChecker
+          implicit val lfhscc     = lastFinalizedHeightConstraintChecker
+          implicit val sp         = span
+          implicit val e          = estimator
+          implicit val ds         = deployStorage
+          implicit val br         = blockRetriever
+          implicit val cu         = commUtil
+          implicit val eb         = eventPublisher
+          val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
+          val dummyDeployerKey =
+            if (dummyDeployerKeyOpt.isEmpty) None
+            else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+
+          // TODO make term for dummy deploy configurable
+          Proposer[F](validatorIdentity, (dummyDeployerKey.map((_, "Nil")))).some
         }
         case None => None
       }
