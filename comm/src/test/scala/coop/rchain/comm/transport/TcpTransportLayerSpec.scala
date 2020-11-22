@@ -1,7 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.nio.file._
-
 import cats.effect.concurrent.{Deferred, MVar, Ref}
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
@@ -12,25 +10,14 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
-import org.scalatest._
 
 import scala.concurrent.duration.Duration
 
-class TcpTransportLayerSpec
-    extends TransportLayerSpec[Task, TcpTlsEnvironment]
-    with BeforeAndAfterEach {
+class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] {
 
   implicit val log: Log[Task]         = new Log.NOPLog[Task]
   implicit val scheduler: Scheduler   = Scheduler.Implicits.global
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
-
-  var tempFolder: Path = null
-
-  override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain-")
-
-  override def afterEach(): Unit =
-    tempFolder.toFile.delete()
 
   def createEnvironment(port: Int): Task[TcpTlsEnvironment] =
     Task.delay {
@@ -57,7 +44,6 @@ class TcpTransportLayerSpec
         env.key,
         maxMessageSize,
         maxMessageSize,
-        tempFolder,
         100,
         Ref.unsafe[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel[Task]]]](Map.empty),
         scheduler
@@ -79,7 +65,6 @@ class TcpTransportLayerSpec
         env.key,
         maxMessageSize,
         maxStreamMessageSize,
-        tempFolder,
         4,
         scheduler
       )
