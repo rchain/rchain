@@ -135,10 +135,11 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
 
-  implicit val patternCodec: Codec[Pattern] = StringExamples.implicits.patternSerialize.toCodec
-  implicit val stringCodec: Codec[String]   = StringExamples.implicits.stringSerialize.toCodec
+  implicit val patternCodec: Codec[Pattern] =
+    StringExamples.implicits.patternSerialize.toSizeHeadCodec
+  implicit val stringCodec: Codec[String] = StringExamples.implicits.stringSerialize.toSizeHeadCodec
   implicit val stringCaptorCodec: Codec[StringsCaptor] =
-    StringExamples.implicits.stringClosureSerialize.toCodec
+    StringExamples.implicits.stringClosureSerialize.toSizeHeadCodec
 
   override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
     val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
