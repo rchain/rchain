@@ -129,10 +129,10 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       playSystemDeploy: S,
       replaySystemDeploy: S
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
-    runtimeManager.withRuntimeLock(
+    runtimeManager.withRuntime(
       runtime => runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
     ) >>
-      runtimeManager.withReplayRuntimeLock(
+      runtimeManager.withReplayRuntime(
         runtime => runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
       ) >>
       runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
