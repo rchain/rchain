@@ -2,13 +2,14 @@ package coop.rchain.rspace.state.exporters
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.Sync
+import cats.Monad
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Monad, Parallel}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.ByteVectorOps.RichByteVector
+import fs2.Stream
 import scodec.Codec
 import scodec.bits.ByteVector
 
@@ -16,7 +17,7 @@ object RSpaceExporterDisk {
   import coop.rchain.rspace.state.syntax._
   import coop.rchain.rspace.util.Lib._
 
-  def writeToDisk[F[_]: Sync: Parallel, C, P, A, K](
+  def writeToDisk[F[_]: Concurrent, C, P, A, K](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
@@ -39,26 +40,27 @@ object RSpaceExporterDisk {
         dataItems    = inputValues.items.toVector
 
         // Validate items
-        _ <- time("Validate state items")(
-              RSpaceImporter.validateStateItems[F, C, P, A, K](
-                historyItems,
-                dataItems,
-                startPath,
-                chunkSize,
-                skip,
-                k => historyStore.get(Seq(k), ByteVector(_)).map(_.head)
-              )
-            )
+        validationProcess = time("Validate state items")(
+          RSpaceImporter.validateStateItems[F, C, P, A, K](
+            historyItems,
+            dataItems,
+            startPath,
+            chunkSize,
+            skip,
+            k => historyStore.get(Seq(k), ByteVector(_)).map(_.head)
+          )
+        )
 
-        // Write to restore store
-        _ <- Parallel.parProduct(
+        // Restore operations / run in parallel
+        _ <- Stream(
+              validationProcess,
               time("COMPLETE LMDB HISTORY WRITE")(
                 historyStore.put[ByteVector](historyItems, _.toDirectByteBuffer)
               ),
               time("COMPLETE LMDB VALUES WRITE")(
                 dataStore.put[ByteVector](dataItems, _.toDirectByteBuffer)
               )
-            )
+            ).map(Stream.eval).parJoinUnbounded.compile.drain
 
         _ = println(s"LAST PATH: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
 

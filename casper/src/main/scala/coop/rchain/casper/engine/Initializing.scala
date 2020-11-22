@@ -68,10 +68,11 @@ class Initializing[F[_]
         CommUtil[F].requestApprovedBlock(trimState)
 
     case s: StoreItemsMessage =>
-      Log[F].info(s"Received ${s.pretty}") *> tupleSpaceQueue.enqueue1(s)
+      Log[F].info(s"Received ${s.pretty} from $peer.") *> tupleSpaceQueue.enqueue1(s)
 
     case b: BlockMessage =>
-      Log[F].info(s"BlockMessage received ${PrettyPrinter.buildString(b)}") *>
+      Log[F]
+        .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
         blockMessageQueue.enqueue1(b)
 
     case _ => ().pure
@@ -164,14 +165,15 @@ class Initializing[F[_]
                            approvedBlock,
                            tupleSpaceQueue
                          )
+      tupleSpaceLogStream = tupleSpaceStream ++
+        fs2.Stream.eval(Log[F].info(s"Rholang state received and saved to store.")).drain
 
       // Receive the blocks and after populate the DAG
-      blockRequestAddDagStream = blockRequestStream.drain ++ fs2.Stream.eval(
-        populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan)
-      )
+      blockRequestAddDagStream = blockRequestStream.drain ++
+        fs2.Stream.eval(populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan))
 
       // Run both streams in parallel until tuple space and all needed blocks are received
-      _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceStream).parJoinUnbounded.compile.drain
+      _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceLogStream).parJoinUnbounded.compile.drain
 
       // Transition to Running state
       _ <- createCasperAndTransitionToRunning(approvedBlock)
@@ -181,7 +183,7 @@ class Initializing[F[_]
   private def validateBlock(block: BlockMessage): F[Boolean] = {
     val blockNumber = ProtoUtil.blockNumber(block)
     if (blockNumber == 0L) {
-      // TODO: genesis (zero) block correctly
+      // TODO: validate genesis (zero) block correctly
       true.pure
     } else
       Validate.blockHash(block).map(_ == Right(Valid))

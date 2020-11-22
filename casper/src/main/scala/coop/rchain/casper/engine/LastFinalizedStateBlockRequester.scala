@@ -6,6 +6,7 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.util.Lib
 import coop.rchain.shared.{Log, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}
@@ -18,17 +19,26 @@ object LastFinalizedStateBlockRequester {
   case object Init      extends ReqStatus
   case object Requested extends ReqStatus
   case object Received  extends ReqStatus
-  case object Done      extends ReqStatus
 
   final case class ReceiveInfo(requested: Boolean, latest: Boolean, lastlatest: Boolean)
 
   /**
     * State to control processing of requests
     */
-  final case class ST[Key](private val d: Map[Key, ReqStatus], latest: Set[Key], lowerBound: Long) {
+  final case class ST[Key](
+      d: Map[Key, ReqStatus],
+      latest: Set[Key],
+      lowerBound: Long,
+      finished: Set[Key]
+  ) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
-    def add(keys: Set[Key]): ST[Key] =
-      this.copy(d ++ keys.filterNot(d.contains).map((_, Init)))
+    def add(keys: Set[Key]): ST[Key] = {
+      // Filter keys that are in Done status
+      //  or in request Map.
+      val newKeys = keys.diff(finished).filterNot(d.contains)
+      // Set Init status for new keys.
+      this.copy(d ++ newKeys.map((_, Init)))
+    }
 
     // Get next keys not already requested or
     //  in case of resend together with Requested.
@@ -76,12 +86,17 @@ object LastFinalizedStateBlockRequester {
 
     // Mark key as finished (Done) with optionally set minimum lower bound.
     def done(k: Key): ST[Key] = {
-      val newSt = d + ((k, Done))
-      this.copy(newSt)
+      val isReceived = d.get(k).contains(Received)
+      if (isReceived) {
+        // If Received key, remove from request Map and add to Done Set
+        val newSt   = d - k
+        val newDone = finished + k
+        this.copy(newSt, finished = newDone)
+      } else this
     }
 
     // Returns flag if all keys are marked as finished (Done).
-    def isFinished: Boolean = latest.isEmpty && !d.exists { case (_, v) => v != Done }
+    def isFinished: Boolean = latest.isEmpty && d.isEmpty
   }
 
   object ST {
@@ -91,7 +106,7 @@ object LastFinalizedStateBlockRequester {
         latest: Set[Key] = Set[Key](),
         lowerBound: Long = 0
     ): ST[Key] =
-      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound)
+      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound, finished = Set[Key]())
   }
 
   /**
@@ -129,7 +144,8 @@ object LastFinalizedStateBlockRequester {
 
     def createStream(
         st: SignallingRef[F, ST[BlockHash]],
-        requestQueue: Queue[F, Boolean]
+        requestQueue: Queue[F, Boolean],
+        responseHashQueue: Queue[F, BlockHash]
     ): Stream[F, Boolean] = {
 
       def broadcastStreams(ids: Seq[BlockHash]) = {
@@ -138,6 +154,18 @@ object LastFinalizedStateBlockRequester {
         // Create stream of requests
         Stream(broadcastRequests: _*)
       }
+
+      def processBlock(block: BlockMessage): F[Unit] =
+        for {
+          // Validate and mark received block
+          isValid <- validateReceivedBlock(block)
+
+          // Save block to store
+          _ <- saveBlock(block).whenA(isValid)
+
+          // Trigger request queue (without resend of already requested)
+          _ <- requestQueue.enqueue1(false)
+        } yield ()
 
       /**
         * Validate received block, check if it was requested and if block hash is correct.
@@ -210,22 +238,11 @@ object LastFinalizedStateBlockRequester {
         // Take next set of items to request (w/o duplicates)
         hashes <- Stream.eval(st.modify(_.getNext(resend)))
 
-        // Add block hashes for requesting
-        _ <- Stream.eval(st.update(_.add(hashes.toSet)))
-
         // Check existing blocks
         existingHashes <- Stream.eval(hashes.toList.filterA(containsBlock))
 
-        // Process blocks already in the store
-        _ <- Stream.eval {
-              for {
-                existingBlocks <- existingHashes.traverse(getBlockFromStore)
-                _ <- existingBlocks.traverse_ { block =>
-                      Log[F].info(s"Process existing ${PrettyPrinter.buildString(block)}") *>
-                        responseQueue.enqueue1(block)
-                    }
-              } yield ()
-            }
+        // Enqueue hashes of exiting blocks
+        _ <- responseHashQueue.enqueue(Stream.emits(existingHashes)).whenA(existingHashes.nonEmpty)
 
         // Missing blocks not already in the block store
         missingBlocks = hashes.diff(existingHashes)
@@ -236,21 +253,21 @@ object LastFinalizedStateBlockRequester {
       } yield isEnd
 
       /**
-        * Response stream is handling incoming block messages.
+        * Response stream is handling incoming block messages. Responses can be processed in parallel.
         */
-      val responseStream = for {
-        // Response queue is incoming message source / async callback handler
-        block <- responseQueue.dequeue
+      val responseStream1 = responseQueue.dequeue.parEvalMapUnordered(100)(processBlock)
 
-        // Validate and mark received block
-        isValid <- Stream.eval(validateReceivedBlock(block))
+      val responseStream2 = responseHashQueue.dequeue
+        .parEvalMapUnordered(100) { hash =>
+          for {
+            block <- getBlockFromStore(hash)
+            _     <- Log[F].info(s"Process existing ${PrettyPrinter.buildString(block)}")
+            _     <- processBlock(block)
+          } yield ()
+        }
 
-        // Save block to DAG store
-        _ <- Stream.eval(saveBlock(block)).whenA(isValid)
-
-        // Trigger request queue (without resend of already requested)
-        _ <- Stream.eval(requestQueue.enqueue1(false))
-      } yield ()
+      // Merge both response streams
+      val responseStream = Stream(responseStream1 concurrently responseStream2).parJoinUnbounded
 
       /**
         * Timeout to resend block requests if response is not received.
@@ -269,7 +286,9 @@ object LastFinalizedStateBlockRequester {
         * Final result! Concurrently pulling requests and handling responses
         *  with resend timeout if response is not received.
         */
-      requestStream.takeWhile(!_).broadcastThrough(withTimeout) concurrently responseStream
+      requestStream
+        .takeWhile(!_)
+        .broadcastThrough(withTimeout) concurrently responseStream
     }
 
     for {
@@ -282,15 +301,17 @@ object LastFinalizedStateBlockRequester {
              )
            )
 
-      // Block requests queue
-      requestQueue <- Queue.unbounded[F, Boolean]
+      // Queue to trigger processing of requests. `True` to resend requests.
+      requestQueue <- Queue.bounded[F, Boolean](maxSize = 100)
+      // Response queue for existing blocks in the store.
+      responseHashQueue <- Queue.unbounded[F, BlockHash]
 
       // Light the fire! / Starts the first request for block
       // - `true` if requested blocks should be re-requested
       _ <- requestQueue.enqueue1(false)
 
       // Create block receiver stream
-    } yield createStream(st, requestQueue)
+    } yield createStream(st, requestQueue, responseHashQueue)
   }
 
 }

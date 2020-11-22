@@ -3,7 +3,6 @@ package coop.rchain.rspace.state
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
@@ -50,7 +49,6 @@ package object syntax {
 
     def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
         implicit m: Concurrent[F],
-        p: Parallel[F],
         codecC: Codec[C],
         codecP: Codec[P],
         codecA: Codec[A],
