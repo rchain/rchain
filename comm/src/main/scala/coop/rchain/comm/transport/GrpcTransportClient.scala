@@ -155,7 +155,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
   }
 
   private def streamBlobFile(
-      path: Path,
+      key: String,
       peer: PeerNode,
       sender: PeerNode
   ): F[Unit] = {

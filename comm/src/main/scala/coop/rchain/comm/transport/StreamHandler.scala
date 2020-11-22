@@ -40,8 +40,7 @@ final case class Streamed(
     header: Option[Header] = None,
     readSoFar: Long = 0,
     circuit: Circuit = Closed,
-    path: Path,
-    fos: FileOutputStream
+    key: String
 )
 
 object StreamHandler {

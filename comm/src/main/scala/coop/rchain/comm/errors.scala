@@ -34,7 +34,7 @@ final case class UnexpectedMessage(msgStr: String)                  extends Comm
 final case object SenderNotAvailable                                extends CommError
 final case class PongNotReceivedForPing(peer: PeerNode)             extends CommError
 final case class UnableToStorePacket(packet: Packet, th: Throwable) extends CommError
-final case class UnableToRestorePacket(path: Path, th: Throwable)   extends CommError
+final case class UnableToRestorePacket(key: String, th: Throwable)  extends CommError
 // TODO add Show instance
 
 object CommError {
@@ -62,7 +62,7 @@ object CommError {
   def timeout: CommError                                   = TimeOut
   def unableToStorePacket(packet: Packet, th: Throwable): CommError =
     UnableToStorePacket(packet, th)
-  def unableToRestorePacket(path: Path, th: Throwable) = UnableToRestorePacket(path, th)
+  def unableToRestorePacket(key: String, th: Throwable) = UnableToRestorePacket(key, th)
 
   def errorMessage(ce: CommError): String =
     ce match {
