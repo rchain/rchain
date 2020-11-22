@@ -21,7 +21,7 @@ class LFSBlockRequesterEffectsSpec
     with Matchers
     with GeneratorDrivenPropertyChecks {
 
-  def mkHash(bs: Byte*) = ByteString.copyFrom(bs.toArray)
+  def mkHash(s: String) = ByteString.copyFromUtf8(s)
 
   def getBlock(hash: BlockHash, number: Long, latestMessages: Seq[BlockHash]) = {
     val justifications                     = latestMessages.map(Justification(ByteString.EMPTY, _))
@@ -40,19 +40,19 @@ class LFSBlockRequesterEffectsSpec
     ApprovedBlock(candidate, Nil)
   }
 
-  val hash9 = mkHash(90)
-  val hash8 = mkHash(80)
-  val hash7 = mkHash(70)
-  val hash6 = mkHash(60)
-  val hash5 = mkHash(50)
-  val hash4 = mkHash(40)
-  val hash3 = mkHash(30)
-  val hash2 = mkHash(20)
-  val hash1 = mkHash(10)
+  val hash9 = mkHash("9")
+  val hash8 = mkHash("8")
+  val hash7 = mkHash("7")
+  val hash6 = mkHash("6")
+  val hash5 = mkHash("5")
+  val hash4 = mkHash("4")
+  val hash3 = mkHash("3")
+  val hash2 = mkHash("2")
+  val hash1 = mkHash("1")
 
-  val b9 = getBlock(hash9, number = 109, Seq(hash8, hash7))
-  val b8 = getBlock(hash8, number = 108, Seq(hash6, hash4))
-  val b7 = getBlock(hash7, number = 107, Seq(hash5))
+  val b9 = getBlock(hash9, number = 109, Seq(hash8))
+  val b8 = getBlock(hash8, number = 108, Seq(hash7, hash5))
+  val b7 = getBlock(hash7, number = 107, Seq(hash6, hash5))
   val b6 = getBlock(hash6, number = 106, Seq(hash4))
   val b5 = getBlock(hash5, number = 75, Seq(hash3))
   val b4 = getBlock(hash4, number = 34, Seq(hash2))
@@ -63,6 +63,7 @@ class LFSBlockRequesterEffectsSpec
   trait Effects[F[_]] {
     def requestForBlock(hash: BlockHash): F[Unit]
     def containsBlockInStore(hash: BlockHash): F[Boolean]
+    def getBlock(hash: BlockHash): F[BlockMessage]
     def putBlockToStore(hash: BlockHash, b: BlockMessage): F[Unit]
     def validateBlock(b: BlockMessage): F[Boolean]
   }
@@ -83,11 +84,16 @@ class LFSBlockRequesterEffectsSpec
         result
       }
 
+    implicit val ordBytes = Ordering.by((_: ByteString).toByteArray.toIterable)
+
     override def requestForBlock(hash: BlockHash): F[Unit] =
-      atomically(requests = requests :+ hash).void
+      atomically(requests = (requests :+ hash).sorted.reverse).void
 
     override def containsBlockInStore(hash: BlockHash): F[Boolean] =
       atomically(puts.contains(hash))
+
+    override def getBlock(hash: BlockHash): F[BlockMessage] =
+      atomically(puts(hash))
 
     override def putBlockToStore(hash: BlockHash, b: BlockMessage): F[Unit] =
       atomically(puts = puts + ((hash, b))).void
@@ -120,9 +126,11 @@ class LFSBlockRequesterEffectsSpec
       requestStream <- LastFinalizedStateBlockRequester.stream(
                         approvedBlock,
                         responseQueue,
+                        initialMinimumHeight = 0,
                         requestTimeout,
                         effects.requestForBlock,
                         effects.containsBlockInStore,
+                        effects.getBlock,
                         effects.putBlockToStore,
                         effects.validateBlock
                       )
@@ -165,49 +173,73 @@ class LFSBlockRequesterEffectsSpec
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
-  it should "send requests for dependencies" in dagFromBlock(b9) { sut =>
+  it should "send requests for dependencies" in dagFromBlock(b8) { sut =>
     import sut._
     for {
-      // Receive of parent should create requests for justifications
-      _ <- receive(b9)
+      // Receive of parent should create requests for justifications (dependencies)
+      _ <- receive(b8)
 
-      _ = eff.requests shouldBe List(hash9, hash8, hash7)
+      _ = eff.requests shouldBe List(hash8, hash7, hash5)
+    } yield ()
+  }
+
+  it should "first request dependencies from starting block" in dagFromBlock(b8) { sut =>
+    import sut._
+    for {
+      // Receive of starting block
+      _ <- receive(b8)
+
+      // Requested dependencies from starting blocks
+      _ = eff.requests shouldBe List(hash8, hash7, hash5)
+      _ = eff.requests = Nil
+
+      // Receive only one dependency
+      _ <- receive(b7)
+
+      // No new requests until all dependencies received
+      _ = eff.requests shouldBe Nil
+
+      // Receive the last dependency (the last of latest blocks)
+      _ <- receive(b5)
+
+      // All dependencies should be requested
+      _ = eff.requests shouldBe List(hash6, hash3)
     } yield ()
   }
 
   it should "save received blocks if requested" in dagFromBlock(b9) { sut =>
     import sut._
     for {
-      // Receive first block
-      _ <- receive(b9)
+      // Receive first block (with dependencies)
+      _ <- receive(b9, b8)
 
       // Receive one dependency
-      _ <- receive(b8)
+      _ <- receive(b7)
 
       // Both blocks should be saved
-      _ = eff.puts shouldBe asMap(b9, b8)
+      _ = eff.puts shouldBe asMap(b9, b8, b7)
     } yield ()
   }
 
   it should "skip received invalid blocks" in dagFromBlock(b9) { sut =>
     import sut._
     for {
-      // Receive first block
-      _ <- receive(b9)
+      // Receive first block (with dependencies)
+      _ <- receive(b9, b8)
       _ = eff.requests = Nil
       _ = eff.puts = Map()
 
       // Set invalid blocks
-      _ = eff.invalids = Set(hash8)
+      _ = eff.invalids = Set(hash5)
 
       // Receive dependencies
-      _ <- receive(b8, b7)
+      _ <- receive(b7, b5)
 
       // Only valid block should be saved
       _ = eff.puts shouldBe asMap(b7)
 
       // Only dependencies from valid block should requested
-      _ = eff.requests shouldBe List(hash5)
+      _ = eff.requests shouldBe List(hash6)
     } yield ()
   }
 
@@ -215,10 +247,10 @@ class LFSBlockRequesterEffectsSpec
     import sut._
     for {
       // Receive blocks not requested
-      _ <- receive(b8, b7, b6, b5, b4, b3, b2, b1)
+      _ <- receive(b7, b6, b5, b4, b3, b2, b1)
 
       // It should contain only request for the first block
-      _ = eff.requests shouldBe List(hash9)
+      _ = eff.requests shouldBe List(hash9, hash8)
       // Nothing should be saved
       _ = eff.puts shouldBe Map()
     } yield ()
@@ -226,44 +258,53 @@ class LFSBlockRequesterEffectsSpec
 
   it should "request and save all blocks" in dagFromBlock(b9) { sut =>
     import sut._
-    // First block should be requested
-    eff.requests shouldBe List(hash9)
+    // Staring block with dependencies should be requested
+    eff.requests shouldBe List(hash9, hash8)
     eff.requests = Nil
     for {
-      // Receive block b9
-      _ <- receive(b9)
+      // Receive starting block and its dependencies (latest blocks)
+      _ <- receive(b9, b8)
 
-      // Dependencies of b9 should be in requests also
-      _ = eff.requests.toSet shouldBe Set(hash8, hash7)
+      // Dependencies of b8 should be in requests also
+      _ = eff.requests shouldBe List(hash7, hash5)
       _ = eff.requests = Nil
-      // Approved block should be saved
-      _ = eff.puts shouldBe asMap(b9)
+      // Starting block and its dependencies should be saved
+      _ = eff.puts shouldBe asMap(b9, b8)
 
-      // Receive blocks b8 and b7
-      _ <- receive(b8, b7)
+      // Receive blocks b7 and b5
+      _ <- receive(b7, b5)
 
       // All blocks should be requested
-      _ = eff.requests.toSet shouldBe Set(hash6, hash5, hash4)
+      _ = eff.requests shouldBe List(hash6, hash3)
       _ = eff.requests = Nil
       // Received blocks should be saved
-      _ = eff.puts shouldBe asMap(b9, b8, b7)
+      _ = eff.puts shouldBe asMap(b9, b8, b7, b5)
 
-      // Receive blocks b6, b5 and b4
-      _ <- receive(b6, b5, b4)
+      // Receive blocks b6, b5 and b3
+      _ <- receive(b6, b5, b3)
 
       // All blocks should be requested
-      _ = eff.requests.toSet shouldBe Set(hash3)
+      _ = eff.requests shouldBe List(hash4, hash1)
       _ = eff.requests = Nil
       // All blocks should be saved
-      _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5)
+      _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5, b3)
 
       // Receive block b3
-      _ <- receive(b3)
+      _ <- receive(b4, b1)
+
+      // All blocks should be requested
+      _ = eff.requests shouldBe List(hash2)
+      _ = eff.requests = Nil
+      // All blocks should be saved
+      _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5, b4, b3, b1)
+
+      // Receive block b2
+      _ <- receive(b2)
 
       // All blocks should be requested
       _ = eff.requests shouldBe Nil
       // All blocks should be saved
-      _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5)
+      _ = eff.puts shouldBe asMap(b9, b8, b7, b6, b5, b4, b3, b2, b1)
     } yield ()
   }
 
@@ -284,7 +325,7 @@ class LFSBlockRequesterEffectsSpec
         _ <- stream.compile.drain.timeout(350.millis).onErrorHandle(_ => ())
 
         // Request should be repeated
-        _ = eff.requests shouldBe List(hash9, hash9)
+        _ = eff.requests shouldBe List(hash9, hash9, hash8, hash8)
       } yield ()
   }
 
