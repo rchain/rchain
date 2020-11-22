@@ -20,6 +20,7 @@ import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.execution.{Cancelable, Scheduler}
 
+import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.{Left, Right}
 
@@ -37,7 +38,6 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
     key: String,
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
-    tempFolder: Path,
     parallelism: Int,
     ioScheduler: Scheduler
 )(implicit mainScheduler: Scheduler)
@@ -47,6 +47,9 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
+
+  // Cache to store received partial data (streaming packets)
+  private val cache = TrieMap[String, Array[Byte]]()
 
   private val serverSslContextTask: F[SslContext] =
     Sync[F]
@@ -75,7 +78,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 
     val dispatchBlob: StreamMessage => F[Unit] =
       msg =>
-        (StreamHandler.restore(msg) >>= {
+        (StreamHandler.restore(msg, cache) >>= {
           case Left(ex) =>
             Log[F].error("Could not restore data from file while handling stream", ex)
           case Right(blob) =>
@@ -93,8 +96,8 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
                    maxStreamMessageSize,
                    messageBuffers,
                    (dispatchSend, dispatchBlob),
-                   tempFolder = tempFolder,
                    parallelism = parallelism,
+                   cache,
                    ioScheduler
                  )
     } yield receiver
@@ -109,7 +112,6 @@ object GrpcTransportServer {
       keyPath: Path,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      folder: Path,
       parallelism: Int,
       ioScheduler: Scheduler
   )(implicit mainScheduler: Scheduler): TransportServer[F] = {
@@ -123,7 +125,6 @@ object GrpcTransportServer {
         key,
         maxMessageSize,
         maxStreamMessageSize,
-        folder,
         parallelism,
         ioScheduler
       )

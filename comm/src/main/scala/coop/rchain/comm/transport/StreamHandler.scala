@@ -1,8 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.io.FileOutputStream
-import java.nio.file.{Files, Path}
-
 import cats.data._
 import cats.effect.Sync
 import cats.syntax.all._
@@ -12,11 +9,11 @@ import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.transport.PacketOps._
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Compression._
-import coop.rchain.shared.GracefulClose._
-import coop.rchain.shared.PathOps._
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, _}
 import monix.reactive.Observable
+
+import scala.collection.concurrent.TrieMap
 
 final case class Header(
     sender: PeerNode,
@@ -76,46 +73,39 @@ object StreamHandler {
   }
 
   def handleStream[F[_]: Monixable: Sync: Log](
-      folder: Path,
       stream: Observable[Chunk],
-      circuitBreaker: CircuitBreaker
+      circuitBreaker: CircuitBreaker,
+      cache: TrieMap[String, Array[Byte]]
   ): F[Either[StreamError, StreamMessage]] =
-    init(folder).toTask
+    init(cache).toTask
       .bracketE { initStmd =>
-        (collect(initStmd, stream, circuitBreaker) >>= toResult[F]).value.toTask
+        (collect(initStmd, stream, circuitBreaker, cache) >>= toResult[F]).value.toTask
       }({
         // failed while collecting stream
         case (stmd, Right(Left(_))) =>
           (Log[F].warn("Failed collecting stream.") >>
-            gracefullyClose[F](stmd.fos).as(()) >>
-            stmd.path.deleteSingleFile[F]).toTask
+            Sync[F].delay(cache.remove(stmd.key)).void).toTask
         // should not happend (errors handled witin bracket) but covered for safety
         case (stmd, Left(_)) =>
           (Log[F].error(
             "Stream collection ended unexpected way. Please contact RNode code maintainer."
-          ) >>
-            gracefullyClose[F](stmd.fos).as(()) >>
-            stmd.path.deleteSingleFile[F]).toTask
+          ) >> Sync[F].delay(cache.remove(stmd.key)).void).toTask
         // succesfully collected
-        case (stmd, _) =>
-          (Log[F].debug("Stream collected.") >>
-            gracefullyClose[F](stmd.fos).void).toTask
+        case (_, _) =>
+          Log[F].debug("Stream collected.").toTask
       })
       .attempt
-      .map { res =>
-        import cats.instances.either._
-        res.leftMap(StreamError.unexpected).flatten
-      }
+      .map(_.leftMap(StreamError.unexpected).flatten)
       .fromTask
 
-  private def init[F[_]: Sync](folder: Path): F[Streamed] =
-    createPacketFile[F](folder, "_packet_streamed.bts")
-      .map { case (file, fos) => Streamed(fos = fos, path = file) }
+  private def init[F[_]: Sync](cache: TrieMap[String, Array[Byte]]): F[Streamed] =
+    createCacheEntry[F]("packet_send/", cache) map (key => Streamed(key = key))
 
   private def collect[F[_]: Monixable: Sync](
       init: Streamed,
       stream: Observable[Chunk],
-      circuitBreaker: CircuitBreaker
+      circuitBreaker: CircuitBreaker,
+      cache: TrieMap[String, Array[Byte]]
   ): EitherT[F, StreamError, Streamed] = {
 
     def collectStream: F[Streamed] =
@@ -136,10 +126,14 @@ object StreamHandler {
             else Left(newStmd)
 
           case (stmd, Chunk(Chunk.Content.Data(ChunkData(newData)))) =>
-            val array = newData.toByteArray
-            stmd.fos.write(array)
-            stmd.fos.flush()
-            val readSoFar = stmd.readSoFar + array.length
+            val receivedBytes = newData.toByteArray
+
+            // Write data to cache
+            val existingBytes = cache(stmd.key)
+            val bytes         = existingBytes ++ receivedBytes
+            cache.update(stmd.key, bytes)
+
+            val readSoFar = stmd.readSoFar + receivedBytes.length
             val newStmd   = stmd.copy(readSoFar = readSoFar)
             val circuit   = circuitBreaker(newStmd)
             if (circuit.broken)
@@ -155,9 +149,9 @@ object StreamHandler {
         .fromTask
 
     EitherT(collectStream.attempt.map {
-      case Right(Streamed(_, _, Opened(error), _, _)) => error.asLeft
-      case Right(stmd)                                => stmd.asRight
-      case Left(t)                                    => StreamError.unexpected(t).asLeft
+      case Right(Streamed(_, _, Opened(error), _)) => error.asLeft
+      case Right(stmd)                             => stmd.asRight
+      case Left(t)                                 => StreamError.unexpected(t).asLeft
     })
 
   }
@@ -173,11 +167,10 @@ object StreamHandler {
             Some(Header(sender, packetType, contentLength, _, compressed)),
             readSoFar,
             _,
-            path,
-            _
+            key
             ) =>
           val result =
-            StreamMessage(sender, packetType, path, compressed, contentLength).asRight[StreamError]
+            StreamMessage(sender, packetType, key, compressed, contentLength).asRight[StreamError]
           if (!compressed && readSoFar != contentLength) notFullError
           else result
 
@@ -186,24 +179,26 @@ object StreamHandler {
     })
   }
 
-  def restore[F[_]: Sync: Log](msg: StreamMessage): F[Either[Throwable, Blob]] =
-    (fetchContent[F](msg.path).attempt flatMap {
+  def restore[F[_]: Sync: Log](
+      msg: StreamMessage,
+      cache: TrieMap[String, Array[Byte]]
+  ): F[Either[Throwable, Blob]] =
+    (Sync[F].delay(cache(msg.key)).attempt >>= {
       case Left(ex) =>
-        Log[F].error("Could not read streamed data from file", ex).as(ex.asLeft[Blob])
+        Log[F]
+          .error(s"Could not read streamed data from cache (key: ${msg.key})", ex)
+          .as(ex.asLeft[Blob])
       case Right(content) =>
         decompressContent[F](content, msg.compressed, msg.contentLength).attempt flatMap {
           case Left(ex) =>
-            Log[F].error("Could not decompressed data ").as(ex.asLeft[Blob])
+            Log[F].error(s"Could not decompressed data (key: ${msg.key})").as(ex.asLeft[Blob])
           case Right(decompressedContent) =>
             ProtocolHelper
               .blob(msg.sender, msg.typeId, decompressedContent)
               .asRight[Throwable]
               .pure[F]
         }
-    }) >>= (res => msg.path.deleteSingleFile[F].as(res))
-
-  private def fetchContent[F[_]: Sync](path: Path): F[Array[Byte]] =
-    Sync[F].delay(Files.readAllBytes(path))
+    }) <* Sync[F].delay(cache.remove(msg.key))
 
   private def decompressContent[F[_]: Sync](
       raw: Array[Byte],
