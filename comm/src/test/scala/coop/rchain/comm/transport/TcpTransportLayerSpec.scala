@@ -65,8 +65,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
         env.key,
         maxMessageSize,
         maxStreamMessageSize,
-        4,
-        scheduler
+        4
       )
     }
 }

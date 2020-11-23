@@ -513,8 +513,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                               nodeConf.tls.keyPath,
                               nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
                               nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
-                              nodeConf.protocolServer.maxMessageConsumers,
-                              grpcScheduler
+                              nodeConf.protocolServer.maxMessageConsumers
                             )
                           )
 

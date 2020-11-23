@@ -38,8 +38,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
     key: String,
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
-    parallelism: Int,
-    ioScheduler: Scheduler
+    parallelism: Int
 )(implicit mainScheduler: Scheduler)
     extends TransportLayerServer[F] {
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
@@ -97,8 +96,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
                    messageBuffers,
                    (dispatchSend, dispatchBlob),
                    parallelism = parallelism,
-                   cache,
-                   ioScheduler
+                   cache
                  )
     } yield receiver
   }
@@ -112,8 +110,7 @@ object GrpcTransportServer {
       keyPath: Path,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      parallelism: Int,
-      ioScheduler: Scheduler
+      parallelism: Int
   )(implicit mainScheduler: Scheduler): TransportServer[F] = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
@@ -125,8 +122,7 @@ object GrpcTransportServer {
         key,
         maxMessageSize,
         maxStreamMessageSize,
-        parallelism,
-        ioScheduler
+        parallelism
       )
     )
   }

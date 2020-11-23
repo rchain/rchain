@@ -38,8 +38,7 @@ object GrpcTransportReceiver {
       buffersMap: Ref[F, Map[PeerNode, Deferred[F, MessageBuffers]]],
       messageHandlers: MessageHandlers[F],
       parallelism: Int,
-      cache: TrieMap[String, Array[Byte]],
-      ioScheduler: Scheduler
+      cache: TrieMap[String, Array[Byte]]
   )(implicit mainScheduler: Scheduler): F[Cancelable] = {
 
     val service = new RoutingGrpcMonix.TransportLayer {
@@ -53,8 +52,8 @@ object GrpcTransportReceiver {
 
       private def getBuffers(peer: PeerNode): F[MessageBuffers] = {
         def createBuffers: MessageBuffers = {
-          val tellBuffer = buffer.LimitedBufferObservable.dropNew[Send](64)(ioScheduler)
-          val blobBuffer = buffer.LimitedBufferObservable.dropNew[StreamMessage](8)(ioScheduler)
+          val tellBuffer = buffer.LimitedBufferObservable.dropNew[Send](64)
+          val blobBuffer = buffer.LimitedBufferObservable.dropNew[StreamMessage](8)
           // TODO cancel queues when peer is lost
           val tellCancellable = tellBuffer
             .mapParallelUnordered(parallelism)(messageHandlers._1(_).toTask)
