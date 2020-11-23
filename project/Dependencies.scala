@@ -59,6 +59,7 @@ object Dependencies {
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
+  val rocksDb             = "org.rocksdb"                 % "rocksdbjni"                % "6.13.3"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"

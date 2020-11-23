@@ -132,6 +132,7 @@ lazy val shared = (project in file("shared"))
       scodecBits,
       scalapbRuntimegGrpc,
       lmdbjava,
+      rocksDb,
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest
@@ -450,6 +451,7 @@ lazy val blockStorage = (project in file("block-storage"))
     name := "block-storage",
     version := "0.0.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ protobufLibDependencies ++ Seq(
+      rocksDb,
       catsCore,
       catsEffect,
       catsMtl
