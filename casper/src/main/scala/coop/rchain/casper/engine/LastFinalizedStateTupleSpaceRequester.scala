@@ -181,31 +181,6 @@ object LastFinalizedStateTupleSpaceRequester {
                   // Run all in parallel and wait to finish, throws on validation error.
                   _ <- Stream(validationProcess, historySaveProcess, dataSaveProcess).parJoinUnbounded.compile.drain
 
-//                  // TEST: read immediately history and data items and validate
-//                  exporter = RSpaceStateManager[F].exporter
-//                  validateWrite = for {
-//                    _                                 <- Log[F].warn("START WRITE VALIDATION ------------------------")
-//                    items                             <- exporter.getHistoryAndData(startPath, 0, pageSize, ByteVector(_))
-//                    (readHistoryItems, readDataItems) = items
-//                    _ <- LogTimer.time(Log[F].info)("Validate written state")(
-//                          validateTupleSpaceItems(
-//                            readHistoryItems.items,
-//                            readDataItems.items,
-//                            startPath,
-//                            chunkSize = pageSize,
-//                            skip = 0,
-//                            importer.getHistoryItem
-//                          )
-//                        )
-//                  } yield ()
-//                  _ <- validateWrite.handleErrorWith { ex: Throwable =>
-//                        for {
-//                          _ <- Log[F].error(s"RETRY", ex)
-//                          _ <- validateWrite
-//                          _ <- new Exception("END RETRY OF VALIDATION").raiseError[F, Unit]
-//                        } yield ()
-//                      }
-
                   // Mark chunk as finished
                   _ <- st.update(_.done(startPath))
 
