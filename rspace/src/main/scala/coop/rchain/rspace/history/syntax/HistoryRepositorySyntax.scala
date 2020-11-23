@@ -5,7 +5,18 @@ import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.syntax.syntaxHistoryRepository
-import coop.rchain.rspace.{internal, Blake2b256Hash}
+import coop.rchain.rspace.trace.Event
+import coop.rchain.rspace.trace.Event.{
+  containConflictingEvents,
+  extractJoinedChannels,
+  extractRSpaceEventGroup,
+  produceChannels,
+  Conflict,
+  IsConflict,
+  NonConflict
+}
+import coop.rchain.rspace.{internal, Blake2b256Hash, StableHashProvider}
+import coop.rchain.shared.Serialize
 
 import scala.language.{higherKinds, implicitConversions}
 
@@ -128,4 +139,58 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
     historyRepo.reset(state) >>= { h =>
       h.getContinuationFromChannelHash(channelHash)
     }
+
+  /**
+    * detect conflict events between rightEvents and rightEvents.
+    * In conflict case, conflict set contains the conflict channel hash.
+    * @param baseState baseState needed here for detect conflict in joins
+    * @return
+    */
+  def isConflict(
+      baseState: Blake2b256Hash,
+      leftEvents: List[Event],
+      rightEvents: List[Event]
+  )(implicit sc: Serialize[C]): F[IsConflict] = {
+    val leftEventGroup  = extractRSpaceEventGroup(leftEvents)
+    val rightEventGroup = extractRSpaceEventGroup(rightEvents)
+    val conflictJoinInLeft =
+      extractJoinedChannels(leftEventGroup).intersect(produceChannels(rightEventGroup))
+    val conflictJoinInRight =
+      extractJoinedChannels(rightEventGroup).intersect(produceChannels(leftEventGroup))
+    val otherConflict          = containConflictingEvents(leftEventGroup, rightEventGroup)
+    val normalConflictChannels = conflictJoinInLeft ++ conflictJoinInRight ++ otherConflict
+    val nonconflictRightProduceChannels =
+      rightEventGroup.produces.filter(p => !normalConflictChannels.contains(p.channelsHash))
+    for {
+      rightJoins <- nonconflictRightProduceChannels.toList.traverse { produce =>
+                     for {
+                       joins <- historyRepo.getJoinsFromChannelHash(
+                                 baseState,
+                                 produce.channelsHash
+                               )
+                       joinM = joins.filter(_.length > 1)
+                     } yield (produce, joinM)
+                   }
+      leftProduceChannel = leftEventGroup.produces.map(_.channelsHash).toSet
+      conflictJoinChannels = rightJoins
+        .filter {
+          case (produce, joins) => {
+            val joinsChannelHashes  = joins.map(_.map(StableHashProvider.hash(_)(sc))).flatten
+            val joinsWithoutProduce = joinsChannelHashes diff Seq(produce.channelsHash)
+            joinsWithoutProduce.exists(p => leftProduceChannel.contains(p))
+          }
+        }
+        .map(_._1.channelsHash)
+        .toSet
+    } yield
+      if (normalConflictChannels.isEmpty && conflictJoinChannels.isEmpty) {
+        NonConflict(leftEventGroup, rightEventGroup)
+      } else {
+        Conflict(
+          leftEventGroup,
+          rightEventGroup,
+          normalConflictChannels ++ conflictJoinChannels
+        )
+      }
+  }
 }

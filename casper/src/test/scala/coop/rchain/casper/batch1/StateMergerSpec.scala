@@ -112,7 +112,7 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
             rightDeploy         <- runtime.processDeploy(deploys(2))
             rightCheckpoint @ _ <- runtime.createCheckpoint
             stateMerger         <- historyRepo.stateMerger
-            isConflictCase <- EstimatorHelper.isDeploysConflict(
+            isConflictCase <- EstimatorHelper.computeMergeChanges(
                                historyRepo,
                                baseCheckpoint.root,
                                List(leftDeploy),
