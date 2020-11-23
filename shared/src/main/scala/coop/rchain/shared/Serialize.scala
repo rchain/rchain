@@ -35,7 +35,7 @@ object Serialize {
 
   implicit class RichSerialize[A](private val instance: Serialize[A]) extends AnyVal {
 
-    def toCodec: Codec[A] = new Codec[A] {
+    def toSizeHeadCodec: Codec[A] = new Codec[A] {
 
       private val sizeCodec = int64
 

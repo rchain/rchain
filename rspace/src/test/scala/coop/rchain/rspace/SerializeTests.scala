@@ -18,7 +18,7 @@ class SerializeTests extends FlatSpec with Matchers with Checkers with Configura
   "A String" should "round trip through a derived codec" in {
 
     val propRoundTripCodec: Prop = Prop.forAll { (str: String) =>
-      roundTripCodec(str)(stringSerialize.toCodec)
+      roundTripCodec(str)(stringSerialize.toSizeHeadCodec)
         .map((value: DecodeResult[String]) => value.value == str)
         .getOrElse(default = false)
     }
@@ -29,7 +29,7 @@ class SerializeTests extends FlatSpec with Matchers with Checkers with Configura
   "A Pattern" should "round trip through a derived codec" in {
 
     val propRoundTripCodec: Prop = Prop.forAll { (pat: Pattern) =>
-      roundTripCodec(pat)(patternSerialize.toCodec)
+      roundTripCodec(pat)(patternSerialize.toSizeHeadCodec)
         .map((value: DecodeResult[Pattern]) => value.value == pat)
         .getOrElse(default = false)
     }

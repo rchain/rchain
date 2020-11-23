@@ -90,9 +90,9 @@ abstract class HistoryRepositoryGenerativeDefinition
     with OptionValues
     with GeneratorDrivenPropertyChecks {
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toSizeHeadCodec
+  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
+  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 

@@ -84,18 +84,24 @@ object ReportMemStore {
       .by(uint2)
       .subcaseP(0)({
         case n: ReportingProduce[C, A] @unchecked => n
-      })(codecReportingProduce(serializeC.toCodec, serializeA.toCodec))
+      })(codecReportingProduce(serializeC.toSizeHeadCodec, serializeA.toSizeHeadCodec))
       .subcaseP(1) {
         case n: ReportingConsume[C, P, K] @unchecked => n
-      }(codecReportingConsume(serializeC.toCodec, serializeP.toCodec, serializeK.toCodec))
+      }(
+        codecReportingConsume(
+          serializeC.toSizeHeadCodec,
+          serializeP.toSizeHeadCodec,
+          serializeK.toSizeHeadCodec
+        )
+      )
       .subcaseP(2) {
         case n: ReportingComm[C, P, A, K] @unchecked => n
       }(
         codecReportingComm(
-          serializeC.toCodec,
-          serializeP.toCodec,
-          serializeA.toCodec,
-          serializeK.toCodec
+          serializeC.toSizeHeadCodec,
+          serializeP.toSizeHeadCodec,
+          serializeA.toSizeHeadCodec,
+          serializeK.toSizeHeadCodec
         )
       )
 
