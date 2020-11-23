@@ -8,7 +8,7 @@ import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.{RNodeKeyValueStoreManager, RocksDbStoreManager}
 import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -119,7 +119,7 @@ object GenesisBuilder {
 
       blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
 
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir)
+      storeManager <- RocksDbStoreManager[Task](blockDagDir)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[Task]

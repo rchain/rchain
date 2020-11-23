@@ -11,7 +11,7 @@ import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, Caspe
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.{RNodeKeyValueStoreManager, RocksDbStoreManager}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
@@ -69,7 +69,7 @@ object Resources {
       path: Path
   ): Resource[F, BlockDagStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RocksDbStoreManager[F](path)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[F]
@@ -80,7 +80,7 @@ object Resources {
       path: Path
   ): Resource[F, CasperBufferStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RocksDbStoreManager[F](path)
       casperBufferStorage <- {
         implicit val kvm = storeManager
         CasperBufferKeyValueStorage.create[F]

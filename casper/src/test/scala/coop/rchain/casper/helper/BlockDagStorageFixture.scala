@@ -14,7 +14,7 @@ import coop.rchain.blockstorage.dag.{
   IndexedBlockDagStorage
 }
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.{RNodeKeyValueStoreManager, RocksDbStoreManager}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -40,7 +40,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     val resource = for {
       paths        <- Resources.copyStorage[Task](context.storageDirectory)
       blockStore   <- Resources.mkBlockStoreAt[Task](paths.blockStoreDir)
-      storeManager <- Resource.liftF(RNodeKeyValueStoreManager[Task](paths.blockDagDir))
+      storeManager <- Resource.liftF(RocksDbStoreManager[Task](paths.blockDagDir))
       blockDagStorage <- Resource.liftF({
                           implicit val kvm = storeManager
                           BlockDagKeyValueStorage.create[Task]
@@ -112,7 +112,7 @@ object BlockDagStorageTestFixture {
       blockStorageDir: Path
   ): F[BlockStore[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
+      storeManager <- RocksDbStoreManager[F](blockStorageDir)
       blockStore <- {
         implicit val kvm = storeManager
         KeyValueBlockStore[F]()
@@ -124,7 +124,7 @@ object BlockDagStorageTestFixture {
       metrics: Metrics[F]
   ): F[BlockDagStorage[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[F](blockDagStorageDir)
+      storeManager <- RocksDbStoreManager[F](blockDagStorageDir)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[F]

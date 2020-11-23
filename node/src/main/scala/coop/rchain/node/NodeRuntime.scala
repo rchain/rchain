@@ -20,7 +20,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.{BlockRetriever, _}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.{RNodeKeyValueStoreManager, RNodeRocksStoreManager}
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{ReportingCasper, engine, _}
@@ -758,7 +758,7 @@ object NodeRuntime {
       else Span.noop[F]
 
       // Key-value store manager / manages LMDB databases
-      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+      casperStoreManager <- RNodeRocksStoreManager(conf.storage.dataDir)
 
       // Block storage
       blockStore <- {
