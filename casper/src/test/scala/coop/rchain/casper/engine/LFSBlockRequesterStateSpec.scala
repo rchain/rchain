@@ -1,14 +1,14 @@
 package coop.rchain.casper.engine
 
 import cats.syntax.all._
-import coop.rchain.casper.engine.LastFinalizedStateBlockRequester.ST
+import coop.rchain.casper.engine.LastFinalizedStateBlockRequester.{ReceiveInfo, ST}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
 class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   "getNext" should "return empty list when called again" in {
-    val st = ST(Seq(10))
+    val st = ST(Set(10))
 
     // Calling next should produce initial set
     val (st1, ids1) = st.getNext(resend = false)
@@ -24,7 +24,7 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
   }
 
   "getNext" should "return new items after add" in {
-    val st = ST(Seq(10))
+    val st = ST(Set(10))
 
     // Add new items
     val st2 = st.add(Set(9, 8))
@@ -35,71 +35,129 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     ids2 shouldBe Seq(10, 9, 8)
   }
 
+  "getNext" should "return requested items on resend" in {
+    val st = ST(Set(10))
+
+    // Calling next should return new items
+    val (st1, ids1) = st.getNext(resend = false)
+
+    ids1 shouldBe Seq(10)
+
+    // Calling next with resend should return already requested
+    val (_, ids2) = st1.getNext(resend = true)
+
+    ids2 shouldBe Seq(10)
+  }
+
+  "isRequested" should "return flag if item is added to requested items" in {
+    val st = ST(Set(10))
+
+    // Calling next to request added items
+    val (st1, _) = st.getNext(resend = false)
+
+    // Check requested item
+    val requested = st1.isRequested(10)
+
+    requested shouldBe true
+
+    // Check not requested item
+    val requested1 = st1.isRequested(100)
+
+    requested1 shouldBe false
+  }
+
   "received" should "return true for requested and false for unknown" in {
-    val st = ST(Seq(10))
+    val st = ST(Set(10))
 
     // Mark next as requested
     val (st1, _) = st.getNext(resend = false)
 
     // Received requested item
-    val (_, isReceivedTrue) = st1.received(10)
+    val (_, ReceiveInfo(requested, _, _)) = st1.received(10, 100)
 
-    isReceivedTrue shouldBe true
+    requested shouldBe true
 
     // Received unknown item
-    val (_, isReceivedFalse) = st1.received(100)
+    val (_, ReceiveInfo(requested1, _, _)) = st1.received(100, 200)
 
-    isReceivedFalse shouldBe false
+    requested1 shouldBe false
   }
 
-  "admitLatest" should "return found and empty if exists in latest" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
+  "received" should "return flag based on calculated height" in {
+    val st = ST(Set(10, 11), latest = Set(10), lowerBound = 200)
 
-    // Admit message, check if latest and remove it
-    // - returns if latest is found and if latest set is empty
-    val (_, (isFound, isEmpty)) = st.admitLatest(10)
+    // Mark next as requested
+    val (st1, _) = st.getNext(resend = false)
 
-    isFound shouldBe true
-    isEmpty shouldBe true
+    // Received the last latest item (sets minimum height)
+    val (st2, receiveInfo1) = st1.received(10, 100)
+
+    receiveInfo1 shouldBe ReceiveInfo(requested = true, latest = true, lastlatest = true)
+
+    // Minimum height should be recalculated based on the last latest item (-1)
+    st2.lowerBound shouldBe 99
+
+    // Mark next as requested
+    val (st3, ids2) = st2.getNext(resend = false)
+
+    ids2 shouldBe Seq(11)
+
+    // Received higher height should be accepted
+    val (st4, ReceiveInfo(requested3, _, _)) = st3.received(11, 50)
+
+    requested3 shouldBe true
+
+    // Minimum height should stay the same after all latest items received
+    st4.lowerBound shouldBe 99
   }
 
-  "admitLatest called again" should "return not found" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
+  "received" should "return next only after latest are received" in {
+    val st = ST(Set(10, 11, 12), latest = Set(10, 11))
 
-    val (st1, _) = st.admitLatest(10)
+    // Mark next as requested
+    val (st1, _) = st.getNext(resend = false)
 
-    val (_, (isFound, isEmpty)) = st1.admitLatest(10)
+    // Received latest item
+    val (st2, receiveInfo) = st1.received(10, 100)
 
-    isFound shouldBe false
-    isEmpty shouldBe true
-  }
+    receiveInfo shouldBe ReceiveInfo(requested = true, latest = true, lastlatest = false)
 
-  "done" should "return minimum height if supplied" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
+    // Before all latest received, next should be empty
+    val (st3, ids1) = st2.getNext(resend = false)
 
-    val (_, minHeight) = st.done(10, height = 1000L.some)
+    ids1 shouldBe Seq.empty
 
-    minHeight shouldBe 1000L
-  }
+    // Received latest item (the last one)
+    val (st4, receiveInfo1) = st3.received(11, 110)
 
-  "done" should "return existing minimum height if not supplied" in {
-    val st = ST(Seq(10), latest = Set[Int](5))
+    receiveInfo1 shouldBe ReceiveInfo(requested = true, latest = true, lastlatest = true)
 
-    val (_, minHeight) = st.done(10, none)
+    // After the last of latest received, the rest of items should be requested
+    val (_, ids4) = st4.getNext(resend = false)
 
-    minHeight shouldBe Long.MaxValue
+    ids4 shouldBe Seq(12)
   }
 
   "done" should "make state finished" in {
-    val st = ST(Seq(10))
+    val st = ST(Set(10))
 
-    val (st1, _) = st.done(10, none)
+    // If item is not received, it should stay unfinished
+    val st1 = st.done(10)
 
-    st1.isFinished shouldBe true
+    st1.isFinished shouldBe false
+
+    // Mark next as requested ...
+    val (st2, _) = st1.getNext(resend = false)
+    // ... and received
+    val (st3, _) = st2.received(10, 100)
+
+    val st4 = st3.done(10)
+
+    st4.isFinished shouldBe true
   }
 
   "from start to finish" should "receive one item" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
+    val st = ST(Set(10), latest = Set[Int](10))
 
     // Calling next should produce initial set
     val (st1, ids1) = st.getNext(resend = false)
@@ -115,16 +173,14 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     st2.isFinished shouldBe false
 
     // Received first item
-    val (st3, isReceived) = st2.received(10)
+    val (st3, ReceiveInfo(requested, _, _)) = st2.received(10, 100)
 
-    isReceived shouldBe true
+    requested shouldBe true
 
-    val (st4, _) = st3.done(10, none)
-
-    val (st5, _) = st4.admitLatest(10)
+    val st4 = st3.done(10)
 
     // Return finished when all items as Done
-    st5.isFinished shouldBe true
+    st4.isFinished shouldBe true
   }
 
 }

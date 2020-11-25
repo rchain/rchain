@@ -1,18 +1,11 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.casper.ValidBlock.Valid
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
-import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.{MultiParentCasperImpl, PrettyPrinter, Validate}
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}
@@ -25,61 +18,94 @@ object LastFinalizedStateBlockRequester {
   case object Init      extends ReqStatus
   case object Requested extends ReqStatus
   case object Received  extends ReqStatus
-  case object Done      extends ReqStatus
+
+  final case class ReceiveInfo(requested: Boolean, latest: Boolean, lastlatest: Boolean)
 
   /**
     * State to control processing of requests
     */
-  final case class ST[Key](private val d: Map[Key, ReqStatus], latest: Set[Key], lowerBound: Long) {
+  final case class ST[Key](
+      d: Map[Key, ReqStatus],
+      latest: Set[Key],
+      lowerBound: Long,
+      finished: Set[Key]
+  ) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
-    def add(keys: Set[Key]): ST[Key] =
-      this.copy(d ++ keys.filterNot(d.contains).map((_, Init)))
+    def add(keys: Set[Key]): ST[Key] = {
+      // Filter keys that are in Done status
+      //  or in request Map.
+      val newKeys = keys.diff(finished).filterNot(d.contains)
+      // Set Init status for new keys.
+      this.copy(d ++ newKeys.map((_, Init)))
+    }
 
     // Get next keys not already requested or
     //  in case of resend together with Requested.
     // Returns updated state with requested keys.
     def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
       val requested = d
-        .filter { case (_, v) => v == Init || (resend && v == Requested) }
+        .filter {
+          case (key, status) =>
+            // Select initialized or re-request if resending
+            def checkForRequest = status == Init || (resend && status == Requested)
+            if (latest.isEmpty) {
+              // Latest are downloaded, no additional conditions
+              checkForRequest
+            } else {
+              // Only latest are requested first
+              checkForRequest && latest(key)
+            }
+        }
         .mapValues(_ => Requested)
       this.copy(d ++ requested) -> requested.keysIterator.toSeq
     }
 
+    // Returns flag if key is requested.
+    def isRequested(k: Key): Boolean = d.get(k).contains(Requested)
+
     // Confirm key is Received if it was Requested.
-    // Returns updated state with the flag if it was Requested.
-    def received(k: Key): (ST[Key], Boolean) = {
-      val isRequested = d.get(k).contains(Requested)
-      val newSt       = if (isRequested) d + ((k, Received)) else d
-      this.copy(newSt) -> isRequested
+    // Returns updated state with the flags if Requested and last latest received.
+    def received(k: Key, height: Long): (ST[Key], ReceiveInfo) = {
+      val isReq = isRequested(k)
+      if (isReq) {
+        // Remove message from the set of latest messages (if exists)
+        val newLatest    = latest - k
+        val isLatest     = latest != newLatest
+        val isLastLatest = isLatest && newLatest.isEmpty
+        // Calculate new minimum height if latest message
+        //  - we need parents of latest message so it's `-1`
+        val newLowerBound = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
+        val newSt         = d + ((k, Received))
+        // Set new minimum height and update latest
+        (this.copy(newSt, newLatest, newLowerBound), ReceiveInfo(isReq, isLatest, isLastLatest))
+      } else {
+        (this, ReceiveInfo(requested = false, latest = false, lastlatest = false))
+      }
     }
 
     // Mark key as finished (Done) with optionally set minimum lower bound.
-    def done(k: Key, height: Option[Long]): (ST[Key], Long) = {
-      val newLowest = height.fold(lowerBound)(Math.min(_, lowerBound))
-      val newSt     = d + ((k, Done))
-      this.copy(newSt, lowerBound = newLowest) -> newLowest
-    }
-
-    // Track when senders list will be empty
-    def admitLatest(msg: Key): (ST[Key], (Boolean, Boolean)) = {
-      // Remove message from the set of latest messages (if exists)
-      val newLatest = latest - msg
-      // Is message found in the set of latest messages
-      val isFound = latest != newLatest
-      // Is set of latest messages empty
-      val isEmpty = newLatest.isEmpty
-      // Returns new state and observed changes to the state
-      (this.copy(latest = newLatest), (isFound, isEmpty))
+    def done(k: Key): ST[Key] = {
+      val isReceived = d.get(k).contains(Received)
+      if (isReceived) {
+        // If Received key, remove from request Map and add to Done Set
+        val newSt   = d - k
+        val newDone = finished + k
+        this.copy(newSt, finished = newDone)
+      } else this
     }
 
     // Returns flag if all keys are marked as finished (Done).
-    def isFinished: Boolean = latest.isEmpty && !d.exists { case (_, v) => v != Done }
+    def isFinished: Boolean = latest.isEmpty && d.isEmpty
   }
 
   object ST {
     // Create requests state with initial keys.
-    def apply[Key](initial: Seq[Key], latest: Set[Key] = Set[Key]()): ST[Key] =
-      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound = Long.MaxValue)
+    def apply[Key](
+        initial: Set[Key],
+        latest: Set[Key] = Set[Key](),
+        lowerBound: Long = 0
+    ): ST[Key] =
+      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound, finished = Set[Key]())
   }
 
   /**
@@ -87,6 +113,8 @@ object LastFinalizedStateBlockRequester {
     *
     * @param approvedBlock Last finalized block
     * @param responseQueue Handler of block messages
+    * @param initialMinimumHeight Required minimum block height before latest messages are downloaded
+    * @param requestTimeout Time after request will be resent if not received
     * @param requestForBlock Send request for block
     * @param containsBlock Check if block is in the store
     * @param putBlockToStore Add block to the store
@@ -96,23 +124,27 @@ object LastFinalizedStateBlockRequester {
   def stream[F[_]: Concurrent: Time: Log](
       approvedBlock: ApprovedBlock,
       responseQueue: Queue[F, BlockMessage],
+      initialMinimumHeight: Long,
+      requestTimeout: FiniteDuration,
       requestForBlock: BlockHash => F[Unit],
       containsBlock: BlockHash => F[Boolean],
+      getBlockFromStore: BlockHash => F[BlockMessage],
       putBlockToStore: (BlockHash, BlockMessage) => F[Unit],
       validateBlock: BlockMessage => F[Boolean]
   ): F[Stream[F, Boolean]] = {
 
-    val block                           = approvedBlock.candidate.block
-    val approvedBlockNumber             = ProtoUtil.blockNumber(block)
-    val minBlockNumberForDeployLifespan = approvedBlockNumber - MultiParentCasperImpl.deployLifespan
+    val block = approvedBlock.candidate.block
 
     // Active validators as per approved block state
     // - for approved state to be complete it is required to have block from each of them
     val latestMessages = block.justifications.map(_.latestBlockHash).toSet
 
+    val initialHashes = latestMessages + block.blockHash
+
     def createStream(
         st: SignallingRef[F, ST[BlockHash]],
-        requestQueue: Queue[F, Boolean]
+        requestQueue: Queue[F, Boolean],
+        responseHashQueue: Queue[F, BlockHash]
     ): Stream[F, Boolean] = {
 
       def broadcastStreams(ids: Seq[BlockHash]) = {
@@ -122,57 +154,72 @@ object LastFinalizedStateBlockRequester {
         Stream(broadcastRequests: _*)
       }
 
-      /**
-        * Validate and save block. Checking justifications from last finalized block gives us proof
-        *  for all ancestor blocks.
-        */
-      def validateAndSaveBlock(block: BlockMessage) =
+      def processBlock(block: BlockMessage): F[Unit] =
         for {
-          blockHashIsValid_ <- validateBlock(block)
-          // TODO: validate zero genesis correctly
-          blockHashIsValid = block.body.state.blockNumber == 0 || blockHashIsValid_
+          // Validate and mark received block
+          isValid <- validateReceivedBlock(block)
 
-          // Log invalid block
-          invalidBlockMsg = s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
-          _               <- Log[F].warn(invalidBlockMsg).whenA(!blockHashIsValid)
+          // Save block to store
+          _ <- saveBlock(block).whenA(isValid)
 
-          _ <- saveBlock(block).whenA(blockHashIsValid)
+          // Trigger request queue (without resend of already requested)
+          _ <- requestQueue.enqueue1(false)
         } yield ()
+
+      /**
+        * Validate received block, check if it was requested and if block hash is correct.
+        *  Following justifications from last finalized block gives us proof for all ancestor blocks.
+        */
+      def validateReceivedBlock(block: BlockMessage) = {
+        def invalidBlockMsg =
+          s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
+        for {
+          isRequested      <- st.get.map(_.isRequested(block.blockHash))
+          blockHashIsValid <- if (isRequested) validateBlock(block) else false.pure[F]
+
+          // Log invalid block if block is requested but hash is invalid
+          _ <- Log[F].warn(invalidBlockMsg).whenA(isRequested && !blockHashIsValid)
+
+          // Try accept received block if it has valid hash
+          isReceived <- if (blockHashIsValid) {
+                         val blockNumber = ProtoUtil.blockNumber(block)
+                         for {
+                           // Mark block as received and calculate minimum height (if latest)
+                           receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
+                           // Result if block is received and if last latest is received
+                           ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
+
+                           // Log minimum height when last latest block is received
+                           minimumHeight <- st.get.map(_.lowerBound)
+                           _ <- Log[F]
+                                 .info(
+                                   s"Latest blocks downloaded. Minimum block height is $minimumHeight."
+                                 )
+                                 .whenA(isLastLatest)
+
+                           // Update dependencies for requesting
+                           requestDependencies = Sync[F].delay(
+                             ProtoUtil.dependenciesHashesOf(block)
+                           ) >>= (deps => st.update(_.add(deps.toSet)))
+
+                           // Accept block if it's requested and satisfy conditions
+                           // - received one of latest messages
+                           // - requested and block number is greater than minimum
+                           blockIsAccepted = isReceivedLatest || isReceived && blockNumber >= minimumHeight
+                           _               <- requestDependencies.whenA(blockIsAccepted)
+                         } yield isReceived
+                       } else false.pure[F]
+        } yield isReceived
+      }
 
       def saveBlock(block: BlockMessage) =
         for {
-          // Block is latest message from bonded validator
-          // - we need all child blocks of this block
-          // - it must be used to calculate minimum block height
-          admitResult                     <- st.modify(_.admitLatest(block.blockHash))
-          (useAsMinHeight, isLatestEmpty) = admitResult
-
-          // Mark block as finished
-          blockNumber           = ProtoUtil.blockNumber(block)
-          blockNumberOpt        = if (useAsMinHeight) (blockNumber - 1).some else none
-          minBlockNumberForDeps <- st.modify(_.done(block.blockHash, blockNumberOpt))
-
-          // Minimum block number to request
-          minBlockNumber = Math.min(minBlockNumberForDeps, minBlockNumberForDeployLifespan)
-
-          // Is block number accepted
-          // - true if all latest are not received
-          // - or all latest received and minimum height is the from oldest latest block
-          isBlockNumberAccepted = !isLatestEmpty || (isLatestEmpty && blockNumber >= minBlockNumber)
-
           // Save block to the store
           alreadySaved <- containsBlock(block.blockHash)
-          _            <- putBlockToStore(block.blockHash, block).whenA(isBlockNumberAccepted && !alreadySaved)
+          _            <- putBlockToStore(block.blockHash, block).whenA(!alreadySaved)
 
-          _ <- Log[F]
-                .info(s"New minimum block height re-calculated $minBlockNumberForDeps.")
-                .whenA(useAsMinHeight)
-
-          // Update dependencies for requesting
-          requestDependencies = getBlockDependencies(block) >>= (
-              deps => st.update(_.add(deps.toSet))
-          )
-          _ <- requestDependencies.whenA(isBlockNumberAccepted)
+          // Mark block download as done
+          _ <- st.update(_.done(block.blockHash))
         } yield ()
 
       import cats.instances.list._
@@ -193,41 +240,41 @@ object LastFinalizedStateBlockRequester {
         // Check existing blocks
         existingHashes <- Stream.eval(hashes.toList.filterA(containsBlock))
 
+        // Enqueue hashes of exiting blocks
+        _ <- responseHashQueue.enqueue(Stream.emits(existingHashes)).whenA(existingHashes.nonEmpty)
+
         // Missing blocks not already in the block store
         missingBlocks = hashes.diff(existingHashes)
 
-        _ <- Stream.eval(st.update(_.add(missingBlocks.toSet)))
-
-        // Send all requests in parallel
+        // Send all requests in parallel for missing blocks
         _ <- broadcastStreams(missingBlocks).parJoinUnbounded
               .whenA(!isEnd && missingBlocks.nonEmpty)
       } yield isEnd
 
       /**
-        * Response stream is handling incoming block messages.
+        * Response stream is handling incoming block messages. Responses can be processed in parallel.
         */
-      val responseStream = for {
-        // Response queue is incoming message source / async callback handler
-        block <- responseQueue.dequeue
+      val responseStream1 = responseQueue.dequeue.parEvalMapUnordered(100)(processBlock)
 
-        // Mark block as received
-        isReceived <- Stream.eval(st.modify(_.received(block.blockHash)))
+      val responseStream2 = responseHashQueue.dequeue
+        .parEvalMapUnordered(100) { hash =>
+          for {
+            block <- getBlockFromStore(hash)
+            _     <- Log[F].info(s"Process existing ${PrettyPrinter.buildString(block)}")
+            _     <- processBlock(block)
+          } yield ()
+        }
 
-        // Save block to DAG store
-        _ <- Stream.eval(validateAndSaveBlock(block)).whenA(isReceived)
-
-        // Trigger request queue (without resend of already requested)
-        _ <- Stream.eval(requestQueue.enqueue1(false))
-      } yield ()
+      // Merge both response streams
+      val responseStream = Stream(responseStream1 concurrently responseStream2).parJoinUnbounded
 
       /**
         * Timeout to resend block requests if response is not received.
         */
-      val timeoutDuration = 30.seconds
-      val timeoutMsg      = s"No block responses for $timeoutDuration. Resending requests."
+      val timeoutMsg = s"No block responses for $requestTimeout. Resending requests."
       val resendStream = Stream.eval(
         // Trigger request queue (resend already requested)
-        Time[F].sleep(timeoutDuration) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
+        Time[F].sleep(requestTimeout) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
       )
       // Switch to resend if response is not triggered after timeout
       // - response message reset timeout by canceling previous stream
@@ -238,29 +285,32 @@ object LastFinalizedStateBlockRequester {
         * Final result! Concurrently pulling requests and handling responses
         *  with resend timeout if response is not received.
         */
-      requestStream.takeWhile(!_).broadcastThrough(withTimeout) concurrently responseStream
-    }
-
-    def getBlockDependencies(block: BlockMessage) = {
-      import cats.instances.list._
-      ProtoUtil.dependenciesHashesOf(block).filterA(containsBlock(_).not)
+      requestStream
+        .takeWhile(!_)
+        .broadcastThrough(withTimeout) concurrently responseStream
     }
 
     for {
       // Requester state, fill with validators for required latest messages
       st <- SignallingRef[F, ST[BlockHash]](
-             ST(Seq(block.blockHash), latest = latestMessages)
+             ST(
+               initialHashes,
+               latest = initialHashes,
+               lowerBound = initialMinimumHeight
+             )
            )
 
-      // Block requests queue
-      requestQueue <- Queue.unbounded[F, Boolean]
+      // Queue to trigger processing of requests. `True` to resend requests.
+      requestQueue <- Queue.bounded[F, Boolean](maxSize = 100)
+      // Response queue for existing blocks in the store.
+      responseHashQueue <- Queue.unbounded[F, BlockHash]
 
       // Light the fire! / Starts the first request for block
       // - `true` if requested blocks should be re-requested
       _ <- requestQueue.enqueue1(false)
 
       // Create block receiver stream
-    } yield createStream(st, requestQueue)
+    } yield createStream(st, requestQueue, responseHashQueue)
   }
 
 }

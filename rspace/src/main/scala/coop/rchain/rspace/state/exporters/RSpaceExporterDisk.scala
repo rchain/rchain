@@ -2,53 +2,69 @@ package coop.rchain.rspace.state.exporters
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.Sync
+import cats.Monad
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Monad, Parallel}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
-import coop.rchain.rspace.state.RSpaceExporter
-import scodec.bits.BitVector
+import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.shared.{Log, Stopwatch}
+import fs2.Stream
+import scodec.Codec
+import scodec.bits.ByteVector
 
 object RSpaceExporterDisk {
-  import coop.rchain.rspace.state.syntax._
-  import coop.rchain.rspace.util.Lib._
 
-  def writeToDisk[F[_]: Sync: Parallel](
+  def writeToDisk[F[_]: Concurrent: Log, C, P, A, K](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
       chunkSize: Int
-  ): F[Unit] = {
+  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
     def writeChunkRec(historyStore: Store[F], dataStore: Store[F])(
         p: Param
     ): F[Either[Param, Unit]] = {
       val (startPath, chunk) = p
-      println(s"PART ${chunk}")
-      val skip      = 0
-      val exportAll = exporter.getHistoryAndData(startPath, skip, chunkSize, BitVector(_))
+      val skip               = 0
+      val exportAll          = exporter.getHistoryAndData(startPath, skip, chunkSize, ByteVector(_))
       for {
         inputs                      <- exportAll
         (inputHistory, inputValues) = inputs
 
-        // Get history
-        partialStoreList = inputHistory.items
+        // Get history and data items
+        historyItems = inputHistory.items.toVector
+        dataItems    = inputValues.items.toVector
 
-        // Get values
-        partialValuesList = inputValues.items
+        // Validate items
+        validationProcess = Stopwatch.time(Log[F].info(_))("Validate state items")(
+          RSpaceImporter.validateStateItems[F, C, P, A, K](
+            historyItems,
+            dataItems,
+            startPath,
+            chunkSize,
+            skip,
+            k => historyStore.get(Seq(k), ByteVector(_)).map(_.head)
+          )
+        )
 
-        // Write to restore store
-        _ <- Parallel.parProduct(
-              time("COMPLETE LMDB HISTORY WRITE")(historyStore.put(partialStoreList)),
-              time("COMPLETE LMDB VALUES WRITE")(dataStore.put(partialValuesList))
-            )
+        // Restore operations / run in parallel
+        _ <- Stream(
+              validationProcess,
+              Stopwatch.time(Log[F].info(_))("Write history items")(
+                historyStore.put[ByteVector](historyItems, _.toDirectByteBuffer)
+              ),
+              Stopwatch.time(Log[F].info(_))("Write data items")(
+                dataStore.put[ByteVector](dataItems, _.toDirectByteBuffer)
+              )
+            ).map(Stream.eval).parJoinUnbounded.compile.drain
 
-        _ = println(s"LAST PATH: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
+        _ = Log[F].info(s"Last path: ${inputHistory.lastPath map RSpaceExporter.pathPretty}")
 
-        _ = println("")
-
-        isEnd = partialStoreList.size < chunkSize
+        receivedSize = historyItems.size
+        isEnd        = receivedSize < chunkSize
       } yield if (isEnd) ().asRight else (inputHistory.lastPath, chunk + 1).asLeft
     }
 
@@ -56,7 +72,7 @@ object RSpaceExporterDisk {
       // Lmdb restore history
       lmdbHistoryStore <- mkLmdbInstance(dirPath.resolve("history"))
       lmdbDataStore    <- mkLmdbInstance(dirPath.resolve("cold"))
-      _ <- time("RESTORE COMPLETE")(
+      _ <- Stopwatch.time(Log[F].info(_))("Restore complete")(
             Monad[F]
               .tailRecM((Seq((root, none[Byte])), 0))(
                 writeChunkRec(lmdbHistoryStore, lmdbDataStore)

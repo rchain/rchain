@@ -2,18 +2,18 @@ package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
-import coop.rchain.rspace.util.Lib
+import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared.ByteVectorOps._
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Log, Stopwatch, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}
 import scodec.bits.ByteVector
@@ -88,6 +88,9 @@ object LastFinalizedStateTupleSpaceRequester {
         requestQueue: Queue[F, Boolean]
     ): Stream[F, Boolean] = {
 
+      // Get importer
+      val importer = RSpaceStateManager[F].importer
+
       def broadcastStreams(ids: Seq[StatePartPath]) = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(
@@ -138,24 +141,45 @@ object LastFinalizedStateTupleSpaceRequester {
         // Import chunk to RSpace
         _ <- Stream
               .eval {
-                // Get importer
-                val importer = RSpaceStateManager[F].importer
+                // Transform values from ByteString to ByteVector
+                val historyItemsBytes = historyItems.map {
+                  case (k, v) => (k, ByteVector(v.toByteArray))
+                }
+                val dataItemsBytes = dataItems.map {
+                  case (k, v) => (k, ByteVector(v.toByteArray))
+                }
+
+                // Validation for received tuple space items.
+                val validationProcess = Stream.eval {
+                  Stopwatch.time(Log[F].info(_))("Validate received state items")(
+                    validateTupleSpaceItems(
+                      historyItemsBytes,
+                      dataItemsBytes,
+                      startPath,
+                      chunkSize = pageSize,
+                      skip = 0,
+                      importer.getHistoryItem
+                    )
+                  )
+                }
+
+                // Save history items to store.
+                val historySaveProcess = Stream.eval {
+                  Stopwatch.time(Log[F].info(_))("Import history items")(
+                    importer.setHistoryItems[ByteVector](historyItemsBytes, _.toDirectByteBuffer)
+                  )
+                }
+
+                // Save data items to store.
+                val dataSaveProcess = Stream.eval {
+                  Stopwatch.time(Log[F].info(_))("Import data items")(
+                    importer.setDataItems[ByteVector](dataItemsBytes, _.toDirectByteBuffer)
+                  )
+                }
+
                 for {
-                  // Write incoming data
-                  _ <- Lib.time("IMPORT HISTORY")(
-                        importer
-                          .setHistoryItems[ByteString](
-                            historyItems,
-                            x => ByteVector(x.toByteArray).toDirectByteBuffer
-                          )
-                      )
-                  _ <- Lib.time("IMPORT DATA")(
-                        importer
-                          .setDataItems[ByteString](
-                            dataItems,
-                            x => ByteVector(x.toByteArray).toDirectByteBuffer
-                          )
-                      )
+                  // Run all in parallel and wait to finish, throws on validation error.
+                  _ <- Stream(validationProcess, historySaveProcess, dataSaveProcess).parJoinUnbounded.compile.drain
 
                   // Mark chunk as finished
                   _ <- st.update(_.done(startPath))
@@ -200,8 +224,8 @@ object LastFinalizedStateTupleSpaceRequester {
       // Requester state
       st <- SignallingRef[F, ST[StatePartPath]](ST(Seq(startRequest)))
 
-      // Tuple space state requests queue
-      requestQueue <- Queue.unbounded[F, Boolean]
+      // Queue to trigger processing of requests. `True` to resend requests.
+      requestQueue <- Queue.bounded[F, Boolean](maxSize = 10)
 
       // Light the fire! / Starts the first request for chunk of state
       // - `true` if requested chunks should be re-requested
@@ -210,4 +234,26 @@ object LastFinalizedStateTupleSpaceRequester {
       // Create tuple space state receiver stream
     } yield createStream(st, requestQueue)
   }
+
+  implicit val codecPar  = storage.serializePar.toCodec
+  implicit val codecBind = storage.serializeBindPattern.toCodec
+  implicit val codecPars = storage.serializePars.toCodec
+  implicit val codecCont = storage.serializeTaggedContinuation.toCodec
+
+  def validateTupleSpaceItems[F[_]: Concurrent: Log](
+      historyItems: Seq[(Blake2b256Hash, ByteVector)],
+      dataItems: Seq[(Blake2b256Hash, ByteVector)],
+      startPath: Seq[(Blake2b256Hash, Option[Byte])],
+      chunkSize: Int,
+      skip: Int,
+      getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
+  ) =
+    RSpaceImporter.validateStateItems[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+      historyItems,
+      dataItems,
+      startPath,
+      chunkSize,
+      skip,
+      getFromHistory
+    )
 }

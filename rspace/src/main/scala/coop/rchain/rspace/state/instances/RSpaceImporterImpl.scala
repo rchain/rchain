@@ -7,6 +7,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{RootsStoreInstances, Store}
 import coop.rchain.rspace.state.RSpaceImporter
+import scodec.bits.ByteVector
 
 object RSpaceImporterImpl {
   // RSpace importer constructor / smart constructor "guards" private class
@@ -18,24 +19,27 @@ object RSpaceImporterImpl {
     RSpaceImporterImpl(historyStore, valueStore, rootsStore)
 
   private final case class RSpaceImporterImpl[F[_]: Sync](
-      sourceHistoryStore: Store[F],
-      sourceValueStore: Store[F],
-      sourceRootsStore: Store[F]
+      historyStore: Store[F],
+      valueStore: Store[F],
+      rootsStore: Store[F]
   ) extends RSpaceImporter[F] {
+    val roots = RootsStoreInstances.rootsStore(rootsStore)
+
     override def setHistoryItems[Value](
         data: Seq[(Blake2b256Hash, Value)],
         toBuffer: Value => ByteBuffer
     ): F[Unit] =
-      sourceHistoryStore.put(data, toBuffer)
+      historyStore.put(data, toBuffer)
 
     override def setDataItems[Value](
         data: Seq[(Blake2b256Hash, Value)],
         toBuffer: Value => ByteBuffer
-    ): F[Unit] = sourceValueStore.put(data, toBuffer)
+    ): F[Unit] = valueStore.put(data, toBuffer)
 
-    override def setRoot(key: Blake2b256Hash): F[Unit] = {
-      val roots = RootsStoreInstances.rootsStore(sourceRootsStore)
+    override def setRoot(key: Blake2b256Hash): F[Unit] =
       roots.recordRoot(key)
-    }
+
+    override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] =
+      historyStore.get(Seq(hash), ByteVector(_)).map(_.head)
   }
 }

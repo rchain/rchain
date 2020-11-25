@@ -22,7 +22,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
@@ -276,7 +276,7 @@ object Running {
       skip: Int,
       take: Int
   ): F[Unit] = {
-    import coop.rchain.rspace.state.syntax._
+    import coop.rchain.rspace.syntax._
     for {
       // Export chunk of store items from RSpace
       exportedItems <- RSpaceStateManager[F].exporter.getHistoryAndData(
@@ -486,8 +486,12 @@ class Running[F[_]
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>
+      val start = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+      val logRequest = Log[F].info(
+        s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
+      )
       if (enableStateExporter) {
-        handleStateItemsMessageRequest(peer, startPath, skip, take)
+        logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
       } else {
         Log[F].debug(
           s"Received StoreItemsMessage from ${peer} but the node is configured to not respond to StoreItemsMessage."

@@ -472,6 +472,7 @@ lazy val rspace = (project in file("rspace"))
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
+      fs2Core,
       scodecCore,
       scodecBits,
       guava
