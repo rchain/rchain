@@ -1,47 +1,32 @@
 package coop.rchain.comm.transport
 
-import java.nio.file._
-
-import scala.util.Random
-
-import coop.rchain.comm.protocol.routing._
-
 import com.google.protobuf.ByteString
+import coop.rchain.comm.protocol.routing._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalacheck.Gen
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
-class PacketStoreRestoreSpec
-    extends FunSpec
-    with Matchers
-    with BeforeAndAfterEach
-    with GeneratorDrivenPropertyChecks {
+import scala.collection.concurrent.TrieMap
+import scala.util.Random
+
+class PacketStoreRestoreSpec extends FunSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   import PacketOps._
 
   implicit val scheduler: Scheduler = Scheduler.Implicits.global
-  var tempFolder: Path              = _
-
-  override def beforeEach(): Unit =
-    tempFolder = Files.createTempDirectory("rchain-")
-
-  override def afterEach(): Unit =
-    tempFolder.toFile.delete()
 
   describe("Packet store & restore") {
     it("should store and restore to the original Packet") {
       forAll(contentGen) { content: Array[Byte] =>
         // given
-        val parent = tempFolder.resolve("inner").resolve("folder")
+        val cache  = TrieMap[String, Array[Byte]]()
         val packet = Packet("Test", ByteString.copyFrom(content))
         // when
-        val storedIn = packet.store[Task](parent).runSyncUnsafe().right.get
-        val restored = PacketOps.restore[Task](storedIn).runSyncUnsafe().right.get
+        val storedIn = packet.store[Task](cache).runSyncUnsafe().right.get
+        val restored = PacketOps.restore[Task](storedIn, cache).runSyncUnsafe().right.get
         // then
-        storedIn.toFile.exists() shouldBe true
-        storedIn.getParent shouldBe parent
         packet shouldBe restored
       }
     }

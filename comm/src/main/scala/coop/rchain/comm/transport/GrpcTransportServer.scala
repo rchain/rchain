@@ -20,11 +20,12 @@ import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.execution.{Cancelable, Scheduler}
 
+import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.{Left, Right}
 
 trait TransportLayerServer[F[_]] {
-  def receive(
+  def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable]
@@ -37,15 +38,17 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
     key: String,
     maxMessageSize: Int,
     maxStreamMessageSize: Long,
-    tempFolder: Path,
     parallelism: Int
-)(implicit scheduler: Scheduler)
+)(implicit mainScheduler: Scheduler)
     extends TransportLayerServer[F] {
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
 
   implicit val metricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "rp.transport")
+
+  // Cache to store received partial data (streaming packets)
+  private val cache = TrieMap[String, Array[Byte]]()
 
   private val serverSslContextTask: F[SslContext] =
     Sync[F]
@@ -62,7 +65,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
         case Left(t)           => Sync[F].raiseError[SslContext](t)
       }
 
-  def receive(
+  def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable] = {
@@ -74,7 +77,7 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
 
     val dispatchBlob: StreamMessage => F[Unit] =
       msg =>
-        (StreamHandler.restore(msg) >>= {
+        (StreamHandler.restore(msg, cache) >>= {
           case Left(ex) =>
             Log[F].error("Could not restore data from file while handling stream", ex)
           case Right(blob) =>
@@ -92,8 +95,8 @@ class GrpcTransportServer[F[_]: Monixable: Concurrent: RPConfAsk: Log: Metrics](
                    maxStreamMessageSize,
                    messageBuffers,
                    (dispatchSend, dispatchBlob),
-                   tempFolder = tempFolder,
-                   parallelism = parallelism
+                   parallelism = parallelism,
+                   cache
                  )
     } yield receiver
   }
@@ -107,9 +110,8 @@ object GrpcTransportServer {
       keyPath: Path,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      folder: Path,
       parallelism: Int
-  )(implicit scheduler: Scheduler): TransportServer[F] = {
+  )(implicit mainScheduler: Scheduler): TransportServer[F] = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)
     new TransportServer[F](
@@ -120,7 +122,6 @@ object GrpcTransportServer {
         key,
         maxMessageSize,
         maxStreamMessageSize,
-        folder,
         parallelism
       )
     )
@@ -139,7 +140,7 @@ class TransportServer[F[_]: Monixable: Concurrent](server: GrpcTransportServer[F
       case Some(_) => ().pure[F]
       case _ =>
         server
-          .receive(dispatch, handleStreamed)
+          .handleReceive(dispatch, handleStreamed)
           .toTask
           .foreachL { cancelable =>
             ref

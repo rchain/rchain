@@ -165,7 +165,7 @@ class TestNode[F[_]](
       Created(block)    = createBlockResult
     } yield block
 
-  def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
+  def receive(): F[Unit] = tls.handleReceive(p => handle[F](p), kp(().pure[F])).void
 
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
