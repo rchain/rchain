@@ -169,8 +169,9 @@ class Initializing[F[_]
         fs2.Stream.eval(Log[F].info(s"Rholang state received and saved to store.")).drain
 
       // Receive the blocks and after populate the DAG
-      blockRequestAddDagStream = blockRequestStream.drain ++
-        fs2.Stream.eval(populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan))
+      blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
+        populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan, st.heightMap)
+      }
 
       // Run both streams in parallel until tuple space and all needed blocks are received
       _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceLogStream).parJoinUnbounded.compile.drain
@@ -189,40 +190,12 @@ class Initializing[F[_]
       Validate.blockHash(block).map(_ == Right(Valid))
   }
 
-  private def populateDag(startBlock: BlockMessage, initialMinHeight: Long): F[Unit] = {
+  private def populateDag(
+      startBlock: BlockMessage,
+      initialMinHeight: Long,
+      heightMap: SortedMap[Long, Set[BlockHash]]
+  ): F[Unit] = {
     import cats.instances.list._
-
-    type SortedBlocks = SortedMap[Long, Set[BlockHash]]
-    type RecParams    = (Seq[BlockHash], Set[BlockHash], SortedBlocks)
-
-    def loopDependencies(
-        params: RecParams
-    ): F[Either[RecParams, SortedMap[Long, Set[BlockHash]]]] = {
-      val (hashes, visited, sortedByHeight) = params
-      hashes match {
-        case Nil => sortedByHeight.asRight[RecParams].pure[F]
-        case head +: tail =>
-          for {
-            block <- BlockStore[F].getUnsafe(head)
-            _     <- Log[F].info(s"Sorting ${PrettyPrinter.buildString(block, short = true)}")
-
-            // Block's all dependencies
-            depsAll = ProtoUtil.dependenciesHashesOf(block).filterNot(visited)
-
-            // Dependencies to add to DAG (without skipped or not in the store)
-            depsInStore <- depsAll.filterA(BlockStore[F].contains)
-
-            // Already collected hashes for block height
-            blockNumber = block.body.state.blockNumber
-            nrHashes    = sortedByHeight.getOrElse(blockNumber, Set())
-
-            // Data for continue recursion
-            newRest    = tail ++ depsInStore
-            newVisited = visited ++ depsAll
-            newSorted  = sortedByHeight.updated(blockNumber, nrHashes + block.blockHash)
-          } yield (newRest, newVisited, newSorted).asLeft
-      }
-    }
 
     def getMinBlockHeight: F[Long] = {
       val blockHashes = startBlock.justifications.map(_.latestBlockHash)
@@ -240,20 +213,19 @@ class Initializing[F[_]
         s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
       ) <* BlockDagStorage[F].insert(block, invalid = isInvalid)
 
-    val emptySorted = SortedMap[Long, Set[BlockHash]]()
     for {
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
-      sortedHashes <- (Seq(startBlock.blockHash), Set[BlockHash](), emptySorted)
-                       .tailRecM(loopDependencies)
+
       // Latest messages from slashed validators / invalid blocks
       slashedValidators = startBlock.body.state.bonds.filter(_.stake == 0L).map(_.validator)
       invalidBlocks = startBlock.justifications
         .filter(v => slashedValidators.contains(v.validator))
         .map(_.latestBlockHash)
         .toSet
+
       // Add sorted DAG in order from oldest to approved block
       minHeight <- getMinBlockHeight
-      _ <- sortedHashes.flatMap(_._2).toList.traverse_ { hash =>
+      _ <- heightMap.flatMap(_._2).toList.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
