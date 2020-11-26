@@ -107,7 +107,7 @@ object ReportingCasper {
       store: ReportMemStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
-      val codecK                                                     = serializeTaggedContinuation.toCodec
+      val codecK                                                     = serializeTaggedContinuation.toSizeHeadCodec
       implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
       implicit val source                                            = Metrics.Source(CasperMetricsSource, "report-replay")
 

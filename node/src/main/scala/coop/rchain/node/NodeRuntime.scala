@@ -2,13 +2,13 @@ package coop.rchain.node
 
 import java.nio.file.{Files, Path}
 
-import cats.{~>, Parallel}
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.syntax.all._
 import cats.mtl._
 import cats.syntax.all._
+import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -58,7 +58,6 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
-import coop.rchain.shared.PathOps._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
@@ -114,15 +113,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                 )
 
       // 3. create instances of typeclasses
-      metrics       = diagnostics.effects.metrics[F]
-      time          = effects.time[F]
-      commTmpFolder = nodeConf.storage.dataDir.resolve("tmp").resolve("comm")
-      _ <- commTmpFolder.toFile
-            .exists()
-            .fold(
-              commTmpFolder.deleteDirectory[F](),
-              ().pure[F]
-            )
+      metrics = diagnostics.effects.metrics[F]
+      time    = effects.time[F]
 
       transport <- {
         implicit val s = scheduler
@@ -135,7 +127,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             nodeConf.tls.keyPath,
             nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
             nodeConf.protocolClient.grpcStreamChunkSize.toInt,
-            commTmpFolder,
             grpcScheduler
           )
       }
@@ -401,11 +392,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _ <- Log[F].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
+
       _ <- servers.transportServer
             .start(
               HandleMessages.handle[F](_),
               blob => packetHandler.handlePacket(blob.sender, blob.packet)
             )
+
       address = local.toAddress
       _       <- Log[F].info(s"Listening for traffic on $address.")
       _       <- EventLog[F].publish(Event.NodeStarted(address))
@@ -523,7 +516,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                               nodeConf.tls.keyPath,
                               nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
                               nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
-                              nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
                               nodeConf.protocolServer.maxMessageConsumers
                             )
                           )

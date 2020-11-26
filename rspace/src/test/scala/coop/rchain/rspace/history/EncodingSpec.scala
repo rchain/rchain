@@ -23,8 +23,8 @@ class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyCh
 
   implicit val codecContinuation: Codec[WaitingContinuation[Pattern, StringsCaptor]] =
     codecWaitingContinuation(
-      implicits.patternSerialize.toCodec,
-      implicits.stringClosureSerialize.toCodec
+      implicits.patternSerialize.toSizeHeadCodec,
+      implicits.stringClosureSerialize.toSizeHeadCodec
     )
 
   "Datum list encode" should "return same hash for different orderings of each datum" in forAll {

@@ -1313,7 +1313,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       hotStore = {
         implicit val hr = history
         implicit val c  = cache
-        implicit val ck = stringClosureSerialize.toCodec
+        implicit val ck = stringClosureSerialize.toSizeHeadCodec
         HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
       res <- f(cache, history, hotStore)
@@ -1336,7 +1336,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       hotStore = {
         implicit val hr = history
         implicit val c  = cache
-        implicit val ck = stringClosureSerialize.toCodec
+        implicit val ck = stringClosureSerialize.toSizeHeadCodec
         HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
       }
       res <- f(hotStore)
