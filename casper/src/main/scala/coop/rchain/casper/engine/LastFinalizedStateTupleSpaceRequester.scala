@@ -235,10 +235,10 @@ object LastFinalizedStateTupleSpaceRequester {
     } yield createStream(st, requestQueue)
   }
 
-  implicit val codecPar  = storage.serializePar.toCodec
-  implicit val codecBind = storage.serializeBindPattern.toCodec
-  implicit val codecPars = storage.serializePars.toCodec
-  implicit val codecCont = storage.serializeTaggedContinuation.toCodec
+  implicit val codecPar  = storage.serializePar.toSizeHeadCodec
+  implicit val codecBind = storage.serializeBindPattern.toSizeHeadCodec
+  implicit val codecPars = storage.serializePars.toSizeHeadCodec
+  implicit val codecCont = storage.serializeTaggedContinuation.toSizeHeadCodec
 
   def validateTupleSpaceItems[F[_]: Concurrent: Log](
       historyItems: Seq[(Blake2b256Hash, ByteVector)],
