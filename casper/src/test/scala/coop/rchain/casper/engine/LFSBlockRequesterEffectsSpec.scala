@@ -3,6 +3,7 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.engine.LastFinalizedStateBlockRequester.ST
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.models.BlockHash.BlockHash
@@ -104,7 +105,7 @@ class LFSBlockRequesterEffectsSpec
 
   trait SUT[F[_], Eff] {
     // Processing stream
-    val stream: Stream[F, Boolean]
+    val stream: Stream[F, ST[BlockHash]]
     // Fill response queue - simulate receiving blocks from external source
     def receive(bs: BlockMessage*): F[Unit]
     // Observed effects (sent requests, saved blocks, ...)
@@ -140,7 +141,7 @@ class LFSBlockRequesterEffectsSpec
       }
 
       sut = new SUT[F, Eff] {
-        override val stream: Stream[F, Boolean]          = requestStream
+        override val stream: Stream[F, ST[BlockHash]]    = requestStream
         override def receive(bs: BlockMessage*): F[Unit] = receiveBlocks(bs.toList)
         override val eff: Eff                            = effects
       }

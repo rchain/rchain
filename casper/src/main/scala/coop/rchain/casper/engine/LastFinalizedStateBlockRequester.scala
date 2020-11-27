@@ -10,6 +10,7 @@ import coop.rchain.shared.{Log, Time}
 import fs2.concurrent.{Queue, SignallingRef}
 import fs2.{Pipe, Stream}
 
+import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
 
 object LastFinalizedStateBlockRequester {
@@ -28,6 +29,7 @@ object LastFinalizedStateBlockRequester {
       d: Map[Key, ReqStatus],
       latest: Set[Key],
       lowerBound: Long,
+      heightMap: SortedMap[Long, Set[Key]],
       finished: Set[Key]
   ) {
     // Adds new keys to Init state, ready for processing. Existing keys are skipped.
@@ -72,12 +74,18 @@ object LastFinalizedStateBlockRequester {
         val newLatest    = latest - k
         val isLatest     = latest != newLatest
         val isLastLatest = isLatest && newLatest.isEmpty
+        // Save in height map
+        val heightKeys   = heightMap.getOrElse(height, Set())
+        val newHeightMap = heightMap + ((height, heightKeys + k))
         // Calculate new minimum height if latest message
         //  - we need parents of latest message so it's `-1`
         val newLowerBound = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
         val newSt         = d + ((k, Received))
         // Set new minimum height and update latest
-        (this.copy(newSt, newLatest, newLowerBound), ReceiveInfo(isReq, isLatest, isLastLatest))
+        (
+          this.copy(newSt, newLatest, newLowerBound, newHeightMap),
+          ReceiveInfo(isReq, isLatest, isLastLatest)
+        )
       } else {
         (this, ReceiveInfo(requested = false, latest = false, lastlatest = false))
       }
@@ -105,7 +113,13 @@ object LastFinalizedStateBlockRequester {
         latest: Set[Key] = Set[Key](),
         lowerBound: Long = 0
     ): ST[Key] =
-      ST[Key](d = initial.map((_, Init)).toMap, latest, lowerBound, finished = Set[Key]())
+      ST[Key](
+        d = initial.map((_, Init)).toMap,
+        latest,
+        lowerBound,
+        heightMap = SortedMap[Long, Set[Key]](),
+        finished = Set[Key]()
+      )
   }
 
   /**
@@ -131,7 +145,7 @@ object LastFinalizedStateBlockRequester {
       getBlockFromStore: BlockHash => F[BlockMessage],
       putBlockToStore: (BlockHash, BlockMessage) => F[Unit],
       validateBlock: BlockMessage => F[Boolean]
-  ): F[Stream[F, Boolean]] = {
+  ): F[Stream[F, ST[BlockHash]]] = {
 
     val block = approvedBlock.candidate.block
 
@@ -145,7 +159,7 @@ object LastFinalizedStateBlockRequester {
         st: SignallingRef[F, ST[BlockHash]],
         requestQueue: Queue[F, Boolean],
         responseHashQueue: Queue[F, BlockHash]
-    ): Stream[F, Boolean] = {
+    ): Stream[F, ST[BlockHash]] = {
 
       def broadcastStreams(ids: Seq[BlockHash]) = {
         // Create broadcast requests to peers
@@ -278,15 +292,14 @@ object LastFinalizedStateBlockRequester {
       )
       // Switch to resend if response is not triggered after timeout
       // - response message reset timeout by canceling previous stream
-      def withTimeout: Pipe[F, Boolean, Boolean] =
+      def withTimeout: Pipe[F, ST[BlockHash], ST[BlockHash]] =
         in => in concurrently resendStream.interruptWhen(in.map(_ => true)).repeat
 
       /**
         * Final result! Concurrently pulling requests and handling responses
         *  with resend timeout if response is not received.
         */
-      requestStream
-        .takeWhile(!_)
+      (requestStream.takeWhile(!_).evalMap(_ => st.get) ++ Stream.eval(st.get))
         .broadcastThrough(withTimeout) concurrently responseStream
     }
 
