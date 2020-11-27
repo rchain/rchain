@@ -225,7 +225,7 @@ class RSpace[F[_], C, P, A, K](
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeK.toCodec)
+      _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
       log         = eventLog.take()
       _           = eventLog.put(Seq.empty)
       _           = produceCounter.take()
@@ -280,7 +280,7 @@ object RSpace {
       setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), Branch.MASTER)
-      replayStore            <- HotStore.empty(historyReader)(sk.toCodec, concurrent)
+      replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore),
@@ -328,10 +328,10 @@ object RSpace {
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
     import coop.rchain.rspace.history._
-    implicit val cc = sc.toCodec
-    implicit val cp = sp.toCodec
-    implicit val ca = sa.toCodec
-    implicit val ck = sk.toCodec
+    implicit val cc = sc.toSizeHeadCodec
+    implicit val cp = sp.toSizeHeadCodec
+    implicit val ca = sa.toSizeHeadCodec
+    implicit val ck = sk.toSizeHeadCodec
 
     val coldStore    = StoreConfig(dataDir.resolve("cold"), mapSize)
     val historyStore = StoreConfig(dataDir.resolve("history"), mapSize)

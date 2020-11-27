@@ -4,18 +4,14 @@ import java.nio.file.Path
 
 import cats.data.ReaderT
 import cats.effect.concurrent.{Deferred, Ref}
-
-import scala.concurrent.duration._
-import scala.io.Source
-import scala.tools.jline.console._
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.mtl._
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Applicative, Monad, Parallel}
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
-import coop.rchain.comm.rp._
 import coop.rchain.comm.rp.Connect._
+import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
@@ -23,6 +19,10 @@ import coop.rchain.shared._
 import monix.eval._
 import monix.execution._
 import monix.execution.atomic.AtomicAny
+
+import scala.concurrent.duration._
+import scala.io.Source
+import scala.tools.jline.console._
 
 package object effects {
 
@@ -57,7 +57,6 @@ package object effects {
       keyPath: Path,
       maxMessageSize: Int,
       packetChunkSize: Int,
-      folder: Path,
       ioScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[TransportLayer[F]] =
     Ref.of[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]](Map()) map { channels =>
@@ -69,7 +68,6 @@ package object effects {
         key,
         maxMessageSize,
         packetChunkSize,
-        folder,
         clientQueueSize = 100,
         channels,
         ioScheduler
