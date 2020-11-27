@@ -156,7 +156,9 @@ object CertificateHelper {
   def decodeSignatureDERtoRS(signatureDER: Array[Byte]): Try[Array[Byte]] = {
     def toBytes(x: ASN1Encodable) = {
       val asn1 = x.toASN1Primitive.asInstanceOf[ASN1Integer]
-      BigIntegers.asUnsignedByteArray(asn1.getValue)
+      // IMPORTANT: Specifying length will left pad zeroes
+      val bytesLength = 32
+      BigIntegers.asUnsignedByteArray(bytesLength, asn1.getValue)
     }
 
     def convert: Array[Byte] = {
