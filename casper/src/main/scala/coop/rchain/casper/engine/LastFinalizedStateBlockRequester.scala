@@ -187,22 +187,21 @@ object LastFinalizedStateBlockRequester {
       def validateReceivedBlock(block: BlockMessage) = {
         def invalidBlockMsg =
           s"Received ${PrettyPrinter.buildString(block)} with invalid hash. Ignored block."
+        val blockNumber = ProtoUtil.blockNumber(block)
         for {
-          isRequested      <- st.get.map(_.isRequested(block.blockHash))
-          blockHashIsValid <- if (isRequested) validateBlock(block) else false.pure[F]
+          // Mark block as received and calculate minimum height (if latest)
+          receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
+          // Result if block is received and if last latest is received
+          ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
+
+          blockHashIsValid <- if (isReceived) validateBlock(block) else false.pure[F]
 
           // Log invalid block if block is requested but hash is invalid
-          _ <- Log[F].warn(invalidBlockMsg).whenA(isRequested && !blockHashIsValid)
+          _ <- Log[F].warn(invalidBlockMsg).whenA(isReceived && !blockHashIsValid)
 
           // Try accept received block if it has valid hash
           isReceived <- if (blockHashIsValid) {
-                         val blockNumber = ProtoUtil.blockNumber(block)
                          for {
-                           // Mark block as received and calculate minimum height (if latest)
-                           receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
-                           // Result if block is received and if last latest is received
-                           ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
-
                            // Log minimum height when last latest block is received
                            minimumHeight <- st.get.map(_.lowerBound)
                            _ <- Log[F]
