@@ -786,16 +786,25 @@ object BlockAPI {
                          s"Could not find block with hash $hash"
                            .asLeft[Boolean]
                            .pure[F]
-                       case Some(givenBlockMetadata) =>
-                         DagOperations
-                           .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
-                             b.parents.traverse(dag.lookup).map { parentOpts =>
-                               parentOpts.flatten.distinct
-                                 .filter(_.blockNum >= givenBlockMetadata.blockNum)
+                       case Some(givenBlockMetadata) => {
+                         // TODO this is temporary solution to not calculate fault tolerance for old blocks which is costly
+                         val oldBlock =
+                           dag.latestBlockNumber.map(_ - givenBlockMetadata.blockNum).map(_ > 100)
+                         val isInvalid           = dag.lookup(givenBlockMetadata.blockHash).map(_.get.invalid)
+                         val oldBlockIsFinalized = isInvalid.map(if (_) false else true)
+                         oldBlock.ifM(
+                           oldBlockIsFinalized.map(_.asRight[Error]),
+                           DagOperations
+                             .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
+                               b.parents.traverse(dag.lookup).map { parentOpts =>
+                                 parentOpts.flatten.distinct
+                                   .filter(_.blockNum >= givenBlockMetadata.blockNum)
+                               }
                              }
-                           }
-                           .contains(givenBlockMetadata)
-                           .map(_.asRight[Error])
+                             .contains(givenBlockMetadata)
+                             .map(_.asRight[Error])
+                         )
+                       }
                      }
           } yield result,
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
