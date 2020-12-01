@@ -6,8 +6,10 @@ import cats._
 import cats.implicits._
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift}
+import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
+import coop.rchain.blockstorage.dag.codecs.codecBlockHash
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
 import coop.rchain.blockstorage.deploy.InMemDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
@@ -31,6 +33,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -133,8 +136,12 @@ object Setup {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
-    implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
-    implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
+    val finalizedBlocksStore  = InMemoryKeyValueStore[Task]()
+    val finalizedBlocksStoreT = finalizedBlocksStore.toTypedStore(codecBlockHash, codecBlockHash)
+
+    implicit val lastFinalizedBlockCalculator =
+      LastFinalizedBlockCalculator[Task](0f, finalizedBlocksStoreT)
+    implicit val synchronyConstraintChecker = SynchronyConstraintChecker[Task](0d)
     implicit val lastFinalizedConstraintChecker =
       LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
     implicit val estimator      = Estimator[Task](Estimator.UnlimitedParents, None)

@@ -35,7 +35,8 @@ import coop.rchain.comm.transport._
 import coop.rchain.grpc.Server
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, BlockHash, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.blockstorage.dag.codecs.codecBlockHash
 import coop.rchain.monix.Monixable
 import coop.rchain.node.NodeRuntime._
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
@@ -801,13 +802,35 @@ object NodeRuntime {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
       }
+      finalizedBlocksNonExist = Files.notExists(conf.storage.dataDir.resolve("finalized-blocks"))
+      finalizedBlocksStore <- casperStoreManager.database[BlockHash, BlockHash](
+                               "finalized-blocks",
+                               codecBlockHash,
+                               codecBlockHash
+                             )
+      _ <- if (finalizedBlocksNonExist && Files.exists(conf.storage.dataDir.resolve("dagstorage"))) {
+            Log[F].info(
+              "FinalizedBlockHash cache does not exist. Construct the cache store from scratch now."
+            ) >>
+              LastFinalizedBlockCalculator.storeHistoryFinalizedBlocks[F](
+                finalizedBlocksStore,
+                blockStore,
+                blockDagStorage,
+                lastFinalizedStorage
+              ) >> Log[F].info(
+              "Construct the FinalizedBlockHash cache store finished."
+            )
+          } else {
+            ().pure[F]
+          }
       lastFinalizedBlockCalculator = {
         implicit val bs = blockStore
         implicit val da = blockDagStorage
         implicit val or = oracle
         implicit val ds = deployStorage
         LastFinalizedBlockCalculator[F](
-          conf.casper.faultToleranceThreshold
+          conf.casper.faultToleranceThreshold,
+          finalizedBlocksStore
         )
       }
       synchronyConstraintChecker = {

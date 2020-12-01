@@ -8,9 +8,15 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueTypedStore
+
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.util.DagOperations
+import coop.rchain.models.BlockMetadata
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
-    faultToleranceThreshold: Float
+    faultToleranceThreshold: Float,
+    finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
 ) {
   def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash): F[BlockHash] =
     for {
@@ -19,13 +25,18 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       maybeFinalizedChild <- childrenHashes.findM(isGreaterThanFaultToleranceThreshold(dag, _))
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
-                              removeDeploysInFinalizedBlock(finalizedChild) >> run(
+                              removeDeploysInFinalizedBlock(finalizedChild) >> storeFinalizedBlock(
+                                finalizedChild
+                              ) >> run(
                                 dag,
                                 finalizedChild
                               )
                             case None => lastFinalizedBlockHash.pure[F]
                           }
     } yield newFinalizedBlock
+
+  private def storeFinalizedBlock(blockHash: BlockHash) =
+    LastFinalizedBlockCalculator.storeFinalizedBlock(finalizedBlocksStore)(List(blockHash))
 
   private def removeDeploysInFinalizedBlock(
       finalizedChildHash: BlockHash
@@ -65,7 +76,50 @@ object LastFinalizedBlockCalculator {
     ev
 
   def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
-      faultToleranceThreshold: Float
+      faultToleranceThreshold: Float,
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
   ): LastFinalizedBlockCalculator[F] =
-    new LastFinalizedBlockCalculator[F](faultToleranceThreshold)
+    new LastFinalizedBlockCalculator[F](faultToleranceThreshold, finalizedBlocksStore)
+
+  def storeFinalizedBlock[F[_]: Sync](
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
+  )(blockHash: List[BlockHash]): F[Unit] =
+    for {
+      _ <- finalizedBlocksStore.put(blockHash.map(b => (b, b)))
+    } yield ()
+
+  def storeHistoryFinalizedBlocks[F[_]: Sync: Log](
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash],
+      blockStore: BlockStore[F],
+      blockDagStore: BlockDagStorage[F],
+      lastFinalizedStore: LastFinalizedStorage[F]
+  ): F[Unit] =
+    for {
+      dag              <- blockDagStore.getRepresentation
+      approvedBlockOpt <- blockStore.getApprovedBlock
+      _ <- approvedBlockOpt match {
+            case Some(approvedBlock) =>
+              for {
+                lastFinalizedHash  <- lastFinalizedStore.get(approvedBlock.candidate.block)
+                lastFinalizedBlock <- blockStore.getUnsafe(lastFinalizedHash)
+                lastFinalizedMeta  = BlockMetadata.fromBlock(lastFinalizedBlock, false)
+                finalizedBlocks <- DagOperations
+                                    .bfTraverseF[F, BlockMetadata](List(lastFinalizedMeta))(
+                                      b =>
+                                        for {
+                                          parents <- b.parents.traverse(dag.lookupUnsafe)
+                                        } yield parents
+                                    )
+                                    .map(_.blockHash)
+                                    .toList
+                _ <- storeFinalizedBlock(finalizedBlocksStore)(finalizedBlocks)
+              } yield ()
+            case None =>
+              Log[F].info(
+                "No valid data in storage.Won't construct FinalizedBlockHash cache store."
+              )
+          }
+
+    } yield ()
+
 }

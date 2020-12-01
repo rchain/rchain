@@ -33,10 +33,11 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
   private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
   private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
   // Temporary storage / cache
-  private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
-  private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val casperBufferEnvConfig         = LmdbEnvConfig(name = "casperbuffer")
+  private val reportingEnvConfig            = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val finalizedBlocksStoreEnvConfig = LmdbEnvConfig(name = "finalized-blocks")
 
-  // Database name to store instance name mapping (sub-folder for LMDB store)
+  // Database name to store instance name mapping (subfolder for LMDB store)
   // - keys with the same instance will be in one LMDB file (environment)
   private val dbInstanceMapping: Map[String, LmdbEnvConfig] = Map[String, LmdbEnvConfig](
     // Block storage
@@ -51,7 +52,9 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     // Reporting (trace) cache
     ("reporting-cache", reportingEnvConfig),
     // CasperBuffer
-    ("parents-map", casperBufferEnvConfig)
+    ("parents-map", casperBufferEnvConfig),
+    // finalized block
+    ("finalized-blocks", finalizedBlocksStoreEnvConfig)
   )
 
   private case class StoreState(

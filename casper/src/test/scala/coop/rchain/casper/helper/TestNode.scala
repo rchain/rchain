@@ -8,19 +8,19 @@ import cats.data.State
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.implicits._
+import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper
 import casper.engine.BlockRetriever._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.blockstorage.dag.codecs.codecBlockHash
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
-import coop.rchain.casper.helper.BlockDagStorageTestFixture.mapSize
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
@@ -40,6 +40,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared._
+import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
@@ -76,12 +77,15 @@ class TestNode[F[_]](
     val rhoHistoryRepository: RhoHistoryRepository[F]
 ) {
 
-  implicit val logEff                       = new LogStub[F](Log.log[F])
-  implicit val timeEff                      = logicalTime
-  implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff            = tle
-  implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
-  implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val logEff             = new LogStub[F](Log.log[F])
+  implicit val timeEff            = logicalTime
+  implicit val connectionsCell    = Cell.unsafe[F, Connections](Connect.Connections.empty)
+  implicit val transportLayerEff  = tle
+  implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
+  val finalizedBlocksStore        = InMemoryKeyValueStore()
+  val finalizedBlocksStoreT       = finalizedBlocksStore.toTypedStore(codecBlockHash, codecBlockHash)
+  implicit val lastFinalizedBlockCalculator =
+    LastFinalizedBlockCalculator[F](0f, finalizedBlocksStoreT)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
   implicit val lastFinalizedHeightConstraintChecker =
