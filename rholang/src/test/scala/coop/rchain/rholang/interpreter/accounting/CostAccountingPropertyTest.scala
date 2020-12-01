@@ -93,7 +93,7 @@ object CostAccountingPropertyTest {
   ): F[EvaluateResult] = {
     val term = PP().buildString(par)
 
-    InterpreterUtil.evaluateResult(runtime, term)
+    Interpreter[F].evaluate(runtime, term)
   }
 
   def costOfExecution(procs: Proc*): Task[Long] = {
