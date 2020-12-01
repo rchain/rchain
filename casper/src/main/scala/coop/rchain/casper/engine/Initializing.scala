@@ -148,7 +148,7 @@ class Initializing[F[_]
 
     for {
       // Request all blocks for Last Finalized State
-      blockRequestStream <- LastFinalizedStateBlockRequester.stream(
+      blockRequestStream <- LfsBlockRequester.stream(
                              approvedBlock,
                              blockMessageQueue,
                              minBlockNumberForDeployLifespan,
@@ -161,7 +161,7 @@ class Initializing[F[_]
                            )
 
       // Request tuple space state for Last Finalized State
-      tupleSpaceStream <- LastFinalizedStateTupleSpaceRequester.stream(
+      tupleSpaceStream <- LfsTupleSpaceRequester.stream(
                            approvedBlock,
                            tupleSpaceQueue
                          )

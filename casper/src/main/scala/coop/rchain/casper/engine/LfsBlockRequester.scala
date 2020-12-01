@@ -18,7 +18,7 @@ import scala.concurrent.duration._
 /**
   * Last Finalized State processor for receiving blocks.
   */
-object LastFinalizedStateBlockRequester {
+object LfsBlockRequester {
   // Possible request statuses
   trait ReqStatus
   case object Init      extends ReqStatus

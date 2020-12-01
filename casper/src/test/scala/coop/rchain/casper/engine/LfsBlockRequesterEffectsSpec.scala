@@ -3,7 +3,7 @@ package coop.rchain.casper.engine
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine.LastFinalizedStateBlockRequester.ST
+import coop.rchain.casper.engine.LfsBlockRequester.ST
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.models.BlockHash.BlockHash
@@ -17,7 +17,7 @@ import org.scalatest.{FlatSpec, Matchers}
 
 import scala.concurrent.duration._
 
-class LFSBlockRequesterEffectsSpec
+class LfsBlockRequesterEffectsSpec
     extends FlatSpec
     with Matchers
     with GeneratorDrivenPropertyChecks {
@@ -124,7 +124,7 @@ class LFSBlockRequesterEffectsSpec
       // Queue for received blocks
       responseQueue <- Queue.unbounded[F, BlockMessage]
       // Queue for processing the internal state (ST)
-      requestStream <- LastFinalizedStateBlockRequester.stream(
+      requestStream <- LfsBlockRequester.stream(
                         approvedBlock,
                         responseQueue,
                         initialMinimumHeight = 0,

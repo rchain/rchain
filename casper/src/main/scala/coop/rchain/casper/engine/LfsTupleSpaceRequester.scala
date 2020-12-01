@@ -25,7 +25,7 @@ import scala.concurrent.duration._
 /**
   * Last Finalized State processor for receiving Rholang state.
   */
-object LastFinalizedStateTupleSpaceRequester {
+object LfsTupleSpaceRequester {
   // Possible request statuses
   trait ReqStatus
   case object Init      extends ReqStatus

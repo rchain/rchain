@@ -83,7 +83,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
         exporterTask.runSyncUnsafe()
       }
 
-      val chunkSize = LastFinalizedStateTupleSpaceRequester.pageSize
+      val chunkSize = LfsTupleSpaceRequester.pageSize
 
       // Export history and data from RSpace (genesis block)
       def genesisExport(startPath: Seq[(Blake2b256Hash, Option[Byte])]) =
