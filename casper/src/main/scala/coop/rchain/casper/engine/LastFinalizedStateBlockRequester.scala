@@ -1,18 +1,23 @@
 package coop.rchain.casper.engine
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage}
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
-import fs2.concurrent.{Queue, SignallingRef}
-import fs2.{Pipe, Stream}
+import fs2.{Pure, Stream}
+import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
 import scala.concurrent.duration._
 
+/**
+  * Last Finalized State processor for receiving blocks.
+  */
 object LastFinalizedStateBlockRequester {
   // Possible request statuses
   trait ReqStatus
@@ -62,13 +67,10 @@ object LastFinalizedStateBlockRequester {
       this.copy(d ++ requested) -> requested.keysIterator.toSeq
     }
 
-    // Returns flag if key is requested.
-    def isRequested(k: Key): Boolean = d.get(k).contains(Requested)
-
     // Confirm key is Received if it was Requested.
     // Returns updated state with the flags if Requested and last latest received.
     def received(k: Key, height: Long): (ST[Key], ReceiveInfo) = {
-      val isReq = isRequested(k)
+      val isReq = d.get(k).contains(Requested)
       if (isReq) {
         // Remove message from the set of latest messages (if exists)
         val newLatest    = latest - k
@@ -156,16 +158,16 @@ object LastFinalizedStateBlockRequester {
     val initialHashes = latestMessages + block.blockHash
 
     def createStream(
-        st: SignallingRef[F, ST[BlockHash]],
+        st: Ref[F, ST[BlockHash]],
         requestQueue: Queue[F, Boolean],
         responseHashQueue: Queue[F, BlockHash]
     ): Stream[F, ST[BlockHash]] = {
 
-      def broadcastStreams(ids: Seq[BlockHash]) = {
+      def broadcastStreams(ids: Seq[BlockHash]): Stream[Pure, Stream[F, Unit]] = {
         // Create broadcast requests to peers
-        val broadcastRequests = ids.map(x => Stream.eval(requestForBlock(x)))
+        val broadcastRequests = ids.map(requestForBlock andThen Stream.eval)
         // Create stream of requests
-        Stream(broadcastRequests: _*)
+        Stream.emits(broadcastRequests)
       }
 
       def processBlock(block: BlockMessage): F[Unit] =
@@ -259,10 +261,10 @@ object LastFinalizedStateBlockRequester {
         // Missing blocks not already in the block store
         missingBlocks = hashes.diff(existingHashes)
 
-        // Send all requests in parallel for missing blocks
-        _ <- broadcastStreams(missingBlocks).parJoinUnbounded
+        // Send all requests in parallel for missing blocks (using `last` to drain the stream)
+        _ <- broadcastStreams(missingBlocks).parJoinUnbounded.last
               .whenA(!isEnd && missingBlocks.nonEmpty)
-      } yield isEnd
+      } yield resend
 
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
@@ -279,32 +281,28 @@ object LastFinalizedStateBlockRequester {
         }
 
       // Merge both response streams
-      val responseStream = Stream(responseStream1 concurrently responseStream2).parJoinUnbounded
+      val responseStream = Stream(responseStream1, responseStream2).parJoinUnbounded
 
       /**
         * Timeout to resend block requests if response is not received.
         */
       val timeoutMsg = s"No block responses for $requestTimeout. Resending requests."
-      val resendStream = Stream.eval(
-        // Trigger request queue (resend already requested)
-        Time[F].sleep(requestTimeout) *> requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
-      )
-      // Switch to resend if response is not triggered after timeout
-      // - response message reset timeout by canceling previous stream
-      def withTimeout: Pipe[F, ST[BlockHash], ST[BlockHash]] =
-        in => in concurrently resendStream.interruptWhen(in.map(_ => true)).repeat
+      // Triggers request queue (resend already requested)
+      val resendRequests = requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
         *  with resend timeout if response is not received.
         */
-      (requestStream.takeWhile(!_).evalMap(_ => st.get) ++ Stream.eval(st.get))
-        .broadcastThrough(withTimeout) concurrently responseStream
+      requestStream
+        .evalMap(_ => st.get)
+        .onIdle(requestTimeout, resendRequests)
+        .terminateAfter(_.isFinished) concurrently responseStream
     }
 
     for {
       // Requester state, fill with validators for required latest messages
-      st <- SignallingRef[F, ST[BlockHash]](
+      st <- Ref.of[F, ST[BlockHash]](
              ST(
                initialHashes,
                latest = initialHashes,

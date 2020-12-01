@@ -56,12 +56,12 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     val (st1, _) = st.getNext(resend = false)
 
     // Check requested item
-    val requested = st1.isRequested(10)
+    val requested = st1.d.contains(10)
 
     requested shouldBe true
 
     // Check not requested item
-    val requested1 = st1.isRequested(100)
+    val requested1 = st1.d.contains(100)
 
     requested1 shouldBe false
   }
