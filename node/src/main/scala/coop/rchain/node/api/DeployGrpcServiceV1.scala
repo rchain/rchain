@@ -13,11 +13,13 @@ import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
+import coop.rchain.store.KeyValueTypedStore
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -27,7 +29,8 @@ object DeployGrpcServiceV1 {
   def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
       reportingCasper: ReportingCasper[F],
-      devMode: Boolean = false
+      devMode: Boolean = false,
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -221,7 +224,7 @@ object DeployGrpcServiceV1 {
         }
 
       def isFinalized(request: IsFinalizedQuery): Task[IsFinalizedResponse] =
-        defer(BlockAPI.isFinalized[F](request.hash)) { r =>
+        defer(BlockAPI.isFinalized[F](request.hash, finalizedBlockHashStored)) { r =>
           import IsFinalizedResponse.Message
           import IsFinalizedResponse.Message._
           IsFinalizedResponse(r.fold[Message](Error, IsFinalized))

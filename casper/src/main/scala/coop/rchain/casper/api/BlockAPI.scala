@@ -31,6 +31,7 @@ import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueTypedStore
 
 import scala.collection.immutable
 
@@ -766,51 +767,13 @@ object BlockAPI {
     )
   }
 
-  def isFinalized[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log](
-      hash: String
-  ): F[ApiErr[Boolean]] = {
-    val errorMessage =
-      "Could not check if block is finalized, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[Boolean]](
-        implicit casper =>
-          for {
-            lastFinalizedBlock <- casper.lastFinalizedBlock
-            lastFinalizedBlockMetadata = BlockMetadata
-              .fromBlock(lastFinalizedBlock, invalid = false)
-            dag                   <- casper.blockDag
-            givenBlockHash        = ProtoUtil.stringToByteString(hash)
-            givenBlockMetadataOpt <- dag.lookup(givenBlockHash)
-            result <- givenBlockMetadataOpt match {
-                       case None =>
-                         s"Could not find block with hash $hash"
-                           .asLeft[Boolean]
-                           .pure[F]
-                       case Some(givenBlockMetadata) => {
-                         // TODO this is temporary solution to not calculate fault tolerance for old blocks which is costly
-                         val oldBlock =
-                           dag.latestBlockNumber.map(_ - givenBlockMetadata.blockNum).map(_ > 100)
-                         val isInvalid           = dag.lookup(givenBlockMetadata.blockHash).map(_.get.invalid)
-                         val oldBlockIsFinalized = isInvalid.map(if (_) false else true)
-                         oldBlock.ifM(
-                           oldBlockIsFinalized.map(_.asRight[Error]),
-                           DagOperations
-                             .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
-                               b.parents.traverse(dag.lookup).map { parentOpts =>
-                                 parentOpts.flatten.distinct
-                                   .filter(_.blockNum >= givenBlockMetadata.blockNum)
-                               }
-                             }
-                             .contains(givenBlockMetadata)
-                             .map(_.asRight[Error])
-                         )
-                       }
-                     }
-          } yield result,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  def isFinalized[F[_]: Monad](
+      hash: String,
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
+  ): F[ApiErr[Boolean]] =
+    finalizedBlockHashStored
+      .get(Seq(ProtoUtil.stringToByteString(hash)))
+      .map(_.head.nonEmpty.asRight[String])
 
   def bondStatus[F[_]: Monad: EngineCell: Log](
       publicKey: ByteString

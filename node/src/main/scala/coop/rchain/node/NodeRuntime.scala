@@ -58,7 +58,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Context
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -948,7 +948,8 @@ object NodeRuntime {
             blockApiLock,
             scheduler,
             conf.apiServer.maxBlocksLimit,
-            conf.devMode
+            conf.devMode,
+            finalizedBlocksStore
           )
       }
       casperLoop = {
@@ -985,7 +986,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val or = oracle
         implicit val bs = blockStore
-        new WebApiImpl[F](conf.apiServer.maxBlocksLimit, conf.devMode)
+        new WebApiImpl[F](conf.apiServer.maxBlocksLimit, conf.devMode, finalizedBlocksStore)
       }
       adminWebApi = {
         implicit val ec     = engineCell
@@ -1019,7 +1020,8 @@ object NodeRuntime {
       blockApiLock: Semaphore[F],
       scheduler: Scheduler,
       apiMaxBlocksLimit: Int,
-      devMode: Boolean
+      devMode: Boolean,
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
   )(
       implicit
       blockStore: BlockStore[F],
@@ -1036,7 +1038,7 @@ object NodeRuntime {
     implicit val s: Scheduler = scheduler
     val repl                  = ReplGrpcService(runtime, s)
     val deploy =
-      DeployGrpcServiceV1(apiMaxBlocksLimit, reportingCasper, devMode)
+      DeployGrpcServiceV1(apiMaxBlocksLimit, reportingCasper, devMode, finalizedBlockHashStored)
     val propose = ProposeGrpcServiceV1(blockApiLock)
     APIServers(repl, propose, deploy)
   }

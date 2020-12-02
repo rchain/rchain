@@ -15,8 +15,10 @@ import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.store.KeyValueTypedStore
 import monix.eval.Task
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
@@ -34,19 +36,11 @@ class LastFinalizedAPITest
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
-  def isFinalized(block: BlockMessage)(engineCell: Cell[Task, Engine[Task]])(
-      implicit blockStore: BlockStore[Task],
-      safetyOracle: SafetyOracle[Task],
-      log: Log[Task]
+  def isFinalized(block: BlockMessage)(
+      finalizedBlockHashStored: KeyValueTypedStore[Task, BlockHash, BlockHash]
   ): Task[Boolean] =
     BlockAPI
-      .isFinalized[Task](ProtoUtil.hashString(block))(
-        Sync[Task],
-        engineCell,
-        safetyOracle,
-        blockStore,
-        log
-      )
+      .isFinalized[Task](ProtoUtil.hashString(block), finalizedBlockHashStored)(Sync[Task])
       .map(
         _.right.value
       )
@@ -71,8 +65,7 @@ class LastFinalizedAPITest
   "isFinalized" should "return true for ancestors of last finalized block" ignore effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockStore, cliqueOracleEffect, logEff}
-        val engine = new EngineWithCasper[Task](n1.casperEff)
+        import n1.finalizedBlocksStoreT
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
@@ -87,13 +80,12 @@ class LastFinalizedAPITest
           lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b5
 
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if last finalized block is finalized
-          _ <- isFinalized(b5)(engineCell) shouldBeF true
+          _ <- isFinalized(b5)(finalizedBlocksStoreT) shouldBeF true
           // Checking if parent of last finalized block is finalized
-          _ <- isFinalized(b4)(engineCell) shouldBeF true
+          _ <- isFinalized(b4)(finalizedBlocksStoreT) shouldBeF true
           // Checking if secondary parent of last finalized block is finalized
-          _ <- isFinalized(b2)(engineCell) shouldBeF true
+          _ <- isFinalized(b2)(finalizedBlocksStoreT) shouldBeF true
         } yield ()
     }
   }
@@ -116,8 +108,7 @@ class LastFinalizedAPITest
   it should "return false for children, uncles and cousins of last finalized block" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockStore, cliqueOracleEffect, logEff}
-        val engine = new EngineWithCasper[Task](n1.casperEff)
+        import n1.finalizedBlocksStoreT
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
@@ -133,13 +124,12 @@ class LastFinalizedAPITest
           lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
           _                  = lastFinalizedBlock shouldBe b3
 
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if child of last finalized block is finalized
-          _ <- isFinalized(b4)(engineCell) shouldBeF false
+          _ <- isFinalized(b4)(finalizedBlocksStoreT) shouldBeF false
           // Checking if uncle of last finalized block is finalized
-          _ <- isFinalized(b6)(engineCell) shouldBeF false
+          _ <- isFinalized(b6)(finalizedBlocksStoreT) shouldBeF false
           // Checking if cousin of last finalized block is finalized
-          _ <- isFinalized(b7)(engineCell) shouldBeF false
+          _ <- isFinalized(b7)(finalizedBlocksStoreT) shouldBeF false
         } yield ()
     }
   }

@@ -13,10 +13,12 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueTypedStore
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -55,7 +57,8 @@ object WebApi {
 
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
-      devMode: Boolean = false
+      devMode: Boolean = false,
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -121,7 +124,7 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
 
     def isFinalized(hash: String): F[Boolean] =
-      BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+      BlockAPI.isFinalized(hash, finalizedBlockHashStored).flatMap(_.liftToBlockApiErr)
   }
 
   // Rholang terms interesting for translation to JSON
