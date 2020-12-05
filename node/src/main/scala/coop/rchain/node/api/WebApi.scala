@@ -58,7 +58,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
-      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, Unit]
   ) extends WebApi[F] {
     import WebApiSyntax._
 

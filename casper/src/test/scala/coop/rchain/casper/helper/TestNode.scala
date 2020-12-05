@@ -44,6 +44,7 @@ import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
+import scodec.codecs.ignore
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
@@ -83,7 +84,7 @@ class TestNode[F[_]](
   implicit val transportLayerEff  = tle
   implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[F]
   val finalizedBlocksStore        = InMemoryKeyValueStore()
-  val finalizedBlocksStoreT       = finalizedBlocksStore.toTypedStore(codecBlockHash, codecBlockHash)
+  val finalizedBlocksStoreT       = finalizedBlocksStore.toTypedStore(codecBlockHash, ignore(0))
   implicit val lastFinalizedBlockCalculator =
     LastFinalizedBlockCalculator[F](0f, finalizedBlocksStoreT)
   implicit val synchronyConstraintChecker =

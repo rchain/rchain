@@ -30,7 +30,7 @@ object DeployGrpcServiceV1 {
       apiMaxBlocksLimit: Int,
       reportingCasper: ReportingCasper[F],
       devMode: Boolean = false,
-      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, Unit]
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =

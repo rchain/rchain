@@ -16,7 +16,7 @@ import coop.rchain.models.BlockMetadata
 
 final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
     faultToleranceThreshold: Float,
-    finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
+    finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, Unit]
 ) {
   def run(dag: BlockDagRepresentation[F], lastFinalizedBlockHash: BlockHash): F[BlockHash] =
     for {
@@ -77,19 +77,19 @@ object LastFinalizedBlockCalculator {
 
   def apply[F[_]: Sync: Log: Concurrent: BlockStore: BlockDagStorage: SafetyOracle: DeployStorage](
       faultToleranceThreshold: Float,
-      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, Unit]
   ): LastFinalizedBlockCalculator[F] =
     new LastFinalizedBlockCalculator[F](faultToleranceThreshold, finalizedBlocksStore)
 
   def storeFinalizedBlock[F[_]: Sync](
-      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, Unit]
   )(blockHash: List[BlockHash]): F[Unit] =
     for {
-      _ <- finalizedBlocksStore.put(blockHash.map(b => (b, b)))
+      _ <- finalizedBlocksStore.put(blockHash.map(b => (b, ())))
     } yield ()
 
   def storeHistoryFinalizedBlocks[F[_]: Sync: Log](
-      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, BlockHash],
+      finalizedBlocksStore: KeyValueTypedStore[F, BlockHash, Unit],
       blockStore: BlockStore[F],
       blockDagStore: BlockDagStorage[F],
       lastFinalizedStore: LastFinalizedStorage[F]

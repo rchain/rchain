@@ -63,6 +63,7 @@ import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.execution.Scheduler
+import scodec.codecs.ignore
 
 import scala.concurrent.duration._
 
@@ -803,10 +804,10 @@ object NodeRuntime {
         SafetyOracle.cliqueOracle[F]
       }
       finalizedBlocksNonExist = Files.notExists(conf.storage.dataDir.resolve("finalized-blocks"))
-      finalizedBlocksStore <- casperStoreManager.database[BlockHash, BlockHash](
+      finalizedBlocksStore <- casperStoreManager.database[BlockHash, Unit](
                                "finalized-blocks",
                                codecBlockHash,
-                               codecBlockHash
+                               ignore(0)
                              )
       _ <- if (finalizedBlocksNonExist && Files.exists(conf.storage.dataDir.resolve("dagstorage"))) {
             Log[F].info(
@@ -1021,7 +1022,7 @@ object NodeRuntime {
       scheduler: Scheduler,
       apiMaxBlocksLimit: Int,
       devMode: Boolean,
-      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, Unit]
   )(
       implicit
       blockStore: BlockStore[F],

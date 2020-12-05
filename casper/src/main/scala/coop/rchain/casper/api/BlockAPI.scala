@@ -769,7 +769,7 @@ object BlockAPI {
 
   def isFinalized[F[_]: Monad](
       hash: String,
-      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, BlockHash]
+      finalizedBlockHashStored: KeyValueTypedStore[F, BlockHash, Unit]
   ): F[ApiErr[Boolean]] =
     finalizedBlockHashStored
       .get(Seq(ProtoUtil.stringToByteString(hash)))

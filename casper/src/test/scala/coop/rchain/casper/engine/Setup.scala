@@ -36,6 +36,7 @@ import coop.rchain.store.InMemoryStoreManager
 import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler
+import scodec.codecs.ignore
 
 object Setup {
   def apply() = new {
@@ -137,7 +138,7 @@ object Setup {
       ): Task[Float] = Task.pure(1.0f)
     }
     val finalizedBlocksStore  = InMemoryKeyValueStore[Task]()
-    val finalizedBlocksStoreT = finalizedBlocksStore.toTypedStore(codecBlockHash, codecBlockHash)
+    val finalizedBlocksStoreT = finalizedBlocksStore.toTypedStore(codecBlockHash, ignore(0))
 
     implicit val lastFinalizedBlockCalculator =
       LastFinalizedBlockCalculator[Task](0f, finalizedBlocksStoreT)

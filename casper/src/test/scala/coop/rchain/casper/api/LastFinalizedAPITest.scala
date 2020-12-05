@@ -37,7 +37,7 @@ class LastFinalizedAPITest
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
   def isFinalized(block: BlockMessage)(
-      finalizedBlockHashStored: KeyValueTypedStore[Task, BlockHash, BlockHash]
+      finalizedBlockHashStored: KeyValueTypedStore[Task, BlockHash, Unit]
   ): Task[Boolean] =
     BlockAPI
       .isFinalized[Task](ProtoUtil.hashString(block), finalizedBlockHashStored)(Sync[Task])
