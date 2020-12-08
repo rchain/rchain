@@ -108,7 +108,7 @@ object BlockAPI {
                 maybeValidator  <- casper.getValidator
                 validatorPubKey <- maybeValidator.fold(validatorCheckFailed)(_.pure[F])
                 validator       = ByteString.copyFrom(validatorPubKey.bytes)
-                genesis         <- casper.getGenesis
+                genesis         <- casper.getApprovedBlock
                 dag             <- casper.blockDag
                 runtimeManager  <- casper.getRuntimeManager
                 checkSynchronyConstraint = SynchronyConstraintChecker[F]

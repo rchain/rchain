@@ -247,7 +247,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
   def approvedBlockStateComplete: F[Boolean]  = underlying.approvedBlockStateComplete
 
-  def getGenesis: F[BlockMessage]        = underlying.getGenesis
+  def getApprovedBlock: F[BlockMessage]  = underlying.getApprovedBlock
   def getValidator: F[Option[PublicKey]] = underlying.getValidator
   override def createBlock: F[CreateBlockStatus] =
     for {

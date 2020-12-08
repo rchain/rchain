@@ -64,8 +64,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def getVersion: F[Long] = version.pure[F]
 
-  //TODO rename to getApprovedBlock
-  def getGenesis: F[BlockMessage] = approvedBlock.pure[F]
+  def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
 
   def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
@@ -124,7 +123,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   override def approvedBlockStateComplete: F[Boolean] = {
     import cats.instances.list._
     for {
-      approvedBlock  <- getGenesis
+      approvedBlock  <- getApprovedBlock
       abHasLowHeight = ProtoUtil.blockNumber(approvedBlock) < expirationThreshold
 
       // active validators as per approved block state
