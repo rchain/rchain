@@ -244,7 +244,8 @@ object BlockDagKeyValueStorage {
       equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
+      lastFinalizedBlock: KeyValueTypedStore[F, Int, BlockHash]
   )
 
   private def createStores[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics] =
@@ -282,6 +283,13 @@ object BlockDagKeyValueStorage {
                         codecDeployId,
                         codecBlockHash
                       )
+
+      // last finalized block
+      lastFinalizedBlockDb <- KeyValueStoreManager[F].database[Int, BlockHash](
+                               "last-finalized-block",
+                               codecSeqNum,
+                               codecBlockHash
+                             )
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
@@ -289,7 +297,8 @@ object BlockDagKeyValueStorage {
       equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb
+      deployIndexDb,
+      lastFinalizedBlockDb
     )
 
   def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[BlockDagStorage[F]] =
