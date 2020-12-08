@@ -41,7 +41,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       latestMessagesMap: Map[Validator, BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
-      invalidBlocksSet: Set[BlockMetadata]
+      invalidBlocksSet: Set[BlockMetadata],
+      finalizedBlocksSet: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
@@ -68,6 +69,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def latestBlockNumber: F[Long] =
       getMaxHeight.pure[F]
+
+    def isFinalized(blockHash: BlockHash): F[Boolean] =
+      finalizedBlocksSet.contains(blockHash).pure[F]
 
     def topoSort(
         startBlockNumber: Long,
@@ -116,17 +120,19 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   private def representation: F[BlockDagRepresentation[F]] =
     for {
       // Take current DAG state / view of the DAG
-      latestMessages <- latestMessagesIndex.toMap
-      dagSet         <- blockMetadataIndex.dagSet
-      childMap       <- blockMetadataIndex.childMapData
-      heightMap      <- blockMetadataIndex.heightMap
-      invalidBlocks  <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+      latestMessages     <- latestMessagesIndex.toMap
+      dagSet             <- blockMetadataIndex.dagSet
+      childMap           <- blockMetadataIndex.childMapData
+      heightMap          <- blockMetadataIndex.heightMap
+      invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+      finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
     } yield KeyValueDagRepresentation(
       dagSet,
       latestMessages,
       childMap,
       heightMap,
-      invalidBlocks
+      invalidBlocks,
+      finalizedBlocksSet
     )
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
@@ -266,7 +272,7 @@ object BlockDagKeyValueStorage {
                                codecBlockHash
                              )
       lastFinalizedStore = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-      lastFinalizedBlock <- lastFinalizedStore.getUnSafe
+      lastFinalizedBlock <- lastFinalizedStore.get
       blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb, lastFinalizedBlock)
       // Equivocation tracker map
       equivocationTrackerDb <- KeyValueStoreManager[F]

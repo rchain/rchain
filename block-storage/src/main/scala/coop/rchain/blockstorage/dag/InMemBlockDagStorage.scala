@@ -55,6 +55,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
       topoSortVector.slice(startBlockNumber.toInt, endBlockNumber.toInt + 1).pure[F]
     }
 
+    def isFinalized(blockHash: BlockHash): F[Boolean] =
+      finalizedBlocksRef.get.map(_.contains(blockHash))
+
     def latestBlockNumber: F[Long] = (topoSortVector.length - 1L).pure[F]
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =

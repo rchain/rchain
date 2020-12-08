@@ -19,11 +19,13 @@ import scala.collection.immutable.SortedMap
 object BlockMetadataStore {
   def apply[F[_]: Sync: Log](
       blockMetadataStore: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      lastFinalizedBlock: BlockHash
+      lastFinalizedBlock: Option[BlockHash]
   ): F[BlockMetadataStore[F]] =
     for {
       blockMetadataMap <- blockMetadataStore.toMap
+      _                <- Log[F].info("Building in-memory blockMetadataStore.")
       dagState         = recreateInMemoryState(blockMetadataMap, lastFinalizedBlock)
+      _                <- Log[F].info("Successfully built in-memory blockMetadataStore.")
     } yield new BlockMetadataStore[F](
       blockMetadataStore,
       new AtomicMonadState(AtomicAny(dagState))
@@ -79,6 +81,8 @@ object BlockMetadataStore {
 
     def heightMap: F[SortedMap[Long, Set[BlockHash]]] =
       dagState.get.map(_.heightMap)
+
+    def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }
 
   private def addBlockToDagState(block: BlockMetadata)(state: DagState): DagState = {
@@ -112,7 +116,7 @@ object BlockMetadataStore {
 
   private def recreateInMemoryState(
       blockMetadataMap: Map[BlockHash, BlockMetadata],
-      lastFinalizedBlockHash: BlockHash
+      lastFinalizedBlockHash: Option[BlockHash]
   ): DagState = {
     @tailrec
     def collectFinalized(
@@ -133,10 +137,12 @@ object BlockMetadataStore {
       case (state, (_, block)) => addBlockToDagState(block)(state)
     }
 
-    val lastFinalizedBlock = blockMetadataMap.get(lastFinalizedBlockHash)
-    assert(lastFinalizedBlock.nonEmpty, "Finalized Block must be in blockMetaData.")
-    val finalizedBlockSet = collectFinalized(Set(lastFinalizedBlockHash), Set.empty[BlockHash])
-    val newDagState       = dagState.copy(finalizedBlockSet = finalizedBlockSet)
+    val finalizedBlockSet = lastFinalizedBlockHash.fold(Set.empty[BlockHash])(lbh => {
+      val lastFinalizedBlock = blockMetadataMap.get(lbh)
+      assert(lastFinalizedBlock.nonEmpty, "Finalized Block must be in blockMetaData.")
+      collectFinalized(Set(lbh), Set.empty[BlockHash])
+    })
+    val newDagState = dagState.copy(finalizedBlockSet = finalizedBlockSet)
 
     validateDagState(newDagState)
   }

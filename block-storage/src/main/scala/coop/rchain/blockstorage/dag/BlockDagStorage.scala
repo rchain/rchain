@@ -39,6 +39,7 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
+  def isFinalized(blockHash: BlockHash): F[Boolean]
 }
 
 trait EquivocationsTracker[F[_]] {
