@@ -774,7 +774,19 @@ object NodeRuntime {
         // Start block storage
         if (oldBlockStoreExists) oldStorage else KeyValueBlockStore()
       }
-
+      // Last finalized Block storage
+      lastFinalizedStorage <- {
+        for {
+          lastFinalizedBlockDb   <- casperStoreManager.store("last-finalized-block")
+          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
+          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
+          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
+          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+          _ <- LastFinalizedKeyValueStorage
+                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
+                .whenA(shouldMigrate)
+        } yield lastFinalizedStore
+      }
       // Block DAG storage
       blockDagStorage <- {
         implicit val kvm = casperStoreManager
@@ -793,18 +805,6 @@ object NodeRuntime {
       casperBufferStorage <- {
         implicit val kvm = casperStoreManager
         CasperBufferKeyValueStorage.create[F]
-      }
-      lastFinalizedStorage <- {
-        for {
-          lastFinalizedBlockDb   <- casperStoreManager.store("last-finalized-block")
-          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
-          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
-          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
-          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-          _ <- LastFinalizedKeyValueStorage
-                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
-                .whenA(shouldMigrate)
-        } yield lastFinalizedStore
       }
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
