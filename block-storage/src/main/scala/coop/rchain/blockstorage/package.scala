@@ -2,6 +2,7 @@ package coop.rchain
 
 import coop.rchain.blockstorage.{BlockStoreSyntax, ByteStringKVStoreSyntax}
 import coop.rchain.blockstorage.dag.BlockDagRepresentationSyntax
+import coop.rchain.blockstorage.finality.LastFinalizedStorageSyntax
 import coop.rchain.metrics.Metrics
 
 package object blockstorage {
@@ -17,3 +18,4 @@ trait AllSyntaxBlockStorage
     extends BlockStoreSyntax
     with BlockDagRepresentationSyntax
     with ByteStringKVStoreSyntax
+    with LastFinalizedStorageSyntax
