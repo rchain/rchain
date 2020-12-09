@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
-import coop.rchain.rholang.interpreter.{EvaluateResult, InterpreterUtil}
+import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, InterpreterUtil}
 import coop.rchain.shared.{Log, Resources}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -49,7 +49,7 @@ class CompilerTests extends FunSuite with Matchers {
         Resources.withResource(Source.fromFile(file.toString))(
           fileContents => {
             implicit val c = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, fileContents.mkString)
+            Interpreter[Task].evaluate(runtime, fileContents.mkString)
           }
         )
       }

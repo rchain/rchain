@@ -39,11 +39,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
         for {
           _ <- {
             implicit val c = runtime.cost
-            Interpreter[Task].evaluate(
-              runtime,
-              "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }",
-              Map.empty[String, Par]
-            )
+            Interpreter[Task].evaluate(runtime, "@1!(Nil) | @2!(Nil) | for(_ <- @2) { Nil }")
           }
           pretty <- StoragePrinter.prettyPrintUnmatchedSends(runtime.space)
           _      = assert(pretty == "@{1}!(Nil)")
