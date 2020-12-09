@@ -23,6 +23,7 @@ import errors._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
   BoolNormalizeMatcher,
+  Compiler,
   DeBruijnLevelMap,
   GroundNormalizeMatcher,
   IndexMapChain,
@@ -77,7 +78,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     DeBruijnLevelMap.empty[VarSort]
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
-  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+  def getNormalizedPar(rho: String): Par       = Compiler[Coeval].sourceToADT(rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -456,45 +457,45 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PSend" should "Not compile if data contains negation" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(~1) }""").value()
+      Compiler[Coeval].sourceToADT("""new x in { x!(~1) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains conjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(1 /\ 2) }""").value()
+      Compiler[Coeval].sourceToADT("""new x in { x!(1 /\ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains disjunction" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""new x in { x!(1 \/ 2) }""").value()
+      Compiler[Coeval].sourceToADT("""new x in { x!(1 \/ 2) }""").value()
     }
   }
 
   "PSend" should "Not compile if data contains wildcard" in {
     an[TopLevelWildcardsNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@"x"!(_)""").value()
+      Compiler[Coeval].sourceToADT("""@"x"!(_)""").value()
     }
   }
 
   "PSend" should "Not compile if data contains free variable" in {
     an[TopLevelFreeVariablesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@"x"!(y)""").value()
+      Compiler[Coeval].sourceToADT("""@"x"!(y)""").value()
     }
   }
 
   "PSend" should "not compile if name contains connectives" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{Nil /\ Nil}!(1)""").value()
+      Compiler[Coeval].sourceToADT("""@{Nil /\ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{Nil \/ Nil}!(1)""").value()
+      Compiler[Coeval].sourceToADT("""@{Nil \/ Nil}!(1)""").value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""@{~Nil}!(1)""").value()
+      Compiler[Coeval].sourceToADT("""@{~Nil}!(1)""").value()
     }
   }
 
@@ -829,82 +830,84 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   "PInput" should "not compile when connectives are used in the channel" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval]("""for(x <- @{Nil \/ Nil}){ Nil }""")
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @{Nil \/ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval]("""for(x <- @{Nil /\ Nil}){ Nil }""")
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @{Nil /\ Nil}){ Nil }""")
         .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @{~Nil}){ Nil }""").value()
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @{~Nil}){ Nil }""")
+        .value()
     }
   }
 
   "PInput" should "not compile when connectives are the top level expression in the body" in {
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ 1 /\ 2 }""").value()
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @Nil){ 1 /\ 2 }""")
+        .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ 1 \/ 2 }""").value()
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @Nil){ 1 \/ 2 }""")
+        .value()
     }
 
     an[TopLevelLogicalConnectivesNotAllowedError] should be thrownBy {
-      ParBuilderUtil.buildNormalizedTerm[Coeval]("""for(x <- @Nil){ ~1 }""").value()
+      Compiler[Coeval]
+        .sourceToADT("""for(x <- @Nil){ ~1 }""")
+        .value()
     }
   }
 
   "PInput" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
     an[PatternReceiveError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval]("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
+      Compiler[Coeval]
+        .sourceToADT("""new x in { for(@{Nil \/ Nil} <- x) { Nil } }""")
         .value()
     }
 
     an[PatternReceiveError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval]("""new x in { for(@{~Nil} <- x) { Nil } }""")
+      Compiler[Coeval]
+        .sourceToADT("""new x in { for(@{~Nil} <- x) { Nil } }""")
         .value()
     }
   }
 
   "PInput" should "compile when logical AND is used in the pattern of the receive" in {
     noException should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval]("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
+      Compiler[Coeval]
+        .sourceToADT("""new x in { for(@{Nil /\ Nil} <- x) { Nil } }""")
         .value()
     }
   }
 
   "PContr" should "not compile when logical OR or NOT is used in the pattern of the receive" in {
     an[PatternReceiveError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval](
-          new StringReader("""new x in { contract x(@{ y /\ {Nil \/ Nil}}) = { Nil } }""")
-        )
+      Compiler[Coeval]
+        .sourceToADT("""new x in { contract x(@{ y /\ {Nil \/ Nil}}) = { Nil } }""")
         .value()
     }
 
     an[PatternReceiveError] should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval](
-          new StringReader("""new x in { contract x(@{ y /\ ~Nil}) = { Nil } }""")
-        )
+      Compiler[Coeval]
+        .sourceToADT("""new x in { contract x(@{ y /\ ~Nil}) = { Nil } }""")
         .value()
     }
   }
 
   "PContr" should "compile when logical AND is used in the pattern of the receive" in {
     noException should be thrownBy {
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval](
-          new StringReader("""new x in { contract x(@{ y /\ {Nil /\ Nil}}) = { Nil } }""")
-        )
+      Compiler[Coeval]
+        .sourceToADT("""new x in { contract x(@{ y /\ {Nil /\ Nil}}) = { Nil } }""")
         .value()
     }
   }
@@ -1608,7 +1611,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
            }
          }
        """
-        ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+        Compiler[Coeval].sourceToADT(rho).value()
         assert(true)
       } catch {
         case e: Throwable =>

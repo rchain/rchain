@@ -7,6 +7,7 @@ import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
   BoolNormalizeMatcher,
+  Compiler,
   DeBruijnLevelMap,
   GroundNormalizeMatcher,
   IndexMapChain,
@@ -902,7 +903,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    ParBuilderUtil.buildNormalizedTerm[Coeval](new StringReader(source)).runAttempt().right.get
+    Compiler[Coeval].sourceToADT(new StringReader(source)).runAttempt().right.get
   )
 }
 

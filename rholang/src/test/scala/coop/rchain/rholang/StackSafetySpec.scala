@@ -8,6 +8,7 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
 import monix.eval.{Coeval, Task}
@@ -193,7 +194,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+      val ast = Compiler[Coeval].sourceToADT(rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix).use { runtime =>

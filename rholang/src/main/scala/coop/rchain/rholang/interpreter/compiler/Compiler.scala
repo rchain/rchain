@@ -14,7 +14,11 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
 trait Compiler[F[_]] {
 
+  def sourceToADT(source: String): F[Par] = sourceToADT(source, Map.empty[String, Par])
+
   def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par]
+
+  def sourceToADT(reader: Reader): F[Par] = sourceToADT(reader, Map.empty[String, Par])
 
   def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
 
