@@ -12,7 +12,8 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
-trait ParBuilder[F[_]] {
+trait Compiler[F[_]] {
+
   def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
 
   def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
@@ -21,11 +22,11 @@ trait ParBuilder[F[_]] {
   private[interpreter] def buildAST(reader: Reader): F[Proc]
 }
 
-object ParBuilder {
+object Compiler {
 
-  def apply[F[_]](implicit parBuilder: ParBuilder[F]): ParBuilder[F] = parBuilder
+  def apply[F[_]](implicit parBuilder: Compiler[F]): Compiler[F] = parBuilder
 
-  implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
+  implicit def parBuilder[F[_]](implicit F: Sync[F]): Compiler[F] = new Compiler[F] {
     def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par] =
       buildNormalizedTerm(new StringReader(source), normalizerEnv)
 

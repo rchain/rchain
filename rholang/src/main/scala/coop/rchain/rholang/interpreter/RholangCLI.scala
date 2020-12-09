@@ -8,7 +8,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -210,7 +210,7 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    ParBuilder[Coeval]
+    Compiler[Coeval]
       .buildNormalizedTerm(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)

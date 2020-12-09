@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.{
   AggregateError,
   InterpreterError,
@@ -89,7 +89,7 @@ object Interpreter {
         val evaluationResult = for {
           _ <- C.set(initialPhlo)
           _ <- charge[F](parsingCost)
-          parsed <- ParBuilder[F]
+          parsed <- Compiler[F]
                      .buildNormalizedTerm(term, normalizerEnv)
                      .handleErrorWith {
                        case err: InterpreterError => ParserError(err).raiseError[F, Par]
