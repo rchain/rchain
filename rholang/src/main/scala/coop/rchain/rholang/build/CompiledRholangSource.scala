@@ -11,7 +11,7 @@ abstract class CompiledRholangSource[Env](val code: String, val normalizerEnv: N
     implicit ev: ToEnvMap[Env]
 ) {
   val path: String
-  val term: Par = Compiler[Coeval].buildNormalizedTerm(code, normalizerEnv.toEnv).value()
+  val term: Par = Compiler[Coeval].sourceToADT(code, normalizerEnv.toEnv).value()
   final def env = normalizerEnv.toEnv
 }
 

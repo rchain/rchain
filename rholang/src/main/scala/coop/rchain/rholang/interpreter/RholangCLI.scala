@@ -211,7 +211,7 @@ object RholangCLI {
     val source = reader(fileName)
 
     Compiler[Coeval]
-      .buildNormalizedTerm(source, Map.empty[String, Par])
+      .sourceToADT(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
 

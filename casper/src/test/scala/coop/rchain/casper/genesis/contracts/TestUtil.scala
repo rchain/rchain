@@ -21,7 +21,7 @@ object TestUtil {
       runtime: Runtime[F],
       normalizerEnv: Map[String, Par]
   )(implicit rand: Blake2b512Random): F[Unit] =
-    Compiler[F].buildNormalizedTerm(code, normalizerEnv) >>= (evalTerm(_, runtime))
+    Compiler[F].sourceToADT(code, normalizerEnv) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,

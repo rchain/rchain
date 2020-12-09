@@ -22,7 +22,7 @@ object ReplGrpcService {
         Sync[F]
           .attempt(
             Compiler[F]
-              .buildNormalizedTerm(source, Map.empty[String, Par])
+              .sourceToADT(source, Map.empty[String, Par])
           )
           .flatMap {
             case Left(er) =>

@@ -14,35 +14,37 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
 trait Compiler[F[_]] {
 
-  def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
+  def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par]
 
-  def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
+  def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
 
-  def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
-  private[interpreter] def buildAST(reader: Reader): F[Proc]
+  def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
+
+  private[interpreter] def sourceToAST(reader: Reader): F[Proc]
+
 }
 
 object Compiler {
 
-  def apply[F[_]](implicit parBuilder: Compiler[F]): Compiler[F] = parBuilder
+  def apply[F[_]](implicit compiler: Compiler[F]): Compiler[F] = compiler
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): Compiler[F] = new Compiler[F] {
-    def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par] =
-      buildNormalizedTerm(new StringReader(source), normalizerEnv)
+    def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par] =
+      sourceToADT(new StringReader(source), normalizerEnv)
 
-    def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
+    def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
       for {
-        proc <- buildAST(reader)
-        par  <- buildPar(proc, normalizerEnv)
+        proc <- sourceToAST(reader)
+        par  <- astToADT(proc, normalizerEnv)
       } yield par
 
-    def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par] =
+    def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par] =
       for {
         par       <- normalizeTerm(proc)(normalizerEnv)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    private[interpreter] def buildAST(reader: Reader): F[Proc] =
+    private[interpreter] def sourceToAST(reader: Reader): F[Proc] =
       for {
         lexer  <- lexer(reader)
         parser <- parser(lexer)

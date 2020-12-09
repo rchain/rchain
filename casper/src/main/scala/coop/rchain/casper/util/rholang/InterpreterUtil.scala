@@ -42,7 +42,7 @@ object InterpreterUtil {
   def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
   ): Either[Throwable, Par] =
-    Compiler[Coeval].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
+    Compiler[Coeval].sourceToADT(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

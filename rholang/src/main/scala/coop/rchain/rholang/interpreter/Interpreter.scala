@@ -90,7 +90,7 @@ object Interpreter {
           _ <- C.set(initialPhlo)
           _ <- charge[F](parsingCost)
           parsed <- Compiler[F]
-                     .buildNormalizedTerm(term, normalizerEnv)
+                     .sourceToADT(term, normalizerEnv)
                      .handleErrorWith {
                        case err: InterpreterError => ParserError(err).raiseError[F, Par]
                      }
