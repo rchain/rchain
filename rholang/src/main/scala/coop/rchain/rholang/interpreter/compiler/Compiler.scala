@@ -25,6 +25,9 @@ trait Compiler[F[_]] {
 
   def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
 
+  def astToADT(proc: Proc): F[Par] =
+    astToADT(proc, Map.empty[String, Par])
+
   def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
 
   def sourceToAST(source: String): F[Proc] =

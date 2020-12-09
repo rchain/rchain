@@ -7,6 +7,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
@@ -32,7 +33,7 @@ class CostAccountingPropertyTest extends FlatSpec with PropertyChecks with Match
 
   implicit val taskExecutionDuration: FiniteDuration = 5.seconds
 
-  def cost(proc: Proc): Cost = Cost(ParBuilderUtil.buildPar[Coeval](proc).apply)
+  def cost(proc: Proc): Cost = Cost(Compiler[Coeval].astToADT(proc).apply)
 
   behavior of "Cost accounting in Reducer"
 
@@ -82,7 +83,7 @@ object CostAccountingPropertyTest {
 
   def execute[F[_]: Sync: _cost](runtime: Runtime[F], p: Proc): F[Long] =
     for {
-      program <- ParBuilderUtil.buildPar(p)
+      program <- Compiler[F].astToADT(p)
       res     <- evaluatePar(runtime, program)
       cost    = res.cost
     } yield cost.value

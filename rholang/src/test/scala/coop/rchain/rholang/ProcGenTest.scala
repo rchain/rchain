@@ -1,7 +1,7 @@
 package coop.rchain.rholang
 
 import coop.rchain.models.PrettyPrinted
-import coop.rchain.rholang.interpreter.ParBuilderUtil
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
 import monix.eval.Coeval
@@ -20,7 +20,7 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
   it should "generate correct procs that are normalized successfully" in {
 
     forAll { p: PrettyPrinted[Proc] =>
-      ParBuilderUtil.buildPar[Coeval](p.value).apply
+      Compiler[Coeval].astToADT(p.value).apply
     }
   }
 
@@ -31,7 +31,7 @@ class ProcGenTest extends FlatSpec with PropertyChecks with Matchers {
       ProcGen.procShrinker
         .shrink(original.value)
         .headOption
-        .map(shrinked => ParBuilderUtil.buildPar[Coeval](shrinked).apply)
+        .map(shrinked => Compiler[Coeval].astToADT(shrinked).apply)
         .getOrElse(true)
 
     }
