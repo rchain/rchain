@@ -1,5 +1,7 @@
 package coop.rchain.rholang.interpreter.compiler
 
+import java.util.UUID
+
 import cats.effect.Sync
 import cats.implicits._
 import cats.{Applicative, MonadError}
@@ -1071,6 +1073,201 @@ object ProcNormalizeMatcher {
                   ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree).pure[M]
                 }
         } yield res
+
+      case p: PLet => {
+
+        p.decls_ match {
+
+          case concDeclsImpl: ConcDeclsImpl =>
+            def extractNamesAndProcs(decl: Decl): (ListName, NameRemainder, ListProc) =
+              decl match {
+                case declImpl: DeclImpl =>
+                  (declImpl.listname_, declImpl.nameremainder_, declImpl.listproc_)
+              }
+
+            val (listNames, listNameRemainders, listProcs) =
+              (extractNamesAndProcs(p.decl_) :: concDeclsImpl.listconcdecl_.toList.map {
+                case concDeclImpl: ConcDeclImpl => extractNamesAndProcs(concDeclImpl.decl_)
+              }).unzip3
+
+            /*
+             It is not necessary to use UUIDs to achieve concurrent let declarations.
+             While there is the possibility for collisions with either variables declared by the user
+             or variables declared within this translation, the chances for collision are astronomically
+             small (see analysis here: https://towardsdatascience.com/are-uuids-really-unique-57eb80fc2a87).
+             A strictly correct approach would be one that performs a ADT rather than an AST translation, which
+             was not done here due to time constraints.
+             */
+            val variableNames = List.fill(listNames.size)(UUID.randomUUID().toString)
+
+            val psends = variableNames.zip(listProcs).map {
+              case (variableName, listProc) =>
+                new PSend(new NameVar(variableName), new SendSingle(), listProc)
+            }
+
+            val pinput = {
+              val listLinearBind = new ListLinearBind()
+              for (linearBind <- variableNames.zip(listNames).zip(listNameRemainders).map {
+                                  case ((variableName, listName), nameRemainder) =>
+                                    new LinearBindImpl(
+                                      listName,
+                                      nameRemainder,
+                                      new NameVar(variableName)
+                                    )
+                                })
+                listLinearBind.add(linearBind)
+              new PInput(new ReceiptLinear(new LinearSimple(listLinearBind)), p.proc_)
+            }
+
+            val ppar = {
+              val procs = psends :+ pinput
+              procs.drop(2).foldLeft(new PPar(procs.head, procs(1))) {
+                case (ppar, proc) => new PPar(ppar, proc)
+              }
+            }
+
+            val pnew = {
+              val listNameDecl = new ListNameDecl()
+              for (nameDecl <- variableNames.map(new NameDeclSimpl(_)))
+                listNameDecl.add(nameDecl)
+              new PNew(listNameDecl, ppar)
+            }
+
+            normalizeMatch[M](pnew, input)
+
+          /*
+          Let processes with a single bind or with sequential binds ";" are converted into match processes rather
+          than input processes, so that each sequential bind doesn't add a new unforgeable name to the tuplespace.
+          The Rholang 1.1 spec defines them as the latter. Because the Rholang 1.1 spec defines let processes in terms
+          of a output process in concurrent composition with an input process, the let process appears to quote the
+          process on the RHS of "<-" and bind it to the pattern on LHS. For example, in
+
+              let x <- 1 in { Nil }
+
+          the process (value) "1" is quoted and bound to "x" as a name. There is no way to perform an AST transformation
+          of sequential let into a match process and still preserve these semantics, so we have to do an ADT transformation.
+           */
+          case _ =>
+            val newContinuation =
+              p.decls_ match {
+                case _: EmptyDeclImpl => p.proc_
+                case linearDeclsImpl: LinearDeclsImpl =>
+                  val newDecl =
+                    linearDeclsImpl.listlineardecl_.head match {
+                      case impl: LinearDeclImpl => impl.decl_
+                    }
+                  val newDecls =
+                    if (linearDeclsImpl.listlineardecl_.size == 1)
+                      new EmptyDeclImpl()
+                    else {
+                      val newListLinearDecls = new ListLinearDecl()
+                      for (linearDecl <- linearDeclsImpl.listlineardecl_.tail)
+                        newListLinearDecls.add(linearDecl)
+                      new LinearDeclsImpl(newListLinearDecls)
+                    }
+                  new PLet(newDecl, newDecls, p.proc_)
+              }
+
+            def listProcToEList(
+                listProc: List[Proc],
+                knownFree: DeBruijnLevelMap[VarSort]
+            ): M[ProcVisitOutputs] =
+              listProc
+                .foldM((Vector.empty[Par], knownFree, BitSet.empty, false)) {
+                  case ((vectorPar, knownFree, locallyFree, connectiveUsed), proc) =>
+                    ProcNormalizeMatcher
+                      .normalizeMatch[M](proc, ProcVisitInputs(VectorPar(), input.env, knownFree))
+                      .map {
+                        case ProcVisitOutputs(par, updatedKnownFree) =>
+                          (
+                            par +: vectorPar,
+                            updatedKnownFree,
+                            locallyFree | par.locallyFree,
+                            connectiveUsed | par.connectiveUsed
+                          )
+                      }
+                }
+                .map {
+                  case (vectorPar, knownFree, locallyFree, connectiveUsed) =>
+                    ProcVisitOutputs(
+                      EList(vectorPar.reverse, locallyFree, connectiveUsed, none[Var]),
+                      knownFree
+                    )
+                }
+
+            // Largely similar to how consume patterns are processed.
+            def listNameToEList(
+                listName: List[Name],
+                nameRemainder: NameRemainder
+            ): M[ProcVisitOutputs] =
+              RemainderNormalizeMatcher
+                .normalizeMatchName(nameRemainder, DeBruijnLevelMap.empty[VarSort]) >>= {
+                case (optionalVar, remainderKnownFree) =>
+                  listName
+                    .foldM((Vector.empty[Par], remainderKnownFree, BitSet.empty)) {
+                      case ((vectorPar, knownFree, locallyFree), name) =>
+                        NameNormalizeMatcher
+                          .normalizeMatch[M](name, NameVisitInputs(input.env.push, knownFree))
+                          .map {
+                            case NameVisitOutputs(par, updatedKnownFree) =>
+                              (
+                                par +: vectorPar,
+                                updatedKnownFree,
+                                // Use input.env.depth + 1 because the pattern was evaluated w.r.t input.env.push,
+                                // and more generally because locally free variables become binders in the pattern position
+                                locallyFree | ParLocallyFree.locallyFree(par, input.env.depth + 1)
+                              )
+                          }
+                    }
+                    .map {
+                      case (vectorPar, knownFree, locallyFree) =>
+                        ProcVisitOutputs(
+                          EList(vectorPar.reverse, locallyFree, connectiveUsed = true, optionalVar),
+                          knownFree
+                        )
+                    }
+              }
+
+            p.decl_ match {
+              case declImpl: DeclImpl =>
+                listProcToEList(declImpl.listproc_.toList, input.knownFree) >>= {
+                  case ProcVisitOutputs(valueListPar, valueKnownFree) =>
+                    listNameToEList(declImpl.listname_.toList, declImpl.nameremainder_) >>= {
+                      case ProcVisitOutputs(patternListPar, patternKnownFree) =>
+                        normalizeMatch[M](
+                          newContinuation,
+                          ProcVisitInputs(
+                            VectorPar(),
+                            input.env.absorbFree(patternKnownFree),
+                            valueKnownFree
+                          )
+                        ).map {
+                          case ProcVisitOutputs(continuationPar, continuationKnownFree) =>
+                            ProcVisitOutputs(
+                              input.par.prepend(
+                                Match(
+                                  target = valueListPar,
+                                  cases = Seq(
+                                    MatchCase(
+                                      patternListPar,
+                                      continuationPar,
+                                      patternKnownFree.countNoWildcards
+                                    )
+                                  ),
+                                  locallyFree = valueListPar.locallyFree | patternListPar.locallyFree | continuationPar.locallyFree
+                                    .from(patternKnownFree.countNoWildcards)
+                                    .map(_ - patternKnownFree.countNoWildcards),
+                                  connectiveUsed = valueListPar.connectiveUsed || continuationPar.connectiveUsed
+                                )
+                              ),
+                              continuationKnownFree
+                            )
+                        }
+                    }
+                }
+            }
+        }
+      }
 
       case p: PMatch => {
 
