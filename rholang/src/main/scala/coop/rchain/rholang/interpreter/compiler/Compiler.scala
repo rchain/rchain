@@ -14,17 +14,21 @@ import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
 trait Compiler[F[_]] {
 
-  def sourceToADT(source: String): F[Par] = sourceToADT(source, Map.empty[String, Par])
+  def sourceToADT(source: String): F[Par] =
+    sourceToADT(source, Map.empty[String, Par])
 
-  def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par]
+  def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par] =
+    sourceToADT(new StringReader(source), normalizerEnv)
 
-  def sourceToADT(reader: Reader): F[Par] = sourceToADT(reader, Map.empty[String, Par])
+  def sourceToADT(reader: Reader): F[Par] =
+    sourceToADT(reader, Map.empty[String, Par])
 
   def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
 
   def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
 
-  def sourceToAST(source: String): F[Proc] = sourceToAST(new StringReader(source))
+  def sourceToAST(source: String): F[Proc] =
+    sourceToAST(new StringReader(source))
 
   def sourceToAST(reader: Reader): F[Proc]
 
@@ -35,9 +39,6 @@ object Compiler {
   def apply[F[_]](implicit compiler: Compiler[F]): Compiler[F] = compiler
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): Compiler[F] = new Compiler[F] {
-
-    def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par] =
-      sourceToADT(new StringReader(source), normalizerEnv)
 
     def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
       for {
