@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
@@ -65,7 +65,12 @@ object LfsTupleSpaceRequester {
     }
 
     // Mark key as finished (Done).
-    def done(k: Key): ST[Key] = ST(d + ((k, Done)))
+    def done(k: Key): ST[Key] = {
+      val isReceived = d.get(k).contains(Received)
+      // If received, mark as Done
+      if (isReceived) ST(d + ((k, Done)))
+      else this
+    }
 
     // Returns flag if all keys are marked as finished (Done).
     def isFinished: Boolean = !d.exists { case (_, v) => v != Done }
@@ -150,57 +155,54 @@ object LfsTupleSpaceRequester {
               .whenA(isReceived)
 
         // Import chunk to RSpace
-        _ <- Stream
-              .eval {
-                // Transform values from ByteString to ByteVector
-                val historyItemsBytes = historyItems.map {
-                  case (k, v) => (k, ByteVector(v.toByteArray))
-                }
-                val dataItemsBytes = dataItems.map {
-                  case (k, v) => (k, ByteVector(v.toByteArray))
-                }
-
-                // Validation for received tuple space items.
-                val validationProcess = Stream.eval {
-                  Stopwatch.time(Log[F].info(_))("Validate received state items")(
-                    validateTupleSpaceItems(
-                      historyItemsBytes,
-                      dataItemsBytes,
-                      startPath,
-                      pageSize,
-                      0,
-                      stateImporter.getHistoryItem
-                    )
-                  )
-                }
-
-                // Save history items to store.
-                val historySaveProcess = Stream.eval {
-                  Stopwatch.time(Log[F].info(_))("Import history items")(
-                    stateImporter
-                      .setHistoryItems[ByteVector](historyItemsBytes, _.toDirectByteBuffer)
-                  )
-                }
-
-                // Save data items to store.
-                val dataSaveProcess = Stream.eval {
-                  Stopwatch.time(Log[F].info(_))("Import data items")(
-                    stateImporter.setDataItems[ByteVector](dataItemsBytes, _.toDirectByteBuffer)
-                  )
-                }
-
-                for {
-                  // Run all in parallel and wait to finish, throws on validation error.
-                  _ <- Stream(validationProcess, historySaveProcess, dataSaveProcess).parJoinUnbounded.compile.drain
-
-                  // Mark chunk as finished
-                  _ <- st.update(_.done(startPath))
-
-                  // Trigger request queue again to process finished chunks
-                  _ <- requestQueue.enqueue1(false)
-                } yield ()
+        _ <- (Sync[F].defer[Unit] _ andThen Stream.eval) {
+              // Transform values from ByteString to ByteVector
+              val historyItemsBytes = historyItems.map {
+                case (k, v) => (k, ByteVector(v.toByteArray))
               }
-              .whenA(isReceived)
+              val dataItemsBytes = dataItems.map {
+                case (k, v) => (k, ByteVector(v.toByteArray))
+              }
+
+              // Validation for received tuple space items.
+              val validationProcess = Stream.eval {
+                Stopwatch.time(Log[F].info(_))("Validate received state items")(
+                  validateTupleSpaceItems(
+                    historyItemsBytes,
+                    dataItemsBytes,
+                    startPath,
+                    pageSize,
+                    0,
+                    stateImporter.getHistoryItem
+                  )
+                )
+              }
+
+              // Save history items to store.
+              val historySaveProcess = Stream.eval {
+                Stopwatch.time(Log[F].info(_))("Import history items")(
+                  stateImporter.setHistoryItems[ByteVector](historyItemsBytes, _.toDirectByteBuffer)
+                )
+              }
+
+              // Save data items to store.
+              val dataSaveProcess = Stream.eval {
+                Stopwatch.time(Log[F].info(_))("Import data items")(
+                  stateImporter.setDataItems[ByteVector](dataItemsBytes, _.toDirectByteBuffer)
+                )
+              }
+
+              for {
+                // Run all in parallel and wait to finish, throws on validation error.
+                _ <- Stream(validationProcess, historySaveProcess, dataSaveProcess).parJoinUnbounded.compile.drain
+
+                // Mark chunk as finished
+                _ <- st.update(_.done(startPath))
+
+                // Trigger request queue again to process finished chunks
+                _ <- requestQueue.enqueue1(false)
+              } yield ()
+            }.whenA(isReceived)
       } yield ()
 
       /**
