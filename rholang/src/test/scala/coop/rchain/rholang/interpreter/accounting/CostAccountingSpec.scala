@@ -53,7 +53,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         case (runtime, costL) =>
           costL.listen {
             implicit val cost = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+            Interpreter[Task].evaluate(runtime, contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)
