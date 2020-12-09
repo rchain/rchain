@@ -65,6 +65,7 @@ PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
 PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
+PLet.            Proc2  ::= "let" Decl Decls "in" "{" Proc "}" ;
 PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
@@ -72,6 +73,19 @@ PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
 PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
+
+-- Let declarations
+DeclImpl.    Decl ::= [Name] NameRemainder "<-" [Proc] ;
+
+LinearDeclImpl.    LinearDecl ::= Decl ;
+separator nonempty LinearDecl ";" ;
+
+ConcDeclImpl.    ConcDecl ::= Decl ;
+separator nonempty ConcDecl "&" ;
+
+EmptyDeclImpl.      Decls ::= ;
+LinearDeclsImpl.    Decls ::= ";" [LinearDecl] ;
+ConcDeclsImpl.      Decls ::= "&" [ConcDecl] ;
 
 -- Process variables
 ProcVarWildcard. ProcVar ::= "_" ;
