@@ -35,7 +35,7 @@ object ReplGrpcService {
                 _ <- Sync[F].delay(printNormalizedTerm(term))
                 res <- {
                   implicit val c = runtime.cost
-                  Interpreter[F].evaluate(runtime, source, Map.empty[String, Par])
+                  Interpreter[F].evaluate(runtime, source)
                 }
                 prettyStorage <- if (printUnmatchedSendsOnly)
                                   StoragePrinter.prettyPrintUnmatchedSends(runtime.space)
