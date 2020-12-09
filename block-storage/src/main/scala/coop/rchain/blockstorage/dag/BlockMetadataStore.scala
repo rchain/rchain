@@ -125,9 +125,9 @@ object BlockMetadataStore {
     ): Set[BlockHash] = {
       val parents = parentHashes.flatMap(blockMetadataMap.get)
       if (parents.nonEmpty) {
-        collectFinalized(parents.map(_.blockHash), parentHashes ++ finalizedBlocks)
+        collectFinalized(parents.flatMap(_.parents), parentHashes ++ finalizedBlocks)
       } else {
-        Set.empty[BlockHash]
+        finalizedBlocks
       }
     }
 
