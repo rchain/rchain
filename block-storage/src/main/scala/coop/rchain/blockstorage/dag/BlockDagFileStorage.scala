@@ -211,6 +211,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
 
     def invalidBlocks: F[Set[BlockMetadata]] =
       invalidBlocksSet.pure[F]
+
+    // blockDag file doesn't support this now because we will get rid of file storage in the future
+    // and we already got migration from file storage to key value store
+    def isFinalized(blockHash: BlockHash): F[Boolean] =
+      Sync[F].raiseError(new Exception("File storage doesn't support isFinalize api."))
   }
 
   private object FileEquivocationsTracker extends EquivocationsTracker[F] {
@@ -357,6 +362,11 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
         _ <- blockNumberIndex.close
       } yield ()
     )
+
+  // blockDag file doesn't support this now because we will get rid of file storage in the future
+  // and we already got migration from file storage to key value store
+  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
+    Sync[F].raiseError(new Exception("File dag storage doesn't support addFinalizedBlockHash api."))
 }
 
 object BlockDagFileStorage {

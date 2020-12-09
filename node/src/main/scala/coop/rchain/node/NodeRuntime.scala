@@ -14,7 +14,7 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
+import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedKeyValueStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.{BlockRetriever, _}
@@ -774,7 +774,19 @@ object NodeRuntime {
         // Start block storage
         if (oldBlockStoreExists) oldStorage else KeyValueBlockStore()
       }
-
+      // Last finalized Block storage
+      lastFinalizedStorage <- {
+        for {
+          lastFinalizedBlockDb   <- casperStoreManager.store("last-finalized-block")
+          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
+          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
+          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
+          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+          _ <- LastFinalizedKeyValueStorage
+                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
+                .whenA(shouldMigrate)
+        } yield lastFinalizedStore
+      }
       // Block DAG storage
       blockDagStorage <- {
         implicit val kvm = casperStoreManager
@@ -794,7 +806,6 @@ object NodeRuntime {
         implicit val kvm = casperStoreManager
         CasperBufferKeyValueStorage.create[F]
       }
-      lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
       oracle = {

@@ -48,6 +48,7 @@ private final case class RNodeKeyValueStoreManager[F[_]: Concurrent: Log](
     ("latest-messages", dagStorageEnvConfig),
     ("invalid-blocks", dagStorageEnvConfig),
     ("deploy-index", dagStorageEnvConfig),
+    ("last-finalized-block", dagStorageEnvConfig),
     // Reporting (trace) cache
     ("reporting-cache", reportingEnvConfig),
     // CasperBuffer
