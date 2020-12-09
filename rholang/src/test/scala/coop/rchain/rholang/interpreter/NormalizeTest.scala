@@ -683,7 +683,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 
   it should "handle peek" in {
     (for {
-      basicInput <- ParBuilderUtil.buildAST[Coeval]("""for ( x, y <<- @Nil ) { x!(*y) }""")
+      basicInput <- Compiler[Coeval].sourceToAST("""for ( x, y <<- @Nil ) { x!(*y) }""")
       result     <- ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs)
     } yield result.par.receives.head.peek shouldBe true).value()
   }

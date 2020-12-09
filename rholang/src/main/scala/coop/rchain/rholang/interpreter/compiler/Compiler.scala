@@ -24,7 +24,9 @@ trait Compiler[F[_]] {
 
   def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
 
-  private[interpreter] def sourceToAST(reader: Reader): F[Proc]
+  def sourceToAST(source: String): F[Proc] = sourceToAST(new StringReader(source))
+
+  def sourceToAST(reader: Reader): F[Proc]
 
 }
 
@@ -33,6 +35,7 @@ object Compiler {
   def apply[F[_]](implicit compiler: Compiler[F]): Compiler[F] = compiler
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): Compiler[F] = new Compiler[F] {
+
     def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par] =
       sourceToADT(new StringReader(source), normalizerEnv)
 
@@ -48,7 +51,7 @@ object Compiler {
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    private[interpreter] def sourceToAST(reader: Reader): F[Proc] =
+    def sourceToAST(reader: Reader): F[Proc] =
       for {
         lexer  <- lexer(reader)
         parser <- parser(lexer)
