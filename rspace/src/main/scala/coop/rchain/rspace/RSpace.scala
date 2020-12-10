@@ -239,8 +239,9 @@ class RSpace[F[_], C, P, A, K](
     for {
       nextHistory <- historyRep.reset(historyRep.history.root)
       hotStore    <- HotStore.empty(nextHistory)
-      _           <- restoreInstalls()
-    } yield new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore), branch)
+      r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore), branch)
+      _           <- r.restoreInstalls()
+    } yield r
   }
 }
 
