@@ -111,8 +111,8 @@ class PeekSpec extends FlatSpec with Matchers {
       .use { runtime =>
         implicit val c = runtime.cost
         for {
-          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
-          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """for (_ <<- @0 & _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """for (_ <<- @0 & _ <<- @1) { @2!(0) }""")
           _  <- evaluate[Task](runtime, """@1!!(1)""")
           _  <- evaluate[Task](runtime, """@0!(0)""")
           r1 <- runtime.space.getData(GInt(0L)).map(_.size)

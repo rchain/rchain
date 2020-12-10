@@ -112,7 +112,7 @@ object errors {
 
   // Current implementation of SpaceMatcher (extractDataCandidates) causes unmatched comms
   // with the same binding channels and overlapping patterns.
-  // Temporarily these kind of joins `for (<- @2; <- @2)` are not allowed.
+  // Temporarily these kind of joins `for (<- @2 & <- @2)` are not allowed.
   // https://rchain.atlassian.net/browse/RCHAIN-4032
   final case class ReceiveOnSameChannelsError(line: Int, col: Int)
       extends InterpreterError(

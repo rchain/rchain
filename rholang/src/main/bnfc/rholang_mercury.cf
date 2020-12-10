@@ -116,19 +116,19 @@ LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
 
 -- Single Linear Bind
 LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" Name ;
-separator nonempty LinearBind ";" ;
+separator nonempty LinearBind "&" ;
 
 -- Repeated Receipts
 RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
 -- Single Repeated Bind
 RepeatedBindImpl. RepeatedBind ::= [Name] NameRemainder "<=" Name ;
-separator nonempty RepeatedBind ";" ;
+separator nonempty RepeatedBind "&" ;
 
 -- Peek Receipts
 PeekSimple. ReceiptPeekImpl ::= [PeekBind] ;
 -- Single Peek
 PeekBindImpl. PeekBind ::= [Name] NameRemainder "<<-" Name ;
-separator nonempty PeekBind ";" ;
+separator nonempty PeekBind "&" ;
 
 -- Types of Send:
 SendSingle.   Send ::= "!" ;

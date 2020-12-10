@@ -298,7 +298,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print multiple binds" in {
-    // new x in { for( y <- x ; z <- x ){ *y | *z } }
+    // new x in { for( y <- x  & z <- x ){ *y | *z } }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("y"))
@@ -325,7 +325,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2} <- x1 ; @{x3} <- x0 ) {
+        |  for( @{x2} <- x1  & @{x3} <- x0 ) {
         |    x2 |
         |    x3
         |  }
@@ -334,7 +334,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print multiple binds with multiple patterns" in {
-    // new x, y in { for( z, v <- x ; a, b <- y ){ *z | *v | *a | *b }
+    // new x, y in { for( z, v <- x  & a, b <- y ){ *z | *v | *a | *b }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
@@ -366,7 +366,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    x3 |
         |    x2 |
         |    x5 |
@@ -377,7 +377,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print partially empty Pars" in {
-    // new x, y in { for( z, v <- x ; a, b <- y ){ *b!(Nil) | *z | *v | *a }
+    // new x, y in { for( z, v <- x  & a, b <- y ){ *b!(Nil) | *z | *v | *a }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
@@ -412,7 +412,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x3}!(Nil) |
         |    x2 |
         |    x5 |
@@ -647,7 +647,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "Print a more complicated receive" in {
-    // new x, y in { for ( z, @a <- y ; b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil case e => c } }
+    // new x, y in { for ( z, @a <- y  & b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil case e => c } }
 
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
@@ -699,7 +699,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     result shouldBe
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x2}!(x5) |
         |    @{x4}!(x3) |
         |    for( @{x6} <- @{x4} ) {

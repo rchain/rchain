@@ -87,7 +87,7 @@ class LetSpec extends WordSpec with Matchers {
           """
             # new x0, x1 in {
             #   x0!(1, 2, [3, 4]) | x1!(5, [6, 7], 8) |
-            #   for(x, y, ... @z <- x0 ; a, b, ... @c <- x1){ Nil }
+            #   for(x, y, ... @z <- x0  & a, b, ... @c <- x1){ Nil }
             # }""".stripMargin('#')
         assertCompiledEqual(s, t)
       }
@@ -118,7 +118,7 @@ class LetSpec extends WordSpec with Matchers {
         """
           # new x0, x1, x2 in {
           #   x0!(1) | x1!(2) | x2!(3) |
-          #   for(x <- x0 ; y <- x1 ; z <- x2) { Nil }
+          #   for(x <- x0  & y <- x1  & z <- x2) { Nil }
           # }""".stripMargin('#')
       assertCompiledEqual(s, t)
     }

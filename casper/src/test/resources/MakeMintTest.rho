@@ -32,7 +32,7 @@ in {
       for (@(_, MakeMint) <- MakeMintCh) {
         @MakeMint!(*mintACh) |
         @MakeMint!(*mintBCh) |
-        for (mintA <- mintACh;
+        for (mintA <- mintACh &
              mintB <- mintBCh) {
           retCh!((*mintA, *mintB))
         }
@@ -48,7 +48,7 @@ in {
         (aliceAmt, bobAmt) => {
           @mintA!("makePurse", aliceAmt, *aliceAPurse) |
           @mintB!("makePurse", bobAmt, *bobBPurse) |
-          for(aliceAPurse <- aliceAPurse; bobBPurse <- bobBPurse) {
+          for(aliceAPurse <- aliceAPurse & bobBPurse <- bobBPurse) {
             aliceAPurse!("getBalance", *aliceAPurseBalance) |
             bobBPurse!("getBalance", *bobBPurseBalance) |
             rhoSpec!("assertMany",
@@ -66,11 +66,11 @@ in {
     new aliceAPurse, bobBPurse, ccDep1, ccDep2 in {
       @mintA!("makePurse", 100, *aliceAPurse) |
       @mintB!("makePurse", 50, *bobBPurse) |
-      for (aliceAPurse <- aliceAPurse;
+      for (aliceAPurse <- aliceAPurse &
            bobBPurse   <- bobBPurse) {
         aliceAPurse!("deposit", 10, *bobBPurse, *ccDep1) |
         bobBPurse!("deposit", 10, *aliceAPurse, *ccDep2) |
-        for (@success1 <- ccDep1;
+        for (@success1 <- ccDep1 &
              @success2 <- ccDep2) {
           rhoSpec!("assertMany",
             [
@@ -90,7 +90,7 @@ in {
         depositSuccess in {
       @mintA!("makePurse", 0, *aliceAPurse) |
       @mintA!("makePurse", 50, *bobAPurse) |
-      for(aliceAPurse <- aliceAPurse;
+      for(aliceAPurse <- aliceAPurse &
           bobAPurse <- bobAPurse) {
         aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
         for (@depositResult <- depositSuccess) {
@@ -141,15 +141,15 @@ in {
         depositSuccess in {
       @mintA!("makePurse", 0, *aliceAPurse) |
       @mintA!("makePurse", 50, *bobAPurse) |
-      for(aliceAPurse <- aliceAPurse;
+      for(aliceAPurse <- aliceAPurse &
           bobAPurse <- bobAPurse) {
         new aliceAck, bobAck in {
           aliceAPurse!("setLog", *aliceLog, *aliceAck) |
           bobAPurse!("setLog", *bobLog, *bobAck) |
-          for (_ <- aliceAck; _ <- bobAck) {
+          for (_ <- aliceAck & _ <- bobAck) {
             aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
             for (@depositResult <- depositSuccess) {
-              for(@["deposit", amountA, src, depOk, blockNumberA, timestampA, senderA] <- aliceLog;
+              for(@["deposit", amountA, src, depOk, blockNumberA, timestampA, senderA] <- aliceLog &
                   @["*decr", amountB, subOk, blockNumberB, timestampB, senderB] <- bobLog) {
                 rhoSpec!("assertMany",
                   [
@@ -197,18 +197,18 @@ in {
           // Alice's purse has maximum balance.
           mint!("makePurse", aliceAmt, *alicePurseCh) |
           mint!("makePurse", bobAmt, *bobPurseCh) |
-          for (alicePurse <- alicePurseCh;
+          for (alicePurse <- alicePurseCh &
                bobPurse   <- bobPurseCh) {
             alicePurse!("getBalance", *initialAlicePurseBalanceCh) |
             bobPurse!("getBalance", *initialBobPurseBalanceCh) |
-            for (@initialAlicePurseBalance <- initialAlicePurseBalanceCh;
+            for (@initialAlicePurseBalance <- initialAlicePurseBalanceCh &
                  @initialBobPurseBalance   <- initialBobPurseBalanceCh) {
               // Depositing any funds to Alice results in overflow.
               alicePurse!("deposit", 1, *bobPurse, *successCh) |
               for (@false <- successCh) {
                 alicePurse!("getBalance", *finalAlicePurseBalanceCh) |
                 bobPurse!("getBalance", *finalBobPurseBalanceCh) |
-                for (@finalAlicePurseBalance <- finalAlicePurseBalanceCh;
+                for (@finalAlicePurseBalance <- finalAlicePurseBalanceCh &
                      @finalBobPurseBalance   <- finalBobPurseBalanceCh) {
                   rhoSpec!("assertMany",
                     [

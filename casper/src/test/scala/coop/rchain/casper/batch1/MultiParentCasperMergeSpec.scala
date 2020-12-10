@@ -205,7 +205,7 @@ class MultiParentCasperMergeSpec
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
-          "for(@x <- @1; @y <- @2){ @1!(x) }",
+          "for(@x <- @1 & @y <- @2){ @1!(x) }",
           current1
         )
         deploy2 <- ConstructDeploy.basicDeployData[Effect](2)

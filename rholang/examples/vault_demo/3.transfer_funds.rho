@@ -21,7 +21,7 @@ in {
           // make sure the target vault it created and the transfer would be done
           @RevVault!("findOrCreate", to, *targetVaultCh) |
           @RevVault!("deployerAuthKey", *deployerId, *revVaultkeyCh) |
-          for (@(true, vault) <- vaultCh; key <- revVaultkeyCh; @(true, _) <- targetVaultCh) {
+          for (@(true, vault) <- vaultCh & key <- revVaultkeyCh & @(true, _) <- targetVaultCh) {
 
             stdout!(("Beginning transfer of ", amount, "REV from", from, "to", to)) |
 

@@ -180,7 +180,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |  for (@x <- @0) { @1 ! (x) | @2 ! (x) } |
          |
          |  //receive both duplicated terms
-         |  for (@y <- @1; @z <- @2) {
+         |  for (@y <- @1 & @z <- @2) {
          |
          |    //create a set to test term's hashCode
          |    @3!(Set(y, z)) |
