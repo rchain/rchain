@@ -8,6 +8,7 @@ import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.shared.DagOps
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -20,7 +21,7 @@ class DagOperationsTest
     with BlockDagStorageFixture {
 
   "bfTraverseF" should "lazily breadth-first traverse a DAG with effectful neighbours" in {
-    val stream = DagOperations.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))
+    val stream = DagOps.bfTraverseF[Id, Int](List(1))(i => List(i * 2, i * 3))
     stream.take(10).toList shouldBe List(1, 2, 3, 4, 6, 9, 8, 12, 18, 27)
   }
 

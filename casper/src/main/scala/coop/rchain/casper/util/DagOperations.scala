@@ -12,23 +12,6 @@ import scala.collection.mutable
 
 object DagOperations {
 
-  def bfTraverseF[F[_]: Monad, A](start: List[A])(neighbours: A => F[List[A]]): StreamT[F, A] = {
-    def build(q: Queue[A], prevVisited: HashSet[A]): F[StreamT[F, A]] =
-      if (q.isEmpty) StreamT.empty[F, A].pure[F]
-      else {
-        val (curr, rest) = q.dequeue
-        if (prevVisited(curr)) build(rest, prevVisited)
-        else
-          for {
-            ns      <- neighbours(curr)
-            visited = prevVisited + curr
-            newQ    = rest.enqueue[A](ns.filterNot(visited))
-          } yield StreamT.cons(curr, Eval.always(build(newQ, visited)))
-      }
-
-    StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
-  }
-
   /**
     * Determines the ancestors to a set of blocks which are not common to all
     * blocks in the set. Each starting block is assigned an index (hence the

@@ -16,7 +16,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{DagOps, Log}
 
 final class Estimator[F[_]: Sync: Log: Metrics: Span](
     maxNumberOfParents: Int,
@@ -141,7 +141,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
     ): F[Map[BlockHash, Long]] =
       for {
         lcaBlockNum <- blockDag.lookup(lowestCommonAncestor).map(_.get.blockNum)
-        result <- DagOperations
+        result <- DagOps
                    .bfTraverseF[F, BlockHash](List(latestBlockHash))(
                      hashParents(_, lcaBlockNum)
                    )
