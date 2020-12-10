@@ -6,6 +6,7 @@ import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
+import coop.rchain.state.DAGReader
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
@@ -25,8 +26,7 @@ object BlockDagStorage {
   def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
 
-trait BlockDagRepresentation[F[_]] {
-  def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+trait BlockDagRepresentation[F[_]] extends DAGReader[F, BlockHash] {
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
