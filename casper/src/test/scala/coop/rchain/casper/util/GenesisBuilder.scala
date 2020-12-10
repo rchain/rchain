@@ -107,8 +107,12 @@ object GenesisBuilder {
 
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize)
-      runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
+      r              <- RhoRuntime.setupRSpace[Task](rspaceDir, storageSize)
+      rSpacePlay     = r._1
+      rSpaceReplay   = r._2
+      historyRepo    = r._3
+      runtimes       <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true)
+      runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2, historyRepo)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- runtimes._1.close
       _              <- runtimes._2.close

@@ -673,4 +673,14 @@ object RhoRuntime {
       replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
     } yield (rhoRuntime, replayRhoRuntime)
+
+  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+      space: RhoISpace[F],
+      replaySpace: RhoReplayISpace[F],
+      initRegistry: Boolean
+  ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
+    for {
+      rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
+      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
+    } yield (rhoRuntime, replayRhoRuntime)
 }

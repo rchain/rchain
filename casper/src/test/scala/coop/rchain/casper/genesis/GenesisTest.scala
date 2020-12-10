@@ -303,14 +303,16 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      r           <- RhoRuntime.setupRSpace[Task](storePath, storageSize)
-      historyRepo = r._3
-      runtimes    <- RhoRuntime.createRuntimes[Task](storePath, storageSize)
-      result      <- body(historyRepo, runtimes, genesisPath, time)
-      _           <- runtimes._1.close
-      _           <- runtimes._2.close
-      _           <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _           <- Sync[Task].delay { gp.recursivelyDelete() }
+      r            <- RhoRuntime.setupRSpace[Task](storePath, storageSize)
+      rSpacePLay   = r._1
+      rSpaceReplay = r._2
+      historyRepo  = r._3
+      runtimes     <- RhoRuntime.createRuntimes[Task](rSpacePLay, rSpaceReplay, true)
+      result       <- body(historyRepo, runtimes, genesisPath, time)
+      _            <- runtimes._1.close
+      _            <- runtimes._2.close
+      _            <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _            <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 

@@ -923,6 +923,7 @@ object NodeRuntime {
         implicit val lf = lastFinalizedStorage
         LastFinalizedHeightConstraintChecker[F]
       }
+      // runtime for `rnode eval`
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -930,14 +931,24 @@ object NodeRuntime {
           case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
-      stateStorageFolder = casperConf.storage.resolve("v2")
-      casperInitialized <- {
+      // rspace for chain state
+      rSpaceFolder = casperConf.storage.resolve("v2")
+      r <- {
+        implicit val sp = span
+        implicit val ec = rspaceScheduler
+        RhoRuntime.setupRSpace[F](rSpaceFolder, casperConf.size)
+      }
+      rSpacePlay   = r._1
+      rSpaceReplay = r._2
+      historyRepo  = r._3
+      // runtimes for on-chain execution
+      onchainRuntimes <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          runtimes                       <- RhoRuntime.createRuntimes[F](stateStorageFolder, casperConf.size)
+          runtimes                       <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true)
           (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
@@ -953,30 +964,21 @@ object NodeRuntime {
                                             ]
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         stateStorageFolder,
+                         rSpaceFolder,
                          casperConf.size
                        )
                      } else
                        ReportingCasper.noop.pure[F]
         } yield (rhoRuntime, replayRhoRuntime, reporter)
       }
-      (casperRuntime, casperReplayRuntime, reportingCasper) = casperInitialized
+      (playRuntime, replayRuntime, reportingRuntime) = onchainRuntimes
       runtimeManager <- {
         implicit val sp = span
-        RuntimeManager.fromRuntimes[F](casperRuntime, casperReplayRuntime)
+        RuntimeManager.fromRuntimes[F](playRuntime, replayRuntime, historyRepo)
       }
       // RNodeStateManager
       stateManagers <- {
         for {
-          history <- {
-            import coop.rchain.rholang.interpreter.storage._
-            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              stateStorageFolder,
-              casperConf.size,
-              Branch.MASTER
-            )
-          }
-          (historyRepo, _)   = history
           exporter           <- historyRepo.exporter
           importer           <- historyRepo.importer
           rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
@@ -1087,7 +1089,7 @@ object NodeRuntime {
         implicit val sp = span
         implicit val sc = synchronyConstraintChecker
         implicit val lh = lastFinalizedHeightConstraintChecker
-        implicit val rc = reportingCasper
+        implicit val rc = reportingRuntime
         NodeRuntime
           .acquireAPIServers[F](
             evalRuntime,
@@ -1124,8 +1126,8 @@ object NodeRuntime {
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
         evalRuntime,
-        casperRuntime,
-        casperReplayRuntime,
+        playRuntime,
+        replayRuntime,
         deployStorageCleanup,
         casperStoreManager
       )
@@ -1162,7 +1164,7 @@ object NodeRuntime {
       updateForkChoiceLoop,
       engineInit,
       casperLaunch,
-      reportingCasper,
+      reportingRuntime,
       webApi,
       adminWebApi,
       proposer,

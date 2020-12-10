@@ -39,8 +39,11 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtimes       <- mkRuntimesAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntimes(runtimes._1, runtimes._2))
+      runtimes    <- mkRuntimesAt[F](storageDirectory)(storageSize)
+      historyRepo <- mkHistoryReposity[F](storageDirectory, storageSize)
+      runtimeManager <- Resource.liftF(
+                         RuntimeManager.fromRuntimes(runtimes._1, runtimes._2, historyRepo)
+                       )
     } yield runtimeManager
   }
 
@@ -56,9 +59,11 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtimes       <- mkRuntimesAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntimes(runtimes._1, runtimes._2))
-      history        <- mkHistoryReposity[F](storageDirectory, storageSize)
+      runtimes <- mkRuntimesAt[F](storageDirectory)(storageSize)
+      history  <- mkHistoryReposity[F](storageDirectory, storageSize)
+      runtimeManager <- Resource.liftF(
+                         RuntimeManager.fromRuntimes(runtimes._1, runtimes._2, history)
+                       )
     } yield (runtimeManager, history)
   }
 

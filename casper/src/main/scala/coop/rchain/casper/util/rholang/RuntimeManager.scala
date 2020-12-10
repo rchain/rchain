@@ -17,7 +17,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
@@ -67,12 +67,13 @@ trait RuntimeManager[F[_]] {
   def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
+  def getHistoryRepo: RhoHistoryRepository[F]
 }
 
-// TODO get rid of Parallel instance here and make it use Streams with Concurrent
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Parallel](
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
-    replaySpace: RhoReplayISpace[F]
+    replaySpace: RhoReplayISpace[F],
+    historyRepo: RhoHistoryRepository[F]
 ) extends RuntimeManager[F] {
 
 //  private[this] val RuntimeManagerMetricsSource =
@@ -198,6 +199,8 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Parallel](
         runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getContinuationPar(channels)
     )
 
+  def getHistoryRepo: RhoHistoryRepository[F] = historyRepo
+
 }
 
 object RuntimeManager {
@@ -218,13 +221,15 @@ object RuntimeManager {
 
   def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log: Parallel](
       runtime: RhoRuntime[F],
-      replayRuntime: ReplayRhoRuntime[F]
+      replayRuntime: ReplayRhoRuntime[F],
+      historyRepo: RhoHistoryRepository[F]
   ): F[RuntimeManager[F]] =
     for {
       _ <- ().pure
     } yield new RuntimeManagerImpl(
       runtime.getRSpace.asInstanceOf[RhoISpace[F]],
-      replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]]
+      replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
+      historyRepo
     )
 
 }
