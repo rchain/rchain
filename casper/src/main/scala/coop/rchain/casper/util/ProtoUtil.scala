@@ -17,11 +17,11 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
-import coop.rchain.shared.DagOps
 
 import scala.collection.immutable
 import scala.collection.immutable.Map

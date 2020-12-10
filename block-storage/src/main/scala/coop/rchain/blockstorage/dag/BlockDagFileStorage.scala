@@ -216,6 +216,9 @@ final class BlockDagFileStorage[F[_]: Concurrent: Sync: Log: RaiseIOError] priva
     // and we already got migration from file storage to key value store
     def isFinalized(blockHash: BlockHash): F[Boolean] =
       Sync[F].raiseError(new Exception("File storage doesn't support isFinalize api."))
+
+    override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] =
+      lookup(vertex).map(_.map(_.parents.toSet))
   }
 
   private object FileEquivocationsTracker extends EquivocationsTracker[F] {

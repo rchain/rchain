@@ -96,6 +96,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       deployIndex.get(deployId)
+
+    override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] =
+      lookup(vertex).map(_.map(_.parents.toSet))
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
