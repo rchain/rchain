@@ -36,7 +36,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
   def tips(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[(BlockHash, IndexedSeq[BlockHash])] =
     Span[F].trace(Tips0MetricsSource) {
       for {
         latestMessageHashes <- dag.latestMessageHashes
@@ -52,7 +52,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
+  ): F[(BlockHash, IndexedSeq[BlockHash])] = Span[F].trace(Tips1MetricsSource) {
     for {
       invalidLatestMessages        <- dag.invalidLatestMessages(latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
@@ -68,7 +68,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
       rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
       _                          <- Span[F].mark("filtered-deep-parents")
-    } yield rankedShallowHashes.take(maxNumberOfParents)
+    } yield (lca, rankedShallowHashes.take(maxNumberOfParents))
   }
 
   private def filterDeepParents(

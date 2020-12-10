@@ -108,7 +108,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield deploy.sig
 
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    Estimator[F].tips(dag, approvedBlock)
+    Estimator[F].tips(dag, approvedBlock).map(_._2)
 
   def lastFinalizedBlock: F[BlockMessage] =
     for {
@@ -175,8 +175,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
 
     for {
-      dag  <- BlockDagStorage[F].getRepresentation
-      tips <- Estimator[F].tips(dag, approvedBlock)
+      dag         <- BlockDagStorage[F].getRepresentation
+      r           <- Estimator[F].tips(dag, approvedBlock)
+      (lca, tips) = r
 
       /**
         * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
@@ -233,8 +234,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         } yield result
       }
       invalidBlocks <- dag.invalidBlocksMap
+      lfb           <- LastFinalizedStorage[F].get(approvedBlock)
     } yield CasperSnapshot(
       dag,
+      lfb,
+      lca,
       tips,
       parents,
       justifications,

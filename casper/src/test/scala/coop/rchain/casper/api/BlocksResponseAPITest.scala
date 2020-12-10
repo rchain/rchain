@@ -107,7 +107,7 @@ class BlocksResponseAPITest
           tips    <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips
+                           tips._2
                          )
           logEff     = new LogStub[Task]
           engine     = new EngineWithCasper[Task](casperEffect)
@@ -135,7 +135,7 @@ class BlocksResponseAPITest
           tips       <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips
+                           tips._2
                          )
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
@@ -162,7 +162,7 @@ class BlocksResponseAPITest
         tips       <- Estimator[Task].tips(dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
-                         tips
+                         tips._2
                        )
         logEff     = new LogStub[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
@@ -190,7 +190,7 @@ class BlocksResponseAPITest
           tips       <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips
+                           tips._2
                          )
           logEff     = new LogStub[Task]
           engine     = new EngineWithCasper[Task](casperEffect)
