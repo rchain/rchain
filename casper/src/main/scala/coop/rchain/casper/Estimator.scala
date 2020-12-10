@@ -18,6 +18,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.shared.{DagOps, Log}
 
+// Tips of the DAG, ranked against LCA
+final case class ForkChoice(tips: IndexedSeq[BlockHash], lca: BlockHash)
+
 final class Estimator[F[_]: Sync: Log: Metrics: Span](
     maxNumberOfParents: Int,
     maxParentDepthOpt: Option[Int]
@@ -36,7 +39,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
   def tips(
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
-  ): F[IndexedSeq[BlockHash]] =
+  ): F[ForkChoice] =
     Span[F].trace(Tips0MetricsSource) {
       for {
         latestMessageHashes <- dag.latestMessageHashes
@@ -52,7 +55,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage,
       latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[IndexedSeq[BlockHash]] = Span[F].trace(Tips1MetricsSource) {
+  ): F[ForkChoice] = Span[F].trace(Tips1MetricsSource) {
     for {
       invalidLatestMessages        <- dag.invalidLatestMessages(latestMessagesHashes)
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
@@ -68,7 +71,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       _                          <- Span[F].mark("ranked-latest-messages-hashes")
       rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
       _                          <- Span[F].mark("filtered-deep-parents")
-    } yield rankedShallowHashes.take(maxNumberOfParents)
+    } yield ForkChoice(rankedShallowHashes.take(maxNumberOfParents), lca)
   }
 
   private def filterDeepParents(

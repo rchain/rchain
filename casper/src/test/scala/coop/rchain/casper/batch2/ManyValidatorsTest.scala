@@ -79,7 +79,7 @@ class ManyValidatorsTest
         tips                      <- Estimator[Task].tips(dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
-                         tips.toIndexedSeq
+                         tips.tips
                        )(Sync[Task], blockStore, newIndexedBlockDagStorage, runtimeManager)
         logEff             = new LogStub[Task]
         engine             = new EngineWithCasper[Task](casperEffect)

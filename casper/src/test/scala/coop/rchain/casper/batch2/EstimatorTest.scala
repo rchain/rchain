@@ -87,7 +87,7 @@ class EstimatorTest
                        genesis,
                        Map.empty[Validator, BlockHash]
                      )
-      } yield forkchoice.head should be(genesis.blockHash)
+      } yield forkchoice.tips.head should be(genesis.blockHash)
   }
 
   // See https://docs.google.com/presentation/d/1znz01SF1ljriPzbMoFV0J127ryPglUYLFyhvsb-ftQk/edit?usp=sharing slide 29 for diagram
@@ -159,8 +159,8 @@ class EstimatorTest
                        genesis,
                        latestBlocks
                      )
-        _      = forkchoice.head should be(b6.blockHash)
-        result = forkchoice(1) should be(b8.blockHash)
+        _      = forkchoice.tips.head should be(b6.blockHash)
+        result = forkchoice.tips(1) should be(b8.blockHash)
       } yield result
   }
 
@@ -236,8 +236,8 @@ class EstimatorTest
                        genesis,
                        latestBlocks
                      )
-        _      = forkchoice.head should be(b8.blockHash)
-        result = forkchoice(1) should be(b7.blockHash)
+        _      = forkchoice.tips.head should be(b8.blockHash)
+        result = forkchoice.tips(1) should be(b7.blockHash)
       } yield result
   }
 }
