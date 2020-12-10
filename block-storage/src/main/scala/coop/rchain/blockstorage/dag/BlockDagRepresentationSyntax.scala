@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.dag
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
@@ -36,6 +36,33 @@ final class BlockDagRepresentationOps[F[_]: Sync](
     def source = s"${file.value}:${line.value} ${enclosing.value}"
     def errMsg = s"DAG storage is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
     dag.lookup(hash) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
+  }
+
+  def lookupUnsafe(hashes: Seq[BlockHash])(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing,
+      concurrent: Concurrent[F]
+  ): F[List[BlockMetadata]] = {
+    val streams = hashes.map(h => fs2.Stream.eval(lookupUnsafe(h)))
+    fs2.Stream.emits(streams).parJoinUnbounded.compile.toList
+  }
+
+  def childrensMetas(hashes: Seq[BlockHash])(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing,
+      concurrent: Concurrent[F]
+  ): F[List[BlockMetadata]] = {
+
+    val childStream = fs2.Stream.emits(hashes).flatMap { h =>
+      fs2.Stream
+        .eval(dag.children(h).map(_.getOrElse(Set.empty)))
+        .flatMap(xs => fs2.Stream.fromIterator(xs.iterator))
+        .parEvalMapUnordered(100)(lookupUnsafe)
+    }
+    childStream.compile.toList
+
   }
 
   def latestMessage(validator: Validator): F[Option[BlockMetadata]] = {

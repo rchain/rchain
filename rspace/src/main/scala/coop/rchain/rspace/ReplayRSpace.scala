@@ -319,10 +319,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     val historyRep  = historyRepositoryAtom.get()
     implicit val ck = serializeK.toSizeHeadCodec
     for {
-      nextHistory <- historyRep.reset(historyRep.history.root)
-      hotStore    <- HotStore.empty(nextHistory)
-      _           <- restoreInstalls()
-    } yield new ReplayRSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore), branch)
+      newHR <- historyRep.reset(historyRep.history.root)
+      newHS <- HotStore.empty(newHR)
+      r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS), branch)
+      _     <- r.restoreInstalls()
+    } yield r
   }
 }
 

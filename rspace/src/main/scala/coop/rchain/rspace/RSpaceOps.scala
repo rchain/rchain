@@ -175,7 +175,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
           store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
       }
 
-  protected[this] def restoreInstalls(): F[Unit] =
+  def restoreInstalls(): F[Unit] =
     /*spanF.trace(restoreInstallsSpanLabel)*/
     installs.get.toList
       .traverse {
