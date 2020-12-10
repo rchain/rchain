@@ -1,9 +1,10 @@
 package coop.rchain.blockstorage
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
 import coop.rchain.models.BlockHash.BlockHash
 
 trait BlockStoreSyntax {
@@ -43,5 +44,14 @@ final class BlockStoreOps[F[_]: Sync](
     def source = s"${file.value}:${line.value} ${enclosing.value}"
     def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
     blockStore.get(hash) >>= (_.liftTo(BlockStoreInconsistencyError(errMsg)))
+  }
+
+  def getUnsafe(
+      hashes: Seq[BlockHash]
+  )(implicit concurrent: Concurrent[F]): fs2.Stream[F, BlockMessage] = {
+    val streams = hashes.map(h => fs2.Stream.eval(getUnsafe(h)))
+    fs2.Stream
+      .emits(streams)
+      .parJoinUnbounded
   }
 }
