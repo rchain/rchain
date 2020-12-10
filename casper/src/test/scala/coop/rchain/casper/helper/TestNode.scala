@@ -8,6 +8,7 @@ import cats.data.State
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Resource, Sync, Timer}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
@@ -547,6 +548,8 @@ object TestNode {
                          dag <- BlockDagStorage[F].getRepresentation
                          dummyCasperSnapshot = CasperSnapshot(
                            dag,
+                           ByteString.EMPTY,
+                           ByteString.EMPTY,
                            IndexedSeq.empty,
                            List.empty,
                            Set.empty,
