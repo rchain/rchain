@@ -1,19 +1,15 @@
 package coop.rchain.casper.engine
 
-import java.nio.ByteBuffer
-
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine.LastFinalizedStateTupleSpaceRequester.StatePartPath
+import coop.rchain.casper.engine.LfsTupleSpaceRequester.{ST, StatePartPath}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceImporter
-import coop.rchain.shared.{Log, SyncVarOps, Time}
-import coop.rchain.state.TrieImporter
+import coop.rchain.rspace.state.{RSpaceImporter, StateValidationError}
+import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -21,7 +17,9 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
-import scala.concurrent.duration._
+import java.nio.ByteBuffer
+import java.util.concurrent.TimeoutException
+import scala.concurrent.duration.DurationInt
 
 class LFSStateRequesterEffectsSpec
     extends FlatSpec
@@ -33,85 +31,52 @@ class LFSStateRequesterEffectsSpec
     ApprovedBlock(candidate, Nil)
   }
 
-  trait Effects[F[_]] {
-    def requestForStoreItem(s: StatePartPath, d: Int): F[Unit]
+  // Create hash from hex string (padding to 32 bytes)
+  def createHash(s: String) = Blake2b256Hash.fromHex(s.padTo(64, '0'))
 
-    def setHistoryItems[Value](
-        item: Seq[(Blake2b256Hash, Value)],
-        conv: Value => ByteBuffer
-    ): F[Unit]
+  def mkRequest(path: StatePartPath) = (path, LfsTupleSpaceRequester.pageSize)
 
-    def setDataItems[Value](
-        item: Seq[(Blake2b256Hash, Value)],
-        conv: Value => ByteBuffer
-    ): F[Unit]
-  }
+  // Approved block state (start of the state)
+  val historyHash1 = createHash("1a")
+  val historyPath1 = List((historyHash1, None))
+  val history1     = Seq((createHash("1a1"), ByteString.EMPTY), (createHash("1a2"), ByteString.EMPTY))
+  val data1        = Seq((createHash("1b1"), ByteString.EMPTY))
+  // Chunk 2
+  val historyHash2 = createHash("2a")
+  val historyPath2 = List((historyHash2, None))
+  val history2     = Seq((createHash("2a1"), ByteString.EMPTY))
+  val data2        = Seq((createHash("2b1"), ByteString.EMPTY), (createHash("2b2"), ByteString.EMPTY))
+  // Chunk 3
+  val historyHash3 = createHash("3a")
+  val historyPath3 = List((historyHash2, None))
+  // Fake invalid history items
+  val invalidHistory = Seq((createHash("666aaaaa"), ByteString.EMPTY))
 
-  case class EffectsImpl[F[_]: Sync](
-      var requests: List[(StatePartPath, Int)],
-      var historyStore: Seq[Blake2b256Hash],
-      var coldStore: Seq[Blake2b256Hash]
-  ) extends Effects[F] {
-    val lock = SyncVarOps.create(this)
+  type SavedStoreItems = Seq[(Blake2b256Hash, ByteString)]
 
-    // Helper for multi-thread safe update of the state
-    def atomically[A](operation: => A): F[A] =
-      Sync[F].delay {
-        lock.take()
-        val result = operation
-        lock.put(this)
-        result
-      }
+  def exceptionInvalidState = StateValidationError("Fake invalid state received.")
 
-    override def requestForStoreItem(s: StatePartPath, d: Int): F[Unit] =
-      atomically(requests = requests :+ (s, d)).void
-
-    override def setHistoryItems[Value](
-        item: Seq[(Blake2b256Hash, Value)],
-        conv: Value => ByteBuffer
-    ) =
-      atomically(historyStore = historyStore ++ item.map(_._1)).void
-
-    override def setDataItems[Value](
-        item: Seq[(Blake2b256Hash, Value)],
-        conv: Value => ByteBuffer
-    ) =
-      atomically(coldStore = coldStore ++ item.map(_._1)).void
-  }
-
-  trait SUT[F[_], Eff] {
-    // Processing stream
-    val stream: Stream[F, Boolean]
-
+  trait SUT[F[_]] {
     // Fill response queue - simulate receiving StoreItems from external source
     def receive(item: StoreItemsMessage*): F[Unit]
 
-    // Observed effects (data persisted, data requested, ...)
-    val eff: Eff
+    // Observed requests
+    val requests: Stream[F, (StatePartPath, Int)]
+
+    // Observed saved state items
+    val savedHistory: Stream[F, SavedStoreItems]
+    val savedData: Stream[F, SavedStoreItems]
+
+    // Processing stream
+    val stream: Stream[F, ST[StatePartPath]]
   }
 
-  def createSut[F[_]: Concurrent: Time: Log, Eff <: Effects[F]](
-      effects: Eff
-  )(test: SUT[F, Eff] => F[Unit]): F[Unit] = {
-    import cats.instances.list._
-
-    val dummyStateImporter = new RSpaceImporter[F] {
-      override type KeyHash = Blake2b256Hash
-
-      override def setHistoryItems[Value](
-          data: Seq[(KeyHash, Value)],
-          toBuffer: Value => ByteBuffer
-      ): F[Unit] = effects.setHistoryItems(data, toBuffer)
-
-      override def setDataItems[Value](
-          data: Seq[(KeyHash, Value)],
-          toBuffer: Value => ByteBuffer
-      ): F[Unit] = effects.setDataItems(data, toBuffer)
-
-      override def setRoot(key: KeyHash): F[Unit] = ().pure[F]
-
-      override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] = ???
-    }
+  /**
+    * Creates test setup
+    *
+    * @param test test definition
+    */
+  def createSut[F[_]: Concurrent: Time: Log](test: SUT[F] => F[Unit]): F[Unit] = {
 
     def alwaysGoodStateValidator(
         historyItems: Seq[(Blake2b256Hash, ByteVector)],
@@ -120,37 +85,81 @@ class LFSStateRequesterEffectsSpec
         chunkSize: Int,
         skip: Int,
         getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
-    ): F[Unit] = ().pure[F]
+    ): F[Unit] = {
+      val invalidItems = invalidHistory.map(_.map(bv => ByteVector(bv.toByteArray)))
 
-    val approvedBlock = createApprovedBlock(blockImplicits.getRandomBlock())
+      // Simulates invalid state if matches predefined constant
+      if (historyItems != invalidItems) ().pure[F]
+      else exceptionInvalidState.raiseError
+    }
+
+    // Approved block has initial root hash of the state
+    val approvedBlock = createApprovedBlock(
+      blockImplicits.getRandomBlock(setPostStateHash = historyHash1.toByteString.some)
+    )
+
     for {
-      // Queue for received blocks
+      // Queue for received store messages
       responseQueue <- Queue.unbounded[F, StoreItemsMessage]
-      // Queue for processing the internal state (ST)
-      requestStream <- LastFinalizedStateTupleSpaceRequester.stream(
-                        approvedBlock,
-                        responseQueue,
-                        effects.requestForStoreItem,
-                        dummyStateImporter,
-                        alwaysGoodStateValidator
-                      )
 
-      receiveStoreItems = (sims: List[StoreItemsMessage]) => {
-        sims.traverse_(responseQueue.enqueue1(_) >> requestStream.take(1).compile.drain)
+      // Queue for requested state chunks
+      requestQueue <- Queue.unbounded[F, (StatePartPath, Int)]
+
+      // Queue for saved chunks
+      savedHistoryQueue <- Queue.unbounded[F, SavedStoreItems]
+      savedDataQueue    <- Queue.unbounded[F, SavedStoreItems]
+
+      importer = new RSpaceImporter[F] {
+        override type KeyHash = Blake2b256Hash
+
+        override def setHistoryItems[Value](
+            data: Seq[(KeyHash, Value)],
+            toBuffer: Value => ByteBuffer
+        ): F[Unit] = {
+          val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
+          savedHistoryQueue.enqueue1(items)
+        }
+
+        override def setDataItems[Value](
+            data: Seq[(KeyHash, Value)],
+            toBuffer: Value => ByteBuffer
+        ): F[Unit] = {
+          val items = data.map(_.map(toBuffer andThen ByteString.copyFrom))
+          savedDataQueue.enqueue1(items)
+        }
+
+        override def setRoot(key: KeyHash): F[Unit] = ().pure[F]
+
+        override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] = ???
       }
 
-      sut = new SUT[F, Eff] {
-        override val stream: Stream[F, Boolean] = requestStream
+      // Queue for processing the internal state (ST)
+      processingStream <- LfsTupleSpaceRequester.stream(
+                           approvedBlock,
+                           responseQueue,
+                           requestQueue.enqueue1(_, _),
+                           importer,
+                           alwaysGoodStateValidator
+                         )
 
-        override def receive(item: StoreItemsMessage*): F[Unit] = receiveStoreItems(item.toList)
+      sut = new SUT[F] {
+        override def receive(msgs: StoreItemsMessage*): F[Unit] =
+          responseQueue.enqueue(Stream.emits(msgs)).compile.drain
 
-        override val eff: Eff = effects
+        override val requests: Stream[F, (StatePartPath, Int)] = requestQueue.dequeue
+
+        override val savedHistory: Stream[F, SavedStoreItems] =
+          savedHistoryQueue.dequeue
+        override val savedData: Stream[F, SavedStoreItems] =
+          savedDataQueue.dequeue
+
+        override val stream: Stream[F, ST[StatePartPath]] = processingStream
       }
 
       // Take one element from the stream, processed the first signal on start
-      _ <- requestStream.take(1).compile.drain
+      _ <- processingStream.take(1).compile.drain
 
-      // Execute test function
+      // Execute test function together with processing stream
       _ <- test(sut)
     } yield ()
   }
@@ -158,38 +167,113 @@ class LFSStateRequesterEffectsSpec
   implicit val logEff: Log[Task]   = Log.log[Task]
   implicit val timeEff: Time[Task] = TestTime.instance
 
-  val sim1StartHash   = Blake2b256Hash.create(Array(1.toByte))
-  val sim1EndHash     = Blake2b256Hash.create(Array(2.toByte))
-  val sim1HistoryData = Blake2b256Hash.create(Array(3.toByte))
-  val sim1ColdData    = Blake2b256Hash.create(Array(3.toByte))
-
   import monix.execution.Scheduler.Implicits.global
 
-  def bootstrapTest(
-      f: SUT[Task, EffectsImpl[Task]] => Task[Unit]
+  /**
+    * Test runner
+    *
+    * @param runProcessingStream flag to automatically run processing stream
+    * @param test test specification
+    */
+  def createBootstrapTest(runProcessingStream: Boolean)(
+      test: SUT[Task] => Task[Unit]
   ): Unit =
-    createSut[Task, EffectsImpl[Task]](EffectsImpl[Task](List.empty, Seq.empty, Seq.empty))(f)
-    // These tests should be executed in milliseconds or maximum seconds,
-    //  but large timeout is because of CI which can pause execution.
-      .runSyncUnsafe()
+    createSut[Task] { sut =>
+      if (!runProcessingStream) test(sut)
+      else (Stream.eval(test(sut)) concurrently sut.stream).compile.drain
+    }.runSyncUnsafe(timeout = 10.seconds)
 
-  it should "received storeItems should be stored and next item should be called" in bootstrapTest {
+  val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
+
+  it should "send requests for dependencies" in bootstrapTest { sut =>
+    import sut._
+    for {
+      reqs <- requests.take(1).compile.toList
+
+      // After start, first request should be for approved block post state
+      _ = reqs shouldBe List(mkRequest(historyPath1))
+
+      // Receives store items message
+      _ <- receive(StoreItemsMessage(historyPath1, historyPath2, history1, data1))
+
+      reqs <- requests.take(1).compile.toList
+
+      // After first chunk received, next chunk should be requested (last past from previous chunk)
+      _ = reqs shouldBe List(mkRequest(historyPath2))
+    } yield ()
+  }
+
+  it should "save requested responses" in bootstrapTest { sut =>
+    import sut._
+    for {
+      // Receives store items message
+      _ <- receive(StoreItemsMessage(historyPath1, historyPath2, history1, data1))
+
+      // One history chunk should be saved
+      history <- savedHistory.take(1).compile.toList
+
+      // Saved history responses
+      _ = history shouldBe List(history1)
+
+      // One data chunk should be saved
+      data <- savedData.take(1).compile.toList
+
+      // Saved data responses
+      _ = data shouldBe List(data1)
+    } yield ()
+  }
+
+  it should "not request next chunk if message is not requested" in bootstrapTest { sut =>
+    import sut._
+    for {
+      reqs <- requests.take(1).compile.toList
+
+      // After start, first request should be for approved block post state
+      _ = reqs shouldBe List(mkRequest(historyPath1))
+
+      // Receives store items message which is not requested
+      _ <- receive(StoreItemsMessage(historyPath2, historyPath3, history2, data2))
+
+      // Request should not be sent for the next chunk,
+      //  getting element from the queue should fail with timeout
+      reqs <- requests.take(1).timeout(250.millis).compile.toList.attempt
+
+      // After first chunk received, next chunk should be requested (last past from previous chunk)
+      _ = reqs shouldBe a[Left[TimeoutException, _]]
+    } yield ()
+  }
+
+  it should "not save message which is not requested" in bootstrapTest { sut =>
+    import sut._
+    for {
+      // Receives store items message which is not requested
+      _ <- receive(StoreItemsMessage(historyPath2, historyPath3, history2, data2))
+
+      // Get from saved queue should fail with timeout
+      history <- savedHistory.take(1).timeout(250.millis).compile.toList.attempt
+
+      // No history items should be saved
+      _ = history shouldBe a[Left[TimeoutException, _]]
+
+      // Get from saved queue should fail with timeout
+      data <- savedData.take(1).timeout(250.millis).compile.toList.attempt
+
+      // No data items should be saved
+      _ = data shouldBe a[Left[TimeoutException, _]]
+    } yield ()
+  }
+
+  it should "stop if invalid state received" in createBootstrapTest(runProcessingStream = false) {
     sut =>
-      {
-        import sut._
-        for {
-          _ <- receive(
-                StoreItemsMessage(
-                  Seq((sim1StartHash, None)),
-                  Seq((sim1EndHash, None)),
-                  Seq((sim1HistoryData, ByteString.EMPTY)),
-                  Seq((sim1ColdData, ByteString.EMPTY))
-                )
-              )
-          _ = eff.historyStore.contains(sim1HistoryData) shouldBe true
-          _ = eff.coldStore.contains(sim1ColdData) shouldBe true
-          _ = eff.requests.contains(sim1EndHash) shouldBe true
-        } yield ()
-      }
+      import sut._
+      for {
+        // Receives store items message
+        _ <- receive(StoreItemsMessage(historyPath1, historyPath2, invalidHistory, data1))
+
+        result <- stream.compile.lastOrError.attempt
+
+        // Stream should fail with an error
+        _ = result shouldBe Left(exceptionInvalidState)
+      } yield ()
   }
 }
