@@ -128,8 +128,8 @@ class LfsBlockRequesterEffectsSpec
                         approvedBlock,
                         responseQueue,
                         initialMinimumHeight = 0,
-                        requestTimeout,
                         effects.requestForBlock,
+                        requestTimeout,
                         effects.containsBlockInStore,
                         effects.getBlock,
                         effects.putBlockToStore,
@@ -323,12 +323,12 @@ class LfsBlockRequesterEffectsSpec
     *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
     *  https://github.com/rchain/rchain/issues/3001
     */
-  it should "re-send request after timeout" in dagFromBlock(b9, requestTimeout = 300.millis) {
+  it should "re-send request after timeout" in dagFromBlock(b9, requestTimeout = 200.millis) {
     sut =>
       import sut._
       for {
         // Wait for timeout to expire
-        _ <- stream.compile.drain.timeout(350.millis).onErrorHandle(_ => ())
+        _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
 
         // Request should be repeated
         _ = eff.requests shouldBe List(hash9, hash9, hash8, hash8)

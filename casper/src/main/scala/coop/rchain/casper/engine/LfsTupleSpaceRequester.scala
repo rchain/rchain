@@ -86,12 +86,17 @@ object LfsTupleSpaceRequester {
     *
     * @param approvedBlock          Last finalized block
     * @param tupleSpaceMessageQueue Handler of tuple space messages
+    * @param requestForStoreItem Send request for state chunk
+    * @param requestTimeout Time after request will be resent if not received
+    * @param stateImporter RSpace importer (history and data)
+    * @param validateTupleSpaceItems Check if received statet chunk is valid
     * @return fs2.Stream processing all tuple space state
     */
   def stream[F[_]: Concurrent: Time: Log](
       approvedBlock: ApprovedBlock,
       tupleSpaceMessageQueue: Queue[F, StoreItemsMessage],
       requestForStoreItem: (StatePartPath, Int) => F[Unit],
+      requestTimeout: FiniteDuration,
       stateImporter: RSpaceImporter[F],
       validateTupleSpaceItems: (
           Seq[(Blake2b256Hash, ByteVector)],
@@ -208,9 +213,8 @@ object LfsTupleSpaceRequester {
       /**
         * Timeout to resend block requests if response is not received
         */
-      val timeoutDuration = 2.minutes
-      val timeoutMsg      = s"No tuple space state responses for $timeoutDuration. Resending requests."
-      val resendRequests  = requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
+      val timeoutMsg     = s"No tuple space state responses for $requestTimeout. Resending requests."
+      val resendRequests = requestQueue.enqueue1(true) <* Log[F].warn(timeoutMsg)
 
       /**
         * Final result! Concurrently pulling requests and handling responses
@@ -218,7 +222,7 @@ object LfsTupleSpaceRequester {
         */
       requestStream
         .evalMap(_ => st.get)
-        .onIdle(timeoutDuration, resendRequests)
+        .onIdle(requestTimeout, resendRequests)
         .terminateAfter(_.isFinished) concurrently responseStream
     }
 

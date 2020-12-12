@@ -154,8 +154,8 @@ class Initializing[F[_]
                              approvedBlock,
                              blockMessageQueue,
                              minBlockNumberForDeployLifespan,
-                             requestTimeout = 30.seconds,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
+                             requestTimeout = 30.seconds,
                              BlockStore[F].contains,
                              BlockStore[F].getUnsafe,
                              BlockStore[F].put,
@@ -183,6 +183,7 @@ class Initializing[F[_]
                              TransportLayer[F].sendToBootstrap(
                                StoreItemsMessageRequest(statePartPath, 0, pageSize).toProto
                              ),
+                           requestTimeout = 2.minutes,
                            RSpaceStateManager[F].importer,
                            stateValidator
                          )

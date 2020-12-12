@@ -13,18 +13,14 @@ import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 import fs2.concurrent.Queue
 import monix.eval.Task
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeoutException
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class LFSStateRequesterEffectsSpec
-    extends FlatSpec
-    with Matchers
-    with GeneratorDrivenPropertyChecks {
+class LFSStateRequesterEffectsSpec extends FlatSpec with Matchers {
 
   def createApprovedBlock(block: BlockMessage): ApprovedBlock = {
     val candidate = ApprovedBlockCandidate(block, requiredSigs = 0)
@@ -61,7 +57,7 @@ class LFSStateRequesterEffectsSpec
     def receive(item: StoreItemsMessage*): F[Unit]
 
     // Observed requests
-    val requests: Stream[F, (StatePartPath, Int)]
+    val sentRequests: Stream[F, (StatePartPath, Int)]
 
     // Observed saved state items
     val savedHistory: Stream[F, SavedStoreItems]
@@ -76,9 +72,11 @@ class LFSStateRequesterEffectsSpec
     *
     * @param test test definition
     */
-  def createSut[F[_]: Concurrent: Time: Log](test: SUT[F] => F[Unit]): F[Unit] = {
+  def createSut[F[_]: Concurrent: Time: Log](requestTimeout: FiniteDuration)(
+      test: SUT[F] => F[Unit]
+  ): F[Unit] = {
 
-    def alwaysGoodStateValidator(
+    def mockValidateStateChunk(
         historyItems: Seq[(Blake2b256Hash, ByteVector)],
         dataItems: Seq[(Blake2b256Hash, ByteVector)],
         startPath: Seq[(Blake2b256Hash, Option[Byte])],
@@ -105,7 +103,7 @@ class LFSStateRequesterEffectsSpec
       // Queue for requested state chunks
       requestQueue <- Queue.unbounded[F, (StatePartPath, Int)]
 
-      // Queue for saved chunks
+      // Queues for saved chunks
       savedHistoryQueue <- Queue.unbounded[F, SavedStoreItems]
       savedDataQueue    <- Queue.unbounded[F, SavedStoreItems]
 
@@ -130,6 +128,7 @@ class LFSStateRequesterEffectsSpec
 
         override def setRoot(key: KeyHash): F[Unit] = ().pure[F]
 
+        // Not used by LFS requester
         override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] = ???
       }
 
@@ -138,16 +137,17 @@ class LFSStateRequesterEffectsSpec
                            approvedBlock,
                            responseQueue,
                            requestQueue.enqueue1(_, _),
+                           requestTimeout,
                            importer,
-                           alwaysGoodStateValidator
+                           mockValidateStateChunk
                          )
 
       sut = new SUT[F] {
         override def receive(msgs: StoreItemsMessage*): F[Unit] =
           responseQueue.enqueue(Stream.emits(msgs)).compile.drain
 
-        override val requests: Stream[F, (StatePartPath, Int)] = requestQueue.dequeue
-
+        override val sentRequests: Stream[F, (StatePartPath, Int)] =
+          requestQueue.dequeue
         override val savedHistory: Stream[F, SavedStoreItems] =
           savedHistoryQueue.dequeue
         override val savedData: Stream[F, SavedStoreItems] =
@@ -172,23 +172,26 @@ class LFSStateRequesterEffectsSpec
   /**
     * Test runner
     *
+    *  - Default request timeout is set to large value to disable re-request messages if CI is slow.
+    *
     * @param runProcessingStream flag to automatically run processing stream
+    * @param requestTimeout request resend timeout
     * @param test test specification
     */
-  def createBootstrapTest(runProcessingStream: Boolean)(
+  def createBootstrapTest(runProcessingStream: Boolean, requestTimeout: FiniteDuration = 10.days)(
       test: SUT[Task] => Task[Unit]
   ): Unit =
-    createSut[Task] { sut =>
+    createSut[Task](requestTimeout) { sut =>
       if (!runProcessingStream) test(sut)
       else (Stream.eval(test(sut)) concurrently sut.stream).compile.drain
     }.runSyncUnsafe(timeout = 10.seconds)
 
   val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
 
-  it should "send requests for dependencies" in bootstrapTest { sut =>
+  it should "send request for next state chunk" in bootstrapTest { sut =>
     import sut._
     for {
-      reqs <- requests.take(1).compile.toList
+      reqs <- sentRequests.take(1).compile.toList
 
       // After start, first request should be for approved block post state
       _ = reqs shouldBe List(mkRequest(historyPath1))
@@ -196,14 +199,14 @@ class LFSStateRequesterEffectsSpec
       // Receives store items message
       _ <- receive(StoreItemsMessage(historyPath1, historyPath2, history1, data1))
 
-      reqs <- requests.take(1).compile.toList
+      reqs <- sentRequests.take(1).compile.toList
 
-      // After first chunk received, next chunk should be requested (last past from previous chunk)
+      // After first chunk received, next chunk should be requested (end of previous chunk)
       _ = reqs shouldBe List(mkRequest(historyPath2))
     } yield ()
   }
 
-  it should "save requested responses" in bootstrapTest { sut =>
+  it should "save (import) received state chunk" in bootstrapTest { sut =>
     import sut._
     for {
       // Receives store items message
@@ -226,7 +229,7 @@ class LFSStateRequesterEffectsSpec
   it should "not request next chunk if message is not requested" in bootstrapTest { sut =>
     import sut._
     for {
-      reqs <- requests.take(1).compile.toList
+      reqs <- sentRequests.take(1).compile.toList
 
       // After start, first request should be for approved block post state
       _ = reqs shouldBe List(mkRequest(historyPath1))
@@ -236,14 +239,14 @@ class LFSStateRequesterEffectsSpec
 
       // Request should not be sent for the next chunk,
       //  getting element from the queue should fail with timeout
-      reqs <- requests.take(1).timeout(250.millis).compile.toList.attempt
+      reqs <- sentRequests.take(1).timeout(250.millis).compile.toList.attempt
 
       // After first chunk received, next chunk should be requested (last past from previous chunk)
       _ = reqs shouldBe a[Left[TimeoutException, _]]
     } yield ()
   }
 
-  it should "not save message which is not requested" in bootstrapTest { sut =>
+  it should "not save (import) state chunk if not requested" in bootstrapTest { sut =>
     import sut._
     for {
       // Receives store items message which is not requested
@@ -263,17 +266,59 @@ class LFSStateRequesterEffectsSpec
     } yield ()
   }
 
-  it should "stop if invalid state received" in createBootstrapTest(runProcessingStream = false) {
+  it should "stop if invalid state chunk received" in createBootstrapTest(
+    runProcessingStream = false
+  ) { sut =>
+    import sut._
+    for {
+      // Receives store items message
+      _ <- receive(StoreItemsMessage(historyPath1, historyPath2, invalidHistory, data1))
+
+      result <- stream.compile.lastOrError.attempt
+
+      // Stream should fail with an error
+      _ = result shouldBe Left(exceptionInvalidState)
+    } yield ()
+  }
+
+  it should "finish after last chunk received" in createBootstrapTest(runProcessingStream = false) {
     sut =>
       import sut._
       for {
-        // Receives store items message
-        _ <- receive(StoreItemsMessage(historyPath1, historyPath2, invalidHistory, data1))
+        // Receives store items message (start path is equal to end path)
+        _ <- receive(StoreItemsMessage(historyPath1, historyPath1, history1, data1))
 
-        result <- stream.compile.lastOrError.attempt
+        state <- stream.compile.lastOrError
 
         // Stream should fail with an error
-        _ = result shouldBe Left(exceptionInvalidState)
+        _ = state.isFinished shouldBe true
       } yield ()
   }
+
+  /**
+    * Test for request timeout. This is timing test which in CI can be a problem if execution is paused.
+    *
+    * NOTE: We don't have any abstraction to test time in execution (with monix Task or cats IO).
+    *  We have LogicalTime and DiscreteTime which are just wrappers to get different "milliseconds" but are totally
+    *  disconnected from Task/IO execution notion of time (e.g. Task.sleep).
+    *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
+    *  https://github.com/rchain/rchain/issues/3001
+    */
+  it should "re-send request after timeout" in createBootstrapTest(
+    runProcessingStream = false,
+    requestTimeout = 200.millis
+  ) { sut =>
+    import sut._
+    for {
+      // Wait for timeout to expire
+      _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
+
+      // Wait for two requests
+      reqs <- sentRequests.take(2).compile.toList
+
+      // Both requests should be the same, second is resent
+      _ = reqs shouldBe List(mkRequest(historyPath1), mkRequest(historyPath1))
+    } yield ()
+  }
+
 }
