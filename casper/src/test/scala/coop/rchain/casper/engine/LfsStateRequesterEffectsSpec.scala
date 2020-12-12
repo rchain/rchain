@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class LFSStateRequesterEffectsSpec extends FlatSpec with Matchers {
+class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
 
   def createApprovedBlock(block: BlockMessage): ApprovedBlock = {
     val candidate = ApprovedBlockCandidate(block, requiredSigs = 0)
