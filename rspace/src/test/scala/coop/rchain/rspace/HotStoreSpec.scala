@@ -19,7 +19,7 @@ import org.scalatest.prop._
 import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
-import scala.collection.concurrent.TrieMap
+import scala.collection.concurrent.{Map, TrieMap}
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -39,35 +39,45 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 
   implicit val arbitraryJoins = distinctListOf[Join].map(_.toVector)
 
-  implicit def arbitraryCache: Arbitrary[Cache[String, Pattern, String, StringsCaptor]] = Arbitrary(
-    for {
-      continuations <- Arbitrary.arbitrary[TrieMap[Seq[String], Seq[
-                        WaitingContinuation[Pattern, StringsCaptor]
-                      ]]]
-      installedContinuations <- Arbitrary.arbitrary[
-                                 TrieMap[Seq[String], WaitingContinuation[Pattern, StringsCaptor]]
-                               ]
-      data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Datum[String]]]]
-      joins          <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
-      installedJoins <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]]
-    } yield Cache(
-      continuations,
-      installedContinuations,
-      data,
-      joins,
-      installedJoins
+  implicit def arbitraryHotStoreState
+      : Arbitrary[HotStoreState[String, Pattern, String, StringsCaptor]] =
+    Arbitrary(
+      for {
+
+        continuations <- Arbitrary
+                          .arbitrary[TrieMap[Seq[String], Seq[
+                            WaitingContinuation[Pattern, StringsCaptor]
+                          ]]]
+                          .map(_.toMap)
+        installedContinuations <- Arbitrary
+                                   .arbitrary[
+                                     TrieMap[
+                                       Seq[String],
+                                       WaitingContinuation[Pattern, StringsCaptor]
+                                     ]
+                                   ]
+                                   .map(_.toMap)
+        data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Datum[String]]]].map(_.toMap)
+        joins          <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]].map(_.toMap)
+        installedJoins <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]].map(_.toMap)
+      } yield HotStoreState(
+        continuations,
+        installedContinuations,
+        data,
+        joins,
+        installedJoins
+      )
     )
-  )
 
   def fixture(
       f: (
-          Ref[F, Cache[String, Pattern, String, StringsCaptor]],
+          Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]],
           History[F, String, Pattern, String, StringsCaptor],
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ): Unit
 
-  def fixture(cache: Cache[String, Pattern, String, StringsCaptor])(
+  def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
       f: (
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
@@ -101,8 +111,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> cachedContinuations
                         )
                       ),
@@ -131,8 +141,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> cachedContinuations
                         )
                       ),
@@ -185,8 +195,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> cachedContinuations
                         )
                       ),
@@ -218,8 +228,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               _ <- state.modify(
                     _ =>
                       (
-                        Cache(
-                          continuations = TrieMap(
+                        HotStoreState(
+                          continuations = Map(
                             channels -> cachedContinuations
                           )
                         ),
@@ -280,8 +290,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> cachedContinuations
                         )
                       ),
@@ -314,11 +324,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> cachedContinuations
                         ),
-                        installedContinuations = TrieMap(
+                        installedContinuations = Map(
                           channels -> installedContinuation
                         )
                       ),
@@ -374,8 +384,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        data = TrieMap(
+                      HotStoreState(
+                        data = Map(
                           channel -> cachedData
                         )
                       ),
@@ -423,8 +433,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        data = TrieMap(
+                      HotStoreState(
+                        data = Map(
                           channel -> cachedData
                         )
                       ),
@@ -471,8 +481,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        data = TrieMap(
+                      HotStoreState(
+                        data = Map(
                           channel -> cachedData
                         )
                       ),
@@ -515,8 +525,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        joins = TrieMap(
+                      HotStoreState(
+                        joins = Map(
                           channel -> cachedJoins
                         )
                       ),
@@ -567,8 +577,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               _ <- state.modify(
                     _ =>
                       (
-                        Cache(
-                          joins = TrieMap(
+                        HotStoreState(
+                          joins = Map(
                             channel -> cachedJoins
                           )
                         ),
@@ -598,8 +608,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        joins = TrieMap(
+                      HotStoreState(
+                        joins = Map(
                           channel -> cachedJoins
                         )
                       ),
@@ -633,8 +643,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               _ <- state.modify(
                     _ =>
                       (
-                        Cache(
-                          joins = TrieMap(
+                        HotStoreState(
+                          joins = Map(
                             channel -> cachedJoins
                           )
                         ),
@@ -673,8 +683,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        joins = TrieMap(
+                      HotStoreState(
+                        joins = Map(
                           channel -> cachedJoins
                         )
                       ),
@@ -735,8 +745,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               _ <- state.modify(
                     _ =>
                       (
-                        Cache(
-                          joins = TrieMap(
+                        HotStoreState(
+                          joins = Map(
                             channel -> cachedJoins
                           )
                         ),
@@ -765,11 +775,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
               _ <- state.modify(
                     _ =>
                       (
-                        Cache(
-                          joins = TrieMap(
+                        HotStoreState(
+                          joins = Map(
                             channel -> cachedJoins
                           ),
-                          installedJoins = TrieMap(
+                          installedJoins = Map(
                             channel -> installedJoins
                           )
                         ),
@@ -813,8 +823,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        joins = TrieMap(
+                      HotStoreState(
+                        joins = Map(
                           channel -> cachedJoins
                         )
                       ),
@@ -850,17 +860,17 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _ <- state.modify(
                   _ =>
                     (
-                      Cache(
-                        continuations = TrieMap(
+                      HotStoreState(
+                        continuations = Map(
                           channels -> continuations
                         ),
-                        installedContinuations = TrieMap(
+                        installedContinuations = Map(
                           channels -> installedContinuation
                         ),
-                        data = TrieMap(
+                        data = Map(
                           channel -> data
                         ),
-                        joins = TrieMap(
+                        joins = Map(
                           channel -> joins
                         )
                       ),
@@ -1153,7 +1163,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
     }
 
   "snapshot" should "create a copy of the cache" in forAll {
-    (cache: Cache[String, Pattern, String, StringsCaptor]) =>
+    (cache: HotStoreState[String, Pattern, String, StringsCaptor]) =>
       fixture(cache) { store =>
         for {
           snapshot <- store.snapshot()
@@ -1251,19 +1261,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
   }
 }
 
-class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
+class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, HotStoreState[C, P, A, K]])
     extends HistoryReaderBase[F, C, P, A, K] {
+
   override def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.get.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.modify { prev =>
-    ignore(prev.joins.put(channel, joins))
+    ignore(prev.joins.updated(channel, joins))
     (prev, ())
   }
 
   override def getData(channel: C): F[Seq[Datum[A]]] =
     R.get.map(_.data.get(channel).toSeq.flatten)
   def putData(channel: C, data: Seq[Datum[A]]): F[Unit] = R.modify { prev =>
-    ignore(prev.data.put(channel, data))
+    ignore(prev.data.updated(channel, data))
     (prev, ())
   }
 
@@ -1275,7 +1286,7 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
       channels: Seq[C],
       continuations: Seq[WaitingContinuation[P, K]]
   ): F[Unit] = R.modify { prev =>
-    ignore(prev.continuations.put(channels, continuations))
+    ignore(prev.continuations.updated(channels, continuations))
     (prev, ())
   }
 
@@ -1293,51 +1304,51 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
   implicit override val S: Sync[F]        = implicitly[Concurrent[Task]]
   implicit override val P: Parallel[Task] = Task.catsParallel
   def C(
-      c: Cache[String, Pattern, String, StringsCaptor] = Cache()
-  ): F[Ref[F, Cache[String, Pattern, String, StringsCaptor]]]
+      c: HotStoreState[String, Pattern, String, StringsCaptor] = HotStoreState()
+  ): F[Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]]]
 
   override def fixture(
       f: (
-          Ref[F, Cache[String, Pattern, String, StringsCaptor]],
+          Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]],
           History[F, String, Pattern, String, StringsCaptor],
           HotStore[F, String, Pattern, String, StringsCaptor]
       ) => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](
-                       Cache[String, Pattern, String, StringsCaptor]()
+      historyState <- Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](
+                       HotStoreState[String, Pattern, String, StringsCaptor]()
                      )
       history = {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
       }
       cache    <- C()
-      hotStore = HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
       res      <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
-  override def fixture(cache: Cache[String, Pattern, String, StringsCaptor])(
+  override def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
       f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](
-                       Cache[String, Pattern, String, StringsCaptor]()
+      historyState <- Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](
+                       HotStoreState[String, Pattern, String, StringsCaptor]()
                      )
       history = {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
       }
       cache    <- C(cache)
-      hotStore = HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
       res      <- f(hotStore)
     } yield res).runSyncUnsafe(1.second)
 
 }
 
-class RefCachedInMemHotStoreSpec extends InMemHotStoreSpec {
+class RefHotStoreStatedInMemHotStoreSpec extends InMemHotStoreSpec {
   implicit override def C(
-      cache: Cache[String, Pattern, String, StringsCaptor]
-  ): F[Ref[F, Cache[String, Pattern, String, StringsCaptor]]] =
-    Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](cache)
+      cache: HotStoreState[String, Pattern, String, StringsCaptor]
+  ): F[Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]]] =
+    Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](cache)
 
 }
