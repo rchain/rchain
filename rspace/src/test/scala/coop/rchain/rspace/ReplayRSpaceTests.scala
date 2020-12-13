@@ -6,12 +6,12 @@ import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.implicits._
 import cats.syntax.parallel._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace.examples.StringExamples._
+import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.{HistoryRepositoryInstances, LMDBRSpaceStorageConfig, StoreConfig}
@@ -1307,33 +1307,47 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
 
     (for {
       historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](config)
-      cache <- Ref.of[Task, Cache[C, P, A, K]](
-                Cache[C, P, A, K]()
-              )
-      store = {
-        implicit val hr = historyRepository
-        implicit val c  = cache
-        AtomicAny(HotStore.inMem[Task, C, P, A, K])
+      playCache <- Ref.of[Task, HotStoreState[C, P, A, K]](
+                    HotStoreState[C, P, A, K]()
+                  )
+      history = {
+        implicit val hs = playCache
+        new History[Task, C, P, A, K]
       }
+      historyRepoState <- Ref
+                           .of[Task, HistoryStoreCache[Task, C, P, A, K]](
+                             HistoryStoreCache(Map.empty, Map.empty, Map.empty)
+                           )
+      store <- {
+        implicit val hr = historyRepository
+        implicit val c  = Concurrent[Task]
+        HotStore.inMem(playCache, historyRepoState).pure[Task]
+      }
+
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
-        store,
+        AtomicAny(store),
         branch
       )
-      historyCache <- Ref.of[Task, Cache[C, P, A, K]](
-                       Cache[C, P, A, K]()
-                     )
-      replayStore = {
+
+      replayCache <- Ref.of[Task, HotStoreState[C, P, A, K]](
+                      HotStoreState[C, P, A, K]()
+                    )
+      historyRepoReplayState <- Ref
+                                 .of[Task, HistoryStoreCache[Task, C, P, A, K]](
+                                   HistoryStoreCache(Map.empty, Map.empty, Map.empty)
+                                 )
+      replayStore <- {
         implicit val hr = historyRepository
-        implicit val c  = historyCache
-        AtomicAny(HotStore.inMem[Task, C, P, A, K])
+        implicit val c  = Concurrent[Task]
+        HotStore.inMem(replayCache, historyRepoReplayState).pure[Task]
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
-        replayStore,
+        AtomicAny(replayStore),
         branch
       )
-      res <- f(store, replayStore, space, replaySpace)
+      res <- f(AtomicAny(store), AtomicAny(replayStore), space, replaySpace)
       _   <- Sync[Task].delay(dbDir.recursivelyDelete())
     } yield { res }).unsafeRunSync
   }
