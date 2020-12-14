@@ -623,19 +623,20 @@ object BlockAPI {
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
-      // TODO this is temporary solution to not calculate fault tolerance for old blocks which is costly
-      oldBlock  = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
-      isInvalid = dag.lookup(block.blockHash).map(_.get.invalid)
+      // TODO this is temporary solution to not calculate fault tolerance all the blocks
+      oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
       // Old block fault tolerance / invalid block has -1.0 fault tolerance
-      oldBlockFaultTolerance = isInvalid.map(if (_) -1f else 1f)
       normalizedFaultTolerance <- oldBlock.ifM(
-                                   oldBlockFaultTolerance,
+                                   dag
+                                     .isFinalized(block.blockHash)
+                                     .map(isFinalized => if (isFinalized) 1f else -1f),
                                    SafetyOracle[F]
                                      .normalizedFaultTolerance(dag, block.blockHash)
                                  )
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
-      blockInfo      <- constructor(block, faultTolerance)
+
+      blockInfo <- constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](

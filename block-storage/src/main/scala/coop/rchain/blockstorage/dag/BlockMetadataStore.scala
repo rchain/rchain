@@ -4,12 +4,11 @@ import cats.Monad
 import cats.effect.Sync
 import cats.mtl.MonadState
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{AtomicMonadState, Log}
+import coop.rchain.shared.{AtomicMonadState, DagOps, Log}
 import coop.rchain.store.KeyValueTypedStore
 import monix.execution.atomic.AtomicAny
 
@@ -22,8 +21,8 @@ object BlockMetadataStore {
       lastFinalizedBlock: Option[BlockHash]
   ): F[BlockMetadataStore[F]] =
     for {
-      blockMetadataMap <- blockMetadataStore.toMap
       _                <- Log[F].info("Building in-memory blockMetadataStore.")
+      blockMetadataMap <- blockMetadataStore.toMap
       dagState         = recreateInMemoryState(blockMetadataMap, lastFinalizedBlock)
       _                <- Log[F].info("Successfully built in-memory blockMetadataStore.")
     } yield new BlockMetadataStore[F](
@@ -125,9 +124,9 @@ object BlockMetadataStore {
     ): Set[BlockHash] = {
       val parents = parentHashes.flatMap(blockMetadataMap.get)
       if (parents.nonEmpty) {
-        collectFinalized(parents.map(_.blockHash), parentHashes ++ finalizedBlocks)
+        collectFinalized(parents.flatMap(_.parents), parentHashes ++ finalizedBlocks)
       } else {
-        Set.empty[BlockHash]
+        finalizedBlocks
       }
     }
 
@@ -138,9 +137,9 @@ object BlockMetadataStore {
     }
 
     val finalizedBlockSet = lastFinalizedBlockHash.fold(Set.empty[BlockHash])(lbh => {
-      val lastFinalizedBlock = blockMetadataMap.get(lbh)
-      assert(lastFinalizedBlock.nonEmpty, "Finalized Block must be in blockMetaData.")
-      collectFinalized(Set(lbh), Set.empty[BlockHash])
+      DagOps
+        .bfTraverse(List(lbh))(bh => blockMetadataMap.get(bh).map(_.parents).getOrElse(List.empty))
+        .toSet
     })
     val newDagState = dagState.copy(finalizedBlockSet = finalizedBlockSet)
 
