@@ -130,8 +130,8 @@ object LfsBlockRequester {
     * @param approvedBlock Last finalized block
     * @param responseQueue Handler of block messages
     * @param initialMinimumHeight Required minimum block height before latest messages are downloaded
-    * @param requestTimeout Time after request will be resent if not received
     * @param requestForBlock Send request for block
+    * @param requestTimeout Time after request will be resent if not received
     * @param containsBlock Check if block is in the store
     * @param putBlockToStore Add block to the store
     * @param validateBlock Check if received block is valid
@@ -141,8 +141,8 @@ object LfsBlockRequester {
       approvedBlock: ApprovedBlock,
       responseQueue: Queue[F, BlockMessage],
       initialMinimumHeight: Long,
-      requestTimeout: FiniteDuration,
       requestForBlock: BlockHash => F[Unit],
+      requestTimeout: FiniteDuration,
       containsBlock: BlockHash => F[Boolean],
       getBlockFromStore: BlockHash => F[BlockMessage],
       putBlockToStore: (BlockHash, BlockMessage) => F[Unit],

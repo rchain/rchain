@@ -1,13 +1,12 @@
 package coop.rchain.fs2
 
-import java.util.concurrent.TimeUnit
-
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.shared.Time
 import fs2.Stream
 
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 trait Fs2StreamSyntax {
@@ -29,7 +28,7 @@ class Fs2StreamOps[F[_], A](
     stream.flatMap(x => if (p(x)) Stream(x.some, none) else Stream(x.some)).unNoneTerminate
 
   /**
-    * Run action if stream is idle (not producing elements) for longer then timeout.
+    * Run action if stream is idle (not producing elements) for longer then timeout duration.
     *
     * @param timeout duration of idle period
     * @param action action to execute when timeout expires
@@ -40,6 +39,10 @@ class Fs2StreamOps[F[_], A](
   )(implicit c: Concurrent[F], t: Time[F]): Stream[F, A] =
     Stream.eval(Ref.of(System.nanoTime)) flatMap { ref =>
       val timeoutNano = timeout.toNanos
+
+      // Reset tracking idle time to current time
+      val resetTimeRef = Stream.eval(ref.set(System.nanoTime))
+
       // Calculate elapsed time from last checking
       val elapsed = for {
         prevTime  <- ref.get
@@ -47,14 +50,17 @@ class Fs2StreamOps[F[_], A](
         duration  = now - prevTime
         isElapsed = duration > timeoutNano
         nextNano  = if (isElapsed) timeoutNano else timeoutNano - duration
-        // Next check for timeout, min. 100ms
-        nextDuration = FiniteDuration(nextNano, TimeUnit.NANOSECONDS).max(100.millis)
+        // Next check for timeout, min. 25 ms
+        nextDuration = FiniteDuration(nextNano, TimeUnit.NANOSECONDS).max(25.millis)
       } yield (isElapsed, nextDuration)
+
       // Stream to execute action when timeout is reached, wait for next checking
-      val nextStream = Stream.eval(elapsed) flatMap {
+      val nextStream = resetTimeRef.drain ++ Stream.eval(elapsed) flatMap {
         case (elapsed, next) =>
           Stream.eval(action).whenA(elapsed) ++ Stream.eval(Time[F].sleep(next)).drain
       }
-      stream.evalTap(_ => ref.set(System.nanoTime)) concurrently nextStream.repeat
+
+      // On each element reset idle timer to current time | run next check recursively
+      stream.flatTap(_ => resetTimeRef) concurrently nextStream.repeat
     }
 }

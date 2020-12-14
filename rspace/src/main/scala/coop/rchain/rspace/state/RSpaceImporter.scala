@@ -18,7 +18,7 @@ trait RSpaceImporter[F[_]] extends TrieImporter[F] {
   def getHistoryItem(hash: KeyHash): F[Option[ByteVector]]
 }
 
-class StateValidationError(message: String) extends Exception(message) {
+final case class StateValidationError(message: String) extends Exception(message) {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def this(message: String, cause: Throwable) = {
     this(message)

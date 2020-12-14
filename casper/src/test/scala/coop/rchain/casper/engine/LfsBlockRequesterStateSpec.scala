@@ -49,23 +49,6 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     ids2 shouldBe Seq(10)
   }
 
-  "isRequested" should "return flag if item is added to requested items" in {
-    val st = ST(Set(10))
-
-    // Calling next to request added items
-    val (st1, _) = st.getNext(resend = false)
-
-    // Check requested item
-    val requested = st1.d.contains(10)
-
-    requested shouldBe true
-
-    // Check not requested item
-    val requested1 = st1.d.contains(100)
-
-    requested1 shouldBe false
-  }
-
   "received" should "return true for requested and false for unknown" in {
     val st = ST(Set(10))
 

@@ -128,8 +128,8 @@ class LfsBlockRequesterEffectsSpec
                         approvedBlock,
                         responseQueue,
                         initialMinimumHeight = 0,
-                        requestTimeout,
                         effects.requestForBlock,
+                        requestTimeout,
                         effects.containsBlockInStore,
                         effects.getBlock,
                         effects.putBlockToStore,
@@ -159,18 +159,23 @@ class LfsBlockRequesterEffectsSpec
 
   import monix.execution.Scheduler.Implicits.global
 
-  // Default timeout is set to large value to disable re-request messages if CI is slow.
+  /**
+    * Test runner
+    *
+    *  - Default request timeout is set to large value to disable re-request messages if CI is slow.
+    *
+    * @param startBlock start of the block DAG
+    * @param requestTimeout request resend timeout
+    * @param test test specification
+    */
   def dagFromBlock(startBlock: BlockMessage, requestTimeout: FiniteDuration = 10.days)(
-      f: SUT[Task, EffectsImpl[Task]] => Task[Unit]
+      test: SUT[Task, EffectsImpl[Task]] => Task[Unit]
   ): Unit =
     createSut[Task, EffectsImpl[Task]](
       startBlock,
       EffectsImpl[Task](Nil, Map(), Set()),
       requestTimeout
-    )(f)
-    // These tests should be executed in milliseconds or maximum seconds,
-    //  but large timeout is because of CI which can pause execution.
-      .runSyncUnsafe(timeout = 3.minutes)
+    )(test).runSyncUnsafe(timeout = 10.seconds)
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
@@ -318,12 +323,12 @@ class LfsBlockRequesterEffectsSpec
     *  Other testing instances of Time are the same as in normal node execution (using Task.timer).
     *  https://github.com/rchain/rchain/issues/3001
     */
-  it should "re-send request after timeout" in dagFromBlock(b9, requestTimeout = 300.millis) {
+  it should "re-send request after timeout" in dagFromBlock(b9, requestTimeout = 200.millis) {
     sut =>
       import sut._
       for {
         // Wait for timeout to expire
-        _ <- stream.compile.drain.timeout(350.millis).onErrorHandle(_ => ())
+        _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())
 
         // Request should be repeated
         _ = eff.requests shouldBe List(hash9, hash9, hash8, hash8)
