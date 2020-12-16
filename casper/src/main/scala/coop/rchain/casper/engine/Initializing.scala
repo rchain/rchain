@@ -52,7 +52,7 @@ class Initializing[F[_]
     theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
-    trimState: Boolean = false,
+    trimState: Boolean = true,
     disableStateExporter: Boolean
 ) extends Engine[F] {
 

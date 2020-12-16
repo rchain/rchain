@@ -52,7 +52,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
           theInit,
           blockResponseQueue,
           stateResponseQueue,
-          trimState = false,
+          trimState = true,
           disableStateExporter = false
         )
 

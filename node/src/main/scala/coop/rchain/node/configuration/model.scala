@@ -52,7 +52,7 @@ final case class ProtocolServer(
 final case class ProtocolClient(
     networkId: String,
     bootstrap: PeerNode,
-    trimState: Boolean,
+    disableLfs: Boolean,
     batchMaxConnections: Int,
     networkTimeout: FiniteDuration,
     grpcMaxRecvMessageSize: Long,

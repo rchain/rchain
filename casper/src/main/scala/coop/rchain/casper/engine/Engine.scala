@@ -129,7 +129,7 @@ object Engine {
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      trimState: Boolean = false,
+      trimState: Boolean = true,
       disableStateExporter: Boolean = false
   ): F[Unit] =
     for {

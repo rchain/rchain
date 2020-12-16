@@ -912,7 +912,7 @@ object NodeRuntime {
 
         CasperLaunch.of[F](
           conf.casper,
-          conf.protocolClient.trimState,
+          !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter
         )
       }

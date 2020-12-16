@@ -58,7 +58,7 @@ object ConfigMapper {
         run.protocolGrpcMaxRecvMessageSize
       )
       add("protocol-client.grpc-stream-chunk-size", run.protocolGrpcStreamChunkSize)
-      add("protocol-client.trim-state", run.trimState)
+      add("protocol-client.disable-lfs", run.disableLfs)
 
       add("storage.data-dir", run.dataDir)
       add("storage.lmdb-map-size-rspace", run.lmdbMapSizeRspace)
