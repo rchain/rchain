@@ -16,20 +16,19 @@ from .rnode import (
 from .wait import (wait_for_node_sees_block)
 
 BOOTSTRAP_KEY = PrivateKey.from_hex("b2527b00340a83e302beae2a8daf6d654e8e57541acfa261cc1b5635eb16aa15")
-BONDED_VALIDATOR_KEY_1 = PrivateKey.from_hex("120d42175739387af0264921bb117e4c4c05fbe2ce5410031e8b158c6e414bb5")
-READONLY_PEER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c")
+VALIDATOR_PEER_KEY = PrivateKey.from_hex("3596e2e5fd14b24a6d84af04b7f0a8f13e3e68ee2ca91dc4b19550f12e61502c")
 
 
 def test_trim_state(command_line_options: CommandLineOptions, random_generator: Random,
                     docker_client: DockerClient) -> None:
     genesis_vault = {
         BOOTSTRAP_KEY: int(5e10),
-        READONLY_PEER_KEY: int(6e10)
+        VALIDATOR_PEER_KEY: int(6e10)
     }
 
     bonded_validator_map = {
         BOOTSTRAP_KEY: 10000000,
-        BONDED_VALIDATOR_KEY_1: 10000000
+        VALIDATOR_PEER_KEY: 10000000
     }
 
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_KEY,
@@ -47,8 +46,8 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
             bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1)
             latest_block_hash = bootstrap_node.propose()
 
-        with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='trim-state-node',
-                                      private_key=READONLY_PEER_KEY) as trim_state_node:
+        with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='trim-node', private_key=VALIDATOR_PEER_KEY,
+                                      cli_options={"--fault-tolerance-threshold": "-1"}) as trim_state_node:
             # trim node should retrieve the latest approved block and replay
             wait_for_node_sees_block(context, trim_state_node, latest_block_hash)
             for _ in range(1, 5):
@@ -57,3 +56,11 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
                 bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1)
                 block_hash = bootstrap_node.propose()
                 wait_for_node_sees_block(context, trim_state_node, block_hash)
+
+            # trim node should propose blocks on top of received trimmed state
+            for _ in range(1, 5):
+              relative_path = random_generator.choice(relative_paths)
+              full_path = os.path.join('/opt/docker/examples', relative_path)
+              trim_state_node.deploy(full_path, VALIDATOR_PEER_KEY, 100000, 1)
+              block_hash = trim_state_node.propose()
+              wait_for_node_sees_block(context, bootstrap_node, block_hash)
