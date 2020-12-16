@@ -314,7 +314,7 @@ class Running[F[_]
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
-    enableStateExporter: Boolean
+    disableStateExporter: Boolean
 ) extends Engine[F] {
 
   import Engine._
@@ -490,7 +490,7 @@ class Running[F[_]
       val logRequest = Log[F].info(
         s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
       )
-      if (enableStateExporter) {
+      if (!disableStateExporter) {
         logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
       } else {
         Log[F].info(

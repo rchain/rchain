@@ -53,7 +53,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
           blockResponseQueue,
           stateResponseQueue,
           trimState = false,
-          enableStateExporter = true
+          disableStateExporter = false
         )
 
       val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)

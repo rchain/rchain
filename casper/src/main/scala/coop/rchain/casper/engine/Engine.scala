@@ -95,7 +95,7 @@ object Engine {
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      enableStateExporter: Boolean
+      disableStateExporter: Boolean
   ): F[Unit] =
     for {
       _ <- Log[F].info("Making a transition to Running state.")
@@ -109,7 +109,7 @@ object Engine {
         approvedBlock,
         validatorId,
         init,
-        enableStateExporter
+        disableStateExporter
       )
       _ <- EngineCell[F].set(running)
 
@@ -130,7 +130,7 @@ object Engine {
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
       trimState: Boolean = false,
-      enableStateExporter: Boolean = false
+      disableStateExporter: Boolean = false
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
@@ -144,7 +144,7 @@ object Engine {
               blockResponseQueue,
               stateResponseQueue,
               trimState,
-              enableStateExporter
+              disableStateExporter
             )
           )
     } yield ()

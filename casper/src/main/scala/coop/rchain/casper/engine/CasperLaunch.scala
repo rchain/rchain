@@ -43,7 +43,7 @@ object CasperLaunch {
   (
       conf: CasperConf,
       trimState: Boolean,
-      enableStateExporter: Boolean
+      disableStateExporter: Boolean
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
       def launch(): F[Unit] =
@@ -51,7 +51,7 @@ object CasperLaunch {
           case Some(approvedBlock) =>
             val msg = "Approved block found, reconnecting to existing network"
             val action =
-              connectToExistingNetwork(approvedBlock, enableStateExporter)
+              connectToExistingNetwork(approvedBlock, disableStateExporter)
             (msg, action)
           case None if (conf.genesisCeremony.genesisValidatorMode) =>
             val msg =
@@ -61,13 +61,13 @@ object CasperLaunch {
           case None if (conf.genesisCeremony.ceremonyMasterMode) =>
             val msg =
               "Approved block not found, taking part in ceremony as ceremony master"
-            val action = initBootstrap(enableStateExporter)
+            val action = initBootstrap(disableStateExporter)
             (msg, action)
           case None =>
             val msg = "Approved block not found, connecting to existing network"
             val action = connectAndQueryApprovedBlock(
               trimState,
-              enableStateExporter
+              disableStateExporter
             )
             (msg, action)
         } >>= {
@@ -76,7 +76,7 @@ object CasperLaunch {
 
       private def connectToExistingNetwork(
           approvedBlock: ApprovedBlock,
-          enableStateExporter: Boolean
+          disableStateExporter: Boolean
       ): F[Unit] = {
         def askPeersForForkChoiceTips = CommUtil[F].sendForkChoiceTipRequest
         def sendBufferPendantsToCasper(casper: Casper[F]) =
@@ -135,7 +135,7 @@ object CasperLaunch {
                   approvedBlock,
                   validatorId,
                   init,
-                  enableStateExporter
+                  disableStateExporter
                 )
         } yield ()
       }
@@ -173,7 +173,7 @@ object CasperLaunch {
               )
         } yield ()
 
-      private def initBootstrap(enableStateExporter: Boolean): F[Unit] =
+      private def initBootstrap(disableStateExporter: Boolean): F[Unit] =
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           abp <- ApproveBlockProtocol
@@ -200,7 +200,7 @@ object CasperLaunch {
                     conf.shardName,
                     conf.finalizationRate,
                     validatorId,
-                    enableStateExporter
+                    disableStateExporter
                   )
               )
           _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
@@ -208,7 +208,7 @@ object CasperLaunch {
 
       private def connectAndQueryApprovedBlock(
           trimState: Boolean,
-          enableStateExporter: Boolean
+          disableStateExporter: Boolean
       ): F[Unit] =
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
@@ -220,7 +220,7 @@ object CasperLaunch {
                 // from genesis to the most recent one (default)
                 CommUtil[F].requestApprovedBlock(trimState),
                 trimState,
-                enableStateExporter
+                disableStateExporter
               )
         } yield ()
 

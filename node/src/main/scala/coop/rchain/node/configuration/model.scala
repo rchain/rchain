@@ -46,7 +46,7 @@ final case class ProtocolServer(
     grpcMaxRecvMessageSize: Long,
     grpcMaxRecvStreamMessageSize: Long,
     maxMessageConsumers: Int,
-    enableStateExporter: Boolean
+    disableStateExporter: Boolean
 )
 
 final case class ProtocolClient(
