@@ -493,8 +493,8 @@ class Running[F[_]
       if (enableStateExporter) {
         logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
       } else {
-        Log[F].debug(
-          s"Received StoreItemsMessage from ${peer} but the node is configured to not respond to StoreItemsMessage."
+        Log[F].info(
+          s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
         )
       }
     case _ => noop
