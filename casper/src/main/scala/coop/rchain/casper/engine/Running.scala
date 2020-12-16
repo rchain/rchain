@@ -263,9 +263,9 @@ object Running {
       peer: PeerNode,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from ${peer.endpoint.host}") >>
+    Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
-      Log[F].info(s"ApprovedBlock sent to ${peer.endpoint.host}")
+      Log[F].info(s"ApprovedBlock sent to ${peer}")
 
   final case object LastFinalizedBlockNotFoundError
       extends Exception("Last finalized block not found in the block storage.")
