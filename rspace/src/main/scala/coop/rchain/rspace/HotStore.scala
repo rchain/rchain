@@ -65,6 +65,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     ck: Codec[K]
 ) extends HotStore[F, C, P, A, K] {
 
+  implicit val codec = fromCodec(ck)
+
   def snapshot(): F[HotStoreState[C, P, A, K]] =
     for {
       c  <- contRef.get
@@ -73,8 +75,6 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       j  <- joinsRef.get
       ij <- instJoinsRef.get
     } yield HotStoreState(c, ic, d, j, ij)
-
-  implicit val codec = fromCodec(ck)
 
   // Continuations
 
