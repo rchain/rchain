@@ -1,5 +1,6 @@
 package coop.rchain.rholang.interpreter
 
+import coop.rchain.rholang.interpreter.ParBuilderUtil.assertCompiledEqual
 import coop.rchain.rholang.interpreter.errors.{SyntaxError, UnexpectedProcContext}
 import org.scalatest.EitherValues._
 import org.scalatest.{Assertion, Matchers, WordSpec}
@@ -49,9 +50,6 @@ class LetSpec extends WordSpec with Matchers {
           .value shouldBe a[UnexpectedProcContext]
       }
     }
-
-    def assertCompiledEqual(s: String, t: String): Assertion =
-      ParBuilderUtil.mkTerm(s).right.value shouldBe ParBuilderUtil.mkTerm(t).right.value
 
     "translate a single declaration of multiple variables into a list match process" in {
       // Variables declared in let declarations are treated as name variables,

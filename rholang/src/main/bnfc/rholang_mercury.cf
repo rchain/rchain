@@ -70,7 +70,7 @@ PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
 PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
-PSendSynch.   Proc1 ::= Name SynchSend "(" [Proc] ")" SynchSendCont ;
+PSendSynch.   Proc1 ::= Name "!?" "(" [Proc] ")" SynchSendCont ;
 PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
@@ -139,8 +139,6 @@ separator nonempty PeekBind "&" ;
 -- Types of Send:
 SendSingle.   Send ::= "!" ;
 SendMultiple. Send ::= "!!" ;
-
-SynchSendImpl.  SynchSend ::= "!?" ;
 
 -- Select Branches
 BranchImpl. Branch ::= ReceiptLinearImpl "=>" Proc3 ;

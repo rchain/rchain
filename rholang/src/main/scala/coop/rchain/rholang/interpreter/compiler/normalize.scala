@@ -292,6 +292,7 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
   // FIXME before adding any more implicits, or fields to the `*VisitInputs` classes, make the normalizer use
   // ApplicativeAsk / MonadState instead
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
       env: Map[String, Par]
@@ -734,6 +735,36 @@ object ProcNormalizeMatcher {
           ),
           dataResults._2.knownFree
         )
+
+      case p: PSendSynch =>
+        val identifier = UUID.randomUUID().toString
+        val nameVar    = new NameVar(identifier)
+
+        val send: PSend = {
+          p.listproc_.prepend(new PEval(nameVar))
+          new PSend(p.name_, new SendSingle(), p.listproc_)
+        }
+
+        val receive: PInput = {
+
+          val listName = new ListName()
+          listName.add(new NameWildcard)
+
+          val listLinearBind = new ListLinearBind()
+          listLinearBind.add(new LinearBindImpl(listName, new NameRemainderEmpty, nameVar))
+
+          new PInput(
+            new ReceiptLinear(new LinearSimple(listLinearBind)),
+            p.synchsendcont_ match {
+              case _: EmptyCont               => new PNil()
+              case nonEmptyCont: NonEmptyCont => nonEmptyCont.proc_
+            }
+          )
+        }
+
+        val listName = new ListNameDecl()
+        listName.add(new NameDeclSimpl(identifier))
+        normalizeMatch[M](new PNew(listName, new PPar(send, receive)), input)
 
       case p: PContr => {
         // A free variable can only be used once in any of the parameters.
