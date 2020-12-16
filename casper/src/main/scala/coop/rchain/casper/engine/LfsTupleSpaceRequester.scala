@@ -238,7 +238,7 @@ object LfsTupleSpaceRequester {
       st <- Ref.of[F, ST[StatePartPath]](ST(Seq(startRequest)))
 
       // Queue to trigger processing of requests. `True` to resend requests.
-      requestQueue <- Queue.bounded[F, Boolean](maxSize = 10)
+      requestQueue <- Queue.bounded[F, Boolean](maxSize = 2)
 
       // Light the fire! / Starts the first request for chunk of state
       // - `true` if requested chunks should be re-requested
