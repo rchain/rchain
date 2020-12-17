@@ -61,7 +61,7 @@ PAnd.            Proc5  ::= Proc5 "and" Proc6 ;
 POr.             Proc4  ::= Proc4 "or" Proc5 ;
 PSend.           Proc3  ::= Name Send "(" [Proc] ")" ;
 PContr.          Proc2  ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" Proc "}" ;
-PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
+PInput.          Proc2  ::= "for" "(" [Receipt] ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
 PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
@@ -113,6 +113,7 @@ BundleReadWrite. Bundle ::= "bundle"  ;
 ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;
 ReceiptRepeated.  Receipt ::= ReceiptRepeatedImpl ;
 ReceiptPeek.      Receipt ::= ReceiptPeekImpl ;
+separator nonempty Receipt ";" ;
 
 -- Linear Receipts
 LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;

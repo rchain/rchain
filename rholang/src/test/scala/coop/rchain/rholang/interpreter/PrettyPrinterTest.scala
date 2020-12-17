@@ -248,9 +248,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PEval(new NameVar("z"))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PEval(new NameVar("z"))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, receive)
     val result =
@@ -278,9 +280,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, receive)
     val result =
@@ -313,9 +317,11 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x0"))
     nameDec.add(new NameDeclSimpl("x1"))
     val source = new PNew(nameDec, receive)
@@ -351,11 +357,13 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
     val cont = new PPar(
       new PPar(new PEval(new NameVar("z")), new PEval(new NameVar("v"))),
       new PPar(new PEval(new NameVar("a")), new PEval(new NameVar("b")))
     )
-    val receive = new PInput(receipt, cont)
+    val receive = new PInput(listReceipt, cont)
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     nameDec.add(new NameDeclSimpl("y"))
@@ -394,14 +402,16 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val sentData     = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val sentData = new ListProc()
     sentData.add(new PNil())
     val pSend = new PSend(new NameVar("b"), new SendSingle(), sentData)
     val cont = new PPar(
       new PPar(new PEval(new NameVar("z")), new PEval(new NameVar("v"))),
       new PPar(new PEval(new NameVar("a")), pSend)
     )
-    val receive = new PInput(receipt, cont)
+    val receive = new PInput(listReceipt, cont)
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     nameDec.add(new NameDeclSimpl("y"))
@@ -433,11 +443,16 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PEval(new NameVar("z"))
-    val sentData     = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont     = new PEval(new NameVar("z"))
+    val sentData = new ListProc()
     sentData.add(new PEval(new NameVar("x")))
     val body =
-      new PPar(new PSend(new NameVar("x"), new SendSingle(), sentData), new PInput(receipt, cont))
+      new PPar(
+        new PSend(new NameVar("x"), new SendSingle(), sentData),
+        new PInput(listReceipt, cont)
+      )
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, body)
@@ -617,11 +632,13 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
     val body = new PPar(
       new PVar(new ProcVarVar("y")),
       new PPar(new PEval(new NameVar("z")), new PVar(new ProcVarVar("u")))
     )
-    val basicInput    = new PInput(receipt, body)
+    val basicInput    = new PInput(listReceipt, body)
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x"))
     listBindings1.add(new NameQuote(basicInput))
@@ -631,10 +648,12 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple1 = new LinearSimple(listLinearBinds1)
     val receipt1      = new ReceiptLinear(linearSimple1)
-    val listSend1     = new ListProc()
+    val listReceipt1  = new ListReceipt()
+    listReceipt1.add(receipt1)
+    val listSend1 = new ListProc()
     listSend1.add(new PVar(new ProcVarVar("u")))
     val body1       = new PSend(new NameVar("x"), new SendSingle(), listSend1)
-    val basicInput1 = new PInput(receipt1, body1)
+    val basicInput1 = new PInput(listReceipt1, body1)
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput1, inputs).value.par
@@ -664,7 +683,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val listSend1    = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val listSend1 = new ListProc()
     listSend1.add(new PVar(new ProcVarVar("y2")))
     val listSend2 = new ListProc()
     listSend2.add(new PVar(new ProcVarVar("y1")))
@@ -674,7 +695,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listLinearBinds2.add(
       new LinearBindImpl(listBindings3, new NameRemainderEmpty(), new NameVar("x1"))
     )
-    val receipt2 = new ReceiptLinear(new LinearSimple(listLinearBinds2))
+    val receipt2     = new ReceiptLinear(new LinearSimple(listLinearBinds2))
+    val listReceipt2 = new ListReceipt()
+    listReceipt2.add(receipt2)
     val body = new PPar(
       new PSend(new NameVar("x1"), new SendSingle(), listSend1),
       new PSend(new NameVar("x2"), new SendSingle(), listSend2)
@@ -685,14 +708,14 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val body3 = new PPar(
       body,
       new PInput(
-        receipt2,
+        listReceipt2,
         new PPar(new PEval(new NameVar("z")), new PMatch(new PEval(new NameVar("z")), listCases))
       )
     )
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
     listNameDecl.add(new NameDeclSimpl("v"))
-    val pInput = new PNew(listNameDecl, new PInput(receipt, body3))
+    val pInput = new PNew(listNameDecl, new PInput(listReceipt, body3))
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value.par
@@ -766,7 +789,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val listCases    = new ListCase()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val listCases = new ListCase()
     listCases.add(new CaseImpl(new PGround(new GroundInt("42")), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarVar("y")), new PNil()))
     val body     = new PMatch(new PVar(new ProcVarVar("x")), listCases)
@@ -774,7 +799,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listData.add(new PGround(new GroundInt("47")))
     val send47OnNil = new PSend(new NameQuote(new PNil()), new SendSingle(), listData)
     val pPar = new PPar(
-      new PInput(receipt, body),
+      new PInput(listReceipt, body),
       send47OnNil
     )
     val result = PrettyPrinter().buildString(
@@ -880,7 +905,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val input        = new PInput(receipt, new PNil())
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val input = new PInput(listReceipt, new PNil())
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par
     )

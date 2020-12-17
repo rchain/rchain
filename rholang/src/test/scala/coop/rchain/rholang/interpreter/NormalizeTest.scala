@@ -650,11 +650,13 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
 
     val listSend = new ListProc()
     listSend.add(new PEval(new NameVar("y")))
     val body       = new PSend(new NameVar("x"), new SendSingle(), listSend)
-    val basicInput = new PInput(receipt, body)
+    val basicInput = new PInput(listReceipt, body)
     val bindCount  = 2
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput, inputs).value
@@ -709,6 +711,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
 
     val listSend1 = new ListProc()
     listSend1.add(new PVar(new ProcVarVar("y2")))
@@ -718,7 +722,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
       new PSend(new NameVar("x1"), new SendSingle(), listSend1),
       new PSend(new NameVar("x2"), new SendSingle(), listSend2)
     )
-    val pInput    = new PInput(receipt, body)
+    val pInput    = new PInput(listReceipt, body)
     val bindCount = 4
 
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
@@ -769,9 +773,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val bindCount    = 1
-    val pInput       = new PInput(receipt, new PNil())
-    val result       = ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val bindCount = 1
+    val pInput    = new PInput(listReceipt, new PNil())
+    val result    = ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
     val expected = inputs.par.prepend(
       Receive(
         List(
@@ -819,9 +825,11 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
 
     val body   = new PNil()
-    val pInput = new PInput(receipt, body)
+    val pInput = new PInput(listReceipt, body)
 
     an[UnexpectedReuseOfNameContextFree] should be thrownBy {
       ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value
@@ -1054,6 +1062,8 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
 
     val listCases = new ListCase()
     listCases.add(new CaseImpl(new PGround(new GroundInt("42")), new PNil()))
@@ -1065,7 +1075,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     val send47OnNil = new PSend(new NameQuote(new PNil()), new SendSingle(), listData)
 
     val pPar = new PPar(
-      new PInput(receipt, body),
+      new PInput(listReceipt, body),
       send47OnNil
     )
     val result    = ProcNormalizeMatcher.normalizeMatch[Coeval](pPar, inputs).value
@@ -1254,7 +1264,9 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val input        = new PInput(receipt, new PNil())
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val input = new PInput(listReceipt, new PNil())
 
     val result    = ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value
     val bindCount = 2
@@ -1501,8 +1513,10 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
 
-    val proc = new PInput(receipt, new PNil())
+    val proc = new PInput(listReceipt, new PNil())
 
     // format: off
     val result = ProcNormalizeMatcher.normalizeMatch[Coeval](proc, boundInputs).value
