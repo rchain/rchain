@@ -11,30 +11,30 @@ import coop.rchain.rholang.interpreter.compiler.{FreeMap, ReceiveBindsSortMatche
 class ReceiveSortMatcherSpec extends FlatSpec with Matchers {
   val emptyMap = FreeMap.empty[VarSort]
   "Binds" should "Presort based on their channel and then pattern" in {
-    val binds: List[Tuple4[List[Par], Par, Option[Var], FreeMap[VarSort]]] =
+    val binds: List[(List[Par], Option[Var], Par, FreeMap[VarSort])] =
       List(
         (
           List(GInt(2)),
+          None,
           GInt(3),
-          None,
           emptyMap
         ),
         (
           List(GInt(3)),
-          GInt(2),
           None,
+          GInt(2),
           emptyMap
         ),
         (
           List(GInt(3)),
-          GInt(2),
           Some(FreeVar(0)),
+          GInt(2),
           emptyMap
         ),
         (
           List(GInt(1)),
-          GInt(3),
           None,
+          GInt(3),
           emptyMap
         )
       )
