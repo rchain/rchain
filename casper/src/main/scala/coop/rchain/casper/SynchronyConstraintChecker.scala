@@ -63,7 +63,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Estimator: Log: S
             activeValidators <- runtimeManager.getActiveValidators(mainParentStateHash)
 
             // Validators weight map filtered by active validators only.
-            validatorWeightMap = lastProposedBlockMeta.weightMap.filter {
+            validatorWeightMap = mainParentMeta.weightMap.filter {
               case (validator, _) => activeValidators.contains(validator)
             }
             // Guaranteed to be present since last proposed block was present
