@@ -18,9 +18,10 @@ class Fs2StreamOps[F[_], A](
     // fs2 Stream extensions / syntax
     private val stream: Stream[F, A]
 ) {
+  val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors
 
   /**
-    * Variation of `takeWhile` including ending element selected by predicate.
+    * Variation of [[Stream.takeWhile]] including ending element selected by predicate.
 
     * @param p predicate after which stream will terminate
     */
@@ -63,4 +64,24 @@ class Fs2StreamOps[F[_], A](
       // On each element reset idle timer to current time | run next check recursively
       stream.flatTap(_ => resetTimeRef) concurrently nextStream.repeat
     }
+
+  /**
+    * Variant of [[Stream.parJoin]] with parallelism bound to number of processors.
+    */
+  def parJoinProcBounded[F2[_]: Concurrent, B](
+      implicit ev: A <:< Stream[F2, B],
+      ev2: F[Any] <:< F2[Any]
+  ): Stream[F2, B] = stream.parJoin(availableProcessors)
+
+  /**
+    * Variant of [[Stream.parEvalMap]] with parallelism bound to number of processors.
+    */
+  def parEvalMapProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+    stream.parEvalMap[F2, B](availableProcessors)(f)
+
+  /**
+    * Variant of [[Stream.parEvalMapUnordered]] with parallelism bound to number of processors.
+    */
+  def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+    stream.parEvalMapUnordered[F2, B](availableProcessors)(f)
 }

@@ -140,7 +140,7 @@ final class CommUtilOps[F[_]](
       Log[F].info(s"Requested fork tip from peers")
 
   def requestApprovedBlock(
-      trimState: Boolean = false
+      trimState: Boolean = true
   )(implicit m: Sync[F], r: RPConfAsk[F]): F[Unit] =
     for {
       maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)

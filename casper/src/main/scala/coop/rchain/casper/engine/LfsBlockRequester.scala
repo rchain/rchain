@@ -269,10 +269,10 @@ object LfsBlockRequester {
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
         */
-      val responseStream1 = responseQueue.dequeue.parEvalMapUnordered(100)(processBlock)
+      val responseStream1 = responseQueue.dequeue.parEvalMapProcBounded(processBlock)
 
       val responseStream2 = responseHashQueue.dequeue
-        .parEvalMapUnordered(100) { hash =>
+        .parEvalMapProcBounded { hash =>
           for {
             block <- getBlockFromStore(hash)
             _     <- Log[F].info(s"Process existing ${PrettyPrinter.buildString(block)}")
@@ -311,7 +311,7 @@ object LfsBlockRequester {
            )
 
       // Queue to trigger processing of requests. `True` to resend requests.
-      requestQueue <- Queue.bounded[F, Boolean](maxSize = 100)
+      requestQueue <- Queue.bounded[F, Boolean](maxSize = 2)
       // Response queue for existing blocks in the store.
       responseHashQueue <- Queue.unbounded[F, BlockHash]
 

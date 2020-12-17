@@ -31,8 +31,8 @@ object ConfigMapper {
       add("protocol-server.use-random-ports", run.useRandomPorts)
       add("protocol-server.allow-private-addresses", run.allowPrivateAddresses)
       add(
-        "protocol-server.enable-state-exporter",
-        run.enableStateExporter
+        "protocol-server.disable-state-exporter",
+        run.disableStateExporter
       )
       add(
         "protocol-server.grpc-max-recv-message-size",
@@ -58,7 +58,7 @@ object ConfigMapper {
         run.protocolGrpcMaxRecvMessageSize
       )
       add("protocol-client.grpc-stream-chunk-size", run.protocolGrpcStreamChunkSize)
-      add("protocol-client.trim-state", run.trimState)
+      add("protocol-client.disable-lfs", run.disableLfs)
 
       add("storage.data-dir", run.dataDir)
       add("storage.lmdb-map-size-rspace", run.lmdbMapSizeRspace)

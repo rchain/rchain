@@ -912,8 +912,8 @@ object NodeRuntime {
 
         CasperLaunch.of[F](
           conf.casper,
-          conf.protocolClient.trimState,
-          conf.protocolServer.enableStateExporter
+          !conf.protocolClient.disableLfs,
+          conf.protocolServer.disableStateExporter
         )
       }
       packetHandler = {
