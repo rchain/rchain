@@ -859,11 +859,11 @@ object ProcNormalizeMatcher {
           // We check for overlap at the end after sorting. We could check before, but it'd be an extra step.
 
           // We split this into parts. First we process all the sources, then we process all the bindings.
-          def processSources(sources: List[(List[Name], Name, NameRemainder)]): M[
-            (Vector[(List[Name], Par, NameRemainder)], FreeMap[VarSort], BitSet, Boolean)
+          def processSources(sources: Vector[(Vector[Name], Name, NameRemainder)]): M[
+            (Vector[(Vector[Name], Par, NameRemainder)], FreeMap[VarSort], BitSet, Boolean)
           ] = {
             val initAcc =
-              (Vector[(List[Name], Par, NameRemainder)](), input.knownFree, BitSet(), false)
+              (Vector[(Vector[Name], Par, NameRemainder)](), input.knownFree, BitSet(), false)
             sources
               .foldM(initAcc)((acc, e) => {
                 NameNormalizeMatcher
@@ -884,10 +884,10 @@ object ProcNormalizeMatcher {
           }
 
           def processBindings(
-              bindings: Vector[(List[Name], Par, NameRemainder)]
+              bindings: Vector[(Vector[Name], Par, NameRemainder)]
           ): M[Vector[(Vector[Par], Par, Option[Var], FreeMap[VarSort], BitSet)]] =
             bindings.traverse {
-              case (names: List[Name], chan: Par, nr: NameRemainder) => {
+              case (names, chan: Par, nr: NameRemainder) => {
                 val initAcc = (Vector[Par](), FreeMap.empty[VarSort], BitSet())
                 names
                   .foldM(initAcc)((acc, n: Name) => {
@@ -924,47 +924,37 @@ object ProcNormalizeMatcher {
               }
             }
 
-          // If we get to this point, we know listreceipt.size() == 1
-          val resM = p.listreceipt_.head match {
-            case rl: ReceiptLinear =>
-              rl.receiptlinearimpl_ match {
-                case ls: LinearSimple =>
-                  ls.listlinearbind_.toList
-                    .traverse {
+          // If we get to this point, we know p.listreceipt.size() == 1
+          val (consumes, persistent, peek) =
+            p.listreceipt_.head match {
+              case rl: ReceiptLinear =>
+                rl.receiptlinearimpl_ match {
+                  case ls: LinearSimple =>
+                    (ls.listlinearbind_.toVector.map {
                       case lbi: LinearBindImpl =>
-                        (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
-                    }
-                    .map(x => (x, false, false))
-              }
-            case rl: ReceiptRepeated =>
-              rl.receiptrepeatedimpl_ match {
-                case ls: RepeatedSimple =>
-                  ls.listrepeatedbind_.toList
-                    .traverse {
-                      case lbi: RepeatedBindImpl =>
-                        (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
-                    }
-                    .map(x => (x, true, false))
-              }
-            case rl: ReceiptPeek =>
-              rl.receiptpeekimpl_ match {
-                case ls: PeekSimple =>
-                  ls.listpeekbind_.toList
-                    .traverse {
-                      case lbi: PeekBindImpl =>
-                        (lbi.listname_.toList, lbi.name_, lbi.nameremainder_).pure[M]
-                    }
-                    .map(x => (x, false, true))
-                case default =>
-                  sync.raiseError(NormalizerError(s"Unknown receipt impl type $default"))
-              }
-            case default => sync.raiseError(NormalizerError(s"Unknown receipt type $default"))
-          }
+                        (lbi.listname_.toVector, lbi.name_, lbi.nameremainder_)
+                    }, false, false)
+                }
+              case rr: ReceiptRepeated =>
+                rr.receiptrepeatedimpl_ match {
+                  case rs: RepeatedSimple =>
+                    (rs.listrepeatedbind_.toVector.map {
+                      case rbi: RepeatedBindImpl =>
+                        (rbi.listname_.toVector, rbi.name_, rbi.nameremainder_)
+                    }, true, false)
+                }
+              case rp: ReceiptPeek =>
+                rp.receiptpeekimpl_ match {
+                  case ps: PeekSimple =>
+                    (ps.listpeekbind_.toVector.map {
+                      case pbi: PeekBindImpl =>
+                        (pbi.listname_.toVector, pbi.name_, pbi.nameremainder_)
+                    }, false, true)
+                }
+            }
 
           for {
-            res                                                              <- resM
-            (bindingsRaw, persistent, peek)                                  = res
-            sourcesP                                                         <- processSources(bindingsRaw)
+            sourcesP                                                         <- processSources(consumes)
             (sources, thisLevelFree, sourcesLocallyFree, sourcesConnectives) = sourcesP
             bindingsProcessed                                                <- processBindings(sources)
             bindingsFree                                                     = bindingsProcessed.map(binding => binding._5).foldLeft(BitSet())(_ | _)
