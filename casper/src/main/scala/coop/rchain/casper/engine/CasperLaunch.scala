@@ -219,6 +219,7 @@ object CasperLaunch {
                 // TODO peer should be able to request approved blocks on different heights
                 // from genesis to the most recent one (default)
                 CommUtil[F].requestApprovedBlock(trimState),
+                trimState,
                 enableStateExporter
               )
         } yield ()

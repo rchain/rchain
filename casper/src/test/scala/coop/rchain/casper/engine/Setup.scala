@@ -141,10 +141,10 @@ object Setup {
       ): Task[Float] = Task.pure(1.0f)
     }
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
+    implicit val estimator                    = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
     implicit val lastFinalizedConstraintChecker =
       LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
-    implicit val estimator      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val kvsManager = InMemoryStoreManager[Task]

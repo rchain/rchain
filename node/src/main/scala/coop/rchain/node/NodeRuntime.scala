@@ -813,8 +813,14 @@ object NodeRuntime {
           conf.casper.faultToleranceThreshold
         )
       }
+      estimator = {
+        implicit val sp = span
+        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
+      }
       synchronyConstraintChecker = {
         implicit val bs = blockStore
+        implicit val es = estimator
+        implicit val sp = span
         SynchronyConstraintChecker[F](
           conf.casper.synchronyConstraintThreshold
         )
@@ -825,10 +831,6 @@ object NodeRuntime {
         LastFinalizedHeightConstraintChecker[F](
           conf.casper.heightConstraintThreshold
         )
-      }
-      estimator = {
-        implicit val sp = span
-        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
       }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
