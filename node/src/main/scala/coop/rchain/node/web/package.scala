@@ -16,7 +16,7 @@ import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
 import org.http4s.server.middleware.CORS
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 package object web {
   // TODO: Temp until web API is refactored with one effect type.
@@ -56,6 +56,7 @@ package object web {
       httpServerFiber <- BlazeServerBuilder[F](scheduler)
                           .bindHttp(httpPort, host)
                           .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
+                          .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
                           .withIdleTimeout(connectionIdleTimeout)
                           .resource
                           .use(_ => Async[F].never[Unit])
@@ -78,7 +79,7 @@ package object web {
       adminHttpServerFiber <- BlazeServerBuilder[F](scheduler)
                                .bindHttp(httpPort, host)
                                .withHttpApp(Router(baseRoutes.toList: _*).orNotFound)
-                               .withResponseHeaderTimeout(connectionIdleTimeout)
+                               .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
                                .withIdleTimeout(connectionIdleTimeout)
                                .resource
                                .use(_ => Async[F].never[Unit])
