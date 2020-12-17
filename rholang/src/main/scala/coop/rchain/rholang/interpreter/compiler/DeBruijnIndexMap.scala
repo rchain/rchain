@@ -31,7 +31,7 @@ final case class DeBruijnIndexMap[T](nextIndex: Int, indexBindings: Map[String, 
     bindings.foldLeft(this)((indexMap, binding) => indexMap.put(binding))
 
   // Takes a level map because we use that to track the free Variables.
-  def absorbFree(levelMap: DeBruijnLevelMap[T]): DeBruijnIndexMap[T] =
+  def absorbFree(levelMap: FreeMap[T]): DeBruijnIndexMap[T] =
     DeBruijnIndexMap(
       nextIndex + levelMap.nextLevel,
       levelMap.levelBindings.foldLeft(indexBindings) {

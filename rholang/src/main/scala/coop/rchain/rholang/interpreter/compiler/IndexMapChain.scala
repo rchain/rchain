@@ -27,7 +27,7 @@ final case class IndexMapChain[T](chain: Vector[DeBruijnIndexMap[T]]) {
   def put(bindings: List[IdContext[T]]): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).put(bindings)))
 
-  def absorbFree(binders: DeBruijnLevelMap[T]): IndexMapChain[T] =
+  def absorbFree(binders: FreeMap[T]): IndexMapChain[T] =
     IndexMapChain(chain.updated(0, chain(0).absorbFree(binders)))
 
   def push: IndexMapChain[T] = IndexMapChain(DeBruijnIndexMap.empty[T] +: chain)

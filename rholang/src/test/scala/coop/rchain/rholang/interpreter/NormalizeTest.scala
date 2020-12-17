@@ -24,7 +24,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
   BoolNormalizeMatcher,
   Compiler,
-  DeBruijnLevelMap,
+  FreeMap,
   GroundNormalizeMatcher,
   IndexMapChain,
   NameNormalizeMatcher,
@@ -75,7 +75,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     IndexMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
-    DeBruijnLevelMap.empty[VarSort]
+    FreeMap.empty[VarSort]
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
   def getNormalizedPar(rho: String): Par       = Compiler[Coeval].sourceToADT(rho).value()
@@ -240,7 +240,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 }
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
+  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "PNil" should "Compile as no modification to the par object" in {
@@ -1654,7 +1654,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 }
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
+  val inputs                                   = NameVisitInputs(IndexMapChain.empty[VarSort], FreeMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "add a wildcard count to knownFree" in {

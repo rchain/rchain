@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter.compiler
 import coop.rchain.models.Connective.ConnectiveInstance
 
 /**
-  *
   * A structure to keep track of free variables, which are assigned DeBruijn levels (0 based).
   *
   * @param nextLevel The DeBruijn level assigned to the next variable name added to the map.
@@ -12,7 +11,7 @@ import coop.rchain.models.Connective.ConnectiveInstance
   * @param connectives A list of the positions of logical connectives.
   * @tparam T The typing discipline we're enforcing.
   */
-final case class DeBruijnLevelMap[T](
+final case class FreeMap[T](
     nextLevel: Int,
     levelBindings: Map[String, LevelContext[T]],
     wildcards: List[SourcePosition],
@@ -21,10 +20,10 @@ final case class DeBruijnLevelMap[T](
 
   def get(name: String): Option[LevelContext[T]] = levelBindings.get(name)
 
-  def put(binding: IdContext[T]): DeBruijnLevelMap[T] =
+  def put(binding: IdContext[T]): FreeMap[T] =
     binding match {
       case (name, typ, sourcePosition) =>
-        DeBruijnLevelMap[T](
+        FreeMap[T](
           nextLevel + 1,
           levelBindings + (name -> LevelContext(nextLevel, typ, sourcePosition)),
           wildcards,
@@ -32,11 +31,11 @@ final case class DeBruijnLevelMap[T](
         )
     }
 
-  def put(bindings: List[IdContext[T]]): DeBruijnLevelMap[T] =
+  def put(bindings: List[IdContext[T]]): FreeMap[T] =
     bindings.foldLeft(this)((levelMap, binding) => levelMap.put(binding))
 
   // Returns the new map, and a list of the shadowed variables
-  def merge(freeMap: DeBruijnLevelMap[T]): (DeBruijnLevelMap[T], List[(String, SourcePosition)]) = {
+  def merge(freeMap: FreeMap[T]): (FreeMap[T], List[(String, SourcePosition)]) = {
 
     val (accEnv, shadowed) =
       freeMap.levelBindings.foldLeft((levelBindings, List.empty[(String, SourcePosition)])) {
@@ -49,7 +48,7 @@ final case class DeBruijnLevelMap[T](
       }
 
     (
-      DeBruijnLevelMap(
+      FreeMap(
         nextLevel + freeMap.nextLevel,
         accEnv,
         wildcards ++ freeMap.wildcards,
@@ -59,14 +58,14 @@ final case class DeBruijnLevelMap[T](
     )
   }
 
-  def addWildcard(sourcePosition: SourcePosition): DeBruijnLevelMap[T] =
-    DeBruijnLevelMap(nextLevel, levelBindings, wildcards :+ sourcePosition, connectives)
+  def addWildcard(sourcePosition: SourcePosition): FreeMap[T] =
+    FreeMap(nextLevel, levelBindings, wildcards :+ sourcePosition, connectives)
 
   def addConnective(
       connective: ConnectiveInstance,
       sourcePosition: SourcePosition
-  ): DeBruijnLevelMap[T] =
-    DeBruijnLevelMap(
+  ): FreeMap[T] =
+    FreeMap(
       nextLevel,
       levelBindings,
       wildcards,
@@ -79,6 +78,6 @@ final case class DeBruijnLevelMap[T](
 
 }
 
-object DeBruijnLevelMap {
-  def empty[T]: DeBruijnLevelMap[T] = DeBruijnLevelMap[T](0, Map.empty, List.empty, List.empty)
+object FreeMap {
+  def empty[T]: FreeMap[T] = FreeMap[T](0, Map.empty, List.empty, List.empty)
 }

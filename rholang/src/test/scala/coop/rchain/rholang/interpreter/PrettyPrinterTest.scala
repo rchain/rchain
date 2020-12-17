@@ -8,7 +8,7 @@ import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
   BoolNormalizeMatcher,
   Compiler,
-  DeBruijnLevelMap,
+  FreeMap,
   GroundNormalizeMatcher,
   IndexMapChain,
   NameNormalizeMatcher,
@@ -67,7 +67,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     IndexMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
-    DeBruijnLevelMap.empty
+    FreeMap.empty
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
@@ -151,7 +151,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty, DeBruijnLevelMap.empty)
+  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "New" should "use 0-based indexing" in {
@@ -965,7 +965,7 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty, DeBruijnLevelMap.empty)
+  val inputs                                   = NameVisitInputs(IndexMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "Print" in {

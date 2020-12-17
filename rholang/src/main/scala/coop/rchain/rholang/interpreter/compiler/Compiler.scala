@@ -79,7 +79,7 @@ object Compiler {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), IndexMapChain.empty, DeBruijnLevelMap.empty)
+          ProcVisitInputs(VectorPar(), IndexMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
           if (normalizedTerm.knownFree.count > 0) {
