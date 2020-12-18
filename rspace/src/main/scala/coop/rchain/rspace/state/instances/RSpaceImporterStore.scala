@@ -9,7 +9,7 @@ import coop.rchain.rspace.history.{RootsStoreInstances, Store}
 import coop.rchain.rspace.state.RSpaceImporter
 import scodec.bits.ByteVector
 
-object RSpaceImporterImpl {
+object RSpaceImporterStore {
   // RSpace importer constructor / smart constructor "guards" private class
   def apply[F[_]: Concurrent](
       historyStore: Store[F],
