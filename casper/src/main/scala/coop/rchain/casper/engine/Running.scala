@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -9,20 +9,19 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper._
-import coop.rchain.casper.syntax._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Log, Time}
-import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
+import coop.rchain.shared.{Log, Time}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
@@ -461,25 +460,35 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        approvedBlock <- if (abr.trimState) for {
-                          lfBlock <- LastFinalizedStorage[F]
-                                      .get(approvedBlock.candidate.block)
-                                      .flatMap(BlockStore[F].getUnsafe)
-                          // Each approved block should be justified by validators signatures
-                          // ATM we have signatures only for genesis approved block - we also have to have a procedure
-                          // for gathering signatures for each approved block post genesis.
-                          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
-                          // TODO We need signatures of Validators supporting this block
-                          lastApprovedBlock = ApprovedBlock(
-                            ApprovedBlockCandidate(lfBlock, 0),
-                            List.empty
-                          )
-                        } yield lastApprovedBlock
+        lfBlockHashOpt <- LastFinalizedStorage[F].get()
+
+        // Create approved block from last finalized block
+        lastFinalizedBlock = for {
+          lfBlockHash <- lfBlockHashOpt.liftTo[F](
+                          new Exception(s"Last finalized block hash not available.")
+                        )
+          lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
+
+          // Each approved block should be justified by validators signatures
+          // ATM we have signatures only for genesis approved block - we also have to have a procedure
+          // for gathering signatures for each approved block post genesis.
+          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
+          // TODO We need signatures of Validators supporting this block
+          lastApprovedBlock = ApprovedBlock(
+            ApprovedBlockCandidate(lfBlock, 0),
+            List.empty
+          )
+        } yield lastApprovedBlock
+
+        approvedBlock <- if (abr.trimState && lfBlockHashOpt.isDefined)
+                          // If Last Finalized State is requested return Last Finalized block as Approved block
+                          lastFinalizedBlock
                         else
                           // Respond with approved block that this node is started from.
                           // The very first one is genesis, but this node still might start from later block,
                           // so it will not necessary be genesis.
                           approvedBlock.pure[F]
+
         _ <- handleApprovedBlockRequest(peer, approvedBlock)
       } yield ()
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
