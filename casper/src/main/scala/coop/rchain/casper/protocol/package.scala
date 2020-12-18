@@ -20,6 +20,9 @@ package object protocol extends CasperMessageProtocol {
         case BlockApproval            => convert[BlockApproval.type](packet)
         case UnapprovedBlock          => convert[UnapprovedBlock.type](packet)
         case NoApprovedBlockAvailable => convert[NoApprovedBlockAvailable.type](packet)
+        // Last finalized state messages
+        case StoreItemsMessageRequest => convert[StoreItemsMessageRequest.type](packet)
+        case StoreItemsMessage        => convert[StoreItemsMessage.type](packet)
       }
       .getOrElse(PacketParseResult.IllegalPacket(s"Unrecognized typeId: ${packet.typeId}"))
 

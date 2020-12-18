@@ -17,6 +17,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBo
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
+import coop.rchain.state.StateManager
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -55,7 +56,8 @@ object WebApi {
 
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
-      devMode: Boolean = false
+      devMode: Boolean = false,
+      stateManager: StateManager[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
 

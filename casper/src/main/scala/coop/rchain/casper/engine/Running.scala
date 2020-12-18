@@ -7,6 +7,7 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.engine.EngineCell.EngineCell
@@ -19,8 +20,9 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.{Log, Time}
-import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
@@ -125,13 +127,12 @@ object Running {
                       if (r.doIgnore) {
                         logIgnore(r.status) >> false.pure[F]
                       } else {
-                        hasBlock.ifM(
-                          logAlreadyInStore >> ackReceive >> true.pure[F],
-                          validateBlockF(blockMessage, peer).ifM(
-                            saveBlock >> logOkSaved >> ackReceive >> true
-                              .pure[F],
-                            logBadDropped >> false.pure[F]
-                          )
+                        validateBlockF(blockMessage, peer).ifM(
+                          hasBlock.ifM(
+                            logAlreadyInStore >> ackReceive >> true.pure[F],
+                            saveBlock >> logOkSaved >> ackReceive >> true.pure[F]
+                          ),
+                          logBadDropped >> false.pure[F]
                         )
                       }
                     })
@@ -262,18 +263,60 @@ object Running {
       peer: PeerNode,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from ${peer.endpoint.host}") >>
+    Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
-      Log[F].info(s"ApprovedBlock sent to ${peer.endpoint.host}")
+      Log[F].info(s"ApprovedBlock sent to ${peer}")
 
+  final case object LastFinalizedBlockNotFoundError
+      extends Exception("Last finalized block not found in the block storage.")
+
+  private def handleStateItemsMessageRequest[F[_]: Sync: TransportLayer: RPConfAsk: RSpaceStateManager: Log](
+      peer: PeerNode,
+      startPath: Seq[(Blake2b256Hash, Option[Byte])],
+      skip: Int,
+      take: Int
+  ): F[Unit] = {
+    import coop.rchain.rspace.syntax._
+    for {
+      // Export chunk of store items from RSpace
+      exportedItems <- RSpaceStateManager[F].exporter.getHistoryAndData(
+                        startPath,
+                        skip,
+                        take,
+                        ByteString.copyFrom
+                      )
+
+      (history, data) = exportedItems
+
+      // Prepare response with the chunk of store items
+      resp = StoreItemsMessage(startPath, history.lastPath, history.items, data.items)
+
+      _ <- Log[F].info(s"Read ${resp.pretty}")
+
+      // Stream store items to peer
+      respProto = StoreItemsMessage.toProto(resp)
+      _         <- TransportLayer[F].streamToPeer(peer, respProto)
+
+      _ <- Log[F].info(s"Store items sent to $peer")
+    } yield ()
+  }
 }
 
-class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever: TransportLayer: CommUtil: ConnectionsCell: RPConfAsk: Log: Time: Metrics](
+// format: off
+class Running[F[_]
+  /* Execution */   : Concurrent: Time
+  /* Transport */   : TransportLayer: CommUtil: BlockRetriever
+  /* State */       : RPConfAsk: ConnectionsCell
+  /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+  /* Diagnostics */ : Log: Metrics] // format: on
+(
     casper: MultiParentCasper[F],
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
-    theInit: F[Unit]
+    theInit: F[Unit],
+    disableStateExporter: Boolean
 ) extends Engine[F] {
+
   import Engine._
   import Running._
 
@@ -330,7 +373,8 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
     * Basic block validation before saving block in Blockstore. The intention here is to prevent saving
     * bad and useless blocks. So the check is if block is well formed and of interest for this particular node.
     * Should not catch any slashable offences - such blocks should be persisted and processed by Casper.
-    * @param b BlockMessage
+    *
+    * @param b    BlockMessage
     * @param peer peer from which BlockMessage came from
     * @return if block is suitable for this node
     */
@@ -351,51 +395,33 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
                     )
                   )
               }
-          lastFinalizedStateBlock = approvedBlock.candidate.block
+          ab = approvedBlock.candidate.block
           // TODO might be more checks can/should be applied here
-          validShard     = lastFinalizedStateBlock.shardId.equalsIgnoreCase(b.shardId)
-          validFormat    <- Validate.formatOfFields(b)
-          validSig       <- Validate.blockSignature(b)
-          validVersion   <- casper.getVersion.flatMap(Validate.version(b, _))
-          deployLifespan <- casper.getDeployLifespan
-          oldBlock = (ProtoUtil.blockNumber(b) <= ProtoUtil.blockNumber(
-            lastFinalizedStateBlock
-          ) - deployLifespan).pure[F]
-          approvedBlockStateComplete = casper.approvedBlockStateComplete
-          notAnIgnorableOldBlock     <- oldBlock.not ||^ (oldBlock &&^ approvedBlockStateComplete.not)
+          validShard   = ab.shardId.equalsIgnoreCase(b.shardId)
+          validFormat  <- Validate.formatOfFields(b)
+          validSig     <- Validate.blockSignature(b)
+          validVersion <- casper.getVersion.flatMap(Validate.version(b, _))
+          oldBlock     = ProtoUtil.blockNumber(b) < ProtoUtil.blockNumber(ab)
           _ <- Log[F]
                 .warn(
-                  s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${lastFinalizedStateBlock.shardId}]."
+                  s"Block is bad: from wrong shard: ${b.shardId}, this node participates in: [${ab.shardId}]."
                 )
                 .unlessA(validShard)
+          _ <- Log[F].warn(s"Block is bad: ill formed.").unlessA(validFormat)
+          _ <- Log[F].warn(s"Block is bad: wrong signature.").unlessA(validSig)
+          _ <- Log[F].warn(s"Block is bad: wrong version.").unlessA(validVersion)
           _ <- Log[F]
-                .warn(
-                  s"Block is bad: ill formed."
-                )
-                .unlessA(validFormat)
-          _ <- Log[F]
-                .warn(
-                  s"Block is bad: wrong signature."
-                )
-                .unlessA(validSig)
-          _ <- Log[F]
-                .warn(
-                  s"Block is bad: wrong version."
-                )
-                .unlessA(validVersion)
-          _ <- Log[F]
-                .warn(
-                  s"Block is not needed: more then 50 blocks behind last finalised state."
-                )
-                .unlessA(notAnIgnorableOldBlock)
+                .warn(s"Block is old: we don't need siblings or parents of approvedBlock")
+                .whenA(oldBlock)
 
-          isValid = validShard && validFormat && validSig && validVersion && notAnIgnorableOldBlock
+          isValid = validShard && validFormat && validSig && validVersion && !oldBlock
         } yield isValid,
       Log[F].info("Casper is not ready, rejecting all blocks until it is ready.") >> false.pure[F]
     )
 
   /**
     * Sends block to from BlockStore to Casper for inserting to the DAG.
+    *
     * @param bh block hash
     * @return Result of block processing
     */
@@ -404,7 +430,7 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
         // At this stage block should be in CasperBuffer, or even in the DAG.
         // It might wait for dependencies so not added to DAG, but there is no point to rerequest it again
         status =>
-          Log[F].info(
+          BlockRetriever[F].ackInCasper(bh) >> Log[F].info(
             s"Block ${PrettyPrinter.buildString(bh)} adding finished with status: $status. " +
               s"BlockRetriever is informed that block consumed by Casper."
           )
@@ -433,9 +459,45 @@ class Running[F[_]: Concurrent: BlockStore: CasperBufferStorage: BlockRetriever:
     case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer)(casper)
-    case _: ApprovedBlockRequest      => handleApprovedBlockRequest(peer, approvedBlock)
+    case abr: ApprovedBlockRequest =>
+      for {
+        approvedBlock <- if (abr.trimState) for {
+                          lfBlock <- LastFinalizedStorage[F]
+                                      .get(approvedBlock.candidate.block)
+                                      .flatMap(BlockStore[F].getUnsafe)
+                          // Each approved block should be justified by validators signatures
+                          // ATM we have signatures only for genesis approved block - we also have to have a procedure
+                          // for gathering signatures for each approved block post genesis.
+                          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
+                          // TODO We need signatures of Validators supporting this block
+                          lastApprovedBlock = ApprovedBlock(
+                            ApprovedBlockCandidate(lfBlock, 0),
+                            List.empty
+                          )
+                        } yield lastApprovedBlock
+                        else
+                          // Respond with approved block that this node is started from.
+                          // The very first one is genesis, but this node still might start from later block,
+                          // so it will not necessary be genesis.
+                          approvedBlock.pure[F]
+        _ <- handleApprovedBlockRequest(peer, approvedBlock)
+      } yield ()
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
-    case _                            => noop
+
+    // Approved state store records
+    case StoreItemsMessageRequest(startPath, skip, take) =>
+      val start = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+      val logRequest = Log[F].info(
+        s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
+      )
+      if (!disableStateExporter) {
+        logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
+      } else {
+        Log[F].info(
+          s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
+        )
+      }
+    case _ => noop
   }
 
   override def withCasper[A](

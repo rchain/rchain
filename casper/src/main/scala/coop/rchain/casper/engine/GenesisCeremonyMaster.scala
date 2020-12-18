@@ -1,26 +1,28 @@
 package coop.rchain.casper.engine
 
-import scala.concurrent.duration._
+import cats.Applicative
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.Applicative
-import EngineCell._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
+
+import scala.concurrent.duration._
 
 class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
@@ -39,12 +41,22 @@ class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RP
   }
 }
 
+// format: off
 object GenesisCeremonyMaster {
   import Engine._
-  def waitingForApprovedBlockLoop[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: BlockRetriever: BlockStore: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
+  def waitingForApprovedBlockLoop[F[_]
+    /* Execution */   : Concurrent: Time
+    /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+    /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+    /* Rholang */     : RuntimeManager
+    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+  (
       shardId: String,
       finalizationRate: Int,
-      validatorId: Option[ValidatorIdentity]
+      validatorId: Option[ValidatorIdentity],
+      disableStateExporter: Boolean
   ): F[Unit] =
     for {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
@@ -52,21 +64,31 @@ object GenesisCeremonyMaster {
       lastApprovedBlockO <- LastApprovedBlock[F].get
       cont <- lastApprovedBlockO match {
                case None =>
-                 waitingForApprovedBlockLoop[F](shardId, finalizationRate, validatorId)
+                 waitingForApprovedBlockLoop[F](
+                   shardId,
+                   finalizationRate,
+                   validatorId,
+                   disableStateExporter
+                 )
                case Some(approvedBlock) =>
-                 val genesis = approvedBlock.candidate.block
+                 val ab = approvedBlock.candidate.block
                  for {
-                   _ <- insertIntoBlockAndDagStore[F](genesis, approvedBlock)
+                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
-                                genesis,
+                                ab,
                                 shardId,
-                                finalizationRate,
-                                skipValidateGenesis = false
+                                finalizationRate
                               )
                    _ <- Engine
-                         .transitionToRunning[F](casper, approvedBlock, validatorId, ().pure[F])
+                         .transitionToRunning[F](
+                           casper,
+                           approvedBlock,
+                           validatorId,
+                           ().pure[F],
+                           disableStateExporter
+                         )
                    _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()
              }

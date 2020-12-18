@@ -61,16 +61,6 @@ trait Casper[F[_]] {
   def getApprovedBlock: F[BlockMessage]
   def getValidator: F[Option[PublicKey]]
   def getVersion: F[Long]
-  def getDeployLifespan: F[Int]
-
-  /**
-    * Approved Block extends notion of Genesis Block - its the block that meets Last Finalized State.
-    * To be able to start building on top of the Approved Block, node have to have some additional information
-    * from the network.
-    *
-    * @return if node has all necessary information accompanying ApprovedBlock
-    */
-  def approvedBlockStateComplete: F[Boolean]
 
   def getBlockProcessingState: F[BlockProcessingState]
 }
@@ -102,58 +92,26 @@ object MultiParentCasper extends MultiParentCasperInstances {
 sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
-  private[this] val genesisLabel = Metrics.Source(MetricsSource, "genesis")
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      genesis: BlockMessage,
+      approvedBlock: BlockMessage,
       shardId: String,
-      finalizationRate: Int,
-      skipValidateGenesis: Boolean
+      finalizationRate: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
-    Span[F].trace(genesisLabel) {
-      for {
-        dag <- BlockDagStorage[F].getRepresentation
-        postGenesisStateHash <- if (skipValidateGenesis) {
-                                 Log[F].warn("Skip genesis block validation!") >> genesis.body.state.postStateHash.pure
-                               } else {
-                                 for {
-                                   maybePostGenesisStateHash <- InterpreterUtil
-                                                                 .validateBlockCheckpoint(
-                                                                   genesis,
-                                                                   dag,
-                                                                   runtimeManager
-                                                                 )
-                                   postGenesisStateHash <- maybePostGenesisStateHash match {
-                                                            case Left(
-                                                                BlockError.BlockException(ex)
-                                                                ) =>
-                                                              ex.raiseError[F, StateHash]
-                                                            case Left(error) =>
-                                                              new Exception(s"Block error: $error")
-                                                                .raiseError[F, StateHash]
-                                                            case Right(None) =>
-                                                              new Exception(
-                                                                "Genesis tuplespace validation failed!"
-                                                              ).raiseError[F, StateHash]
-                                                            case Right(Some(hash)) => hash.pure
-                                                          }
-                                 } yield postGenesisStateHash
-                               }
-        blockProcessingLock <- MetricsSemaphore.single[F]
-        blockProcessingState <- Ref.of[F, BlockProcessingState](
-                                 BlockProcessingState(Set.empty, Set.empty)
-                               )
-      } yield {
-        new MultiParentCasperImpl(
-          validatorId,
-          genesis,
-          postGenesisStateHash,
-          shardId,
-          finalizationRate,
-          blockProcessingLock,
-          blockProcessingState
-        )
-      }
+    for {
+      blockProcessingLock <- MetricsSemaphore.single[F]
+      blockProcessingState <- Ref.of[F, BlockProcessingState](
+                               BlockProcessingState(Set.empty, Set.empty)
+                             )
+    } yield {
+      new MultiParentCasperImpl(
+        validatorId,
+        approvedBlock,
+        shardId,
+        finalizationRate,
+        blockProcessingLock,
+        blockProcessingState
+      )
     }
 }

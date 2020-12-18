@@ -12,7 +12,7 @@ import scodec.bits.{BitVector, ByteVector}
 
 trait RootsStore[F[_]] {
   def currentRoot(): F[Option[Blake2b256Hash]]
-  def validateRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]]
+  def validateAndSetCurrentRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]]
   def recordRoot(key: Blake2b256Hash): F[Unit]
 
   def close(): F[Unit]
@@ -31,7 +31,7 @@ object RootsStoreInstances {
         maybeHash    = maybeDecoded.map(_.value)
       } yield (maybeHash)
 
-    override def validateRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]] =
+    override def validateAndSetCurrentRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]] =
       for {
         bits    <- Blake2b256Hash.codecBlake2b256Hash.encode(key).get
         bytes   = bits.toByteVector.toDirectByteBuffer

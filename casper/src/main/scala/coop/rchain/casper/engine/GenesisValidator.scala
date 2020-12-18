@@ -1,27 +1,37 @@
 package coop.rchain.casper.engine
 
+import cats.Applicative
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
-import cats.Applicative
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper._
-import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import EngineCell._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.PeerNode
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared._
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.casper.engine.EngineCell.EngineCell
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.PeerNode
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.comm.transport.TransportLayer
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.shared._
 
-class GenesisValidator[F[_]: Sync: Metrics: Span: Concurrent: CommUtil: TransportLayer: ConnectionsCell: RPConfAsk: Log: EventLog: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: LastApprovedBlock: BlockDagStorage: LastFinalizedStorage: EngineCell: RuntimeManager: BlockRetriever: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage](
+// format: off
+class GenesisValidator[F[_]
+  /* Execution */   : Concurrent: Time
+  /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
+  /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
+  /* Rholang */     : RuntimeManager
+  /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
+(
     validatorId: ValidatorIdentity,
     shardId: String,
     finalizationRate: Int,

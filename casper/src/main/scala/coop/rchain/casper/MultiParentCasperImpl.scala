@@ -33,7 +33,6 @@ import coop.rchain.crypto.signatures.Signed
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
     approvedBlock: BlockMessage,
-    postGenesisStateHash: StateHash,
     shardId: String,
     finalizationRate: Int,
     blockProcessingLock: Semaphore[F],
@@ -45,20 +44,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     runtimeManager: RuntimeManager[F]
 ) extends MultiParentCasper[F] {
   import MultiParentCasper.MetricsSource
+  import MultiParentCasperImpl._
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private[this] val syncF                   = Sync[F]
 
-  //TODO: Extract hardcoded version and expirationThreshold
-  private val version             = 1L
-  private val expirationThreshold = 50
+  // TODO: Extract hardcoded version from shard config
+  private val version = 1L
 
   private[this] val AddBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "add-block")
   private[this] val CreateBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "create-block")
-
-  def getDeployLifespan: F[Int] = expirationThreshold.pure[F]
 
   def getVersion: F[Long] = version.pure[F]
 
@@ -72,15 +69,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def addBlockFromStore(
       blockHash: BlockHash,
       allowAddFromBuffer: Boolean
-  ): F[ValidBlockProcessing] = {
-    def returnSafetyRangeNotFilled: F[ValidBlockProcessing] =
-      BlockStatus
-        .exception(
-          new Exception("Not enough blocks past ApprovedBlock received.")
-        )
-        .asLeft[ValidBlock]
-        .pure[F]
-
+  ): F[ValidBlockProcessing] =
     for {
       blockAvailable <- BlockStore[F].get(blockHash)
       returnNoBlockInStore = BlockStatus
@@ -101,48 +90,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                        InvalidBlock.MissingBlocks
                      )
 
-                     isReadyApprovedBlockChild = isApprovedBlockChild(b) &&^ approvedBlockStateComplete
-                     blockIsReady              <- ~^(dagMissingBlockDependencies.pure[F]) ||^ isReadyApprovedBlockChild
+                     blockIsReady <- ~^(dagMissingBlockDependencies.pure[F]) ||^
+                                      isApprovedBlockChild(b)
 
-                     _ <- fetchMissingDependencies(b).whenA(dagMissingBlockDependencies)
                      r <- if (blockIsReady) addBlock(b, allowAddFromBuffer)
-                         else {
-                           isApprovedBlockChild(b).flatMap(
-                             c =>
-                               if (c) returnSafetyRangeNotFilled
-                               else missingDepCheckResult.pure[F]
-                           )
-                         }
+                         else fetchMissingDependencies(b) >> missingDepCheckResult.pure[F]
+
                    } yield r
                }
     } yield result
-  }
-
-  override def approvedBlockStateComplete: F[Boolean] = {
-    import cats.instances.list._
-    for {
-      approvedBlock  <- getApprovedBlock
-      abHasLowHeight = ProtoUtil.blockNumber(approvedBlock) < expirationThreshold
-
-      // active validators as per approved block state
-      abValidators = approvedBlock.body.state.bonds.filter(_.stake > 0).map(_.validator)
-
-      cbPendants       <- casperBuffer.getPendants
-      cbPendantsStored <- cbPendants.toList.filterA(BlockStore[F].contains)
-      cbPendantsBlocks <- cbPendantsStored.map(BlockStore[F].getUnsafe).sequence
-
-      enoughBlocksAreInBuffer = abValidators.foldLeft(true)((acc, validator) => {
-        val pendantFromValidator = cbPendantsBlocks.find(b => b.sender.equals(validator))
-        val enoughBlocksAreInBufferForValidator = pendantFromValidator.exists(
-          p =>
-            ProtoUtil.blockNumber(p) <= ProtoUtil.blockNumber(approvedBlock) - expirationThreshold
-        )
-        acc && enoughBlocksAreInBufferForValidator
-      })
-
-      bufferFilled = abHasLowHeight || enoughBlocksAreInBuffer
-    } yield bufferFilled
-  }
 
   private def isApprovedBlockChild(blockMessage: BlockMessage): F[Boolean] =
     blockMessage.header.parentsHashList.contains(approvedBlock.blockHash).pure[F]
@@ -335,7 +291,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                 validatorIdentity,
                 shardId,
                 version,
-                expirationThreshold,
+                deployLifespan,
                 runtimeManager
               )
           }
@@ -395,7 +351,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   ): F[(ValidBlockProcessing, BlockDagRepresentation[F])] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
-        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, expirationThreshold))
+        _ <- EitherT(Validate.blockSummary(b, approvedBlock, dag, shardId, deployLifespan))
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
@@ -595,6 +551,13 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 }
 
 object MultiParentCasperImpl {
+
+  // TODO: Extract hardcoded deployLifespan from shard config
+  // Size of deploy safety range.
+  // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+  // Required to enable protection from re-submitting duplicate deploys
+  val deployLifespan = 50
+
   def addedEvent(block: BlockMessage): RChainEvent = {
     val (blockHash, parents, justifications, deployIds, creator, seqNum) = blockEvent(block)
     RChainEvent.blockAdded(

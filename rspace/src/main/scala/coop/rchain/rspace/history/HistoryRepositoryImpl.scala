@@ -2,9 +2,13 @@ package coop.rchain.rspace.history
 
 import java.nio.charset.StandardCharsets
 
+import cats.effect.Sync
+import cats.syntax.all._
 import cats.{Applicative, Parallel}
-import cats.effect.{IO, Sync}
-import cats.implicits._
+import com.typesafe.scalalogging.Logger
+import coop.rchain.rspace.history.HistoryRepositoryImpl._
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{
   internal,
   util,
@@ -18,17 +22,16 @@ import coop.rchain.rspace.{
   InsertJoins,
   RSpace
 }
-import coop.rchain.rspace.internal._
+import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
-import HistoryRepositoryImpl._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.shared.Serialize
 
 final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
-    leafStore: ColdStore[F]
+    leafStore: ColdStore[F],
+    rspaceExporter: RSpaceExporter[F],
+    rspaceImporter: RSpaceImporter[F]
 )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K])
     extends HistoryRepository[F, C, P, A, K] {
   val joinSuffixBits                = BitVector("-joins".getBytes(StandardCharsets.UTF_8))
@@ -195,8 +198,8 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
-    implicit val P = Parallel[F]
-    val batchSize  = Math.max(1, actions.size / RSpace.parallelism)
+    import cats.instances.list._
+    val batchSize = Math.max(1, actions.size / RSpace.parallelism)
     for {
       batches        <- Sync[F].delay(actions.grouped(batchSize).toList)
       historyActions <- batches.parFlatTraverse(transformAndStore)
@@ -208,7 +211,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
 
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
-      _    <- rootsRepository.validateRoot(root)
+      _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
     } yield this.copy(history = next)
 
@@ -218,12 +221,16 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
       _ <- rootsRepository.close()
       _ <- history.close()
     } yield ()
+
+  override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
+
+  override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 }
 
 object HistoryRepositoryImpl {
   val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
 
-  private def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
+  def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
     codecSeqByteVector.decode(data.bits).get.value.map(bv => codec.decode(bv.bits).get.value)
 
   private def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =

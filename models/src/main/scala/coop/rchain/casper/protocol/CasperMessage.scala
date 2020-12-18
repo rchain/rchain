@@ -3,11 +3,12 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.{PCost, Pretty}
+import coop.rchain.models.PCost
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -29,6 +30,9 @@ object CasperMessage {
     case p: HasBlockRequestProto          => Right(HasBlockRequest.from(p))
     case p: NoApprovedBlockAvailableProto => Right(NoApprovedBlockAvailable.from(p))
     case p: UnapprovedBlockProto          => UnapprovedBlock.from(p)
+    // Last finalized state messages
+    case p: StoreItemsMessageRequestProto => Right(StoreItemsMessageRequest.from(p))
+    case p: StoreItemsMessageProto        => Right(StoreItemsMessage.from(p))
   }
 }
 
@@ -142,13 +146,14 @@ object NoApprovedBlockAvailable {
     NoApprovedBlockAvailable(naba.identifier, naba.nodeIdentifer)
 }
 
-final case class ApprovedBlockRequest(identifier: String) extends CasperMessage {
-  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier)
+final case class ApprovedBlockRequest(identifier: String, trimState: Boolean = false)
+    extends CasperMessage {
+  def toProto: ApprovedBlockRequestProto = ApprovedBlockRequestProto(identifier, trimState)
 }
 
 object ApprovedBlockRequest {
   def from(abr: ApprovedBlockRequestProto): ApprovedBlockRequest =
-    ApprovedBlockRequest(abr.identifier)
+    ApprovedBlockRequest(abr.identifier, abr.trimState)
 }
 
 final case class BlockHashMessage(blockHash: BlockHash, blockCreator: ByteString)
@@ -579,4 +584,73 @@ final case class Bond(
 object Bond {
   def from(b: BondProto): Bond    = Bond(b.validator, b.stake)
   def toProto(b: Bond): BondProto = BondProto(b.validator, b.stake)
+}
+
+// Last finalized state
+
+object StoreNodeKey {
+  // Encoding of non existent index for store node (Skip or Leaf node)
+  val noneIndex = 0x100
+
+  def from(s: StoreNodeKeyProto): (Blake2b256Hash, Option[Byte]) = {
+    // Key hash
+    val hashBytes = Blake2b256Hash.fromByteString(s.hash)
+    // Relative branch index / max 8-bit
+    val idx = if (s.index == noneIndex) none[Byte] else s.index.toByte.some
+    (hashBytes, idx)
+  }
+
+  def toProto(s: (Blake2b256Hash, Option[Byte])): StoreNodeKeyProto =
+    StoreNodeKeyProto(s._1.toByteString, s._2.map(_.toInt).getOrElse(noneIndex))
+}
+
+final case class StoreItemsMessageRequest(
+    startPath: Seq[(Blake2b256Hash, Option[Byte])],
+    skip: Int,
+    take: Int
+) extends CasperMessage {
+  override def toProto: StoreItemsMessageRequestProto = StoreItemsMessageRequest.toProto(this)
+}
+
+object StoreItemsMessageRequest {
+  def from(x: StoreItemsMessageRequestProto): StoreItemsMessageRequest =
+    StoreItemsMessageRequest(x.startPath.map(StoreNodeKey.from), x.skip, x.take)
+
+  def toProto(x: StoreItemsMessageRequest): StoreItemsMessageRequestProto =
+    StoreItemsMessageRequestProto(x.startPath.map(StoreNodeKey.toProto).toList, x.skip, x.take)
+}
+
+final case class StoreItemsMessage(
+    startPath: Seq[(Blake2b256Hash, Option[Byte])],
+    lastPath: Seq[(Blake2b256Hash, Option[Byte])],
+    historyItems: Seq[(Blake2b256Hash, ByteString)],
+    dataItems: Seq[(Blake2b256Hash, ByteString)]
+) extends CasperMessage {
+  override def toProto: StoreItemsMessageProto = StoreItemsMessage.toProto(this)
+
+  def pretty: String = {
+    val start       = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+    val last        = lastPath.map(RSpaceExporter.pathPretty).mkString(" ")
+    val historySize = historyItems.size
+    val dataSize    = dataItems.size
+    s"StoreItems(history: $historySize, data: $dataSize, start: [$start], last: [$last])"
+  }
+}
+
+object StoreItemsMessage {
+  def from(x: StoreItemsMessageProto): StoreItemsMessage =
+    StoreItemsMessage(
+      x.startPath.map(StoreNodeKey.from),
+      x.lastPath.map(StoreNodeKey.from),
+      x.historyItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value)),
+      x.dataItems.map(y => (Blake2b256Hash.fromByteString(y.key), y.value))
+    )
+
+  def toProto(x: StoreItemsMessage): StoreItemsMessageProto =
+    StoreItemsMessageProto(
+      x.startPath.map(StoreNodeKey.toProto).toList,
+      x.lastPath.map(StoreNodeKey.toProto).toList,
+      x.historyItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList,
+      x.dataItems.map(y => StoreItemProto(y._1.toByteString, y._2)).toList
+    )
 }

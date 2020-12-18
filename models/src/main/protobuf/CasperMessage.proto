@@ -74,6 +74,7 @@ message ApprovedBlockProto  {
 message ApprovedBlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
   string identifier = 1;
+  bool trimState = 2;
 }
 
 message NoApprovedBlockAvailableProto {
@@ -230,3 +231,32 @@ message BondProto {
   int64 stake     = 2;
 }
 // --------- End Core Protocol  --------
+
+// --------- Last finalized state  --------
+
+message StoreNodeKeyProto {
+  bytes hash  = 1;
+  int32 index = 2;
+}
+
+message StoreItemsMessageRequestProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  repeated StoreNodeKeyProto startPath = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+  int32 skip                           = 2;
+  int32 take                           = 3;
+}
+
+message StoreItemProto {
+  bytes key   = 1;
+  bytes value = 2;
+}
+
+message StoreItemsMessageProto {
+  option (scalapb.message).extends = "CasperMessageProto";
+  repeated StoreNodeKeyProto startPath = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreNodeKeyProto lastPath  = 2 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreItemProto historyItems = 3 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated StoreItemProto dataItems    = 4 [(scalapb.field).collection_type="collection.immutable.List"];
+}
+
+// --------- End Last finalized state  --------
