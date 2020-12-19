@@ -187,7 +187,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
       _ <- EitherT(Validate.sequenceNumber(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
-      _ <- EitherT(Validate.justificationRegressions(block, genesis, dag))
+      _ <- EitherT(Validate.justificationRegressions(block, dag))
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
       s <- EitherT(Validate.shardIdentifier(block, shardId))
     } yield s).value
@@ -545,104 +545,72 @@ object Validate {
     } yield status
   }
 
-  /*
-   * When we switch between equivocation forks for a slashed validator, we will potentially get a
-   * justification regression that is valid. We cannot ignore this as the creator only drops the
-   * justification block created by the equivocator on the following block.
-   * Hence, we ignore justification regressions involving the block's sender and
-   * let checkEquivocations handle it instead.
-   */
+  /**
+    * Justification regression check.
+    * Compares justifications that has been already used by sender and recorded in the DAG with
+    * justifications used by the same sender in new block `b` and assures that there is no
+    * regression.
+    *
+    * When we switch between equivocation forks for a slashed validator, we will potentially get a
+    * justification regression that is valid. We cannot ignore this as the creator only drops the
+    * justification block created by the equivocator on the following block.
+    * Hence, we ignore justification regressions involving the block's sender and
+    * let checkEquivocations handle it instead.
+    */
   def justificationRegressions[F[_]: Sync: Log](
       b: BlockMessage,
-      genesis: BlockMessage,
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] =
     dag.latestMessage(b.sender).flatMap {
-      case Some(latestMessage) =>
-        val latestMessagesOfBlock = ProtoUtil.toLatestMessageHashes(b.justifications)
-        val latestMessagesFromSenderView =
-          ProtoUtil.toLatestMessageHashes(latestMessage.justifications)
-        justificationRegressionsGivenLatestMessages(
-          b,
-          dag,
-          latestMessagesOfBlock,
-          latestMessagesFromSenderView,
-          genesis
-        )
+      // `b` is first message from sender of `b`, so regression is not possible
       case None =>
-        // We cannot have a justification regression if we don't have a previous latest message from sender
         BlockStatus.valid.asRight[BlockError].pure
-    }
+      // Latest Message from sender of `b` is present in the DAG
+      case Some(curSendersBlock) =>
+        // Here we comparing view on the network by sender from the standpoint of
+        // his previous block created (current Latest Message of sender)
+        // and new block `b` (potential new Latest Message of sender)
+        val newSendersBlock = b
+        val newLMs          = ProtoUtil.toLatestMessageHashes(newSendersBlock.justifications)
+        val curLMs          = ProtoUtil.toLatestMessageHashes(curSendersBlock.justifications)
+        // We let checkEquivocations handle when sender uses old self-justification
+        val newLMsNoSelf = newLMs.filterNot(_._1 == b.sender)
 
-  private def justificationRegressionsGivenLatestMessages[F[_]: Sync: Log](
-      b: BlockMessage,
-      dag: BlockDagRepresentation[F],
-      currentLatestMessages: Map[Validator, BlockHash],
-      previousLatestMessages: Map[Validator, BlockHash],
-      genesis: BlockMessage
-  ): F[ValidBlockProcessing] =
-    currentLatestMessages.toList.tailRecM {
-      case Nil =>
-        // No more latest messages to check
-        Applicative[F].pure(BlockStatus.valid.asRight.asRight)
-      case (validator, currentBlockJustificationHash) :: tail =>
-        if (validator == b.sender) {
-          // We let checkEquivocations handle this case
-          Applicative[F].pure(Left(tail))
-        } else {
-          val previousBlockJustificationHash =
-            previousLatestMessages.getOrElse(
-              validator,
-              genesis.blockHash
-            )
-          isJustificationRegression(
-            dag,
-            currentBlockJustificationHash,
-            previousBlockJustificationHash
-          ).ifM(
-            {
-              val message =
-                s"block ${PrettyPrinter.buildString(currentBlockJustificationHash)} by ${PrettyPrinter
-                  .buildString(validator)} has a lower sequence number than ${PrettyPrinter.buildString(previousBlockJustificationHash)}."
-              Log[F]
-                .warn(ignore(b, message))
-                .as(
-                  BlockStatus.justificationRegression.asLeft.asRight
-                )
-            },
-            Applicative[F].pure(Left(tail))
-          )
+        // Check each Latest Message for regression (block seq num goes backwards)
+        newLMsNoSelf.toList.tailRecM {
+          // No more Latest Messages to check
+          case Nil =>
+            Applicative[F].pure(BlockStatus.valid.asRight.asRight)
+          // Check if sender of LatestMessage does justification regression
+          case newLM :: tail =>
+            val (sender, newJustificationHash) = newLM
+            val noSenderInCurLMs               = !curLMs.contains(sender)
+            if (noSenderInCurLMs) {
+              // If there is no justification to compare with - regression is not possible
+              Applicative[F].pure(Left(tail))
+            } else {
+              val curJustificationHash = curLMs(sender)
+              def logWarn(currentHash: BlockHash, regressiveHash: BlockHash): F[Unit] = {
+                val msg = s"block ${PrettyPrinter.buildString(regressiveHash)} by ${PrettyPrinter
+                  .buildString(sender)} has a lower sequence number than ${PrettyPrinter
+                  .buildString(currentHash)}."
+                Log[F].warn(ignore(b, msg))
+              }
+              // Compare and check for regression
+              val regressionDetected = for {
+                newJustification <- dag.lookupUnsafe(newJustificationHash)
+                curJustification <- dag.lookupUnsafe(curJustificationHash)
+                regression       = (!newJustification.invalid && newJustification.seqNum < curJustification.seqNum)
+                _                <- logWarn(curJustificationHash, newJustificationHash).whenA(regression)
+              } yield regression
+              // Exit tailRecM when regression detected, or continue to check remaining Latest Messages.
+              regressionDetected.ifM(
+                BlockStatus.justificationRegression.asLeft.asRight.pure,
+                Applicative[F].pure(Left(tail))
+              )
+            }
         }
     }
-
-  private def isJustificationRegression[F[_]: Sync](
-      dag: BlockDagRepresentation[F],
-      currentBlockJustificationHash: BlockHash,
-      previousBlockJustificationHash: BlockHash
-  ): F[Boolean] =
-    for {
-      maybeCurrentBlockJustification <- dag.lookup(currentBlockJustificationHash)
-      currentBlockJustification <- maybeCurrentBlockJustification match {
-                                    case Some(block) => block.pure
-                                    case None =>
-                                      Sync[F].raiseError[BlockMetadata](
-                                        new Exception(
-                                          s"Missing ${PrettyPrinter.buildString(currentBlockJustificationHash)} from block dag store."
-                                        )
-                                      )
-                                  }
-      maybePreviousBlockJustification <- dag.lookup(previousBlockJustificationHash)
-      previousBlockJustification <- maybePreviousBlockJustification match {
-                                     case Some(block) => block.pure
-                                     case None =>
-                                       Sync[F].raiseError[BlockMetadata](
-                                         new Exception(
-                                           s"Missing ${PrettyPrinter.buildString(previousBlockJustificationHash)} from block dag store."
-                                         )
-                                       )
-                                   }
-    } yield !currentBlockJustification.invalid &&
-      currentBlockJustification.seqNum < previousBlockJustification.seqNum
 
   /**
     * If block contains an invalid justification block B and the creator of B is still bonded,

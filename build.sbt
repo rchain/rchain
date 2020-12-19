@@ -125,6 +125,7 @@ lazy val shared = (project in file("shared"))
       catsEffect,
       catsMtl,
       catsTagless,
+      fs2Core,
       lz4,
       monix,
       scodecCore,
@@ -163,6 +164,7 @@ lazy val casper = (project in file("casper"))
       catsRetry,
       catsMtl,
       monix,
+      fs2Core,
       scalacheck % "slowcooker"
     )
   )
@@ -471,6 +473,7 @@ lazy val rspace = (project in file("rspace"))
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
+      fs2Core,
       scodecCore,
       scodecBits,
       guava

@@ -29,6 +29,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -43,10 +44,16 @@ object Setup {
     val networkId                 = "test"
     val scheduler                 = Scheduler.io("test")
     val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
-    val (space, replay, _) = {
+    val (space, replay, historyRepo) = {
       implicit val s = scheduler
       Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
     }
+    val (exporter, importer) = {
+      implicit val s = scheduler
+      (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
+    }
+    implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
+
     val activeRuntime =
       Runtime
         .createWithEmptyCost[Task]((space, replay))(
@@ -134,10 +141,10 @@ object Setup {
       ): Task[Float] = Task.pure(1.0f)
     }
     implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
+    implicit val estimator                    = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
     implicit val lastFinalizedConstraintChecker =
       LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
-    implicit val estimator      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val kvsManager = InMemoryStoreManager[Task]

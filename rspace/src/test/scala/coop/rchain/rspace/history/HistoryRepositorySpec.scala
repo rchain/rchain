@@ -1,5 +1,13 @@
 package coop.rchain.rspace.history
 
+import java.nio.ByteBuffer
+
+import cats.effect.Sync
+import cats.implicits._
+import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.rspace.{
   util,
   Blake2b256Hash,
@@ -11,21 +19,17 @@ import coop.rchain.rspace.{
   InsertData,
   InsertJoins
 }
+import coop.rchain.state.TrieNode
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
-
-import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
-import coop.rchain.rspace.trace.{Consume, Produce}
-
-import scala.collection.concurrent.TrieMap
-import scala.util.Random
-import cats.implicits._
+import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scodec.Codec
+import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
+import scala.collection.concurrent.TrieMap
+import scala.concurrent.duration._
+import scala.util.Random
 
 class HistoryRepositorySpec
     extends FlatSpec
@@ -167,7 +171,9 @@ class HistoryRepositorySpec
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
-        inMemColdStore
+        inMemColdStore,
+        emptyExporter,
+        emptyImporter
       )
       _ <- f(repo)
     } yield ()).runSyncUnsafe(20.seconds)
@@ -189,7 +195,7 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           maybeCurrentRoot
         }
 
-      override def validateRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
+      override def validateAndSetCurrentRoot(key: Blake2b256Hash): Task[Option[Blake2b256Hash]] =
         Task.delay {
           if (roots.contains(key)) {
             maybeCurrentRoot = Some(key)
@@ -224,5 +230,41 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
 
     override def put(list: List[(Blake2b256Hash, PersistedData)]): Task[Unit] =
       list.traverse_(Function.tupled(put))
+  }
+
+  def emptyExporter[F[_]: Sync]: RSpaceExporter[F] = new RSpaceExporter[F] {
+    override def getRoot: F[Blake2b256Hash] = ???
+
+    override def getNodes(
+        startPath: NodePath,
+        skip: Int,
+        take: Int
+    ): F[Seq[TrieNode[Blake2b256Hash]]] = ???
+
+    override def getHistoryItems[Value](
+        keys: Seq[Blake2b256Hash],
+        fromBuffer: ByteBuffer => Value
+    ): F[Seq[(Blake2b256Hash, Value)]] = ???
+
+    override def getDataItems[Value](
+        keys: Seq[Blake2b256Hash],
+        fromBuffer: ByteBuffer => Value
+    ): F[Seq[(Blake2b256Hash, Value)]] = ???
+  }
+
+  def emptyImporter[F[_]: Sync]: RSpaceImporter[F] = new RSpaceImporter[F] {
+    override def setHistoryItems[Value](
+        data: Seq[(Blake2b256Hash, Value)],
+        toBuffer: Value => ByteBuffer
+    ): F[Unit] = ???
+
+    override def setDataItems[Value](
+        data: Seq[(Blake2b256Hash, Value)],
+        toBuffer: Value => ByteBuffer
+    ): F[Unit] = ???
+
+    override def setRoot(key: Blake2b256Hash): F[Unit] = ???
+
+    override def getHistoryItem(hash: Blake2b256Hash): F[Option[ByteVector]] = ???
   }
 }

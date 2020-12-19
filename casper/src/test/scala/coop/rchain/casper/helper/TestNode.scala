@@ -11,11 +11,10 @@ import cats.implicits._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.{DeployStorage, InMemDeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
 import coop.rchain.casper
 import casper.engine.BlockRetriever._
-import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.engine.EngineCell._
@@ -82,11 +81,11 @@ class TestNode[F[_]](
   implicit val transportLayerEff            = tle
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val estimator                    = Estimator[F](maxNumberOfParents, maxParentDepth)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
   implicit val lastFinalizedHeightConstraintChecker =
     LastFinalizedHeightConstraintChecker[F](Long.MaxValue)
-  implicit val estimator = Estimator[F](maxNumberOfParents, maxParentDepth)
   implicit val rpConfAsk = createRPConfAsk[F](local)
   implicit val eventBus  = EventPublisher.noop[F]
 
@@ -123,14 +122,14 @@ class TestNode[F[_]](
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     genesis,
-    postGenesisStateHash,
     shardId,
     finalizationRate,
     blockProcessingLock,
     blockProcessingState
   )
 
-  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F])
+  implicit val rspaceMan                 = RSpaceStateManagerTestImpl()
+  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F], true)
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 

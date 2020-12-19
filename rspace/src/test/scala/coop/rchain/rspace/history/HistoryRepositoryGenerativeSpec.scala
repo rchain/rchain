@@ -4,7 +4,6 @@ import cats.effect.Sync
 import java.nio.file.{Files, Path}
 
 import coop.rchain.rspace.{
-  Blake2b256Hash,
   DeleteContinuations,
   DeleteData,
   DeleteJoins,
@@ -24,6 +23,7 @@ import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Serialize
@@ -55,11 +55,15 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
       rootRepository   = new RootRepository[Task](rootsStore)
       emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
+      exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
           rootRepository,
-          coldStore
+          coldStore,
+          exporter,
+          importer
         )
     } yield repository
 
@@ -78,7 +82,9 @@ class InmemHistoryRepositoryGenerativeSpec
       HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
-        inMemColdStore
+        inMemColdStore,
+        emptyExporter,
+        emptyImporter
       )
     repository.pure[Task]
   }

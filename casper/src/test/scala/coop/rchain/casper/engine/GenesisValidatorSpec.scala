@@ -7,6 +7,7 @@ import coop.rchain.casper.protocol.{NoApprovedBlockAvailable, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.rp.ProtocolHelper
 import coop.rchain.comm.rp.ProtocolHelper._
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.shared.{Cell, EventPublisher}
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -23,6 +24,8 @@ class GenesisValidatorSpec extends WordSpec {
 
       implicit val engineCell: EngineCell[Task] =
         Cell.unsafe[Task, Engine[Task]](Engine.noop)
+      implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
+
       val expectedCandidate = ApprovedBlockCandidate(genesis, requiredSigs)
       val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
       val test = for {
@@ -51,6 +54,7 @@ class GenesisValidatorSpec extends WordSpec {
 
       implicit val engineCell: EngineCell[Task] =
         Cell.unsafe[Task, Engine[Task]](Engine.noop)
+      implicit val rspaceMan = RSpaceStateManagerTestImpl[Task]()
 
       val approvedBlockRequest = ApprovedBlockRequest("test")
       val test = for {

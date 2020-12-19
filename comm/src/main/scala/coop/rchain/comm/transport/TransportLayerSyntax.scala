@@ -7,6 +7,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper.packet
+import coop.rchain.rspace.Blake2b256Hash
 
 trait TransportLayerSyntax {
   implicit final def commSyntaxTransportLayer[F[_]: Monad: RPConfAsk](
@@ -45,4 +46,11 @@ final class TransportLayerOps[F[_]: Monad: RPConfAsk](
       peer: PeerNode,
       message: Msg
   ): F[Unit] = streamToPeer(peer, ToPacket(message))
+
+  def sendToBootstrap[Msg: ToPacket](message: Msg): F[Unit] =
+    for {
+      maybeBootstrap <- RPConfAsk[F].reader(_.bootstrap)
+      bootstrap      = maybeBootstrap.get
+      _              <- sendToPeer(bootstrap, message)
+    } yield ()
 }

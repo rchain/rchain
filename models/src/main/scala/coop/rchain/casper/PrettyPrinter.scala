@@ -20,7 +20,9 @@ object PrettyPrinter {
   // TODO shouldn header.parentsHashList be nonempty list?
   private def buildString(b: BlockMessage, short: Boolean): String =
     b.header.parentsHashList.headOption
-      .fold(s"Block ${buildString(b.blockHash)} with empty parents (supposedly genesis)")(
+      .fold(
+        s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
+      )(
         mainParent =>
           if (short) {
             s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"

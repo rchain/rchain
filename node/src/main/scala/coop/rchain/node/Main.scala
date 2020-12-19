@@ -45,7 +45,7 @@ object Main {
     // Should always be passed as implicit dependency.
     // All other schedulers should be explicit.
     implicit val scheduler: Scheduler = Scheduler.computation(
-      Math.max(java.lang.Runtime.getRuntime.availableProcessors() * 4, 2),
+      Math.max(java.lang.Runtime.getRuntime.availableProcessors, 2),
       "node-runner",
       reporter = UncaughtExceptionLogger
     )

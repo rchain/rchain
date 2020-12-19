@@ -152,10 +152,10 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     val sendersNewLM           = (block.sender, block.blockHash)
 
     val logAlreadyStored =
-      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} is already stored.")
+      Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} is already stored.")
 
     val logEmptySender =
-      Log[F].warn(s"${PrettyPrinter.buildString(block, short = true)} sender is empty")
+      Log[F].warn(s"Block ${PrettyPrinter.buildString(block, short = true)} sender is empty.")
 
     // Add LM either if there is no existing message for the sender, or if sequence number advances
     // - assumes block sender is not valid hash

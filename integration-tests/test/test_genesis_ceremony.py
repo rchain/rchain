@@ -33,15 +33,15 @@ def test_successful_genesis_ceremony(command_line_options: CommandLineOptions, r
     https://docs.google.com/document/d/1Z5Of7OVVeMGl2Fw054xrwpRmDmKCC-nAoIxtIIHD-Tc/
     """
     bootstrap_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-signatures':      '2',
-        '--approve-duration':           '5min',
-        '--approve-interval':           '10sec',
+        '--deploy-timestamp'   : '1',
+        '--required-signatures': '2',
+        '--approve-duration'   : '1min',
+        '--approve-interval'   : '10sec',
     }
-    peers_cli_flags = set(['--genesis-validator'])
+    peers_cli_flags = {'--genesis-validator'}
     peers_cli_options = {
-        '--deploy-timestamp':   '1',
-        '--required-signatures':      '2',
+        '--deploy-timestamp'   : '1',
+        '--required-signatures': '2',
     }
     peers_keypairs = [
         VALIDATOR_A_KEYPAIR,
