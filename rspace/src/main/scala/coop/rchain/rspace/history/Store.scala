@@ -1,8 +1,5 @@
 package coop.rchain.rspace.history
 
-import java.nio.ByteBuffer
-import java.nio.file.Path
-
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.lmdb.LMDBStore
@@ -12,6 +9,9 @@ import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.{Env, EnvFlags, Txn}
 import scodec.bits.BitVector
+
+import java.nio.ByteBuffer
+import java.nio.file.Path
 
 trait Store[F[_]] {
   def get(key: Blake2b256Hash): F[Option[BitVector]]
@@ -32,7 +32,7 @@ final case class StoreConfig(
     mapSize: Long,
     maxDbs: Int = 2,
     maxReaders: Int = 2048,
-    flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
+    flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
 )
 
 object StoreInstances {

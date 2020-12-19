@@ -257,7 +257,7 @@ object LMDBOpsBench {
 
     def setup(): Unit = {
       dbDir = Files.createTempDirectory("rchain-rspace-mixed-bench-")
-      val flags = List(EnvFlags.MDB_NOTLS)
+      val flags = List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
       env = Context.env(dbDir, mapSize, flags)
       dbGnats = env.openDbi(s"db-gnats", MDB_CREATE)
       populate()

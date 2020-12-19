@@ -42,7 +42,7 @@ class LMDBHistoryRepositoryGenerativeSpec
       1024L * 1024L * 4096L,
       2,
       2048,
-      List(EnvFlags.MDB_NOTLS)
+      List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
     )
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =

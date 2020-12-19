@@ -1291,7 +1291,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         mapSize,
         2,
         2048,
-        List(EnvFlags.MDB_NOTLS)
+        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
       )
 
     val config = LMDBRSpaceStorageConfig(

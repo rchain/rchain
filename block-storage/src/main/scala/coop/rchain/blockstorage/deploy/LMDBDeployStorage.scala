@@ -2,7 +2,6 @@ package coop.rchain.blockstorage.deploy
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
-
 import cats.syntax.traverse._
 import cats.syntax.applicative._
 import cats.syntax.functor._
@@ -94,7 +93,8 @@ object LMDBDeployStorage {
                 ().pure[F]
               )
           env <- Sync[F].delay {
-                  val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+                  val defaultFlags = List(EnvFlags.MDB_NORDAHEAD)
+                  val flags        = if (config.noTls) EnvFlags.MDB_NOTLS +: defaultFlags else defaultFlags
                   Env
                     .create(PROXY_SAFE)
                     .setMapSize(config.mapSize)
