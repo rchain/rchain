@@ -122,8 +122,12 @@ LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
 -- LinearCond.   Linear ::= [LinearBind] "if" Proc ;
 
 -- Single Linear Bind
-LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" Name ;
+LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" NameSource ;
 separator nonempty LinearBind "&" ;
+
+SimpleSource.         NameSource ::= Name ;
+ReceiveSendSource.    NameSource ::= Name "?!" ;
+SendReceiveSource.    NameSource ::= Name "!?" "(" [Proc] ")" ;
 
 -- Repeated Receipts
 RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
