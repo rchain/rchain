@@ -450,7 +450,8 @@ object BlockDagFileStorage {
             ().pure[F]
           )
       env <- Sync[F].delay {
-              val flags = if (config.noTls) List(EnvFlags.MDB_NOTLS) else List.empty
+              val defaultFlags = List(EnvFlags.MDB_NORDAHEAD)
+              val flags        = if (config.noTls) EnvFlags.MDB_NOTLS +: defaultFlags else defaultFlags
               Env
                 .create(PROXY_SAFE)
                 .setMapSize(config.mapSize)

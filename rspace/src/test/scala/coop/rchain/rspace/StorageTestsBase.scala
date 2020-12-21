@@ -78,7 +78,7 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
         mapSize,
         2,
         2048,
-        List(EnvFlags.MDB_NOTLS)
+        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
       )
 
     val config = LMDBRSpaceStorageConfig(

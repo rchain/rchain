@@ -118,7 +118,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
     for {
       _     <- Log[F].debug(s"Creating LMDB environment: $dirPath")
       _     <- Sync[F].delay(Files.createDirectories(dirPath))
-      flags = Seq(EnvFlags.MDB_NOTLS)
+      flags = Seq(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
       // Create environment
       env <- Sync[F].delay(
               Env
