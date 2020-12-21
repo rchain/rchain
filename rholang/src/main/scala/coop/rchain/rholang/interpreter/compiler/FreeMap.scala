@@ -3,9 +3,9 @@ package coop.rchain.rholang.interpreter.compiler
 import coop.rchain.models.Connective.ConnectiveInstance
 
 /**
-  * A structure to keep track of free variables, which are assigned DeBruijn levels (0 based).
+  * A structure to keep track of free variables using de Bruijn levels (0 based).
   *
-  * @param nextLevel The DeBruijn level assigned to the next variable name added to the map.
+  * @param nextLevel The de Bruijn level assigned to the next variable name added to the map.
   * @param levelBindings A map of names to DeBruijn levels.
   * @param wildcards A list of the positions of _ patterns.
   * @param connectives A list of the positions of logical connectives.
@@ -13,19 +13,19 @@ import coop.rchain.models.Connective.ConnectiveInstance
   */
 final case class FreeMap[T](
     nextLevel: Int,
-    levelBindings: Map[String, LevelContext[T]],
+    levelBindings: Map[String, FreeContext[T]],
     wildcards: List[SourcePosition],
     connectives: List[(ConnectiveInstance, SourcePosition)]
 ) {
 
-  def get(name: String): Option[LevelContext[T]] = levelBindings.get(name)
+  def get(name: String): Option[FreeContext[T]] = levelBindings.get(name)
 
   def put(binding: IdContext[T]): FreeMap[T] =
     binding match {
       case (name, typ, sourcePosition) =>
         FreeMap[T](
           nextLevel + 1,
-          levelBindings + (name -> LevelContext(nextLevel, typ, sourcePosition)),
+          levelBindings + (name -> FreeContext(nextLevel, typ, sourcePosition)),
           wildcards,
           connectives
         )
@@ -39,9 +39,9 @@ final case class FreeMap[T](
 
     val (accEnv, shadowed) =
       freeMap.levelBindings.foldLeft((levelBindings, List.empty[(String, SourcePosition)])) {
-        case ((accEnv, shadowed), (name, LevelContext(level, typ, sourcePosition))) =>
+        case ((accEnv, shadowed), (name, FreeContext(level, typ, sourcePosition))) =>
           (
-            accEnv + (name -> LevelContext(level + nextLevel, typ, sourcePosition)),
+            accEnv + (name -> FreeContext(level + nextLevel, typ, sourcePosition)),
             if (levelBindings.contains(name)) (name, sourcePosition) :: shadowed
             else shadowed
           )

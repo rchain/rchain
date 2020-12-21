@@ -79,25 +79,25 @@ object Compiler {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), IndexMapChain.empty, FreeMap.empty)
+          ProcVisitInputs(VectorPar(), BoundMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
-          if (normalizedTerm.knownFree.count > 0) {
-            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.connectives.isEmpty) {
-              val topLevelFreeList = normalizedTerm.knownFree.levelBindings.map {
-                case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
+          if (normalizedTerm.freeMap.count > 0) {
+            if (normalizedTerm.freeMap.wildcards.isEmpty && normalizedTerm.freeMap.connectives.isEmpty) {
+              val topLevelFreeList = normalizedTerm.freeMap.levelBindings.map {
+                case (name, FreeContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
               )
-            } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
+            } else if (normalizedTerm.freeMap.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
                 if (conn.isConnAndBody) "/\\ (conjunction)"
                 else if (conn.isConnOrBody) "\\/ (disjunction)"
                 else if (conn.isConnNotBody) "~ (negation)"
                 else conn.toString
 
-              val connectives = normalizedTerm.knownFree.connectives
+              val connectives = normalizedTerm.freeMap.connectives
                 .map {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"
@@ -105,7 +105,7 @@ object Compiler {
                 .mkString("", ", ", "")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
-              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
+              val topLevelWildcardList = normalizedTerm.freeMap.wildcards.map { sourcePosition =>
                 s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
