@@ -21,6 +21,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
+import coop.rchain.shared.DagOps
 
 import scala.collection.immutable
 import scala.collection.immutable.Map
@@ -399,7 +400,7 @@ object ProtoUtil {
     bottomBlock match {
       case None => Set(topBlock.blockHash).pure[F]
       case Some(bottomBlock) =>
-        DagOperations
+        DagOps
           .bfTraverseF(List(topBlock))(
             nextCreatorBlock =>
               getCreatorJustificationUnlessGoal(

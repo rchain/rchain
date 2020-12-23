@@ -28,7 +28,8 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
     topoSortRef: Ref[F, Vector[Vector[BlockHash]]],
     blockHashesByDeployRef: Ref[F, Map[DeployId, BlockHash]],
     equivocationsTrackerRef: Ref[F, Set[EquivocationRecord]],
-    invalidBlocksRef: Ref[F, Set[BlockMetadata]]
+    invalidBlocksRef: Ref[F, Set[BlockMetadata]],
+    finalizedBlocksRef: Ref[F, Set[BlockHash]]
 ) extends BlockDagStorage[F] {
   private case class InMemBlockDagRepresentation(
       latestMessagesMap: Map[Validator, BlockHash],
@@ -53,6 +54,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
       val endBlockNumber: Long = maybeEndBlockNumber.getOrElse(topoSortVector.length.toLong)
       topoSortVector.slice(startBlockNumber.toInt, endBlockNumber.toInt + 1).pure[F]
     }
+
+    def isFinalized(blockHash: BlockHash): F[Boolean] =
+      finalizedBlocksRef.get.map(_.contains(blockHash))
 
     def latestBlockNumber: F[Long] = (topoSortVector.length - 1L).pure[F]
 
@@ -169,6 +173,9 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
   override def checkpoint(): F[Unit] = ().pure[F]
 
   override def close(): F[Unit] = ().pure[F]
+
+  override def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
+    finalizedBlocksRef.update(_ + blockHash)
 }
 
 object InMemBlockDagStorage {
@@ -185,6 +192,7 @@ object InMemBlockDagStorage {
       blockHashesByDeployRef  <- Ref.of[F, Map[DeployId, BlockHash]](Map.empty)
       equivocationsTrackerRef <- Ref.of[F, Set[EquivocationRecord]](Set.empty)
       invalidBlocksRef        <- Ref.of[F, Set[BlockMetadata]](Set.empty)
+      finalizedBlocksRef      <- Ref.of[F, Set[BlockHash]](Set.empty)
     } yield new InMemBlockDagStorage[F](
       lock,
       latestMessagesRef,
@@ -193,6 +201,7 @@ object InMemBlockDagStorage {
       topoSortRef,
       blockHashesByDeployRef,
       equivocationsTrackerRef,
-      invalidBlocksRef
+      invalidBlocksRef,
+      finalizedBlocksRef
     )
 }

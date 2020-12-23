@@ -27,8 +27,8 @@ trait StorageActionsTests[F[_]]
   implicit val serializeString: Serialize[String] = coop.rchain.rspace.util.stringSerialize
 
   implicit val codecString: Codec[String]   = coop.rchain.rspace.util.stringCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
+  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
 
   "produce" should
     "persist a piece of data in the store" in fixture { (store, _, space) =>

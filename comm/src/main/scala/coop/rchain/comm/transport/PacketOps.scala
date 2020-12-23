@@ -1,52 +1,53 @@
 package coop.rchain.comm.transport
 
-import java.io._
-import java.nio.file._
 import java.text.SimpleDateFormat
 import java.util.Date
 
-import scala.util.Random
-
-import cats.effect.{Resource, Sync}
-import cats.implicits._
-
-import coop.rchain.comm.CommError
-import CommError._
+import cats.effect.Sync
+import cats.syntax.all._
+import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.crypto.codec.Base16
 
+import scala.collection.concurrent.TrieMap
+import scala.util.Random
+
 object PacketOps {
 
-  def restore[F[_]: Sync](file: Path): F[CommErr[Packet]] =
-    Resource
-      .fromAutoCloseable(Sync[F].delay(new FileInputStream(file.toFile)))
-      .use(fin => Sync[F].delay(Packet.parseFrom(fin)))
+  def restore[F[_]: Sync](key: String, cache: TrieMap[String, Array[Byte]]): F[CommErr[Packet]] =
+    Sync[F]
+      .delay(cache(key))
+      .map(Packet.parseFrom)
       .attempt
-      .map(_.fold(unableToRestorePacket(file, _).asLeft, _.asRight))
+      .map(_.leftMap(unableToRestorePacket(key, _)))
 
   implicit class RichPacket(packet: Packet) {
-    def store[F[_]: Sync](folder: Path): F[CommErr[Path]] =
-      Resource
-        .make(createPacketFile[F](folder, "_packet.bts")) {
-          case (_, fos) => Sync[F].delay(fos.close())
-        }
-        .use {
-          case (file, fos) =>
-            Sync[F].delay {
-              fos.write(packet.toByteArray)
-              fos.flush()
-              file
-            }
+    def store[F[_]: Sync](cache: TrieMap[String, Array[Byte]]): F[CommErr[String]] =
+      createCacheEntry[F]("packet_receive/", cache)
+        .flatMap { key =>
+          // Write packet data to cache
+          Sync[F].delay(cache.update(key, packet.toByteArray)).as(key)
         }
         .attempt
-        .map(_.fold(unableToStorePacket(packet, _).asLeft, _.asRight))
+        .map(_.leftMap(unableToStorePacket(packet, _)))
   }
 
-  def createPacketFile[F[_]: Sync](folder: Path, postfix: String): F[(Path, FileOutputStream)] =
-    for {
-      _    <- Sync[F].delay(folder.toFile.mkdirs())
-      file <- Sync[F].delay(folder.resolve(timestamp + postfix))
-    } yield (file, new FileOutputStream(file.toFile))
+  /**
+    * Generates key and put empty data in streaming cache.
+    *
+    * @param prefix for generated key
+    * @param cache streaming cache
+    * @return key
+    */
+  def createCacheEntry[F[_]: Sync](
+      prefix: String,
+      cache: TrieMap[String, Array[Byte]]
+  ): F[String] = {
+    val key = s"$prefix/$timestamp"
+    Sync[F]
+      .delay(cache.put(key, Array[Byte]()))
+      .as(key)
+  }
 
   private val TS_FORMAT = "yyyyMMddHHmmss"
 

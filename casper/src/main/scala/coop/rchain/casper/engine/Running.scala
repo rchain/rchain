@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Semaphore
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -9,20 +9,19 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper._
-import coop.rchain.casper.syntax._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.comm.PeerNode
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Log, Time}
-import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
+import coop.rchain.shared.{Log, Time}
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
@@ -263,9 +262,9 @@ object Running {
       peer: PeerNode,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
-    Log[F].info(s"Received ApprovedBlockRequest from ${peer.endpoint.host}") >>
+    Log[F].info(s"Received ApprovedBlockRequest from ${peer}") >>
       TransportLayer[F].streamToPeer(peer, approvedBlock.toProto) >>
-      Log[F].info(s"ApprovedBlock sent to ${peer.endpoint.host}")
+      Log[F].info(s"ApprovedBlock sent to ${peer}")
 
   final case object LastFinalizedBlockNotFoundError
       extends Exception("Last finalized block not found in the block storage.")
@@ -276,7 +275,7 @@ object Running {
       skip: Int,
       take: Int
   ): F[Unit] = {
-    import coop.rchain.rspace.state.syntax._
+    import coop.rchain.rspace.syntax._
     for {
       // Export chunk of store items from RSpace
       exportedItems <- RSpaceStateManager[F].exporter.getHistoryAndData(
@@ -314,7 +313,7 @@ class Running[F[_]
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
-    enableStateExporter: Boolean
+    disableStateExporter: Boolean
 ) extends Engine[F] {
 
   import Engine._
@@ -461,36 +460,50 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        approvedBlock <- if (abr.trimState) for {
-                          lfBlock <- LastFinalizedStorage[F]
-                                      .get(approvedBlock.candidate.block)
-                                      .flatMap(BlockStore[F].getUnsafe)
-                          // Each approved block should be justified by validators signatures
-                          // ATM we have signatures only for genesis approved block - we also have to have a procedure
-                          // for gathering signatures for each approved block post genesis.
-                          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
-                          // TODO We need signatures of Validators supporting this block
-                          lastApprovedBlock = ApprovedBlock(
-                            ApprovedBlockCandidate(lfBlock, 0),
-                            List.empty
-                          )
-                        } yield lastApprovedBlock
+        lfBlockHashOpt <- LastFinalizedStorage[F].get()
+
+        // Create approved block from last finalized block
+        lastFinalizedBlock = for {
+          lfBlockHash <- lfBlockHashOpt.liftTo[F](
+                          new Exception(s"Last finalized block hash not available.")
+                        )
+          lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
+
+          // Each approved block should be justified by validators signatures
+          // ATM we have signatures only for genesis approved block - we also have to have a procedure
+          // for gathering signatures for each approved block post genesis.
+          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
+          // TODO We need signatures of Validators supporting this block
+          lastApprovedBlock = ApprovedBlock(
+            ApprovedBlockCandidate(lfBlock, 0),
+            List.empty
+          )
+        } yield lastApprovedBlock
+
+        approvedBlock <- if (abr.trimState && lfBlockHashOpt.isDefined)
+                          // If Last Finalized State is requested return Last Finalized block as Approved block
+                          lastFinalizedBlock
                         else
                           // Respond with approved block that this node is started from.
                           // The very first one is genesis, but this node still might start from later block,
                           // so it will not necessary be genesis.
                           approvedBlock.pure[F]
+
         _ <- handleApprovedBlockRequest(peer, approvedBlock)
       } yield ()
     case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
 
     // Approved state store records
     case StoreItemsMessageRequest(startPath, skip, take) =>
-      if (enableStateExporter) {
-        handleStateItemsMessageRequest(peer, startPath, skip, take)
+      val start = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+      val logRequest = Log[F].info(
+        s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
+      )
+      if (!disableStateExporter) {
+        logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
       } else {
-        Log[F].debug(
-          s"Received StoreItemsMessage from ${peer} but the node is configured to not respond to StoreItemsMessage."
+        Log[F].info(
+          s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
         )
       }
     case _ => noop

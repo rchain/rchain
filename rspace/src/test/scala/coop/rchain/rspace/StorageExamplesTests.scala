@@ -270,11 +270,13 @@ trait StorageExamplesTests[F[_]]
 abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
 
-  implicit val channelCodec: Codec[Channel] = AddressBookExample.implicits.serializeChannel.toCodec
-  implicit val patternCodec: Codec[Pattern] = AddressBookExample.implicits.serializePattern.toCodec
-  implicit val entryCodec: Codec[Entry]     = AddressBookExample.implicits.serializeInfo.toCodec
+  implicit val channelCodec: Codec[Channel] =
+    AddressBookExample.implicits.serializeChannel.toSizeHeadCodec
+  implicit val patternCodec: Codec[Pattern] =
+    AddressBookExample.implicits.serializePattern.toSizeHeadCodec
+  implicit val entryCodec: Codec[Entry] = AddressBookExample.implicits.serializeInfo.toSizeHeadCodec
   implicit val entryCaptorCodec: Codec[EntriesCaptor] =
-    AddressBookExample.implicits.serializeEntriesCaptor.toCodec
+    AddressBookExample.implicits.serializeEntriesCaptor.toSizeHeadCodec
 
   override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
     val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =

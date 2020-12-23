@@ -108,7 +108,7 @@ object BlockAPI {
                 maybeValidator  <- casper.getValidator
                 validatorPubKey <- maybeValidator.fold(validatorCheckFailed)(_.pure[F])
                 validator       = ByteString.copyFrom(validatorPubKey.bytes)
-                genesis         <- casper.getGenesis
+                genesis         <- casper.getApprovedBlock
                 dag             <- casper.blockDag
                 runtimeManager  <- casper.getRuntimeManager
                 checkSynchronyConstraint = SynchronyConstraintChecker[F]
@@ -623,19 +623,20 @@ object BlockAPI {
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
-      // TODO this is temporary solution to not calculate fault tolerance for old blocks which is costly
-      oldBlock  = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
-      isInvalid = dag.lookup(block.blockHash).map(_.get.invalid)
+      // TODO this is temporary solution to not calculate fault tolerance all the blocks
+      oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
       // Old block fault tolerance / invalid block has -1.0 fault tolerance
-      oldBlockFaultTolerance = isInvalid.map(if (_) -1f else 1f)
       normalizedFaultTolerance <- oldBlock.ifM(
-                                   oldBlockFaultTolerance,
+                                   dag
+                                     .isFinalized(block.blockHash)
+                                     .map(isFinalized => if (isFinalized) 1f else -1f),
                                    SafetyOracle[F]
                                      .normalizedFaultTolerance(dag, block.blockHash)
                                  )
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
-      blockInfo      <- constructor(block, faultTolerance)
+
+      blockInfo <- constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
@@ -775,29 +776,10 @@ object BlockAPI {
       _.withCasper[ApiErr[Boolean]](
         implicit casper =>
           for {
-            lastFinalizedBlock <- casper.lastFinalizedBlock
-            lastFinalizedBlockMetadata = BlockMetadata
-              .fromBlock(lastFinalizedBlock, invalid = false)
-            dag                   <- casper.blockDag
-            givenBlockHash        = ProtoUtil.stringToByteString(hash)
-            givenBlockMetadataOpt <- dag.lookup(givenBlockHash)
-            result <- givenBlockMetadataOpt match {
-                       case None =>
-                         s"Could not find block with hash $hash"
-                           .asLeft[Boolean]
-                           .pure[F]
-                       case Some(givenBlockMetadata) =>
-                         DagOperations
-                           .bfTraverseF(List(lastFinalizedBlockMetadata)) { b =>
-                             b.parents.traverse(dag.lookup).map { parentOpts =>
-                               parentOpts.flatten.distinct
-                                 .filter(_.blockNum >= givenBlockMetadata.blockNum)
-                             }
-                           }
-                           .contains(givenBlockMetadata)
-                           .map(_.asRight[Error])
-                     }
-          } yield result,
+            dag            <- casper.blockDag
+            givenBlockHash = ProtoUtil.stringToByteString(hash)
+            result         <- dag.isFinalized(givenBlockHash)
+          } yield result.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )

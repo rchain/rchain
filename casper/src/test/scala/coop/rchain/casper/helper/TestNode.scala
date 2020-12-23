@@ -83,11 +83,11 @@ class TestNode[F[_]](
   implicit val transportLayerEff            = tle
   implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
   implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+  implicit val estimator                    = Estimator[F](maxNumberOfParents, maxParentDepth)
   implicit val synchronyConstraintChecker =
     SynchronyConstraintChecker[F](synchronyConstraintThreshold)
   implicit val lastFinalizedHeightConstraintChecker =
     LastFinalizedHeightConstraintChecker[F](Long.MaxValue)
-  implicit val estimator = Estimator[F](maxNumberOfParents, maxParentDepth)
   implicit val rpConfAsk = createRPConfAsk[F](local)
   implicit val eventBus  = EventPublisher.noop[F]
 
@@ -166,7 +166,7 @@ class TestNode[F[_]](
       Created(block)    = createBlockResult
     } yield block
 
-  def receive(): F[Unit] = tls.receive(p => handle[F](p), kp(().pure[F])).void
+  def receive(): F[Unit] = tls.handleReceive(p => handle[F](p), kp(().pure[F])).void
 
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {

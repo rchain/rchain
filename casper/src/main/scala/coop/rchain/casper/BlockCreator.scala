@@ -13,7 +13,7 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.util.rholang.{SystemDeploy, _}
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -21,7 +21,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Cell, Log, Time}
+import coop.rchain.shared.{DagOps, Log, Time}
 import coop.rchain.casper.util.rholang.SystemDeployUtil
 
 object BlockCreator {
@@ -162,7 +162,7 @@ object BlockCreator {
             d.data
           )
       )
-      result <- DagOperations
+      result <- DagOps
                  .bfTraverseF[F, BlockMetadata](parents.toList)(
                    b =>
                      ProtoUtil

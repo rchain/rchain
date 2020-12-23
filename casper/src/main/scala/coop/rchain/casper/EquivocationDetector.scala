@@ -8,14 +8,14 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, Eq
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.blockstorage.util.DoublyLinkedDag
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.shared.{Cell, Log, LogSource}
+import coop.rchain.shared.{Cell, DagOps, Log, LogSource}
 
 object EquivocationDetector {
 
@@ -27,6 +27,7 @@ object EquivocationDetector {
       dag: BlockDagRepresentation[F]
   ): F[ValidBlockProcessing] =
     for {
+      _                               <- Log[F].info("Calculate checkEquivocations.")
       maybeLatestMessageOfCreatorHash <- dag.latestMessageHash(block.sender)
       maybeCreatorJustification       = creatorJustificationHash(block)
       isNotEquivocation               = maybeCreatorJustification == maybeLatestMessageOfCreatorHash
@@ -62,12 +63,13 @@ object EquivocationDetector {
     } yield maybeCreatorJustification.latestBlockHash
 
   // See summary of algorithm above
-  def checkNeglectedEquivocationsWithUpdate[F[_]: Sync: BlockStore: BlockDagStorage](
+  def checkNeglectedEquivocationsWithUpdate[F[_]: Sync: Log: BlockStore: BlockDagStorage](
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       genesis: BlockMessage
   ): F[ValidBlockProcessing] =
     for {
+      _ <- Log[F].info("Calculate checkNeglectedEquivocationsWithUpdate")
       neglectedEquivocationDetected <- isNeglectedEquivocationDetectedWithUpdate[F](
                                         block,
                                         dag,
@@ -350,7 +352,7 @@ object EquivocationDetector {
     if (b.seqNum == seqNum) {
       Option(b.blockHash).pure[F]
     } else {
-      DagOperations
+      DagOps
         .bfTraverseF(List(b.blockHash)) { blockHash =>
           getCreatorJustificationAsListUntilGoalInMemory[F](blockDag, blockHash)
         }

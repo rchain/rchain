@@ -33,9 +33,9 @@ class LastFinalizedFileStorage[F[_]: Sync: RaiseIOError] private (
       } yield ()
     )
 
-  override def get(genesis: BlockMessage): F[BlockHash] =
+  override def get(): F[Option[BlockHash]] =
     lock.withPermit(
-      lastFinalizedBlockHashState.read.map(_.getOrElse(genesis.blockHash))
+      lastFinalizedBlockHashState.read
     )
 }
 

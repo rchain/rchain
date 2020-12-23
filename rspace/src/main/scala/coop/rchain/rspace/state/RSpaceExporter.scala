@@ -1,7 +1,6 @@
 package coop.rchain.rspace.state
 
 import cats.Monad
-import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history._
@@ -28,9 +27,7 @@ object RSpaceExporter {
       // Skip & take counter
       Counter,
       // Result tries as indexed collection
-      Vector[TrieNode[Blake2b256Hash]],
-      // Items traversed (temp for debugging)
-      Int
+      Vector[TrieNode[Blake2b256Hash]]
   )
 
   def traverseTrie[F[_]: Monad](
@@ -46,8 +43,7 @@ object RSpaceExporter {
           Vector(TrieNode(root, isLeaf = false, Seq.empty)),
           startPath,
           Counter(skip, take),
-          Vector.empty,
-          0
+          Vector.empty
         )
         startParams.tailRecM(traverseTrieRec[F](getTrie))
     }
@@ -55,15 +51,13 @@ object RSpaceExporter {
   private def traverseTrieRec[F[_]: Monad](
       getTrie: Blake2b256Hash => F[Trie]
   )(params: ReadParams[F]): F[Either[ReadParams[F], Vector[TrieNode[Blake2b256Hash]]]] = {
-    val (keys, path, Counter(skip, take), currentNodes, iterations) = params
+    val (keys, path, Counter(skip, take), currentNodes) = params
     def getCounter(n: Int, items: Vector[TrieNode[Blake2b256Hash]]) =
       if (skip > 0) (Counter(skip + n, take), Vector.empty) else (Counter(skip, take + n), items)
     keys match {
       case _ if skip == 0 && take == 0 =>
-        println(s"ITERATIONS $iterations")
         currentNodes.asRight[ReadParams[F]].pure[F]
       case Seq() =>
-        println(s"ITERATIONS $iterations")
         currentNodes.asRight[ReadParams[F]].pure[F]
       case key +: keysRest =>
         for {
@@ -96,7 +90,7 @@ object RSpaceExporter {
           }
           // Tries left to process
           remainingKeys = childNotLeafs ++ keysRest
-        } yield (remainingKeys, pathRest, counter, collected, iterations + 1).asLeft
+        } yield (remainingKeys, pathRest, counter, collected).asLeft
     }
   }
 

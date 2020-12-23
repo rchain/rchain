@@ -82,7 +82,7 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             local     = e1.peer
             remote    = e2.peer
             cb        <- createDispatcherCallback
-            server <- remoteTls.receive(
+            server <- remoteTls.handleReceive(
                        protocolDispatcher.dispatch(remote, cb),
                        streamDispatcher.dispatch(remote, cb)
                      )
@@ -163,11 +163,11 @@ abstract class TransportLayerRuntime[F[_]: Monad: Timer, E <: Environment] {
             cbl        <- createDispatcherCallback
             cb1        <- createDispatcherCallback
             cb2        <- createDispatcherCallback
-            server1 <- remoteTls1.receive(
+            server1 <- remoteTls1.handleReceive(
                         protocolDispatcher.dispatch(remote1, cb1),
                         streamDispatcher.dispatch(remote1, cb1)
                       )
-            server2 <- remoteTls2.receive(
+            server2 <- remoteTls2.handleReceive(
                         protocolDispatcher.dispatch(remote2, cb2),
                         streamDispatcher.dispatch(remote2, cb2)
                       )

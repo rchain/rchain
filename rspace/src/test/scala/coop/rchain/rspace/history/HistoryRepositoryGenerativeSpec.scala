@@ -23,7 +23,7 @@ import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.state.instances.{RSpaceExporterImpl, RSpaceImporterImpl}
+import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Serialize
@@ -42,7 +42,7 @@ class LMDBHistoryRepositoryGenerativeSpec
       1024L * 1024L * 4096L,
       2,
       2048,
-      List(EnvFlags.MDB_NOTLS)
+      List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
     )
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
@@ -55,8 +55,8 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
       rootRepository   = new RootRepository[Task](rootsStore)
       emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
-      exporter         = RSpaceExporterImpl[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      importer         = RSpaceImporterImpl[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -96,9 +96,9 @@ abstract class HistoryRepositoryGenerativeDefinition
     with OptionValues
     with GeneratorDrivenPropertyChecks {
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toCodec
+  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toSizeHeadCodec
+  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
+  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 

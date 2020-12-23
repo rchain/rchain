@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.catscontrib.ski._
-import coop.rchain.rspace.state.instances.RSpaceExporterImpl.NoRootError
+import coop.rchain.rspace.state.instances.RSpaceExporterStore.NoRootError
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter, RSpaceStateManager}
 
 object RSpaceStateManagerImpl {

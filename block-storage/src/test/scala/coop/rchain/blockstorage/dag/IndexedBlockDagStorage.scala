@@ -9,12 +9,14 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.models.BlockHash.BlockHash
 
 final class IndexedBlockDagStorage[F[_]: Sync](
     lock: Semaphore[F],
     underlying: BlockDagStorage[F],
     idToBlocksRef: Ref[F, Map[Long, BlockMessage]],
-    currentIdRef: Ref[F, Long]
+    currentIdRef: Ref[F, Long],
+    finalizedBlockHashRef: Ref[F, Set[BlockHash]]
 ) extends BlockDagStorage[F] {
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
@@ -67,6 +69,9 @@ final class IndexedBlockDagStorage[F[_]: Sync](
 
   def close(): F[Unit] = underlying.close()
 
+  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
+    finalizedBlockHashRef.update(_ + blockHash)
+
   def lookupById(id: Int): F[Option[BlockMessage]] =
     idToBlocksRef.get.map(_.get(id.toLong))
 
@@ -84,13 +89,15 @@ object IndexedBlockDagStorage {
       underlying: BlockDagStorage[F]
   ): F[IndexedBlockDagStorage[F]] =
     for {
-      semaphore  <- MetricsSemaphore.single[F]
-      idToBlocks <- Ref.of[F, Map[Long, BlockMessage]](Map.empty)
-      currentId  <- Ref.of[F, Long](-1L)
+      semaphore          <- MetricsSemaphore.single[F]
+      idToBlocks         <- Ref.of[F, Map[Long, BlockMessage]](Map.empty)
+      currentId          <- Ref.of[F, Long](-1L)
+      finalizedBlockHash <- Ref.of[F, Set[BlockHash]](Set.empty)
     } yield new IndexedBlockDagStorage[F](
       semaphore,
       underlying,
       idToBlocks,
-      currentId
+      currentId,
+      finalizedBlockHash
     )
 }

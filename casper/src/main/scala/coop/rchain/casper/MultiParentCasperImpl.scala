@@ -4,7 +4,6 @@ import cats.Applicative
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.syntax.bracket
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -24,7 +23,6 @@ import coop.rchain.models.BlockHash._
 import coop.rchain.models.{EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
@@ -61,8 +59,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def getVersion: F[Long] = version.pure[F]
 
-  //TODO rename to getApprovedBlock
-  def getGenesis: F[BlockMessage] = approvedBlock.pure[F]
+  def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
 
   def getValidator: F[Option[PublicKey]] = validatorId.map(_.publicKey).pure[F]
 
@@ -315,7 +312,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def lastFinalizedBlock: F[BlockMessage] =
     for {
       dag                    <- blockDag
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(approvedBlock)
+      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
       updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
                                         .run(dag, lastFinalizedBlockHash)
       _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
@@ -362,16 +359,15 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
-                  case Right(None) =>
-                    val isOwnBlock = PublicKey(b.sender).some == validatorId.map(_.publicKey)
-                    if (!isOwnBlock) Left(BlockStatus.invalidTransaction)
-                    else
-                      // Prevent validator to slash itself for invalid block
-                      Left(
-                        BlockStatus.exception(
-                          new Exception("Validation of own block failed, adding block canceled.")
-                        )
+                  case Right(None)    =>
+                    // Do not add block in case of tuplespace mismatch.
+                    // TODO this is slashable offence and should be reverted back when external validators are allowed.
+                    // TODO this should be BlockStatus.invalidTransaction
+                    Left(
+                      BlockStatus.exception(
+                        new Exception("InvalidTransaction, ceasing to add block.")
                       )
+                    )
                 }
             )
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))

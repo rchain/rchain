@@ -194,8 +194,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         "in `<genesis-path>/<public_key>.sk`" +
         "This param specifies number of validator identites to generate."
     )
-    val trimState = opt[Flag](
-      descr = "Node would start from approved block state."
+    val disableLfs = opt[Flag](
+      descr =
+        "Disable the node to start from Last Finalized State, instead it will start from genesis."
     )
 
     val host = opt[String](
@@ -210,8 +211,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Allow connections to peers with private network addresses."
     )
 
-    val enableStateExporter = opt[Flag](
-      descr = "Allow the node to export the state."
+    val disableStateExporter = opt[Flag](
+      descr = "Disable the node respond to export state requests."
     )
 
     val networkTimeout = opt[FiniteDuration](

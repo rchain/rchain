@@ -101,7 +101,7 @@ lazy val coverageSettings = Seq(
 )
 
 lazy val compilerSettings = CompilerSettings.options ++ Seq(
-  crossScalaVersions := Seq("2.11.12", scalaVersion.value)
+  crossScalaVersions := Seq(scalaVersion.value)
 )
 
 // Before starting sbt export YOURKIT_AGENT set to the profiling agent appropriate
@@ -125,6 +125,7 @@ lazy val shared = (project in file("shared"))
       catsEffect,
       catsMtl,
       catsTagless,
+      fs2Core,
       lz4,
       monix,
       scodecCore,
@@ -472,6 +473,7 @@ lazy val rspace = (project in file("rspace"))
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
       lmdbjava,
       catsCore,
+      fs2Core,
       scodecCore,
       scodecBits,
       guava

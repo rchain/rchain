@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.effect.Concurrent
 import cats.Parallel
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace.state.instances.{RSpaceExporterImpl, RSpaceImporterImpl}
+import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
 import coop.rchain.store.KeyValueStoreManager
 import org.lmdbjava.EnvFlags
@@ -61,8 +61,8 @@ object HistoryRepositoryInstances {
       historyStore     = HistoryStoreInstances.historyStore[F](historyLMDBStore)
       history          = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
-      exporter = RSpaceExporterImpl[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
-      importer = RSpaceImporterImpl[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
+      exporter = RSpaceExporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
+      importer = RSpaceImporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
       history,
       rootsRepository,
