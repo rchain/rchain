@@ -274,10 +274,9 @@ object RSpace {
       metricsF: Metrics[F],
       spanF: Span[F],
       par: Parallel[F]
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
-    val v2Dir = dataDir.resolve("v2")
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
+      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, Branch.MASTER)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), Branch.MASTER)
       replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
@@ -287,7 +286,6 @@ object RSpace {
         Branch.REPLAY
       )
     } yield (space, replay, historyReader)
-  }
 
   def createReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
       implicit
