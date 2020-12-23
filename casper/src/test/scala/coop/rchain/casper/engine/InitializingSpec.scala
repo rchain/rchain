@@ -10,7 +10,7 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
@@ -74,10 +74,9 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
 
       // Get exporter for genesis block
       val genesisExporter = {
-        implicit val s       = scheduler
         val genesisStorePath = context.storageDirectory.resolve("rspace")
         val exporterTask =
-          Runtime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L) >>= {
+          RhoRuntime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L) >>= {
             case (_, _, hr) => hr.exporter
           }
         exporterTask.runSyncUnsafe()
