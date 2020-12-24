@@ -94,5 +94,5 @@ package object util {
       Try.apply(new String(bytes.toArray, StandardCharsets.UTF_8)).toEither
   }
 
-  val stringCodec: Codec[String] = stringSerialize.toCodec
+  val stringCodec: Codec[String] = stringSerialize.toSizeHeadCodec
 }

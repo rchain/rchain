@@ -95,7 +95,7 @@ object Engine {
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      enableStateExporter: Boolean
+      disableStateExporter: Boolean
   ): F[Unit] =
     for {
       _ <- Log[F].info("Making a transition to Running state.")
@@ -109,7 +109,7 @@ object Engine {
         approvedBlock,
         validatorId,
         init,
-        enableStateExporter
+        disableStateExporter
       )
       _ <- EngineCell[F].set(running)
 
@@ -129,12 +129,12 @@ object Engine {
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      trimState: Boolean = false,
-      enableStateExporter: Boolean = false
+      trimState: Boolean = true,
+      disableStateExporter: Boolean = false
   ): F[Unit] =
     for {
-      blockResponseQueue <- Queue.unbounded[F, BlockMessage]
-      stateResponseQueue <- Queue.unbounded[F, StoreItemsMessage]
+      blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
+      stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
       _ <- EngineCell[F].set(
             new Initializing(
               shardId,
@@ -144,7 +144,7 @@ object Engine {
               blockResponseQueue,
               stateResponseQueue,
               trimState,
-              enableStateExporter
+              disableStateExporter
             )
           )
     } yield ()

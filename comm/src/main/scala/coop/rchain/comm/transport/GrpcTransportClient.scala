@@ -1,7 +1,6 @@
 package coop.rchain.comm.transport
 
 import java.io.ByteArrayInputStream
-import java.nio.file.Path
 
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.syntax.all._
@@ -16,7 +15,6 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.PathOps.PathDelete
 import io.grpc.ManagedChannel
 import io.grpc.netty._
 import io.netty.handler.ssl.SslContext
@@ -24,6 +22,7 @@ import monix.eval.Task
 import monix.execution.Ack.Continue
 import monix.execution.{Cancelable, CancelableFuture, Scheduler}
 
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration.{FiniteDuration, _}
 import scala.util._
 
@@ -44,7 +43,6 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
     key: String,
     maxMessageSize: Int,
     packetChunkSize: Int,
-    tempFolder: Path,
     clientQueueSize: Int,
     channelsMap: Ref[F, Map[PeerNode, Deferred[F, BufferedGrpcStreamChannel[F]]]],
     ioScheduler: Scheduler
@@ -58,6 +56,9 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
 
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
+
+  // Cache to store received partial data (streaming packets)
+  private val cache = TrieMap[String, Array[Byte]]()
 
   private val clientSslContextTask: F[SslContext] =
     Sync[F]
@@ -86,12 +87,12 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
         .intercept(new SslSessionClientInterceptor(networkId))
         .overrideAuthority(peer.id.toString)
         .build()
-      buffer = new StreamObservable[F](peer, clientQueueSize, tempFolder)
+      buffer = new StreamObservable[F](peer, clientQueueSize, cache)
 
       buferSubscriber = buffer.subscribe(
         sMsg =>
-          streamBlobFile(sMsg.path, peer, sMsg.sender)
-            .guarantee(sMsg.path.deleteSingleFile[F])
+          streamBlobFile(sMsg.key, peer, sMsg.sender)
+            .guarantee(Sync[F].delay(cache.remove(sMsg.key)).void)
             .toTask
             .runToFuture >> Continue.pure[CancelableFuture]
       )
@@ -155,7 +156,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
   }
 
   private def streamBlobFile(
-      path: Path,
+      key: String,
       peer: PeerNode,
       sender: PeerNode
   ): F[Unit] = {
@@ -163,7 +164,7 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
     def timeout(packet: Packet): FiniteDuration =
       Math.max(packet.content.size().toLong * 5, DefaultSendTimeout.toMicros).micros
 
-    PacketOps.restore[F](path) >>= {
+    PacketOps.restore[F](key, cache) >>= {
       case Right(packet) =>
         Log[F].debug(
           s"Attempting to stream packet to $peer with timeout: ${timeout(packet).toMillis}ms"
@@ -175,10 +176,10 @@ class GrpcTransportClient[F[_]: Monixable: Concurrent: Parallel: Log: Metrics](
               Log[F].debug(
                 s"Error while streaming packet to $peer (timeout: ${timeout(packet).toMillis}ms): ${error.message}"
               )
-            case Right(_) => Log[F].debug(s"Streamed packet $path to $peer")
+            case Right(_) => Log[F].debug(s"Streamed packet $key to $peer")
           }
       case Left(error) =>
-        Log[F].error(s"Error while streaming packet $path to $peer: ${error.message}")
+        Log[F].error(s"Error while streaming packet $key to $peer: ${error.message}")
     }
   }
 }

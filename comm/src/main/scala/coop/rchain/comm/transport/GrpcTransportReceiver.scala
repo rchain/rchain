@@ -1,7 +1,5 @@
 package coop.rchain.comm.transport
 
-import java.nio.file.Path
-
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
@@ -12,14 +10,16 @@ import coop.rchain.comm.transport.buffer.LimitedBuffer
 import coop.rchain.comm.{CommMetricsSource, PeerNode}
 import coop.rchain.metrics.Metrics
 import coop.rchain.monix.Monixable
-import coop.rchain.shared.PathOps.PathDelete
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, UncaughtExceptionLogger}
-import io.grpc.netty.NettyServerBuilder
+import io.grpc.netty.{NettyChannelBuilder, NettyServerBuilder}
 import io.netty.handler.ssl.SslContext
 import monix.eval.Task
 import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
+
+import scala.collection.concurrent.TrieMap
 
 object GrpcTransportReceiver {
 
@@ -37,18 +37,11 @@ object GrpcTransportReceiver {
       maxStreamMessageSize: Long,
       buffersMap: Ref[F, Map[PeerNode, Deferred[F, MessageBuffers]]],
       messageHandlers: MessageHandlers[F],
-      tempFolder: Path,
-      parallelism: Int
-  )(implicit scheduler: Scheduler): F[Cancelable] = {
+      parallelism: Int,
+      cache: TrieMap[String, Array[Byte]]
+  )(implicit mainScheduler: Scheduler): F[Cancelable] = {
 
     val service = new RoutingGrpcMonix.TransportLayer {
-
-      private val queueScheduler =
-        Scheduler.fixedPool(
-          "tl-dispatcher-server-queue",
-          parallelism,
-          reporter = UncaughtExceptionLogger
-        )
 
       private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
         if (streamed.header.exists(_.networkId != networkId))
@@ -64,10 +57,10 @@ object GrpcTransportReceiver {
           // TODO cancel queues when peer is lost
           val tellCancellable = tellBuffer
             .mapParallelUnordered(parallelism)(messageHandlers._1(_).toTask)
-            .subscribe()(queueScheduler)
+            .subscribe()(mainScheduler)
           val blobCancellable = blobBuffer
             .mapParallelUnordered(parallelism)(messageHandlers._2(_).toTask)
-            .subscribe()(queueScheduler)
+            .subscribe()(mainScheduler)
           val buffersCancellable = Cancelable.collection(tellCancellable, blobCancellable)
 
           (tellBuffer, blobBuffer, buffersCancellable)
@@ -119,7 +112,7 @@ object GrpcTransportReceiver {
         import StreamHandler._
         import StreamError.StreamErrorToMessage
 
-        val result = handleStream(tempFolder, observable, circuitBreaker) >>= {
+        val result = handleStream(observable, circuitBreaker, cache) >>= {
           case Left(error @ StreamError.Unexpected(t)) =>
             Log[F].error(error.message, t).as(internalServerError(error.message))
 
@@ -129,7 +122,7 @@ object GrpcTransportReceiver {
           case Right(msg) => {
             val msgEnqueued =
               s"Stream chunk pushed to message buffer. Sender ${msg.sender.endpoint.host}, message ${msg.typeId}, " +
-                s"size ${msg.contentLength}, file ${msg.path}."
+                s"size ${msg.contentLength}, file ${msg.key}."
             val msgDropped =
               s"Stream chunk dropped, ${msg.sender.endpoint.host} stream queue overflown."
 
@@ -144,7 +137,7 @@ object GrpcTransportReceiver {
                   else
                     Metrics[F].incrementCounter("stream.chunks.dropped") >>
                       Log[F].debug(msgDropped) >>
-                      msg.path.deleteSingleFile[F] >>
+                      Sync[F].delay(cache.remove(msg.key)) >>
                       internalServerError(msgDropped).pure[F]
             } yield r
           }
@@ -167,10 +160,10 @@ object GrpcTransportReceiver {
 
     val server = NettyServerBuilder
       .forPort(port)
-      .executor(scheduler)
+      .executor(mainScheduler)
       .maxInboundMessageSize(maxMessageSize)
       .sslContext(serverSslContext)
-      .addService(RoutingGrpcMonix.bindService(service, scheduler))
+      .addService(RoutingGrpcMonix.bindService(service, mainScheduler))
       .intercept(new SslSessionServerInterceptor(networkId))
       .build
       .start

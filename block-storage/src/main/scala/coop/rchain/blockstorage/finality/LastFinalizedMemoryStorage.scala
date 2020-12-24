@@ -14,8 +14,8 @@ class LastFinalizedMemoryStorage[F[_]: Functor](
   override def put(blockHash: BlockHash): F[Unit] =
     lastFinalizedBlockHashState.set(blockHash.some)
 
-  override def get(genesis: BlockMessage): F[BlockHash] =
-    lastFinalizedBlockHashState.read.map(_.getOrElse(genesis.blockHash))
+  override def get(): F[Option[BlockHash]] =
+    lastFinalizedBlockHashState.read
 }
 
 object LastFinalizedMemoryStorage {

@@ -84,7 +84,7 @@ class TransportLayerTestImpl[F[_]: Monad]()(
 class TransportLayerServerTestImpl[F[_]: Monad](identity: PeerNode)(
     implicit val testNetworkF: TestNetwork[F]
 ) extends TransportLayerServer[F] {
-  def receive(
+  def handleReceive(
       dispatch: Protocol => F[CommunicationResponse],
       handleStreamed: Blob => F[Unit]
   ): F[Cancelable] =

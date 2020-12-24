@@ -9,7 +9,7 @@ import coop.rchain.rspace.history.{HistoryStoreInstances, RootsStoreInstances, S
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.state.TrieNode
 
-object RSpaceExporterImpl {
+object RSpaceExporterStore {
   // RSpace exporter constructor / smart constructor "guards" private class
   def apply[F[_]: Concurrent](
       historyStore: Store[F],

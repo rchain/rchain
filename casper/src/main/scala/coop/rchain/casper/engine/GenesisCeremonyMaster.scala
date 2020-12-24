@@ -56,7 +56,7 @@ object GenesisCeremonyMaster {
       shardId: String,
       finalizationRate: Int,
       validatorId: Option[ValidatorIdentity],
-      enableStateExporter: Boolean
+      disableStateExporter: Boolean
   ): F[Unit] =
     for {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
@@ -68,7 +68,7 @@ object GenesisCeremonyMaster {
                    shardId,
                    finalizationRate,
                    validatorId,
-                   enableStateExporter
+                   disableStateExporter
                  )
                case Some(approvedBlock) =>
                  val ab = approvedBlock.candidate.block
@@ -87,7 +87,7 @@ object GenesisCeremonyMaster {
                            approvedBlock,
                            validatorId,
                            ().pure[F],
-                           enableStateExporter
+                           disableStateExporter
                          )
                    _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()

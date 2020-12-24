@@ -11,7 +11,7 @@ object Context {
   def env(
       path: Path,
       mapSize: Long,
-      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS)
+      flags: List[EnvFlags] = List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
   ): Env[ByteBuffer] =
     Env
       .create(PROXY_SAFE)

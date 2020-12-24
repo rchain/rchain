@@ -16,6 +16,7 @@ trait BlockDagStorage[F[_]] {
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
   def close(): F[Unit]
+  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit]
 }
 
 object BlockDagStorage {
@@ -38,6 +39,7 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
+  def isFinalized(blockHash: BlockHash): F[Boolean]
 }
 
 trait EquivocationsTracker[F[_]] {

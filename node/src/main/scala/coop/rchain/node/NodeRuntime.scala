@@ -2,19 +2,19 @@ package coop.rchain.node
 
 import java.nio.file.{Files, Path}
 
-import cats.{~>, Parallel}
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.syntax.all._
 import cats.mtl._
 import cats.syntax.all._
+import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedFileStorage
+import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedKeyValueStorage}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.{BlockRetriever, _}
@@ -59,7 +59,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, Match, RSpace}
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
-import coop.rchain.shared.PathOps._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
@@ -115,15 +114,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                 )
 
       // 3. create instances of typeclasses
-      metrics       = diagnostics.effects.metrics[F]
-      time          = effects.time[F]
-      commTmpFolder = nodeConf.storage.dataDir.resolve("tmp").resolve("comm")
-      _ <- commTmpFolder.toFile
-            .exists()
-            .fold(
-              commTmpFolder.deleteDirectory[F](),
-              ().pure[F]
-            )
+      metrics = diagnostics.effects.metrics[F]
+      time    = effects.time[F]
 
       transport <- {
         implicit val s = scheduler
@@ -136,7 +128,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             nodeConf.tls.keyPath,
             nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
             nodeConf.protocolClient.grpcStreamChunkSize.toInt,
-            commTmpFolder,
             grpcScheduler
           )
       }
@@ -402,11 +393,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _ <- Log[F].info(
             s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
           )
+
       _ <- servers.transportServer
             .start(
               HandleMessages.handle[F](_),
               blob => packetHandler.handlePacket(blob.sender, blob.packet)
             )
+
       address = local.toAddress
       _       <- Log[F].info(s"Listening for traffic on $address.")
       _       <- EventLog[F].publish(Event.NodeStarted(address))
@@ -524,7 +517,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                               nodeConf.tls.keyPath,
                               nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
                               nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
-                              nodeConf.storage.dataDir.resolve("tmp").resolve("comm"),
                               nodeConf.protocolServer.maxMessageConsumers
                             )
                           )
@@ -788,7 +780,19 @@ object NodeRuntime {
         // Start block storage
         if (oldBlockStoreExists) oldStorage else KeyValueBlockStore()
       }
-
+      // Last finalized Block storage
+      lastFinalizedStorage <- {
+        for {
+          lastFinalizedBlockDb   <- casperStoreManager.store("last-finalized-block")
+          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
+          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
+          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
+          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+          _ <- LastFinalizedKeyValueStorage
+                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
+                .whenA(shouldMigrate)
+        } yield lastFinalizedStore
+      }
       // Block DAG storage
       blockDagStorage <- {
         implicit val kvm = casperStoreManager
@@ -808,7 +812,6 @@ object NodeRuntime {
         implicit val kvm = casperStoreManager
         CasperBufferKeyValueStorage.create[F]
       }
-      lastFinalizedStorage                  <- LastFinalizedFileStorage.make[F](lastFinalizedPath)
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
       oracle = {
@@ -824,8 +827,14 @@ object NodeRuntime {
           conf.casper.faultToleranceThreshold
         )
       }
+      estimator = {
+        implicit val sp = span
+        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
+      }
       synchronyConstraintChecker = {
         implicit val bs = blockStore
+        implicit val es = estimator
+        implicit val sp = span
         SynchronyConstraintChecker[F](
           conf.casper.synchronyConstraintThreshold
         )
@@ -836,10 +845,6 @@ object NodeRuntime {
         LastFinalizedHeightConstraintChecker[F](
           conf.casper.heightConstraintThreshold
         )
-      }
-      estimator = {
-        implicit val sp = span
-        Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
       }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
@@ -933,8 +938,8 @@ object NodeRuntime {
 
         CasperLaunch.of[F](
           conf.casper,
-          conf.protocolClient.trimState,
-          conf.protocolServer.enableStateExporter
+          !conf.protocolClient.disableLfs,
+          conf.protocolServer.disableStateExporter
         )
       }
       packetHandler = {

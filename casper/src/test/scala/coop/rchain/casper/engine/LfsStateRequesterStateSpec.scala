@@ -1,11 +1,10 @@
 package coop.rchain.casper.engine
 
-import cats.syntax.all._
-import coop.rchain.casper.engine.LastFinalizedStateBlockRequester.ST
+import coop.rchain.casper.engine.LfsTupleSpaceRequester.ST
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
 
-class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+class LfsStateRequesterStateSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   "getNext" should "return empty list when called again" in {
     val st = ST(Seq(10))
@@ -35,6 +34,20 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     ids2 shouldBe Seq(10, 9, 8)
   }
 
+  "getNext" should "return requested items on resend" in {
+    val st = ST(Seq(10))
+
+    // Calling next should return new items
+    val (st1, ids1) = st.getNext(resend = false)
+
+    ids1 shouldBe Seq(10)
+
+    // Calling next with resend should return already requested
+    val (_, ids2) = st1.getNext(resend = true)
+
+    ids2 shouldBe Seq(10)
+  }
+
   "received" should "return true for requested and false for unknown" in {
     val st = ST(Seq(10))
 
@@ -52,54 +65,26 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     isReceivedFalse shouldBe false
   }
 
-  "admitLatest" should "return found and empty if exists in latest" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
-
-    // Admit message, check if latest and remove it
-    // - returns if latest is found and if latest set is empty
-    val (_, (isFound, isEmpty)) = st.admitLatest(10)
-
-    isFound shouldBe true
-    isEmpty shouldBe true
-  }
-
-  "admitLatest called again" should "return not found" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
-
-    val (st1, _) = st.admitLatest(10)
-
-    val (_, (isFound, isEmpty)) = st1.admitLatest(10)
-
-    isFound shouldBe false
-    isEmpty shouldBe true
-  }
-
-  "done" should "return minimum height if supplied" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
-
-    val (_, minHeight) = st.done(10, height = 1000L.some)
-
-    minHeight shouldBe 1000L
-  }
-
-  "done" should "return existing minimum height if not supplied" in {
-    val st = ST(Seq(10), latest = Set[Int](5))
-
-    val (_, minHeight) = st.done(10, none)
-
-    minHeight shouldBe Long.MaxValue
-  }
-
   "done" should "make state finished" in {
     val st = ST(Seq(10))
 
-    val (st1, _) = st.done(10, none)
+    // If item is not received, it should stay unfinished
+    val st1 = st.done(10)
 
-    st1.isFinished shouldBe true
+    st1.isFinished shouldBe false
+
+    // Mark next as requested ...
+    val (st2, _) = st1.getNext(resend = false)
+    // ... and received
+    val (st3, _) = st2.received(10)
+
+    val st4 = st3.done(10)
+
+    st4.isFinished shouldBe true
   }
 
   "from start to finish" should "receive one item" in {
-    val st = ST(Seq(10), latest = Set[Int](10))
+    val st = ST(Seq(10))
 
     // Calling next should produce initial set
     val (st1, ids1) = st.getNext(resend = false)
@@ -119,12 +104,10 @@ class LFSBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
 
     isReceived shouldBe true
 
-    val (st4, _) = st3.done(10, none)
-
-    val (st5, _) = st4.admitLatest(10)
+    val st4 = st3.done(10)
 
     // Return finished when all items as Done
-    st5.isFinished shouldBe true
+    st4.isFinished shouldBe true
   }
 
 }

@@ -156,7 +156,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
   override def createCheckpoint(): F[Checkpoint] = syncF.defer {
     val historyRepository = historyRepositoryAtom.get()
     for {
-      _ <- createNewHotStore(historyRepository)(serializeK.toCodec)
+      _ <- createNewHotStore(historyRepository)(serializeK.toSizeHeadCodec)
       _ <- restoreInstalls()
       _ = softReport.update(_ => Seq.empty[ReportingEvent])
       _ = report.update(_ => Seq.empty[Seq[ReportingEvent]])

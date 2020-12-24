@@ -19,7 +19,7 @@ trait ColdStore[F[_]] {
 }
 
 object ColdStoreInstances {
-  private[history] def codecPersistedData: Codec[PersistedData] =
+  val codecPersistedData: Codec[PersistedData] =
     discriminated[PersistedData]
       .by(uint2)
       .subcaseP(0) {

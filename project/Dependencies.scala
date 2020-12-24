@@ -14,8 +14,8 @@ object Dependencies {
   val slf4jVersion      = "1.7.25"
 
   // format: off
-  val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.66"
-  val bouncyPkixCastle    = "org.bouncycastle"            % "bcpkix-jdk15on"            % "1.66"
+  val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.67"
+  val bouncyPkixCastle    = "org.bouncycastle"            % "bcpkix-jdk15on"            % "1.67"
   val catsCore            = "org.typelevel"              %% "cats-core"                 % catsVersion
   val catsLawsTest        = "org.typelevel"              %% "cats-laws"                 % catsVersion % "test"
   val catsLawsTestkitTest = "org.typelevel"              %% "cats-testkit"              % catsVersion % "test"
@@ -30,10 +30,10 @@ object Dependencies {
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
-  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.0.3"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.2"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.4.4"
-  val guava               = "com.google.guava"            % "guava"                     % "24.1.1-jre"
+  val guava               = "com.google.guava"            % "guava"                     % "30.0-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
@@ -55,14 +55,14 @@ object Dependencies {
   val lmdbjava            = "org.lmdbjava"                % "lmdbjava"                  % "0.8.1"
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "5.3"
-  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.5.1"
+  val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
-  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "1.1.5"
-  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.14.3"
-  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.13" % "1.1.8" % "test"
+  val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
+  val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.1"
+  val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.5" % "test"
   val scalactic           = "org.scalactic"              %% "scalactic"                 % "3.0.5" % "test"
   val scalapbCompiler     = "com.thesamet.scalapb"       %% "compilerplugin"            % scalapb.compiler.Version.scalapbVersion
   val scalapbRuntime      = "com.thesamet.scalapb"       %% "scalapb-runtime"           % scalapb.compiler.Version.scalapbVersion % "protobuf"
@@ -70,15 +70,15 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.31.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.31.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.34.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
-  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.10.3"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "0.8.0"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.20"
+  val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M2"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.21"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
@@ -115,7 +115,7 @@ object Dependencies {
     "com.typesafe"             % "config"                  % "1.4.0"
   )
 
-  private val kindProjector = compilerPlugin("org.spire-math" %% "kind-projector" % "0.9.10")
+  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full

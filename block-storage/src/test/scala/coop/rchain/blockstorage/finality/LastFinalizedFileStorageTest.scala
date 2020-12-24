@@ -6,6 +6,7 @@ import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.blockstorage.util.io._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.models.blockImplicits._
 import coop.rchain.shared.scalatestcontrib._
@@ -40,7 +41,7 @@ class LastFinalizedFileStorageTest
   "Last finalized file storage" should "return genesis on empty state" in {
     forAll(blockElementGen()) { genesis =>
       withLfbStorage {
-        _.get(genesis) shouldBeF genesis.blockHash
+        _.getOrElse(genesis.blockHash) shouldBeF genesis.blockHash
       }
     }
   }
@@ -52,7 +53,7 @@ class LastFinalizedFileStorageTest
           lfbStorage1 <- LastFinalizedFileStorage.make[Task](lfbStorageFile)
           _           <- lfbStorage1.put(blockHash)
           lfbStorage2 <- LastFinalizedFileStorage.make[Task](lfbStorageFile)
-          _           <- lfbStorage2.get(genesis) shouldBeF blockHash
+          _           <- lfbStorage2.getOrElse(genesis.blockHash) shouldBeF blockHash
         } yield ()
       }
     }

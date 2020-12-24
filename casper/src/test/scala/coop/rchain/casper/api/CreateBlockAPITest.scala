@@ -66,6 +66,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
     implicit val metricsEff: Metrics[Effect] = new metrics.Metrics.MetricsNOP[Effect]
     implicit val logEff                      = new LogStub[Effect]
     implicit val spanEff                     = NoopSpan[Effect]
+    implicit val estimator                   = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val time = new Time[Task] {
       private val timer                               = Task.timer
       def currentMillis: Task[Long]                   = timer.clock.realTime(MILLISECONDS)
@@ -148,6 +149,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           val engine                        = new EngineWithCasper[Task](n1.casperEff)
           implicit val blockStore           = n1.blockStore
           implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val estimator            = Estimator[Task](Estimator.UnlimitedParents, None)
           implicit val synchronyConstraintChecker =
             SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
@@ -180,6 +182,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           val engine                        = new EngineWithCasper[Task](n1.casperEff)
           implicit val blockStore           = n1.blockStore
           implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val estimator            = Estimator[Task](Estimator.UnlimitedParents, None)
           implicit val synchronyConstraintChecker =
             SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
@@ -211,6 +214,7 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
           val engine                        = new EngineWithCasper[Task](n1.casperEff)
           implicit val blockStore           = n1.blockStore
           implicit val lastFinalizedStorage = n1.lastFinalizedStorage
+          implicit val estimator            = Estimator[Task](Estimator.UnlimitedParents, None)
           implicit val synchronyConstraintChecker =
             SynchronyConstraintChecker[Effect](syncConstraintThreshold)
           implicit val lastFinalizedHeightConstraintChecker =
@@ -246,7 +250,7 @@ private class SleepingMultiParentCasperImpl[F[_]: Monad: Time](underlying: Multi
   def getRuntimeManager: F[RuntimeManager[F]] = underlying.getRuntimeManager
   def fetchDependencies: F[Unit]              = underlying.fetchDependencies
 
-  def getGenesis: F[BlockMessage]        = underlying.getGenesis
+  def getApprovedBlock: F[BlockMessage]  = underlying.getApprovedBlock
   def getValidator: F[Option[PublicKey]] = underlying.getValidator
   override def createBlock: F[CreateBlockStatus] =
     for {

@@ -21,7 +21,7 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
       validator: Validator
   ): F[Boolean] =
     for {
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].get(genesis)
+      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(genesis.blockHash)
       lastFinalizedBlock     <- dag.lookupUnsafe(lastFinalizedBlockHash)
       latestMessageOpt       <- dag.latestMessage(validator)
       result <- latestMessageOpt match {
