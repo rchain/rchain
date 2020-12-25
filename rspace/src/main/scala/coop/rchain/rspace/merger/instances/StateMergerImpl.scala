@@ -29,9 +29,13 @@ import coop.rchain.rspace.history.{
 }
 import coop.rchain.rspace.internal.{toOrderedByteVectors, Datum, WaitingContinuation}
 import coop.rchain.rspace.merger.StateMerger
+import coop.rchain.rspace.trace.Event.IsConflict
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.shared.Serialize
 import scodec.Codec
+
+import scala.collection.immutable.Set
+
 object StateMergerImpl {
 
   sealed trait StateMergeStoreAction

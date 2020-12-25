@@ -1,5 +1,6 @@
 package coop.rchain.casper.batch1
 
+import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
@@ -126,10 +127,9 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
                             isConflictCase.validEventLogs.toList
                           )
             dataContinuationAtMergedState <- getDataContinuationOnChannel0(runtime, mergedState)
-            _ = assert(
-              dataContinuationAtMergedState == mergedResultState,
-              "merged state is not correct"
-            )
+            _ <- Sync[Effect]
+                  .raiseError(new Exception(dataContinuationAtMergedState.toString))
+                  .whenA(dataContinuationAtMergedState != mergedResultState)
           } yield true
       }
       .adaptError {
@@ -139,7 +139,10 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
                                      | b1   = ${b1.value}
                                      | b2   = ${b2.value}
                                      | The conflict result should be ${isConflict} and
-                                     | the mergedState should be ${mergedResultState}
+                                     | the mergedState should be
+                                     | ${mergedResultState}
+                                     | and it is
+                                     | ${e}
                                      | 
                                      | go see it at ${file.value}:${line.value}
                                      | """.stripMargin, e, 5).severedAtStackDepth

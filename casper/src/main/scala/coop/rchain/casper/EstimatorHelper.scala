@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
@@ -126,47 +126,66 @@ object EstimatorHelper {
     * @param sc
     * @return
     */
-  def computeMergeChanges[F[_]: Sync, C, P, A, K](
+  def computeMergeChanges[F[_]: Concurrent, C, P, A, K](
       historyRepo: HistoryRepository[F, C, P, A, K],
       baseState: Blake2b256Hash,
       mainDeploys: List[ProcessedDeploy],
       mergingDeploys: List[ProcessedDeploy]
-  )(implicit sc: Serialize[C]): F[MergeChanges] = {
+  ): F[MergeChanges] = {
+
     // errored deploy is always non-conflict
-    val mainNonErrDeploys    = mainDeploys.filter(!_.isFailed)
-    val mergingNonErrDeploys = mergingDeploys.filter(!_.isFailed)
-    historyRepo
-      .isConflict(
-        baseState,
-        mainNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent)),
-        mergingNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent))
-      )
-      .map { conflictCase =>
-        conflictCase match {
-          case NonConflict(_, rightEvents) =>
-            MergeChanges(mergingDeploys, List.empty[ProcessedDeploy], rightEvents.events)
-          case Conflict(_, _, conflicts) => {
-            val (conflictDeploys, nonConflictDeploys) = mergingDeploys.partition(
-              d =>
-                d.deployLog.forall(
-                  e =>
-                    EventConverter.toRspaceEvent(e) match {
-                      case Produce(channelsHash, _, _) => conflicts.contains(channelsHash)
-                      case Consume(channelsHasees, _, _) =>
-                        channelsHasees.exists(conflicts.contains(_))
-                      case COMM(consume, produces, _, _) =>
-                        consume.channelsHashes.exists(conflicts.contains(_)) || produces.exists(
-                          p => conflicts.contains(p.channelsHash)
-                        )
-                    }
-                )
-            )
-            MergeChanges(
-              nonConflictDeploys,
-              conflictDeploys,
-              extractEventGroup(nonConflictDeploys.flatMap(_.deployLog)).events
-            )
+    val successDeploysMain  = mainDeploys.filterNot(_.isFailed)
+    val successDeploysMerge = mergingDeploys.filterNot(_.isFailed)
+
+    // free IOEvents are produces and consumes that are not part of any COMM event, or they are persistent
+    def getFreeIOEvents(d: ProcessedDeploy) = {
+      val (prod, cons, comms) = d.deployLog
+        .map(EventConverter.toRspaceEvent)
+        .foldLeft((Seq.empty[Produce], Seq.empty[Consume], Seq.empty[COMM])) { (op, event) =>
+          event match {
+            case p: Produce => (op._1 :+ p, op._2, op._3)
+            case c: Consume => (op._1, op._2 :+ c, op._3)
+            case c: COMM    => (op._1, op._2, op._3 :+ c)
           }
+        }
+      val freeProd = prod.filter(p => p.persistent || !comms.exists(_.produces.contains(p)))
+      val freeCons = cons.filter(c => c.persistent || !comms.exists(_.consume == c))
+      ((freeProd ++ freeCons))
+    }
+
+    val freeIOEventsMain  = successDeploysMain.map(getFreeIOEvents).reduce(_ ++ _)
+    val freeIOEventsMerge = successDeploysMerge.map(getFreeIOEvents).reduce(_ ++ _)
+
+    historyRepo
+      .simpleConflictDetector(
+        baseState,
+        freeIOEventsMain,
+        freeIOEventsMerge
+      )
+      .map {
+        case Seq() =>
+          MergeChanges(
+            mergingDeploys,
+            List.empty[ProcessedDeploy],
+            extractEventGroup(mergingDeploys.flatMap(_.deployLog)).events
+          )
+        case conflicts => {
+          val (conflictDeploys, nonConflictDeploys) = mergingDeploys.partition(
+            d =>
+              d.deployLog.forall(
+                e =>
+                  EventConverter.toRspaceEvent(e) match {
+                    case Produce(channelsHash, _, _)   => conflicts.contains(channelsHash)
+                    case Consume(channelsHashes, _, _) => channelsHashes.exists(conflicts.contains)
+                    case COMM(_, _, _, _)              => true
+                  }
+              )
+          )
+          MergeChanges(
+            nonConflictDeploys,
+            conflictDeploys,
+            extractEventGroup(nonConflictDeploys.flatMap(_.deployLog)).events
+          )
         }
       }
   }

@@ -26,6 +26,8 @@ trait MergeabilityRules {
       joins: Seq[Seq[Par]]
   ) {
 
+    override def toString = s"State:\n datas: ${datas}\n conts: ${continuations}\n joins: ${joins}"
+
     def ++(obj: State): State =
       State(
         datas ++ obj.datas,
