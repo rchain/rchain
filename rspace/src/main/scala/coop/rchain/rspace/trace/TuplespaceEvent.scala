@@ -1,7 +1,6 @@
-package coop.rchain.casper
+package coop.rchain.rspace.trace
 
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.trace._
 
 final case class TuplespaceEvent(
     incoming: TuplespaceOperation,
@@ -39,6 +38,7 @@ object TuplespaceEvent {
 
   def from(consume: Consume): Option[(Blake2b256Hash, TuplespaceEvent)] = consume match {
     case Consume(singleChannelHash :: Nil, _, _) =>
+      // ???????????????? it is possible that the consume is peek
       Some(singleChannelHash -> TuplespaceEvent(toOperation(consume, false), None))
     case _ => None
   }
@@ -66,7 +66,7 @@ object TuplespaceEvent {
 
   implicit class TuplespaceEventOps(val ev: TuplespaceEvent) extends AnyVal {
 
-    private[casper] def conflicts(other: TuplespaceEvent): Boolean =
+    def conflicts(other: TuplespaceEvent): Boolean =
       if (ev.incoming.polarity == other.incoming.polarity) {
 
         val bothPeeks = (ev.incoming.cardinality == Peek) && (other.incoming.cardinality ==
@@ -82,7 +82,7 @@ object TuplespaceEvent {
 
       } else ev.unsatisfied && other.unsatisfied
 
-    private[casper] def unsatisfied: Boolean =
+    def unsatisfied: Boolean =
       ev.incoming.cardinality match {
         case Peek      => ev.matched.isEmpty
         case Linear    => ev.matched.forall(_.cardinality == Peek)

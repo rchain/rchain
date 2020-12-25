@@ -1,22 +1,31 @@
 package coop.rchain.casper
 
-import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.protocol.ProcessedDeploy
+import coop.rchain.casper.protocol.Event
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{DagOperations, EventConverter, ProtoUtil}
+import coop.rchain.casper.util.{DagOperations, EventConverter}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
+import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.trace._
-import coop.rchain.shared.Log
+import coop.rchain.rspace.trace.{COMM, Consume, EventGroup, Produce, Event => RSpaceEvent}
+import coop.rchain.rspace.trace.Event.{
+  allChannels,
+  containConflictingEvents,
+  extractJoinedChannels,
+  extractRSpaceEventGroup,
+  Conflict,
+  NonConflict
+}
+import coop.rchain.shared.{Log, Serialize}
 
 import scala.collection.BitSet
-
-final case class BlockEvents(produces: Set[Produce], consumes: Set[Consume], comms: Set[COMM])
 
 object EstimatorHelper {
 
@@ -60,7 +69,7 @@ object EstimatorHelper {
       conflictsBecauseOfJoins = extractJoinedChannels(b1Events)
         .intersect(allChannels(b2Events))
         .nonEmpty || extractJoinedChannels(b2Events).intersect(allChannels(b1Events)).nonEmpty
-      conflicts = conflictsBecauseOfJoins || containConflictingEvents(b1Events, b2Events)
+      conflicts = conflictsBecauseOfJoins || containConflictingEvents(b1Events, b2Events).nonEmpty
       _ <- if (conflicts) {
             Log[F].info(
               s"Blocks ${PrettyPrinter.buildString(b1.blockHash)} and ${PrettyPrinter
@@ -75,99 +84,112 @@ object EstimatorHelper {
           }
     } yield conflicts
 
-  private[this] def containConflictingEvents(
-      b1Events: BlockEvents,
-      b2Events: BlockEvents
-  ): Boolean = {
-    def channelConflicts(
-        b1Events: Set[TuplespaceEvent],
-        b2Events: Set[TuplespaceEvent]
-    ): Boolean =
-      (for {
-        b1  <- b1Events
-        b2  <- b2Events
-        res = b1.conflicts(b2)
-        // TODO: fail fast
-      } yield (res)).contains(true)
+  final case class MergeChanges(
+      validDeploys: List[ProcessedDeploy],
+      rejectedDeploys: List[ProcessedDeploy],
+      validEventLogs: Seq[RSpaceEvent]
+  )
 
-    val b1Ops = tuplespaceEventsPerChannel(b1Events)
-    val b2Ops = tuplespaceEventsPerChannel(b2Events)
-    val conflictPerChannel = b1Ops
-      .map {
-        case (channel, v) =>
-          (channel, channelConflicts(v, b2Ops.getOrElse(channel, Set.empty)))
-      }
-    conflictPerChannel
-      .filter { case (_, conflicts) => conflicts }
-      .keys
-      .nonEmpty
-  }
-
-  private[this] def isVolatile(comm: COMM, consumes: Set[Consume], produces: Set[Produce]) =
-    !comm.consume.persistent && comm.peeks.isEmpty && consumes.contains(comm.consume) && comm.produces
-      .forall(
-        produce => !produce.persistent && produces.contains(produce)
+  /**
+    * When merging two blocks in casper, you can suppose the minor case like below.
+    *
+    *       mergedBlock
+    *       /        \
+    * mainBlock    mergingBlock
+    *       \       /
+    *       baseBlock
+    *
+    *  The `baseState` should be the `postState` of the baseBlock which the outcome of baseBlock and the state should
+    *  be the start of mainBlock and mergingBlock.
+    *
+    *  The `mainDeploys` are all the deploys in the `mainBlock` and the mergingDeploys are all the
+    *  deploys in `mergingBlock`.
+    *
+    *  The minor case can be extended like below.
+    *
+    *          mergedBlock
+    *       /             \
+    *     b1              mergingBlock
+    *     |               |
+    *     b2              |
+    *       \            /
+    *          baseBlock
+    *
+    *  The `mainDeploys` should be all the deploys in `b1` and `b2`.
+    *
+    *  The function would return conflict detection on these deploys between main side and merging side.
+    *
+    * @param historyRepo [[coop.rchain.rspace.history.HistoryRepository]] which is used for compute mergeChanges
+    * @param baseState
+    * @param mainDeploys
+    * @param mergingDeploys
+    * @param sc
+    * @return
+    */
+  def computeMergeChanges[F[_]: Sync, C, P, A, K](
+      historyRepo: HistoryRepository[F, C, P, A, K],
+      baseState: Blake2b256Hash,
+      mainDeploys: List[ProcessedDeploy],
+      mergingDeploys: List[ProcessedDeploy]
+  )(implicit sc: Serialize[C]): F[MergeChanges] = {
+    // errored deploy is always non-conflict
+    val mainNonErrDeploys    = mainDeploys.filter(!_.isFailed)
+    val mergingNonErrDeploys = mergingDeploys.filter(!_.isFailed)
+    historyRepo
+      .isConflict(
+        baseState,
+        mainNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent)),
+        mergingNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent))
       )
-
-  private[this] def allChannels(events: BlockEvents) =
-    events.produces.map(_.channelsHash).toSet ++ events.consumes
-      .flatMap(_.channelsHashes)
-      .toSet ++ events.comms.flatMap { comm =>
-      comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
-    }.toSet
+      .map { conflictCase =>
+        conflictCase match {
+          case NonConflict(_, rightEvents) =>
+            MergeChanges(mergingDeploys, List.empty[ProcessedDeploy], rightEvents.events)
+          case Conflict(_, _, conflicts) => {
+            val (conflictDeploys, nonConflictDeploys) = mergingDeploys.partition(
+              d =>
+                d.deployLog.forall(
+                  e =>
+                    EventConverter.toRspaceEvent(e) match {
+                      case Produce(channelsHash, _, _) => conflicts.contains(channelsHash)
+                      case Consume(channelsHasees, _, _) =>
+                        channelsHasees.exists(conflicts.contains(_))
+                      case COMM(consume, produces, _, _) =>
+                        consume.channelsHashes.exists(conflicts.contains(_)) || produces.exists(
+                          p => conflicts.contains(p.channelsHash)
+                        )
+                    }
+                )
+            )
+            MergeChanges(
+              nonConflictDeploys,
+              conflictDeploys,
+              extractEventGroup(nonConflictDeploys.flatMap(_.deployLog)).events
+            )
+          }
+        }
+      }
+  }
 
   private[this] def extractBlockEvents[F[_]: Sync: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]
-  ): F[BlockEvents] =
+  ): F[EventGroup] =
     for {
       ancestors <- blockAncestorsMeta.traverse(
                     blockAncestorMeta => BlockStore[F].getUnsafe(blockAncestorMeta.blockHash)
                   )
-      ancestorEvents = ancestors
+      events = ancestors
         .flatMap(_.body.deploys.flatMap(_.deployLog))
-        .map(EventConverter.toRspaceEvent)
-        .toSet
-      allProduceEvents = ancestorEvents.collect { case p: Produce => p }
-      allConsumeEvents = ancestorEvents.collect { case c: Consume => c }
-      allCommEvents    = ancestorEvents.collect { case c: COMM    => c }
-      (volatileCommEvents, nonVolatileCommEvents) = allCommEvents
-        .partition(isVolatile(_, allConsumeEvents, allProduceEvents))
-      producesInVolatileCommEvents = volatileCommEvents.flatMap(_.produces)
-      consumesInVolatileCommEvents = volatileCommEvents.map(_.consume)
-      produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
-      consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
-    } yield BlockEvents(produceEvents, consumeEvents, nonVolatileCommEvents)
+      eventGroup = extractEventGroup(events)
+    } yield eventGroup
 
-  private[this] def extractJoinedChannels(b: BlockEvents): Set[Blake2b256Hash] = {
-
-    def joinedChannels(consumes: Set[Consume]) =
-      consumes.withFilter(Consume.hasJoins).flatMap(_.channelsHashes)
-
-    joinedChannels(b.consumes) ++ joinedChannels(b.comms.map(_.consume))
-
-  }
-
-  private[this] def tuplespaceEventsPerChannel(
-      b: BlockEvents
-  ): Map[Blake2b256Hash, Set[TuplespaceEvent]] = {
-    val nonPersistentProducesInComms = b.comms.flatMap(_.produces).filterNot(_.persistent)
-    val nonPersistentConsumesInComms = b.comms.map(_.consume).filterNot(_.persistent)
-    val peekedProducesInCommsHashes =
-      b.comms.withFilter(_.peeks.nonEmpty).flatMap(_.produces).map(_.hash)
-
-    val freeProduces = b.produces
-      .diff(nonPersistentProducesInComms)
-      .filterNot(p => peekedProducesInCommsHashes.contains(p.hash) && !p.persistent)
-
-    val freeConsumes = b.consumes.diff(nonPersistentConsumesInComms)
-
-    val produceEvents = freeProduces.map(TuplespaceEvent.from(_))
-    val consumeEvents = freeConsumes.flatMap(TuplespaceEvent.from(_))
-    val commEvents    = b.comms.flatMap(TuplespaceEvent.from(_, b.consumes))
-
-    (produceEvents ++ consumeEvents ++ commEvents)
-      .groupBy(_._1)
-      .mapValues[Set[TuplespaceEvent]](_.map(_._2))
+  /**
+    * @return EventGroup contains all the events which is not volatile in the scope
+    */
+  private[this] def extractEventGroup(events: List[Event]): EventGroup = {
+    val rspaceEvents = events
+      .map(EventConverter.toRspaceEvent)
+    extractRSpaceEventGroup(rspaceEvents)
   }
 
 }

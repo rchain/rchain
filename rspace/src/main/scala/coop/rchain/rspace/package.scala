@@ -1,6 +1,7 @@
 package coop.rchain
 
 import coop.rchain.metrics.Metrics
+import coop.rchain.rspace.history.syntax.HistoryRepositorySyntax
 import coop.rchain.rspace.state.RSpaceExporterSyntax
 
 package object rspace {
@@ -9,5 +10,4 @@ package object rspace {
   // Importing syntax object means using all extensions in the project
   object syntax extends AllSyntaxRSpace
 }
-
-trait AllSyntaxRSpace extends RSpaceExporterSyntax
+trait AllSyntaxRSpace extends RSpaceExporterSyntax with HistoryRepositorySyntax
