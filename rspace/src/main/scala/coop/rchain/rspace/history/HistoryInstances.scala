@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.{Applicative, FlatMap, Parallel}
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
@@ -19,7 +19,7 @@ object HistoryInstances {
 
   def MalformedTrieError = new RuntimeException("malformed trie")
 
-  final case class MergingHistory[F[_]: Parallel: Sync](
+  final case class MergingHistory[F[_]: Parallel: Concurrent: Sync](
       root: Blake2b256Hash,
       historyStore: CachingHistoryStore[F]
   ) extends History[F] {
@@ -307,8 +307,7 @@ object HistoryInstances {
           commitUncommonLeftSubtrie(currentPath, previousPath, previousRoot)
       }
 
-    def process(actions: List[HistoryAction]): F[History[F]] = {
-      implicit val parallel = Parallel[F]
+    def process(actions: List[HistoryAction]): F[History[F]] =
       for {
         _ <- Sync[F].ensure(actions.pure[F])(
               new RuntimeException("Cannot process duplicate actions on one key")
@@ -318,7 +317,13 @@ object HistoryInstances {
         // TODO: make processing of subtries parallel again,
         //  sequential execution is now to prevent the bug with root hash mismatch.
         // https://rchain.atlassian.net/browse/RCHAIN-3940
-        roots            <- partitions.traverse(tupled(processSubtree(this.root)))
+        roots <- fs2.Stream
+                  .emits(
+                    partitions.map(p => fs2.Stream.eval(processSubtree(this.root)(p._1, p._2)))
+                  )
+                  .parJoinUnbounded
+                  .compile
+                  .toList
         modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
         unmodified       <- extractUnmodifiedRootElements(partitions)
         all              = modified ++ unmodified
@@ -329,7 +334,6 @@ object HistoryInstances {
         _                <- historyStore.commit(newRootHash)
         _                <- historyStore.clear()
       } yield this.copy(root = newRootHash)
-    }
 
     private def hasNoDuplicates(actions: List[HistoryAction]) =
       actions.map(_.key).toSet.size == actions.size
@@ -562,7 +566,7 @@ object HistoryInstances {
 
   }
 
-  def merging[F[_]: Sync: Parallel](
+  def merging[F[_]: Concurrent: Parallel](
       root: Blake2b256Hash,
       historyStore: HistoryStore[F]
   ): History[F] =

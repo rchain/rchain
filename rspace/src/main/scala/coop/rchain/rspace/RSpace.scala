@@ -351,7 +351,7 @@ object RSpace {
       )
     } yield space
 
-  def setUp[F[_], C, P, A, K](
+  def setUp[F[_]: Log, C, P, A, K](
       dataDir: Path,
       mapSize: Long,
       branch: Branch

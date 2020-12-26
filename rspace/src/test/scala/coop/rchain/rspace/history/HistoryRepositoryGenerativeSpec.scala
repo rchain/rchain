@@ -29,7 +29,7 @@ import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Serialize
+import coop.rchain.shared.{Log, Serialize}
 
 import scala.concurrent.duration._
 
@@ -48,7 +48,8 @@ class LMDBHistoryRepositoryGenerativeSpec
       List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
     )
 
-  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
+  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
     for {
       historyLmdbStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
       historyStore     = HistoryStoreInstances.historyStore(historyLmdbStore)
@@ -73,6 +74,7 @@ class LMDBHistoryRepositoryGenerativeSpec
           stringSerialize
         )
     } yield repository
+  }
 
   protected override def afterAll(): Unit =
     dbDir.recursivelyDelete()
@@ -85,6 +87,7 @@ class InmemHistoryRepositoryGenerativeSpec
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+    implicit val log: Log[Task] = new Log.NOPLog[Task]
     for {
       channelStore <- Sync[Task].pure {
                        new ChannelStoreImpl[Task, String](

@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
@@ -25,11 +25,11 @@ import coop.rchain.rspace.{
   InsertJoins,
   RSpace
 }
-import coop.rchain.shared.Serialize
+import coop.rchain.shared.{Log, Serialize}
 import scodec.Codec
 import scodec.bits.ByteVector
 
-final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
+final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdStore[F],
@@ -83,6 +83,20 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
         )
       case None => Seq.empty[internal.Datum[A]].pure[F]
     }
+
+  override def getDataWithBytes(channelHash: Blake2b256Hash): F[Seq[(Datum[A], ByteVector)]] =
+    fetchData(channelHash).flatMap {
+      case Some(DataLeaf(bytes)) =>
+        decodeSortedWithBytes[internal.Datum[A]](bytes).pure[F]
+      case Some(p) =>
+        Sync[F].raiseError[Seq[(internal.Datum[A], ByteVector)]](
+          new RuntimeException(
+            s"Found unexpected leaf while looking for data at key $channelHash, data: $p"
+          )
+        )
+      case None => Seq.empty[(internal.Datum[A], ByteVector)].pure[F]
+    }
+
   override def getData(channel: C): F[Seq[internal.Datum[A]]] =
     getData(hashDataChannel(channel, codecC))
 
@@ -98,6 +112,25 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
         )
       case None => Seq.empty[internal.WaitingContinuation[P, K]].pure[F]
     }
+
+  // This methods returning raw bytes along with decode value is performnce optimisatoin
+  // Making diff for two Seq[(WaitingContinuation[P, K]] is 5-10 tims slower then Seq[ByteVector],
+  // so the second val of the tuple is exposed to compare values
+  override def getContinuationsWithBytes(
+      hash: Blake2b256Hash
+  ): F[Seq[(WaitingContinuation[P, K], ByteVector)]] =
+    fetchData(hash).flatMap {
+      case Some(ContinuationsLeaf(bytes)) =>
+        decodeSortedWithBytes[internal.WaitingContinuation[P, K]](bytes).pure[F]
+      case Some(p) =>
+        Sync[F].raiseError[Seq[(WaitingContinuation[P, K], ByteVector)]](
+          new RuntimeException(
+            s"Found unexpected leaf while looking for continuations at key $hash, data: $p"
+          )
+        )
+      case None => Seq.empty[(WaitingContinuation[P, K], ByteVector)].pure[F]
+    }
+
   override def getContinuations(channels: Seq[C]): F[Seq[internal.WaitingContinuation[P, K]]] =
     getContinuations(hashContinuationsChannels(channels, serializeC))
 
@@ -114,7 +147,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     )
 
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
-    actions.map {
+    actions.par.map {
       case i: InsertData[C, A] =>
         val key  = hashDataChannel(i.channel, codecC).bytes
         val data = encodeData(i.data)
@@ -136,7 +169,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
       case d: DeleteJoins[C] =>
         val key = hashJoinsChannel(d.channel, codecC).bytes
         s"${key.toHex};delete-join;0"
-    }
+    }.toList
 
   private def transformAndStore(hotStoreActions: List[HotStoreAction]): F[List[HistoryAction]] = {
     import cats.instances.list._
@@ -266,13 +299,29 @@ object HistoryRepositoryImpl {
   val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
 
   def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
-    codecSeqByteVector.decode(data.bits).get.value.map(bv => codec.decode(bv.bits).get.value)
+    codecSeqByteVector
+      .decode(data.bits)
+      .get
+      .value
+      .par
+      .map(bv => codec.decode(bv.bits).get.value)
+      .toVector
+
+  def decodeSortedWithBytes[D](data: ByteVector)(implicit codec: Codec[D]): Seq[(D, ByteVector)] =
+    codecSeqByteVector
+      .decode(data.bits)
+      .get
+      .value
+      .par
+      .map(bv => (codec.decode(bv.bits).get.value, bv))
+      .toVector
 
   def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
     codecSeqByteVector
       .encode(
-        data
+        data.par
           .map(d => Codec.encode[D](d).get.toByteVector)
+          .toVector
           .sorted(util.ordByteVector)
       )
       .get
@@ -291,17 +340,20 @@ object HistoryRepositoryImpl {
       .decode(data.bits)
       .get
       .value
+      .par
       .map(
         bv => codecSeqByteVector.decode(bv.bits).get.value.map(v => codec.decode(v.bits).get.value)
       )
+      .toVector
 
   def encodeJoins[C](joins: Seq[Seq[C]])(implicit codec: Codec[C]): ByteVector =
     codecSeqByteVector
       .encode(
-        joins
+        joins.par
           .map(
             channels => encodeSorted(channels)
           )
+          .toVector
           .sorted(util.ordByteVector)
       )
       .get
