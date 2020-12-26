@@ -11,7 +11,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagStorage}
+import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper
@@ -544,9 +544,8 @@ object TestNode {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
                      in.evalMap(v => {
                        val (c, b) = v
-                       for {
-                         dag <- BlockDagStorage[F].getRepresentation
-                         dummyCasperSnapshot = CasperSnapshot(
+                       def mkCasperSnapshot(dag: BlockDagRepresentation[F]) =
+                         CasperSnapshot(
                            dag,
                            ByteString.EMPTY,
                            ByteString.EMPTY,
@@ -563,7 +562,11 @@ object TestNode {
                              Seq.empty
                            )
                          )
-                         _ <- BlockStore[F].put(b)
+                       for {
+                         dag <- BlockDagStorage[F].getRepresentation
+
+                         dummyCasperSnapshot = mkCasperSnapshot(dag)
+                         _                   <- BlockStore[F].put(b)
                          r <- blockProcessor
                                .validateWithEffects(c, b, dummyCasperSnapshot.copy(dag = dag).some)
                        } yield r

@@ -172,8 +172,7 @@ object BlockProcessor {
       )
     }
 
-    val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
-      c.validate(b, s.dag)
+    val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) => c.validate(b, s)
 
     def ackProcessed =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)

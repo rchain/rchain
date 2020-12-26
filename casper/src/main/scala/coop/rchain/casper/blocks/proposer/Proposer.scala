@@ -124,7 +124,7 @@ object Proposer {
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
 
     val validateBlock = (casper: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
-      casper.validate(b, s.dag)
+      casper.validate(b, s)
 
     val checkValidatorIsActive = (s: CasperSnapshot[F], validator: ValidatorIdentity) =>
       if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))

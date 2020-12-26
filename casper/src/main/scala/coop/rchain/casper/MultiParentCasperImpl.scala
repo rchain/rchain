@@ -253,18 +253,18 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   override def validate(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[Either[BlockError, ValidBlock]] = {
     val validationStatus: EitherT[F, BlockError, ValidBlock] =
       for {
         _ <- EitherT(
               Validate
-                .blockSummary(b, approvedBlock, dag, casperShardConf.shardName, deployLifespan)
+                .blockSummary(b, approvedBlock, s, casperShardConf.shardName, deployLifespan)
             )
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
-                .validateBlockCheckpoint(b, dag, runtimeManager)
+                .validateBlockCheckpoint(b, s, runtimeManager)
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
@@ -274,14 +274,14 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
         _ <- EitherT(Validate.bondsCache(b, runtimeManager))
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
-        _ <- EitherT(Validate.neglectedInvalidBlock(b, dag))
+        _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
         _ <- EitherT(
-              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, dag, approvedBlock)
+              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
         _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
         depDag <- EitherT.liftF(casperBuffer.toDoublyLinkedDag)
-        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, dag))
+        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 

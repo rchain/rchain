@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.instances.list._
 import com.google.protobuf.ByteString
@@ -36,7 +36,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Sync: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
+  def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
@@ -100,6 +100,7 @@ object BlockCreator {
       }
 
       for {
+        now <- Time[F].currentMillis
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
@@ -121,7 +122,7 @@ object BlockCreator {
                                    parents,
                                    deploys.toSeq,
                                    systemDeploys,
-                                   s.dag,
+                                   s,
                                    runtimeManager,
                                    blockData,
                                    invalidBlocks
