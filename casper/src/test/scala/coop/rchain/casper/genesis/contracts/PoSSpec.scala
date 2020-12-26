@@ -16,9 +16,10 @@ class PoSSpec
       CompiledRholangSource("PoSTest.rho", NormalizerEnv.Empty),
       Seq.empty,
       400.seconds,
-      genesisParameters = GenesisBuilder
-        .buildGenesisParameters()
-        .map(genesis => genesis.copy(vaults = genesis.vaults ++ PoSSpec.testVaults))
+      genesisParameters = {
+        val p = GenesisBuilder.buildGenesisParameters()
+        (p._1, p._2, p._3.copy(vaults = p._3.vaults ++ PoSSpec.testVaults))
+      }
     )
 
 object PoSSpec {

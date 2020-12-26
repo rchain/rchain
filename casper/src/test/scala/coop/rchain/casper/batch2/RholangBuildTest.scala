@@ -66,8 +66,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
       .map(i => (Secp256k1.newKeyPair, i))
       .map { case ((_, publicKey), i) => Vault(RevAddress.fromPublicKey(publicKey).get, i.toLong) }
       .toSeq
-    val (keyPairs, genesis) = buildGenesisParameters()
-    val genesisParams       = (keyPairs, genesis.copy(vaults = vaults))
+    val (keyPairs, genesisVaults, genesis) = buildGenesisParameters()
+    val genesisParams                      = (keyPairs, genesisVaults, genesis.copy(vaults = vaults))
     TestNode
       .standaloneEff(buildGenesis(genesisParams))
       .use { node =>

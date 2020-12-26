@@ -71,8 +71,8 @@ object Resources {
 
   def mkRuntimeWithHistory[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
       prefix: String,
-      storageSize: Long,
-      additionalSystemProcesses: Seq[Definition[F]]
+      storageSize: Long = 1024 * 1024 * 1024L,
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir[F](prefix) >>= (mkRuntimeAt(_)(storageSize, additionalSystemProcesses))
 
