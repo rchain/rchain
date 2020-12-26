@@ -53,7 +53,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   override def getSnapshot: F[CasperSnapshot[F]] = ???
   override def validate(
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[Either[BlockError, ValidBlock]]                                             = ???
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] = ???
   override def handleInvalidBlock(

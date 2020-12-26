@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.instances.list._
 import com.google.protobuf.ByteString
@@ -36,7 +36,7 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Sync: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
+  def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
@@ -87,41 +87,43 @@ object BlockCreator {
               )
         } yield slashingDeploys
 
-      def prepareDummyDeploy(blockNumber: Long): Seq[Signed[DeployData]] = dummyDeployOpt match {
-        case Some(d) =>
-          Seq(
-            ConstructDeploy.sourceDeployNow(
-              source = d._2,
-              sec = d._1,
-              vabn = blockNumber - 1
+      def prepareDummyDeploy(blockNumber: Long, now: Long): Seq[Signed[DeployData]] =
+        dummyDeployOpt match {
+          case Some(d) =>
+            Seq(
+              ConstructDeploy.sourceDeploy(
+                source = d._2,
+                sec = d._1,
+                vabn = blockNumber - 1,
+                timestamp = now
+              )
             )
-          )
-        case None => Seq.empty[Signed[DeployData]]
-      }
+          case None => Seq.empty[Signed[DeployData]]
+        }
 
       for {
+        now <- Time[F].currentMillis
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
         userDeploys     <- prepareUserDeploys(nextBlockNum)
-        dummyDeploys    = prepareDummyDeploy(nextBlockNum)
+        dummyDeploys    = prepareDummyDeploy(nextBlockNum, now)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
+        deploys       = userDeploys -- s.deploysInScope ++ dummyDeploys
+        invalidBlocks = s.invalidBlocks
+        blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
               for {
-                now           <- Time[F].currentMillis
-                invalidBlocks = s.invalidBlocks
-                blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    parents,
                                    deploys.toSeq,
                                    systemDeploys,
-                                   s.dag,
+                                   s,
                                    runtimeManager,
                                    blockData,
                                    invalidBlocks

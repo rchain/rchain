@@ -1,10 +1,11 @@
 package coop.rchain.casper.util.rholang
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
@@ -54,8 +55,25 @@ class InterpreterUtilTest
 
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
-
-  def computeDeploysCheckpoint[F[_]: Sync: Log: BlockStore: Span: Time: Metrics](
+  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+    CasperSnapshot(
+      dag,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
+  def computeDeploysCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Time: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       dag: BlockDagRepresentation[F],
@@ -72,7 +90,7 @@ class InterpreterUtilTest
               parents,
               deploys,
               List.empty[SystemDeploy],
-              dag,
+              mkCasperSnapshot(dag),
               runtimeManager,
               BlockData(
                 now,
@@ -244,7 +262,7 @@ class InterpreterUtilTest
       _         <- step(runtimeManager)(b1, genesis)
       _         <- step(runtimeManager)(b2, genesis)
       dag       <- blockDagStorage.getRepresentation
-      postState <- validateBlockCheckpoint[Task](b3, dag, runtimeManager)
+      postState <- validateBlockCheckpoint[Task](b3, mkCasperSnapshot(dag), runtimeManager)
       result    = postState shouldBe Right(None)
     } yield result
   }
@@ -292,7 +310,7 @@ class InterpreterUtilTest
       _ <- step(runtimeManager)(b4, genesis)
 
       dag       <- blockDagStorage.getRepresentation
-      postState <- validateBlockCheckpoint[Task](b5, dag, runtimeManager)
+      postState <- validateBlockCheckpoint[Task](b5, mkCasperSnapshot(dag), runtimeManager)
       result    = postState shouldBe Right(None)
     } yield result
   }
@@ -303,7 +321,12 @@ class InterpreterUtilTest
       deploy: Signed[DeployData]*
   )(implicit blockStore: BlockStore[Task]): Task[Seq[PCost]] =
     for {
-      computeResult                      <- computeDeploysCheckpoint[Task](Seq(genesis), deploy, dag, runtimeManager)
+      computeResult <- computeDeploysCheckpoint[Task](
+                        Seq(genesis),
+                        deploy,
+                        dag,
+                        runtimeManager
+                      )
       Right((_, _, processedDeploys, _)) = computeResult
     } yield processedDeploys.map(_.cost)
 
@@ -357,9 +380,13 @@ class InterpreterUtilTest
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {
-          block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
-          dag              <- blockDagStorage.getRepresentation
-          validateResult   <- validateBlockCheckpoint[Task](block, dag, runtimeManager)
+          block <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
+          dag   <- blockDagStorage.getRepresentation
+          validateResult <- validateBlockCheckpoint[Task](
+                             block,
+                             mkCasperSnapshot(dag),
+                             runtimeManager
+                           )
           Right(stateHash) = validateResult
         } yield stateHash should be(None)
       }
@@ -398,7 +425,7 @@ class InterpreterUtilTest
               )
       dag2 <- blockDagStorage.getRepresentation
 
-      validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
+      validateResult <- validateBlockCheckpoint[Task](block, mkCasperSnapshot(dag2), runtimeManager)
       Right(tsHash)  = validateResult
     } yield tsHash should be(Some(computedTsHash))
   }
@@ -447,9 +474,13 @@ class InterpreterUtilTest
                   postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
-        dag2           <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-        Right(tsHash)  = validateResult
+        dag2 <- blockDagStorage.getRepresentation
+        validateResult <- validateBlockCheckpoint[Task](
+                           block,
+                           mkCasperSnapshot(dag2),
+                           runtimeManager
+                         )
+        Right(tsHash) = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
@@ -502,9 +533,13 @@ class InterpreterUtilTest
                   postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
-        dag2           <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-        Right(tsHash)  = validateResult
+        dag2 <- blockDagStorage.getRepresentation
+        validateResult <- validateBlockCheckpoint[Task](
+                           block,
+                           mkCasperSnapshot(dag2),
+                           runtimeManager
+                         )
+        Right(tsHash) = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
@@ -554,9 +589,13 @@ class InterpreterUtilTest
                   postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
-        dag2           <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-        Right(tsHash)  = validateResult
+        dag2 <- blockDagStorage.getRepresentation
+        validateResult <- validateBlockCheckpoint[Task](
+                           block,
+                           mkCasperSnapshot(dag2),
+                           runtimeManager
+                         )
+        Right(tsHash) = validateResult
       } yield tsHash should be(Some(computedTsHash))
   }
 
@@ -603,8 +642,12 @@ class InterpreterUtilTest
                   )
           dag2 <- blockDagStorage.getRepresentation
 
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-          Right(tsHash)  = validateResult
+          validateResult <- validateBlockCheckpoint[Task](
+                             block,
+                             mkCasperSnapshot(dag2),
+                             runtimeManager
+                           )
+          Right(tsHash) = validateResult
         } yield tsHash should be(Some(computedTsHash))
       }
   }
@@ -635,9 +678,13 @@ class InterpreterUtilTest
                   postStateHash = computedTsHash,
                   preStateHash = preStateHash
                 )
-        dag2           <- blockDagStorage.getRepresentation
-        validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-        Right(tsHash)  = validateResult
+        dag2 <- blockDagStorage.getRepresentation
+        validateResult <- validateBlockCheckpoint[Task](
+                           block,
+                           mkCasperSnapshot(dag2),
+                           runtimeManager
+                         )
+        Right(tsHash) = validateResult
       } yield tsHash should be(None)
   }
 
@@ -684,10 +731,14 @@ class InterpreterUtilTest
                     preStateHash = preStateHash,
                     seqNum = i + 1
                   )
-          dag2           <- blockDagStorage.getRepresentation
-          validateResult <- validateBlockCheckpoint[Task](block, dag2, runtimeManager)
-          Right(tsHash)  = validateResult
-          _              <- timeEff.advance()
+          dag2 <- blockDagStorage.getRepresentation
+          validateResult <- validateBlockCheckpoint[Task](
+                             block,
+                             mkCasperSnapshot(dag2),
+                             runtimeManager
+                           )
+          Right(tsHash) = validateResult
+          _             <- timeEff.advance()
         } yield tsHash should be(Some(computedTsHash))
       }
   }

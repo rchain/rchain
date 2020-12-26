@@ -93,8 +93,7 @@ object Validate {
 
   def blockSenderHasWeight[F[_]: Monad: Log: BlockStore](
       b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      genesis: BlockMessage
   ): F[Boolean] =
     if (b == genesis) {
       true.pure //genesis block has a valid sender
@@ -161,7 +160,7 @@ object Validate {
   def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span: Estimator](
       block: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       shardId: String,
       expirationThreshold: Int
   ): F[ValidBlockProcessing] =
@@ -169,23 +168,23 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
       _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
-      _ <- EitherT(Validate.timestamp(block, dag))
+      _ <- EitherT(Validate.timestamp(block))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
-      _ <- EitherT(Validate.repeatDeploy(block, dag, expirationThreshold))
+      _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
-      _ <- EitherT(Validate.blockNumber(block, dag))
+      _ <- EitherT(Validate.blockNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
       _ <- EitherT(Validate.futureTransaction(block))
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-justification-follows-validation"))
-      _ <- EitherT(Validate.justificationFollows(block, genesis, dag))
+      _ <- EitherT(Validate.justificationFollows(block))
       _ <- EitherT.liftF(Span[F].mark("before-parents-validation"))
-      _ <- EitherT(Validate.parents(block, genesis, dag))
+      _ <- EitherT(Validate.parents(block, genesis, s))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
-      _ <- EitherT(Validate.sequenceNumber(block, dag))
+      _ <- EitherT(Validate.sequenceNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
-      _ <- EitherT(Validate.justificationRegressions(block, dag))
+      _ <- EitherT(Validate.justificationRegressions(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
       s <- EitherT(Validate.shardIdentifier(block, shardId))
     } yield s).value
@@ -197,7 +196,7 @@ object Validate {
     */
   def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       expirationThreshold: Int
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
@@ -207,7 +206,7 @@ object Validate {
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
       blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
-      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata, dag)
+      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata, s.dag)
       maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")
@@ -218,7 +217,7 @@ object Validate {
                                              .getParentMetadatasAboveBlockNumber(
                                                b,
                                                earliestBlockNumber,
-                                               dag
+                                               s.dag
                                              )
                                        )
                                        .findF { blockMetadata =>
@@ -261,8 +260,7 @@ object Validate {
 
   // This is not a slashable offence
   def timestamp[F[_]: Sync: Log: Time: BlockStore](
-      b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      b: BlockMessage
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
@@ -298,13 +296,13 @@ object Validate {
   // Agnostic of non-parent justifications
   def blockNumber[F[_]: Sync: Log](
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
     for {
       parents <- ProtoUtil.parentHashes(b).traverse { parentHash =>
-                  dag.lookup(parentHash).flatMap {
+                  s.dag.lookup(parentHash).flatMap {
                     case Some(p) => p.pure[F]
                     case None =>
                       Sync[F].raiseError[BlockMetadata](
@@ -387,14 +385,14 @@ object Validate {
   @SuppressWarnings(Array("org.wartremover.warts.Throw")) // TODO remove throw
   def sequenceNumber[F[_]: Monad: Log](
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
     for {
       creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(-1) {
                                         case (_, Justification(_, latestBlockHash)) =>
-                                          dag.lookup(latestBlockHash).map {
+                                          s.dag.lookup(latestBlockHash).map {
                                             case Some(block) =>
                                               block.seqNum
                                             case None =>
@@ -460,47 +458,44 @@ object Validate {
   def parents[F[_]: Sync: Log: BlockStore: Metrics: Span: Estimator](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F]
-  ): F[ValidBlockProcessing] = {
-    val maybeParentHashes = ProtoUtil.parentHashes(b)
-    val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
-      case hashes                   => hashes
-    }
-
+      s: CasperSnapshot[F]
+  ): F[ValidBlockProcessing] =
+//    val maybeParentHashes = ProtoUtil.parentHashes(b)
+//    val parentHashes = maybeParentHashes match {
+//      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
+//      case hashes                   => hashes
+//    }
     for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure
-      tipHashes            <- Estimator[F].tips(dag, genesis, latestMessagesHashes)
-      computedParents      <- EstimatorHelper.chooseNonConflicting(tipHashes, dag)
-      computedParentHashes = computedParents.map(_.blockHash)
-      status <- if (parentHashes == computedParentHashes) {
-                 BlockStatus.valid.asRight[BlockError].pure
-               } else {
-                 val parentsString =
-                   parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val estimateString =
-                   computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val justificationString = latestMessagesHashes.values
-                   .map(hash => PrettyPrinter.buildString(hash))
-                   .mkString(",")
-                 val message =
-                   s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(b, message)
-                       )
-                 } yield BlockStatus.invalidParents.asLeft[ValidBlock]
-               }
-    } yield status
-  }
+      _ <- ().pure[F]
+//      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure
+//      tipHashes            <- Estimator[F].tips(s.dag, genesis, latestMessagesHashes)
+//      computedParents      <- EstimatorHelper.chooseNonConflicting(tipHashes._2, dag)
+//      computedParentHashes = computedParents.map(_.blockHash)
+//      status <- if (parentHashes == computedParentHashes) {
+//                 BlockStatus.valid.asRight[BlockError].pure
+//               } else {
+//                 val parentsString =
+//                   parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+//                 val estimateString =
+//                   computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
+//                 val justificationString = latestMessagesHashes.values
+//                   .map(hash => PrettyPrinter.buildString(hash))
+//                   .mkString(",")
+//                 val message =
+//                   s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
+//                 for {
+//                   _ <- Log[F].warn(
+//                         ignore(b, message)
+//                       )
+//                 } yield BlockStatus.invalidParents.asLeft[ValidBlock]
+//               }
+    } yield BlockStatus.valid.asRight[BlockError]
 
   /*
    * This check must come before Validate.parents
    */
   def justificationFollows[F[_]: Sync: Log: BlockStore](
-      b: BlockMessage,
-      genesis: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      b: BlockMessage
   ): F[ValidBlockProcessing] = {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
@@ -538,9 +533,9 @@ object Validate {
     */
   def justificationRegressions[F[_]: Sync: Log](
       b: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[ValidBlockProcessing] =
-    dag.latestMessage(b.sender).flatMap {
+    s.dag.latestMessage(b.sender).flatMap {
       // `b` is first message from sender of `b`, so regression is not possible
       case None =>
         BlockStatus.valid.asRight[BlockError].pure
@@ -577,8 +572,8 @@ object Validate {
               }
               // Compare and check for regression
               val regressionDetected = for {
-                newJustification <- dag.lookupUnsafe(newJustificationHash)
-                curJustification <- dag.lookupUnsafe(curJustificationHash)
+                newJustification <- s.dag.lookupUnsafe(newJustificationHash)
+                curJustification <- s.dag.lookupUnsafe(curJustificationHash)
                 regression       = (!newJustification.invalid && newJustification.seqNum < curJustification.seqNum)
                 _                <- logWarn(curJustificationHash, newJustificationHash).whenA(regression)
               } yield regression
@@ -597,14 +592,14 @@ object Validate {
     */
   def neglectedInvalidBlock[F[_]: Applicative](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
     for {
       invalidJustifications <- block.justifications.filterA { justification =>
                                 for {
-                                  latestBlockOpt <- dag.lookup(justification.latestBlockHash)
+                                  latestBlockOpt <- s.dag.lookup(justification.latestBlockHash)
                                 } yield latestBlockOpt.exists(_.invalid)
                               }
       neglectedInvalidJustification = invalidJustifications.exists { justification =>
