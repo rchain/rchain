@@ -6,7 +6,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag._
-import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.InterpreterUtil.computeDeploysCheckpoint
 import coop.rchain.casper.util.rholang.{RuntimeManager, SystemDeploy}
@@ -33,13 +33,35 @@ object BlockGenerator {
     Metrics.Source(CasperMetricsSource, "generate-block")
 
   implicit val logSource: LogSource = LogSource(this.getClass)
-
-  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Log: Span: Sync](
+  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+    CasperSnapshot(
+      dag,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
+  def step[F[_]: BlockDagStorage: BlockStore: Time: Metrics: Log: Span: Concurrent](
       runtimeManager: RuntimeManager[F]
   )(block: BlockMessage, genesis: BlockMessage): F[Unit] =
     for {
-      dag                                       <- BlockDagStorage[F].getRepresentation
-      computeBlockCheckpointResult              <- computeBlockCheckpoint(block, genesis, dag, runtimeManager)
+      dag <- BlockDagStorage[F].getRepresentation
+      computeBlockCheckpointResult <- computeBlockCheckpoint(
+                                       block,
+                                       genesis,
+                                       mkCasperSnapshot(dag),
+                                       runtimeManager
+                                     )
       (postB1StateHash, postB1ProcessedDeploys) = computeBlockCheckpointResult
       result <- injectPostStateHash[F](
                  block,
@@ -49,10 +71,10 @@ object BlockGenerator {
                )
     } yield result
 
-  private def computeBlockCheckpoint[F[_]: Sync: Log: BlockStore: Metrics: Span](
+  private def computeBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
   ): F[(StateHash, Seq[ProcessedDeploy])] = Span[F].trace(GenerateBlockMetricsSource) {
     for {
@@ -62,7 +84,7 @@ object BlockGenerator {
                  parents,
                  deploys,
                  List.empty[SystemDeploy],
-                 dag,
+                 s,
                  runtimeManager,
                  BlockData.fromBlock(b),
                  Map.empty[BlockHash, Validator]

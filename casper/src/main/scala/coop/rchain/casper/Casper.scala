@@ -59,7 +59,7 @@ trait Casper[F[_]] {
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
-  def validate(b: BlockMessage, dag: BlockDagRepresentation[F]): F[Either[BlockError, ValidBlock]]
+  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Either[BlockError, ValidBlock]]
   def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]]
   def handleInvalidBlock(
       block: BlockMessage,
