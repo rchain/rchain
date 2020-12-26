@@ -4,7 +4,7 @@ import java.nio.file.{Files, Path}
 
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.{Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.syntax.all._
 import cats.mtl._
 import cats.syntax.all._
@@ -16,11 +16,15 @@ import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorag
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedKeyValueStorage}
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.blocks.BlockProcessor
+import coop.rchain.casper.blocks.proposer.Proposer
+import coop.rchain.casper.{ReportingCasper, engine, _}
 import coop.rchain.casper.engine.{BlockRetriever, _}
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
-import coop.rchain.casper.state.instances.BlockStateManagerImpl
+import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -30,6 +34,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._
+import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
@@ -51,6 +56,7 @@ import coop.rchain.node.diagnostics.{
   UdpInfluxDBReporter
 }
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
+import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web._
@@ -62,6 +68,8 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
+import fs2.concurrent.Queue
+import io.grpc.ManagedChannel
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -77,8 +85,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     scheduler: Scheduler
 ) {
 
-  private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
+  //private[this] val loopScheduler =
+  //Scheduler.fixedPool("loop", 4, reporter = UncaughtExceptionLogger)
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
   private[this] val rspaceScheduler         = RChainScheduler.interpreterScheduler
@@ -242,7 +250,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         casperLaunch,
         reportingCasper,
         webApi,
-        adminWebApi
+        adminWebApi,
+        proposerOpt,
+        proposerQueue,
+        proposerStateRef,
+        blockProcessor,
+        blockProcessorState,
+        blockProcessorQueue
       ) = result
 
       // 4. launch casper
@@ -257,7 +271,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val pn = peerNodeAsk
         implicit val ks = kademliaStore
         implicit val nd = nodeDiscovery
-        implicit val bs = blockStore
+        //implicit val bs = blockStore
         implicit val ph = packetHandler
         implicit val eb = eventBus
         implicit val mt = metrics
@@ -270,7 +284,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           runtimeCleanup,
           reportingCasper,
           webApi,
-          adminWebApi
+          adminWebApi,
+          proposerOpt,
+          proposerQueue,
+          proposerStateRef,
+          blockProcessor,
+          blockProcessorState,
+          blockProcessorQueue
         )
       }
       _ <- handleUnrecoverableErrors(program)
@@ -299,8 +319,15 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       runtimeCleanup: Cleanup[F],
       reportingCasper: ReportingCasper[F],
       webApi: WebApi[F],
-      adminWebApi: AdminWebApi[F]
+      adminWebApi: AdminWebApi[F],
+      proposer: Option[Proposer[F]],
+      proposeRequestsQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      proposerStateRef: Ref[F, ProposerState[F]],
+      blockProcessor: BlockProcessor[F],
+      blockProcessingState: Ref[F, Set[BlockHash]],
+      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
   )(
+      )(
       implicit
       time: Time[F],
       rpConfState: RPConfState[F],
@@ -311,7 +338,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       kademliaStore: KademliaStore[F],
       nodeDiscovery: NodeDiscovery[F],
       rpConnections: ConnectionsCell[F],
-      blockStore: BlockStore[F],
+      //blockStore: BlockStore[F],
       packetHandler: PacketHandler[F],
       consumer: EventConsumer[F]
   ): F[Unit] = {
@@ -357,7 +384,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
     def waitForFirstConnection: F[Unit] =
       for {
-        _ <- time.sleep(10.second)
+        _ <- time.sleep(1.second)
         _ <- ConnectionsCell[F].read
               .map(_.isEmpty)
               .ifM(waitForFirstConnection, ().pure[F])
@@ -366,69 +393,78 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     for {
       _       <- info
       local   <- peerNodeAsk.ask
-      host    = local.endpoint.host
-      servers <- acquireServers(apiServers, reportingCasper, webApi, adminWebApi)
-      _       <- addShutdownHook(servers, runtimeCleanup, blockStore)
-      _       <- servers.externalApiServer.start
-
-      _ <- Log[F].info(
-            s"External API server started at ${nodeConf.apiServer.host}:${servers.externalApiServer.port}"
-          )
-      _ <- servers.internalApiServer.start
-
-      _ <- Log[F].info(
-            s"Internal API server started at ${nodeConf.apiServer.host}:${servers.internalApiServer.port}"
-          )
-      _ <- servers.kademliaRPCServer.start
-
-      // HTTP server is started immediately on `acquireServers`
-      _ <- Log[F].info(
-            s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
-          )
-
-      _ <- Log[F].info(
-            s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
-          )
-
-      _ <- Log[F].info(
-            s"Kademlia RPC server started at $host:${servers.kademliaRPCServer.port}"
-          )
-
-      _ <- servers.transportServer
-            .start(
-              HandleMessages.handle[F](_),
-              blob => packetHandler.handlePacket(blob.sender, blob.packet)
-            )
-
       address = local.toAddress
-      _       <- Log[F].info(s"Listening for traffic on $address.")
-      _       <- EventLog[F].publish(Event.NodeStarted(address))
-      _ <- Sync[F]
-            .defer(nodeDiscoveryLoop.forever)
-            .toTask
-            .executeOn(loopScheduler)
-            .fromTask
-            .start
-      _ <- Sync[F]
-            .defer(clearConnectionsLoop.forever)
-            .toTask
-            .executeOn(loopScheduler)
-            .fromTask
-            .start
-      _ <- if (nodeConf.standalone) ().pure[F]
-          else Log[F].info(s"Waiting for first connection.") >> waitForFirstConnection
-      _ <- Concurrent[F].start(engineInit)
-      _ <- Sync[F]
-            .defer(casperLoop.forever)
-            .toTask
-            .executeOn(loopScheduler)
-            .fromTask
-            .start
-      _ <- Sync[F]
-            .defer(updateForkChoiceLoop.forever)
-            .toTask
-            .executeOn(loopScheduler)
-            .fromTask
+      host    = local.endpoint.host
+      servers <- acquireServers(
+                  apiServers,
+                  reportingCasper,
+                  webApi,
+                  adminWebApi,
+                  HandleMessages.handle[F](_),
+                  blob => packetHandler.handlePacket(blob.sender, blob.packet),
+                  host,
+                  address
+                )
+      //_ <- addShutdownHook(servers, runtimeCleanup, blockStore)
+
+      _ <- EventLog[F].publish(Event.NodeStarted(address))
+
+      nodeDiscoveryStream    = fs2.Stream.eval(nodeDiscoveryLoop).repeat
+      clearConnectionsStream = fs2.Stream.eval(clearConnectionsLoop).repeat
+      connectivityStream = fs2
+        .Stream(
+          nodeDiscoveryStream,
+          clearConnectionsStream,
+          servers.kademliaServer,
+          servers.transportServer
+        )
+        .parJoinUnbounded
+
+      waitForFirstConnectionStream = if (nodeConf.standalone) fs2.Stream.empty
+      else
+        fs2.Stream.eval(
+          Log[F].info(s"Waiting for first connection.") >> waitForFirstConnection
+        )
+
+      engineInitStream = fs2.Stream.eval(engineInit)
+
+      casperLoopStream = fs2.Stream.eval(casperLoop).repeat
+      blockProcessorStream = BlockProcessorInstance.create(
+        incomingBlocksQueue,
+        blockProcessor,
+        blockProcessingState
+      )
+
+      proposerStream = if (proposer.isDefined)
+        ProposerInstance
+          .create[F](proposeRequestsQueue, proposer.get, proposerStateRef)
+      else fs2.Stream.empty
+
+      updateForkChoiceLoopStream = fs2.Stream.eval(updateForkChoiceLoop).repeat
+
+      serverStream = fs2
+        .Stream(
+          servers.externalApiServer,
+          servers.internalApiServer,
+          servers.httpServer,
+          servers.adminHttpServer,
+          blockProcessorStream,
+          proposerStream,
+          engineInitStream,
+          casperLoopStream,
+          updateForkChoiceLoopStream
+        )
+        .parJoinUnbounded
+
+      // run all streams in parallel, but start server streams after node sees some peers
+      node = fs2
+        .Stream(
+          connectivityStream,
+          waitForFirstConnectionStream ++ serverStream
+        )
+        .parJoinUnbounded
+
+      _ <- node.compile.drain
     } yield ()
   }
 
@@ -445,16 +481,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       blockStore: BlockStore[F]
   ): Unit = {
     val shutdown = for {
-      _ <- Log[F].info("Shutting down API servers...")
-      _ <- servers.externalApiServer.stop
-      _ <- servers.internalApiServer.stop
-      _ <- Log[F].info("Shutting down Kademlia RPC server...")
-      _ <- servers.kademliaRPCServer.stop
-      _ <- Log[F].info("Shutting down transport layer...")
-      _ <- servers.transportServer.stop()
-      _ <- Log[F].info("Shutting down HTTP server....")
       _ <- Sync[F].delay(Kamon.stopAllReporters())
-      _ <- servers.httpServer.cancel.attempt
       _ <- runtimeCleanup.close()
       _ <- Log[F].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
@@ -476,19 +503,23 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     } >> exit0.void
 
   case class Servers(
-      kademliaRPCServer: Server[F],
-      transportServer: TransportServer[F],
-      externalApiServer: Server[F],
-      internalApiServer: Server[F],
-      httpServer: Fiber[F, Unit],
-      adminHttpServer: Fiber[F, Unit]
+      kademliaServer: fs2.Stream[F, Unit],
+      transportServer: fs2.Stream[F, Unit],
+      externalApiServer: fs2.Stream[F, Unit],
+      internalApiServer: fs2.Stream[F, Unit],
+      httpServer: fs2.Stream[F, ExitCode],
+      adminHttpServer: fs2.Stream[F, ExitCode]
   )
 
   def acquireServers(
       apiServers: APIServers,
       reportingCasper: ReportingCasper[F],
       webApi: WebApi[F],
-      adminWebApi: AdminWebApi[F]
+      adminWebApi: AdminWebApi[F],
+      grpcPacketHandler: Protocol => F[CommunicationResponse],
+      grpcStreamHandler: Blob => F[Unit],
+      host: String,
+      address: String
   )(
       implicit
       kademliaStore: KademliaStore[F],
@@ -499,75 +530,116 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       consumer: EventConsumer[F]
   ): F[Servers] = {
     implicit val s: Scheduler = scheduler
+
+    val transportServerStream = fs2
+      .Stream(
+        GrpcTransportServer
+          .acquireServer(
+            nodeConf.protocolServer.networkId,
+            nodeConf.protocolServer.port,
+            nodeConf.tls.certificatePath,
+            nodeConf.tls.keyPath,
+            nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
+            nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
+            nodeConf.protocolServer.maxMessageConsumers
+          )
+      )
+      .evalMap(
+        _.start(
+          grpcPacketHandler,
+          grpcStreamHandler
+        ) >> Log[F].info(s"Listening for traffic on $address.")
+      )
+
+    val kademliaServerStream = fs2.Stream
+      .eval(
+        discovery
+          .acquireKademliaRPCServer(
+            nodeConf.protocolServer.networkId,
+            nodeConf.peersDiscovery.port,
+            KademliaHandleRPC.handlePing[F],
+            KademliaHandleRPC.handleLookup[F]
+          )
+      )
+      .evalMap(
+        server =>
+          server.start >> Log[F]
+            .info(s"Kademlia RPC server started at $host:${server.port}")
+      )
+
+    val externalApiServerStream = fs2.Stream
+      .eval(
+        acquireExternalServer[F](
+          nodeConf.apiServer.host,
+          nodeConf.apiServer.portGrpcExternal,
+          grpcScheduler,
+          apiServers.deploy,
+          nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+          nodeConf.apiServer.keepAliveTime,
+          nodeConf.apiServer.keepAliveTimeout,
+          nodeConf.apiServer.permitKeepAliveTime,
+          nodeConf.apiServer.maxConnectionIdle,
+          nodeConf.apiServer.maxConnectionAge,
+          nodeConf.apiServer.maxConnectionAgeGrace
+        )
+      )
+      .evalMap(
+        server =>
+          server.start >> Log[F]
+            .info(s"External API server started at ${nodeConf.apiServer.host}:${server.port}")
+      )
+
+    val internalApiServerStream = fs2.Stream
+      .eval(
+        acquireInternalServer[F](
+          nodeConf.apiServer.host,
+          nodeConf.apiServer.portGrpcInternal,
+          grpcScheduler,
+          apiServers.repl,
+          apiServers.deploy,
+          apiServers.propose,
+          nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+          nodeConf.apiServer.keepAliveTime,
+          nodeConf.apiServer.keepAliveTimeout,
+          nodeConf.apiServer.permitKeepAliveTime,
+          nodeConf.apiServer.maxConnectionIdle,
+          nodeConf.apiServer.maxConnectionAge,
+          nodeConf.apiServer.maxConnectionAgeGrace
+        )
+      )
+      .evalMap(
+        server =>
+          server.start >> Log[F]
+            .info(s"Internal API server started at $host:${server.port}")
+      )
+
+    val prometheusReporter = new NewPrometheusReporter()
+
     for {
-      kademliaRPCServer <- discovery
-                            .acquireKademliaRPCServer(
-                              nodeConf.protocolServer.networkId,
-                              nodeConf.peersDiscovery.port,
-                              KademliaHandleRPC.handlePing[F],
-                              KademliaHandleRPC.handleLookup[F]
-                            )
+      httpServerStream <- aquireHttpServer[F](
+                           nodeConf.apiServer.enableReporting,
+                           nodeConf.apiServer.host,
+                           nodeConf.apiServer.portHttp,
+                           prometheusReporter,
+                           reportingCasper,
+                           webApi,
+                           nodeConf.apiServer.maxConnectionIdle
+                         )
+      // Note - here http servers are not really stated, only worker streams are created.
+      _ <- Log[F].info(
+            s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
+          )
+      adminHttpServerStream <- aquireAdminHttpServer[F](
+                                nodeConf.apiServer.host,
+                                nodeConf.apiServer.portAdminHttp,
+                                adminWebApi,
+                                nodeConf.apiServer.maxConnectionIdle
+                              )
 
-      transportServer <- Sync[F]
-                          .delay(
-                            GrpcTransportServer.acquireServer(
-                              nodeConf.protocolServer.networkId,
-                              nodeConf.protocolServer.port,
-                              nodeConf.tls.certificatePath,
-                              nodeConf.tls.keyPath,
-                              nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
-                              nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
-                              nodeConf.protocolServer.maxMessageConsumers
-                            )
-                          )
+      _ <- Log[F].info(
+            s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
+          )
 
-      externalApiServer <- acquireExternalServer[F](
-                            nodeConf.apiServer.host,
-                            nodeConf.apiServer.portGrpcExternal,
-                            grpcScheduler,
-                            apiServers.deploy,
-                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                            nodeConf.apiServer.keepAliveTime,
-                            nodeConf.apiServer.keepAliveTimeout,
-                            nodeConf.apiServer.permitKeepAliveTime,
-                            nodeConf.apiServer.maxConnectionIdle,
-                            nodeConf.apiServer.maxConnectionAge,
-                            nodeConf.apiServer.maxConnectionAgeGrace
-                          )
-      internalApiServer <- acquireInternalServer[F](
-                            nodeConf.apiServer.host,
-                            nodeConf.apiServer.portGrpcInternal,
-                            grpcScheduler,
-                            apiServers.repl,
-                            apiServers.deploy,
-                            apiServers.propose,
-                            nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-                            nodeConf.apiServer.keepAliveTime,
-                            nodeConf.apiServer.keepAliveTimeout,
-                            nodeConf.apiServer.permitKeepAliveTime,
-                            nodeConf.apiServer.maxConnectionIdle,
-                            nodeConf.apiServer.maxConnectionAge,
-                            nodeConf.apiServer.maxConnectionAgeGrace
-                          )
-
-      prometheusReporter = new NewPrometheusReporter()
-      httpServerFiber = aquireHttpServer[F](
-        nodeConf.apiServer.enableReporting,
-        nodeConf.apiServer.host,
-        nodeConf.apiServer.portHttp,
-        prometheusReporter,
-        reportingCasper,
-        webApi,
-        nodeConf.apiServer.maxConnectionIdle
-      )
-      httpFiber <- httpServerFiber.start
-      adminHttpServerFiber = aquireAdminHttpServer[F](
-        nodeConf.apiServer.host,
-        nodeConf.apiServer.portAdminHttp,
-        adminWebApi,
-        nodeConf.apiServer.maxConnectionIdle
-      )
-      adminHttpFiber <- adminHttpServerFiber.start
       _ <- Sync[F].delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
             if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
@@ -577,12 +649,12 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
           }
     } yield Servers(
-      kademliaRPCServer,
-      transportServer,
-      externalApiServer,
-      internalApiServer,
-      httpFiber,
-      adminHttpFiber
+      kademliaServerStream,
+      transportServerStream,
+      externalApiServerStream,
+      internalApiServerStream,
+      httpServerStream,
+      adminHttpServerStream
     )
   }
 }
@@ -743,7 +815,14 @@ object NodeRuntime {
         CasperLaunch[F],
         ReportingCasper[F],
         WebApi[F],
-        AdminWebApi[F]
+        AdminWebApi[F],
+        Option[Proposer[F]],
+        Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+        // TODO move towards having a single node state
+        Ref[F, ProposerState[F]],
+        BlockProcessor[F],
+        Ref[F, Set[BlockHash]],
+        Queue[F, (Casper[F], BlockMessage)]
     )
   ] =
     for {
@@ -833,18 +912,12 @@ object NodeRuntime {
       }
       synchronyConstraintChecker = {
         implicit val bs = blockStore
-        implicit val es = estimator
-        implicit val sp = span
-        SynchronyConstraintChecker[F](
-          conf.casper.synchronyConstraintThreshold
-        )
+        SynchronyConstraintChecker[F]
       }
       lastFinalizedHeightConstraintChecker = {
         implicit val bs = blockStore
         implicit val lf = lastFinalizedStorage
-        LastFinalizedHeightConstraintChecker[F](
-          conf.casper.heightConstraintThreshold
-        )
+        LastFinalizedHeightConstraintChecker[F]
       }
       evalRuntime <- {
         implicit val s  = rspaceScheduler
@@ -909,9 +982,46 @@ object NodeRuntime {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
       // Engine dynamic reference
-      engineCell   <- EngineCell.init[F]
-      envVars      = EnvVars.envVars[F]
-      raiseIOError = IOError.raiseIOErrorThroughSync[F]
+      engineCell          <- EngineCell.init[F]
+      envVars             = EnvVars.envVars[F]
+      raiseIOError        = IOError.raiseIOErrorThroughSync[F]
+      blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
+      // block processing state - set of items currently in processing
+      blockProcessorStateRef <- Ref.of[F, Set[BlockHash]](
+                                 Set.empty[BlockHash]
+                               )
+      blockProcessor = {
+        implicit val bd = blockDagStorage
+        implicit val br = blockRetriever
+        implicit val cu = commUtil
+        implicit val bs = blockStore
+        implicit val cb = casperBufferStorage
+        BlockProcessor[F]
+      }
+      validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
+                               conf.casper.validatorPrivateKey
+                             )
+      // Propose request is a tuple - Casper plus deferred proposeID that will be resolved by proposer
+      proposerQueue    <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
+      proposerStateRef <- Ref.of[F, ProposerState[F]](ProposerState[F]())
+      proposer = validatorIdentityOpt match {
+        case Some(validatorIdentity) => {
+          implicit val rm     = runtimeManager
+          implicit val bs     = blockStore
+          implicit val lf     = lastFinalizedStorage
+          implicit val bd     = blockDagStorage
+          implicit val sc     = synchronyConstraintChecker
+          implicit val lfhscc = lastFinalizedHeightConstraintChecker
+          implicit val sp     = span
+          implicit val e      = estimator
+          implicit val ds     = deployStorage
+          implicit val br     = blockRetriever
+          implicit val cu     = commUtil
+          implicit val eb     = eventPublisher
+          Proposer[F](validatorIdentity).some
+        }
+        case None => None
+      }
       casperLaunch = {
         implicit val bs     = blockStore
         implicit val bd     = blockDagStorage
@@ -937,6 +1047,8 @@ object NodeRuntime {
         implicit val rsm    = rspaceStateManager
 
         CasperLaunch.of[F](
+          blockProcessorQueue,
+          blockProcessorStateRef,
           conf.casper,
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter
@@ -969,7 +1081,8 @@ object NodeRuntime {
         NodeRuntime
           .acquireAPIServers[F](
             evalRuntime,
-            blockApiLock,
+            if (proposer.isDefined) proposerQueue.some else None,
+            if (proposer.isDefined) proposerStateRef.some else None,
             scheduler,
             conf.apiServer.maxBlocksLimit,
             conf.devMode
@@ -1017,7 +1130,11 @@ object NodeRuntime {
         implicit val sp     = span
         implicit val sc     = synchronyConstraintChecker
         implicit val lfhscc = lastFinalizedHeightConstraintChecker
-        new AdminWebApiImpl[F](blockApiLock, rnodeStateManager)
+        new AdminWebApiImpl[F](
+          if (proposer.isDefined) proposerQueue.some else None,
+          if (proposer.isDefined) proposerStateRef.some else None,
+          rnodeStateManager
+        )
       }
     } yield (
       blockStore,
@@ -1030,7 +1147,13 @@ object NodeRuntime {
       casperLaunch,
       reportingCasper,
       webApi,
-      adminWebApi
+      adminWebApi,
+      proposer,
+      proposerQueue,
+      proposerStateRef,
+      blockProcessor,
+      blockProcessorStateRef,
+      blockProcessorQueue
     )
 
   final case class APIServers(
@@ -1041,7 +1164,8 @@ object NodeRuntime {
 
   def acquireAPIServers[F[_]: Monixable](
       runtime: RhoRuntime[F],
-      blockApiLock: Semaphore[F],
+      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]],
+      proposerStateRef: Option[Ref[F, ProposerState[F]]],
       scheduler: Scheduler,
       apiMaxBlocksLimit: Int,
       devMode: Boolean
@@ -1062,7 +1186,7 @@ object NodeRuntime {
     val repl                  = ReplGrpcService(runtime, s)
     val deploy =
       DeployGrpcServiceV1(apiMaxBlocksLimit, reportingCasper, devMode)
-    val propose = ProposeGrpcServiceV1(blockApiLock)
+    val propose = ProposeGrpcServiceV1(proposerQueue, proposerStateRef)
     APIServers(repl, propose, deploy)
   }
 }

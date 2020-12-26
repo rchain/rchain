@@ -3,6 +3,7 @@ package coop.rchain.casper.engine
 import java.nio.file.Paths
 
 import cats.Parallel
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
@@ -22,8 +23,10 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
+import fs2.concurrent.Queue
 
 trait CasperLaunch[F[_]] {
   def launch(): F[Unit]
@@ -41,11 +44,30 @@ object CasperLaunch {
     /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
+      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+      blocksInProcessing: Ref[F, Set[BlockHash]],
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
+      val casperShardConf = CasperShardConf(
+        conf.faultToleranceThreshold,
+        conf.shardName,
+        conf.parentShardId,
+        conf.finalizationRate,
+        conf.maxNumberOfParents,
+        conf.maxParentDepth.getOrElse(Int.MaxValue),
+        conf.synchronyConstraintThreshold.toFloat,
+        conf.heightConstraintThreshold,
+        50,
+        1,
+        1,
+        conf.genesisBlockData.bondMinimum,
+        conf.genesisBlockData.bondMaximum,
+        conf.genesisBlockData.epochLength,
+        conf.genesisBlockData.quarantineLength
+      )
       def launch(): F[Unit] =
         BlockStore[F].getApprovedBlock map {
           case Some(approvedBlock) =>
@@ -110,7 +132,7 @@ object CasperLaunch {
                               )
                               .whenA(dc)
                         _ <- BlockRetriever[F].ackReceive(hash)
-                        _ <- casper.addBlockFromStore(hash, allowAddFromBuffer = true)
+                        _ <- blockProcessingQueue.enqueue1((casper, block))
                       } yield ()
                   )
           } yield ()
@@ -121,9 +143,8 @@ object CasperLaunch {
           casper <- MultiParentCasper
                      .hashSetCasper[F](
                        validatorId,
-                       ab,
-                       conf.shardName,
-                       conf.finalizationRate
+                       casperShardConf,
+                       ab
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
@@ -131,6 +152,8 @@ object CasperLaunch {
           } yield ()
           _ <- Engine
                 .transitionToRunning[F](
+                  blockProcessingQueue,
+                  blocksInProcessing,
                   casper,
                   approvedBlock,
                   validatorId,
@@ -169,7 +192,13 @@ object CasperLaunch {
                   conf.genesisCeremony.requiredSignatures
                 )(Sync[F])
           _ <- EngineCell[F].set(
-                new GenesisValidator(validatorId.get, conf.shardName, conf.finalizationRate, bap)
+                new GenesisValidator(
+                  blockProcessingQueue,
+                  blocksInProcessing,
+                  casperShardConf,
+                  validatorId.get,
+                  bap
+                )
               )
         } yield ()
 
@@ -197,8 +226,9 @@ object CasperLaunch {
           _ <- Concurrent[F].start(
                 GenesisCeremonyMaster
                   .waitingForApprovedBlockLoop[F](
-                    conf.shardName,
-                    conf.finalizationRate,
+                    blockProcessingQueue,
+                    blocksInProcessing,
+                    casperShardConf,
                     validatorId,
                     disableStateExporter
                   )
@@ -213,8 +243,9 @@ object CasperLaunch {
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           _ <- Engine.transitionToInitializing(
-                conf.shardName,
-                conf.finalizationRate,
+                blockProcessingQueue,
+                blocksInProcessing,
+                casperShardConf,
                 validatorId,
                 // TODO peer should be able to request approved blocks on different heights
                 // from genesis to the most recent one (default)

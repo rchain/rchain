@@ -16,7 +16,7 @@ ecdsa = "*"
 cryptography = ">=3.2"
 eth-hash = "*"
 pycryptodome = "*"
-pyrchain = "==0.3.7"
+pyrchain = {editable = true, ref = "block-merge", git = "https://github.com/nzpr/pyrchain.git"}
 requests = "*"
 importlib-metadata = "*"
 

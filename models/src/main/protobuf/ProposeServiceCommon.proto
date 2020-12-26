@@ -18,3 +18,7 @@ option (scalapb.options) = {
 message PrintUnmatchedSendsQuery {
   bool printUnmatchedSends = 1;
 }
+
+message ProposeResultQuery{
+}
+

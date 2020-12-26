@@ -158,7 +158,8 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   }
 
   def genAdminWebApi: AdminWebApi[Task] = new AdminWebApi[Task] {
-    override def propose: Task[String] = Task.delay("")
+    override def propose: Task[String]       = Task.delay("")
+    override def proposeResult: Task[String] = Task.delay("")
   }
 
   implicit val decodeByteString: Decoder[ByteString] = new Decoder[ByteString] {

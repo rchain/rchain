@@ -168,7 +168,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         b1n3 <- n3.addBlock(short)
         b1n2 <- n2.addBlock(time)
         b1n1 <- n1.addBlock(tuples)
-        _    <- n2.receive()
+        _    <- n2.handleReceive()
         b2n2 <- n2.createBlock(reg)
       } yield ()
     }
@@ -200,7 +200,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         _      <- TestNode.propagate(nodes)
 
         singleParentBlock <- nodes(0).addBlock(deploys(2))
-        _                 <- nodes(1).receive()
+        _                 <- nodes(1).handleReceive()
 
         _ = singleParentBlock.header.parentsHashList.size shouldBe 1
         _ <- nodes(0).contains(singleParentBlock.blockHash) shouldBeF true

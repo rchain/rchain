@@ -35,6 +35,7 @@ import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
+import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -142,17 +143,42 @@ object Setup {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
-    implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
-    implicit val estimator                    = Estimator[Task](Estimator.UnlimitedParents, None)
-    implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
-    implicit val lastFinalizedConstraintChecker =
-      LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
-    implicit val blockRetriever = BlockRetriever.of[Task]
+    implicit val lastFinalizedBlockCalculator   = LastFinalizedBlockCalculator[Task](0f)
+    implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
+    implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
+    implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
+    implicit val blockRetriever                 = BlockRetriever.of[Task]
 
     implicit val kvsManager = InMemoryStoreManager[Task]
     implicit val casperBuffer = CasperBufferKeyValueStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val blockProcessingQueue = Queue
+      .unbounded[Task, (Casper[Task], BlockMessage)]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val blockProcessingState = Ref
+      .of[Task, Set[BlockHash]](Set.empty)
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val casperShardConf = CasperShardConf(
+      -1,
+      shardId,
+      "",
+      finalizationRate,
+      Int.MaxValue,
+      Int.MaxValue,
+      0,
+      Long.MaxValue,
+      50,
+      1,
+      1,
+      genesisParams.proofOfStake.minimumBond,
+      genesisParams.proofOfStake.maximumBond,
+      genesisParams.proofOfStake.epochLength,
+      genesisParams.proofOfStake.quarantineLength
+    )
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 

@@ -6,9 +6,9 @@ object BlockStatus {
   def processed: BlockError                = BlockError.Processed
   def casperIsBusy: BlockError             = BlockError.CasperIsBusy
   def exception(ex: Throwable): BlockError = BlockError.BlockException(ex)
+  def missingBlocks: BlockError            = BlockError.MissingBlocks
   def admissibleEquivocation: BlockError   = InvalidBlock.AdmissibleEquivocation
   def ignorableEquivocation: BlockError    = InvalidBlock.IgnorableEquivocation
-  def missingBlocks: BlockError            = InvalidBlock.MissingBlocks
   def invalidFormat: BlockError            = InvalidBlock.InvalidFormat
   def invalidSignature: BlockError         = InvalidBlock.InvalidSignature
   def invalidSender: BlockError            = InvalidBlock.InvalidSender
@@ -47,6 +47,7 @@ sealed trait BlockError extends BlockStatus
 object BlockError {
   case object Processed                          extends BlockError
   case object CasperIsBusy                       extends BlockError
+  case object MissingBlocks                      extends BlockError
   final case class BlockException(ex: Throwable) extends BlockError
 }
 
@@ -60,7 +61,6 @@ object InvalidBlock {
   // as we aren't forced to add it to our view as a dependency.
   // TODO: The above will become a DOS vector if we don't fix.
   case object IgnorableEquivocation extends InvalidBlock
-  case object MissingBlocks         extends InvalidBlock
 
   case object InvalidFormat    extends InvalidBlock
   case object InvalidSignature extends InvalidBlock

@@ -438,24 +438,4 @@ object ProtoUtil {
       case None =>
         List.empty[BlockMetadata].pure
     }
-
-  def invalidLatestMessages[F[_]: Sync](
-      dag: BlockDagRepresentation[F]
-  ): F[Map[Validator, BlockHash]] =
-    dag.latestMessages.flatMap(
-      latestMessages =>
-        invalidLatestMessages(dag, latestMessages.map {
-          case (validator, block) => (validator, block.blockHash)
-        })
-    )
-
-  def invalidLatestMessages[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
-      latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[Map[Validator, BlockHash]] =
-    dag.invalidBlocks.map { invalidBlocks =>
-      latestMessagesHashes.filter {
-        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
-      }
-    }
 }

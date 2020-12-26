@@ -292,7 +292,9 @@ class Node:
     def propose(self) -> str:
         try:
             with RClient(self.get_self_host(), self.get_internal_grpc_port()) as client:
-                return client.propose()
+                _ = client.propose()
+                r = client.get_propose_result()
+                return r
         except RClientException as e:
             message = e.args[0]
             if "Must wait for more blocks from other validators" in message:

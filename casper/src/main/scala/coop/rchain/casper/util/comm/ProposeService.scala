@@ -43,6 +43,15 @@ class GrpcProposeService[F[_]: Monixable: Sync](host: String, port: Int, maxMess
         _.message.result
       )
 
+  def proposeResult: F[Either[Seq[String], String]] =
+    stub
+      .proposeResult(ProposeResultQuery())
+      .fromTask
+      .toEitherF(
+        _.message.error,
+        _.message.result
+      )
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
     val terminated = channel.shutdown().awaitTermination(10, TimeUnit.SECONDS)

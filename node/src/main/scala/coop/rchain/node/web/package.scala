@@ -1,6 +1,6 @@
 package coop.rchain.node
 
-import cats.effect.{Async, ConcurrentEffect, Timer}
+import cats.effect.{Async, ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import cats.~>
 import coop.rchain.casper.ReportingCasper
@@ -30,7 +30,7 @@ package object web {
       reportingCasper: ReportingCasper[F],
       webApiRoutes: WebApi[F],
       connectionIdleTimeout: FiniteDuration
-  )(implicit scheduler: Scheduler): F[Unit] =
+  )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]
       baseRoutes = Map(
@@ -53,21 +53,19 @@ package object web {
       else
         Map.empty
       allRoutes = baseRoutes ++ extraRoutes
-      httpServerFiber <- BlazeServerBuilder[F](scheduler)
-                          .bindHttp(httpPort, host)
-                          .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
-                          .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
-                          .withIdleTimeout(connectionIdleTimeout)
-                          .resource
-                          .use(_ => Async[F].never[Unit])
-    } yield httpServerFiber
+    } yield BlazeServerBuilder[F](scheduler)
+      .bindHttp(httpPort, host)
+      .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
+      .withIdleTimeout(connectionIdleTimeout)
+      .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
+      .serve
 
   def aquireAdminHttpServer[F[_]: ConcurrentEffect: Timer: EventConsumer](
       host: String = "0.0.0.0",
       httpPort: Int,
       adminWebApiRoutes: AdminWebApi[F],
       connectionIdleTimeout: FiniteDuration
-  )(implicit scheduler: Scheduler): F[Unit] =
+  )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]
       baseRoutes = Map(
@@ -76,12 +74,10 @@ package object web {
           AdminWebApiRoutes.service[F, F](adminWebApiRoutes)
         })
       )
-      adminHttpServerFiber <- BlazeServerBuilder[F](scheduler)
-                               .bindHttp(httpPort, host)
-                               .withHttpApp(Router(baseRoutes.toList: _*).orNotFound)
-                               .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
-                               .withIdleTimeout(connectionIdleTimeout)
-                               .resource
-                               .use(_ => Async[F].never[Unit])
-    } yield adminHttpServerFiber
+    } yield BlazeServerBuilder[F](scheduler)
+      .bindHttp(httpPort, host)
+      .withHttpApp(Router(baseRoutes.toList: _*).orNotFound)
+      .withResponseHeaderTimeout(connectionIdleTimeout - 1.second)
+      .withIdleTimeout(connectionIdleTimeout)
+      .serve
 }
