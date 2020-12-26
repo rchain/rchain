@@ -68,10 +68,10 @@ object Setup {
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
     implicit val runtimeManager =
-      RuntimeManager.fromRuntimes(runtime, replayRuntime).unsafeRunSync(scheduler)
+      RuntimeManager.fromRuntimes(runtime, replayRuntime, historyRepo).unsafeRunSync(scheduler)
 
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                        = GenesisBuilder.buildGenesis(params)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
