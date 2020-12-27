@@ -3,10 +3,10 @@ package coop.rchain.blockstorage.dag
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
+import coop.rchain.dag.DAGReader
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
-import coop.rchain.state.DAGReader
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]

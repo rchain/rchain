@@ -10,12 +10,12 @@ import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.dag.DAGReader
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.shared.{Log, Stopwatch}
-import coop.rchain.state.DAGReader
 import coop.rchain.shared.syntax._
-import coop.rchain.state.DAGReader._
+import DAGReader._
 
 import scala.collection.Seq
 

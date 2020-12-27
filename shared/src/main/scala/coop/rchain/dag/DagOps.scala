@@ -1,7 +1,8 @@
-package coop.rchain.shared
+package coop.rchain.dag
 
 import cats.implicits._
 import cats.{Eval, Monad}
+import coop.rchain.shared.StreamT
 
 import scala.collection.immutable.{HashSet, Queue}
 

@@ -1,6 +1,7 @@
-package coop.rchain.state
-import cats.{Applicative, Monad}
+package coop.rchain.dag
+
 import cats.syntax.all._
+import cats.{Applicative, Monad}
 
 import scala.collection.Seq
 
@@ -44,7 +45,7 @@ object DAGReader {
                              } yield (acc ++ next, next).asLeft[Seq[A]]
                          }
                      }
-      // blocks from tipSet connected to LFB
+      // blocks from tipSet connected to base
       branchSet <- (Seq(base), Seq(base)).tailRecM[F, Seq[A]] {
                     case (acc, blocksToProceed) =>
                       blocksToProceed.toList match {

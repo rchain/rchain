@@ -16,7 +16,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.shared.{DagOps, Log}
+import coop.rchain.dag.DagOps
+import coop.rchain.shared.Log
 
 final class Estimator[F[_]: Sync: Log: Metrics: Span](
     maxNumberOfParents: Int,

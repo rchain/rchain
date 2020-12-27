@@ -13,6 +13,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.dag.InMemDAG
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
@@ -20,7 +21,6 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
-import coop.rchain.state.InMemDAG
 import fs2.Stream
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
