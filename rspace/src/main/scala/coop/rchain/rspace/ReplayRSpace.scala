@@ -253,7 +253,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
       _           <- restoreInstalls()
-    } yield (Checkpoint(nextHistory.history.root, Seq.empty))
+    } yield (Checkpoint(nextHistory.history.root, Set.empty))
   }
 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()

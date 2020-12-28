@@ -13,7 +13,7 @@ import coop.rchain.metrics.implicits._
 import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
+import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce, Log => EventLog}
 import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
@@ -55,7 +55,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   def assertF(predicate: Boolean, errorMsg: => String): F[Unit] =
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
-  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
+  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Set.empty)
   protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
     create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
 
@@ -322,11 +322,12 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       nextHistory <- historyRepositoryAtom.get().reset(root)
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           = produceCounter.take()
-      _           = produceCounter.put(Map.empty.withDefaultValue(0))
-      _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
-      _           <- restoreInstalls()
+//      _           = eventLog.put(Seq.empty)
+      _ = eventLog.put(Set.empty)
+      _ = produceCounter.take()
+      _ = produceCounter.put(Map.empty.withDefaultValue(0))
+      _ <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
+      _ <- restoreInstalls()
     } yield ()
   }
 
@@ -340,12 +341,27 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
+//  def logFreeAndComm = eventLog.take()
+  def logFreeAndComm = {
+    val rawLog = eventLog.take()
+    val boundEvs = rawLog flatMap {
+      case COMM(c, ps, _, _) => c +: ps
+      case _                 => Set[Event]()
+    }
+    rawLog.filterNot(boundEvs)
+  }
+
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
-      cache    <- storeAtom.get().snapshot()
-      log      = eventLog.take()
-      _        = eventLog.put(Seq.empty)
+      cache <- storeAtom.get().snapshot()
+
+//      log = eventLog.take()
+      log = logFreeAndComm
+
+      _ = println(s"Soft checkpoint log size: ${log.size}")
+
+      _        = eventLog.put(Set.empty)
       pCounter = produceCounter.take()
       _        = produceCounter.put(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)

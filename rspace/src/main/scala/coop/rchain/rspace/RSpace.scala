@@ -192,7 +192,14 @@ class RSpace[F[_], C, P, A, K](
       label: String
   ): F[COMM] =
     metricsF.incrementCounter(label).map { _ =>
-      eventLog.update(comm +: _)
+//      eventLog.update(comm +: _)
+      eventLog.update { x =>
+//        assert(!x.contains(comm), s"Event found in event log $comm")
+        if (x.contains(comm)) println(s"Event found in event log $comm")
+//        comm +: x
+        x + comm
+//        if (!x.contains(comm)) comm +: x else x
+      }
       comm
     }
 
@@ -204,7 +211,14 @@ class RSpace[F[_], C, P, A, K](
       persist: Boolean,
       peeks: SortedSet[Int]
   ): F[Consume] = syncF.delay {
-    eventLog.update(consumeRef +: _)
+//    eventLog.update(consumeRef +: _)
+    eventLog.update { x =>
+//      assert(!x.contains(consumeRef), s"Event found in event log $consumeRef")
+//      if (x.contains(consumeRef)) println(s"Event found in event log $consumeRef")
+//      consumeRef +: x
+      x + consumeRef
+//      if (!x.contains(consumeRef)) consumeRef +: x else x
+    }
     consumeRef
   }
 
@@ -214,7 +228,14 @@ class RSpace[F[_], C, P, A, K](
       data: A,
       persist: Boolean
   ): F[Produce] = syncF.delay {
-    eventLog.update(produceRef +: _)
+//    eventLog.update(produceRef +: _)
+    eventLog.update { x =>
+//      assert(!x.contains(produceRef), s"Event found in event log $produceRef")
+//      if (x.contains(produceRef)) println(s"Event found in event log $produceRef")
+//      produceRef +: x
+      x + produceRef
+//      if (!x.contains(produceRef)) produceRef +: x else x
+    }
     if (!persist)
       produceCounter.update(_.putAndIncrementCounter(produceRef))
     produceRef
@@ -226,11 +247,16 @@ class RSpace[F[_], C, P, A, K](
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
-      log         = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           = produceCounter.take()
-      _           = produceCounter.put(Map.empty.withDefaultValue(0))
-      _           <- restoreInstalls()
+
+//      log = eventLog.take()
+      log = logFreeAndComm
+
+      _ = println(s"Checkpoint log size: ${log.size}")
+
+      _ = eventLog.put(Set.empty)
+      _ = produceCounter.take()
+      _ = produceCounter.put(Map.empty.withDefaultValue(0))
+      _ <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
 }
 

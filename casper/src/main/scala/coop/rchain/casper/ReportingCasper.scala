@@ -393,7 +393,7 @@ object ReportingCasper {
       Span[F].withMarks("replay-deploy") {
         for {
           _ <- runtime.reportingSpace.rig(
-                processedDeploy.deployLog.map(EventConverter.toRspaceEvent)
+                processedDeploy.deployLog.map(EventConverter.toRspaceEvent).toSet
               )
           _ <- Span[F].mark("before-replay-deploy-compute-effect")
           failureOption <- evaluatorT.flatMap { succeeded =>

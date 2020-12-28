@@ -207,7 +207,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     for {
       _ <- runtime.replaySpace.rigAndReset(
             Blake2b256Hash.fromByteString(stateHash),
-            processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+            processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent).toSet
           )
       expectedFailure = processedSystemDeploy
         .fold(_ => None, (_, errorMsg) => Some(SystemDeployError(errorMsg)))
@@ -524,7 +524,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
     Span[F].withMarks("replay-system-deploy") {
       for {
         _ <- runtime.replaySpace.rig(
-              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent).toSet
             )
         _ <- Span[F].mark("before-replay-system-deploy-compute-effect")
         failureOption <- deployEvaluator
@@ -636,7 +636,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
 
     Span[F].withMarks("replay-deploy") {
       for {
-        _ <- runtime.replaySpace.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
+        _ <- runtime.replaySpace.rig(
+              processedDeploy.deployLog.map(EventConverter.toRspaceEvent).toSet
+            )
         _ <- Span[F].mark("before-replay-deploy-compute-effect")
         failureOption <- evaluatorT
                           .flatMap { succeeded =>

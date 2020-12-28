@@ -23,9 +23,19 @@ trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
   def rigAndReset(startRoot: Blake2b256Hash, log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     rig(log) >> reset(startRoot)
 
-  def rig(log: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
+  def rig(rawLog: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
+//        def logFreeAndComm = {
+//          val boundEvs = rawLog flatMap {
+//            case COMM(c, ps, _, _) => c +: ps
+//            case _                 => Set[Event]()
+//          }
+//          rawLog.filterNot(boundEvs)
+//        }
+//        val log = logFreeAndComm
+        val log = rawLog
+
         val (ioEvents, commEvents) = log.partition {
           case _: Produce => true
           case _: Consume => true
@@ -42,8 +52,11 @@ trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
           case comm @ COMM(consume, produces, _, _) =>
             (consume +: produces).foreach { ioEvent =>
               if (newStuff(ioEvent)) {
-                replayData.addBinding(ioEvent, comm)
+//                replayData.addBinding(ioEvent, comm)
+                println(s"Event is free: $ioEvent")
               }
+
+              replayData.addBinding(ioEvent, comm)
             }
           case _ =>
             syncF.raiseError(new RuntimeException("BUG FOUND: only COMM events are expected here"))
