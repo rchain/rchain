@@ -23,6 +23,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -364,7 +365,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
             deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
 
             _             <- runtime.cost.set(initialPhlo)
-            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.data.term)
+            term          <- Compiler[Task].sourceToADT(deploy.data.term)
             _             <- runtime.reducer.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft
