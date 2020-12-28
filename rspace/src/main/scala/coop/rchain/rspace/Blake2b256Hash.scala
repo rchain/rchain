@@ -4,8 +4,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.rspace.internal.codecSeq
-import scodec.Codec
-import scodec.bits.ByteVector
+import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
+import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 
 /**
@@ -69,6 +69,28 @@ object Blake2b256Hash {
 
   def fromByteString(byteString: ByteString): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(byteString.toByteArray))
+
+  val codecPureBlake2b256Hash: Codec[Blake2b256Hash] = new Codec[Blake2b256Hash] {
+    val bitLength = (length * 8).toLong
+    override def decode(bits: BitVector): Attempt[DecodeResult[Blake2b256Hash]] =
+      if (bits.sizeGreaterThanOrEqual(bitLength)) {
+        Attempt.successful(
+          DecodeResult(Blake2b256Hash.create(bits.toByteVector), bits.drop(bitLength))
+        )
+      } else {
+        Attempt.failure(Err.insufficientBits(bitLength, bits.size))
+      }
+    override def encode(value: Blake2b256Hash): Attempt[BitVector] = {
+      val encoded = value.bytes.toBitVector
+      if (encoded.size != bitLength)
+        Attempt.failure(
+          Err(s"[$value] requires ${encoded.size} bits but field is fixed size of $bitLength bits")
+        )
+      else
+        Attempt.successful(encoded)
+    }
+    override def sizeBound: SizeBound = SizeBound.exact(bitLength)
+  }
 
   implicit val codecWithBytesStringBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
