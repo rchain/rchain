@@ -160,7 +160,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
       _ <- restoreInstalls()
       _ = softReport.update(_ => Seq.empty[ReportingEvent])
       _ = report.update(_ => Seq.empty[Seq[ReportingEvent]])
-    } yield (Checkpoint(historyRepository.history.root, Set.empty))
+    } yield (Checkpoint(historyRepository.history.root, Vector.empty))
   }
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =

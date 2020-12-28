@@ -196,8 +196,8 @@ class RSpace[F[_], C, P, A, K](
       eventLog.update { x =>
 //        assert(!x.contains(comm), s"Event found in event log $comm")
         if (x.contains(comm)) println(s"Event found in event log $comm")
-//        comm +: x
-        x + comm
+        comm +: x
+//        x + comm
 //        if (!x.contains(comm)) comm +: x else x
       }
       comm
@@ -215,8 +215,8 @@ class RSpace[F[_], C, P, A, K](
     eventLog.update { x =>
 //      assert(!x.contains(consumeRef), s"Event found in event log $consumeRef")
 //      if (x.contains(consumeRef)) println(s"Event found in event log $consumeRef")
-//      consumeRef +: x
-      x + consumeRef
+      consumeRef +: x
+//      x + consumeRef
 //      if (!x.contains(consumeRef)) consumeRef +: x else x
     }
     consumeRef
@@ -232,8 +232,8 @@ class RSpace[F[_], C, P, A, K](
     eventLog.update { x =>
 //      assert(!x.contains(produceRef), s"Event found in event log $produceRef")
 //      if (x.contains(produceRef)) println(s"Event found in event log $produceRef")
-//      produceRef +: x
-      x + produceRef
+      produceRef +: x
+//      x + produceRef
 //      if (!x.contains(produceRef)) produceRef +: x else x
     }
     if (!persist)
@@ -253,7 +253,7 @@ class RSpace[F[_], C, P, A, K](
 
       _ = println(s"Checkpoint log size: ${log.size}")
 
-      _ = eventLog.put(Set.empty)
+      _ = eventLog.put(Vector.empty)
       _ = produceCounter.take()
       _ = produceCounter.put(Map.empty.withDefaultValue(0))
       _ <- restoreInstalls()

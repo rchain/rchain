@@ -26,15 +26,15 @@ trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {
   def rig(rawLog: trace.Log)(implicit syncF: Sync[F]): F[Unit] =
     syncF
       .delay {
-//        def logFreeAndComm = {
-//          val boundEvs = rawLog flatMap {
-//            case COMM(c, ps, _, _) => c +: ps
-//            case _                 => Set[Event]()
-//          }
-//          rawLog.filterNot(boundEvs)
-//        }
-//        val log = logFreeAndComm
-        val log = rawLog
+        def logFreeAndComm = {
+          val boundEvs = rawLog flatMap {
+            case COMM(c, ps, _, _) => c +: ps
+            case _                 => Set[Event]()
+          }
+          rawLog.filterNot(boundEvs.toSet)
+        }
+        val log = logFreeAndComm
+//        val log = rawLog
 
         val (ioEvents, commEvents) = log.partition {
           case _: Produce => true

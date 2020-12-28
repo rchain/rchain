@@ -55,7 +55,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   def assertF(predicate: Boolean, errorMsg: => String): F[Unit] =
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
-  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Set.empty)
+  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Vector.empty)
   protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
     create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
 
@@ -323,7 +323,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
 //      _           = eventLog.put(Seq.empty)
-      _ = eventLog.put(Set.empty)
+      _ = eventLog.put(Vector.empty)
       _ = produceCounter.take()
       _ = produceCounter.put(Map.empty.withDefaultValue(0))
       _ <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
@@ -341,15 +341,15 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
-//  def logFreeAndComm = eventLog.take()
-  def logFreeAndComm = {
-    val rawLog = eventLog.take()
-    val boundEvs = rawLog flatMap {
-      case COMM(c, ps, _, _) => c +: ps
-      case _                 => Set[Event]()
-    }
-    rawLog.filterNot(boundEvs)
-  }
+  def logFreeAndComm = eventLog.take()
+//  def logFreeAndComm = {
+//    val rawLog = eventLog.take()
+//    val boundEvs = rawLog flatMap {
+//      case COMM(c, ps, _, _) => c +: ps
+//      case _                 => Vector[Event]()
+//    }
+//    rawLog.filterNot(boundEvs.toSet)
+//  }
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
@@ -361,7 +361,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
       _ = println(s"Soft checkpoint log size: ${log.size}")
 
-      _        = eventLog.put(Set.empty)
+      _        = eventLog.put(Vector.empty)
       pCounter = produceCounter.take()
       _        = produceCounter.put(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
