@@ -26,14 +26,16 @@ object RootsStoreInstances {
 
     override def currentRoot(): F[Option[Blake2b256Hash]] =
       for {
-        bytes        <- store.get(currentRootName)
-        maybeDecoded <- bytes.map(Blake2b256Hash.codecBlake2b256Hash.decode(_).get).sequence
-        maybeHash    = maybeDecoded.map(_.value)
+        bytes <- store.get(currentRootName)
+        maybeDecoded <- bytes
+                         .map(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.decode(_).get)
+                         .sequence
+        maybeHash = maybeDecoded.map(_.value)
       } yield (maybeHash)
 
     override def validateAndSetCurrentRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]] =
       for {
-        bits    <- Blake2b256Hash.codecBlake2b256Hash.encode(key).get
+        bits    <- Blake2b256Hash.codecWithBytesStringBlake2b256Hash.encode(key).get
         bytes   = bits.toByteVector.toDirectByteBuffer
         byteBuf <- store.get(bytes)
         result  <- byteBuf.traverse(_ => store.put(currentRootName, bytes).as(key))
@@ -41,7 +43,7 @@ object RootsStoreInstances {
 
     override def recordRoot(key: Blake2b256Hash): F[Unit] =
       for {
-        bits  <- Blake2b256Hash.codecBlake2b256Hash.encode(key).get
+        bits  <- Blake2b256Hash.codecWithBytesStringBlake2b256Hash.encode(key).get
         bytes = bits.toByteVector.toDirectByteBuffer
         _     <- store.put(bytes, tag)
         _     <- store.put(currentRootName, bytes)

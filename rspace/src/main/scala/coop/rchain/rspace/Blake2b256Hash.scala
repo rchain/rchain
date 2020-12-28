@@ -70,10 +70,12 @@ object Blake2b256Hash {
   def fromByteString(byteString: ByteString): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(byteString.toByteArray))
 
-  implicit val codecBlake2b256Hash: Codec[Blake2b256Hash] =
+  implicit val codecWithBytesStringBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 
-  implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(codecBlake2b256Hash)
+  implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(
+    codecWithBytesStringBlake2b256Hash
+  )
 
   implicit val ordering: Ordering[Blake2b256Hash] =
     (x: Blake2b256Hash, y: Blake2b256Hash) => {
