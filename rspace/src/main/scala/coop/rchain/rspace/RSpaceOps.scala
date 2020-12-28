@@ -341,15 +341,15 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
-  def logFreeAndComm = eventLog.take()
-//  def logFreeAndComm = {
-//    val rawLog = eventLog.take()
-//    val boundEvs = rawLog flatMap {
-//      case COMM(c, ps, _, _) => c +: ps
-//      case _                 => Vector[Event]()
-//    }
-//    rawLog.filterNot(boundEvs.toSet)
-//  }
+//  def logFreeAndComm = eventLog.take()
+  def logFreeAndComm = {
+    val rawLog = eventLog.take()
+    val boundEvs = rawLog flatMap {
+      case COMM(c, ps, _, _) => c +: ps
+      case _                 => Vector[Event]()
+    }
+    rawLog.filterNot(boundEvs.toSet)
+  }
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
