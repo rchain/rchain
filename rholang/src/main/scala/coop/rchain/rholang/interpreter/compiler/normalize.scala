@@ -1235,15 +1235,18 @@ object ProcNormalizeMatcher {
 
             val pinput = {
               val listLinearBind = new ListLinearBind()
-              for (linearBind <- variableNames.zip(listNames).zip(listNameRemainders).map {
-                                  case ((variableName, listName), nameRemainder) =>
-                                    new LinearBindImpl(
-                                      listName,
-                                      nameRemainder,
-                                      new SimpleSource(new NameVar(variableName))
-                                    )
-                                })
-                listLinearBind.add(linearBind)
+              variableNames
+                .zip(listNames)
+                .zip(listNameRemainders)
+                .map {
+                  case ((variableName, listName), nameRemainder) =>
+                    new LinearBindImpl(
+                      listName,
+                      nameRemainder,
+                      new SimpleSource(new NameVar(variableName))
+                    )
+                }
+                .foreach(listLinearBind.add)
               val listReceipt = new ListReceipt()
               listReceipt.add(new ReceiptLinear(new LinearSimple(listLinearBind)))
               new PInput(listReceipt, p.proc_)
@@ -1258,8 +1261,7 @@ object ProcNormalizeMatcher {
 
             val pnew = {
               val listNameDecl = new ListNameDecl()
-              for (nameDecl <- variableNames.map(new NameDeclSimpl(_)))
-                listNameDecl.add(nameDecl)
+              variableNames.map(new NameDeclSimpl(_)).foreach(listNameDecl.add)
               new PNew(listNameDecl, ppar)
             }
 
@@ -1291,8 +1293,7 @@ object ProcNormalizeMatcher {
                       new EmptyDeclImpl()
                     else {
                       val newListLinearDecls = new ListLinearDecl()
-                      for (linearDecl <- linearDeclsImpl.listlineardecl_.tail)
-                        newListLinearDecls.add(linearDecl)
+                      linearDeclsImpl.listlineardecl_.tail.foreach(newListLinearDecls.add)
                       new LinearDeclsImpl(newListLinearDecls)
                     }
                   new PLet(newDecl, newDecls, p.proc_)
