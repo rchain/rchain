@@ -19,6 +19,7 @@ import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.shared.PathOps._
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
@@ -1301,13 +1302,13 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       storeConfig("channelHash")
     )
 
-    implicit val cc = sc.toSizeHeadCodec
-    implicit val cp = sp.toSizeHeadCodec
-    implicit val ca = sa.toSizeHeadCodec
-    implicit val ck = sk.toSizeHeadCodec
-
+    implicit val cc  = sc.toSizeHeadCodec
+    implicit val cp  = sp.toSizeHeadCodec
+    implicit val ca  = sa.toSizeHeadCodec
+    implicit val ck  = sk.toSizeHeadCodec
+    implicit val kvm = InMemoryStoreManager[Task]
     (for {
-      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](config)
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](kvm, config)
       cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
               )

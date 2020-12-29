@@ -18,6 +18,7 @@ import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.store.KeyValueStoreManager
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
@@ -273,7 +274,8 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F]
+      par: Parallel[F],
+      kvm: KeyValueStoreManager[F]
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
       setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, Branch.MASTER)
@@ -300,7 +302,8 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F]
+      par: Parallel[F],
+      kvm: KeyValueStoreManager[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     for {
       setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, Branch.MASTER)
@@ -329,7 +332,8 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F]
+      par: Parallel[F],
+      kvm: KeyValueStoreManager[F]
   ): F[ISpace[F, C, P, A, K]] =
     for {
       setup                  <- setUp[F, C, P, A, K](dataDir, mapSize, branch)
@@ -352,7 +356,8 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       concurrent: Concurrent[F],
-      par: Parallel[F]
+      par: Parallel[F],
+      kvm: KeyValueStoreManager[F]
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
     import coop.rchain.rspace.history._
@@ -380,7 +385,7 @@ object RSpace {
       _ <- checkCreateDir(rootsStore.path)
       _ <- checkCreateDir(channelHashStore.path)
       historyReader <- HistoryRepositoryInstances
-                        .lmdbRepository[F, C, P, A, K](config)
+                        .lmdbRepository[F, C, P, A, K](kvm, config)
       store <- HotStore.empty(historyReader)
     } yield (historyReader, store)
   }

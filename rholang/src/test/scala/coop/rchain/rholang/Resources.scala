@@ -17,6 +17,7 @@ import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.rspace.RSpace.setUp
 import coop.rchain.rspace.history.{Branch, HistoryRepository}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.execution.Scheduler
 
 import scala.reflect.io.Directory
@@ -48,6 +49,7 @@ object Resources {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     import scala.concurrent.ExecutionContext.Implicits.global
+    implicit val kvm = InMemoryStoreManager[F]
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] =
       RSpace.create[
@@ -82,6 +84,8 @@ object Resources {
       initRegistry: Boolean = true
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
+    implicit val kvm = InMemoryStoreManager[F]
+
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
         space   <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
@@ -100,6 +104,8 @@ object Resources {
       storageSize: Long = 1024 * 1024 * 1024L
   ): Resource[F, RhoHistoryRepository[F]] = {
     import coop.rchain.rholang.interpreter.storage._
+    implicit val kvm = InMemoryStoreManager[F]
+
     Resource.make[F, RhoHistoryRepository[F]](
       for {
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -116,6 +122,8 @@ object Resources {
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit scheduler: Scheduler): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F])] = {
     import coop.rchain.rholang.interpreter.storage._
+    implicit val kvm = InMemoryStoreManager[F]
+
     Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F])](
       for {
         space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize)

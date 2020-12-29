@@ -1,6 +1,8 @@
 package coop.rchain.rspace.bench
 
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
 import cats.effect._
 import java.io.{FileNotFoundException, InputStreamReader}
 import java.nio.file.{Files, Path}
@@ -12,6 +14,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{Setup, TearDown}
@@ -22,6 +25,7 @@ trait EvalBenchStateBase {
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val kvm                        = InMemoryStoreManager[Task]
 
   val rhoScriptSource: String
 

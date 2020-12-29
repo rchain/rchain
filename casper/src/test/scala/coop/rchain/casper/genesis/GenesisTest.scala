@@ -25,6 +25,7 @@ import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 
 class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
@@ -274,6 +275,7 @@ object GenesisTest {
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val span: Span[Task]           = NoopSpan[Task]()
     val time                                = new LogicalTime[Task]
+    implicit val kvsManager                 = InMemoryStoreManager[Task]
 
     for {
       runtimes <- RhoRuntime.createRuntimes[Task](storePath, storageSize)

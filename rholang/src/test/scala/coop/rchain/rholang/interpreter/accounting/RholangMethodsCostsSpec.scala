@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -826,6 +827,7 @@ class RholangMethodsCostsSpec
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
+  implicit val kvm                        = InMemoryStoreManager[Task]
 
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._

@@ -18,6 +18,7 @@ import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
+import coop.rchain.store.KeyValueStoreManager
 import monix.execution.atomic.AtomicAny
 
 class ReplayRSpace[F[_]: Sync, C, P, A, K](
@@ -361,7 +362,8 @@ object ReplayRSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F]
+      par: Parallel[F],
+      kvm: KeyValueStoreManager[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     RSpace.setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
       case (historyReader, store) =>

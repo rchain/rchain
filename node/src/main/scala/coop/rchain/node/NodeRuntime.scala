@@ -920,18 +920,20 @@ object NodeRuntime {
         LastFinalizedHeightConstraintChecker[F]
       }
       evalRuntime <- {
-        implicit val s  = rspaceScheduler
-        implicit val sp = span
+        implicit val s   = rspaceScheduler
+        implicit val sp  = span
+        implicit val kvm = casperStoreManager
         RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size) >>= {
           case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
       stateStorageFolder = casperConf.storage.resolve("v2")
       casperInitialized <- {
-        implicit val s  = rspaceScheduler
-        implicit val sp = span
-        implicit val bs = blockStore
-        implicit val bd = blockDagStorage
+        implicit val s   = rspaceScheduler
+        implicit val sp  = span
+        implicit val bs  = blockStore
+        implicit val bd  = blockDagStorage
+        implicit val kvm = casperStoreManager
         for {
           runtimes                       <- RhoRuntime.createRuntimes[F](stateStorageFolder, casperConf.size)
           (rhoRuntime, replayRhoRuntime) = runtimes
@@ -949,6 +951,7 @@ object NodeRuntime {
                                             ]
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
+                         kvm,
                          stateStorageFolder,
                          casperConf.size
                        )
@@ -963,6 +966,7 @@ object NodeRuntime {
       }
       // RNodeStateManager
       stateManagers <- {
+        implicit val kvm = casperStoreManager
         for {
           history <- {
             import coop.rchain.rholang.interpreter.storage._

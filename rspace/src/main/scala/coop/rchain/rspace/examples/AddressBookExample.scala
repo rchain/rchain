@@ -13,6 +13,7 @@ import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.rspace.util._
+import coop.rchain.store.InMemoryStoreManager
 
 import scala.concurrent.ExecutionContext
 import scodec.bits.ByteVector
@@ -203,6 +204,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
@@ -243,6 +245,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Here we define a temporary place to put the store's files
     val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
@@ -337,6 +340,7 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Here we define a temporary place to put the store's files
     val storePath = Files.createTempDirectory("rspace-address-book-example-")

@@ -21,6 +21,7 @@ import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -66,6 +67,7 @@ object RholangCLI {
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
     implicit val parF: Parallel[Task]    = Task.catsParallel
+    implicit val kvm                     = InMemoryStoreManager[Task]
 
     val runtime = (for {
       space   <- RhoRuntime.setupRhoRSpace[Task](conf.dataDir(), conf.mapSize())

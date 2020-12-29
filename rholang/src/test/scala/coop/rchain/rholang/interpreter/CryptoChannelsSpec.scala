@@ -21,6 +21,7 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -219,6 +220,7 @@ class CryptoChannelsSpec
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+    implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
       space   <- RhoRuntime.setupRhoRSpace[Task](dbDir, size)

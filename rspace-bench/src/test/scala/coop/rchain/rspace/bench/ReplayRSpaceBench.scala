@@ -15,6 +15,7 @@ import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.store.InMemoryStoreManager
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -67,6 +68,7 @@ object ReplayRSpaceBench {
     val produceChannel                    = Channel("produce")
     val matches                           = List(CityMatch(city = "Crystal Lake"))
     val captor                            = new EntriesCaptor()
+    implicit val kvm                      = InMemoryStoreManager[Id]
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()

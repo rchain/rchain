@@ -29,6 +29,7 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueStoreManager
 
 import scala.concurrent.ExecutionContext
 
@@ -511,7 +512,8 @@ object RhoRuntime {
       dataDir: Path,
       mapSize: Long
   )(
-      implicit scheduler: ExecutionContext
+      implicit scheduler: ExecutionContext,
+      kvm: KeyValueStoreManager[F]
   ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -537,7 +539,8 @@ object RhoRuntime {
       dataDir: Path,
       mapSize: Long
   )(
-      implicit scheduler: ExecutionContext
+      implicit scheduler: ExecutionContext,
+      kvm: KeyValueStoreManager[F]
   ): F[RhoReplayISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -563,7 +566,8 @@ object RhoRuntime {
       dataDir: Path,
       mapSize: Long
   )(
-      implicit scheduler: ExecutionContext
+      implicit scheduler: ExecutionContext,
+      kvm: KeyValueStoreManager[F]
   ): F[RhoISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -659,7 +663,8 @@ object RhoRuntime {
       initRegistry: Boolean = true
   )(
       implicit scheduler: ExecutionContext,
-      costLog: FunctorTell[F, Chain[Cost]]
+      costLog: FunctorTell[F, Chain[Cost]],
+      kvm: KeyValueStoreManager[F]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
       space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize)

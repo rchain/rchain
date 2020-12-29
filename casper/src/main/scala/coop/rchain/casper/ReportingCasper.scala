@@ -34,6 +34,7 @@ import coop.rchain.models.Validator.Validator
 
 import scala.concurrent.ExecutionContext
 import coop.rchain.metrics.MetricsSemaphore
+import coop.rchain.store.KeyValueStoreManager
 
 import scala.collection.concurrent.TrieMap
 
@@ -61,11 +62,13 @@ object ReportingCasper {
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       store: ReportMemStore[F],
+      keyValueStoreManager: KeyValueStoreManager[F],
       dataDir: Path,
       mapSize: Long
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
+      implicit val kvm    = keyValueStoreManager
 
       val blockLockMap = TrieMap[BlockHash, (MetricsSemaphore[F], Boolean)]()
 
@@ -207,7 +210,8 @@ object ReportingRuntime {
       dataDir: Path,
       mapSize: Long
   )(
-      implicit scheduler: ExecutionContext
+      implicit scheduler: ExecutionContext,
+      kvm: KeyValueStoreManager[F]
   ): F[RhoReportingRspace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._

@@ -30,6 +30,7 @@ import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterSt
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Serialize
+import coop.rchain.store.{InMemoryStoreManager, KeyValueStoreManager}
 
 import scala.concurrent.duration._
 
@@ -48,20 +49,25 @@ class LMDBHistoryRepositoryGenerativeSpec
       List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
     )
 
+  val kvm = InMemoryStoreManager[Task]
+
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
     for {
-      historyLmdbStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      historyStore     = HistoryStoreInstances.historyStore(historyLmdbStore)
-      coldLmdbStore    <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      coldStore        = ColdStoreInstances.coldStore(coldLmdbStore)
-      rootsLmdbStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
-      rootRepository   = new RootRepository[Task](rootsStore)
-      emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
-      exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      channelLMDBStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      channelStore     = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
+      historyLmdbStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      historyLmdbKVStore <- kvm.store("history")
+      historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
+      coldLmdbStore      <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      coldLmdbKVStore    <- kvm.store("cold")
+      coldStore          = ColdStoreInstances.coldStore(coldLmdbKVStore)
+      rootsLmdbStore     <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      rootsLmdbKVStore   <- kvm.store("roots")
+      rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
+      rootRepository     = new RootRepository[Task](rootsStore)
+      emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
+      exporter           = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      importer           = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      channelLMDBStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
+      channelStore       = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,

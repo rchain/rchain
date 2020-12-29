@@ -47,9 +47,11 @@ object Setup {
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
-    val networkId                 = "test"
-    implicit val scheduler        = Scheduler.io("test")
-    val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
+    implicit val kvsManager       = InMemoryStoreManager[Task]
+
+    val networkId          = "test"
+    implicit val scheduler = Scheduler.io("test")
+    val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
     val (runtime, replayRuntime) =
       RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
 
@@ -149,7 +151,6 @@ object Setup {
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
     implicit val blockRetriever                 = BlockRetriever.of[Task]
 
-    implicit val kvsManager = InMemoryStoreManager[Task]
     implicit val casperBuffer = CasperBufferKeyValueStorage
       .create[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)

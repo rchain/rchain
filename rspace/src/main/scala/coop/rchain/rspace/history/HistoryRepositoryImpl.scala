@@ -7,6 +7,7 @@ import cats.{Applicative, Parallel}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.HistoryRepositoryImpl._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
@@ -26,13 +27,14 @@ import coop.rchain.rspace.{
   RSpace
 }
 import coop.rchain.shared.Serialize
+import coop.rchain.shared.syntax._
 import scodec.Codec
 import scodec.bits.ByteVector
 
 final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
-    leafStore: ColdStore[F],
+    leafStore: ColdKeyValueStore[F],
     rspaceExporter: RSpaceExporter[F],
     rspaceImporter: RSpaceImporter[F],
     // Map channel hash in event log -> channel hash in history
@@ -223,7 +225,6 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
 
   override def close(): F[Unit] =
     for {
-      _ <- leafStore.close()
       _ <- rootsRepository.close()
       _ <- history.close()
       _ <- channelHashesStore.close
@@ -251,7 +252,7 @@ object HistoryRepositoryImpl {
   def fetchData[F[_]: Sync](
       key: Blake2b256Hash,
       history: History[F],
-      leafStore: ColdStore[F]
+      leafStore: ColdKeyValueStore[F]
   ): F[Option[PersistedData]] =
     history.find(key.bytes.toSeq.toList).flatMap {
       case (trie, _) =>

@@ -10,6 +10,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -43,6 +44,7 @@ abstract class RhoBenchBaseState {
   var randRun: Blake2b512Random             = null
 
   var runTask: Task[Unit] = null
+  implicit val kvm        = InMemoryStoreManager[Task]
 
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]

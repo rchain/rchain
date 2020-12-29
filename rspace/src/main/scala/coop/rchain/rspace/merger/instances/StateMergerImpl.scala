@@ -6,6 +6,7 @@ import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.continuationKey
 import coop.rchain.rspace.channelStore.{ChannelStore, ContinuationHash, DataJoinHash}
+import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.HistoryRepositoryImpl.{
   encodeContinuations,
   encodeData,
@@ -54,7 +55,7 @@ object StateMergerImpl {
   final case class StateMergerImpl[F[_]: Sync, C, P, A, K](
       historyRepo: HistoryRepository[F, C, P, A, K],
       history: History[F],
-      leafStore: ColdStore[F],
+      leafStore: ColdKeyValueStore[F],
       rootsRepository: RootRepository[F],
       serializeC: Serialize[C],
       joinMap: Ref[F, Map[Blake2b256Hash, Seq[Seq[C]]]]

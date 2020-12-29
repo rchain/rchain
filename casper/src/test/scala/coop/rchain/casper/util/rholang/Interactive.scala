@@ -11,6 +11,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -88,6 +89,8 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val kvsManager                = InMemoryStoreManager[Task]
+
     val space = RhoRuntime
       .setupRhoRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
       .unsafeRunSync

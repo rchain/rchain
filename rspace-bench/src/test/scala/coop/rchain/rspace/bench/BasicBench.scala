@@ -17,6 +17,7 @@ import coop.rchain.rspace.{Match, RSpace, ReplayRSpace, _}
 import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{State => _, _}
@@ -113,6 +114,7 @@ object BasicBench {
     implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
+    implicit val kvm                                            = InMemoryStoreManager[Task]
 
     private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 

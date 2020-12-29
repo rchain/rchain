@@ -5,6 +5,7 @@ import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
 import Ordering.Implicits.seqDerivedOrdering
@@ -571,14 +572,14 @@ object HistoryInstances {
       extends HistoryStore[F] {
     private[rspace] val cache: TrieMap[Blake2b256Hash, Trie] = TrieMap.empty
 
-    override def put(tries: List[Trie]): F[Unit] =
+    def put(tries: List[Trie]): F[Unit] =
       Sync[F].delay {
         tries.foreach { t =>
           cache.put(Trie.hash(t), t)
         }
       }
 
-    override def get(key: Blake2b256Hash): F[Trie] =
+    def get(key: Blake2b256Hash): F[Trie] =
       for {
         maybeValue <- Sync[F].delay { cache.get(key) }
         result <- maybeValue match {
@@ -587,7 +588,7 @@ object HistoryInstances {
                  }
       } yield result
 
-    override def close(): F[Unit] = historyStore.close()
+    def close(): F[Unit] = historyStore.close()
 
     def clear(): F[Unit] = Sync[F].delay {
       cache.clear()

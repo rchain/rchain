@@ -10,6 +10,7 @@ import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
 import coop.rchain.shared.Serialize
+import coop.rchain.store.KeyValueStoreManager
 import org.lmdbjava.EnvFlags
 import scodec.Codec
 
@@ -50,6 +51,7 @@ final case class LMDBRSpaceStorageConfig(
 object HistoryRepositoryInstances {
 
   def lmdbRepository[F[_]: Concurrent: Parallel, C, P, A, K](
+      storeManager: KeyValueStoreManager[F],
       config: LMDBRSpaceStorageConfig
   )(
       implicit codecC: Codec[C],
@@ -60,16 +62,19 @@ object HistoryRepositoryInstances {
   ): F[HistoryRepository[F, C, P, A, K]] =
     for {
       // Roots store
-      rootsLMDBStore  <- StoreInstances.lmdbStore[F](config.rootsStore)
-      rootsRepository = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBStore))
-      currentRoot     <- rootsRepository.currentRoot()
+      rootsLMDBStore   <- StoreInstances.lmdbStore[F](config.rootsStore)
+      rootsLMDBKVStore <- storeManager.store("roots")
+      rootsRepository  = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBKVStore))
+      currentRoot      <- rootsRepository.currentRoot()
       // Cold store
-      coldLMDBStore <- StoreInstances.lmdbStore[F](config.coldStore)
-      coldStore     = ColdStoreInstances.coldStore[F](coldLMDBStore)
+      coldLMDBStore   <- StoreInstances.lmdbStore[F](config.coldStore)
+      coldLMDBKVStore <- storeManager.store("cold")
+      coldStore       = ColdStoreInstances.coldStore[F](coldLMDBKVStore)
       // History store
-      historyLMDBStore <- StoreInstances.lmdbStore[F](config.historyStore)
-      historyStore     = HistoryStoreInstances.historyStore[F](historyLMDBStore)
-      history          = HistoryInstances.merging(currentRoot, historyStore)
+      historyLMDBStore   <- StoreInstances.lmdbStore[F](config.historyStore)
+      historyLMDBKVStore <- storeManager.store("history")
+      historyStore       = HistoryStoreInstances.historyStore[F](historyLMDBKVStore)
+      history            = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
       exporter         = RSpaceExporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
       importer         = RSpaceImporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
