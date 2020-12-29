@@ -53,19 +53,16 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
     for {
-      historyLmdbStore    <- StoreInstances.lmdbStore[Task](lmdbConfig)
       historyLmdbKVStore  <- kvm.store("history")
       historyStore        = HistoryStoreInstances.historyStore(historyLmdbKVStore)
-      coldLmdbStore       <- StoreInstances.lmdbStore[Task](lmdbConfig)
       coldLmdbKVStore     <- kvm.store("cold")
       coldStore           = ColdStoreInstances.coldStore(coldLmdbKVStore)
-      rootsLmdbStore      <- StoreInstances.lmdbStore[Task](lmdbConfig)
       rootsLmdbKVStore    <- kvm.store("roots")
       rootsStore          = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
       rootRepository      = new RootRepository[Task](rootsStore)
       emptyHistory        = HistoryInstances.merging(History.emptyRootHash, historyStore)
-      exporter            = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      importer            = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      exporter            = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer            = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       channelsLmdbKVStore <- kvm.store("channels")
       channelStore        = ChannelStoreImpl(channelsLmdbKVStore, stringSerialize, codecString)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl

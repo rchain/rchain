@@ -62,22 +62,19 @@ object HistoryRepositoryInstances {
   ): F[HistoryRepository[F, C, P, A, K]] =
     for {
       // Roots store
-      rootsLMDBStore   <- StoreInstances.lmdbStore[F](config.rootsStore)
       rootsLMDBKVStore <- storeManager.store("roots")
       rootsRepository  = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBKVStore))
       currentRoot      <- rootsRepository.currentRoot()
       // Cold store
-      coldLMDBStore   <- StoreInstances.lmdbStore[F](config.coldStore)
       coldLMDBKVStore <- storeManager.store("cold")
       coldStore       = ColdStoreInstances.coldStore[F](coldLMDBKVStore)
       // History store
-      historyLMDBStore   <- StoreInstances.lmdbStore[F](config.historyStore)
       historyLMDBKVStore <- storeManager.store("history")
       historyStore       = HistoryStoreInstances.historyStore[F](historyLMDBKVStore)
       history            = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
-      exporter           = RSpaceExporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
-      importer           = RSpaceImporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
+      exporter           = RSpaceExporterStore[F](historyLMDBKVStore, coldLMDBKVStore, rootsLMDBKVStore)
+      importer           = RSpaceImporterStore[F](historyLMDBKVStore, coldLMDBKVStore, rootsLMDBKVStore)
       channelLMDBKVStore <- storeManager.store("channels")
       channelStore       = ChannelStoreImpl(channelLMDBKVStore, sc, codecC)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
