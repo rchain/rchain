@@ -6,7 +6,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
 import coop.rchain.shared.Log
-import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, LmdbStoreManager}
 
 object RNodeKeyValueStoreManager {
   def apply[F[_]: Concurrent: Log](dirPath: Path): F[KeyValueStoreManager[F]] =

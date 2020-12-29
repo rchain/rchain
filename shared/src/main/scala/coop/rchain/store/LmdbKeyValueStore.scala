@@ -1,11 +1,10 @@
-package coop.rchain.casper.storage
+package coop.rchain.store
 
 import java.nio.ByteBuffer
 
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.shared.Resources.withResource
-import coop.rchain.store.KeyValueStore
 import org.lmdbjava._
 
 import scala.util.control.NonFatal
