@@ -4,7 +4,7 @@ import cats.implicits._
 import cats.effect.Concurrent
 import cats.Parallel
 import coop.rchain.rspace.channelStore.ChannelStore
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
@@ -76,10 +76,10 @@ object HistoryRepositoryInstances {
       historyStore       = HistoryStoreInstances.historyStore[F](historyLMDBKVStore)
       history            = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
-      exporter         = RSpaceExporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
-      importer         = RSpaceImporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
-      channelLMDBStore <- StoreInstances.lmdbStore(config.channelHashStore)
-      channelStore     = ChannelStoreImpl(channelLMDBStore, sc, codecC)
+      exporter           = RSpaceExporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
+      importer           = RSpaceImporterStore[F](historyLMDBStore, coldLMDBStore, rootsLMDBStore)
+      channelLMDBKVStore <- storeManager.store("channels")
+      channelStore       = ChannelStoreImpl(channelLMDBKVStore, sc, codecC)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
       history,
       rootsRepository,

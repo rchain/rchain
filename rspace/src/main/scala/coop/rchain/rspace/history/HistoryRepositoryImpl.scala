@@ -227,7 +227,6 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
     for {
       _ <- rootsRepository.close()
       _ <- history.close()
-      _ <- channelHashesStore.close
     } yield ()
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)

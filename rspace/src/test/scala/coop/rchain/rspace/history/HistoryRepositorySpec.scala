@@ -28,7 +28,7 @@ import scala.concurrent.duration._
 import scala.util.Random
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.util.stringSerialize
@@ -175,18 +175,11 @@ class HistoryRepositorySpec
     implicit val codecString: Codec[String] = util.stringCodec
     val emptyHistory                        = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val pastRoots                           = rootRepository
-    val lmdbConfig = StoreConfig(
-      Files.createTempDirectory("test-"),
-      1024L * 1024L * 4096L,
-      2,
-      2048,
-      List(EnvFlags.MDB_NOTLS)
-    )
 
     (for {
       _                <- pastRoots.commit(History.emptyRootHash)
-      channelLMDBStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      channelStore     = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
+      channelLMDBStore = InMemoryKeyValueStore[Task]
+      channelStore     = ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
@@ -237,44 +230,6 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
 
   def rootRepository =
     new RootRepository[Task](inmemRootsStore)
-
-  def inMemStore = new Store[Task] {
-    val data: TrieMap[ByteBuffer, ByteBuffer] = TrieMap.empty
-
-    override def close(): Task[Unit] = Task.delay(())
-
-    override def get(key: Blake2b256Hash): Task[Option[BitVector]] = Task.delay {
-      data.get(key.bytes.toByteBuffer).map(BitVector(_))
-    }
-
-    override def get(key: ByteBuffer): Task[Option[BitVector]] = Task.delay {
-      data.get(key).map(BitVector(_))
-    }
-
-    override def get[T](
-        keys: Seq[Blake2b256Hash],
-        fromBuffer: ByteBuffer => T
-    ): Task[Seq[Option[T]]] = Task {
-      keys.map(k => get(k.bytes.toByteBuffer).runSyncUnsafe().map(b => fromBuffer(b.toByteBuffer)))
-    }
-
-    override def put(data: Seq[(Blake2b256Hash, BitVector)]): Task[Unit] = Task {
-      data.map { case (k, v) => put(k, v).runSyncUnsafe() }
-      ()
-    }
-
-    override def put(key: Blake2b256Hash, value: BitVector): Task[Unit] = Task {
-      data.put(key.bytes.toByteBuffer, value.toByteBuffer)
-    }
-
-    override def put(key: ByteBuffer, value: ByteBuffer): Task[Unit] = Task { data.put(key, value) }
-
-    override def put[T](keys: Seq[(Blake2b256Hash, T)], toBuffer: T => ByteBuffer): Task[Unit] =
-      Task {
-        keys.map { case (k, v) => put(k.bytes.toByteBuffer, toBuffer(v)).runSyncUnsafe() }
-        ()
-      }
-  }
 
   def inMemColdStore: ColdKeyValueStore[Task] = {
     val store = InMemoryKeyValueStore[Task]
