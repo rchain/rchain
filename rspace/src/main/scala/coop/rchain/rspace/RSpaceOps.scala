@@ -22,8 +22,7 @@ import scodec.Codec
 
 abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
-    val branch: Branch
+    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],

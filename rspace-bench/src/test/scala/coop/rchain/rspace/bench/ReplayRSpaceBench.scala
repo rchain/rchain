@@ -12,7 +12,6 @@ import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.store.InMemoryStoreManager

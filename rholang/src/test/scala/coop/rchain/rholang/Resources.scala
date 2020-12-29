@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rspace
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.rspace.RSpace.setUp
-import coop.rchain.rspace.history.{Branch, HistoryRepository}
+import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.execution.Scheduler
@@ -43,8 +43,7 @@ object Resources {
       prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
 
-    val branch: String = "test"
-    val mapSize: Long  = 1024L * 1024L * 4
+    val mapSize: Long = 1024L * 1024L * 4
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -58,7 +57,7 @@ object Resources {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](dbDir, mapSize, Branch(branch))
+      ](dbDir, mapSize)
 
     mkTempDir(prefix)(implicitly[Concurrent[F]])
       .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
@@ -92,8 +91,7 @@ object Resources {
         runtime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                           path,
-                          storageSize,
-                          Branch.MASTER
+                          storageSize
                         )
       } yield (runtime, historyReader._1)
     )(r => r._1.close >> r._2.close)
@@ -110,8 +108,7 @@ object Resources {
       for {
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                           path,
-                          storageSize,
-                          Branch.MASTER
+                          storageSize
                         )
       } yield historyReader._1
     )(_.close())

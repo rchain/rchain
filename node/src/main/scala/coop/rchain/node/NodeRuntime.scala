@@ -62,7 +62,6 @@ import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Context, Match, RSpace}
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared._
@@ -972,8 +971,7 @@ object NodeRuntime {
             import coop.rchain.rholang.interpreter.storage._
             RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
               stateStorageFolder,
-              casperConf.size,
-              Branch.MASTER
+              casperConf.size
             )
           }
           (historyRepo, _)   = history

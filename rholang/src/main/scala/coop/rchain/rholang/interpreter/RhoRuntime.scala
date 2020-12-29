@@ -24,7 +24,7 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, 
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
-import coop.rchain.rspace.history.{Branch, HistoryRepository}
+import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, RSpace, _}
@@ -586,7 +586,7 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize, Branch.MASTER)
+    ](dataDir, mapSize)
   }
 
   /**

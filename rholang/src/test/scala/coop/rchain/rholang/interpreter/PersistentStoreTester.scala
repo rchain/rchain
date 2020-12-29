@@ -8,7 +8,6 @@ import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuati
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rspace.RSpace
-import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
@@ -42,7 +41,7 @@ trait PersistentStoreTester {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](dbDir, 1024L * 1024L * 1024L, Branch("test"))
+      ](dbDir, 1024L * 1024L * 1024L)
       .unsafeRunSync
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)

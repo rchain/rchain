@@ -1281,8 +1281,6 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
-    val branch = Branch("inmem")
-
     implicit val cc  = sc.toSizeHeadCodec
     implicit val cp  = sp.toSizeHeadCodec
     implicit val ca  = sa.toSizeHeadCodec
@@ -1300,8 +1298,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       }
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
-        store,
-        branch
+        store
       )
       historyCache <- Ref.of[Task, Cache[C, P, A, K]](
                        Cache[C, P, A, K]()
@@ -1313,8 +1310,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
-        replayStore,
-        branch
+        replayStore
       )
       res <- f(store, replayStore, space, replaySpace)
     } yield { res }).unsafeRunSync

@@ -26,7 +26,6 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
@@ -227,8 +226,7 @@ object ReportingRuntime {
       _ <- checkCreateDataDir
       history <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                   dataDir,
-                  mapSize,
-                  Branch.MASTER
+                  mapSize
                 )
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[
@@ -239,8 +237,7 @@ object ReportingRuntime {
         TaggedContinuation
       ](
         historyRepository,
-        AtomicAny(replayStore),
-        Branch.REPLAY
+        AtomicAny(replayStore)
       )
     } yield reportingRspace
   }

@@ -31,7 +31,6 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.RSpace
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
@@ -58,8 +57,7 @@ object Setup {
     val history = RSpace
       .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
         runtimeDir,
-        1024L * 1024 * 1024L,
-        Branch.MASTER
+        1024L * 1024 * 1024L
       )
       .unsafeRunSync
 

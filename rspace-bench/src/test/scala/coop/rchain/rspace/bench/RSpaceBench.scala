@@ -11,7 +11,6 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
@@ -107,8 +106,7 @@ class RSpaceBench extends RSpaceBenchBase {
     dbDir = Files.createTempDirectory("rchain-rspace-bench-")
     space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](
       dbDir,
-      mapSize,
-      Branch.MASTER
+      mapSize
     )
   }
 
