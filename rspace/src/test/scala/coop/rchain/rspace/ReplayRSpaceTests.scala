@@ -14,7 +14,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.history.{HistoryRepositoryInstances, LMDBRSpaceStorageConfig, StoreConfig}
+import coop.rchain.rspace.history.HistoryRepositoryInstances
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
 import coop.rchain.shared.{Log, Serialize}
@@ -1283,32 +1283,13 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
 
     val branch = Branch("inmem")
 
-    val dbDir: Path   = Files.createTempDirectory("replayrspace-test-")
-    val mapSize: Long = 1024L * 1024L * 1024L
-
-    def storeConfig(name: String): StoreConfig =
-      StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)),
-        mapSize,
-        2,
-        2048,
-        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-      )
-
-    val config = LMDBRSpaceStorageConfig(
-      storeConfig("cold"),
-      storeConfig("history"),
-      storeConfig("roots"),
-      storeConfig("channelHash")
-    )
-
     implicit val cc  = sc.toSizeHeadCodec
     implicit val cp  = sp.toSizeHeadCodec
     implicit val ca  = sa.toSizeHeadCodec
     implicit val ck  = sk.toSizeHeadCodec
     implicit val kvm = InMemoryStoreManager[Task]
     (for {
-      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](kvm, config)
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](kvm)
       cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
               )
@@ -1336,7 +1317,6 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
         branch
       )
       res <- f(store, replayStore, space, replaySpace)
-      _   <- Sync[Task].delay(dbDir.recursivelyDelete())
     } yield { res }).unsafeRunSync
   }
 }

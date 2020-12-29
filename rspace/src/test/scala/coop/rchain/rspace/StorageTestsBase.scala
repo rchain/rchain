@@ -14,23 +14,16 @@ import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.history.{
-  HistoryRepository,
-  HistoryRepositoryInstances,
-  LMDBRSpaceStorageConfig,
-  StoreConfig
-}
+import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
 import org.scalatest._
 
-import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import monix.eval._
 import monix.execution.atomic.AtomicAny
-import org.lmdbjava.EnvFlags
 import coop.rchain.metrics.NoopSpan
 import coop.rchain.store.InMemoryStoreManager
 
@@ -76,35 +69,15 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   ): S = {
     val branch = Branch("inmem")
 
-    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-    val mapSize: Long = 1024L * 1024L * 1024L
-
-    def storeConfig(name: String): StoreConfig =
-      StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)),
-        mapSize,
-        2,
-        2048,
-        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-      )
-
-    val config = LMDBRSpaceStorageConfig(
-      storeConfig("cold"),
-      storeConfig("history"),
-      storeConfig("roots"),
-      storeConfig("channelHash")
-    )
-
     val kvm = InMemoryStoreManager[F]
 
     run(for {
-      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](kvm, config)
+      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](kvm)
       cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore, branch)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)
-      _                    <- Sync[F].delay(dbDir.recursivelyDelete())
     } yield {
       res
     })

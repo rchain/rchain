@@ -40,15 +40,6 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-  def lmdbConfig =
-    StoreConfig(
-      Files.createTempDirectory(dbDir, "test-"),
-      1024L * 1024L * 4096L,
-      2,
-      2048,
-      List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-    )
-
   val kvm = InMemoryStoreManager[Task]
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =

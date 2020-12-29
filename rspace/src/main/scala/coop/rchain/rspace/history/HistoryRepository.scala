@@ -41,18 +41,10 @@ final case class LMDBStorageConfig(
     flags: List[EnvFlags] = Nil,
     dbNamePrefix: String = "db"
 )
-final case class LMDBRSpaceStorageConfig(
-    coldStore: StoreConfig,
-    historyStore: StoreConfig,
-    rootsStore: StoreConfig,
-    channelHashStore: StoreConfig
-)
-
 object HistoryRepositoryInstances {
 
   def lmdbRepository[F[_]: Concurrent: Parallel, C, P, A, K](
-      storeManager: KeyValueStoreManager[F],
-      config: LMDBRSpaceStorageConfig
+      storeManager: KeyValueStoreManager[F]
   )(
       implicit codecC: Codec[C],
       codecP: Codec[P],
