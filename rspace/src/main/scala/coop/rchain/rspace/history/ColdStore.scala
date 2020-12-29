@@ -39,32 +39,6 @@ object ColdStoreInstances {
       .subcaseP(2) {
         case c: ContinuationsLeaf => c
       }(codecByteVector.as[ContinuationsLeaf])
-
-  def coldStore[F[_]: Sync](store: Store[F]): ColdStore[F] = new ColdStore[F] {
-    private val codec = codecPersistedData
-
-    override def put(key: Blake2b256Hash, d: PersistedData): F[Unit] =
-      for {
-        encoded <- codec.encode(d).get
-        data    <- store.put(key, encoded)
-      } yield data
-
-    override def get(key: Blake2b256Hash): F[Option[PersistedData]] =
-      for {
-        maybeBytes   <- store.get(key)
-        maybeDecoded <- maybeBytes.map(bytes => codec.decode(bytes).get).sequence
-      } yield (maybeDecoded.map(_.value))
-
-    override def close(): F[Unit] = store.close()
-
-    override def put(data: List[(Blake2b256Hash, PersistedData)]): F[Unit] =
-      data
-        .traverse {
-          case (key, data) => codec.encode(data).get.map((key, _))
-        }
-        .flatMap(encoded => store.put(encoded))
-
-  }
 }
 
 sealed trait PersistedData {
