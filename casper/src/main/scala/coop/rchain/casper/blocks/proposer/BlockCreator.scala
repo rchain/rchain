@@ -114,7 +114,10 @@ object BlockCreator {
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys       = userDeploys -- s.deploysInScope ++ dummyDeploys
+        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
+        _ <- deploys.toList.traverse(
+              d => Log[F].info(s"Pushing deploy: ${PrettyPrinter.buildString(d)}")
+            )
         invalidBlocks = s.invalidBlocks
         blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
         r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)

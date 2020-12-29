@@ -3,7 +3,7 @@ package coop.rchain.blockstorage.dag
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
-import coop.rchain.dag.DAGReader
+import coop.rchain.dag.DagReader
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
@@ -26,7 +26,7 @@ object BlockDagStorage {
   def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
 
-trait BlockDagRepresentation[F[_]] extends DAGReader[F, BlockHash] {
+trait BlockDagRepresentation[F[_]] extends DagReader[F, BlockHash] {
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]

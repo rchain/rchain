@@ -6,6 +6,7 @@ import cats.implicits.none
 import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.history.{HistoryHashReader, HistoryRepository}
+import coop.rchain.rspace.internal.WaitingContinuation
 import coop.rchain.rspace.syntax.syntaxHistoryRepository
 import coop.rchain.rspace.trace.{COMM, Consume, Event, EventGroup, IOEvent, Produce}
 import coop.rchain.rspace.trace.Event.{
@@ -117,23 +118,17 @@ final class HistoryRepositoryOps[F[_]: Concurrent, C, P, A, K](
     historyRepo.reset(state) >>= { h =>
       getJoinsFromChannelHash(channelHash)
     }
+
   def getContinuationFromChannelHash(
       channelHash: Blake2b256Hash
   ): F[Seq[internal.WaitingContinuation[P, K]]] =
     for {
-      maybeContinuationHash <- historyRepo.getChannelHash(
-                                channelHash
-                              )
-      continuationHash <- maybeContinuationHash match {
-                           case Some(ContinuationHash(continuationHash)) => continuationHash.pure[F]
-                           case _ =>
-                             Sync[F].raiseError[Blake2b256Hash](
-                               new Exception(
-                                 s"not found continuation hash for $channelHash in channel store"
-                               )
-                             )
-                         }
-      continuations <- historyRepo.getContinuations(continuationHash)
+      maybeContinuationHash <- historyRepo.getChannelHash(channelHash)
+      continuations <- maybeContinuationHash match {
+                        case Some(ContinuationHash(continuationHash)) =>
+                          historyRepo.getContinuations(continuationHash)
+                        case _ => Seq.empty[WaitingContinuation[P, K]].pure[F]
+                      }
     } yield continuations
 
   def getContinuationFromChannelHash(
@@ -144,120 +139,197 @@ final class HistoryRepositoryOps[F[_]: Concurrent, C, P, A, K](
       getContinuationFromChannelHash(channelHash)
     }
 
-  def simpleConflictDetector(
-      baseState: Blake2b256Hash,
-      mainFreeEvents: Seq[IOEvent],
-      mergeFreeEvents: Seq[IOEvent]
-  ): F[Set[Blake2b256Hash]] = {
+//  def calculateConflictingEvents(
+//      notCommedProducesMain: Seq[Produce],
+//      notCommedConsumesMain: Seq[Consume],
+//      commedProducesMain: Seq[Produce],
+//      commedConsumesMain: Seq[Consume],
+//      notCommedProducesMerging: Seq[Produce],
+//      notCommedConsumesMerging: Seq[Consume],
+//      commedProducesMerging: Seq[Produce],
+//      commedConsumesMerging: Seq[Consume],
+//      baseState: Blake2b256Hash
+//  ) = {
+//    // if main produce channel is met in any merging consume - produce is conflicting
+//    val (conflictingFreeProduces, _) = notCommedProducesMerging.partition(
+//      p =>
+//        notCommedConsumesMain
+//          .foldLeft(false)((acc, consume) => acc || consume.channelsHashes.contains(p.channelsHash))
+//    )
+//
+//    // if main consume channel is met in any merging produce - consume is conflicting
+//    val (conflictingFreeConsumes, _) = notCommedConsumesMerging.partition(
+//      c =>
+//        notCommedProducesMain
+//          .foldLeft(false)((acc, produce) => acc || c.channelsHashes.contains(produce.channelsHash))
+//    )
+//
+//    for {
+//      h <- historyRepo.reset(baseState)
+//      conflictingCommedProduces <- fs2.Stream
+//                                    .emits((commedProducesMerging ++ commedProducesMain).map { p =>
+//                                      fs2.Stream
+//                                        .eval(
+//                                          for {
+//                                            baseConts <- h.getContinuationFromChannelHash(
+//                                                          p.channelsHash
+//                                                        )
+//                                          } yield (baseConts.nonEmpty, p)
+//                                        )
+//                                        .filter(v => v._1)
+//                                        .map(_._2)
+//                                    })
+//                                    .parJoinUnbounded
+//                                    .compile
+//                                    .toVector
+//      conflictingCommedConsumes <- fs2.Stream
+//                                    .emits((commedConsumesMerging ++ commedConsumesMain).map { c =>
+//                                      fs2.Stream
+//                                        .eval(
+//                                          for {
+//                                            conflictsWithBase <- c.channelsHashes.toList
+//                                                                  .foldLeftM(false)(
+//                                                                    (acc, ch) =>
+//                                                                      h.getDataFromChannelHash(ch)
+//                                                                        .map(_.nonEmpty && acc)
+//                                                                  )
+//                                          } yield (conflictsWithBase, c)
+//                                        )
+//                                        .filter(v => v._1)
+//                                        .map(_._2)
+//                                    })
+//                                    .parJoinUnbounded
+//                                    .compile
+//                                    .toVector
+//      conflictingCommedProduceFromMerging = commedProducesMerging.filter(
+//        p => conflictingCommedProduces.exists(_.channelsHash == p.channelsHash)
+//      )
+//      conflictingCommedConsumesFromMerging = commedConsumesMerging.filter(
+//        c => conflictingCommedConsumes.exists(_.channelsHashes.contains(c.channelsHashes))
+//      )
+//
+//    } yield (
+//      conflictingFreeProduces,
+//      conflictingCommedProduceFromMerging,
+//      conflictingFreeConsumes,
+//      conflictingCommedConsumesFromMerging
+//    )
+//  }
 
-    case class ChannelPolarityState(
-        consumes: Int,
-        produces: Int,
-        persistentProdPresent: Boolean,
-        persistentConsPresent: Boolean
-    )
-
-    def getChannelPolarity(
-        channelsPolarities: Ref[F, Map[Blake2b256Hash, Ref[F, ChannelPolarityState]]],
-        baseHistoryReader: HistoryHashReader[F, C, P, A, K],
-        channel: Blake2b256Hash,
-        isProduce: Boolean,
-        isConsume: Boolean,
-        persistent: Boolean
-    ) =
-      for {
-        // prepare/get polarity state for channel - nothing interesting here
-        x <- Ref.of[F, ChannelPolarityState](ChannelPolarityState(0, 0, false, false))
-        pRef <- channelsPolarities.modify[Ref[F, ChannelPolarityState]] { s =>
-                 s.get(channel) match {
-                   case Some(a) => (s, a)
-                   case None    => (s.updated(channel, x), x)
-                 }
-               }
-
-        // extract what is in base state - ho many produces/consumes at the channel, if there are persistent ones
-        producesAtBase <- baseHistoryReader.getData(channel)
-        consumesAtBase <- baseHistoryReader.getContinuations(channel)
-        (prodNumAtBase, persistentProdAtBase) = (
-          producesAtBase.size,
-          producesAtBase.foldLeft(false)((acc, pr) => acc || pr.persist)
-        )
-        (consNumAtBase, persistentConsAtBase) = (
-          consumesAtBase.size,
-          consumesAtBase.foldLeft(false)((acc, co) => acc || co.persist)
-        )
-        //_ = assert(prodNumAtBase != 0 && consNumAtBase != 0)
-
-        persistentProdFound = (isProduce && persistent) || persistentProdAtBase
-        persistentConsFound = (isConsume && persistent) || persistentConsAtBase
-
-        _ <- pRef.update(s => {
-              val newPersistentProdPresent = s.persistentProdPresent || persistentProdFound
-              val newPersistentConsPresent = s.persistentConsPresent || persistentConsFound
-              assert(!(newPersistentProdPresent && newPersistentConsPresent))
-              val newProdCount =
-                // persistent consume disables all produces
-                if (newPersistentConsPresent) 0
-                else if (isProduce) s.produces + prodNumAtBase + 1
-                else s.produces + prodNumAtBase
-              val newConsCount =
-                // persistent produce disables all consumes
-                if (newPersistentProdPresent) 0
-                else if (isConsume) s.consumes + consNumAtBase + 1
-                else s.consumes + consNumAtBase
-
-              ChannelPolarityState(
-                consumes = newConsCount,
-                produces = newProdCount,
-                persistentConsPresent = newPersistentConsPresent,
-                persistentProdPresent = newPersistentProdPresent
-              )
-            })
-      } yield ()
-
-    for {
-      // polarity (consume on chan equals -1, produce equals +1, persistent produce eliminates all consumes, persistent consume eliminates all produces)
-      channelsPolarities <- Ref.of[F, Map[Blake2b256Hash, Ref[F, ChannelPolarityState]]](Map.empty)
-
-      h <- historyRepo.reset(baseState)
-
-      processingStreams = (mainFreeEvents ++ mergeFreeEvents).flatMap {
-        case Produce(channelsHash, _, persistent) =>
-          fs2.Stream.eval(
-            getChannelPolarity(channelsPolarities, h, channelsHash, true, false, persistent)
-          ) :: Nil
-        case c: Consume =>
-          c.channelsHashes.map(
-            channelsHash =>
-              fs2.Stream.eval(
-                getChannelPolarity(channelsPolarities, h, channelsHash, false, true, c.persistent)
-              )
-          )
-      }
-
-      _ <- fs2.Stream
-            .emits(processingStreams)
-            .parJoinUnbounded
-            .compile
-            .toVector
-
-      polaritiesResult <- channelsPolarities.get
-      conflictingChans <- polaritiesResult.toList
-                           .filterA(
-                             p =>
-                               p._2.get.map(
-                                 chanPolarity =>
-                                   !(chanPolarity.produces == 0 ||
-                                     chanPolarity.consumes == 0 ||
-                                     chanPolarity.produces == chanPolarity.consumes)
-                               )
-                           )
-                           .map(_.map(_._1))
-      _ = println(
-        s"Found ${conflictingChans.size} conflicting channels out of ${polaritiesResult.size}"
-      )
-    } yield conflictingChans.toSet
-  }
+//  def simpleConflictDetector(
+//      baseState: Blake2b256Hash,
+//      mainFreeEvents: Seq[IOEvent],
+//      mergeFreeEvents: Seq[IOEvent]
+//  ): F[Set[Blake2b256Hash]] = {
+//
+//    case class ChannelPolarityState(
+//        consumes: Int,
+//        produces: Int,
+//        persistentProdPresent: Boolean,
+//        persistentConsPresent: Boolean
+//    )
+//
+//    def processChan(
+//        channelsPolarities: Ref[F, Map[Blake2b256Hash, Ref[F, ChannelPolarityState]]],
+//        baseHistoryReader: HistoryHashReader[F, C, P, A, K],
+//        channel: Blake2b256Hash,
+//        isProduce: Boolean,
+//        isConsume: Boolean,
+//        persistent: Boolean
+//    ) =
+//      for {
+//        // prepare/get polarity state for channel - nothing interesting here
+//        x <- Ref.of[F, ChannelPolarityState](ChannelPolarityState(0, 0, false, false))
+//        pRef <- channelsPolarities.modify[Ref[F, ChannelPolarityState]] { s =>
+//                 s.get(channel) match {
+//                   case Some(a) => (s, a)
+//                   case None    => (s.updated(channel, x), x)
+//                 }
+//               }
+//
+//        // extract what is in base state - ho many produces/consumes at the channel, if there are persistent ones
+//        producesAtBase <- baseHistoryReader.getData(channel)
+//        consumesAtBase <- baseHistoryReader.getContinuations(channel)
+//        (prodNumAtBase, persistentProdAtBase) = (
+//          producesAtBase.size,
+//          producesAtBase.foldLeft(false)((acc, pr) => acc || pr.persist)
+//        )
+//        (consNumAtBase, persistentConsAtBase) = (
+//          consumesAtBase.size,
+//          consumesAtBase.foldLeft(false)((acc, co) => acc || co.persist)
+//        )
+//        //_ = assert(prodNumAtBase != 0 && consNumAtBase != 0)
+//
+//        persistentProdFound = (isProduce && persistent) || persistentProdAtBase
+//        persistentConsFound = (isConsume && persistent) || persistentConsAtBase
+//
+//        _ <- pRef.update(s => {
+//              val newPersistentProdPresent = s.persistentProdPresent || persistentProdFound
+//              val newPersistentConsPresent = s.persistentConsPresent || persistentConsFound
+//              assert(!(newPersistentProdPresent && newPersistentConsPresent))
+//              val newProdCount =
+//                // persistent consume disables all produces
+//                if (newPersistentConsPresent) 0
+//                else if (isProduce) s.produces + prodNumAtBase + 1
+//                else s.produces + prodNumAtBase
+//              val newConsCount =
+//                // persistent produce disables all consumes
+//                if (newPersistentProdPresent) 0
+//                else if (isConsume) s.consumes + consNumAtBase + 1
+//                else s.consumes + consNumAtBase
+//
+//              ChannelPolarityState(
+//                consumes = newConsCount,
+//                produces = newProdCount,
+//                persistentConsPresent = newPersistentConsPresent,
+//                persistentProdPresent = newPersistentProdPresent
+//              )
+//            })
+//      } yield ()
+//
+//    for {
+//      // polarity (consume on chan equals -1, produce equals +1, persistent produce eliminates all consumes, persistent consume eliminates all produces)
+//      channelsPolarities <- Ref.of[F, Map[Blake2b256Hash, Ref[F, ChannelPolarityState]]](Map.empty)
+//
+//      h <- historyRepo.reset(baseState)
+//
+//      processingStreams = (mainFreeEvents ++ mergeFreeEvents).flatMap {
+//        case Produce(channelsHash, _, persistent) =>
+//          fs2.Stream.eval(
+//            processChan(channelsPolarities, h, channelsHash, true, false, persistent)
+//          ) :: Nil
+//        case c: Consume =>
+//          c.channelsHashes.map(
+//            channelsHash =>
+//              fs2.Stream.eval(
+//                processChan(channelsPolarities, h, channelsHash, false, true, c.persistent)
+//              )
+//          )
+//      }
+//
+//      _ <- fs2.Stream
+//            .emits(processingStreams)
+//            .parJoinUnbounded
+//            .compile
+//            .toVector
+//
+//      polaritiesResult <- channelsPolarities.get
+//      conflictingChans <- polaritiesResult.toList
+//                           .filterA(
+//                             p =>
+//                               p._2.get.map(
+//                                 chanPolarity =>
+//                                   !(chanPolarity.produces == 0 ||
+//                                     chanPolarity.consumes == 0 ||
+//                                     chanPolarity.produces == chanPolarity.consumes)
+//                               )
+//                           )
+//                           .map(_.map(_._1))
+//      _ = println(
+//        s"Found ${conflictingChans.size} conflicting channels out of ${polaritiesResult.size}"
+//      )
+//    } yield conflictingChans.toSet
+//  }
 
   /**
     * detect conflict events between rightEvents and rightEvents.

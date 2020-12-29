@@ -1,12 +1,14 @@
 package coop.rchain.casper.batch1
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.casper.helper.TestNode._
-import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.EstimatorHelper
+import coop.rchain.casper.blocks.merger.{ConflictDetectors, MergingBranchIndex, MergingVertex}
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import coop.rchain.casper.syntax._
@@ -16,6 +18,8 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.merger.EventChain
+import coop.rchain.store.LazyKeyValueCache
 import org.scalatest.exceptions.TestFailedException
 
 class StateMergerSpec extends FlatSpec with Matchers with Inspectors with MergeabilityRules {
@@ -97,9 +101,10 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
       ConstructDeploy.sourceDeploy(b1.value, 2L, phloLimit = 500),
       ConstructDeploy.sourceDeploy(b2.value, 3L, phloLimit = 500, sec = ConstructDeploy.defaultSec2)
     )
-    implicit val logger: Log[Effect]         = Log.log[Task]
+    implicit val concurent                   = Concurrent[Task]
     implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
+    implicit val logger: Log[Effect]         = Log.log[Task]
     import coop.rchain.rholang.interpreter.storage._
     rhoRuntimeEff[Effect](false)
       .use {
@@ -113,18 +118,53 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
             rightDeploy         <- runtime.processDeploy(deploys(2))
             rightCheckpoint @ _ <- runtime.createCheckpoint
             stateMerger         <- historyRepo.stateMerger
-            isConflictCase <- EstimatorHelper.computeMergeChanges(
-                               historyRepo,
-                               baseCheckpoint.root,
-                               List(leftDeploy),
-                               List(rightDeploy)
+
+            leftV <- MergingBranchIndex.create(
+                      Seq(
+                        MergingVertex(
+                          postStateHash = leftCheckpoint.root.toByteString,
+                          processedDeploys = Set(leftDeploy)
+                        )
+                      )
+                    )
+            rightV <- MergingBranchIndex.create(
+                       Seq(
+                         MergingVertex(
+                           postStateHash = rightCheckpoint.root.toByteString,
+                           processedDeploys = Set(rightDeploy)
+                         )
+                       )
+                     )
+            baseStateReader <- historyRepo.reset(baseCheckpoint.root)
+            // Caching readers for data in base state
+            baseDataReader <- LazyKeyValueCache(
+                               (ch: Blake2b256Hash) =>
+                                 baseStateReader
+                                   .getDataFromChannelHash(ch)
                              )
-            _ = assert(isConflictCase.rejectedDeploys.nonEmpty == isConflict)
+            baseJoinReader <- LazyKeyValueCache(
+                               (ch: Blake2b256Hash) =>
+                                 baseStateReader
+                                   .getJoinsFromChannelHash(ch)
+                             )
+            conflicts <- ConflictDetectors.findConflicts(
+                          leftV,
+                          rightV,
+                          baseDataReader,
+                          baseJoinReader
+                        )
+            _ = assert(conflicts.nonEmpty == isConflict)
             mergedState <- stateMerger.merge(
-                            baseCheckpoint.root,
                             leftCheckpoint.root,
-                            rightCheckpoint.root,
-                            isConflictCase.validEventLogs.toList
+                            if (conflicts.nonEmpty) Seq.empty
+                            else
+                              Seq(
+                                EventChain(
+                                  startState = baseCheckpoint.root,
+                                  endState = rightCheckpoint.root,
+                                  events = rightDeploy.deployLog.map(EventConverter.toRspaceEvent)
+                                )
+                              )
                           )
             dataContinuationAtMergedState <- getDataContinuationOnChannel0(runtime, mergedState)
             _ <- Sync[Effect]
@@ -143,7 +183,7 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
                                      | ${mergedResultState}
                                      | and it is
                                      | ${e}
-                                     | 
+                                     |
                                      | go see it at ${file.value}:${line.value}
                                      | """.stripMargin, e, 5).severedAtStackDepth
       }

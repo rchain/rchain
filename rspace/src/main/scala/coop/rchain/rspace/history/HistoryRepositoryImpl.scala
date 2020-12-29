@@ -259,7 +259,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
       _ <- leafStore.close()
       _ <- rootsRepository.close()
       _ <- history.close()
-      _ <- channelHashesStore.close
+      _ <- channelHashesStore.close()
     } yield ()
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
@@ -267,15 +267,14 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 
   override def stateMerger: F[StateMerger[F]] =
-    for {
-      joinMap <- Ref.of[F, Map[Blake2b256Hash, Seq[Seq[C]]]](Map.empty)
-    } yield new StateMergerImpl[F, C, P, A, K](
-      this,
-      history,
-      leafStore,
-      rootsRepository,
-      sc,
-      joinMap
+    Sync[F].delay(
+      new StateMergerImpl[F, C, P, A, K](
+        this,
+        history,
+        leafStore,
+        rootsRepository,
+        sc
+      )
     )
 
 }

@@ -6,8 +6,6 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper._
-import coop.rchain.casper.blocks.BranchMerger
-import coop.rchain.casper.blocks.BranchMerger.{MergingDagReader, MergingVertex}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager._
@@ -20,7 +18,10 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.blocks.merger.{CasperDagMerger, CasperMergingDagReader, MergingVertex}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.dag.DagMerger
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import monix.eval.Coeval
 
@@ -233,7 +234,8 @@ object InterpreterUtil {
                          MergingVertex(
                            b.blockHash,
                            b.body.state.postStateHash,
-                           b.body.deploys
+                           b.body.state.preStateHash,
+                           b.body.deploys.toSet
                          )
                      )
                      .compile
@@ -245,12 +247,11 @@ object InterpreterUtil {
                          MergingVertex(
                            b.blockHash,
                            b.body.state.postStateHash,
-                           b.body.deploys
+                           b.body.state.preStateHash,
+                           b.body.deploys.toSet
                          )
                      )
-            _ <- Log[F].debug(s"merging ${tips.size} tips")
-
-            r <- BranchMerger.merge(tips, base, new MergingDagReader(s.dag))
+            r <- CasperDagMerger.merge(tips, base, new CasperMergingDagReader(s.dag))
           } yield r._1
         }
 

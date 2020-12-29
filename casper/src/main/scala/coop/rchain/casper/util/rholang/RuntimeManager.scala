@@ -232,4 +232,6 @@ object RuntimeManager {
       historyRepo
     )
 
+  def apply[F[_]](implicit instance: RuntimeManager[F]): RuntimeManager[F] = instance
+
 }
