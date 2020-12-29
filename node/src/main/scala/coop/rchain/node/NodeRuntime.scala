@@ -950,9 +950,7 @@ object NodeRuntime {
                                             ]
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         kvm,
-                         stateStorageFolder,
-                         casperConf.size
+                         kvm
                        )
                      } else
                        ReportingCasper.noop.pure[F]
@@ -969,10 +967,7 @@ object NodeRuntime {
         for {
           history <- {
             import coop.rchain.rholang.interpreter.storage._
-            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              stateStorageFolder,
-              casperConf.size
-            )
+            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
           }
           (historyRepo, _)   = history
           exporter           <- historyRepo.exporter

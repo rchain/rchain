@@ -840,10 +840,7 @@ class RholangMethodsCostsSpec
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](
-        dbDir,
-        mapSize = 1024 * 1024
-      )
+      ]
       .unsafeRunSync
   }
 

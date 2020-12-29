@@ -43,24 +43,22 @@ object Resources {
       prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
 
-    val mapSize: Long = 1024L * 1024L * 4
-
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     import scala.concurrent.ExecutionContext.Implicits.global
     implicit val kvm = InMemoryStoreManager[F]
 
-    def mkRspace(dbDir: Path): F[RhoISpace[F]] =
+    def mkRspace: F[RhoISpace[F]] =
       RSpace.create[
         F,
         Par,
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](dbDir, mapSize)
+      ]
 
     mkTempDir(prefix)(implicitly[Concurrent[F]])
-      .flatMap(tmpDir => Resource.make(mkRspace(tmpDir))(_.close()))
+      .flatMap(tmpDir => Resource.make(mkRspace)(_.close()))
   }
 
   def mkRuntime[F[_]: Log: Metrics: Span: Concurrent: Parallel: ContextShift](
@@ -87,12 +85,9 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
-        space   <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
-        runtime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                          path,
-                          storageSize
-                        )
+        space         <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
+        runtime       <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
       } yield (runtime, historyReader._1)
     )(r => r._1.close >> r._2.close)
   }
@@ -106,10 +101,7 @@ object Resources {
 
     Resource.make[F, RhoHistoryRepository[F]](
       for {
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                          path,
-                          storageSize
-                        )
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
       } yield historyReader._1
     )(_.close())
   }

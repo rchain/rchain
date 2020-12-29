@@ -61,9 +61,7 @@ object ReportingCasper {
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       store: ReportMemStore[F],
-      keyValueStoreManager: KeyValueStoreManager[F],
-      dataDir: Path,
-      mapSize: Long
+      keyValueStoreManager: KeyValueStoreManager[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
@@ -75,7 +73,7 @@ object ReportingCasper {
           block: BlockMessage
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
-          reportingRspace  <- ReportingRuntime.setupReportingRSpace(dataDir, mapSize)
+          reportingRspace  <- ReportingRuntime.setupReportingRSpace
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           genesis          <- BlockStore[F].getApprovedBlock
@@ -206,9 +204,6 @@ object ReportingRuntime {
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
   def setupReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
-  )(
       implicit scheduler: ExecutionContext,
       kvm: KeyValueStoreManager[F]
   ): F[RhoReportingRspace[F]] = {
@@ -216,18 +211,8 @@ object ReportingRuntime {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _         <- Sync[F].delay(Files.createDirectories(dataDir)).whenA(notexists)
-      } yield ()
-
     for {
-      _ <- checkCreateDataDir
-      history <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                  dataDir,
-                  mapSize
-                )
+      history                          <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[
         F,

@@ -343,27 +343,4 @@ object ReplayRSpace {
     space.pure[F]
   }
 
-  def create[F[_], C, P, A, K](
-      dataDir: Path,
-      mapSize: Long
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      m: Match[F, P, A],
-      concurrent: Concurrent[F],
-      logF: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F],
-      spanF: Span[F],
-      par: Parallel[F],
-      kvm: KeyValueStoreManager[F]
-  ): F[IReplaySpace[F, C, P, A, K]] =
-    RSpace.setUp[F, C, P, A, K](dataDir, mapSize).map {
-      case (historyReader, store) =>
-        new ReplayRSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-    }
 }

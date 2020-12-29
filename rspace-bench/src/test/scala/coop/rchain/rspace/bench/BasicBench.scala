@@ -131,10 +131,7 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](
-          dbDir,
-          1024L * 1024L * 1024L
-        )
+        ]
         .unsafeRunSync
 
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync

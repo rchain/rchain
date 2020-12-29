@@ -532,7 +532,7 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize)
+    ]
   }
 
   def setupReplaySpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
@@ -559,7 +559,7 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize)
+    ]
   }
 
   def setupRhoRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
@@ -586,7 +586,7 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize)
+    ]
   }
 
   /**

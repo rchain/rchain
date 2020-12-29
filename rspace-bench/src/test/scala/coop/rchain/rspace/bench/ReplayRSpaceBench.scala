@@ -80,10 +80,7 @@ object ReplayRSpaceBench {
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
       val (space, replaySpace, _) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](
-          dbDir,
-          1024L * 1024L * 1024L
-        )
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor]
       this.space = space
       this.replaySpace = replaySpace
     }

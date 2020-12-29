@@ -205,14 +205,11 @@ object AddressBookExample {
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
     // Here we define a temporary place to put the store's files
-    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+//    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L
-      )
+      RSpace.create[Id, Channel, Pattern, Entry, Printer]
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -246,14 +243,11 @@ object AddressBookExample {
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Here we define a temporary place to put the store's files
-    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+//    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L
-      )
+      RSpace.create[Id, Channel, Pattern, Entry, Printer]
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -340,13 +334,10 @@ object AddressBookExample {
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Here we define a temporary place to put the store's files
-    val storePath = Files.createTempDirectory("rspace-address-book-example-")
+//    val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L
-      )
+      RSpace.create[Id, Channel, Pattern, Entry, Printer]
     try {
       f(space)
     } finally {

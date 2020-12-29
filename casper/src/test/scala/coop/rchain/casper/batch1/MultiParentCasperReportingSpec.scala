@@ -34,7 +34,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         reportingStore <- ReportMemStore
                            .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation]
         reportingCasper = ReportingCasper
-          .rhoReporter(reportingStore, kvm, node.dataPath.rspaceDir, 1024L * 1024L * 1024L)
+          .rhoReporter(reportingStore, kvm)
         deploy      <- ConstructDeploy.sourceDeployNowF(correctRholang)
         signedBlock <- node.addBlock(deploy)
         _           = logEff.warns.isEmpty should be(true)

@@ -259,7 +259,7 @@ object RSpace {
     space.pure[F]
   }
 
-  def createWithReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
+  def createWithReplay[F[_], C, P, A, K](
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -276,7 +276,7 @@ object RSpace {
       kvm: KeyValueStoreManager[F]
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize)
+      setup                  <- setUp[F, C, P, A, K]
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
       replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
@@ -286,7 +286,7 @@ object RSpace {
       )
     } yield (space, replay, historyReader)
 
-  def createReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
+  def createReplay[F[_], C, P, A, K](
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -303,7 +303,7 @@ object RSpace {
       kvm: KeyValueStoreManager[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize)
+      setup                  <- setUp[F, C, P, A, K]
       (historyReader, store) = setup
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
@@ -312,9 +312,6 @@ object RSpace {
     } yield replay
 
   def create[F[_], C, P, A, K](
-      dataDir: Path,
-      mapSize: Long
-  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -331,7 +328,7 @@ object RSpace {
       kvm: KeyValueStoreManager[F]
   ): F[ISpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K](dataDir, mapSize)
+      setup                  <- setUp[F, C, P, A, K]
       (historyReader, store) = setup
       space = new RSpace[F, C, P, A, K](
         historyReader,
@@ -340,9 +337,6 @@ object RSpace {
     } yield space
 
   def setUp[F[_], C, P, A, K](
-      dataDir: Path,
-      mapSize: Long
-  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

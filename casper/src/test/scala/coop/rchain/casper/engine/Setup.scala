@@ -55,10 +55,7 @@ object Setup {
       RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
 
     val history = RSpace
-      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-        runtimeDir,
-        1024L * 1024 * 1024L
-      )
+      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation]
       .unsafeRunSync
 
     val (historyRepo, _) = history
