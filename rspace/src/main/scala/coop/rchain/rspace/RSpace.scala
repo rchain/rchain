@@ -259,7 +259,7 @@ object RSpace {
     space.pure[F]
   }
 
-  def createWithReplay[F[_], C, P, A, K](
+  def createWithReplay[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -272,11 +272,10 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F],
-      kvm: KeyValueStoreManager[F]
+      par: Parallel[F]
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup                  <- setUp[F, C, P, A, K]
+      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
       replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
@@ -286,7 +285,7 @@ object RSpace {
       )
     } yield (space, replay, historyReader)
 
-  def createReplay[F[_], C, P, A, K](
+  def createReplay[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -299,11 +298,10 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F],
-      kvm: KeyValueStoreManager[F]
+      par: Parallel[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K]
+      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
       (historyReader, store) = setup
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
@@ -311,7 +309,7 @@ object RSpace {
       )
     } yield replay
 
-  def create[F[_], C, P, A, K](
+  def create[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -324,11 +322,10 @@ object RSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F],
-      par: Parallel[F],
-      kvm: KeyValueStoreManager[F]
+      par: Parallel[F]
   ): F[ISpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K]
+      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
       (historyReader, store) = setup
       space = new RSpace[F, C, P, A, K](
         historyReader,
@@ -336,15 +333,14 @@ object RSpace {
       )
     } yield space
 
-  def setUp[F[_], C, P, A, K](
+  def setUp[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
       concurrent: Concurrent[F],
-      par: Parallel[F],
-      kvm: KeyValueStoreManager[F]
+      par: Parallel[F]
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
 
     import coop.rchain.rspace.history._
@@ -355,7 +351,7 @@ object RSpace {
 
     for {
       historyReader <- HistoryRepositoryInstances
-                        .lmdbRepository[F, C, P, A, K](kvm)
+                        .lmdbRepository[F, C, P, A, K](keyValueStoreManager)
       store <- HotStore.empty(historyReader)
     } yield (historyReader, store)
   }

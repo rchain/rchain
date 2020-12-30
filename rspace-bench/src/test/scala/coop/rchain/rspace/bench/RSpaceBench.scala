@@ -104,7 +104,7 @@ class RSpaceBench extends RSpaceBenchBase {
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-bench-")
-    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor]
+    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](kvm)
   }
 
   @TearDown

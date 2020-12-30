@@ -77,7 +77,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       val genesisExporter = {
         val genesisStorePath = context.storageDirectory.resolve("rspace")
         val exporterTask =
-          RhoRuntime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L) >>= {
+          RhoRuntime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L, kvsManager) >>= {
             case (_, _, hr) => hr.exporter
           }
         exporterTask.runSyncUnsafe()

@@ -65,7 +65,6 @@ object ReportingCasper {
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
-      implicit val kvm    = keyValueStoreManager
 
       val blockLockMap = TrieMap[BlockHash, (MetricsSemaphore[F], Boolean)]()
 
@@ -73,7 +72,7 @@ object ReportingCasper {
           block: BlockMessage
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
-          reportingRspace  <- ReportingRuntime.setupReportingRSpace
+          reportingRspace  <- ReportingRuntime.setupReportingRSpace(keyValueStoreManager)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           genesis          <- BlockStore[F].getApprovedBlock
@@ -204,15 +203,18 @@ object ReportingRuntime {
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
   def setupReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      implicit scheduler: ExecutionContext,
-      kvm: KeyValueStoreManager[F]
+      keyValueStoreManager: KeyValueStoreManager[F]
+  )(
+      implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     for {
-      history                          <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+      history <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                  keyValueStoreManager
+                )
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[
         F,

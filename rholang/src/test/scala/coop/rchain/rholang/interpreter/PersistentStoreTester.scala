@@ -41,7 +41,7 @@ trait PersistentStoreTester {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ]
+      ](kvm)
       .unsafeRunSync
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)

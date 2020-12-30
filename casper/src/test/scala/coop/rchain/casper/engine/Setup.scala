@@ -52,10 +52,10 @@ object Setup {
     implicit val scheduler = Scheduler.io("test")
     val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
     val (runtime, replayRuntime) =
-      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
+      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, kvsManager).unsafeRunSync
 
     val history = RSpace
-      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvsManager)
       .unsafeRunSync
 
     val (historyRepo, _) = history

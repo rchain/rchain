@@ -209,7 +209,7 @@ object AddressBookExample {
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer]
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -247,7 +247,7 @@ object AddressBookExample {
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer]
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -337,7 +337,7 @@ object AddressBookExample {
 //    val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer]
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
     try {
       f(space)
     } finally {

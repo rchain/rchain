@@ -278,7 +278,7 @@ object GenesisTest {
     implicit val kvsManager                 = InMemoryStoreManager[Task]
 
     for {
-      runtimes <- RhoRuntime.createRuntimes[Task](storePath, storageSize)
+      runtimes <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
       result   <- body(runtimes, genesisPath, time)
       _        <- runtimes._1.close
       _        <- runtimes._2.close

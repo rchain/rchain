@@ -919,26 +919,24 @@ object NodeRuntime {
         LastFinalizedHeightConstraintChecker[F]
       }
       evalRuntime <- {
-        implicit val s   = rspaceScheduler
-        implicit val sp  = span
-        implicit val kvm = casperStoreManager
-        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size) >>= {
+        implicit val s  = rspaceScheduler
+        implicit val sp = span
+        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size, casperStoreManager) >>= {
           case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
       stateStorageFolder = casperConf.storage.resolve("v2")
       casperInitialized <- {
-        implicit val s   = rspaceScheduler
-        implicit val sp  = span
-        implicit val bs  = blockStore
-        implicit val bd  = blockDagStorage
-        implicit val kvm = casperStoreManager
+        implicit val s  = rspaceScheduler
+        implicit val sp = span
+        implicit val bs = blockStore
+        implicit val bd = blockDagStorage
         for {
-          runtimes                       <- RhoRuntime.createRuntimes[F](stateStorageFolder, casperConf.size)
+          runtimes <- RhoRuntime
+                       .createRuntimes[F](stateStorageFolder, casperConf.size, casperStoreManager)
           (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
-                       implicit val kvm = casperStoreManager
                        for {
                          reportingCache <- ReportMemStore
                                             .store[
@@ -947,10 +945,10 @@ object NodeRuntime {
                                               BindPattern,
                                               ListParWithRandom,
                                               TaggedContinuation
-                                            ]
+                                            ](casperStoreManager)
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         kvm
+                         casperStoreManager
                        )
                      } else
                        ReportingCasper.noop.pure[F]
@@ -963,11 +961,12 @@ object NodeRuntime {
       }
       // RNodeStateManager
       stateManagers <- {
-        implicit val kvm = casperStoreManager
         for {
           history <- {
             import coop.rchain.rholang.interpreter.storage._
-            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+              casperStoreManager
+            )
           }
           (historyRepo, _)   = history
           exporter           <- historyRepo.exporter

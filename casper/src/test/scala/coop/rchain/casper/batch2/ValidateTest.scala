@@ -728,7 +728,7 @@ class ValidateTest
       implicit val kvm      = InMemoryStoreManager[Task]
 
       for {
-        runtimes          <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize)
+        runtimes          <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize, kvm)
         runtimeManager    <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)

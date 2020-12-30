@@ -29,7 +29,7 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  lazy val space = RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize).unsafeRunSync
+  lazy val space = RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize, kvm).unsafeRunSync
   lazy val runtime: RhoRuntime[Task] =
     RhoRuntime.createRhoRuntime[Task](space).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)

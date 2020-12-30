@@ -55,7 +55,7 @@ object Resources {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ]
+      ](kvm)
 
     mkTempDir(prefix)(implicitly[Concurrent[F]])
       .flatMap(tmpDir => Resource.make(mkRspace)(_.close()))
@@ -85,9 +85,9 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
-        space         <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
+        space         <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
         runtime       <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
       } yield (runtime, historyReader._1)
     )(r => r._1.close >> r._2.close)
   }
@@ -101,7 +101,7 @@ object Resources {
 
     Resource.make[F, RhoHistoryRepository[F]](
       for {
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
       } yield historyReader._1
     )(_.close())
   }
@@ -115,9 +115,9 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F])](
       for {
-        space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize)
+        space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
         runtime     <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
-        replaySpace <- RhoRuntime.setupReplaySpace[F](path, storageSize)
+        replaySpace <- RhoRuntime.setupReplaySpace[F](path, storageSize, kvm)
         replayRuntime <- RhoRuntime
                           .createReplayRhoRuntime[F](replaySpace, additionalSystemProcesses)
       } yield (runtime, replayRuntime)

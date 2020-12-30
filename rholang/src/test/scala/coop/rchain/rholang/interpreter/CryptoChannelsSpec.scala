@@ -223,7 +223,7 @@ class CryptoChannelsSpec
     implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      space   <- RhoRuntime.setupRhoRSpace[Task](dbDir, size)
+      space   <- RhoRuntime.setupRhoRSpace[Task](dbDir, size, kvm)
       runtime <- RhoRuntime.createRhoRuntime[Task](space)
       _       <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync

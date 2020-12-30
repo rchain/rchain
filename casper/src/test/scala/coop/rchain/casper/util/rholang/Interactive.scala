@@ -92,7 +92,11 @@ object Interactive {
     implicit val kvsManager                = InMemoryStoreManager[Task]
 
     val space = RhoRuntime
-      .setupRhoRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
+      .setupRhoRSpace[Task](
+        Files.createTempDirectory("interactive-"),
+        1024 * 1024L * 1024L,
+        kvsManager
+      )
       .unsafeRunSync
     new Interactive(RhoRuntime.createRhoRuntime[Task](space).runSyncUnsafe(5.seconds))
   }

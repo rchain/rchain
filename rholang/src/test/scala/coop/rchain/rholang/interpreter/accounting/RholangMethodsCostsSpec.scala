@@ -840,7 +840,7 @@ class RholangMethodsCostsSpec
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ]
+      ](kvm)
       .unsafeRunSync
   }
 

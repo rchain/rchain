@@ -510,10 +510,10 @@ object RhoRuntime {
 
   def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
-      mapSize: Long
+      mapSize: Long,
+      keyValueStoreManager: KeyValueStoreManager[F]
   )(
-      implicit scheduler: ExecutionContext,
-      kvm: KeyValueStoreManager[F]
+      implicit scheduler: ExecutionContext
   ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -532,15 +532,15 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ]
+    ](keyValueStoreManager)
   }
 
   def setupReplaySpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
-      mapSize: Long
+      mapSize: Long,
+      keyValueStoreManager: KeyValueStoreManager[F]
   )(
-      implicit scheduler: ExecutionContext,
-      kvm: KeyValueStoreManager[F]
+      implicit scheduler: ExecutionContext
   ): F[RhoReplayISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -559,15 +559,15 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ]
+    ](keyValueStoreManager)
   }
 
   def setupRhoRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
-      mapSize: Long
+      mapSize: Long,
+      keyValueStoreManager: KeyValueStoreManager[F]
   )(
-      implicit scheduler: ExecutionContext,
-      kvm: KeyValueStoreManager[F]
+      implicit scheduler: ExecutionContext
   ): F[RhoISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
@@ -586,7 +586,7 @@ object RhoRuntime {
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ]
+    ](keyValueStoreManager)
   }
 
   /**
@@ -660,16 +660,16 @@ object RhoRuntime {
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       dataDir: Path,
       mapSize: Long,
+      keyValueStoreManager: KeyValueStoreManager[F],
       initRegistry: Boolean = true
   )(
       implicit scheduler: ExecutionContext,
-      costLog: FunctorTell[F, Chain[Cost]],
-      kvm: KeyValueStoreManager[F]
+      costLog: FunctorTell[F, Chain[Cost]]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize)
+      space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize, keyValueStoreManager)
       rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
-      replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize)
+      replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize, keyValueStoreManager)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
     } yield (rhoRuntime, replayRhoRuntime)
 }

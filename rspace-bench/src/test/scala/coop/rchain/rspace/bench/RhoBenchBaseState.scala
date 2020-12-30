@@ -72,12 +72,12 @@ abstract class RhoBenchBaseState {
     }
 
     runtime = (for {
-      space <- RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize)
+      space <- RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize, kvm)
       r     <- RhoRuntime.createRhoRuntime[Task](space)
     } yield r).runSyncUnsafe()
 
     replayRuntime = (for {
-      space <- RhoRuntime.setupReplaySpace[Task](dbDir, mapSize)
+      space <- RhoRuntime.setupReplaySpace[Task](dbDir, mapSize, kvm)
       r     <- RhoRuntime.createReplayRhoRuntime[Task](space)
     } yield r).runSyncUnsafe()
 

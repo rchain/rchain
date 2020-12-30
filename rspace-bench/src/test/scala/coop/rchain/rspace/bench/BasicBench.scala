@@ -131,7 +131,7 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ]
+        ](kvm)
         .unsafeRunSync
 
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
