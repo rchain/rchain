@@ -32,6 +32,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
 import fs2.concurrent.Queue
@@ -51,11 +52,14 @@ object Setup {
     val networkId          = "test"
     implicit val scheduler = Scheduler.io("test")
     val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
+    val spaceKVManager     = RSpaceKeyValueStoreManager[Task](runtimeDir).runSyncUnsafe()
     val (runtime, replayRuntime) =
-      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, kvsManager).unsafeRunSync
+      RhoRuntime
+        .createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, spaceKVManager)
+        .unsafeRunSync
 
     val history = RSpace
-      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvsManager)
+      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](spaceKVManager)
       .unsafeRunSync
 
     val (historyRepo, _) = history

@@ -21,6 +21,7 @@ import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -275,15 +276,15 @@ object GenesisTest {
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val span: Span[Task]           = NoopSpan[Task]()
     val time                                = new LogicalTime[Task]
-    implicit val kvsManager                 = InMemoryStoreManager[Task]
 
     for {
-      runtimes <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
-      result   <- body(runtimes, genesisPath, time)
-      _        <- runtimes._1.close
-      _        <- runtimes._2.close
-      _        <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _        <- Sync[Task].delay { gp.recursivelyDelete() }
+      kvsManager <- RSpaceKeyValueStoreManager[Task](storePath)
+      runtimes   <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
+      result     <- body(runtimes, genesisPath, time)
+      _          <- runtimes._1.close
+      _          <- runtimes._2.close
+      _          <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _          <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 

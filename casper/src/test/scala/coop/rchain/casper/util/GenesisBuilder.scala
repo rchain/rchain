@@ -18,6 +18,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -107,11 +108,9 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      rspaceDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      runtimes <- {
-        implicit val kvsManager = InMemoryStoreManager[Task]
-        RhoRuntime.createRuntimes[Task](rspaceDir, storageSize, kvsManager)
-      }
+      rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
+      kvsManager     <- RSpaceKeyValueStoreManager[Task](rspaceDir)
+      runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize, kvsManager)
       runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       _              <- runtimes._1.close

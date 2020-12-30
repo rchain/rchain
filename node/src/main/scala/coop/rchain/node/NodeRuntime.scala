@@ -64,6 +64,7 @@ import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.{Context, Match, RSpace}
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
@@ -770,7 +771,9 @@ object NodeRuntime {
       casperRuntime: RhoRuntime[F],
       casperReplayRuntime: RhoRuntime[F],
       deployStorageCleanup: F[Unit],
-      casperStoreManager: KeyValueStoreManager[F]
+      casperStoreManager: KeyValueStoreManager[F],
+      rspaceStoreManager: KeyValueStoreManager[F],
+      evalRspaceStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
     new Cleanup[F] {
       override def close(): F[Unit] =
@@ -782,6 +785,10 @@ object NodeRuntime {
           _ <- casperReplayRuntime.close
           _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
+          _ <- Log[F].info("Shutting down rspace store manager ...")
+          _ <- rspaceStoreManager.shutdown
+          _ <- Log[F].info("Shutting down eval rspace store manager ...")
+          _ <- evalRspaceStoreManager.shutdown
           _ <- Log[F].info("Shutting down deploy storage ...")
           _ <- deployStorageCleanup
         } yield ()
@@ -835,7 +842,8 @@ object NodeRuntime {
 
       // Key-value store manager / manages LMDB databases
       casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
-
+      stateStorageFolder = casperConf.storage.resolve("v2")
+      rspaceStoreManager <- RSpaceKeyValueStoreManager(stateStorageFolder)
       // Block storage
       blockStore <- {
         implicit val kvm = casperStoreManager
@@ -918,14 +926,14 @@ object NodeRuntime {
         implicit val lf = lastFinalizedStorage
         LastFinalizedHeightConstraintChecker[F]
       }
+      evalRSpaceStoreManager <- RSpaceKeyValueStoreManager(cliConf.storage)
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size, casperStoreManager) >>= {
+        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size, evalRSpaceStoreManager) >>= {
           case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
         }
       }
-      stateStorageFolder = casperConf.storage.resolve("v2")
       casperInitialized <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -933,7 +941,7 @@ object NodeRuntime {
         implicit val bd = blockDagStorage
         for {
           runtimes <- RhoRuntime
-                       .createRuntimes[F](stateStorageFolder, casperConf.size, casperStoreManager)
+                       .createRuntimes[F](stateStorageFolder, casperConf.size, rspaceStoreManager)
           (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
@@ -945,10 +953,10 @@ object NodeRuntime {
                                               BindPattern,
                                               ListParWithRandom,
                                               TaggedContinuation
-                                            ](casperStoreManager)
+                                            ](rspaceStoreManager)
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         casperStoreManager
+                         rspaceStoreManager
                        )
                      } else
                        ReportingCasper.noop.pure[F]
@@ -1112,7 +1120,9 @@ object NodeRuntime {
         casperRuntime,
         casperReplayRuntime,
         deployStorageCleanup,
-        casperStoreManager
+        casperStoreManager,
+        rspaceStoreManager,
+        evalRSpaceStoreManager
       )
       webApi = {
         implicit val ec = engineCell

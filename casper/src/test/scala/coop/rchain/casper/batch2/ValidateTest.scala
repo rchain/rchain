@@ -33,6 +33,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 import coop.rchain.models.blockImplicits._
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.store.InMemoryStoreManager
 
 import scala.collection.immutable.HashMap
@@ -725,9 +726,9 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
       val storageSize: Long = 1024L * 1024L * 1024L
-      implicit val kvm      = InMemoryStoreManager[Task]
 
       for {
+        kvm               <- RSpaceKeyValueStoreManager[Task](storageDirectory)
         runtimes          <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize, kvm)
         runtimeManager    <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
         dag               <- blockDagStorage.getRepresentation
