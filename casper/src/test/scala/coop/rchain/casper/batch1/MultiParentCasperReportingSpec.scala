@@ -8,8 +8,9 @@ import coop.rchain.casper.{ReportMemStore, ReportingCasper}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rspace.ReportingRspace.ReportingComm
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.scalatestcontrib.effectTest
-import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.store.{InMemoryStoreManager, KeyValueStoreManager}
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -27,13 +28,14 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       import coop.rchain.rholang.interpreter.storage._
-      implicit val timeEff: LogicalTime[Effect]      = new LogicalTime[Effect]
-      implicit val kvm: InMemoryStoreManager[Effect] = InMemoryStoreManager[Effect]
+      implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
+      implicit val memCache                     = InMemoryStoreManager[Effect]
 
       for {
+        kvm <- RSpaceKeyValueStoreManager[Effect](node.dataPath.rspaceDir)
         reportingStore <- ReportMemStore
                            .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                             kvm
+                             memCache
                            )
         reportingCasper = ReportingCasper
           .rhoReporter(reportingStore, kvm)
