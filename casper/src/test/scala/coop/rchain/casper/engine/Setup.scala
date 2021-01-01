@@ -52,7 +52,8 @@ object Setup {
     val networkId          = "test"
     implicit val scheduler = Scheduler.io("test")
     val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
-    val spaceKVManager     = RSpaceKeyValueStoreManager[Task](runtimeDir).runSyncUnsafe()
+    val spaceKVManager =
+      RSpaceKeyValueStoreManager[Task](runtimeDir, 1024L * 1024L * 1024L).runSyncUnsafe()
     val (runtime, replayRuntime) =
       RhoRuntime
         .createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, spaceKVManager)

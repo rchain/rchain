@@ -728,7 +728,7 @@ class ValidateTest
       val storageSize: Long = 1024L * 1024L * 1024L
 
       for {
-        kvm               <- RSpaceKeyValueStoreManager[Task](storageDirectory)
+        kvm               <- RSpaceKeyValueStoreManager[Task](storageDirectory, storageSize)
         runtimes          <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize, kvm)
         runtimeManager    <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
         dag               <- blockDagStorage.getRepresentation

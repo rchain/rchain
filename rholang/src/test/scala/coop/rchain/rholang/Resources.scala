@@ -43,13 +43,15 @@ object Resources {
       prefix: String = ""
   ): Resource[F, RhoISpace[F]] = {
 
+    val mapSize: Long = 1024L * 1024L * 4
+
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     import scala.concurrent.ExecutionContext.Implicits.global
 
     def mkRspace(dbDir: Path): F[RhoISpace[F]] =
       for {
-        kvm <- RSpaceKeyValueStoreManager[F](dbDir)
+        kvm <- RSpaceKeyValueStoreManager[F](dbDir, mapSize)
         space <- RSpace.create[
                   F,
                   Par,
@@ -86,7 +88,7 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F])](
       for {
-        kvm           <- RSpaceKeyValueStoreManager[F](path)
+        kvm           <- RSpaceKeyValueStoreManager[F](path, storageSize)
         space         <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
         runtime       <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
@@ -102,7 +104,7 @@ object Resources {
 
     Resource.make[F, RhoHistoryRepository[F]](
       for {
-        kvm           <- RSpaceKeyValueStoreManager[F](path)
+        kvm           <- RSpaceKeyValueStoreManager[F](path, storageSize)
         historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
       } yield historyReader._1
     )(_.close())
@@ -116,7 +118,7 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F])](
       for {
-        kvm         <- RSpaceKeyValueStoreManager[F](path)
+        kvm         <- RSpaceKeyValueStoreManager[F](path, storageSize)
         space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
         runtime     <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
         replaySpace <- RhoRuntime.setupReplaySpace[F](path, storageSize, kvm)

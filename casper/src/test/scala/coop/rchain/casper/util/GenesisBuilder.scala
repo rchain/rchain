@@ -109,7 +109,7 @@ object GenesisBuilder {
 
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      kvsManager     <- RSpaceKeyValueStoreManager[Task](rspaceDir)
+      kvsManager     <- RSpaceKeyValueStoreManager[Task](rspaceDir, storageSize)
       runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize, kvsManager)
       runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)

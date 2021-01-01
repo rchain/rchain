@@ -54,14 +54,14 @@ object HistoryRepositoryInstances {
   ): F[HistoryRepository[F, C, P, A, K]] =
     for {
       // Roots store
-      rootsLMDBKVStore <- storeManager.store("roots")
+      rootsLMDBKVStore <- storeManager.store("db-roots")
       rootsRepository  = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBKVStore))
       currentRoot      <- rootsRepository.currentRoot()
       // Cold store
-      coldLMDBKVStore <- storeManager.store("cold")
+      coldLMDBKVStore <- storeManager.store("db-cold")
       coldStore       = ColdStoreInstances.coldStore[F](coldLMDBKVStore)
       // History store
-      historyLMDBKVStore <- storeManager.store("history")
+      historyLMDBKVStore <- storeManager.store("db-history")
       historyStore       = HistoryStoreInstances.historyStore[F](historyLMDBKVStore)
       history            = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)

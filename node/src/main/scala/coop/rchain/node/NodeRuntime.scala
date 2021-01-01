@@ -843,7 +843,7 @@ object NodeRuntime {
       // Key-value store manager / manages LMDB databases
       casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
       stateStorageFolder = casperConf.storage.resolve("v2")
-      rspaceStoreManager <- RSpaceKeyValueStoreManager(stateStorageFolder)
+      rspaceStoreManager <- RSpaceKeyValueStoreManager(stateStorageFolder, casperConf.size)
       // Block storage
       blockStore <- {
         implicit val kvm = casperStoreManager
@@ -926,7 +926,7 @@ object NodeRuntime {
         implicit val lf = lastFinalizedStorage
         LastFinalizedHeightConstraintChecker[F]
       }
-      evalRSpaceStoreManager <- RSpaceKeyValueStoreManager(cliConf.storage)
+      evalRSpaceStoreManager <- RSpaceKeyValueStoreManager(cliConf.storage, cliConf.size)
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -973,7 +973,7 @@ object NodeRuntime {
           history <- {
             import coop.rchain.rholang.interpreter.storage._
             RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              casperStoreManager
+              rspaceStoreManager
             )
           }
           (historyRepo, _)   = history

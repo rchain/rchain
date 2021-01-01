@@ -278,7 +278,7 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      kvsManager <- RSpaceKeyValueStoreManager[Task](storePath)
+      kvsManager <- RSpaceKeyValueStoreManager[Task](storePath, storageSize)
       runtimes   <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
       result     <- body(runtimes, genesisPath, time)
       _          <- runtimes._1.close
