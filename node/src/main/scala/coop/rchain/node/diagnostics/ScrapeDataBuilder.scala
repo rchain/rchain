@@ -3,9 +3,10 @@ package coop.rchain.node.diagnostics
 import java.lang.StringBuilder
 import java.text.{DecimalFormat, DecimalFormatSymbols}
 import java.util.Locale
-
-import kamon.Environment
-import kamon.metric.{MetricDistribution, MetricValue}
+import kamon.status.Environment
+import kamon.metric.Metric
+import kamon.metric.MetricSnapshot
+import kamon.metric.{Counter, Distribution, Gauge}
 import kamon.metric.MeasurementUnit
 import kamon.metric.MeasurementUnit.{information, none, time}
 import kamon.metric.MeasurementUnit.Dimension._
@@ -24,26 +25,34 @@ class ScrapeDataBuilder(
   def build(): String =
     builder.toString()
 
-  def appendCounters(counters: Seq[MetricValue]): ScrapeDataBuilder = {
+  //find out what name was
+  def appendCounters(
+      counters: Seq[MetricSnapshot.Values[Long]]
+  ): ScrapeDataBuilder = {
     counters.groupBy(_.name).foreach(appendValueMetric("counter", alwaysIncreasing = true))
     this
   }
 
-  def appendGauges(gauges: Seq[MetricValue]): ScrapeDataBuilder = {
+  def appendGauges(
+      gauges: Seq[MetricSnapshot.Values[Double]]
+  ): ScrapeDataBuilder = {
     gauges.groupBy(_.name).foreach(appendValueMetric("gauge", alwaysIncreasing = false))
     this
   }
 
-  def appendHistograms(histograms: Seq[MetricDistribution]): ScrapeDataBuilder = {
+  def appendHistograms(
+      histograms: Seq[MetricSnapshot.Distributions]
+  ): ScrapeDataBuilder = {
     histograms.groupBy(_.name).foreach(appendDistributionMetric)
     this
   }
 
+  //Adds a value metric to the scrape data
   private def appendValueMetric(metricType: String, alwaysIncreasing: Boolean)(
-      group: (String, Seq[MetricValue])
+      group: (String, Seq[MetricSnapshot.Values[_]])
   ): Unit = {
     val (metricName, snapshots) = group
-    val unit                    = snapshots.headOption.map(_.unit).getOrElse(none)
+    val unit                    = snapshots.headOption.map(_.settings.unit).getOrElse(none)
     val normalizedMetricName = normalizeMetricName(metricName, unit) + {
       if (alwaysIncreasing) "_total" else ""
     }
@@ -54,14 +63,15 @@ class ScrapeDataBuilder(
       append(normalizedMetricName)
       appendTags(metric.tags)
       append(" ")
-      append(format(scale(metric.value, metric.unit)))
+      append(format(scale(metric.value, metric.settings.unit)))
       append("\n")
     })
   }
 
-  private def appendDistributionMetric(group: (String, Seq[MetricDistribution])): Unit = {
+  //Adds a distribution Metric to the scrape data
+  private def appendDistributionMetric(group: (String, Seq[MetricSnapshot.Distributions])): Unit = {
     val (metricName, snapshots) = group
-    val unit                    = snapshots.headOption.map(_.unit).getOrElse(none)
+    val unit                    = snapshots.headOption.map(_.settings.unit).getOrElse(none)
     val normalizedMetricName    = normalizeMetricName(metricName, unit)
 
     append("# TYPE ").append(normalizedMetricName).append(" histogram").append("\n")
@@ -113,7 +123,7 @@ class ScrapeDataBuilder(
       metric: MetricDistribution,
       buckets: Seq[java.lang.Double]
   ): Unit = {
-    val distributionBuckets            = metric.distribution.bucketsIterator
+    val distributionBuckets            = Distribution.bucketsIterator
     var currentDistributionBucket      = distributionBuckets.next()
     var currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)
     var inBucketCount                  = 0L
@@ -188,11 +198,12 @@ class ScrapeDataBuilder(
   private def format(value: Double): String =
     numberFormat.format(value)
 
+  //scale to convert. toDouble since new function convert() accepts double as its parameter
   private def scale(value: Long, unit: MeasurementUnit): Double = unit.dimension match {
     case Time if unit.magnitude != time.seconds.magnitude =>
-      MeasurementUnit.scale(value, unit, time.seconds)
+      MeasurementUnit.convert(value.toDouble, unit, time.seconds)
     case Information if unit.magnitude != information.bytes.magnitude =>
-      MeasurementUnit.scale(value, unit, information.bytes)
+      MeasurementUnit.convert(value.toDouble, unit, information.bytes)
     case _ => value.toDouble
   }
 

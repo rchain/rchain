@@ -7,7 +7,7 @@ object Dependencies {
   val circeVersion      = "0.13.0"
   val enumeratumVersion = "1.5.13"
   val http4sVersion     = "0.21.9"
-  val kamonVersion      = "2.1.9"
+  val kamonVersion      = "2.0.0"
   val catsVersion       = "2.2.0"
   val catsEffectVersion = "2.2.0"
   val catsMtlVersion    = "0.7.1"

@@ -7,7 +7,7 @@ import scala.collection.JavaConverters._
 import com.typesafe.config.{Config, ConfigUtil}
 import kamon._
 import kamon.metric._
-
+import kamon.module.MetricReporter
 /**
   * Based on kamon-prometheus but without the embedded server
   */
@@ -15,8 +15,7 @@ import kamon.metric._
 class NewPrometheusReporter extends MetricReporter {
   import NewPrometheusReporter.Configuration.{environmentTags, readConfiguration}
 
-  private val snapshotAccumulator =
-    new PeriodSnapshotAccumulator(Duration.ofDays(365 * 5), Duration.ZERO)
+  private val snapshotAccumulator = PeriodSnapshot.accumulator(Duration.ofDays(365 * 5), Duration.ZERO)
 
   @volatile private var preparedScrapeData: String =
     "# The kamon-prometheus module didn't receive any data just yet.\n"
@@ -32,10 +31,10 @@ class NewPrometheusReporter extends MetricReporter {
     val scrapeDataBuilder =
       new ScrapeDataBuilder(reporterConfiguration, environmentTags(reporterConfiguration))
 
-    scrapeDataBuilder.appendCounters(currentData.metrics.counters)
-    scrapeDataBuilder.appendGauges(currentData.metrics.gauges)
-    scrapeDataBuilder.appendHistograms(currentData.metrics.histograms)
-    scrapeDataBuilder.appendHistograms(currentData.metrics.rangeSamplers)
+    scrapeDataBuilder.appendCounters(currentData.counters)
+    scrapeDataBuilder.appendGauges(currentData.gauges)
+    scrapeDataBuilder.appendHistograms(currentData.histograms)
+    scrapeDataBuilder.appendHistograms(currentData.rangeSamplers)
     preparedScrapeData = scrapeDataBuilder.build()
   }
 
@@ -79,8 +78,8 @@ object NewPrometheusReporter {
     def environmentTags(
         reporterConfiguration: NewPrometheusReporter.Configuration
     ): Map[String, String] =
-      if (reporterConfiguration.includeEnvironmentTags) Kamon.environment.tags
-      else Map.empty[String, String]
+      if (reporterConfiguration.includeEnvironmentTags) TagSetToMap.tagSetToMap(Kamon.environment.tags)
+      else Map.empty
 
     private def readCustomBuckets(customBuckets: Config): Map[String, Seq[java.lang.Double]] =
       customBuckets.topLevelKeys

@@ -7,9 +7,10 @@ import java.nio.channels.DatagramChannel
 import coop.rchain.node.diagnostics.UdpInfluxDBReporter.{MetricDataPacketBuffer, Settings}
 
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import kamon.Kamon
+import kamon.module.MetricReporter
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
+import kamon.util.EnvironmentTags
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
@@ -32,7 +33,7 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
       new InetSocketAddress(influxConfig.getString("hostname"), influxConfig.getInt("port"))
     val maxPacketSize  = influxConfig.getBytes("max-packet-size")
     val percentiles    = influxConfig.getDoubleList("percentiles").asScala.map(_.toDouble)
-    val additionalTags = EnvironmentTagBuilder.create(influxConfig.getConfig("additional-tags"))
+    val additionalTags = TagSetToMap.tagSetToMap(EnvironmentTags.from(Kamon.environment, influxConfig.getConfig("additional-tags")))
 
     Settings(address, maxPacketSize, percentiles, additionalTags)
   }

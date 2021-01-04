@@ -569,10 +569,10 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       adminHttpFiber <- adminHttpServerFiber.start
       _ <- Sync[F].delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
-            if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
-            if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
-            if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
-            if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
+            if (nodeConf.metrics.influxdb) Kamon.registerModule("BatchInfluxDBReporter", new BatchInfluxDBReporter())
+            if (nodeConf.metrics.influxdbUdp) Kamon.registerModule("UdpInfluxDBReporter", new UdpInfluxDBReporter())
+            if (nodeConf.metrics.prometheus) Kamon.registerModule("prometheusReporter", prometheusReporter)
+            if (nodeConf.metrics.zipkin) Kamon.registerModule("prometheusReporter", new ZipkinReporter())
             if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
           }
     } yield Servers(

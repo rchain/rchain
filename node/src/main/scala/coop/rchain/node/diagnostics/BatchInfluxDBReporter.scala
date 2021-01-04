@@ -9,9 +9,10 @@ import scala.util.Try
 import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
 
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import kamon.Kamon
+import kamon.module.MetricReporter
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
+import kamon.util.EnvironmentTags
 import monix.eval.Task
 import monix.execution.Cancelable
 import monix.execution.Scheduler.Implicits.global
@@ -67,7 +68,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
         Duration.fromNanos(root.getDuration("batch-interval").toNanos)
       else 10.seconds
 
-    val additionalTags = EnvironmentTagBuilder.create(root.getConfig("additional-tags"))
+    val additionalTags = TagSetToMap.tagSetToMap(EnvironmentTags.from(Kamon.environment, root.getConfig("additional-tags")))
 
     Settings(
       url,
@@ -117,7 +118,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     }
 
   private def translateToLineProtocol(periodSnapshot: PeriodSnapshot): String = {
-    import periodSnapshot.metrics._
+    import periodSnapshot._
     val builder   = StringBuilder.newBuilder
     val timestamp = periodSnapshot.to.toEpochMilli
 
