@@ -447,7 +447,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
             .copy(systemDeployError = Some(errorMsg))
       }
       .run // run the computation and produce the logs
-      .map { case (accLog, pd) => pd.copy(deployLog = accLog.toList) }
+      .map { case (accLog, pd) => pd.copy(deployLog = accLog) }
   }
 
   private def processDeploy(runtime: Runtime[F])(
@@ -462,7 +462,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       deployResult = ProcessedDeploy(
         deploy,
         Cost.toProto(cost),
-        checkpoint.log.map(EventConverter.toCasperEvent).toList,
+        checkpoint.log.map(EventConverter.toCasperEvent),
         errors.nonEmpty
       )
       _ <- if (errors.nonEmpty) runtime.space.revertToSoftCheckpoint(fallback)

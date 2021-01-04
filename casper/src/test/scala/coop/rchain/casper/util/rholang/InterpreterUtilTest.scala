@@ -212,7 +212,7 @@ class InterpreterUtilTest
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
     val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow(_))
-    genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, false))
+    genesisDeploys.map(d => ProcessedDeploy(d, c, Vector.empty, false))
   }
 
   it should "merge histories in case of multiple parents with complex contract" in withGenesis(
@@ -353,7 +353,7 @@ class InterpreterUtilTest
     implicit blockStore => implicit blockDagStorage =>
       val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))
       val processedDeploys =
-        deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
+        deploys.map(d => ProcessedDeploy(d, PCost(1L), Vector.empty, false))
       val invalidHash = ByteString.EMPTY
       mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
         for {

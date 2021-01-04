@@ -390,7 +390,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
               ProcessedDeploy(
                 deploy = d,
                 cost = PCost(0L),
-                List.empty,
+                Vector.empty,
                 isFailed = false
               )
           )

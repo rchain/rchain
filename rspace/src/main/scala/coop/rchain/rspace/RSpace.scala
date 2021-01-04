@@ -227,7 +227,7 @@ class RSpace[F[_], C, P, A, K](
       _           = historyRepositoryAtom.set(nextHistory)
       _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
       log         = eventLog.take()
-      _           = eventLog.put(Seq.empty)
+      _           = eventLog.put(Vector.empty)
       _           = produceCounter.take()
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- restoreInstalls()

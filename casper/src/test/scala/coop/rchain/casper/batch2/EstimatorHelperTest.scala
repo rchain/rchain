@@ -102,12 +102,12 @@ class EstimatorHelperTest
     implicit blockStore => implicit blockDagStorage =>
       testConflict[Task] { deploy =>
         deploy.copy(
-          deployLog = List(
+          deployLog = Vector(
             produce(ByteString.copyFromUtf8(channelsHash))
           )
         )
       } { deploy =>
-        deploy.copy(deployLog = List(consume(ByteString.copyFromUtf8(channelsHash))))
+        deploy.copy(deployLog = Vector(consume(ByteString.copyFromUtf8(channelsHash))))
       }
   }
 

@@ -34,7 +34,7 @@ object SystemDeployPlayResult {
   ): SystemDeployPlayResult[A] =
     PlaySucceeded(
       stateHash,
-      ProcessedSystemDeploy.Succeeded(log.toList, systemDeployData),
+      ProcessedSystemDeploy.Succeeded(log.toVector, systemDeployData),
       result
     )
 
@@ -48,7 +48,7 @@ object SystemDeployPlayResult {
       log: Seq[Event],
       systemDeployError: SystemDeployError
   ): SystemDeployPlayResult[A] =
-    PlayFailed(ProcessedSystemDeploy.Failed(log.toList, systemDeployError.errorMsg))
+    PlayFailed(ProcessedSystemDeploy.Failed(log.toVector, systemDeployError.errorMsg))
 
 }
 

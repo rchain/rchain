@@ -69,7 +69,7 @@ object blockImplicits {
     } yield ProcessedDeploy(
       deploy = deployData,
       cost = PCost(0L),
-      deployLog = List.empty,
+      deployLog = Vector.empty,
       isFailed = false
     )
 

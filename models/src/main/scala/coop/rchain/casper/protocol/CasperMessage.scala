@@ -313,7 +313,7 @@ object RChainState {
 final case class ProcessedDeploy(
     deploy: Signed[DeployData],
     cost: PCost,
-    deployLog: List[Event],
+    deployLog: Vector[Event],
     isFailed: Boolean,
     systemDeployError: Option[String] = None
 ) {
@@ -337,13 +337,13 @@ final case class ProcessedDeploy(
 
 object ProcessedDeploy {
   def empty(deploy: Signed[DeployData]) =
-    ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
+    ProcessedDeploy(deploy, PCost(), Vector.empty, isFailed = false)
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
       ddProto   <- pd.deploy.toRight("DeployData not available")
       dd        <- DeployData.from(ddProto)
       cost      <- pd.cost.toRight("Cost not available")
-      deployLog <- pd.deployLog.toList.traverse(Event.from)
+      deployLog <- pd.deployLog.toVector.traverse(Event.from)
     } yield ProcessedDeploy(
       dd,
       cost,
@@ -404,36 +404,42 @@ object SystemDeployData {
 
 sealed trait ProcessedSystemDeploy {
   val systemDeploy: SystemDeployData
-  def eventList: List[Event]
+  def eventList: Vector[Event]
   def failed: Boolean
-  def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A
+  def fold[A](ifSucceeded: Vector[Event] => A, ifFailed: (Vector[Event], String) => A): A
 }
 
 object ProcessedSystemDeploy {
 
   final case class Succeeded(
-      eventList: List[Event],
+      eventList: Vector[Event],
       systemDeploy: SystemDeployData
   ) extends ProcessedSystemDeploy {
     val failed = false
 
-    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+    override def fold[A](
+        ifSucceeded: Vector[Event] => A,
+        ifFailed: (Vector[Event], String) => A
+    ): A =
       ifSucceeded(eventList)
   }
 
   final case class Failed(
-      eventList: List[Event],
+      eventList: Vector[Event],
       errorMsg: String
   ) extends ProcessedSystemDeploy {
     val failed                                  = true
     override val systemDeploy: SystemDeployData = SystemDeployData.empty
 
-    override def fold[A](ifSucceeded: List[Event] => A, ifFailed: (List[Event], String) => A): A =
+    override def fold[A](
+        ifSucceeded: Vector[Event] => A,
+        ifFailed: (Vector[Event], String) => A
+    ): A =
       ifFailed(eventList, errorMsg)
   }
 
   def from(psd: ProcessedSystemDeployProto): Either[String, ProcessedSystemDeploy] =
-    psd.deployLog.toList
+    psd.deployLog.toVector
       .traverse(Event.from)
       .map(
         deployLog =>

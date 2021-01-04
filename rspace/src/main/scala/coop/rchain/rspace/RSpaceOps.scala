@@ -55,7 +55,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   def assertF(predicate: Boolean, errorMsg: => String): F[Unit] =
     Sync[F].raiseError(new IllegalStateException(errorMsg)).unlessA(predicate)
 
-  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Seq.empty)
+  protected[this] val eventLog: SyncVar[EventLog] = create[EventLog](Vector.empty)
   protected[this] val produceCounter: SyncVar[Map[Produce, Int]] =
     create[Map[Produce, Int]](Map.empty.withDefaultValue(0))
 
@@ -322,7 +322,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       nextHistory <- historyRepositoryAtom.get().reset(root)
       _           = historyRepositoryAtom.set(nextHistory)
       _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
+      _           = eventLog.put(Vector.empty)
       _           = produceCounter.take()
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
@@ -345,7 +345,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     for {
       cache    <- storeAtom.get().snapshot()
       log      = eventLog.take()
-      _        = eventLog.put(Seq.empty)
+      _        = eventLog.put(Vector.empty)
       pCounter = produceCounter.take()
       _        = produceCounter.put(Map.empty.withDefaultValue(0))
     } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
