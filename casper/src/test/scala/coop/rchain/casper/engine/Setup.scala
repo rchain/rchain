@@ -49,11 +49,17 @@ object Setup {
     implicit val span: Span[Task] = NoopSpan[Task]()
     implicit val kvsManager       = InMemoryStoreManager[Task]
 
+    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                     = GenesisBuilder.buildGenesis(params)
+
     val networkId          = "test"
     implicit val scheduler = Scheduler.io("test")
     val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
     val spaceKVManager =
-      RSpaceKeyValueStoreManager[Task](runtimeDir, 1024L * 1024L * 1024L).runSyncUnsafe()
+      RSpaceKeyValueStoreManager[Task](
+        context.storageDirectory.resolve("rspace"),
+        1024L * 1024L * 1024L
+      ).runSyncUnsafe()
     val (runtime, replayRuntime) =
       RhoRuntime
         .createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, spaceKVManager)
@@ -71,9 +77,6 @@ object Setup {
 
     implicit val runtimeManager =
       RuntimeManager.fromRuntimes(runtime, replayRuntime).unsafeRunSync(scheduler)
-
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
