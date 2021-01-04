@@ -17,7 +17,6 @@ trait RootsStore[F[_]] {
   def validateAndSetCurrentRoot(key: Blake2b256Hash): F[Option[Blake2b256Hash]]
   def recordRoot(key: Blake2b256Hash): F[Unit]
 
-  def close(): F[Unit]
 }
 
 object RootsStoreInstances {
@@ -61,6 +60,5 @@ object RootsStoreInstances {
         _     <- store.put1(currentRootName, bytes, identity[ByteBuffer])
       } yield ()
 
-    override def close(): F[Unit] = ().pure[F]
   }
 }

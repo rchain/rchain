@@ -225,7 +225,6 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           roots += key
         }
 
-      override def close(): Task[Unit] = Task.delay(())
     }
 
   def rootRepository =

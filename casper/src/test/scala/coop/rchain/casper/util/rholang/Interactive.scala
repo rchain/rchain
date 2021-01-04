@@ -68,8 +68,7 @@ class Interactive private (runtime: RhoRuntime[Task])(implicit scheduler: Schedu
   }
   def pp(term: Par): String = prettyPrinter.buildString(term)
 
-  def cleanUp(): Unit =
-    runtime.close.unsafeRunSync
+  def cleanUp(): Unit = ()
 
   def checkpoint(name: String): Unit =
     checkpoints.update(name, runtime.createCheckpoint.unsafeRunSync)

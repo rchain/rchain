@@ -256,9 +256,7 @@ object BasicBench {
       generate[TaggedContinuation]()(arbitraryContinuation).toVector
 
     @TearDown
-    def tearDown(): Unit = {
-      testSpace.close()
+    def tearDown(): Unit =
       dbDir.recursivelyDelete()
-    }
   }
 }

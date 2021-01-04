@@ -24,8 +24,6 @@ trait HistoryRepository[F[_], C, P, A, K]
 
   def history: History[F]
 
-  def close(): F[Unit]
-
   def exporter: F[RSpaceExporter[F]]
 
   def importer: F[RSpaceImporter[F]]

@@ -113,8 +113,6 @@ object GenesisBuilder {
       runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize, kvsManager)
       runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      _              <- runtimes._1.close
-      _              <- runtimes._2.close
       blockStoreDir  <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
       blockStore     <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
       _              <- blockStore.put(genesis.blockHash, genesis)

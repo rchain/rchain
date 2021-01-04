@@ -15,11 +15,12 @@ import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
-
+import coop.rchain.store.KeyValueStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -113,7 +114,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     implicit val rand            = Blake2b512Random(Array.empty[Byte])
     implicit val logF: Log[Task] = Log.log[Task]
 
-    def testImplementation(pureRSpace: RhoISpace[Task]): Task[
+    def testImplementation(pureRSpace: (RhoISpace[Task], KeyValueStoreManager[Task])): Task[
       (
           Either[Throwable, Unit],
           Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
@@ -125,7 +126,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       lazy val (_, reducer) =
         RholangAndScalaDispatcher
           .create[Task, Task.Par](
-            pureRSpace,
+            pureRSpace._1,
             Map.empty,
             Map.empty
           )
@@ -148,7 +149,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       for {
         _           <- cost.set(initPhlos)
         result      <- reducer.inj(program).attempt
-        mappedSpace <- pureRSpace.toMap
+        mappedSpace <- pureRSpace._1.toMap
       } yield (result, mappedSpace)
     }
 

@@ -741,8 +741,6 @@ class ValidateTest
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
-        _ <- runtimes._1.close
-        _ <- runtimes._2.close
       } yield result
   }
 

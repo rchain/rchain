@@ -58,7 +58,8 @@ object Resources {
     for {
       runtimes       <- mkRuntimesAt[F](storageDirectory)(storageSize)
       runtimeManager <- Resource.liftF(RuntimeManager.fromRuntimes(runtimes._1, runtimes._2))
-      history        <- mkHistoryReposity[F](storageDirectory, storageSize)
+      historyWithKVM <- mkHistoryReposity[F](storageDirectory, storageSize)
+      (history, _)   = historyWithKVM
     } yield (runtimeManager, history)
   }
 

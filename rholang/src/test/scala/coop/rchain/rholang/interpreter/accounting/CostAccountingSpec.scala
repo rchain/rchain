@@ -50,7 +50,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
           RhoRuntime
             .createRhoRuntime[Task](space, Seq.empty, false)
         )(
-          _.close
+          _ => ().pure[Task]
         )
       }
 
@@ -82,7 +82,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
 
     resources
       .use {
-        case (runtime, replayRuntime) =>
+        case (runtime, replayRuntime, _) =>
           implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           runtime.evaluate(
             term,

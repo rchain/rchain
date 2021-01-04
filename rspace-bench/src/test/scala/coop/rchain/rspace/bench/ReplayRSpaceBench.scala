@@ -87,8 +87,6 @@ object ReplayRSpaceBench {
 
     @TearDown
     def tearDown() = {
-      space.close()
-      replaySpace.close()
       dbDir.recursivelyDelete()
       ()
     }

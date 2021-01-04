@@ -134,8 +134,6 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     */
   def setInvalidBlocks(invalidBlocks: Map[BlockHash, Validator]): F[Unit]
 
-  def close: F[Unit]
-
   /**
     * Get the hot changes after some executions for the runtime.
     * Currently this is only for debug info mostly.
@@ -157,7 +155,6 @@ class RhoRuntimeImpl[F[_]: Sync](
     val invalidBlocksParam: InvalidBlocks[F]
 ) extends RhoRuntime[F] {
   private val emptyContinuation = TaggedContinuation()
-  def close: F[Unit]            = space.close()
 
   override def getHotChanges
       : F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap

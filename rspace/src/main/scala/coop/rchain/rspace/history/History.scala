@@ -13,7 +13,6 @@ trait History[F[_]] {
   def process(actions: List[HistoryAction]): F[History[F]]
   def root: Blake2b256Hash
   def find(key: KeyPath): F[(TriePointer, Vector[Trie])]
-  def close(): F[Unit]
   def reset(root: Blake2b256Hash): History[F]
 }
 

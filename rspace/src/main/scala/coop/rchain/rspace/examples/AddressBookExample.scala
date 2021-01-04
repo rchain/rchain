@@ -321,7 +321,6 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.close()
   }
 
   private[this] def withSpace(
@@ -341,7 +340,7 @@ object AddressBookExample {
     try {
       f(space)
     } finally {
-      space.close()
+      ()
     }
 
   }

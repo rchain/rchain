@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter.storage
 
 import cats.effect.{Resource, Sync}
+import cats.implicits.catsSyntaxApplicativeId
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -314,7 +315,9 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
     val chargingRSpaceResource =
       mkRhoISpace[Task]("rchain-charging-rspace-test-")
-        .flatMap(rhoISpace => Resource.make(mkChargingRspace(rhoISpace))(_.close()))
+        .flatMap {
+          case (rhoISpace, kvm) => Resource.make(mkChargingRspace(rhoISpace))(_ => kvm.shutdown)
+        }
 
     chargingRSpaceResource
       .use(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, cost)) })

@@ -281,8 +281,6 @@ object GenesisTest {
       kvsManager <- RSpaceKeyValueStoreManager[Task](storePath, storageSize)
       runtimes   <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
       result     <- body(runtimes, genesisPath, time)
-      _          <- runtimes._1.close
-      _          <- runtimes._2.close
       _          <- Sync[Task].delay { storePath.recursivelyDelete() }
       _          <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result

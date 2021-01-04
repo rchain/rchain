@@ -15,7 +15,6 @@ trait HistoryStore[F[_]] {
 
   def get(key: Blake2b256Hash): F[Trie]
 
-  def close(): F[Unit]
 }
 
 object HistoryStoreInstances {
@@ -23,8 +22,6 @@ object HistoryStoreInstances {
 
   def historyStore[F[_]: Sync](store: KeyValueStore[F]): HistoryStore[F] = new HistoryStore[F] {
     val typedStore = store.toTypedStore(Blake2b256Hash.codecPureBlake2b256Hash, Trie.codecTrie)
-
-    override def close(): F[Unit] = ().pure[F]
 
     override def get(key: Blake2b256Hash): F[Trie] = typedStore.getOrElse(key, EmptyTrie)
 

@@ -556,8 +556,6 @@ object HistoryInstances {
 
     }
 
-    override def close(): F[Unit] = historyStore.close()
-
     override def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 
   }
@@ -587,8 +585,6 @@ object HistoryInstances {
                    case Some(v) => Applicative[F].pure(v)
                  }
       } yield result
-
-    def close(): F[Unit] = historyStore.close()
 
     def clear(): F[Unit] = Sync[F].delay {
       cache.clear()

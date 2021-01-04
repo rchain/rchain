@@ -231,7 +231,6 @@ class CryptoChannelsSpec
     try {
       test(runtime)
     } finally {
-      runtime.close.unsafeRunSync
       dbDir.recursivelyDelete()
     }
   }

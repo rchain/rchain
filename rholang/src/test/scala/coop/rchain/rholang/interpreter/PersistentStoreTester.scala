@@ -48,7 +48,6 @@ trait PersistentStoreTester {
     try {
       f(TestFixture(space, reducer))
     } finally {
-      space.close()
       dbDir.recursivelyDelete()
     }
   }
@@ -58,16 +57,17 @@ trait PersistentStoreTester {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     mkRhoISpace[Task]("rholang-interpreter-test-")
-      .use { rspace =>
-        for {
-          cost <- CostAccounting.emptyCost[Task]
-          reducer = {
-            implicit val c = cost
-            RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
-          }
-          _   <- cost.set(Cost.UNSAFE_MAX)
-          res <- f(rspace, reducer)
-        } yield res
+      .use {
+        case (rspace, _) =>
+          for {
+            cost <- CostAccounting.emptyCost[Task]
+            reducer = {
+              implicit val c = cost
+              RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
+            }
+            _   <- cost.set(Cost.UNSAFE_MAX)
+            res <- f(rspace, reducer)
+          } yield res
       }
       .runSyncUnsafe(3.seconds)
   }

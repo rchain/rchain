@@ -48,8 +48,7 @@ trait EvalBenchStateBase {
   }
 
   @TearDown
-  def tearDown(): Unit =
-    runtime.close.unsafeRunSync
+  def tearDown(): Unit = ()
 
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(

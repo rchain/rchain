@@ -109,7 +109,6 @@ class RSpaceBench extends RSpaceBenchBase {
 
   @TearDown
   def tearDown() = {
-    space.close()
     dbDir.recursivelyDelete()
     ()
   }

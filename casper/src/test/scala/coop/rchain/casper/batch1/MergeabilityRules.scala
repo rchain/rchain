@@ -189,7 +189,7 @@ trait MergeabilityRules {
       implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
       implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
       rhoRuntimeEff[Effect](initRegistry = false).use {
-        case (runtime, _) =>
+        case (runtime, _, _) =>
           for {
             _            <- runtime.evaluate(value, Cost(500L))
             _            <- runtime.createCheckpoint

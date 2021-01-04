@@ -92,6 +92,5 @@ abstract class RhoBenchBaseState {
   }
 
   @TearDown
-  def tearDown(): Unit =
-    runtime.close.unsafeRunSync
+  def tearDown(): Unit = ()
 }

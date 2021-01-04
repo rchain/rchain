@@ -846,7 +846,6 @@ class RholangMethodsCostsSpec
 
   protected override def afterAll(): Unit = {
     import coop.rchain.shared.PathOps._
-    space.close()
     dbDir.recursivelyDelete()
   }
 

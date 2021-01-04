@@ -367,8 +367,6 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       } yield ()
     }
 
-  override def close(): F[Unit] = historyRepositoryAtom.get().close()
-
   def wrapResult(
       channels: Seq[C],
       wk: WaitingContinuation[P, K],

@@ -102,7 +102,7 @@ object RholangCLI {
         List()
       }
     } finally {
-      runtime.close.unsafeRunSync
+      ()
     }
     if (!problems.isEmpty) {
       System.exit(1)

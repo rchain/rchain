@@ -779,11 +779,6 @@ object NodeRuntime {
       override def close(): F[Unit] =
         for {
           _ <- Log[F].info("Shutting down interpreter runtime ...")
-          _ <- runtime.close
-          _ <- Log[F].info("Shutting down Casper runtime ...")
-          _ <- casperRuntime.close
-          _ <- casperReplayRuntime.close
-          _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
           _ <- Log[F].info("Shutting down rspace store manager ...")
           _ <- rspaceStoreManager.shutdown
