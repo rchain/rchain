@@ -427,7 +427,7 @@ jobs:
   # Merge into "trying" branch (bors try) does not trigger release_* jobs.
 
   bors_try_success:
-    name: bors build finished
+    name: bors build finished, try successful
     needs:
       - run_unit_tests
       - run_integration_tests
@@ -455,7 +455,7 @@ jobs:
   # on run_*_tests jobs.
 
   bors_merge_success:
-    name: bors build finished
+    name: bors build finished, merge successful
     needs:
       - release_docker_image
       #- release_packages
