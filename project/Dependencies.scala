@@ -10,7 +10,7 @@ object Dependencies {
   val kamonVersion      = "1.1.5"
   val catsVersion       = "2.3.1"
   val catsEffectVersion = "2.3.1"
-  val catsMtlVersion    = "1.1.1"
+  val catsMtlVersion    = "0.7.1"
   val slf4jVersion      = "1.7.25"
 
   // format: off
