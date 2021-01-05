@@ -82,18 +82,15 @@ object HashM extends HashMDerivation {
   implicit def seqHash[A: HashM]: HashM[Seq[A]] = new HashM[Seq[A]] {
 
     override def hash[F[_]: Sync](value: Seq[A]): F[Int] =
-      for {
-        hashes <- value.toList.traverse(HashM[A].hash[F])
-      } yield hashes.hashCode()
+      value.toList.traverse(HashM[A].hash[F]).map(_.hashCode)
+      
 
   }
 
   implicit def arrayHash[A: HashM]: HashM[Array[A]] = new HashM[Array[A]] {
 
     override def hash[F[_]: Sync](value: Array[A]): F[Int] =
-      for {
-        hashes <- value.toList.traverse(HashM[A].hash[F])
-      } yield hashes.hashCode()
+      value.toList.traverse(HashM[A].hash[F]).map(_.hashCode)
 
   }
 
