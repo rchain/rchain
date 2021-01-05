@@ -83,15 +83,12 @@ object HashM extends HashMDerivation {
 
     override def hash[F[_]: Sync](value: Seq[A]): F[Int] =
       value.toList.traverse(HashM[A].hash[F]).map(_.hashCode)
-      
 
   }
   implicit def vectorHash[A: HashM]: HashM[Vector[A]] = new HashM[Vector[A]] {
 
     override def hash[F[_]: Sync](value: Vector[A]): F[Int] =
-      for {
-        hashes <- value.toVector.traverse(HashM[A].hash[F])
-      } yield hashes.hashCode()
+      value.traverse(HashM[A].hash[F]).map(_.hashCode)
 
   }
 
