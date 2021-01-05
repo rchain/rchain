@@ -426,51 +426,51 @@ jobs:
 
   # Merge into "trying" branch (bors try) does not trigger release_* jobs.
 
-  bors_try_success:
+  bors_success:
     name: bors build finished
     needs:
-      - run_unit_tests
-      - run_integration_tests
-    if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && success()"
+      - release_docker_image
+    if: "github.event_name == 'push' && (github.ref == 'refs/heads/trying' || github.ref == 'refs/heads/staging') && success()"
     runs-on: ubuntu-latest
     steps:
       - run: true
-  
+    
 
   # IMPORTANT: 
   # bors_try_failure and bors_merge_failure are no longer needed due to an update to bors 
-  # <https://github.com/bors-ng/bors-ng/issues/1115> that considers skipped checks as failures.
+  # <https://github.com/bors-ng/bors-ng/issues/1115> that considers skipped checks that share 
+  # names (e.g. 'bors build finished') as failures.
 
 
-  bors_try_failure:
-    name: bors build finished
-    needs:
-      - run_unit_tests
-      - run_integration_tests
-    if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && !success()"
-    runs-on: ubuntu-latest
-    steps:
-      - run: false
+  # bors_try_failure:
+  #   name: bors build finished
+  #   needs:
+  #     - run_unit_tests
+  #     - run_integration_tests
+  #   if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && !success()"
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - run: false
 
   # Merge into "staging" branch (bors r+ ) triggers release_* jobs which depend
   # on run_*_tests jobs.
 
-  bors_merge_success:
-    name: bors build finished
-    needs:
-      - release_docker_image
-      #- release_packages
-    if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && success()"
-    runs-on: ubuntu-latest
-    steps:
-      - run: true
+  #bors_merge_success:
+  #  name: bors build finished
+  #  needs:
+  #    - release_docker_image
+  #    #- release_packages
+  #  if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && success()"
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - run: true
 
-  bors_merge_failure:
-    name: bors build finished
-    needs:
-      - release_docker_image
-      #- release_packages
-    if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && !success()"
-    runs-on: ubuntu-latest
-    steps:
-      - run: false
+  #bors_merge_failure:
+  #  name: bors build finished
+  #  needs:
+  #    - release_docker_image
+  #    #- release_packages
+  #  if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && !success()"
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    - run: false
