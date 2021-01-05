@@ -836,7 +836,7 @@ object NodeRuntime {
       else Span.noop[F]
 
       // Key-value store manager / manages LMDB databases
-      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir)
+      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir, casperConf.size)
       stateStorageFolder = casperConf.storage.resolve("v2")
       rspaceStoreManager <- RSpaceKeyValueStoreManager(stateStorageFolder, casperConf.size)
       // Block storage

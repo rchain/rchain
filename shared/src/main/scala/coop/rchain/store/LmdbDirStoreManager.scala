@@ -12,9 +12,10 @@ import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, LmdbStoreManager}
 object LmdbDirStoreManager {
   def apply[F[_]: Concurrent: Log](
       dirPath: Path,
-      dbInstanceMapping: Map[String, LmdbEnvConfig]
+      dbInstanceMapping: Map[String, LmdbEnvConfig],
+      legacyDBHandle: (String, LmdbEnvConfig) => String = (dbName, _) => dbName
   ): F[KeyValueStoreManager[F]] =
-    Concurrent[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping))
+    Concurrent[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping, legacyDBHandle))
 
   // Giga and tera bytes
   val gb = 1024L * 1024L * 1024L
@@ -30,7 +31,8 @@ object LmdbDirStoreManager {
 // For LMDB this allows control which databases are part of the same environment (file).
 private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
     dirPath: Path,
-    dbInstanceMapping: Map[String, LmdbEnvConfig]
+    dbInstanceMapping: Map[String, LmdbEnvConfig],
+    legacyDBHandle: (String, LmdbEnvConfig) => String
 ) extends KeyValueStoreManager[F] {
 
   private case class StoreState(
@@ -53,10 +55,8 @@ private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
       (isNew, defer, manCfg) = action
       _                      <- createLmdbManger(manCfg, defer).whenA(isNew)
       manager                <- defer.get
-      dataBaseName = if (dbName.startsWith("db")) {
-        "db"
-      } else dbName
-      database <- manager.store(dataBaseName)
+      dataBaseName           = legacyDBHandle(dbName, dbInstanceMapping(dbName))
+      database               <- manager.store(dataBaseName)
     } yield database
 
   private def createLmdbManger(config: LmdbEnvConfig, defer: Deferred[F, KeyValueStoreManager[F]]) =

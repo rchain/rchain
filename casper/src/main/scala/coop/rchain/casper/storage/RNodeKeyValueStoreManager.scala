@@ -36,7 +36,22 @@ object RNodeKeyValueStoreManager {
     // CasperBuffer
     ("parents-map", casperBufferEnvConfig)
   )
+  def rspaceDbMapping(mapSize: Long): Map[String, LmdbEnvConfig] =
+    Map[String, LmdbEnvConfig](
+      ("db-cold", LmdbEnvConfig(name = "rspace/casper/v2/cold", maxEnvSize = mapSize)),
+      ("db-history", LmdbEnvConfig(name = "rspace/casper/v2/history", maxEnvSize = mapSize)),
+      ("db-roots", LmdbEnvConfig(name = "rspace/casper/v2/roots", maxEnvSize = mapSize)),
+      ("db-eval-cold", LmdbEnvConfig(name = "rspace/v2/cold", maxEnvSize = mapSize)),
+      ("db-eval-history", LmdbEnvConfig(name = "rspace/v2/history", maxEnvSize = mapSize)),
+      ("db-eval-roots", LmdbEnvConfig(name = "rspace/v2/roots", maxEnvSize = mapSize)),
+      ("channels", LmdbEnvConfig(name = "channels", maxEnvSize = mapSize))
+    )
 
-  def apply[F[_]: Concurrent: Log](dirPath: Path): F[KeyValueStoreManager[F]] =
-    LmdbDirStoreManager(dirPath, rnodeDbMapping)
+  // TODO remove legacy handle and migrate old rspace databases
+  // the legacy rspace databases use "db" by default
+  def legacyDBHandle(dbName: String, config: LmdbEnvConfig) =
+    if (config.name.contains("v2")) "db" else dbName
+
+  def apply[F[_]: Concurrent: Log](dirPath: Path, rspaceMapSize: Long): F[KeyValueStoreManager[F]] =
+    LmdbDirStoreManager(dirPath, rnodeDbMapping ++ rspaceDbMapping(rspaceMapSize), legacyDBHandle)
 }

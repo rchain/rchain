@@ -18,6 +18,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkHistoryReposity, mkRuntimesAt, mkTempDir}
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Log
+import coop.rchain.shared.store.LmdbDirStoreManager.gb
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -79,7 +80,7 @@ object Resources {
       path: Path
   ): Resource[F, BlockDagStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RNodeKeyValueStoreManager[F](path, 1 * gb)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[F]
@@ -90,7 +91,7 @@ object Resources {
       path: Path
   ): Resource[F, CasperBufferStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RNodeKeyValueStoreManager[F](path, 1 * gb)
       casperBufferStorage <- {
         implicit val kvm = storeManager
         CasperBufferKeyValueStorage.create[F]

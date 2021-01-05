@@ -5,7 +5,6 @@ import java.nio.file.Path
 import cats._
 import cats.implicits._
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
@@ -16,7 +15,6 @@ import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
 import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}

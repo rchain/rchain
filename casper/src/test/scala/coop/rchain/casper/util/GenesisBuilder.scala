@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.shared.store.LmdbDirStoreManager.gb
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 
@@ -119,7 +120,7 @@ object GenesisBuilder {
 
       blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
 
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir)
+      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir, 1 * gb)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[Task]
