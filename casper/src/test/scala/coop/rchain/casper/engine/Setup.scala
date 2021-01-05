@@ -58,13 +58,22 @@ object Setup {
         context.storageDirectory.resolve("rspace"),
         1024L * 1024L * 1024L
       ).runSyncUnsafe()
+    val rootsKVStore   = spaceKVManager.store("roots").runSyncUnsafe()
+    val coldKVStore    = spaceKVManager.store("cold").runSyncUnsafe()
+    val historyKVStore = spaceKVManager.store("history").runSyncUnsafe()
+    val channelKVStore = spaceKVManager.store("channels").runSyncUnsafe()
     val (runtime, replayRuntime) =
       RhoRuntime
-        .createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L, spaceKVManager)
+        .createRuntimes[Task](rootsKVStore, coldKVStore, historyKVStore, channelKVStore)
         .unsafeRunSync
 
     val history = RSpace
-      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](spaceKVManager)
+      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+        rootsKVStore,
+        coldKVStore,
+        historyKVStore,
+        channelKVStore
+      )
       .unsafeRunSync
 
     val (historyRepo, _) = history

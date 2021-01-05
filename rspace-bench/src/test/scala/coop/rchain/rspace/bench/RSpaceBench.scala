@@ -100,11 +100,15 @@ class RSpaceBench extends RSpaceBenchBase {
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
   implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
   implicit val kvm                      = InMemoryStoreManager[Id]
-
+  val roots                             = kvm.store("roots")
+  val cold                              = kvm.store("cold")
+  val history                           = kvm.store("history")
+  val channelStore                      = kvm.store("channels")
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-bench-")
-    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](kvm)
+    space =
+      RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](roots, cold, history, channelStore)
   }
 
   @TearDown

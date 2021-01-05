@@ -279,7 +279,11 @@ object GenesisTest {
 
     for {
       kvsManager <- RSpaceKeyValueStoreManager[Task](storePath, storageSize)
-      runtimes   <- RhoRuntime.createRuntimes[Task](storePath, storageSize, kvsManager)
+      roots      <- kvsManager.store("roots")
+      cold       <- kvsManager.store("cold")
+      history    <- kvsManager.store("history")
+      channels   <- kvsManager.store("channels")
+      runtimes   <- RhoRuntime.createRuntimes[Task](roots, cold, history, channels)
       result     <- body(runtimes, genesisPath, time)
       _          <- Sync[Task].delay { storePath.recursivelyDelete() }
       _          <- Sync[Task].delay { gp.recursivelyDelete() }

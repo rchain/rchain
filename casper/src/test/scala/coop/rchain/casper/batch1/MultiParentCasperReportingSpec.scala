@@ -32,13 +32,18 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
       implicit val memCache                     = InMemoryStoreManager[Effect]
 
       for {
-        kvm <- RSpaceKeyValueStoreManager[Effect](node.dataPath.rspaceDir)
+        kvm      <- RSpaceKeyValueStoreManager[Effect](node.dataPath.rspaceDir)
+        roots    <- kvm.store("roots")
+        cold     <- kvm.store("cold")
+        history  <- kvm.store("history")
+        channels <- kvm.store("channels")
         reportingStore <- ReportMemStore
                            .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                              memCache
                            )
         reportingCasper = ReportingCasper
-          .rhoReporter(reportingStore, kvm)
+          .rhoReporter(reportingStore, roots, cold, history, channels)
+
         deploy      <- ConstructDeploy.sourceDeployNowF(correctRholang)
         signedBlock <- node.addBlock(deploy)
         _           = logEff.warns.isEmpty should be(true)

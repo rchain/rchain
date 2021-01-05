@@ -33,7 +33,10 @@ trait PersistentStoreTester {
     implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
     implicit val m    = matchListPar[Task]
     implicit val kvm  = InMemoryStoreManager[Task]
-
+    val roots         = kvm.store("roots").unsafeRunSync
+    val cold          = kvm.store("cold").unsafeRunSync
+    val history       = kvm.store("history").unsafeRunSync
+    val channels      = kvm.store("channels").unsafeRunSync
     val space = RSpace
       .create[
         Task,
@@ -41,7 +44,7 @@ trait PersistentStoreTester {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](kvm)
+      ](roots, cold, history, channels)
       .unsafeRunSync
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)

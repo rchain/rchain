@@ -729,7 +729,11 @@ class ValidateTest
 
       for {
         kvm               <- RSpaceKeyValueStoreManager[Task](storageDirectory, storageSize)
-        runtimes          <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize, kvm)
+        roots             <- kvm.store("roots")
+        cold              <- kvm.store("cold")
+        history           <- kvm.store("history")
+        channels          <- kvm.store("channels")
+        runtimes          <- RhoRuntime.createRuntimes[Task](roots, cold, history, channels)
         runtimeManager    <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
         dag               <- blockDagStorage.getRepresentation
         _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)

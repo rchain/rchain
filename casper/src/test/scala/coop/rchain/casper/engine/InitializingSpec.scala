@@ -74,14 +74,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       )
 
       // Get exporter for genesis block
-      val genesisExporter = {
-        val genesisStorePath = context.storageDirectory.resolve("rspace")
-        val exporterTask =
-          RhoRuntime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L, spaceKVManager) >>= {
-            case (_, _, hr) => hr.exporter
-          }
-        exporterTask.runSyncUnsafe()
-      }
+      val genesisExporter = history._1.exporter.runSyncUnsafe()
 
       val chunkSize = LfsTupleSpaceRequester.pageSize
 

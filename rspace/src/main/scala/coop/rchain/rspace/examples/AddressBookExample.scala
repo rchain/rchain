@@ -207,9 +207,13 @@ object AddressBookExample {
     // Here we define a temporary place to put the store's files
 //    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
+    val roots    = keyValueStoreManager.store("roots")
+    val cold     = keyValueStoreManager.store("cold")
+    val history  = keyValueStoreManager.store("history")
+    val channels = keyValueStoreManager.store("channels")
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](roots, cold, history, channels)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -242,12 +246,16 @@ object AddressBookExample {
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
+    val roots    = keyValueStoreManager.store("roots")
+    val cold     = keyValueStoreManager.store("cold")
+    val history  = keyValueStoreManager.store("history")
+    val channels = keyValueStoreManager.store("channels")
     // Here we define a temporary place to put the store's files
 //    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
 
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](roots, cold, history, channels)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -331,12 +339,15 @@ object AddressBookExample {
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
     implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
-
+    val roots                          = keyValueStoreManager.store("roots")
+    val cold                           = keyValueStoreManager.store("cold")
+    val history                        = keyValueStoreManager.store("history")
+    val channels                       = keyValueStoreManager.store("channels")
     // Here we define a temporary place to put the store's files
 //    val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](keyValueStoreManager)
+      RSpace.create[Id, Channel, Pattern, Entry, Printer](roots, cold, history, channels)
     try {
       f(space)
     } finally {

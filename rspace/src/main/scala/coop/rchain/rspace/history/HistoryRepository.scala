@@ -10,7 +10,7 @@ import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
 import coop.rchain.shared.Serialize
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import org.lmdbjava.EnvFlags
 import scodec.Codec
 
@@ -42,7 +42,10 @@ final case class LMDBStorageConfig(
 object HistoryRepositoryInstances {
 
   def lmdbRepository[F[_]: Concurrent: Parallel, C, P, A, K](
-      storeManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(
       implicit codecC: Codec[C],
       codecP: Codec[P],
@@ -52,21 +55,19 @@ object HistoryRepositoryInstances {
   ): F[HistoryRepository[F, C, P, A, K]] =
     for {
       // Roots store
-      rootsLMDBKVStore <- storeManager.store("db-roots")
-      rootsRepository  = new RootRepository[F](RootsStoreInstances.rootsStore[F](rootsLMDBKVStore))
-      currentRoot      <- rootsRepository.currentRoot()
+      rootsRepository <- new RootRepository[F](
+                          RootsStoreInstances.rootsStore[F](rootsKeyValueStore)
+                        ).pure[F]
+      currentRoot <- rootsRepository.currentRoot()
       // Cold store
-      coldLMDBKVStore <- storeManager.store("db-cold")
-      coldStore       = ColdStoreInstances.coldStore[F](coldLMDBKVStore)
+      coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
       // History store
-      historyLMDBKVStore <- storeManager.store("db-history")
-      historyStore       = HistoryStoreInstances.historyStore[F](historyLMDBKVStore)
-      history            = HistoryInstances.merging(currentRoot, historyStore)
+      historyStore = HistoryStoreInstances.historyStore[F](historyKeyValueStore)
+      history      = HistoryInstances.merging(currentRoot, historyStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
-      exporter           = RSpaceExporterStore[F](historyLMDBKVStore, coldLMDBKVStore, rootsLMDBKVStore)
-      importer           = RSpaceImporterStore[F](historyLMDBKVStore, coldLMDBKVStore, rootsLMDBKVStore)
-      channelLMDBKVStore <- storeManager.store("channels")
-      channelStore       = ChannelStoreImpl(channelLMDBKVStore, sc, codecC)
+      exporter     = RSpaceExporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
+      importer     = RSpaceImporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
+      channelStore = ChannelStoreImpl(channelsKeyValueStore, sc, codecC)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
       history,
       rootsRepository,

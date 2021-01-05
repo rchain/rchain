@@ -79,8 +79,17 @@ object ReplayRSpaceBench {
     @Setup
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
+      val rootsKVStore    = kvm.store("roots")
+      val coldKVStore     = kvm.store("cold")
+      val historyKVStore  = kvm.store("history")
+      val channelsKVStore = kvm.store("channels")
       val (space, replaySpace, _) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](kvm)
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](
+          rootsKVStore,
+          coldKVStore,
+          historyKVStore,
+          channelsKVStore
+        )
       this.space = space
       this.replaySpace = replaySpace
     }

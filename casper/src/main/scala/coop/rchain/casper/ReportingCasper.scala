@@ -33,7 +33,7 @@ import coop.rchain.models.Validator.Validator
 
 import scala.concurrent.ExecutionContext
 import coop.rchain.metrics.MetricsSemaphore
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 
 import scala.collection.concurrent.TrieMap
 
@@ -61,7 +61,10 @@ object ReportingCasper {
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       store: ReportMemStore[F],
-      keyValueStoreManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
@@ -72,7 +75,12 @@ object ReportingCasper {
           block: BlockMessage
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
-          reportingRspace  <- ReportingRuntime.setupReportingRSpace(keyValueStoreManager)
+          reportingRspace <- ReportingRuntime.setupReportingRSpace(
+                              rootsKeyValueStore,
+                              coldKeyValueStore,
+                              historyKeyValueStore,
+                              channelsKeyValueStore
+                            )
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           genesis          <- BlockStore[F].getApprovedBlock
@@ -203,7 +211,10 @@ object ReportingRuntime {
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
   def setupReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      keyValueStoreManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
@@ -213,7 +224,10 @@ object ReportingRuntime {
 
     for {
       history <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                  keyValueStoreManager
+                  rootsKeyValueStore,
+                  coldKeyValueStore,
+                  historyKeyValueStore,
+                  channelsKeyValueStore
                 )
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[

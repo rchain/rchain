@@ -111,7 +111,11 @@ object GenesisBuilder {
     (for {
       rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
       kvsManager     <- RSpaceKeyValueStoreManager[Task](rspaceDir, storageSize)
-      runtimes       <- RhoRuntime.createRuntimes[Task](rspaceDir, storageSize, kvsManager)
+      roots          <- kvsManager.store("roots")
+      cold           <- kvsManager.store("cold")
+      history        <- kvsManager.store("history")
+      channels       <- kvsManager.store("channels")
+      runtimes       <- RhoRuntime.createRuntimes[Task](roots, cold, history, channels)
       runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2)
       genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       blockStoreDir  <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))

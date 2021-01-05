@@ -90,12 +90,13 @@ object Interactive {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val kvsManager                = InMemoryStoreManager[Task]
 
+    val roots    = kvsManager.store("roots").unsafeRunSync
+    val cold     = kvsManager.store("cold").unsafeRunSync
+    val history  = kvsManager.store("history").unsafeRunSync
+    val channels = kvsManager.store("channels").unsafeRunSync
+
     val space = RhoRuntime
-      .setupRhoRSpace[Task](
-        Files.createTempDirectory("interactive-"),
-        1024 * 1024L * 1024L,
-        kvsManager
-      )
+      .setupRhoRSpace[Task](roots, cold, history, channels)
       .unsafeRunSync
     new Interactive(RhoRuntime.createRhoRuntime[Task](space).runSyncUnsafe(5.seconds))
   }

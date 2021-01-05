@@ -72,13 +72,22 @@ abstract class RhoBenchBaseState {
     }
 
     runtime = (for {
-      space <- RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize, kvm)
+      roots    <- kvm.store("roots")
+      cold     <- kvm.store("cold")
+      history  <- kvm.store("history")
+      channels <- kvm.store("channels")
+
+      space <- RhoRuntime.setupRhoRSpace[Task](roots, cold, history, channels)
       r     <- RhoRuntime.createRhoRuntime[Task](space)
     } yield r).runSyncUnsafe()
 
     replayRuntime = (for {
-      space <- RhoRuntime.setupReplaySpace[Task](dbDir, mapSize, kvm)
-      r     <- RhoRuntime.createReplayRhoRuntime[Task](space)
+      roots    <- kvm.store("roots")
+      cold     <- kvm.store("cold")
+      history  <- kvm.store("history")
+      channels <- kvm.store("channels")
+      space    <- RhoRuntime.setupReplaySpace[Task](roots, cold, history, channels)
+      r        <- RhoRuntime.createReplayRhoRuntime[Task](space)
     } yield r).runSyncUnsafe()
 
     randSetup = rand

@@ -11,9 +11,9 @@ import coop.rchain.store.{KeyValueStoreManager}
 object RSpaceKeyValueStoreManager {
   def rspaceDbMapping(mapSize: Long = 1 * tb): Map[String, LmdbEnvConfig] =
     Map[String, LmdbEnvConfig](
-      ("db-cold", LmdbEnvConfig(name = "cold", maxEnvSize = mapSize)),
-      ("db-history", LmdbEnvConfig(name = "history", maxEnvSize = mapSize)),
-      ("db-roots", LmdbEnvConfig(name = "roots", maxEnvSize = mapSize)),
+      ("cold", LmdbEnvConfig(name = "cold", maxEnvSize = mapSize)),
+      ("history", LmdbEnvConfig(name = "history", maxEnvSize = mapSize)),
+      ("roots", LmdbEnvConfig(name = "roots", maxEnvSize = mapSize)),
       ("channels", LmdbEnvConfig(name = "channels", maxEnvSize = mapSize))
     )
 

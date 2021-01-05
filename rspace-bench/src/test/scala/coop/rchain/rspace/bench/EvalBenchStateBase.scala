@@ -21,7 +21,6 @@ import org.openjdk.jmh.annotations.{Setup, TearDown}
 
 trait EvalBenchStateBase {
   private lazy val dbDir: Path            = Files.createTempDirectory("rchain-storage-test-")
-  private val mapSize: Long               = 1024L * 1024L * 1024L
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
@@ -29,7 +28,12 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  lazy val space = RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize, kvm).unsafeRunSync
+  val roots    = kvm.store("roots").unsafeRunSync
+  val cold     = kvm.store("cold").unsafeRunSync
+  val history  = kvm.store("history").unsafeRunSync
+  val channels = kvm.store("channels").unsafeRunSync
+
+  lazy val space = RhoRuntime.setupRhoRSpace[Task](roots, cold, history, channels).unsafeRunSync
   lazy val runtime: RhoRuntime[Task] =
     RhoRuntime.createRhoRuntime[Task](space).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)

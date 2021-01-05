@@ -925,10 +925,19 @@ object NodeRuntime {
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
-        RhoRuntime.setupRhoRSpace[F](cliConf.storage, cliConf.size, evalRSpaceStoreManager) >>= {
-          case space => RhoRuntime.createRhoRuntime[F](space, Seq.empty)
-        }
+        for {
+          roots    <- casperStoreManager.store("db-eval-roots")
+          cold     <- casperStoreManager.store("db-eval-cold")
+          history  <- casperStoreManager.store("db-eval-history")
+          channels <- casperStoreManager.store("eval-channels")
+          space    <- RhoRuntime.setupRhoRSpace[F](roots, cold, history, channels)
+          runtime  <- RhoRuntime.createRhoRuntime[F](space, Seq.empty)
+        } yield runtime
       }
+      casperRoots    <- casperStoreManager.store("db-roots")
+      casperCold     <- casperStoreManager.store("db-cold")
+      casperHistory  <- casperStoreManager.store("db-history")
+      casperChannels <- casperStoreManager.store("channels")
       casperInitialized <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
@@ -936,7 +945,7 @@ object NodeRuntime {
         implicit val bd = blockDagStorage
         for {
           runtimes <- RhoRuntime
-                       .createRuntimes[F](stateStorageFolder, casperConf.size, rspaceStoreManager)
+                       .createRuntimes[F](casperRoots, casperCold, casperHistory, casperChannels)
           (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
@@ -951,7 +960,10 @@ object NodeRuntime {
                                             ](rspaceStoreManager)
                        } yield ReportingCasper.rhoReporter(
                          reportingCache,
-                         rspaceStoreManager
+                         casperRoots,
+                         casperCold,
+                         casperHistory,
+                         casperChannels
                        )
                      } else
                        ReportingCasper.noop.pure[F]
@@ -968,7 +980,10 @@ object NodeRuntime {
           history <- {
             import coop.rchain.rholang.interpreter.storage._
             RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              rspaceStoreManager
+              casperRoots,
+              casperCold,
+              casperHistory,
+              casperChannels
             )
           }
           (historyRepo, _)   = history

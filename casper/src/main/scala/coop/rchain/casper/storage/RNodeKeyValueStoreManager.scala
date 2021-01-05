@@ -44,7 +44,8 @@ object RNodeKeyValueStoreManager {
       ("db-eval-cold", LmdbEnvConfig(name = "rspace/v2/cold", maxEnvSize = mapSize)),
       ("db-eval-history", LmdbEnvConfig(name = "rspace/v2/history", maxEnvSize = mapSize)),
       ("db-eval-roots", LmdbEnvConfig(name = "rspace/v2/roots", maxEnvSize = mapSize)),
-      ("channels", LmdbEnvConfig(name = "channels", maxEnvSize = mapSize))
+      ("channels", LmdbEnvConfig(name = "channels", maxEnvSize = mapSize)),
+      ("eval-channels", LmdbEnvConfig(name = "eval-channels", maxEnvSize = mapSize))
     )
 
   // TODO remove legacy handle and migrate old rspace databases

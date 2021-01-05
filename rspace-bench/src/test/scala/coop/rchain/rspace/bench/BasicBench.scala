@@ -114,8 +114,11 @@ object BasicBench {
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
     implicit val kvm                                            = InMemoryStoreManager[Task]
-
-    private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+    val roots                                                   = kvm.store("roots").runSyncUnsafe()
+    val cold                                                    = kvm.store("cold").runSyncUnsafe()
+    val history                                                 = kvm.store("history").runSyncUnsafe()
+    val channelsStore                                           = kvm.store("channels").runSyncUnsafe()
+    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
 
     val testSpace: ISpace[
       Task,
@@ -131,7 +134,7 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](kvm)
+        ](roots, cold, history, channelsStore)
         .unsafeRunSync
 
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync

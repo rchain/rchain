@@ -29,7 +29,7 @@ import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 
 import scala.concurrent.ExecutionContext
 
@@ -506,84 +506,63 @@ object RhoRuntime {
   }
 
   def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long,
-      keyValueStoreManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createWithReplay[
+    RSpace.createWithReplay[
       F,
       Par,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](keyValueStoreManager)
+    ](rootsKeyValueStore, coldKeyValueStore, historyKeyValueStore, channelsKeyValueStore)
   }
 
   def setupReplaySpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long,
-      keyValueStoreManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[RhoReplayISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createReplay[
+    RSpace.createReplay[
       F,
       Par,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](keyValueStoreManager)
+    ](rootsKeyValueStore, coldKeyValueStore, historyKeyValueStore, channelsKeyValueStore)
   }
 
   def setupRhoRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long,
-      keyValueStoreManager: KeyValueStoreManager[F]
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[RhoISpace[F]] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.create[
+    RSpace.create[
       F,
       Par,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](keyValueStoreManager)
+    ](rootsKeyValueStore, coldKeyValueStore, historyKeyValueStore, channelsKeyValueStore)
   }
 
   /**
@@ -655,18 +634,29 @@ object RhoRuntime {
     } yield runtime
 
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long,
-      keyValueStoreManager: KeyValueStoreManager[F],
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F],
       initRegistry: Boolean = true
   )(
       implicit scheduler: ExecutionContext,
       costLog: FunctorTell[F, Chain[Cost]]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize, keyValueStoreManager)
-      rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
-      replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize, keyValueStoreManager)
+      space <- RhoRuntime.setupRhoRSpace[F](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore,
+                channelsKeyValueStore
+              )
+      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
+      replaySpace <- RhoRuntime.setupReplaySpace(
+                      rootsKeyValueStore,
+                      coldKeyValueStore,
+                      historyKeyValueStore,
+                      channelsKeyValueStore
+                    )
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
     } yield (rhoRuntime, replayRhoRuntime)
 }

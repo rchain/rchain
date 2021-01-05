@@ -40,9 +40,12 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      space   <- Resource.liftF(RhoRuntime.setupRhoRSpace[Task](dir, 1024L * 1024 * 1024, kvm))
+      costLog  <- Resource.liftF(costLog[Task]())
+      roots    <- Resource.liftF(kvm.store("roots"))
+      cold     <- Resource.liftF(kvm.store("cold"))
+      history  <- Resource.liftF(kvm.store("history"))
+      channels <- Resource.liftF(kvm.store("channels"))
+      space    <- Resource.liftF(RhoRuntime.setupRhoRSpace[Task](roots, cold, history, channels))
       runtime <- {
         // naming noOpCostLog because want to override package scope noOpCostLog val
         implicit val noOpCostLog: FunctorTell[Task, Chain[Cost]] = costLog

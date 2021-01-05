@@ -52,14 +52,18 @@ object Resources {
 
     def mkRspace(dbDir: Path): F[(RhoISpace[F], KeyValueStoreManager[F])] =
       for {
-        kvm <- RSpaceKeyValueStoreManager[F](dbDir, mapSize)
+        kvm      <- RSpaceKeyValueStoreManager[F](dbDir, mapSize)
+        roots    <- kvm.store("roots")
+        cold     <- kvm.store("cold")
+        history  <- kvm.store("history")
+        channels <- kvm.store("channels")
         space <- RSpace.create[
                   F,
                   Par,
                   BindPattern,
                   ListParWithRandom,
                   TaggedContinuation
-                ](kvm)
+                ](roots, cold, history, channels)
       } yield (space, kvm)
 
     mkTempDir(prefix)(implicitly[Concurrent[F]])
@@ -93,10 +97,19 @@ object Resources {
 
     Resource.make[F, (RhoRuntime[F], RhoHistoryRepository[F], KeyValueStoreManager[F])](
       for {
-        kvm           <- RSpaceKeyValueStoreManager[F](path, storageSize)
-        space         <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
-        runtime       <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
+        kvm      <- RSpaceKeyValueStoreManager[F](path, storageSize)
+        roots    <- kvm.store("roots")
+        cold     <- kvm.store("cold")
+        history  <- kvm.store("history")
+        channels <- kvm.store("channels")
+        space    <- RhoRuntime.setupRhoRSpace[F](roots, cold, history, channels)
+        runtime  <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                          roots,
+                          cold,
+                          history,
+                          channels
+                        )
       } yield (runtime, historyReader._1, kvm)
     )(r => r._3.shutdown)
   }
@@ -109,8 +122,17 @@ object Resources {
 
     Resource.make[F, (RhoHistoryRepository[F], KeyValueStoreManager[F])](
       for {
-        kvm           <- RSpaceKeyValueStoreManager[F](path, storageSize)
-        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](kvm)
+        kvm      <- RSpaceKeyValueStoreManager[F](path, storageSize)
+        roots    <- kvm.store("roots")
+        cold     <- kvm.store("cold")
+        history  <- kvm.store("history")
+        channels <- kvm.store("channels")
+        historyReader <- setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                          roots,
+                          cold,
+                          history,
+                          channels
+                        )
       } yield (historyReader._1, kvm)
     )(r => r._2.shutdown)
   }
@@ -126,9 +148,13 @@ object Resources {
     Resource.make[F, (RhoRuntime[F], ReplayRhoRuntime[F], KeyValueStoreManager[F])](
       for {
         kvm         <- RSpaceKeyValueStoreManager[F](path, storageSize)
-        space       <- RhoRuntime.setupRhoRSpace[F](path, storageSize, kvm)
+        roots       <- kvm.store("roots")
+        cold        <- kvm.store("cold")
+        history     <- kvm.store("history")
+        channels    <- kvm.store("channels")
+        space       <- RhoRuntime.setupRhoRSpace[F](roots, cold, history, channels)
         runtime     <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
-        replaySpace <- RhoRuntime.setupReplaySpace[F](path, storageSize, kvm)
+        replaySpace <- RhoRuntime.setupReplaySpace[F](roots, cold, history, channels)
         replayRuntime <- RhoRuntime
                           .createReplayRhoRuntime[F](replaySpace, additionalSystemProcesses)
       } yield (runtime, replayRuntime, kvm)

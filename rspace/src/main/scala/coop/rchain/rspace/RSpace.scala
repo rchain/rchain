@@ -18,7 +18,7 @@ import coop.rchain.rspace.trace._
 import coop.rchain.shared.{Cell, Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
@@ -259,7 +259,12 @@ object RSpace {
     space.pure[F]
   }
 
-  def createWithReplay[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
+  def createWithReplay[F[_], C, P, A, K](
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -275,7 +280,12 @@ object RSpace {
       par: Parallel[F]
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
+      setup <- setUp[F, C, P, A, K](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore,
+                channelsKeyValueStore
+              )
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
       replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
@@ -285,7 +295,12 @@ object RSpace {
       )
     } yield (space, replay, historyReader)
 
-  def createReplay[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
+  def createReplay[F[_], C, P, A, K](
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -301,7 +316,12 @@ object RSpace {
       par: Parallel[F]
   ): F[IReplaySpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
+      setup <- setUp[F, C, P, A, K](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore,
+                channelsKeyValueStore
+              )
       (historyReader, store) = setup
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
@@ -309,7 +329,12 @@ object RSpace {
       )
     } yield replay
 
-  def create[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
+  def create[F[_], C, P, A, K](
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -325,7 +350,12 @@ object RSpace {
       par: Parallel[F]
   ): F[ISpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K](keyValueStoreManager)
+      setup <- setUp[F, C, P, A, K](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore,
+                channelsKeyValueStore
+              )
       (historyReader, store) = setup
       space = new RSpace[F, C, P, A, K](
         historyReader,
@@ -333,7 +363,12 @@ object RSpace {
       )
     } yield space
 
-  def setUp[F[_], C, P, A, K](keyValueStoreManager: KeyValueStoreManager[F])(
+  def setUp[F[_], C, P, A, K](
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F],
+      channelsKeyValueStore: KeyValueStore[F]
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -351,7 +386,12 @@ object RSpace {
 
     for {
       historyReader <- HistoryRepositoryInstances
-                        .lmdbRepository[F, C, P, A, K](keyValueStoreManager)
+                        .lmdbRepository[F, C, P, A, K](
+                          rootsKeyValueStore,
+                          coldKeyValueStore,
+                          historyKeyValueStore,
+                          channelsKeyValueStore
+                        )
       store <- HotStore.empty(historyReader)
     } yield (historyReader, store)
   }

@@ -70,8 +70,12 @@ object RholangCLI {
     implicit val kvm                     = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      space   <- RhoRuntime.setupRhoRSpace[Task](conf.dataDir(), conf.mapSize(), kvm)
-      runtime <- RhoRuntime.createRhoRuntime[Task](space)
+      roots    <- kvm.store("roots")
+      cold     <- kvm.store("cold")
+      history  <- kvm.store("history")
+      channels <- kvm.store("channels")
+      space    <- RhoRuntime.setupRhoRSpace[Task](roots, cold, history, channels)
+      runtime  <- RhoRuntime.createRhoRuntime[Task](space)
     } yield (runtime)).unsafeRunSync
 
     val problems = try {

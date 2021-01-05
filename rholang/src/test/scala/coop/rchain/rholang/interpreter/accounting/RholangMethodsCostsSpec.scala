@@ -827,7 +827,10 @@ class RholangMethodsCostsSpec
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
   implicit val kvm                        = InMemoryStoreManager[Task]
-
+  val roots                               = kvm.store("roots").runSyncUnsafe()
+  val cold                                = kvm.store("cold").runSyncUnsafe()
+  val history                             = kvm.store("history").runSyncUnsafe()
+  val channels                            = kvm.store("channels").runSyncUnsafe()
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage._
@@ -840,7 +843,7 @@ class RholangMethodsCostsSpec
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](kvm)
+      ](roots, cold, history, channels)
       .unsafeRunSync
   }
 

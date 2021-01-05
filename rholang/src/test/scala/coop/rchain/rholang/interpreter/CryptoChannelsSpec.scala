@@ -216,16 +216,19 @@ class CryptoChannelsSpec
   protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt                           = scala.util.Random.nextInt
     val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
-    val size                                = 1024L * 1024 * 1024
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
     implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      space   <- RhoRuntime.setupRhoRSpace[Task](dbDir, size, kvm)
-      runtime <- RhoRuntime.createRhoRuntime[Task](space)
-      _       <- runtime.cost.set(Cost.UNSAFE_MAX)
+      roots    <- kvm.store("roots")
+      cold     <- kvm.store("cold")
+      history  <- kvm.store("history")
+      channels <- kvm.store("channels")
+      space    <- RhoRuntime.setupRhoRSpace[Task](roots, cold, history, channels)
+      runtime  <- RhoRuntime.createRhoRuntime[Task](space)
+      _        <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
     try {
