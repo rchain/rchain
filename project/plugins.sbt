@@ -1,6 +1,6 @@
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "0.99.34")
 // Yes it's weird to do the following, but it's what is mandated by the scalapb documentation
-libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.10.8"
+libraryDependencies += "com.thesamet.scalapb" %% "compilerplugin" % "0.10.9"
 
 addSbtPlugin("com.typesafe.sbt"       % "sbt-license-report"   % "1.2.0")
 addSbtPlugin("org.wartremover"        % "sbt-wartremover"      % "2.4.10")
@@ -13,7 +13,7 @@ addSbtPlugin("com.typesafe.sbt"       % "sbt-native-packager"  % "1.3.12")
 addSbtPlugin("pl.project13.scala"     % "sbt-jmh"              % "0.4.0")
 addSbtPlugin("com.typesafe.sbt"       % "sbt-site"             % "1.4.1")
 addSbtPlugin("com.typesafe.sbt"       % "sbt-ghpages"          % "0.6.3")
-addSbtPlugin("com.jsuereth"           % "sbt-pgp"              % "2.0.1")
+addSbtPlugin("com.jsuereth"           % "sbt-pgp"              % "2.0.2")
 addSbtPlugin("org.xerial.sbt"         % "sbt-sonatype"         % "2.6")
 addSbtPlugin("org.tpolecat"           % "tut-plugin"           % "0.6.13")
 addSbtPlugin("net.virtual-void"       % "sbt-dependency-graph" % "0.9.2")
