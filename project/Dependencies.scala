@@ -6,11 +6,11 @@ object Dependencies {
 
   val circeVersion      = "0.13.0"
   val enumeratumVersion = "1.5.13"
-  val http4sVersion     = "0.21.9"
+  val http4sVersion     = "0.21.15"
   val kamonVersion      = "1.1.5"
-  val catsVersion       = "2.2.0"
-  val catsEffectVersion = "2.2.0"
-  val catsMtlVersion    = "0.7.1"
+  val catsVersion       = "2.3.1"
+  val catsEffectVersion = "2.3.1"
+  val catsMtlVersion    = "1.1.1"
   val slf4jVersion      = "1.7.25"
 
   // format: off
@@ -23,16 +23,16 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.0.0"
+  val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.1.0"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.12"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
-  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.2"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.3"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
-  val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.4.4"
+  val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.4.6"
   val guava               = "com.google.guava"            % "guava"                     % "30.0-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
@@ -70,15 +70,15 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.34.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.35.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.35.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.35.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.35.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M2"
-  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.21"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M4"
+  val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.23"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
   val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
@@ -97,15 +97,15 @@ object Dependencies {
     scodecBits,
     shapeless,
     // Added to resolve conflicts in scalapb plugin v0.10.8
-    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
-    "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
-    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.2.0",
+    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.19",
+    "com.google.protobuf"    % "protobuf-java"              % "3.14.0",
+    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.3.2",
     // Strange version conflict, it requires the same version but in square brackets (range?).
     // e.g. io.grpc:grpc-core:1.30.2 ([1.30.2] wanted)
     // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
-    "io.grpc"  % "grpc-api"          % "1.30.2",
-    "io.grpc"  % "grpc-core"         % "1.30.2",
-    "io.netty" % "netty-codec-http2" % "4.1.48.Final",
+    "io.grpc"  % "grpc-api"          % "1.34.1",
+    "io.grpc"  % "grpc-core"         % "1.34.1",
+    "io.netty" % "netty-codec-http2" % "4.1.56.Final",
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.15",
     "com.google.errorprone"    % "error_prone_annotations" % "2.3.4",
@@ -115,7 +115,7 @@ object Dependencies {
     "com.typesafe"             % "config"                  % "1.4.0"
   )
 
-  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
+  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.11.2")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
