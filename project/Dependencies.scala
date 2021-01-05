@@ -115,7 +115,7 @@ object Dependencies {
     "com.typesafe"             % "config"                  % "1.4.0"
   )
 
-  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.11.2")
+  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
