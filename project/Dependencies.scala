@@ -105,7 +105,7 @@ object Dependencies {
     // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
     "io.grpc"  % "grpc-api"          % "1.34.1",
     "io.grpc"  % "grpc-core"         % "1.34.1",
-    "io.netty" % "netty-codec-http2" % "4.1.56.Final",
+    "io.netty" % "netty-codec-http2" % "4.1.48.Final",
     //overrides for transitive dependencies (we don't use them directly, hence no val-s)
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.15",
     "com.google.errorprone"    % "error_prone_annotations" % "2.3.4",
