@@ -68,7 +68,9 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
         Duration.fromNanos(root.getDuration("batch-interval").toNanos)
       else 10.seconds
 
-    val additionalTags = TagSetToMap.tagSetToMap(EnvironmentTags.from(Kamon.environment, root.getConfig("additional-tags")))
+    val additionalTags = TagSetToMap.tagSetToMap(
+      EnvironmentTags.from(Kamon.environment, root.getConfig("additional-tags"))
+    )
 
     Settings(
       url,
@@ -122,47 +124,67 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     val builder   = StringBuilder.newBuilder
     val timestamp = periodSnapshot.to.toEpochMilli
 
-    counters.foreach(c => writeMetricValue(builder, c, "count", timestamp))
-    gauges.foreach(g => writeMetricValue(builder, g, "value", timestamp))
-    histograms.foreach(h => writeMetricDistribution(builder, h, settings.percentiles, timestamp))
-    rangeSamplers.foreach(
-      rs => writeMetricDistribution(builder, rs, settings.percentiles, timestamp)
-    )
-
+    counters.foreach(counterSnapshot => {
+      val name = counterSnapshot.name
+      counterSnapshot.instruments.foreach(counterInstrument => {
+        writeMetricValue(builder, counterInstrument, "count", timestamp, name)
+      })
+    })
+    gauges.foreach(gaugeSnapshot => {
+      val name = gaugeSnapshot.name
+      gaugeSnapshot.instruments.foreach(gaugeInstrument => {
+        writeMetricValue(builder, gaugeInstrument, "value", timestamp, name)
+      })
+    })
+    histograms.foreach(histogramSnapshot => {
+      val name = histogramSnapshot.name
+      histogramSnapshot.instruments.foreach(histogramInstrument => {
+        writeMetricDistribution(builder, histogramInstrument, settings.percentiles, timestamp, name)
+      })
+    })
+    rangeSamplers.foreach(rangeSamplerSnapshot => {
+      val name = rangeSamplerSnapshot.name
+      rangeSamplerSnapshot.instruments.foreach(rangeSamplerInstrument => {
+        writeMetricDistribution(builder, rangeSamplerInstrument, settings.percentiles, timestamp, name)
+      })
+    })
+    
     builder.result()
   }
 
   private def writeMetricValue(
       builder: StringBuilder,
-      metric: MetricValue,
+      metric: Instrument.Snapshot[_],
       fieldName: String,
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, fieldName, metric.value, appendSeparator = false)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, fieldName, metric.value.asInstanceOf[Long], appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 
   private def writeMetricDistribution(
       builder: StringBuilder,
-      metric: MetricDistribution,
+      metric: Instrument.Snapshot[Distribution],
       percentiles: Seq[Double],
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, "count", metric.distribution.count)
-    writeIntField(builder, "sum", metric.distribution.sum)
-    writeIntField(builder, "min", metric.distribution.min)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, "count", metric.value.count)
+    writeIntField(builder, "sum", metric.value.sum)
+    writeIntField(builder, "min", metric.value.min)
 
     percentiles.foreach(p => {
       writeDoubleField(
         builder,
         "p" + String.valueOf(p),
-        metric.distribution.percentile(p).value.toDouble
+        metric.value.percentile(p).value.toDouble
       )
     })
 
-    writeIntField(builder, "max", metric.distribution.max, appendSeparator = false)
+    writeIntField(builder, "max", metric.value.max, appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 
