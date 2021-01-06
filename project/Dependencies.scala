@@ -23,7 +23,7 @@ object Dependencies {
   val catsEffectLawsTest  = "org.typelevel"              %% "cats-effect-laws"          % catsEffectVersion % "test"
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
-  val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.0.0"
+  val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.1.0"
   val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.12"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
