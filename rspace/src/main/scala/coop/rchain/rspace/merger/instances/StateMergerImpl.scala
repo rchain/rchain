@@ -18,7 +18,6 @@ import coop.rchain.rspace.history.{
 }
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.history.{
-  ColdStore,
   ContinuationsLeaf,
   DataLeaf,
   History,

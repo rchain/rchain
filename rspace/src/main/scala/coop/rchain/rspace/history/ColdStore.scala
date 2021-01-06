@@ -12,15 +12,6 @@ import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import coop.rchain.shared.AttemptOpsF.RichAttempt
 import coop.rchain.shared.syntax._
 
-trait ColdStore[F[_]] {
-  def put(hash: Blake2b256Hash, data: PersistedData): F[Unit]
-  def put(data: List[(Blake2b256Hash, PersistedData)]): F[Unit]
-
-  def get(hash: Blake2b256Hash): F[Option[PersistedData]]
-
-  def close(): F[Unit]
-}
-
 object ColdStoreInstances {
   type ColdKeyValueStore[F[_]] = KeyValueTypedStore[F, Blake2b256Hash, PersistedData]
 
