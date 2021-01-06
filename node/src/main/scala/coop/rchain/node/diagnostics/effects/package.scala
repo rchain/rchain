@@ -32,16 +32,16 @@ object Trace {
       parent match {
         case Some(st) =>
           Kamon
-            .buildSpan(s)
-            .withTag("network-id", networkId)
-            .withTag("host", host)
+            .spanBuilder(s)
+            .tag("network-id", networkId)
+            .tag("host", host)
             .asChildOf(st.ks)
             .start()
         case None =>
           Kamon
-            .buildSpan(s)
-            .withTag("network-id", networkId)
-            .withTag("host", host)
+            .spanBuilder(s)
+            .tag("network-id", networkId)
+            .tag("host", host)
             .start()
       }
     }
@@ -114,7 +114,7 @@ package object effects {
     new Metrics[F] {
       import kamon._
 
-      private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_]]()
+      private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_,_]]()
 
       private def source(name: String)(implicit ev: Metrics.Source): String = s"$ev.$name"
 
@@ -142,21 +142,21 @@ package object effects {
       def setGauge(name: String, value: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.set(value)
+            case c: metric.Gauge => c.update(value.asInstanceOf[Double])
           }
         }
 
       def incrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.increment(delta)
+            case c: metric.Gauge => c.increment(delta.asInstanceOf[Double])
           }
         }
 
       def decrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.decrement(delta)
+            case c: metric.Gauge => c.decrement(delta.asInstanceOf[Double])
           }
         }
 
