@@ -8,6 +8,7 @@ import com.typesafe.config.{Config, ConfigUtil}
 import kamon._
 import kamon.metric._
 import kamon.module.MetricReporter
+
 /**
   * Based on kamon-prometheus but without the embedded server
   */
@@ -15,7 +16,8 @@ import kamon.module.MetricReporter
 class NewPrometheusReporter extends MetricReporter {
   import NewPrometheusReporter.Configuration.{environmentTags, readConfiguration}
 
-  private val snapshotAccumulator = PeriodSnapshot.accumulator(Duration.ofDays(365 * 5), Duration.ZERO)
+  private val snapshotAccumulator =
+    PeriodSnapshot.accumulator(Duration.ofDays(365 * 5), Duration.ZERO)
 
   @volatile private var preparedScrapeData: String =
     "# The kamon-prometheus module didn't receive any data just yet.\n"
@@ -78,7 +80,8 @@ object NewPrometheusReporter {
     def environmentTags(
         reporterConfiguration: NewPrometheusReporter.Configuration
     ): Map[String, String] =
-      if (reporterConfiguration.includeEnvironmentTags) TagSetToMap.tagSetToMap(Kamon.environment.tags)
+      if (reporterConfiguration.includeEnvironmentTags)
+        TagSetToMap.tagSetToMap(Kamon.environment.tags)
       else Map.empty
 
     private def readCustomBuckets(customBuckets: Config): Map[String, Seq[java.lang.Double]] =
