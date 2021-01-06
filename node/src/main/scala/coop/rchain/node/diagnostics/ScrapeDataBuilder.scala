@@ -59,12 +59,14 @@ class ScrapeDataBuilder(
 
     append("# TYPE ").append(normalizedMetricName).append(" ").append(metricType).append("\n")
 
-    snapshots.foreach(metric => {
-      append(normalizedMetricName)
-      appendTags(metric.tags)
-      append(" ")
-      append(format(scale(metric.value, metric.settings.unit)))
-      append("\n")
+    snapshots.foreach(valueSnapshot => {
+      valueSnapshot.instruments.foreach(valueInstrument => {
+        append(normalizedMetricName)
+        appendTags(TagSetToMap.tagSetToMap(valueInstrument.tags))
+        append(" ")
+        append(format(scale(valueInstrument.value.asInstanceOf[Long], valueSnapshot.settings.unit)))
+        append("\n")
+      })
     })
   }
 
@@ -76,20 +78,26 @@ class ScrapeDataBuilder(
 
     append("# TYPE ").append(normalizedMetricName).append(" histogram").append("\n")
 
-    snapshots.foreach(metric => {
-      if (metric.distribution.count > 0) {
-        appendHistogramBuckets(
-          normalizedMetricName,
-          metric.tags,
-          metric,
-          resolveBucketConfiguration(metric)
-        )
+    snapshots.foreach(snapshot => {
+      val bucketConfig = resolveBucketConfiguration(snapshot)
+      val unit = snapshot.settings.unit
+      snapshot.instruments.foreach(distribution => {
+        val tags = TagSetToMap.tagSetToMap(distribution.tags)
+        if(distribution.value.count > 0) {
+          appendHistogramBuckets(
+            normalizedMetricName,
+            tags,
+            distribution,
+            bucketConfig,
+            unit
+          )
+        }
 
-        val count = format(metric.distribution.count.toDouble)
-        val sum   = format(scale(metric.distribution.sum, metric.unit))
-        appendTimeSerieValue(normalizedMetricName, metric.tags, count, "_count")
-        appendTimeSerieValue(normalizedMetricName, metric.tags, sum, "_sum")
-      }
+        val count = format(distribution.value.count.toDouble)
+        val sum = format(scale(distribution.value.sum, unit))
+        appendTimeSerieValue(normalizedMetricName, tags, count, "_count")
+        appendTimeSerieValue(normalizedMetricName, tags, sum, "_sum")
+      })
     })
   }
 
@@ -107,10 +115,10 @@ class ScrapeDataBuilder(
     append("\n")
   }
 
-  private def resolveBucketConfiguration(metric: MetricDistribution): Seq[java.lang.Double] =
+  private def resolveBucketConfiguration(metric: MetricSnapshot.Distributions): Seq[java.lang.Double] =
     prometheusConfig.customBuckets.getOrElse(
       metric.name,
-      metric.unit.dimension match {
+      metric.settings.unit.dimension match {
         case Time        => prometheusConfig.timeBuckets
         case Information => prometheusConfig.informationBuckets
         case _           => prometheusConfig.defaultBuckets
@@ -120,12 +128,13 @@ class ScrapeDataBuilder(
   private def appendHistogramBuckets(
       name: String,
       tags: Map[String, String],
-      metric: MetricDistribution,
-      buckets: Seq[java.lang.Double]
+      distribution: kamon.metric.Instrument.Snapshot[Distribution],
+      buckets: Seq[java.lang.Double],
+      unit: MeasurementUnit
   ): Unit = {
-    val distributionBuckets            = Distribution.bucketsIterator
+    val distributionBuckets            = distribution.value.bucketsIterator
     var currentDistributionBucket      = distributionBuckets.next()
-    var currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)
+    var currentDistributionBucketValue = scale(currentDistributionBucket.value, unit)
     var inBucketCount                  = 0L
     var leftOver                       = currentDistributionBucket.frequency
 
@@ -138,7 +147,7 @@ class ScrapeDataBuilder(
 
         while (distributionBuckets.hasNext && currentDistributionBucketValue <= configuredBucket) {
           currentDistributionBucket = distributionBuckets.next()
-          currentDistributionBucketValue = scale(currentDistributionBucket.value, metric.unit)
+          currentDistributionBucketValue = scale(currentDistributionBucket.value, unit)
 
           if (currentDistributionBucketValue <= configuredBucket) {
             inBucketCount += currentDistributionBucket.frequency
