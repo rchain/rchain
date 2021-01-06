@@ -1,6 +1,7 @@
 package coop.rchain.store
 
 import cats.Functor
+import cats.effect.Sync
 import cats.syntax.all._
 
 trait KeyValueTypedStoreSyntax {
@@ -16,6 +17,14 @@ final class KeyValueTypedStoreOps[F[_], K, V](
   def get(key: K)(implicit f: Functor[F]): F[Option[V]] = store.get(Seq(key)).map(_.head)
 
   def put(key: K, value: V): F[Unit] = store.put(Seq((key, value)))
+
+  def putIfAbsent(kvPairs: Seq[(K, V)])(implicit s: Sync[F]) =
+    for {
+      ifAbsent   <- store.exist(kvPairs.map(_._1))
+      kvIfAbsent = kvPairs zip ifAbsent
+      kvAbsent   = kvIfAbsent.filterNot(_._2)
+      _          <- store.put(kvAbsent.map(_._1))
+    } yield ()
 
   def delete(key: K)(implicit f: Functor[F]): F[Boolean] = store.delete(Seq(key)).map(_ == 1)
 

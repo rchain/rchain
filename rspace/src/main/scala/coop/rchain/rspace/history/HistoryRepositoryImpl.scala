@@ -202,7 +202,7 @@ final case class HistoryRepositoryImpl[F[_]: Sync: Parallel, C, P, A, K](
 
   private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] = {
     val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
-    leafStore.put(toBeStored).map(_ => leafs.map(_._3))
+    leafStore.putIfAbsent(toBeStored).map(_ => leafs.map(_._3))
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {

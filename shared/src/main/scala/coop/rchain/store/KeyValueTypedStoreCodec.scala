@@ -55,6 +55,13 @@ class KeyValueTypedStoreCodec[F[_]: Sync, K, V](
       values        <- valuesBytes.toVector.traverse(_.traverse(decodeValue))
     } yield values
 
+  override def exist(keys: Seq[K]): F[Seq[Boolean]] =
+    for {
+      keysBitVector <- keys.toVector.traverse(encodeKey)
+      keysBuf       = keysBitVector.map(_.toByteVector.toDirectByteBuffer)
+      valuesBytes   <- store.get(keysBuf, identity)
+    } yield valuesBytes.map(_.nonEmpty)
+
   override def put(kvPairs: Seq[(K, V)]): F[Unit] =
     for {
       pairsBitVector <- kvPairs.toVector.traverse {

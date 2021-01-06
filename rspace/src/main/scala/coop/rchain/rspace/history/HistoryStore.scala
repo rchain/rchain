@@ -25,6 +25,7 @@ object HistoryStoreInstances {
 
     override def get(key: Blake2b256Hash): F[Trie] = typedStore.getOrElse(key, EmptyTrie)
 
-    override def put(tries: List[Trie]): F[Unit] = typedStore.put(tries.map(t => (Trie.hash(t), t)))
+    override def put(tries: List[Trie]): F[Unit] =
+      typedStore.putIfAbsent(tries.map(t => (Trie.hash(t), t)))
   }
 }
