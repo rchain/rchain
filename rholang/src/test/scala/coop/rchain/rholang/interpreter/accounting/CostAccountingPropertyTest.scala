@@ -8,8 +8,8 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.Resources._
 import coop.rchain.rholang.interpreter.{PrettyPrinter => PP, _}
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{PPar, Proc}
-import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
+import coop.rchain.rholang.parser.rholang_mercury.Absyn.{PPar, Proc}
+import coop.rchain.rholang.parser.rholang_mercury.PrettyPrinter
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.{GenTools, ProcGen}
 import coop.rchain.shared.Log

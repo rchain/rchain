@@ -2,8 +2,8 @@ package coop.rchain.rholang
 
 import coop.rchain.models.PrettyPrinted
 import coop.rchain.rholang.interpreter.ParBuilderUtil
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
-import coop.rchain.rholang.syntax.rholang_mercury.PrettyPrinter
+import coop.rchain.rholang.parser.rholang_mercury.Absyn._
+import coop.rchain.rholang.parser.rholang_mercury.PrettyPrinter
 import monix.eval.Coeval
 import org.scalacheck.Arbitrary
 import org.scalacheck.Test.Parameters
