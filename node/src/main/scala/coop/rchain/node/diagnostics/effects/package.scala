@@ -114,56 +114,58 @@ package object effects {
     new Metrics[F] {
       import kamon._
 
-      private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_,_]]()
+      private val m = scala.collection.concurrent.TrieMap[String, metric.Metric[_, _]]()
 
       private def source(name: String)(implicit ev: Metrics.Source): String = s"$ev.$name"
 
       def incrementCounter(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
-        Sync[F].delay {
+        Sync[F].delay({
           m.getOrElseUpdate(source(name), Kamon.counter(source(name))) match {
-            case c: metric.Counter => c.increment(delta)
+            case c: metric.Counter => {
+              c.increment(delta).asInstanceOf[Unit]
+            }
           }
-        }
+        })
 
       def incrementSampler(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
-            case c: metric.RangeSampler => c.increment(delta)
+            case c: metric.RangeSampler => c.increment(delta).asInstanceOf[Unit]
           }
         }
 
       def sample(name: String)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.rangeSampler(source(name))) match {
-            case c: metric.RangeSampler => c.sample
+            case c: metric.RangeSampler => c.sample.asInstanceOf[Unit]
           }
         }
 
       def setGauge(name: String, value: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.update(value.asInstanceOf[Double])
+            case c: metric.Gauge => c.update(value.asInstanceOf[Double]).asInstanceOf[Unit]
           }
         }
 
       def incrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.increment(delta.asInstanceOf[Double])
+            case c: metric.Gauge => c.increment(delta.asInstanceOf[Double]).asInstanceOf[Unit]
           }
         }
 
       def decrementGauge(name: String, delta: Long)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.gauge(source(name))) match {
-            case c: metric.Gauge => c.decrement(delta.asInstanceOf[Double])
+            case c: metric.Gauge => c.decrement(delta.asInstanceOf[Double]).asInstanceOf[Unit]
           }
         }
 
       def record(name: String, value: Long, count: Long = 1)(implicit ev: Metrics.Source): F[Unit] =
         Sync[F].delay {
           m.getOrElseUpdate(source(name), Kamon.histogram(source(name))) match {
-            case c: metric.Histogram => c.record(value, count)
+            case c: metric.Histogram => c.record(value, count).asInstanceOf[Unit]
           }
         }
 

@@ -19,8 +19,6 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
   private var settings: Settings             = readConfiguration(config)
   private val clientChannel: DatagramChannel = DatagramChannel.open()
 
-  override def start(): Unit = {}
-
   override def stop(): Unit = {}
 
   override def reconfigure(config: Config): Unit =
@@ -74,12 +72,18 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
     rangeSamplers.foreach(rangeSamplerSnapshot => {
       val name = rangeSamplerSnapshot.name
       rangeSamplerSnapshot.instruments.foreach(rangeSamplerInstrument => {
-        writeMetricDistribution(builder, rangeSamplerInstrument, settings.percentiles, timestamp, name)
+        writeMetricDistribution(
+          builder,
+          rangeSamplerInstrument,
+          settings.percentiles,
+          timestamp,
+          name
+        )
         packetBuffer.appendMeasurement(builder.toString)
         builder.clear()
       })
     })
-    
+
   }
 
   private def writeMetricValue(

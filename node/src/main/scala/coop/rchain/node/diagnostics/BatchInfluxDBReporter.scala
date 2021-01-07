@@ -19,8 +19,16 @@ import monix.execution.Scheduler.Implicits.global
 import monix.reactive.subjects._
 import okhttp3._
 import org.slf4j.LoggerFactory
+//add override create to replace start
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+class BatchInfluxDBReporterFactory extends kamon.module.ModuleFactory {
+  override def create(settings: kamon.module.ModuleFactory.Settings): BatchInfluxDBReporter = {
+    val reporter = new BatchInfluxDBReporter()
+    reporter.start()
+    reporter
+  }
+}
 class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
   private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter])
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
@@ -29,7 +37,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   private val subject      = PublishSubject[String]
   private val subscription = new AtomicReference(Option.empty[Cancelable])
 
-  override def start(): Unit = {
+  def start(): Unit = {
     subscription.getAndSet(None).foreach(_.cancel())
     val s =
       Some(
@@ -49,7 +57,6 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   override def reconfigure(config: Config): Unit = {
     stop()
     settings = readSettings(config)
-    start()
   }
 
   private def readSettings(config: Config): Settings = {
@@ -82,8 +89,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   }
 
   override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit =
-    subject.onNext(translateToLineProtocol(snapshot))
-
+    subject.onNext(translateToLineProtocol(snapshot)).asInstanceOf[Unit]
   private def postMetrics(metrics: Seq[String]): Task[Unit] =
     Task.create { (_, cb) =>
       val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
@@ -145,10 +151,16 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     rangeSamplers.foreach(rangeSamplerSnapshot => {
       val name = rangeSamplerSnapshot.name
       rangeSamplerSnapshot.instruments.foreach(rangeSamplerInstrument => {
-        writeMetricDistribution(builder, rangeSamplerInstrument, settings.percentiles, timestamp, name)
+        writeMetricDistribution(
+          builder,
+          rangeSamplerInstrument,
+          settings.percentiles,
+          timestamp,
+          name
+        )
       })
     })
-    
+
     builder.result()
   }
 
@@ -195,6 +207,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   ): Unit = {
     builder
       .append(name)
+      .asInstanceOf[Unit]
 
     val tags =
       if (settings.additionalTags.nonEmpty) metricTags ++ settings.additionalTags else metricTags
@@ -210,7 +223,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       }
     }
 
-    builder.append(' ')
+    builder.append(' ').asInstanceOf[Unit]
   }
 
   private def escapeString(in: String): String =
@@ -228,9 +241,10 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append(fieldName)
       .append('=')
       .append(String.valueOf(value))
+      .asInstanceOf[Unit]
 
     if (appendSeparator)
-      builder.append(',')
+      builder.append(',').asInstanceOf[Unit]
   }
 
   def writeIntField(
@@ -244,9 +258,10 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append('=')
       .append(String.valueOf(value))
       .append('i')
+      .asInstanceOf[Unit]
 
     if (appendSeparator)
-      builder.append(',')
+      builder.append(',').asInstanceOf[Unit]
   }
 
   def writeTimestamp(builder: StringBuilder, timestamp: Long): Unit =
@@ -254,6 +269,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append(' ')
       .append(timestamp)
       .append("\n")
+      .asInstanceOf[Unit]
 
   protected def buildClient(settings: Settings): OkHttpClient = {
     val basicBuilder = new OkHttpClient.Builder()

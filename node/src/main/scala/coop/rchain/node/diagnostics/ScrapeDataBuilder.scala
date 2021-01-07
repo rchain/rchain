@@ -25,7 +25,7 @@ class ScrapeDataBuilder(
   def build(): String =
     builder.toString()
 
-  //find out what name was
+  //Adds counter snapshots to the scrape data
   def appendCounters(
       counters: Seq[MetricSnapshot.Values[Long]]
   ): ScrapeDataBuilder = {
@@ -33,6 +33,7 @@ class ScrapeDataBuilder(
     this
   }
 
+  //Adds gauge snapshots to the scrape data
   def appendGauges(
       gauges: Seq[MetricSnapshot.Values[Double]]
   ): ScrapeDataBuilder = {
@@ -40,6 +41,7 @@ class ScrapeDataBuilder(
     this
   }
 
+  //Adds histogram snapshots to the scrape data
   def appendHistograms(
       histograms: Seq[MetricSnapshot.Distributions]
   ): ScrapeDataBuilder = {
@@ -47,7 +49,7 @@ class ScrapeDataBuilder(
     this
   }
 
-  //Adds a value metric to the scrape data
+  //Adds value snapshots to the scrape data
   private def appendValueMetric(metricType: String, alwaysIncreasing: Boolean)(
       group: (String, Seq[MetricSnapshot.Values[_]])
   ): Unit = {
@@ -70,7 +72,7 @@ class ScrapeDataBuilder(
     })
   }
 
-  //Adds a distribution Metric to the scrape data
+  //Adds Distribution Snapshots to the scrape data
   private def appendDistributionMetric(group: (String, Seq[MetricSnapshot.Distributions])): Unit = {
     val (metricName, snapshots) = group
     val unit                    = snapshots.headOption.map(_.settings.unit).getOrElse(none)
@@ -80,10 +82,10 @@ class ScrapeDataBuilder(
 
     snapshots.foreach(snapshot => {
       val bucketConfig = resolveBucketConfiguration(snapshot)
-      val unit = snapshot.settings.unit
+      val unit         = snapshot.settings.unit
       snapshot.instruments.foreach(distribution => {
         val tags = TagSetToMap.tagSetToMap(distribution.tags)
-        if(distribution.value.count > 0) {
+        if (distribution.value.count > 0) {
           appendHistogramBuckets(
             normalizedMetricName,
             tags,
@@ -94,7 +96,7 @@ class ScrapeDataBuilder(
         }
 
         val count = format(distribution.value.count.toDouble)
-        val sum = format(scale(distribution.value.sum, unit))
+        val sum   = format(scale(distribution.value.sum, unit))
         appendTimeSerieValue(normalizedMetricName, tags, count, "_count")
         appendTimeSerieValue(normalizedMetricName, tags, sum, "_sum")
       })
@@ -115,7 +117,9 @@ class ScrapeDataBuilder(
     append("\n")
   }
 
-  private def resolveBucketConfiguration(metric: MetricSnapshot.Distributions): Seq[java.lang.Double] =
+  private def resolveBucketConfiguration(
+      metric: MetricSnapshot.Distributions
+  ): Seq[java.lang.Double] =
     prometheusConfig.customBuckets.getOrElse(
       metric.name,
       metric.settings.unit.dimension match {
@@ -207,7 +211,7 @@ class ScrapeDataBuilder(
   private def format(value: Double): String =
     numberFormat.format(value)
 
-  //scale to convert. toDouble since new function convert() accepts double as its parameter
+  //In newer versions of Kamon, scale is replaced by convert which must accept a double.
   private def scale(value: Long, unit: MeasurementUnit): Double = unit.dimension match {
     case Time if unit.magnitude != time.seconds.magnitude =>
       MeasurementUnit.convert(value.toDouble, unit, time.seconds)

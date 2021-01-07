@@ -12,6 +12,7 @@ import kamon.module.MetricReporter
 /**
   * Based on kamon-prometheus but without the embedded server
   */
+//add override create
 @SuppressWarnings(Array("org.wartremover.warts.Var", "org.wartremover.warts.NonUnitStatements"))
 class NewPrometheusReporter extends MetricReporter {
   import NewPrometheusReporter.Configuration.{environmentTags, readConfiguration}
@@ -22,7 +23,6 @@ class NewPrometheusReporter extends MetricReporter {
   @volatile private var preparedScrapeData: String =
     "# The kamon-prometheus module didn't receive any data just yet.\n"
 
-  override def start(): Unit                        = {}
   override def stop(): Unit                         = {}
   override def reconfigure(newConfig: Config): Unit = {}
 
