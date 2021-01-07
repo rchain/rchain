@@ -92,7 +92,7 @@ object BNFC {
         // format: off
         javaSource     := (javaSource in Compile).value,
         scalaSource    := (javaSource in Compile).value,
-        bnfcNamespace  := "coop.rchain.rholang.syntax",
+        bnfcNamespace  := "coop.rchain.rholang.ast",
         bnfcGrammarDir := baseDirectory.value / "src" / "main" / "bnfc",
         bnfcOutputDir  := (javaSource in Compile).value,
         bnfcDocDir     := baseDirectory.value / "doc" / "bnfc",
