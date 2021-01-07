@@ -62,7 +62,7 @@ import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
 import kamon._
-import kamon.system.SystemMetrics
+import kamon.instrumentation.system
 import kamon.zipkin.ZipkinReporter
 import monix.execution.Scheduler
 
@@ -452,7 +452,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _ <- Log[F].info("Shutting down transport layer...")
       _ <- servers.transportServer.stop()
       _ <- Log[F].info("Shutting down HTTP server....")
-      _ <- Sync[F].delay(Kamon.stopAllReporters())
+      _ <- Sync[F].delay(Kamon.stopModules())
       _ <- servers.httpServer.cancel.attempt
       _ <- runtimeCleanup.close()
       _ <- Log[F].info("Bringing BlockStore down ...")
@@ -569,11 +569,15 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       adminHttpFiber <- adminHttpServerFiber.start
       _ <- Sync[F].delay {
             Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
-            if (nodeConf.metrics.influxdb) Kamon.registerModule("BatchInfluxDBReporter", new BatchInfluxDBReporter())
-            if (nodeConf.metrics.influxdbUdp) Kamon.registerModule("UdpInfluxDBReporter", new UdpInfluxDBReporter())
-            if (nodeConf.metrics.prometheus) Kamon.registerModule("prometheusReporter", prometheusReporter)
-            if (nodeConf.metrics.zipkin) Kamon.registerModule("prometheusReporter", new ZipkinReporter())
-            if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
+            if (nodeConf.metrics.influxdb)
+              Kamon.registerModule("BatchInfluxDBReporter", new BatchInfluxDBReporter())
+            if (nodeConf.metrics.influxdbUdp)
+              Kamon.registerModule("UdpInfluxDBReporter", new UdpInfluxDBReporter())
+            if (nodeConf.metrics.prometheus)
+              Kamon.registerModule("prometheusReporter", prometheusReporter)
+            if (nodeConf.metrics.zipkin)
+              Kamon.registerModule("prometheusReporter", new ZipkinReporter())
+            Kamon.init()
           }
     } yield Servers(
       kademliaRPCServer,
