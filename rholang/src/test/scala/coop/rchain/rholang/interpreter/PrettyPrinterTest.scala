@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   SourcePosition,
   VarSort
 }
-import coop.rchain.rholang.parser.rholang_mercury.Absyn._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{Assertion, FlatSpec, Matchers}
 
