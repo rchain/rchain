@@ -35,7 +35,7 @@ class Runtime[F[_]: Sync] private (
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
-) extends HasCost[F] {}
+) extends HasCost[F]
 
 trait HasCost[F[_]] {
   def cost: _cost[F]
