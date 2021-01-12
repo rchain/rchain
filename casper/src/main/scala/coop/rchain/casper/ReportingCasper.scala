@@ -61,7 +61,6 @@ import coop.rchain.rholang.interpreter.{
   Runtime
 }
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{
   Blake2b256Hash,
   HotStore,
@@ -77,6 +76,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 
 import scala.concurrent.ExecutionContext
 import coop.rchain.metrics.MetricsSemaphore
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 
 import scala.collection.concurrent.TrieMap
 
@@ -129,8 +129,7 @@ object ReportingCasper {
             TaggedContinuation
           ](
             historyRepository,
-            AtomicAny(replayStore),
-            Branch.REPLAY
+            AtomicAny(replayStore)
           )
           runtime <- ReportingRuntime
                       .createWithEmptyCost[F](reporting, Seq.empty)
@@ -507,12 +506,7 @@ class ReportingRuntime[F[_]: Sync](
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
-) extends HasCost[F] {
-  def close(): F[Unit] =
-    for {
-      _ <- reportingSpace.close()
-    } yield ()
-}
+) extends HasCost[F] {}
 
 object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
