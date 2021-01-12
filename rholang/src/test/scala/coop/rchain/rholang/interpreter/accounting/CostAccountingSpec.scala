@@ -78,47 +78,45 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val ms: Metrics.Source        = Metrics.BaseSource
     implicit val kvm                       = InMemoryStoreManager[Task]
 
-    val resources = for {
-      costLog             <- Resource.liftF(costLog[Task]())
-      cost                <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      roots               <- Resource.liftF(kvm.store("roots"))
-      cold                <- Resource.liftF(kvm.store("cold"))
-      history             <- Resource.liftF(kvm.store("history"))
-      spaces              <- Resource.liftF(Runtime.setupRSpace[Task](roots, cold, history))
+    val evaluaResult = for {
+      costLog             <- costLog[Task]()
+      cost                <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      roots               <- kvm.store("roots")
+      cold                <- kvm.store("cold")
+      history             <- kvm.store("history")
+      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
       (rspace, replay, _) = spaces
-      runtimes <- {
+      runtime <- {
         implicit val c: _cost[Task] = cost
-        Resource.liftF(Runtime.create[Task]((rspace, replay), Seq.empty))
+        Runtime.create[Task]((rspace, replay), Seq.empty)
       }
-    } yield (runtimes, cost)
+      result <- {
+        implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+        implicit val c: _cost[Task]         = cost
 
-    resources
-      .use {
-        case (runtime, cost) =>
-          implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-          implicit val c: _cost[Task]         = cost
-
-          Interpreter[Task].injAttempt(
-            runtime.reducer,
-            term,
-            initialPhlo,
-            Map.empty
-          )(rand) >>= { playResult =>
-            runtime.space.createCheckpoint() >>= {
-              case Checkpoint(root, log) =>
-                runtime.replaySpace.rigAndReset(root, log) >>
-                  Interpreter[Task].injAttempt(
-                    runtime.replayReducer,
-                    term,
-                    initialPhlo,
-                    Map.empty
-                  )(rand) >>= { replayResult =>
-                  runtime.replaySpace.checkReplayData().as((playResult, replayResult))
-                }
-            }
+        Interpreter[Task].injAttempt(
+          runtime.reducer,
+          term,
+          initialPhlo,
+          Map.empty
+        )(rand) >>= { playResult =>
+          runtime.space.createCheckpoint() >>= {
+            case Checkpoint(root, log) =>
+              runtime.replaySpace.rigAndReset(root, log) >>
+                Interpreter[Task].injAttempt(
+                  runtime.replayReducer,
+                  term,
+                  initialPhlo,
+                  Map.empty
+                )(rand) >>= { replayResult =>
+                runtime.replaySpace.checkReplayData().as((playResult, replayResult))
+              }
           }
+        }
       }
-      .runSyncUnsafe(75.seconds)
+    } yield result
+
+    evaluaResult.runSyncUnsafe(75.seconds)
   }
 
   // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix
