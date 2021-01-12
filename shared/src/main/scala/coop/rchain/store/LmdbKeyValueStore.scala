@@ -56,21 +56,10 @@ final case class LmdbKeyValueStore[F[_]: Sync](
   def withWriteTxn[T](f: (Txn[ByteBuffer], Dbi[ByteBuffer]) => T): F[T] =
     withTxnSingleThread(isWrite = true)(f)
 
-  // lmdb can only work with direct buffer
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
-  private def forceDirectBuffer(b: ByteBuffer): ByteBuffer =
-    if (b.isDirect) b
-    else {
-      val buffer: ByteBuffer = ByteBuffer.allocateDirect(b.remaining())
-      buffer.put(b)
-      buffer.flip()
-      buffer
-    }
-
   // GET
   override def get[T](keys: Seq[ByteBuffer], fromBuffer: ByteBuffer => T): F[Seq[Option[T]]] =
     withTxnSingleThread(isWrite = false) { (txn, dbi) =>
-      keys.map(x => Option(dbi.get(txn, forceDirectBuffer(x))).map(fromBuffer))
+      keys.map(x => Option(dbi.get(txn, x)).map(fromBuffer))
     }
 
   // PUT
@@ -78,7 +67,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
     // Buffers for key and value created outside of transaction.
     // Why this helps (or why corruption happens) is not clear but this code will prevent corruption of the database.
     val byteBuffers = kvPairs.map {
-      case (key, value) => (forceDirectBuffer(key), forceDirectBuffer(toBuffer(value)))
+      case (key, value) => (key, toBuffer(value))
     }
     withWriteTxn { (txn, dbi) =>
       byteBuffers.foreach {
@@ -91,7 +80,7 @@ final case class LmdbKeyValueStore[F[_]: Sync](
   // DELETE
   override def delete(keys: Seq[ByteBuffer]): F[Int] =
     withWriteTxn { (txn, dbi) =>
-      keys.foldLeft(0)((acc, key) => if (dbi.delete(txn, forceDirectBuffer(key))) acc + 1 else acc)
+      keys.foldLeft(0)((acc, key) => if (dbi.delete(txn, key)) acc + 1 else acc)
     }
 
   // ITERATE
