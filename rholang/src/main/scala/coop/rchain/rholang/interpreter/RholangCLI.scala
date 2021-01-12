@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Resources
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}

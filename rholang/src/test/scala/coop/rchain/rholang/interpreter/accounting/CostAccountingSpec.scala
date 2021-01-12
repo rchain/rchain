@@ -10,7 +10,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint

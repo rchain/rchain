@@ -6,7 +6,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, InterpreterUtil}
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import coop.rchain.shared.{Log, Resources}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

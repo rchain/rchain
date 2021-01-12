@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import org.scalatest.Matchers._
 
 object InterpreterUtil {

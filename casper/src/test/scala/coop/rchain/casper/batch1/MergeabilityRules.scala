@@ -4,7 +4,7 @@ import cats.Monoid
 import cats.implicits._
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.{BindPattern, Expr, ListParWithRandom, Par, TaggedContinuation}
