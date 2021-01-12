@@ -23,14 +23,6 @@ trait HistoryRepository[F[_], C, P, A, K] extends HistoryReader[F, C, P, A, K] {
   def importer: F[RSpaceImporter[F]]
 }
 
-final case class LMDBStorageConfig(
-    path: String,
-    mapSize: Long,
-    maxReaders: Int = 2048,
-    maxDbs: Int = 2,
-    flags: List[EnvFlags] = Nil,
-    dbNamePrefix: String = "db"
-)
 object HistoryRepositoryInstances {
 
   def lmdbRepository[F[_]: Concurrent: Parallel, C, P, A, K](
