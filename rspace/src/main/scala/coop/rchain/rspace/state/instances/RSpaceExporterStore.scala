@@ -7,6 +7,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.{HistoryStoreInstances, RootsStoreInstances}
 import coop.rchain.rspace.state.RSpaceExporter
+import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.state.TrieNode
 import coop.rchain.store.KeyValueStore
 
@@ -34,7 +35,7 @@ object RSpaceExporterStore {
         fromBuffer: ByteBuffer => Value
     ): F[Seq[(Blake2b256Hash, Value)]] =
       for {
-        loaded <- store.get(keys.map(_.bytes.toByteBuffer), fromBuffer)
+        loaded <- store.get(keys.map(_.bytes.toDirectByteBuffer), fromBuffer)
       } yield keys.zip(loaded).filter(_._2.nonEmpty).map(_.map(_.get))
 
     override def getHistoryItems[Value](
