@@ -506,7 +506,7 @@ class ReportingRuntime[F[_]: Sync](
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: Runtime.InvalidBlocks[F]
-) extends HasCost[F] {}
+) extends HasCost[F]
 
 object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
