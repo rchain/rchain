@@ -40,7 +40,10 @@ object RSpaceImporterStore {
         data: Seq[(Blake2b256Hash, Value)],
         toBuffer: Value => ByteBuffer
     ): F[Unit] =
-      valueStore.put(data.map { case (hash, value) => (hash.bytes.toDirectByteBuffer, value) }, toBuffer)
+      valueStore.put(
+        data.map { case (hash, value) => (hash.bytes.toDirectByteBuffer, value) },
+        toBuffer
+      )
 
     override def setRoot(key: Blake2b256Hash): F[Unit] =
       roots.recordRoot(key)
