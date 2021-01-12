@@ -1,4 +1,4 @@
-package coop.rchain.shared.store
+package coop.rchain.store
 
 import java.nio.file.Path
 
@@ -6,8 +6,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
 import coop.rchain.shared.Log
-import coop.rchain.shared.store.LmdbDirStoreManager._
-import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, LmdbStoreManager}
+import coop.rchain.store.LmdbDirStoreManager._
 
 object LmdbDirStoreManager {
   def apply[F[_]: Concurrent: Log](

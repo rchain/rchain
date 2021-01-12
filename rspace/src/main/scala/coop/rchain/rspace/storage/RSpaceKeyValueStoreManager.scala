@@ -4,8 +4,8 @@ import java.nio.file.Path
 
 import cats.effect.Concurrent
 import coop.rchain.shared.Log
-import coop.rchain.shared.store.LmdbDirStoreManager._
-import coop.rchain.shared.store.LmdbDirStoreManager
+import coop.rchain.store.LmdbDirStoreManager._
+import coop.rchain.store.LmdbDirStoreManager
 import coop.rchain.store.{KeyValueStoreManager}
 
 object RSpaceKeyValueStoreManager {
