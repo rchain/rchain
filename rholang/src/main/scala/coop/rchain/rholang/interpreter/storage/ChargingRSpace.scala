@@ -147,6 +147,5 @@ object ChargingRSpace {
           .foldLeft(Cost(0))(_ + _)
       }
 
-      override def close(): F[Unit] = space.close()
     }
 }
