@@ -27,6 +27,7 @@ import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterSt
 import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Serialize
+import coop.rchain.store.{InMemoryKeyValueStore, InMemoryStoreManager, KeyValueStoreManager}
 
 import scala.concurrent.duration._
 
@@ -36,27 +37,20 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-  def lmdbConfig =
-    StoreConfig(
-      Files.createTempDirectory(dbDir, "test-"),
-      1024L * 1024L * 4096L,
-      2,
-      2048,
-      List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-    )
+  val kvm = InMemoryStoreManager[Task]
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
     for {
-      historyLmdbStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      historyStore     = HistoryStoreInstances.historyStore(historyLmdbStore)
-      coldLmdbStore    <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      coldStore        = ColdStoreInstances.coldStore(coldLmdbStore)
-      rootsLmdbStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
-      rootRepository   = new RootRepository[Task](rootsStore)
-      emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
-      exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
+      historyLmdbKVStore <- kvm.store("history")
+      historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
+      coldLmdbKVStore    <- kvm.store("cold")
+      coldStore          = ColdStoreInstances.coldStore(coldLmdbKVStore)
+      rootsLmdbKVStore   <- kvm.store("roots")
+      rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
+      rootRepository     = new RootRepository[Task](rootsStore)
+      emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
+      exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -88,6 +82,7 @@ class InmemHistoryRepositoryGenerativeSpec
       )
     repository.pure[Task]
   }
+
 }
 
 abstract class HistoryRepositoryGenerativeDefinition
@@ -146,7 +141,9 @@ abstract class HistoryRepositoryGenerativeDefinition
       case InsertJoins(channel: String, joins) =>
         repo.getJoins(channel).map(checkJoins(_, joins))
       case InsertContinuations(channels, conts) =>
-        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(checkContinuations(_, conts))
+        repo
+          .getContinuations(channels.asInstanceOf[Seq[String]])
+          .map(checkContinuations(_, conts))
       case DeleteData(channel: String) =>
         repo.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>

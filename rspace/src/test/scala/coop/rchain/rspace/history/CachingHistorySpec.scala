@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.TestData._
 import monix.eval.Task
@@ -25,7 +26,7 @@ class CachingHistorySpec
       f: (MergingHistory[Task], CachingHistoryStore[Task]) => Task[Unit]
   ): Unit = {
     val (history, caching) = create
-    runEffect(f(history, caching).flatMap(_ => history.close()))
+    runEffect(f(history, caching).flatMap(_ => ().pure[Task]))
   }
 
   /**

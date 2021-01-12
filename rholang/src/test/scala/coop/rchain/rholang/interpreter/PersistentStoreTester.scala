@@ -8,7 +8,6 @@ import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuati
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.{Cost, CostAccounting}
 import coop.rchain.rspace.RSpace
-import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import monix.eval.Task
 import coop.rchain.catscontrib.TaskContrib._
@@ -18,6 +17,7 @@ import monix.execution.Scheduler.Implicits.global
 import scala.concurrent.duration._
 import coop.rchain.shared.PathOps._
 import coop.rchain.rholang.interpreter.storage._
+import coop.rchain.store.InMemoryStoreManager
 
 final case class TestFixture(space: RhoISpace[Task], reducer: DebruijnInterpreter[Task])
 
@@ -32,6 +32,10 @@ trait PersistentStoreTester {
 
     implicit val cost = CostAccounting.emptyCost[Task].unsafeRunSync
     implicit val m    = matchListPar[Task]
+    implicit val kvm  = InMemoryStoreManager[Task]
+    val roots         = kvm.store("roots").unsafeRunSync
+    val cold          = kvm.store("cold").unsafeRunSync
+    val history       = kvm.store("history").unsafeRunSync
     val space = RSpace
       .create[
         Task,
@@ -39,14 +43,13 @@ trait PersistentStoreTester {
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](dbDir, 1024L * 1024L * 1024L, Branch("test"))
+      ](roots, cold, history)
       .unsafeRunSync
     val reducer = RholangOnlyDispatcher.create[Task, Task.Par](space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
     try {
       f(TestFixture(space, reducer))
     } finally {
-      space.close()
       dbDir.recursivelyDelete()
     }
   }
@@ -56,16 +59,17 @@ trait PersistentStoreTester {
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     mkRhoISpace[Task]("rholang-interpreter-test-")
-      .use { rspace =>
-        for {
-          cost <- CostAccounting.emptyCost[Task]
-          reducer = {
-            implicit val c = cost
-            RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
-          }
-          _   <- cost.set(Cost.UNSAFE_MAX)
-          res <- f(rspace, reducer)
-        } yield res
+      .use {
+        case (rspace, _) =>
+          for {
+            cost <- CostAccounting.emptyCost[Task]
+            reducer = {
+              implicit val c = cost
+              RholangOnlyDispatcher.create[Task, Task.Par](rspace)._2
+            }
+            _   <- cost.set(Cost.UNSAFE_MAX)
+            res <- f(rspace, reducer)
+          } yield res
       }
       .runSyncUnsafe(3.seconds)
   }

@@ -17,6 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared.Log
+import coop.rchain.shared.store.LmdbDirStoreManager.gb
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -55,9 +56,10 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      rhr            <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(rhr._1))
-    } yield (runtimeManager, rhr._2)
+      runtimes              <- mkRuntimeAt[F](storageDirectory)(storageSize)
+      (runtime, history, _) = runtimes
+      runtimeManager        <- Resource.liftF(RuntimeManager.fromRuntime(runtime))
+    } yield (runtimeManager, history)
   }
 
   def mkBlockStoreAt[F[_]: Concurrent: Metrics: Sync: Log](path: Path): Resource[F, BlockStore[F]] =
@@ -69,7 +71,7 @@ object Resources {
       path: Path
   ): Resource[F, BlockDagStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RNodeKeyValueStoreManager[F](path, 1 * gb)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[F]
@@ -80,7 +82,7 @@ object Resources {
       path: Path
   ): Resource[F, CasperBufferStorage[F]] =
     Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
+      storeManager <- RNodeKeyValueStoreManager[F](path, 1 * gb)
       casperBufferStorage <- {
         implicit val kvm = storeManager
         CasperBufferKeyValueStorage.create[F]

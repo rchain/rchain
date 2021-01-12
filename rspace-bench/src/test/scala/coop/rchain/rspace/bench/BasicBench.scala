@@ -14,9 +14,9 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.{Match, RSpace, ReplayRSpace, _}
-import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{State => _, _}
@@ -113,8 +113,11 @@ object BasicBench {
     implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
-
-    private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+    implicit val kvm                                            = InMemoryStoreManager[Task]
+    val roots                                                   = kvm.store("roots").runSyncUnsafe()
+    val cold                                                    = kvm.store("cold").runSyncUnsafe()
+    val history                                                 = kvm.store("history").runSyncUnsafe()
+    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
 
     val testSpace: ISpace[
       Task,
@@ -130,11 +133,7 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](
-          dbDir,
-          1024L * 1024L * 1024L,
-          Branch("bench")
-        )
+        ](roots, cold, history)
         .unsafeRunSync
 
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
@@ -259,9 +258,7 @@ object BasicBench {
       generate[TaggedContinuation]()(arbitraryContinuation).toVector
 
     @TearDown
-    def tearDown(): Unit = {
-      testSpace.close()
+    def tearDown(): Unit =
       dbDir.recursivelyDelete()
-    }
   }
 }

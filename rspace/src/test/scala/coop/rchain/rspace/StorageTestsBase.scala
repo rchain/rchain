@@ -14,24 +14,18 @@ import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.history.{
-  HistoryRepository,
-  HistoryRepositoryInstances,
-  LMDBRSpaceStorageConfig,
-  StoreConfig
-}
+import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
 import org.scalatest._
 
-import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import monix.eval._
 import monix.execution.atomic.AtomicAny
-import org.lmdbjava.EnvFlags
 import coop.rchain.metrics.NoopSpan
+import coop.rchain.store.InMemoryStoreManager
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
@@ -64,37 +58,28 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   def run[S](f: F[S]): S
 
   protected def setupTestingSpace[S, STORE](
-      createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
+      createISpace: (HR, ST) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]
-  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): S = {
-    val branch = Branch("inmem")
+  )(
+      implicit codecC: Codec[C],
+      codecP: Codec[P],
+      codecA: Codec[A],
+      codecK: Codec[K]
+  ): S = {
 
-    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-    val mapSize: Long = 1024L * 1024L * 1024L
-
-    def storeConfig(name: String): StoreConfig =
-      StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)),
-        mapSize,
-        2,
-        2048,
-        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-      )
-
-    val config = LMDBRSpaceStorageConfig(
-      storeConfig("cold"),
-      storeConfig("history"),
-      storeConfig("roots")
-    )
+    val kvm = InMemoryStoreManager[F]
 
     run(for {
-      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
+      roots   <- kvm.store("roots")
+      cold    <- kvm.store("cold")
+      history <- kvm.store("history")
+      historyRepository <- HistoryRepositoryInstances
+                            .lmdbRepository[F, C, P, A, K](roots, cold, history)
       cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
-      spaceAndStore        <- createISpace(historyRepository, testStore, branch)
+      spaceAndStore        <- createISpace(historyRepository, testStore)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)
-      _                    <- Sync[F].delay(dbDir.recursivelyDelete())
     } yield {
       res
     })
@@ -142,11 +127,11 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
     StringExamples.implicits.stringClosureSerialize.toSizeHeadCodec
 
   override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
-    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
-      (hr, ts, b) => {
+    val creator: (HR, ST) => F[(ST, AtST, T)] =
+      (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore, b)
+          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

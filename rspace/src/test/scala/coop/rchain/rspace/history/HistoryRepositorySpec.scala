@@ -3,10 +3,8 @@ package coop.rchain.rspace.history
 import java.nio.ByteBuffer
 
 import cats.effect.Sync
-import cats.implicits._
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.rspace.{
   util,
@@ -19,17 +17,22 @@ import coop.rchain.rspace.{
   InsertData,
   InsertJoins
 }
-import coop.rchain.state.TrieNode
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
-import scodec.Codec
 import scodec.bits.ByteVector
-
-import scala.collection.SortedSet
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
+import cats.implicits._
+import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.state.TrieNode
+import coop.rchain.store.InMemoryKeyValueStore
+import coop.rchain.shared.syntax._
+import scodec.Codec
+
+import scala.collection.SortedSet
 
 class HistoryRepositorySpec
     extends FlatSpec
@@ -211,25 +214,14 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           roots += key
         }
 
-      override def close(): Task[Unit] = Task.delay(())
     }
 
   def rootRepository =
     new RootRepository[Task](inmemRootsStore)
 
-  def inMemColdStore: ColdStore[Task] = new ColdStore[Task] {
-    val data: TrieMap[Blake2b256Hash, PersistedData] = TrieMap.empty
-
-    override def put(hash: Blake2b256Hash, d: PersistedData): Task[Unit] =
-      Task.delay { data.put(hash, d) }
-
-    override def get(hash: Blake2b256Hash): Task[Option[PersistedData]] =
-      Task.delay { data.get(hash) }
-
-    override def close(): Task[Unit] = Task.delay(())
-
-    override def put(list: List[(Blake2b256Hash, PersistedData)]): Task[Unit] =
-      list.traverse_(Function.tupled(put))
+  def inMemColdStore: ColdKeyValueStore[Task] = {
+    val store = InMemoryKeyValueStore[Task]
+    store.toTypedStore(codecPureBlake2b256Hash, codecPersistedData)
   }
 
   def emptyExporter[F[_]: Sync]: RSpaceExporter[F] = new RSpaceExporter[F] {

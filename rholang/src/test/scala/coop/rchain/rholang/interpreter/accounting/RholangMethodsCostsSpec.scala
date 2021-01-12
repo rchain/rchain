@@ -11,9 +11,9 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -826,7 +826,10 @@ class RholangMethodsCostsSpec
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
-
+  implicit val kvm                        = InMemoryStoreManager[Task]
+  val roots                               = kvm.store("roots").runSyncUnsafe()
+  val cold                                = kvm.store("cold").runSyncUnsafe()
+  val history                             = kvm.store("history").runSyncUnsafe()
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage._
@@ -839,17 +842,12 @@ class RholangMethodsCostsSpec
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](
-        dbDir,
-        mapSize = 1024 * 1024,
-        Branch("rholang-methods-cost-test")
-      )
+      ](roots, cold, history)
       .unsafeRunSync
   }
 
   protected override def afterAll(): Unit = {
     import coop.rchain.shared.PathOps._
-    space.close()
     dbDir.recursivelyDelete()
   }
 

@@ -20,6 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -214,21 +215,25 @@ class CryptoChannelsSpec
   protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt                           = scala.util.Random.nextInt
     val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
-    val size                                = 1024L * 1024 * 1024
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+    implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      sar     <- Runtime.setupRSpace[Task](dbDir, size)
-      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      _       <- runtime.cost.set(Cost.UNSAFE_MAX)
+      roots                <- kvm.store("roots")
+      cold                 <- kvm.store("cold")
+      history              <- kvm.store("history")
+      spaces               <- Runtime.setupRSpace[Task](roots, cold, history)
+      (rspace, replay, hr) = spaces
+      runtime              <- Runtime.createWithEmptyCost[Task]((rspace, replay), Seq.empty)
+      _                    <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
     try {
       test((runtime.reducer, runtime.space))
     } finally {
-      runtime.close().unsafeRunSync
+      kvm.shutdown.runSyncUnsafe()
       dbDir.recursivelyDelete()
     }
   }

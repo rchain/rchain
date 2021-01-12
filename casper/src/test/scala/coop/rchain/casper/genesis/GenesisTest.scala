@@ -21,10 +21,12 @@ import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 
 class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
@@ -276,12 +278,16 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      sar     <- Runtime.setupRSpace[Task](storePath, storageSize)
-      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      result  <- body(runtime, genesisPath, time)
-      _       <- runtime.close()
-      _       <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _       <- Sync[Task].delay { gp.recursivelyDelete() }
+      kvsManager          <- RSpaceKeyValueStoreManager[Task](storePath, storageSize)
+      roots               <- kvsManager.store("roots")
+      cold                <- kvsManager.store("cold")
+      history             <- kvsManager.store("history")
+      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+      (rspace, replay, _) = spaces
+      runtime             <- Runtime.createWithEmptyCost((rspace, replay))
+      result              <- body(runtime, genesisPath, time)
+      _                   <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _                   <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 

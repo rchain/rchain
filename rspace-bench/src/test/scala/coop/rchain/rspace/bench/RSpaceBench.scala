@@ -11,10 +11,10 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -99,20 +99,18 @@ class RSpaceBench extends RSpaceBenchBase {
   implicit val logF: Log[Id]            = new Log.NOPLog[Id]
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
   implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
-
+  implicit val kvm                      = InMemoryStoreManager[Id]
+  val roots                             = kvm.store("roots")
+  val cold                              = kvm.store("cold")
+  val history                           = kvm.store("history")
   @Setup
   def setup() = {
     dbDir = Files.createTempDirectory("rchain-rspace-bench-")
-    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](
-      dbDir,
-      mapSize,
-      Branch.MASTER
-    )
+    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](roots, cold, history)
   }
 
   @TearDown
   def tearDown() = {
-    space.close()
     dbDir.recursivelyDelete()
     ()
   }

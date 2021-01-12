@@ -6,6 +6,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
+import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.interpreter.accounting.utils.costLog
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 import coop.rchain.rspace.SoftCheckpoint
@@ -120,21 +121,14 @@ class ReplaySpec extends FlatSpec with Matchers {
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val ms: Metrics.Source        = Metrics.BaseSource
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      cost    <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      sar     <- Resource.liftF(Runtime.setupRSpace[Task](dir, 1024L * 1024 * 1024))
-      runtime <- {
-        implicit val c: _cost[Task] = cost
-        Resource.make(Runtime.create[Task]((sar._1, sar._2), Nil))(_.close())
-      }
-    } yield (runtime, costLog)
+      dir      <- Resources.mkTempDir[Task]("cost-accounting-spec-")
+      runtimes <- Resources.mkRuntimeAt(dir)(1024L * 1024 * 1024)
+    } yield (runtimes._1)
 
     resources.use {
-      case (runtime, _) =>
+      case (runtime) =>
         // Execute operation
         op(runtime)
     }
