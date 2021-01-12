@@ -20,6 +20,7 @@ import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 
 import scala.annotation.tailrec
 import scala.concurrent.Await
@@ -65,9 +66,13 @@ object RholangCLI {
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
     implicit val parF: Parallel[Task]    = Task.catsParallel
+    implicit val kvm                     = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      sarAndHR           <- Runtime.setupRSpace[Task](conf.dataDir(), conf.mapSize())
+      roots              <- kvm.store("roots")
+      cold               <- kvm.store("cold")
+      history            <- kvm.store("history")
+      sarAndHR           <- Runtime.setupRSpace[Task](roots, cold, history)
       (space, replay, _) = sarAndHR
       runtime            <- Runtime.createWithEmptyCost[Task]((space, replay))
       _                  <- Runtime.bootstrapRegistry[Task](runtime)
@@ -101,7 +106,7 @@ object RholangCLI {
         List()
       }
     } finally {
-      runtime.close().unsafeRunSync
+      kvm.shutdown.runSyncUnsafe()
     }
     if (!problems.isEmpty) {
       System.exit(1)
