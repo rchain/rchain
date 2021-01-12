@@ -249,8 +249,6 @@ object AddressBookExample {
     val cold    = keyValueStoreManager.store("cold")
     val history = keyValueStoreManager.store("history")
     // Here we define a temporary place to put the store's files
-//    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
-
     // Let's define our store
     val space =
       RSpace.create[Id, Channel, Pattern, Entry, Printer](roots, cold, history)
@@ -341,7 +339,6 @@ object AddressBookExample {
     val cold                           = keyValueStoreManager.store("cold")
     val history                        = keyValueStoreManager.store("history")
     // Here we define a temporary place to put the store's files
-//    val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
     val space =
       RSpace.create[Id, Channel, Pattern, Entry, Printer](roots, cold, history)

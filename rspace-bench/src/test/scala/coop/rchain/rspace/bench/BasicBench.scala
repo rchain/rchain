@@ -13,6 +13,7 @@ import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace, ReplayRSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
@@ -113,11 +114,11 @@ object BasicBench {
     implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
-    implicit val kvm                                            = InMemoryStoreManager[Task]
+    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
+    implicit val kvm                                            = RSpaceKeyValueStoreManager[Task](dbDir).runSyncUnsafe()
     val roots                                                   = kvm.store("roots").runSyncUnsafe()
     val cold                                                    = kvm.store("cold").runSyncUnsafe()
     val history                                                 = kvm.store("history").runSyncUnsafe()
-    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
 
     val testSpace: ISpace[
       Task,

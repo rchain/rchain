@@ -11,6 +11,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.rspace.util._
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.Log
@@ -95,19 +96,17 @@ class RSpaceBench extends RSpaceBenchBase {
   val mapSize: Long  = 1024L * 1024L * 1024L
   val noTls: Boolean = false
 
-  var dbDir: Path                       = null
   implicit val logF: Log[Id]            = new Log.NOPLog[Id]
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
   implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
-  implicit val kvm                      = InMemoryStoreManager[Id]
+  val dbDir                             = Files.createTempDirectory("rchain-rspace-bench-")
+  val kvm                               = RSpaceKeyValueStoreManager(dbDir)
   val roots                             = kvm.store("roots")
   val cold                              = kvm.store("cold")
   val history                           = kvm.store("history")
   @Setup
-  def setup() = {
-    dbDir = Files.createTempDirectory("rchain-rspace-bench-")
+  def setup() =
     space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](roots, cold, history)
-  }
 
   @TearDown
   def tearDown() = {

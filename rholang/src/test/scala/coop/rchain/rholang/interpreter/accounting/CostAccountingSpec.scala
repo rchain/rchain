@@ -2,12 +2,10 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats.data.Chain
 import cats.effect._
-import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
@@ -38,13 +36,13 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      costLog              <- Resource.liftF(costLog[Task]())
-      cost                 <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      roots                <- Resource.liftF(kvm.store("roots"))
-      cold                 <- Resource.liftF(kvm.store("cold"))
-      history              <- Resource.liftF(kvm.store("history"))
-      spaces               <- Resource.liftF(Runtime.setupRSpace[Task](roots, cold, history))
-      (rspace, replay, hr) = spaces
+      costLog             <- Resource.liftF(costLog[Task]())
+      cost                <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
+      roots               <- Resource.liftF(kvm.store("roots"))
+      cold                <- Resource.liftF(kvm.store("cold"))
+      history             <- Resource.liftF(kvm.store("history"))
+      spaces              <- Resource.liftF(Runtime.setupRSpace[Task](roots, cold, history))
+      (rspace, replay, _) = spaces
       runtime <- {
         // naming noOpCostLog because want to override package scope noOpCostLog val
         implicit val c: _cost[Task] = cost

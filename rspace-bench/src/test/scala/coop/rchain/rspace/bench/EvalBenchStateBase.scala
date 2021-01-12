@@ -13,6 +13,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, Runtime}
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.{Coeval, Task}
@@ -24,7 +25,7 @@ trait EvalBenchStateBase {
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
-  implicit val kvm                        = InMemoryStoreManager[Task]
+  implicit val kvm                        = RSpaceKeyValueStoreManager[Task](dbDir).runSyncUnsafe()
 
   val rhoScriptSource: String
 
