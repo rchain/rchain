@@ -1,7 +1,6 @@
 package coop.rchain.rspace
 
 import java.lang
-import java.nio.file.{Files, Path}
 
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
@@ -11,20 +10,18 @@ import cats.Parallel
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.metrics.implicits._
-import coop.rchain.rspace.history.{Branch, HistoryRepository}
+import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal.{ConsumeCandidate, _}
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.{Cell, Log, Serialize}
+import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.shared.SyncVarOps._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.store.{KeyValueStore}
 import monix.execution.atomic.AtomicAny
-import scodec.Codec
 
 class RSpace[F[_], C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]],
-    branch: Branch
+    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
     implicit
     serializeC: Serialize[C],
@@ -38,7 +35,7 @@ class RSpace[F[_], C, P, A, K](
     scheduler: ExecutionContext,
     metricsF: Metrics[F],
     val spanF: Span[F]
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom, branch)
+) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with ISpace[F, C, P, A, K] {
 
   def store: HotStore[F, C, P, A, K] = storeAtom.get()
@@ -239,8 +236,7 @@ object RSpace {
 
   def create[F[_], C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K],
-      branch: Branch
+      store: HotStore[F, C, P, A, K]
   )(
       implicit
       sc: Serialize[C],
@@ -256,11 +252,15 @@ object RSpace {
       spanF: Span[F]
   ): F[ISpace[F, C, P, A, K]] = {
     val space: ISpace[F, C, P, A, K] =
-      new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store), branch)
+      new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
     space.pure[F]
   }
 
-  def createWithReplay[F[_], C, P, A, K](dataDir: Path, mapSize: Long)(
+  def createWithReplay[F[_], C, P, A, K](
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F]
+  )(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -274,25 +274,26 @@ object RSpace {
       metricsF: Metrics[F],
       spanF: Span[F],
       par: Parallel[F]
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
-    val v2Dir = dataDir.resolve("v2")
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup                  <- setUp[F, C, P, A, K](v2Dir, mapSize, Branch.MASTER)
+      setup <- setUp[F, C, P, A, K](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore
+              )
       (historyReader, store) = setup
-      space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), Branch.MASTER)
+      space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
       replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
-        AtomicAny(replayStore),
-        Branch.REPLAY
+        AtomicAny(replayStore)
       )
     } yield (space, replay, historyReader)
-  }
 
   def create[F[_], C, P, A, K](
-      dataDir: Path,
-      mapSize: Long,
-      branch: Branch
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -308,15 +309,23 @@ object RSpace {
       spanF: Span[F],
       par: Parallel[F]
   ): F[ISpace[F, C, P, A, K]] =
-    setUp[F, C, P, A, K](dataDir, mapSize, branch).map {
-      case (historyReader, store) =>
-        new RSpace[F, C, P, A, K](historyReader, AtomicAny(store), branch)
-    }
+    for {
+      setup <- setUp[F, C, P, A, K](
+                rootsKeyValueStore,
+                coldKeyValueStore,
+                historyKeyValueStore
+              )
+      (historyReader, store) = setup
+      space = new RSpace[F, C, P, A, K](
+        historyReader,
+        AtomicAny(store)
+      )
+    } yield space
 
   def setUp[F[_], C, P, A, K](
-      dataDir: Path,
-      mapSize: Long,
-      branch: Branch
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -333,23 +342,13 @@ object RSpace {
     implicit val ca = sa.toSizeHeadCodec
     implicit val ck = sk.toSizeHeadCodec
 
-    val coldStore    = StoreConfig(dataDir.resolve("cold"), mapSize)
-    val historyStore = StoreConfig(dataDir.resolve("history"), mapSize)
-    val rootsStore   = StoreConfig(dataDir.resolve("roots"), mapSize)
-    val config       = LMDBRSpaceStorageConfig(coldStore, historyStore, rootsStore)
-
-    def checkCreateDir(dir: Path): F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dir))
-        _         <- if (notexists) Sync[F].delay(Files.createDirectories(dir)) else ().pure[F]
-      } yield ()
-
     for {
-      _ <- checkCreateDir(coldStore.path)
-      _ <- checkCreateDir(historyStore.path)
-      _ <- checkCreateDir(rootsStore.path)
       historyReader <- HistoryRepositoryInstances
-                        .lmdbRepository[F, C, P, A, K](config)
+                        .lmdbRepository[F, C, P, A, K](
+                          rootsKeyValueStore,
+                          coldKeyValueStore,
+                          historyKeyValueStore
+                        )
       store <- HotStore.empty(historyReader)
     } yield (historyReader, store)
   }
