@@ -8,7 +8,9 @@ import cats.syntax.all._
 import scodec.Codec
 
 trait KeyValueStoreSyntax {
-  implicit final def sharedSyntaxKeyValueStore[F[_]](store: KeyValueStore[F]): KeyValueStoreOps[F] =
+  implicit final def sharedSyntaxKeyValueStore[F[_]](
+      store: KeyValueStore[F]
+  ): KeyValueStoreOps[F] =
     new KeyValueStoreOps[F](store)
 }
 
@@ -23,6 +25,16 @@ final class KeyValueStoreOps[F[_]](
 
   def put1[T](key: ByteBuffer, value: T, toBuffer: T => ByteBuffer): F[Unit] =
     store.put(Seq((key, value)), toBuffer)
+
+  def putIfAbsent[T](kvPairs: Seq[(ByteBuffer, T)], toBuffer: T => ByteBuffer)(
+      implicit s: Sync[F]
+  ): F[Unit] =
+    for {
+      values          <- store.get(kvPairs.map(_._1), identity)
+      keyValues       = kvPairs zip values
+      absentKeyValues = keyValues.filter { case (_, optV) => optV.isEmpty }
+      _               <- store.put(absentKeyValues.map(_._1), toBuffer)
+    } yield ()
 
   def delete1(key: ByteBuffer)(implicit f: Functor[F]): F[Boolean] =
     store.delete(Seq(key)).map(_ == 1)
