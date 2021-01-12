@@ -1,16 +1,16 @@
 package coop.rchain.rspace.state.exporters
 
-import java.nio.file.{Files, Path}
+import java.nio.file.{Path}
 
 import cats.Monad
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent}
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.{Store, StoreConfig, StoreInstances}
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.shared.{Log, Stopwatch}
+import coop.rchain.store.{KeyValueStore, LmdbStoreManager}
 import fs2.Stream
 import scodec.Codec
 import scodec.bits.ByteVector
@@ -24,7 +24,7 @@ object RSpaceExporterDisk {
       chunkSize: Int
   )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
-    def writeChunkRec(historyStore: Store[F], dataStore: Store[F])(
+    def writeChunkRec(historyStore: KeyValueStore[F], dataStore: KeyValueStore[F])(
         p: Param
     ): F[Either[Param, Unit]] = {
       val (startPath, chunk) = p
@@ -46,7 +46,7 @@ object RSpaceExporterDisk {
             startPath,
             chunkSize,
             skip,
-            k => historyStore.get(Seq(k), ByteVector(_)).map(_.head)
+            k => historyStore.get(Seq(k.bytes.toByteBuffer), ByteVector(_)).map(_.head)
           )
         )
 
@@ -54,10 +54,15 @@ object RSpaceExporterDisk {
         _ <- Stream(
               validationProcess,
               Stopwatch.time(Log[F].info(_))("Write history items")(
-                historyStore.put[ByteVector](historyItems, _.toDirectByteBuffer)
+                historyStore.put[ByteVector](historyItems.map {
+                  case (b, v) => (b.bytes.toByteBuffer, v)
+                }, _.toDirectByteBuffer)
               ),
               Stopwatch.time(Log[F].info(_))("Write data items")(
-                dataStore.put[ByteVector](dataItems, _.toDirectByteBuffer)
+                dataStore.put[ByteVector](
+                  dataItems.map { case (b, v) => (b.bytes.toByteBuffer, v) },
+                  _.toDirectByteBuffer
+                )
               )
             ).map(Stream.eval).parJoinUnbounded.compile.drain
 
@@ -70,26 +75,16 @@ object RSpaceExporterDisk {
 
     for {
       // Lmdb restore history
-      lmdbHistoryStore <- mkLmdbInstance(dirPath.resolve("history"))
-      lmdbDataStore    <- mkLmdbInstance(dirPath.resolve("cold"))
+      lmdbHistoryManager <- LmdbStoreManager(dirPath.resolve("history"), 10L * 1024 * 1024 * 1024)
+      lmdbHistoryStore   <- lmdbHistoryManager.store("db")
+      lmdbDataManager    <- LmdbStoreManager(dirPath.resolve("cold"), 10L * 1024 * 1024 * 1024)
+      lmdbDataStore      <- lmdbDataManager.store("db")
       _ <- Stopwatch.time(Log[F].info(_))("Restore complete")(
             Monad[F]
               .tailRecM((Seq((root, none[Byte])), 0))(
                 writeChunkRec(lmdbHistoryStore, lmdbDataStore)
               )
           )
-      _ <- lmdbHistoryStore.close()
-      _ <- lmdbDataStore.close()
     } yield ()
-  }
-
-  def mkLmdbInstance[F[_]: Sync](path: Path): F[Store[F]] = {
-    val newStore = StoreInstances.lmdbStore[F](
-      StoreConfig(
-        path = path,
-        mapSize = 10L * 1024 * 1024 * 1024
-      )
-    )
-    Sync[F].delay(Files.createDirectories(path)) >> newStore
   }
 }

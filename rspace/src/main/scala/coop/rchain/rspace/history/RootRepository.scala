@@ -28,5 +28,4 @@ class RootRepository[F[_]: Sync](
       case Some(_) => Applicative[F].pure(())
     }
 
-  def close(): F[Unit] = rootsStore.close()
 }
