@@ -23,7 +23,7 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.store.LmdbDirStoreManager.gb
+import coop.rchain.store.LmdbDirStoreManager.gb
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}

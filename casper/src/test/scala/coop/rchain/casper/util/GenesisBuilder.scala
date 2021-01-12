@@ -20,7 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Log
-import coop.rchain.shared.store.LmdbDirStoreManager.gb
+import coop.rchain.store.LmdbDirStoreManager.gb
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 

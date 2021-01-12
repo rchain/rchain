@@ -17,7 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared.Log
-import coop.rchain.shared.store.LmdbDirStoreManager.gb
+import coop.rchain.store.LmdbDirStoreManager.gb
 import monix.eval.Task
 import monix.execution.Scheduler
 
