@@ -33,6 +33,8 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 import coop.rchain.models.blockImplicits._
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
+import coop.rchain.store.InMemoryStoreManager
 
 import scala.collection.immutable.HashMap
 
@@ -724,21 +726,26 @@ class ValidateTest
 
       val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
       val storageSize: Long = 1024L * 1024L * 1024L
+
       for {
-        sar               <- Runtime.setupRSpace[Task](storageDirectory, storageSize)
-        activeRuntime     <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-        runtimeManager    <- RuntimeManager.fromRuntime[Task](activeRuntime)
-        dag               <- blockDagStorage.getRepresentation
-        _                 <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
-        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        modifiedBonds     = Seq.empty[Bond]
-        modifiedPostState = genesis.body.state.copy(bonds = modifiedBonds.toList)
-        modifiedBody      = genesis.body.copy(state = modifiedPostState)
-        modifiedGenesis   = genesis.copy(body = modifiedBody)
+        kvm                  <- RSpaceKeyValueStoreManager[Task](storageDirectory, storageSize)
+        roots                <- kvm.store("roots")
+        cold                 <- kvm.store("cold")
+        history              <- kvm.store("history")
+        spaces               <- Runtime.setupRSpace[Task](roots, cold, history)
+        (rspace, replay, hr) = spaces
+        runtime              <- Runtime.createWithEmptyCost((rspace, replay), Seq.empty)
+        runtimeManager       <- RuntimeManager.fromRuntime[Task](runtime)
+        dag                  <- blockDagStorage.getRepresentation
+        _                    <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
+        _                    <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        modifiedBonds        = Seq.empty[Bond]
+        modifiedPostState    = genesis.body.state.copy(bonds = modifiedBonds.toList)
+        modifiedBody         = genesis.body.copy(state = modifiedPostState)
+        modifiedGenesis      = genesis.copy(body = modifiedBody)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
-        _ <- activeRuntime.close()
       } yield result
   }
 

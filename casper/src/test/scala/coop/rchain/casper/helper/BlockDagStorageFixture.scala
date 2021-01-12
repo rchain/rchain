@@ -23,6 +23,7 @@ import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.shared.store.LmdbDirStoreManager.gb
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}
@@ -40,7 +41,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     val resource = for {
       paths        <- Resources.copyStorage[Task](context.storageDirectory)
       blockStore   <- Resources.mkBlockStoreAt[Task](paths.blockStoreDir)
-      storeManager <- Resource.liftF(RNodeKeyValueStoreManager[Task](paths.blockDagDir))
+      storeManager <- Resource.liftF(RNodeKeyValueStoreManager[Task](paths.blockDagDir, 1 * gb))
       blockDagStorage <- Resource.liftF({
                           implicit val kvm = storeManager
                           BlockDagKeyValueStorage.create[Task]
@@ -112,7 +113,7 @@ object BlockDagStorageTestFixture {
       blockStorageDir: Path
   ): F[BlockStore[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
+      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir, 1 * gb)
       blockStore <- {
         implicit val kvm = storeManager
         KeyValueBlockStore[F]()
@@ -124,7 +125,7 @@ object BlockDagStorageTestFixture {
       metrics: Metrics[F]
   ): F[BlockDagStorage[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[F](blockDagStorageDir)
+      storeManager <- RNodeKeyValueStoreManager[F](blockDagStorageDir, 1 * gb)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[F]

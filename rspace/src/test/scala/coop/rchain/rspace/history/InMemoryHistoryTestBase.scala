@@ -25,6 +25,5 @@ trait InMemoryHistoryTestBase {
     override def get(key: Blake2b256Hash): Task[Trie] =
       Task.delay { data.getOrElse(key, EmptyTrie) }
 
-    override def close(): Task[Unit] = Task.now(())
   }
 }

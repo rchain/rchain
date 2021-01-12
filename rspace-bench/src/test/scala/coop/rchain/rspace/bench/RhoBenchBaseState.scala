@@ -10,6 +10,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
@@ -42,6 +43,7 @@ abstract class RhoBenchBaseState {
   var randRun: Blake2b512Random   = null
 
   var runTask: Task[Unit] = null
+  implicit val kvm        = InMemoryStoreManager[Task]
 
   implicit val logF: Log[Task]            = Log.log[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -51,13 +53,14 @@ abstract class RhoBenchBaseState {
 
   def createRuntime(): Runtime[Task] =
     (for {
-      cost <- CostAccounting.emptyCost[Task]
-      sar  <- Runtime.setupRSpace[Task](dbDir, mapSize)
-      runtime <- {
-        implicit val c: _cost[Task] = cost
-        Runtime.create[Task]((sar._1, sar._2))
-      }
-    } yield (runtime)).unsafeRunSync
+      roots   <- kvm.store("roots")
+      cold    <- kvm.store("cold")
+      history <- kvm.store("history")
+
+      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+      (rspace, replay, _) = spaces
+      r                   <- Runtime.createWithEmptyCost[Task]((rspace, replay), Seq.empty)
+    } yield (r)).unsafeRunSync
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
@@ -80,14 +83,15 @@ abstract class RhoBenchBaseState {
     runtime = createRuntime()
     runtime.cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
-    (for {
-      emptyCheckpoint <- runtime.space.createCheckpoint()
-      //make sure we always start from clean rspace & trie
-      _ <- runtime.replaySpace.clear()
-      _ <- runtime.replaySpace.reset(emptyCheckpoint.root)
-      _ <- runtime.space.clear()
-      _ <- runtime.space.reset(emptyCheckpoint.root)
-    } yield ()).unsafeRunSync
+    runtime = (for {
+      roots   <- kvm.store("roots")
+      cold    <- kvm.store("cold")
+      history <- kvm.store("history")
+
+      spaces               <- Runtime.setupRSpace[Task](roots, cold, history)
+      (rspace, replay, hr) = spaces
+      r                    <- Runtime.createWithEmptyCost[Task]((rspace, replay), Seq.empty)
+    } yield r).runSyncUnsafe()
 
     randSetup = rand
     randRun = rand
@@ -100,6 +104,5 @@ abstract class RhoBenchBaseState {
   }
 
   @TearDown
-  def tearDown(): Unit =
-    runtime.close().unsafeRunSync
+  def tearDown(): Unit = ()
 }

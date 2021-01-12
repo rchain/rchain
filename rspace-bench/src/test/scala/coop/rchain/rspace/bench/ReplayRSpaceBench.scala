@@ -12,9 +12,9 @@ import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import coop.rchain.store.InMemoryStoreManager
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -67,6 +67,7 @@ object ReplayRSpaceBench {
     val produceChannel                    = Channel("produce")
     val matches                           = List(CityMatch(city = "Crystal Lake"))
     val captor                            = new EntriesCaptor()
+    implicit val kvm                      = InMemoryStoreManager[Id]
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()
@@ -78,10 +79,14 @@ object ReplayRSpaceBench {
     @Setup
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
+      val rootsKVStore   = kvm.store("roots")
+      val coldKVStore    = kvm.store("cold")
+      val historyKVStore = kvm.store("history")
       val (space, replaySpace, _) =
         RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](
-          dbDir,
-          1024L * 1024L * 1024L
+          rootsKVStore,
+          coldKVStore,
+          historyKVStore
         )
       this.space = space
       this.replaySpace = replaySpace
@@ -89,8 +94,6 @@ object ReplayRSpaceBench {
 
     @TearDown
     def tearDown() = {
-      space.close()
-      replaySpace.close()
       dbDir.recursivelyDelete()
       ()
     }

@@ -18,7 +18,10 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.shared.store.LmdbDirStoreManager.gb
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 
 import scala.collection.mutable
@@ -106,20 +109,23 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      sar            <- Runtime.setupRSpace[Task](rspaceDir, storageSize)
-      activeRuntime  <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      runtimeManager <- RuntimeManager.fromRuntime[Task](activeRuntime)
-      genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      _              <- activeRuntime.close()
-
-      blockStoreDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
-      blockStore    <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-      _             <- blockStore.put(genesis.blockHash, genesis)
+      rspaceDir           <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
+      kvsManager          <- RSpaceKeyValueStoreManager[Task](rspaceDir, storageSize)
+      roots               <- kvsManager.store("roots")
+      cold                <- kvsManager.store("cold")
+      history             <- kvsManager.store("history")
+      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+      (rspace, replay, _) = spaces
+      runtime             <- Runtime.createWithEmptyCost((rspace, replay))
+      runtimeManager      <- RuntimeManager.fromRuntime[Task](runtime)
+      genesis             <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      blockStoreDir       <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
+      blockStore          <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      _                   <- blockStore.put(genesis.blockHash, genesis)
 
       blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
 
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir)
+      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir, 1 * gb)
       blockDagStorage <- {
         implicit val kvm = storeManager
         BlockDagKeyValueStorage.create[Task]
