@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.{Files, Path}
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
@@ -25,6 +23,7 @@ import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueStore
 
 import scala.concurrent.ExecutionContext
 
@@ -36,13 +35,7 @@ class Runtime[F[_]: Sync] private (
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
-) extends HasCost[F] {
-  def close(): F[Unit] =
-    for {
-      _ <- space.close()
-      _ <- replaySpace.close()
-    } yield ()
-}
+) extends HasCost[F] {}
 
 trait HasCost[F[_]] {
   def cost: _cost[F]
@@ -448,28 +441,21 @@ object Runtime {
   }
 
   def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
+      rootsKeyValueStore: KeyValueStore[F],
+      coldKeyValueStore: KeyValueStore[F],
+      historyKeyValueStore: KeyValueStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
 
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createWithReplay[
+    RSpace.createWithReplay[
       F,
       Par,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize)
+    ](rootsKeyValueStore, coldKeyValueStore, historyKeyValueStore)
   }
 }
