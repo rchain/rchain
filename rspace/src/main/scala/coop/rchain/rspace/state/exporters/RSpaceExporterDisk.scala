@@ -55,12 +55,12 @@ object RSpaceExporterDisk {
               validationProcess,
               Stopwatch.time(Log[F].info(_))("Write history items")(
                 historyStore.put[ByteVector](historyItems.map {
-                  case (b, v) => (b.bytes.toByteBuffer, v)
+                  case (b, v) => (b.bytes.toDirectByteBuffer, v)
                 }, _.toDirectByteBuffer)
               ),
               Stopwatch.time(Log[F].info(_))("Write data items")(
                 dataStore.put[ByteVector](
-                  dataItems.map { case (b, v) => (b.bytes.toByteBuffer, v) },
+                  dataItems.map { case (b, v) => (b.bytes.toDirectByteBuffer, v) },
                   _.toDirectByteBuffer
                 )
               )
