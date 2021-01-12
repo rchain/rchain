@@ -5,35 +5,36 @@ import java.nio.ByteBuffer
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.{HistoryStoreInstances, RootsStoreInstances, Store}
+import coop.rchain.rspace.history.{HistoryStoreInstances, RootsStoreInstances}
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.state.TrieNode
+import coop.rchain.store.KeyValueStore
 
 object RSpaceExporterStore {
   // RSpace exporter constructor / smart constructor "guards" private class
   def apply[F[_]: Concurrent](
-      historyStore: Store[F],
-      valueStore: Store[F],
-      rootsStore: Store[F]
+      historyStore: KeyValueStore[F],
+      valueStore: KeyValueStore[F],
+      rootsStore: KeyValueStore[F]
   ): RSpaceExporter[F] = RSpaceExporterImpl(historyStore, valueStore, rootsStore)
 
   final case object NoRootError extends Exception
 
   private final case class RSpaceExporterImpl[F[_]: Concurrent](
-      sourceHistoryStore: Store[F],
-      sourceValueStore: Store[F],
-      sourceRootsStore: Store[F]
+      sourceHistoryStore: KeyValueStore[F],
+      sourceValueStore: KeyValueStore[F],
+      sourceRootsStore: KeyValueStore[F]
   ) extends RSpaceExporter[F] {
     import RSpaceExporter._
     import cats.instances.tuple._
 
     def getItems[Value](
-        store: Store[F],
+        store: KeyValueStore[F],
         keys: Seq[Blake2b256Hash],
         fromBuffer: ByteBuffer => Value
     ): F[Seq[(Blake2b256Hash, Value)]] =
       for {
-        loaded <- store.get(keys, fromBuffer)
+        loaded <- store.get(keys.map(_.bytes.toByteBuffer), fromBuffer)
       } yield keys.zip(loaded).filter(_._2.nonEmpty).map(_.map(_.get))
 
     override def getHistoryItems[Value](
