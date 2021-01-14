@@ -1,24 +1,36 @@
 package coop.rchain.store
 
-import java.nio.file.Path
-
-import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.Log
-import coop.rchain.store.LmdbDirStoreManager._
+import coop.rchain.store.LmdbDirStoreManager.{Db, LmdbEnvConfig}
+
+import java.nio.file.Path
 
 object LmdbDirStoreManager {
+  // TODO: Return instance as Resource with the call to _shutdown_.
+  //  Shutdown can also be removed from the interface and be only
+  //  implemented as instance method if applicable.
   def apply[F[_]: Concurrent: Log](
       dirPath: Path,
-      dbInstanceMapping: Map[String, LmdbEnvConfig],
-      legacyDBHandle: (String, LmdbEnvConfig) => String = (dbName, _) => dbName
+      dbInstanceMapping: Map[Db, LmdbEnvConfig]
   ): F[KeyValueStoreManager[F]] =
-    Concurrent[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping, legacyDBHandle))
+    Sync[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping))
 
-  // Giga and tera bytes
-  val gb = 1024L * 1024L * 1024L
-  val tb = 1024 * gb
+  /**
+    * Specification for LMDB database: unique identifier and database name
+    *
+    * @param id unique identifier
+    * @param nameOverride name to use as database name instead of [[id]]
+    */
+  final case class Db(id: String, nameOverride: Option[String] = none)
+
+  // Mega, giga and tera bytes
+  val mb = 1024L * 1024L
+  val gb = 1024L * mb
+  val tb = 1024L * gb
+
   final case class LmdbEnvConfig(
       name: String,
       // Max LMDB environment (file) size
@@ -30,8 +42,7 @@ object LmdbDirStoreManager {
 // For LMDB this allows control which databases are part of the same environment (file).
 private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
     dirPath: Path,
-    dbInstanceMapping: Map[String, LmdbEnvConfig],
-    legacyDBHandle: (String, LmdbEnvConfig) => String
+    dbMapping: Map[Db, LmdbEnvConfig]
 ) extends KeyValueStoreManager[F] {
 
   private case class StoreState(
@@ -40,22 +51,24 @@ private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
 
   private val managersState = Ref.unsafe(StoreState(Map.empty))
 
+  private val dbInstanceMapping = dbMapping.map { case (db, cfg) => (db.id, (db, cfg)) }
+
   // Creates database uniquely defined by the name
   override def store(dbName: String): F[KeyValueStore[F]] =
     for {
       // Find DB ref / first time create deferred object
       newDefer <- Deferred[F, KeyValueStoreManager[F]]
       action <- managersState.modify { st =>
-                 val cfg @ LmdbEnvConfig(manName, _) = dbInstanceMapping(dbName)
-                 val (isNew, defer)                  = st.envs.get(manName).fold((true, newDefer))((false, _))
-                 val newSt                           = st.copy(envs = st.envs.updated(manName, defer))
-                 (newSt, (isNew, defer, cfg))
+                 val (db, cfg @ LmdbEnvConfig(manName, _)) = dbInstanceMapping(dbName)
+                 val (isNew, defer)                        = st.envs.get(manName).fold((true, newDefer))((false, _))
+                 val newSt                                 = st.copy(envs = st.envs.updated(manName, defer))
+                 (newSt, (isNew, defer, db, cfg))
                }
-      (isNew, defer, manCfg) = action
-      _                      <- createLmdbManger(manCfg, defer).whenA(isNew)
-      manager                <- defer.get
-      dataBaseName           = legacyDBHandle(dbName, dbInstanceMapping(dbName))
-      database               <- manager.store(dataBaseName)
+      (isNew, defer, db, manCfg) = action
+      _                          <- createLmdbManger(manCfg, defer).whenA(isNew)
+      manager                    <- defer.get
+      dataBaseName               = db.nameOverride.getOrElse(db.id)
+      database                   <- manager.store(dataBaseName)
     } yield database
 
   private def createLmdbManger(config: LmdbEnvConfig, defer: Deferred[F, KeyValueStoreManager[F]]) =
