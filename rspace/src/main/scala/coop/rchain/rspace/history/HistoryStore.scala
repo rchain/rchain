@@ -1,20 +1,15 @@
 package coop.rchain.rspace.history
 
-import cats.Functor
-import cats.implicits._
 import cats.effect.Sync
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.shared.AttemptOpsF.RichAttempt
-import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
-import scodec.DecodeResult
+import coop.rchain.store.KeyValueStore
 import scodec.bits.BitVector
 
 trait HistoryStore[F[_]] {
   def put(tries: List[Trie]): F[Unit]
 
   def get(key: Blake2b256Hash): F[Trie]
-
 }
 
 object HistoryStoreInstances {

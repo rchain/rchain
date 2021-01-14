@@ -1,23 +1,23 @@
 package coop.rchain.rspace
 
-import java.lang
+import cats.Parallel
+import cats.effect._
+import cats.syntax.all._
+import com.typesafe.scalalogging.Logger
+import coop.rchain.catscontrib._
+import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.internal.{ConsumeCandidate, Datum, ProduceCandidate, WaitingContinuation}
+import coop.rchain.rspace.trace._
+import coop.rchain.shared.SyncVarOps._
+import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.KeyValueStore
+import monix.execution.atomic.AtomicAny
 
+import java.lang
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
-import cats.effect._
-import cats.implicits._
-import cats.Parallel
-import coop.rchain.catscontrib._
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.metrics.Metrics.Source
-import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.internal.{ConsumeCandidate, _}
-import coop.rchain.rspace.trace._
-import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.shared.SyncVarOps._
-import com.typesafe.scalalogging.Logger
-import coop.rchain.store.{KeyValueStore}
-import monix.execution.atomic.AtomicAny
 
 class RSpace[F[_], C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -234,7 +234,13 @@ class RSpace[F[_], C, P, A, K](
 object RSpace {
   val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
 
-  def create[F[_], C, P, A, K](
+  final case class RSpaceStore[F[_]](
+      history: KeyValueStore[F],
+      roots: KeyValueStore[F],
+      cold: KeyValueStore[F]
+  )
+
+  def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -244,22 +250,12 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       m: Match[F, P, A],
-      concurrent: Concurrent[F],
-      logF: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F],
-      spanF: Span[F]
-  ): F[ISpace[F, C, P, A, K]] = {
-    val space: ISpace[F, C, P, A, K] =
-      new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
-    space.pure[F]
-  }
+      scheduler: ExecutionContext
+  ): F[ISpace[F, C, P, A, K]] =
+    Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
 
-  def createWithReplay[F[_], C, P, A, K](
-      rootsKeyValueStore: KeyValueStore[F],
-      coldKeyValueStore: KeyValueStore[F],
-      historyKeyValueStore: KeyValueStore[F]
+  def createWithReplay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+      store: RSpaceStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -267,33 +263,21 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       m: Match[F, P, A],
-      concurrent: Concurrent[F],
-      logF: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F],
-      spanF: Span[F],
-      par: Parallel[F]
+      scheduler: ExecutionContext
   ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
-      setup <- setUp[F, C, P, A, K](
-                rootsKeyValueStore,
-                coldKeyValueStore,
-                historyKeyValueStore
-              )
+      setup                  <- setUp[F, C, P, A, K](store)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-      replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, concurrent)
+      replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, Concurrent[F])
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore)
       )
     } yield (space, replay, historyReader)
 
-  def create[F[_], C, P, A, K](
-      rootsKeyValueStore: KeyValueStore[F],
-      coldKeyValueStore: KeyValueStore[F],
-      historyKeyValueStore: KeyValueStore[F]
+  def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+      store: RSpaceStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -301,20 +285,10 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       m: Match[F, P, A],
-      concurrent: Concurrent[F],
-      logF: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F],
-      spanF: Span[F],
-      par: Parallel[F]
+      scheduler: ExecutionContext
   ): F[ISpace[F, C, P, A, K]] =
     for {
-      setup <- setUp[F, C, P, A, K](
-                rootsKeyValueStore,
-                coldKeyValueStore,
-                historyKeyValueStore
-              )
+      setup                  <- setUp[F, C, P, A, K](store)
       (historyReader, store) = setup
       space = new RSpace[F, C, P, A, K](
         historyReader,
@@ -322,34 +296,27 @@ object RSpace {
       )
     } yield space
 
-  def setUp[F[_], C, P, A, K](
-      rootsKeyValueStore: KeyValueStore[F],
-      coldKeyValueStore: KeyValueStore[F],
-      historyKeyValueStore: KeyValueStore[F]
-  )(
+  def setUp[F[_]: Concurrent: Parallel, C, P, A, K](store: RSpaceStore[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
-      sk: Serialize[K],
-      concurrent: Concurrent[F],
-      par: Parallel[F]
+      sk: Serialize[K]
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
-
     import coop.rchain.rspace.history._
+
     implicit val cc = sc.toSizeHeadCodec
     implicit val cp = sp.toSizeHeadCodec
     implicit val ca = sa.toSizeHeadCodec
     implicit val ck = sk.toSizeHeadCodec
 
     for {
-      historyReader <- HistoryRepositoryInstances
-                        .lmdbRepository[F, C, P, A, K](
-                          rootsKeyValueStore,
-                          coldKeyValueStore,
-                          historyKeyValueStore
-                        )
-      store <- HotStore.empty(historyReader)
-    } yield (historyReader, store)
+      historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
+                      store.history,
+                      store.roots,
+                      store.cold
+                    )
+      store <- HotStore.empty(historyRepo)
+    } yield (historyRepo, store)
   }
 }
