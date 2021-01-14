@@ -1,9 +1,6 @@
 package coop.rchain.casper.engine
 
-import java.nio.file.Path
-
 import cats._
-import cats.implicits._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -13,9 +10,9 @@ import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -27,9 +24,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
-import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -42,23 +38,17 @@ object Setup {
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
     implicit val kvsManager       = InMemoryStoreManager[Task]
+    implicit val scheduler        = Scheduler.Implicits.global
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)
 
-    val networkId          = "test"
-    implicit val scheduler = Scheduler.io("test")
-    val runtimeDir         = BlockDagStorageTestFixture.blockStorageDir
+    val networkId = "test"
     val spaceKVManager =
-      RSpaceKeyValueStoreManager[Task](
-        context.storageDirectory.resolve("rspace"),
-        1024L * 1024L * 1024L
-      ).runSyncUnsafe()
-    val rootsKVStore   = spaceKVManager.store("roots").runSyncUnsafe()
-    val coldKVStore    = spaceKVManager.store("cold").runSyncUnsafe()
-    val historyKVStore = spaceKVManager.store("history").runSyncUnsafe()
+      mkTestRNodeStoreManager[Task](context.storageDirectory).runSyncUnsafe()
+    val store = spaceKVManager.rSpaceStores.runSyncUnsafe()
     val spaces =
-      Runtime.setupRSpace[Task](rootsKVStore, coldKVStore, historyKVStore).runSyncUnsafe()
+      Runtime.setupRSpace[Task](store).runSyncUnsafe()
     val (rspace, replay, historyRepo) = spaces
     val activeRuntime =
       Runtime
@@ -70,7 +60,7 @@ object Setup {
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
-    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
+    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
@@ -150,7 +140,7 @@ object Setup {
     implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val casperBuffer = CasperBufferKeyValueStorage
-      .create[Task]
+      .create[Task](kvsManager)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)

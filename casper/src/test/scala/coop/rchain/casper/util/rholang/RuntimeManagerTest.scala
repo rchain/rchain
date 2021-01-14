@@ -9,15 +9,9 @@ import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
-import coop.rchain.casper.util.rholang.costacc.{
-  CheckBalance,
-  CloseBlockDeploy,
-  PreChargeDeploy,
-  RefundDeploy
-}
+import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
@@ -51,17 +45,25 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    rm   <- Resources.mkRuntimeManagerAt[Task](dirs.rspaceDir)()
-  } yield rm
+  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
+    Resources
+      .copyStorage[Task](genesisContext.storageDirectory)
+      .map(_.storageDir)
+      .evalMap(Resources.mkTestRNodeStoreManager[Task])
+      .evalMap(Resources.mkRuntimeManagerAt[Task])
 
-  val runtimeAndManager: Resource[Task, (interpreter.Runtime[Task], RuntimeManager[Task])] = for {
-    dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    rhr  <- rholang.Resources.mkRuntimeAt[Task](dirs.rspaceDir)()
-    r    = rhr._1
-    rm   <- Resource.liftF[Task, RuntimeManager[Task]](RuntimeManager.fromRuntime[Task](r))
-  } yield (r, rm)
+  val runtimeAndManager: Resource[Task, (interpreter.Runtime[Task], RuntimeManager[Task])] =
+    Resources
+      .copyStorage[Task](genesisContext.storageDirectory)
+      .map(_.storageDir)
+      .evalMap(Resources.mkTestRNodeStoreManager[Task])
+      .evalMap(rholang.Resources.mkRuntimeAt[Task](_))
+      .evalMap {
+        case (runtime, _) =>
+          for {
+            runtimeManager <- RuntimeManager.fromRuntime[Task](runtime)
+          } yield (runtime, runtimeManager)
+      }
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],

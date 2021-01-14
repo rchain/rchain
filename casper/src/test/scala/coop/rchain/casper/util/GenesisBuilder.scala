@@ -1,15 +1,13 @@
 package coop.rchain.casper.util
 
-import java.nio.file.{Files, Path}
-
-import cats.implicits._
+import cats.syntax.all._
+import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
@@ -18,12 +16,11 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import coop.rchain.store.LmdbDirStoreManager.gb
-import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 
+import java.nio.file.{Files, Path}
 import scala.collection.mutable
 
 object GenesisBuilder {
@@ -101,37 +98,27 @@ object GenesisBuilder {
 
     val (validavalidatorKeyPairs, genesisParameters) = parameters
     val storageDirectory                             = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-    val storageSize: Long                            = 1024L * 1024 * 1024
     implicit val log: Log.NOPLog[Task]               = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]           = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                             = NoopSpan[Task]()
 
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
-    (for {
-      rspaceDir           <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      kvsManager          <- RSpaceKeyValueStoreManager[Task](rspaceDir, storageSize)
-      roots               <- kvsManager.store("roots")
-      cold                <- kvsManager.store("cold")
-      history             <- kvsManager.store("history")
-      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+    val genesisContext = for {
+      kvsManager          <- mkTestRNodeStoreManager[Task](storageDirectory)
+      store               <- kvsManager.rSpaceStores
+      spaces              <- Runtime.setupRSpace[Task](store)
       (rspace, replay, _) = spaces
       runtime             <- Runtime.createWithEmptyCost((rspace, replay))
       runtimeManager      <- RuntimeManager.fromRuntime[Task](runtime)
       genesis             <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      blockStoreDir       <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
-      blockStore          <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
+      blockStore          <- KeyValueBlockStore[Task](kvsManager)
       _                   <- blockStore.put(genesis.blockHash, genesis)
+      blockDagStorage     <- BlockDagKeyValueStorage.create[Task](kvsManager)
+      _                   <- blockDagStorage.insert(genesis, invalid = false)
+    } yield GenesisContext(genesis, validavalidatorKeyPairs, storageDirectory)
 
-      blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
-
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir, 1 * gb)
-      blockDagStorage <- {
-        implicit val kvm = storeManager
-        BlockDagKeyValueStorage.create[Task]
-      }
-      _ <- blockDagStorage.insert(genesis, invalid = false)
-    } yield GenesisContext(genesis, validavalidatorKeyPairs, storageDirectory)).unsafeRunSync
+    genesisContext.unsafeRunSync
   }
 
   case class GenesisContext(
