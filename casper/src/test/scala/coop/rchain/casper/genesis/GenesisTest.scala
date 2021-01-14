@@ -1,32 +1,30 @@
 package coop.rchain.casper.genesis
 
-import java.io.PrintWriter
-import java.nio.file.{Files, Path, Paths}
-
-import cats.implicits._
 import cats.effect.Sync
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.helper.BlockDagStorageFixture
-import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.util.{BondsParser, ProtoUtil, RSpaceUtil, VaultParser}
-import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.shared.PathOps.RichPath
-import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.casper.helper.BlockDagStorageFixture
+import coop.rchain.casper.protocol.{BlockMessage, Bond}
+import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
+import coop.rchain.casper.util.{BondsParser, ProtoUtil, VaultParser}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
+import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import coop.rchain.shared.Log
-import coop.rchain.store.InMemoryStoreManager
+import org.scalatest.{EitherValues, FlatSpec, Matchers}
+
+import java.io.PrintWriter
+import java.nio.file.{Files, Path}
 
 class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDagStorageFixture {
   import GenesisTest._
@@ -213,7 +211,6 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 }
 
 object GenesisTest {
-  val storageSize      = 1024L * 1024 * 1024
   def storageLocation  = Files.createTempDirectory(s"casper-genesis-test-runtime-")
   def genesisPath      = Files.createTempDirectory(s"casper-genesis-test-")
   val autogenShardSize = 5
@@ -278,11 +275,9 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      kvsManager          <- RSpaceKeyValueStoreManager[Task](storePath, storageSize)
-      roots               <- kvsManager.store("roots")
-      cold                <- kvsManager.store("cold")
-      history             <- kvsManager.store("history")
-      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+      kvsManager          <- Resources.mkTestRNodeStoreManager[Task](storePath)
+      store               <- kvsManager.rSpaceStores
+      spaces              <- Runtime.setupRSpace[Task](store)
       (rspace, replay, _) = spaces
       runtime             <- Runtime.createWithEmptyCost((rspace, replay))
       result              <- body(runtime, genesisPath, time)

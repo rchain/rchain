@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
 import cats.data.Chain
-import cats.effect._
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -10,6 +9,7 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -20,8 +20,8 @@ import org.scalatest.prop.Checkers.check
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration._
 
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
 
@@ -36,28 +36,20 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      costLog             <- Resource.liftF(costLog[Task]())
-      cost                <- Resource.liftF(CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms))
-      roots               <- Resource.liftF(kvm.store("roots"))
-      cold                <- Resource.liftF(kvm.store("cold"))
-      history             <- Resource.liftF(kvm.store("history"))
-      spaces              <- Resource.liftF(Runtime.setupRSpace[Task](roots, cold, history))
+      costLog             <- costLog[Task]()
+      cost                <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store               <- kvm.rSpaceStores
+      spaces              <- Runtime.setupRSpace[Task](store)
       (rspace, replay, _) = spaces
       runtime <- {
         // naming noOpCostLog because want to override package scope noOpCostLog val
         implicit val c: _cost[Task] = cost
-        Resource.make(
-          Runtime
-            .create[Task]((rspace, replay), Seq.empty)
-        )(
-          _ => ().pure[Task]
-        )
+        Runtime.create[Task]((rspace, replay), Seq.empty)
       }
-
     } yield (runtime, costLog)
 
     resources
-      .use {
+      .flatMap {
         case (runtime, costL) =>
           costL.listen {
             implicit val cost = runtime.cost
@@ -81,10 +73,8 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     val evaluaResult = for {
       costLog             <- costLog[Task]()
       cost                <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
-      roots               <- kvm.store("roots")
-      cold                <- kvm.store("cold")
-      history             <- kvm.store("history")
-      spaces              <- Runtime.setupRSpace[Task](roots, cold, history)
+      store               <- kvm.rSpaceStores
+      spaces              <- Runtime.setupRSpace[Task](store)
       (rspace, replay, _) = spaces
       runtime <- {
         implicit val c: _cost[Task] = cost

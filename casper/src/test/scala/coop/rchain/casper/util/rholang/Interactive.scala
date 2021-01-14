@@ -1,7 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
-
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -10,6 +8,7 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -90,14 +89,12 @@ object Interactive {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val kvsManager                = InMemoryStoreManager[Task]
 
-    val roots   = kvsManager.store("roots").unsafeRunSync
-    val cold    = kvsManager.store("cold").unsafeRunSync
-    val history = kvsManager.store("history").unsafeRunSync
-
+    val store = kvsManager.rSpaceStores.unsafeRunSync
     val spaces = Runtime
-      .setupRSpace[Task](roots, cold, history)
+      .setupRSpace[Task](store)
       .unsafeRunSync
     val (rspace, replay, _) = spaces
+
     new Interactive(Runtime.createWithEmptyCost[Task]((rspace, replay)).runSyncUnsafe(5.seconds))
   }
 }
