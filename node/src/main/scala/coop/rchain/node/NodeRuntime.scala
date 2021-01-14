@@ -1,7 +1,5 @@
 package coop.rchain.node
 
-import java.nio.file.{Files, Path}
-
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -14,7 +12,7 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
-import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedKeyValueStorage}
+import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine.{BlockRetriever, _}
@@ -22,6 +20,7 @@ import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.BlockStateManagerImpl
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{ReportingCasper, engine, _}
@@ -56,17 +55,20 @@ import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web._
 import coop.rchain.p2p.effects._
 import coop.rchain.rholang.interpreter.Runtime
-import coop.rchain.rspace.{Context, RSpace}
+import coop.rchain.rspace.Context
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
-import coop.rchain.rspace.storage.RSpaceKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.LmdbDirStoreManager.gb
+import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
+import fs2.Stream
 import kamon._
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
 import monix.execution.Scheduler
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -90,9 +92,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   private val blockdagStoragePath      = dataDir.resolve("dagstorage")
   private val deployStoragePath        = dataDir.resolve("deploystorage")
   private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
-  private val rspacePath               = dataDir.resolve("rspace")
-  private val casperStoragePath        = rspacePath.resolve("casper")
-  private val storageSize              = nodeConf.storage.lmdbMapSizeRspace
 
   /**
     * Main node entry. It will:
@@ -184,7 +183,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         * if it does not exist). For now this small fix should suffice, but we should unify this.
         */
       _ <- mkDirs(dataDir)
-      _ <- mkDirs(blockdagStoragePath)
 
       dagConfig = BlockDagFileStorage.Config(
         latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
@@ -199,14 +197,10 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
         checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
         blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
-        mapSize = nodeConf.storage.lmdbMapSizeBlockdagstore
+        mapSize = 10 * gb
       )
-      deployStorageConfig = LMDBDeployStorage.Config(
-        storagePath = deployStoragePath,
-        mapSize = nodeConf.storage.lmdbMapSizeDeploystore
-      )
-      casperConfig = RuntimeConf(casperStoragePath, storageSize)
-      cliConfig    = RuntimeConf(rspacePath, 800L * 1024L * 1024L) // 800MB for cli
+
+      deployStorageConfig = LMDBDeployStorage.Config(storagePath = deployStoragePath, mapSize = gb)
 
       eventBus <- RchainEvents[F]
 
@@ -221,8 +215,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           blockRetriever,
           nodeConf,
           dagConfig,
-          casperConfig,
-          cliConfig,
           blockstorePath,
           lastFinalizedStoragePath,
           rspaceScheduler,
@@ -296,7 +288,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       casperLoop: CasperLoop[F],
       updateForkChoiceLoop: CasperLoop[F],
       engineInit: EngineInit[F],
-      runtimeCleanup: Cleanup[F],
+      runtimeCleanup: F[Unit],
       reportingCasper: ReportingCasper[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F]
@@ -434,14 +426,14 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
   def addShutdownHook(
       servers: Servers,
-      runtimeCleanup: Cleanup[F],
+      runtimeCleanup: F[Unit],
       blockStore: BlockStore[F]
   ): F[Unit] =
     Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore))).void
 
   def clearResources(
       servers: Servers,
-      runtimeCleanup: Cleanup[F],
+      runtimeCleanup: F[Unit],
       blockStore: BlockStore[F]
   ): Unit = {
     val shutdown = for {
@@ -455,7 +447,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _ <- Log[F].info("Shutting down HTTP server....")
       _ <- Sync[F].delay(Kamon.stopAllReporters())
       _ <- servers.httpServer.cancel.attempt
-      _ <- runtimeCleanup.close()
+      _ <- runtimeCleanup
       _ <- Log[F].info("Bringing BlockStore down ...")
       _ <- blockStore.close()
       _ <- Log[F].info("Goodbye.")
@@ -601,11 +593,6 @@ object NodeRuntime {
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
 
-  final case class RuntimeConf(
-      storage: Path,
-      size: Long
-  )
-
   def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log: EventLog](
       nodeConf: NodeConf,
       kamonConf: Config
@@ -690,31 +677,19 @@ object NodeRuntime {
     } yield ()
   }
 
-  trait Cleanup[F[_]] {
-    def close(): F[Unit]
+  def cleanup[F[_]: Concurrent: Log](
+      rnodeStoreManager: KeyValueStoreManager[F],
+      deployStorageCleanup: F[Unit]
+  ): F[Unit] = {
+    val kvmShutdown         = Log[F].info("Shutting down RNode store manager ...") *> rnodeStoreManager.shutdown
+    val deployStoreShutdown = Log[F].info("Shutting down deploy storage ...") *> deployStorageCleanup
+    // Shutdown all resources in parallel
+    Stream(kvmShutdown, deployStoreShutdown)
+      .map(fs2.Stream.eval)
+      .parJoinProcBounded
+      .compile
+      .drain
   }
-
-  def cleanup[F[_]: Sync: Log](
-      runtime: Runtime[F],
-      casperRuntime: Runtime[F],
-      deployStorageCleanup: F[Unit],
-      casperStoreManager: KeyValueStoreManager[F],
-      rspaceStoreManager: KeyValueStoreManager[F],
-      evalRspaceStoreManager: KeyValueStoreManager[F]
-  ): Cleanup[F] =
-    new Cleanup[F] {
-      override def close(): F[Unit] =
-        for {
-          _ <- Log[F].info("Shutting down interpreter runtime ...")
-          _ <- casperStoreManager.shutdown
-          _ <- Log[F].info("Shutting down rspace store manager ...")
-          _ <- rspaceStoreManager.shutdown
-          _ <- Log[F].info("Shutting down eval rspace store manager ...")
-          _ <- evalRspaceStoreManager.shutdown
-          _ <- Log[F].info("Shutting down deploy storage ...")
-          _ <- deployStorageCleanup
-        } yield ()
-    }
 
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
       rpConnections: ConnectionsCell[F],
@@ -723,8 +698,6 @@ object NodeRuntime {
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
       dagConfig: BlockDagFileStorage.Config,
-      casperConf: RuntimeConf,
-      cliConf: RuntimeConf,
       blockstorePath: Path,
       lastFinalizedPath: Path,
       rspaceScheduler: Scheduler,
@@ -734,7 +707,7 @@ object NodeRuntime {
   ): F[
     (
         BlockStore[F],
-        Cleanup[F],
+        F[Unit],
         PacketHandler[F],
         APIServers,
         CasperLoop[F],
@@ -755,36 +728,32 @@ object NodeRuntime {
           .span(conf.protocolServer.networkId, conf.protocolServer.host.getOrElse("-"))
       else Span.noop[F]
 
-      // Key-value store manager / manages LMDB databases
-      casperStoreManager <- RNodeKeyValueStoreManager(conf.storage.dataDir, casperConf.size)
-      stateStorageFolder = casperConf.storage.resolve("v2")
-      rspaceStoreManager <- RSpaceKeyValueStoreManager(stateStorageFolder, casperConf.size)
+      // RNode key-value store manager / manages LMDB databases
+      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
+      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
+      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+
       // Block storage
       blockStore <- {
-        implicit val kvm = casperStoreManager
         // Check if old file based block store exists
         val oldBlockStoreExists = blockstorePath.resolve("storage").toFile.exists
         // TODO: remove file based block store in future releases
         def oldStorage = {
-          val blockstoreEnv = Context.env(blockstorePath, conf.storage.lmdbMapSizeBlockstore)
+          val blockstoreEnv = Context.env(blockstorePath, LmdbDirStoreManager.tb)
           for {
             blockStore <- FileLMDBIndexBlockStore
-                           .create[F](blockstoreEnv, blockstorePath)(
-                             Concurrent[F],
-                             Sync[F],
-                             Log[F],
-                             Metrics[F]
-                           )
+                           .create[F](blockstoreEnv, blockstorePath)
                            .map(_.right.get) // TODO handle errors
           } yield blockStore
         }
         // Start block storage
-        if (oldBlockStoreExists) oldStorage else KeyValueBlockStore()
+        if (oldBlockStoreExists) oldStorage else KeyValueBlockStore(rnodeStoreManager)
       }
+
       // Last finalized Block storage
       lastFinalizedStorage <- {
         for {
-          lastFinalizedBlockDb   <- casperStoreManager.store("last-finalized-block")
+          lastFinalizedBlockDb   <- rnodeStoreManager.store("last-finalized-block")
           lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
           oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
           shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
@@ -794,39 +763,43 @@ object NodeRuntime {
                 .whenA(shouldMigrate)
         } yield lastFinalizedStore
       }
+
       // Block DAG storage
       blockDagStorage <- {
-        implicit val kvm = casperStoreManager
         for {
           // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- casperStoreManager.store("block-metadata")
+          blockMetadataDb   <- rnodeStoreManager.store("block-metadata")
           dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
           oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
           shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists
           // TODO: remove `dagConfig`, it's not used anymore (after migration)
-          _ <- BlockDagKeyValueStorage.importFromFileStorage(dagConfig).whenA(shouldMigrate)
+          _ <- BlockDagKeyValueStorage
+                .importFromFileStorage(rnodeStoreManager, dagConfig)
+                .whenA(shouldMigrate)
           // Create DAG store
-          dagStorage <- BlockDagKeyValueStorage.create[F]
+          dagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
         } yield dagStorage
       }
-      casperBufferStorage <- {
-        implicit val kvm = casperStoreManager
-        CasperBufferKeyValueStorage.create[F]
-      }
+
+      // Casper requesting blocks cache
+      casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
+
+      // Deploy storage
+      // TODO: Move deploy store to RNode store manager.
       deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
       (deployStorage, deployStorageCleanup) = deployStorageAllocation
+
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
       }
+
       lastFinalizedBlockCalculator = {
         implicit val bs = blockStore
         implicit val da = blockDagStorage
         implicit val or = oracle
         implicit val ds = deployStorage
-        LastFinalizedBlockCalculator[F](
-          conf.casper.faultToleranceThreshold
-        )
+        LastFinalizedBlockCalculator[F](conf.casper.faultToleranceThreshold)
       }
       estimator = {
         implicit val sp = span
@@ -836,59 +809,48 @@ object NodeRuntime {
         implicit val bs = blockStore
         implicit val es = estimator
         implicit val sp = span
-        SynchronyConstraintChecker[F](
-          conf.casper.synchronyConstraintThreshold
-        )
+        SynchronyConstraintChecker[F](conf.casper.synchronyConstraintThreshold)
       }
       lastFinalizedHeightConstraintChecker = {
         implicit val bs = blockStore
         implicit val lf = lastFinalizedStorage
-        LastFinalizedHeightConstraintChecker[F](
-          conf.casper.heightConstraintThreshold
-        )
+        LastFinalizedHeightConstraintChecker[F](conf.casper.heightConstraintThreshold)
       }
-      evalRSpaceStoreManager <- RSpaceKeyValueStoreManager(cliConf.storage, cliConf.size)
+
+      // Rholang evaluator
       evalRuntime <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         for {
-          roots              <- casperStoreManager.store("db-eval-roots")
-          cold               <- casperStoreManager.store("db-eval-cold")
-          history            <- casperStoreManager.store("db-eval-history")
-          spr                <- Runtime.setupRSpace[F](roots, cold, history)
+          store              <- rnodeStoreManager.evalStores
+          spr                <- Runtime.setupRSpace[F](store)
           (space, replay, _) = spr
           runtime            <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
         } yield runtime
       }
-      casperRoots   <- casperStoreManager.store("db-roots")
-      casperCold    <- casperStoreManager.store("db-cold")
-      casperHistory <- casperStoreManager.store("db-history")
+
+      // Rholang blockchain
+      rSpaceStore <- rnodeStoreManager.rSpaceStores
       casperInitialized <- {
         implicit val s  = rspaceScheduler
         implicit val sp = span
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
         for {
-          sarAndHR            <- Runtime.setupRSpace[F](casperRoots, casperCold, casperHistory)
+          sarAndHR            <- Runtime.setupRSpace[F](rSpaceStore)
           (space, replay, hr) = sarAndHR
           runtime             <- Runtime.createWithEmptyCost[F]((space, replay), Seq.empty)
-          reporter <- if (conf.apiServer.enableReporting) {
-                       import coop.rchain.rholang.interpreter.storage._
-                       for {
-                         reportingCache <- ReportMemStore
-                                            .store[
-                                              F,
-                                              Par,
-                                              BindPattern,
-                                              ListParWithRandom,
-                                              TaggedContinuation
-                                            ](rspaceStoreManager)
-                       } yield ReportingCasper.rhoReporter(
-                         hr,
-                         reportingCache
-                       )
-                     } else
-                       ReportingCasper.noop.pure[F]
+          reporter <- {
+            if (conf.apiServer.enableReporting) {
+              import coop.rchain.rholang.interpreter.storage._
+              ReportMemStore
+                .store[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                  rnodeStoreManager
+                )
+                .map(ReportingCasper.rhoReporter(hr, _))
+            } else
+              ReportingCasper.noop.pure[F]
+          }
         } yield (runtime, reporter, hr)
       }
       (casperRuntime, reportingCasper, historyRepo) = casperInitialized
@@ -896,18 +858,10 @@ object NodeRuntime {
         implicit val sp = span
         RuntimeManager.fromRuntime[F](casperRuntime)
       }
+
       // RNodeStateManager
       stateManagers <- {
         for {
-          history <- {
-            import coop.rchain.rholang.interpreter.storage._
-            RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-              casperRoots,
-              casperCold,
-              casperHistory
-            )
-          }
-          (historyRepo, _)   = history
           exporter           <- historyRepo.exporter
           importer           <- historyRepo.importer
           rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
@@ -916,6 +870,7 @@ object NodeRuntime {
         } yield (rnodeStateManager, rspaceStateManager)
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
+
       // Engine dynamic reference
       engineCell   <- EngineCell.init[F]
       envVars      = EnvVars.envVars[F]
@@ -1007,12 +962,8 @@ object NodeRuntime {
       }
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
-        evalRuntime,
-        casperRuntime,
-        deployStorageCleanup,
-        casperStoreManager,
-        rspaceStoreManager,
-        evalRSpaceStoreManager
+        rnodeStoreManager,
+        deployStorageCleanup
       )
       webApi = {
         implicit val ec = engineCell
