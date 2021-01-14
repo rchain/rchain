@@ -27,7 +27,6 @@ import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
-import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -37,7 +36,6 @@ object Setup {
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
-    implicit val kvsManager       = InMemoryStoreManager[Task]
     implicit val scheduler        = Scheduler.Implicits.global
 
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
@@ -140,7 +138,7 @@ object Setup {
     implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val casperBuffer = CasperBufferKeyValueStorage
-      .create[Task](kvsManager)
+      .create[Task](spaceKVManager)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
