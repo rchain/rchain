@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import java.nio.file.{Files, Path}
-
 import com.google.protobuf.ByteString
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -11,6 +9,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
@@ -20,6 +19,7 @@ import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks._
 import org.scalatest.{Assertion, BeforeAndAfterAll, Matchers, WordSpec}
 
+import java.nio.file.{Files, Path}
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
 
@@ -827,9 +827,7 @@ class RholangMethodsCostsSpec
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
   implicit val kvm                        = InMemoryStoreManager[Task]
-  val roots                               = kvm.store("roots").runSyncUnsafe()
-  val cold                                = kvm.store("cold").runSyncUnsafe()
-  val history                             = kvm.store("history").runSyncUnsafe()
+  val rSpaceStore                         = kvm.rSpaceStores.runSyncUnsafe()
   protected override def beforeAll(): Unit = {
     import coop.rchain.catscontrib.TaskContrib._
     import coop.rchain.rholang.interpreter.storage._
@@ -842,7 +840,7 @@ class RholangMethodsCostsSpec
         BindPattern,
         ListParWithRandom,
         TaggedContinuation
-      ](roots, cold, history)
+      ](rSpaceStore)
       .unsafeRunSync
   }
 

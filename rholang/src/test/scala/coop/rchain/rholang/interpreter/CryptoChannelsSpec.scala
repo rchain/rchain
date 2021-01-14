@@ -1,8 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
-
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
@@ -18,6 +17,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
@@ -221,10 +221,8 @@ class CryptoChannelsSpec
     implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      roots                <- kvm.store("roots")
-      cold                 <- kvm.store("cold")
-      history              <- kvm.store("history")
-      spaces               <- Runtime.setupRSpace[Task](roots, cold, history)
+      store                <- kvm.rSpaceStores
+      spaces               <- Runtime.setupRSpace[Task](store)
       (rspace, replay, hr) = spaces
       runtime              <- Runtime.createWithEmptyCost[Task]((rspace, replay), Seq.empty)
       _                    <- runtime.cost.set(Cost.UNSAFE_MAX)

@@ -1,22 +1,21 @@
 package coop.rchain.rspace.bench
 
-import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
-
 import cats.Id
-import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.store.InMemoryStoreManager
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
+
+import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
 
 class ReplayRSpaceBench {
 
@@ -67,7 +66,6 @@ object ReplayRSpaceBench {
     val produceChannel                    = Channel("produce")
     val matches                           = List(CityMatch(city = "Crystal Lake"))
     val captor                            = new EntriesCaptor()
-    implicit val kvm                      = InMemoryStoreManager[Id]
 
     def initSpace() = {
       val rigPoint = space.createCheckpoint()
@@ -79,15 +77,10 @@ object ReplayRSpaceBench {
     @Setup
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
-      val rootsKVStore   = kvm.store("roots")
-      val coldKVStore    = kvm.store("cold")
-      val historyKVStore = kvm.store("history")
+      val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir)
+      val store = kvm.rSpaceStores
       val (space, replaySpace, _) =
-        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](
-          rootsKVStore,
-          coldKVStore,
-          historyKVStore
-        )
+        RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store)
       this.space = space
       this.replaySpace = replaySpace
     }

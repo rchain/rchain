@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
@@ -10,7 +10,6 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
@@ -34,8 +33,6 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
 
   "Initializing state" should {
     "make a transition to Running once ApprovedBlock has been received" in {
-      import monix.execution.Scheduler.Implicits.global
-
       val theInit = Task.unit
 
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)

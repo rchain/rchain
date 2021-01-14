@@ -12,6 +12,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployId, Par}
+import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -19,9 +20,10 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class DeployIdTest extends FlatSpec with Matchers {
+  implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("deploy-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deploy-id-runtime-manager-test")
 
   private val sk = ConstructDeploy.defaultSec
 

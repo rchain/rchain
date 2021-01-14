@@ -16,7 +16,6 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class InterpreterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 1024L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
 
@@ -30,7 +29,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
     val sendRho = "@{0}!(0)"
 
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         for {
           initStorage           <- storageContents(runtime)
@@ -53,7 +52,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   }
 
   it should "yield correct results for the PrimeCheck contract" in {
-    val tupleSpace = mkRuntime[Task](tmpPrefix, mapSize)
+    val tupleSpace = mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         for {
           _ <- success(
@@ -106,7 +105,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "signal syntax errors to the caller" in {
     val badRholang = "new f, x in { f(x) }"
     val EvaluateResult(_, errors) =
-      mkRuntime[Task](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           execute(runtime, badRholang)
         }
@@ -119,7 +118,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     val EvaluateResult(cost, errors) =
-      mkRuntime[Task](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           execute(runtime, badRholang)
         }
@@ -133,7 +132,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val sendRho     = "@{0}!(0)"
     val initialPhlo = parsingCost(sendRho) - Cost(1)
     val EvaluateResult(cost, errors) =
-      mkRuntime[Task](tmpPrefix, mapSize)
+      mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           implicit val c = runtime.cost
           InterpreterUtil.evaluateResult(runtime, sendRho, initialPhlo)

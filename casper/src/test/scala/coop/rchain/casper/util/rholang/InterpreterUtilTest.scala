@@ -355,7 +355,7 @@ class InterpreterUtilTest
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
-      mkRuntimeManager("interpreter-util-test").use { runtimeManager =>
+      mkRuntimeManager[Task]("interpreter-util-test").use { runtimeManager =>
         for {
           block            <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           dag              <- blockDagStorage.getRepresentation
