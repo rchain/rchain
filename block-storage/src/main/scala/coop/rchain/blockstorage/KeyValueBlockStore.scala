@@ -108,11 +108,10 @@ object KeyValueBlockStore {
       storeApprovedBlock: KeyValueStore[F]
   ): F[BlockStore[F]] = Sync[F].delay(new KeyValueBlockStore[F](store, storeApprovedBlock))
 
-  // TODO: move this to `node` project where is implementation of KV manager
-  def apply[F[_]: Sync: KeyValueStoreManager](): F[BlockStore[F]] =
+  def apply[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[BlockStore[F]] =
     for {
-      store              <- KeyValueStoreManager[F].store("blocks")
-      storeApprovedBlock <- KeyValueStoreManager[F].store("blocks-approved")
+      store              <- kvm.store("blocks")
+      storeApprovedBlock <- kvm.store("blocks-approved")
       blockStore         <- KeyValueBlockStore(store, storeApprovedBlock)
     } yield blockStore
 
