@@ -56,7 +56,7 @@ object Dependencies {
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.6"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
-  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.8"
+  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
