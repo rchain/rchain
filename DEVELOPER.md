@@ -161,7 +161,7 @@ To run RNode locally, first execute:
 ```
 This will build an executable on the path `./node/target/universal/stage/bin/rnode` relative to the repository.
 
-Next, make a directory where you would like to store the logs, keys, and other information related to your rnode testing:
+Next, make a directory where you would like to store the logs, keys, and other information related to your rnode testing:\
 e.x.
 ```
 ~$ mkdir testing
@@ -182,7 +182,7 @@ Populate `bonds.txt` with the following information:
 042be28cef3700a6f5d95ec670af061ec69002efee4d553e398b032ea1f5cb9550c262ef06a46f9cdec65660a66d05dd27cbb84e8e714d84822523395ee7cc3790 480000000
 ```
 
-Populate `wallets.txt` with rev wallet[s] with which you would like to perform testing. These can be generated using the RNode client testing page located at https://tgrospic.github.io/rnode-client-js/. When adding wallets to `wallets.txt`, use the format `public_ethereum_key,rev_balance,0`: 
+Populate `wallets.txt` with rev wallet[s] with which you would like to perform testing. These can be generated using the RNode client testing page located at https://tgrospic.github.io/rnode-client-js/. When adding wallets to `wallets.txt`, use the format `public_ethereum_key,rev_balance,0`:\
 e.x.
 ```
 ~/testing/genesis$ echo "96c44b4cea933e6ebab8cc481a407bc1af99a4ac,10000000000,0" >> wallets.txt
