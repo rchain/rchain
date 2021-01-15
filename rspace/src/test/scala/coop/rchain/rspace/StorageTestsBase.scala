@@ -1,31 +1,25 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path, Paths}
-
-import cats._
-import cats.implicits._
+import cats.{Parallel, _}
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.Parallel
+import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace._
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
-import coop.rchain.shared.PathOps._
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
+import monix.eval._
+import monix.execution.atomic.AtomicAny
 import org.scalatest._
-
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import monix.eval._
-import monix.execution.atomic.AtomicAny
-import coop.rchain.metrics.NoopSpan
-import coop.rchain.store.InMemoryStoreManager
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
@@ -70,11 +64,10 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     val kvm = InMemoryStoreManager[F]
 
     run(for {
-      roots   <- kvm.store("roots")
-      cold    <- kvm.store("cold")
-      history <- kvm.store("history")
+      stores                            <- kvm.rSpaceStores
+      RSpaceStore(history, roots, cold) = stores
       historyRepository <- HistoryRepositoryInstances
-                            .lmdbRepository[F, C, P, A, K](roots, cold, history)
+                            .lmdbRepository[F, C, P, A, K](history, roots, cold)
       cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore)
@@ -93,6 +86,7 @@ import coop.rchain.shared.Log
 
 trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
+
   import scala.concurrent.ExecutionContext
 
   implicit override val concurrentF: Concurrent[Task] =

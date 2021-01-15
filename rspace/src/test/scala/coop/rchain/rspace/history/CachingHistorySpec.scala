@@ -26,7 +26,7 @@ class CachingHistorySpec
       f: (MergingHistory[Task], CachingHistoryStore[Task]) => Task[Unit]
   ): Unit = {
     val (history, caching) = create
-    runEffect(f(history, caching).flatMap(_ => ().pure[Task]))
+    runEffect(f(history, caching))
   }
 
   /**
