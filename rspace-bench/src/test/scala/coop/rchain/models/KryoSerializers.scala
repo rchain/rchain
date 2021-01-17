@@ -28,7 +28,7 @@ class DefaultSerializer[T](implicit tag: ClassTag[T]) extends Serializer[T] {
   override def read(
       kryo: Kryo,
       input: Input,
-      `type`: Class[T]
+      `type`: Class[_ <: T]
   ): T = defaultSerializer(kryo).read(kryo, input, `type`)
 
 }
@@ -41,7 +41,7 @@ object KryoSerializers {
     override def write(kryo: Kryo, output: Output, parMap: ParMap): Unit =
       kryo.writeObject(output, parMapToEMap(parMap))
 
-    override def read(kryo: Kryo, input: Input, `type`: Class[ParMap]): ParMap =
+    override def read(kryo: Kryo, input: Input, `type`: Class[_ <: ParMap]): ParMap =
       emapToParMap(kryo.readObject(input, classOf[EMap]))
   }
 
@@ -51,7 +51,7 @@ object KryoSerializers {
     override def write(kryo: Kryo, output: Output, parSet: ParSet): Unit =
       kryo.writeObject(output, parSetToESet(parSet))
 
-    override def read(kryo: Kryo, input: Input, `type`: Class[ParSet]): ParSet =
+    override def read(kryo: Kryo, input: Input, `type`: Class[_ <: ParSet]): ParSet =
       esetToParSet(kryo.readObject(input, classOf[ESet]))
   }
 
@@ -60,7 +60,7 @@ object KryoSerializers {
       override def read(
           kryo: Kryo,
           input: Input,
-          `type`: Class[T]
+          `type`: Class[_ <: T]
       ): T = {
         val read = super.read(kryo, input, `type`)
         if (thunk(read))

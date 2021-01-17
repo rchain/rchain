@@ -507,9 +507,9 @@ lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(
     commonSettings,
     libraryDependencies ++= commonDependencies,
-    libraryDependencies += "com.esotericsoftware" % "kryo" % "4.0.2",
+    libraryDependencies += "com.esotericsoftware" % "kryo" % "5.0.3",
     dependencyOverrides ++= Seq(
-      "org.ow2.asm" % "asm" % "5.0.4"
+      "org.ow2.asm" % "asm" % "9.0"
     ),
     sourceDirectory in Jmh := (sourceDirectory in Test).value,
     classDirectory in Jmh := (classDirectory in Test).value,

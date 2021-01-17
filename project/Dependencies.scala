@@ -33,7 +33,7 @@ object Dependencies {
   val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.3"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.5.0"
-  val guava               = "com.google.guava"            % "guava"                     % "30.0-jre"
+  val guava               = "com.google.guava"            % "guava"                     % "30.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
   val http4sBlazeServer   = "org.http4s"                 %% "http4s-blaze-server"       % http4sVersion
@@ -56,7 +56,7 @@ object Dependencies {
   val logbackClassic      = "ch.qos.logback"              % "logback-classic"           % "1.2.3"
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.6"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
-  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.12.0"
+  val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
@@ -70,14 +70,14 @@ object Dependencies {
   val scalapbRuntimegGrpc = "com.thesamet.scalapb"       %% "scalapb-runtime-grpc"      % scalapb.compiler.Version.scalapbVersion
   val grpcNetty           = "io.grpc"                     % "grpc-netty"                % scalapb.compiler.Version.grpcJavaVersion
   val grpcServices        = "io.grpc"                     % "grpc-services"             % scalapb.compiler.Version.grpcJavaVersion
-  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.34.Final"
-  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier osClassifier
-  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64"
-  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.34.Final" classifier "linux-x86_64-fedora"
+  val nettyBoringSsl      = "io.netty"                    % "netty-tcnative-boringssl-static" % "2.0.36.Final"
+  val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier osClassifier
+  val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64"
+  val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64-fedora"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
-  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M2"
+  val scodecCats          = "org.scodec"                 %% "scodec-cats"               % "1.1.0-M4"
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.23"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
@@ -98,7 +98,7 @@ object Dependencies {
     shapeless,
     // Added to resolve conflicts with kamon, cats, http4s
     slf4j,
-    "org.typelevel"          % "jawn-parser_2.12"         % "1.0.0",
+    "org.typelevel" % "jawn-parser_2.12" % "1.0.0",
     // Added to resolve conflicts in scalapb plugin v0.10.8
     "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
     "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
@@ -118,7 +118,7 @@ object Dependencies {
     "com.typesafe"             % "config"                  % "1.4.0"
   )
 
-  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.0")
+  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
