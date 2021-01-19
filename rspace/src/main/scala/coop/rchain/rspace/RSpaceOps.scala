@@ -355,7 +355,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       implicit val ck: Codec[K] = serializeK.toSizeHeadCodec
       val history               = historyRepositoryAtom.get()
       for {
-        hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, history)
+        hotStore <- HotStore.from(checkpoint.cacheSnapshot, history)
         _        = storeAtom.set(hotStore)
         _        = eventLog.take()
 
