@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import cats._
 import cats.implicits._
 import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.Parallel
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -88,9 +88,14 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     )
 
     run(for {
-      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
-      cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
+      cache             <- Ref.of[F, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      historyRepoState <- Ref
+                           .of[F, HistoryStoreCache[F, C, P, A, K]](
+                             HistoryStoreCache(Map.empty, Map.empty, Map.empty)
+                           )
+      l                    <- Semaphore[F](1)
+      testStore            = HotStore.inMem(cache, historyRepoState)(Concurrent[F], historyRepository, codecK)
       spaceAndStore        <- createISpace(historyRepository, testStore, branch)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)
