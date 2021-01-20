@@ -6,8 +6,16 @@ import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal.WaitingContinuation
 import coop.rchain.rspace.trace.Event
-import coop.rchain.rspace.trace.Event.{Conflict, IsConflict, NonConflict, containConflictingEvents, extractJoinedChannels, extractRSpaceEventGroup, produceChannels}
-import coop.rchain.rspace.{Blake2b256Hash, StableHashProvider, internal}
+import coop.rchain.rspace.trace.Event.{
+  containConflictingEvents,
+  extractJoinedChannels,
+  extractRSpaceEventGroup,
+  produceChannels,
+  Conflict,
+  IsConflict,
+  NonConflict
+}
+import coop.rchain.rspace.{internal, Blake2b256Hash, StableHashProvider}
 import coop.rchain.shared.Serialize
 
 import scala.language.{higherKinds, implicitConversions}
