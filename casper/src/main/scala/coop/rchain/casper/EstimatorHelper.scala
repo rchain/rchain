@@ -1,6 +1,9 @@
 package coop.rchain.casper
 
-import cats.effect.Sync
+import java.util.concurrent.ConcurrentHashMap
+
+import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
@@ -13,7 +16,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.syntax._
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.{Blake2b256Hash, HistoryReader}
 import coop.rchain.rspace.trace.{COMM, Consume, EventGroup, Produce, Event => RSpaceEvent}
 import coop.rchain.rspace.trace.Event.{
   allChannels,
@@ -25,7 +28,9 @@ import coop.rchain.rspace.trace.Event.{
 }
 import coop.rchain.shared.{Log, Serialize}
 
-import scala.collection.BitSet
+import scala.collection.concurrent.TrieMap
+import scala.collection.{mutable, BitSet}
+import scala.collection.immutable.Set
 
 object EstimatorHelper {
 
@@ -84,92 +89,11 @@ object EstimatorHelper {
           }
     } yield conflicts
 
-  final case class MergeChanges(
-      validDeploys: List[ProcessedDeploy],
-      rejectedDeploys: List[ProcessedDeploy],
-      validEventLogs: Seq[RSpaceEvent]
-  )
-
-  /**
-    * When merging two blocks in casper, you can suppose the minor case like below.
-    *
-    *       mergedBlock
-    *       /        \
-    * mainBlock    mergingBlock
-    *       \       /
-    *       baseBlock
-    *
-    *  The `baseState` should be the `postState` of the baseBlock which the outcome of baseBlock and the state should
-    *  be the start of mainBlock and mergingBlock.
-    *
-    *  The `mainDeploys` are all the deploys in the `mainBlock` and the mergingDeploys are all the
-    *  deploys in `mergingBlock`.
-    *
-    *  The minor case can be extended like below.
-    *
-    *          mergedBlock
-    *       /             \
-    *     b1              mergingBlock
-    *     |               |
-    *     b2              |
-    *       \            /
-    *          baseBlock
-    *
-    *  The `mainDeploys` should be all the deploys in `b1` and `b2`.
-    *
-    *  The function would return conflict detection on these deploys between main side and merging side.
-    *
-    * @param historyRepo [[coop.rchain.rspace.history.HistoryRepository]] which is used for compute mergeChanges
-    * @param baseState
-    * @param mainDeploys
-    * @param mergingDeploys
-    * @param sc
-    * @return
-    */
-  def computeMergeChanges[F[_]: Sync, C, P, A, K](
-      historyRepo: HistoryRepository[F, C, P, A, K],
-      baseState: Blake2b256Hash,
-      mainDeploys: List[ProcessedDeploy],
-      mergingDeploys: List[ProcessedDeploy]
-  )(implicit sc: Serialize[C]): F[MergeChanges] = {
-    // errored deploy is always non-conflict
-    val mainNonErrDeploys    = mainDeploys.filter(!_.isFailed)
-    val mergingNonErrDeploys = mergingDeploys.filter(!_.isFailed)
-    historyRepo
-      .isConflict(
-        baseState,
-        mainNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent)),
-        mergingNonErrDeploys.flatMap(_.deployLog.map(EventConverter.toRspaceEvent))
-      )
-      .map { conflictCase =>
-        conflictCase match {
-          case NonConflict(_, rightEvents) =>
-            MergeChanges(mergingDeploys, List.empty[ProcessedDeploy], rightEvents.events)
-          case Conflict(_, _, conflicts) => {
-            val (conflictDeploys, nonConflictDeploys) = mergingDeploys.partition(
-              d =>
-                d.deployLog.forall(
-                  e =>
-                    EventConverter.toRspaceEvent(e) match {
-                      case Produce(channelsHash, _, _) => conflicts.contains(channelsHash)
-                      case Consume(channelsHasees, _, _) =>
-                        channelsHasees.exists(conflicts.contains(_))
-                      case COMM(consume, produces, _, _) =>
-                        consume.channelsHashes.exists(conflicts.contains(_)) || produces.exists(
-                          p => conflicts.contains(p.channelsHash)
-                        )
-                    }
-                )
-            )
-            MergeChanges(
-              nonConflictDeploys,
-              conflictDeploys,
-              extractEventGroup(nonConflictDeploys.flatMap(_.deployLog)).events
-            )
-          }
-        }
-      }
-  }
+//  final case class MergeChanges(
+//      validDeploys: List[ProcessedDeploy],
+//      rejectedDeploys: List[ProcessedDeploy],
+//      validEventLogs: Seq[RSpaceEvent]
+//  )
 
   private[this] def extractBlockEvents[F[_]: Sync: BlockStore](
       blockAncestorsMeta: List[BlockMetadata]

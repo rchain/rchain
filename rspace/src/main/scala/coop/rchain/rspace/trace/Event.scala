@@ -11,6 +11,7 @@ import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
+import coop.rchain.rspace.trace.{Log => EventLog}
 import shapeless.syntax.std.tuple.productTupleOps
 
 import scala.collection.SortedSet
@@ -97,6 +98,19 @@ object Event {
     val produceEvents                = allProduceEvents.filterNot(producesInVolatileCommEvents.contains)
     val consumeEvents                = allConsumeEvents.filterNot(consumesInVolatileCommEvents.contains)
     EventGroup(produceEvents.toSet, consumeEvents.toSet, nonVolatileCommEvents.toSet)
+  }
+
+  def splitEvents(eventLog: EventLog): (Seq[Produce], Seq[Consume], Seq[COMM]) = {
+    // TODO make it parallel
+    val (allProduceEvents, allConsumeEvents, allCommEvents) =
+      eventLog.foldLeft((Seq.empty[Produce], Seq.empty[Consume], Seq.empty[COMM])) { (op, event) =>
+        event match {
+          case p: Produce => (op._1 :+ p, op._2, op._3)
+          case c: Consume => (op._1, op._2 :+ c, op._3)
+          case c: COMM    => (op._1, op._2, op._3 :+ c)
+        }
+      }
+    (allProduceEvents, allConsumeEvents, allCommEvents)
   }
 
   def extractJoinedChannels(b: EventGroup): Set[Blake2b256Hash] = {

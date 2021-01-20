@@ -10,7 +10,6 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager._
 import coop.rchain.casper.util.{DagOperations, ProtoUtil}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
@@ -19,7 +18,10 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.blocks.merger.{CasperDagMerger, CasperMergingDagReader, MergingVertex}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.dag.DagMerger
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import monix.eval.Coeval
 
@@ -32,9 +34,9 @@ object InterpreterUtil {
 
   private[this] val ComputeParentPostStateMetricsSource =
     Metrics.Source(CasperMetricsSource, "compute-parents-post-state")
-
-  private[this] val ReplayIntoMergeBlockMetricsSource =
-    Metrics.Source(CasperMetricsSource, "replay-into-merge-block")
+//
+//  private[this] val ReplayIntoMergeBlockMetricsSource =
+//    Metrics.Source(CasperMetricsSource, "replay-into-merge-block")
 
   private[this] val ReplayBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "replay-block")
@@ -46,9 +48,9 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Sync: Log: BlockStore: Span: Metrics](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics](
       block: BlockMessage,
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
@@ -56,7 +58,7 @@ object InterpreterUtil {
       _                  <- Span[F].mark("before-unsafe-get-parents")
       parents            <- ProtoUtil.getParents(block)
       _                  <- Span[F].mark("before-compute-parents-post-state")
-      preStateHashEither <- computeParentsPostState(parents, dag, runtimeManager).attempt
+      preStateHashEither <- computeParentsPostState(parents, s, runtimeManager).attempt
       _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
       result <- preStateHashEither match {
                  case Left(ex) =>
@@ -64,8 +66,13 @@ object InterpreterUtil {
                  case Right(computedPreStateHash) =>
                    if (incomingPreStateHash == computedPreStateHash) {
                      for {
-                       replayResult <- replayBlock(incomingPreStateHash, block, dag, runtimeManager)
-                       result       <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                       replayResult <- replayBlock(
+                                        incomingPreStateHash,
+                                        block,
+                                        s.dag,
+                                        runtimeManager
+                                      )
+                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
                      } yield result
                    } else {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
@@ -169,11 +176,11 @@ object InterpreterUtil {
         }
     }
 
-  def computeDeploysCheckpoint[F[_]: Sync: BlockStore: Log: Metrics](
+  def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator]
@@ -186,7 +193,7 @@ object InterpreterUtil {
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
-        preStateHash <- computeParentsPostState(nonEmptyParents, dag, runtimeManager)
+        preStateHash <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
@@ -197,98 +204,57 @@ object InterpreterUtil {
       } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
     }
 
-  private def computeParentsPostState[F[_]: Sync: BlockStore: Log: Metrics](
+  private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F],
+      s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[StateHash] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
-      val parentTuplespaces =
-        parents.map(p => p -> ProtoUtil.postStateHash(p))
-
-      parentTuplespaces match {
+      parents.size match {
         // For genesis, use empty trie's root hash
-        case Seq() =>
+        case 0 =>
           RuntimeManager.emptyStateHashFixed.pure[F]
 
-        case Seq((_, parentStateHash)) =>
-          parentStateHash.pure
+        // For single parent, get itd post state hash
+        case 1 =>
+          ProtoUtil.postStateHash(parents.head).pure
 
-        case _ =>
-          findLeastEffortParentForReply(parents, dag).flatMap {
-            case (leastEfforParentIndex, blockHashesToApply) =>
-              replayIntoMergeBlock(
-                parents,
-                dag,
-                runtimeManager,
-                parentTuplespaces(leastEfforParentIndex)._2,
-                blockHashesToApply
-              )
-          }
+        // we might want to take some data from the parent with the most stake,
+        // e.g. bonds map, slashing deploys, bonding deploys.
+        // such system deploys are not mergeable, so take them from one of the parents.
+        case _ => {
+          implicit val r = runtimeManager
+          val tipsHashes = parents.map(_.blockHash)
+          val lfbHash    = s.lastFinalizedBlock
+          for {
+            tips <- BlockStore[F]
+                     .getUnsafe(tipsHashes)
+                     .map(
+                       b =>
+                         MergingVertex(
+                           b.blockHash,
+                           b.body.state.postStateHash,
+                           b.body.state.preStateHash,
+                           b.body.deploys.toSet
+                         )
+                     )
+                     .compile
+                     .toList
+            base <- BlockStore[F]
+                     .getUnsafe(lfbHash)
+                     .map(
+                       b =>
+                         MergingVertex(
+                           b.blockHash,
+                           b.body.state.postStateHash,
+                           b.body.state.preStateHash,
+                           b.body.deploys.toSet
+                         )
+                     )
+            r <- CasperDagMerger.merge(tips, base, new CasperMergingDagReader(s.dag))
+          } yield r._1
+        }
+
       }
     }
-
-  // In the case of multiple parents we need to apply all of the deploys that have been
-  // made in all of the branches of the DAG being merged. This is done by computing uncommon ancestors
-  // and applying the deploys in those blocks on top of the initial parent.
-  private def replayIntoMergeBlock[F[_]: Sync: BlockStore: Log: Metrics](
-      parents: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F],
-      initStateHash: StateHash,
-      blockMetasToApply: Vector[BlockMetadata]
-  )(implicit spanF: Span[F]): F[StateHash] =
-    spanF.trace(ReplayIntoMergeBlockMetricsSource) {
-      import cats.instances.vector._
-      for {
-        _ <- Span[F].mark("before-compute-parents-post-state-find-multi-parents")
-        _ <- Log[F].info(
-              s"replayIntoMergeBlock computed number of uncommon ancestors: ${blockMetasToApply.length}"
-            )
-        _ <- Metrics[F].setGauge("uncommon_ancestors", blockMetasToApply.length.toLong)(
-              ReplayIntoMergeBlockMetricsSource
-            )
-        _             <- Span[F].mark("before-compute-parents-post-state-get-blocks")
-        blocksToApply <- blockMetasToApply.traverse(b => BlockStore[F].getUnsafe(b.blockHash))
-        _             <- Span[F].mark("before-compute-parents-post-state-replay")
-        replayResult <- blocksToApply.foldM(initStateHash) { (stateHash, block) =>
-                         (for {
-                           replayResult <- replayBlock(stateHash, block, dag, runtimeManager)
-                         } yield replayResult.leftMap[Throwable] { status =>
-                           val parentHashes =
-                             parents.map(p => Base16.encode(p.blockHash.toByteArray).take(8))
-                           new Exception(
-                             s"Failed status while computing post state of $parentHashes: $status"
-                           )
-                         }).rethrow
-                       }
-      } yield replayResult
-    }
-
-  private[rholang] def findLeastEffortParentForReply[F[_]: Monad](
-      parents: Seq[BlockMessage],
-      dag: BlockDagRepresentation[F]
-  ): F[(Int, Vector[BlockMetadata])] = {
-    import cats.instances.list._
-    for {
-      parentsMetadata <- parents.toList.traverse(b => dag.lookup(b.blockHash).map(_.get))
-      result <- {
-        for {
-          uncommonAncestors <- DagOperations.uncommonAncestors(parentsMetadata.toVector, dag)
-          blocksToApplyByParent = parentsMetadata.indices.map(
-            ancestorsOfInitParentIndex =>
-              // Filter out blocks that already included by starting from the chosen initial parent
-              // as otherwise we will be applying the initial parent's ancestor's twice.
-              ancestorsOfInitParentIndex -> uncommonAncestors.filterNot {
-                case (_, set) => set.contains(ancestorsOfInitParentIndex)
-              }.keys
-          )
-          (leastEffortParentIndex, blockMetasToApply) = blocksToApplyByParent.minBy(_._2.size)
-          // Ensure blocks to apply is topologically sorted to maintain any causal dependencies
-        } yield leastEffortParentIndex -> blockMetasToApply.toVector.sorted(
-          BlockMetadata.orderingByNum
-        )
-      }
-    } yield result
-  }
 }
