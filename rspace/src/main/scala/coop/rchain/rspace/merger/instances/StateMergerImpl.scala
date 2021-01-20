@@ -1,37 +1,36 @@
 package coop.rchain.rspace.merger.instances
 
-import cats.effect.Sync
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.continuationKey
-import coop.rchain.rspace.channelStore.{ChannelStore, ContinuationHash, DataJoinHash}
+import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.history.HistoryRepositoryImpl.{
   encodeContinuations,
   encodeData,
   encodeJoins
 }
 import coop.rchain.rspace.history.{
-  DeleteAction => HistoryDeleteAction,
-  InsertAction => HistoryInsertAction
-}
-import coop.rchain.rspace.syntax._
-import coop.rchain.rspace.history.{
   ColdStore,
   ContinuationsLeaf,
   DataLeaf,
   History,
   HistoryAction,
+  HistoryHashReader,
   HistoryRepository,
   JoinsLeaf,
   PersistedData,
-  RootRepository
+  RootRepository,
+  DeleteAction => HistoryDeleteAction,
+  InsertAction => HistoryInsertAction
 }
 import coop.rchain.rspace.internal.{toOrderedByteVectors, Datum, WaitingContinuation}
-import coop.rchain.rspace.merger.StateMerger
+import coop.rchain.rspace.merger.{EventChain, StateMerger}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
-import coop.rchain.shared.Serialize
+import coop.rchain.shared.{Log, Serialize, Stopwatch}
 import scodec.Codec
+
 object StateMergerImpl {
 
   sealed trait StateMergeStoreAction
@@ -51,13 +50,23 @@ object StateMergerImpl {
       channels: Blake2b256Hash
   ) extends StateMergeDeleteAction
 
-  final case class StateMergerImpl[F[_]: Sync, C, P, A, K](
+  final case class ChannelChanges(
+      produceChanges: Vector[Blake2b256Hash],
+      consumeChanges: Vector[Seq[Blake2b256Hash]]
+  )
+
+  final case class HistoriesWithChanges[F[_], C, P, A, K](
+      startState: HistoryRepository[F, C, P, A, K],
+      endState: HistoryRepository[F, C, P, A, K],
+      events: Seq[Event]
+  )
+
+  final case class StateMergerImpl[F[_]: Concurrent: Log, C, P, A, K](
       historyRepo: HistoryRepository[F, C, P, A, K],
       history: History[F],
       leafStore: ColdStore[F],
       rootsRepository: RootRepository[F],
-      serializeC: Serialize[C],
-      joinMap: Ref[F, Map[Blake2b256Hash, Seq[Seq[C]]]]
+      serializeC: Serialize[C]
   )(
       implicit codecC: Codec[C],
       codecP: Codec[P],
@@ -65,99 +74,279 @@ object StateMergerImpl {
       codecK: Codec[K]
   ) extends StateMerger[F] {
 
-    case class ChannelChanges(
-        produceChanges: Set[Blake2b256Hash],
-        consumeChanges: Set[Seq[Blake2b256Hash]]
-    )
-    private def excludeEventsInComm(eventsLogs: List[Event]) = {
-      val comm = eventsLogs.collect { case c: COMM => c }
-      val produceChanges = comm
-        .flatMap(_.produces)
-        .map(_.channelsHash)
-        .toSet ++ eventsLogs.collect {
-        case p: Produce => p.channelsHash
-      }.toSet
-      val consumeChanges = comm.map(_.consume.channelsHashes).toSet ++ eventsLogs.collect {
-        case c: Consume => c.channelsHashes
-      }.toSet
-      ChannelChanges(produceChanges, consumeChanges)
-    }
+    private def computeHistoryActions(
+        mainStateReader: HistoryRepository[F, C, P, A, K],
+        mergings: Seq[HistoriesWithChanges[F, C, P, A, K]],
+        joinMap: Ref[F, Map[Blake2b256Hash, Seq[Seq[C]]]]
+    ): F[List[HistoryAction]] = {
 
-    case class JoinInfo(channelHash: Blake2b256Hash, joinHash: Blake2b256Hash, joins: Seq[Seq[C]])
-    private def getJoins(
-        mainState: Blake2b256Hash,
-        merginState: Blake2b256Hash,
-        channelHash: Blake2b256Hash
-    ) =
+      val events = mergings.flatMap(_.events)
+
+      val changedChannels = {
+        val comm = events.collect { case c: COMM => c }
+        val produceChanges =
+          (events.collect { case p: Produce => p } ++ comm.flatMap(_.produces)).toSet
+        val consumeChanges = comm.map(_.consume).toSet ++ events.collect {
+          case c: Consume => c
+        }
+        ChannelChanges(
+          produceChanges.map(_.channelsHash).toVector,
+          consumeChanges.map(_.channelsHashes).toVector
+        )
+      }
+
+      // TODO now all channels in all mergings are checked, reduce check to only channels inside partolular merging
+      // streams for compute data and continuation changes
+      val dataChangesComputes = changedChannels.produceChanges.map(
+        ch =>
+          fs2.Stream.eval(
+            computeDataChanges(ch, mainStateReader, mergings)
+          )
+      )
+      val contChangesComputes = changedChannels.consumeChanges.map(
+        ch =>
+          fs2.Stream
+            .eval(
+              computeContinuationChanges(ch, mainStateReader, mergings, joinMap)
+            )
+            .filter(_.isDefined)
+            .map(_.get)
+      )
+
       for {
-        maybeJoinHash <- historyRepo.getChannelHash(channelHash)
-        joinHash <- maybeJoinHash match {
-                     case Some(DataJoinHash(_, j)) => j.pure[F]
-                     case _ =>
-                       Sync[F].raiseError[Blake2b256Hash](
-                         new Exception(s"not found join hash ${channelHash} in channel store")
-                       )
-                   }
-        m <- joinMap.get
-        result <- m.get(joinHash) match {
-                   case None =>
-                     for {
-                       mainJoins    <- historyRepo.getJoins(mainState, joinHash)
-                       mergingJoins <- historyRepo.getJoins(merginState, joinHash)
-                       unionJoins   = (mainJoins.toSet ++ mergingJoins.toSet).toSeq
-                       _            <- joinMap.update(_ + (joinHash -> unionJoins))
-                     } yield unionJoins
-                   case Some(j) => j.pure[F]
-                 }
-      } yield JoinInfo(channelHash, joinHash, result)
+        // compute data and continuation changes
+        dNcChanges <- Stopwatch.time(Log[F].info(_))(
+                       s"compute changes: ${dataChangesComputes.size} produces + ${contChangesComputes.size} consumes"
+                     )(
+                       fs2.Stream
+                         .emits(dataChangesComputes ++ contChangesComputes)
+                         .parJoinUnbounded
+                         .compile
+                         .toVector
+                     )
+        // join changes. NOTE: should be called after continuation changes are computed
+        jChanges <- computeJoinChanges(joinMap).map(_.toVector)
+        changes  = dNcChanges ++ jChanges
 
-    private def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
-      val (l1, l2) = col splitAt index
-      (l1 ++ (l2 tail))
+        // transform changes into actions on data store and history store
+        transformedActions = changes.par.map(transform)
+
+        // apply data actions
+        historyActions <- storeLeaves(transformedActions.toList)
+
+      } yield historyActions
     }
-
-    private def removeJoins(
-        mainState: Blake2b256Hash,
-        mergingState: Blake2b256Hash,
-        channelHash: Blake2b256Hash,
-        join: Seq[C]
-    ) =
-      for {
-        joinInfo <- getJoins(mainState, mergingState, channelHash)
-        index    = joinInfo.joins.indexOf(join)
-        _ <- if (index != -1) {
-              joinMap.update { m =>
-                val updatedJoins = removeIndex(joinInfo.joins, index)
-                m + (joinInfo.joinHash -> updatedJoins)
-              }
-            } else Sync[F].unit
-      } yield ()
 
     override def merge(
-        baseState: Blake2b256Hash,
         mainState: Blake2b256Hash,
-        mergingState: Blake2b256Hash,
-        eventLogs: List[Event]
+        toMerge: Seq[EventChain]
     ): F[Blake2b256Hash] =
       for {
-        changedChannels <- excludeEventsInComm(eventLogs).pure[F]
-        dataChanges <- changedChannels.produceChanges.toList
-                        .traverse(getDataChanges(_, mainState, baseState, mergingState))
-        consumeChangesOpt <- changedChannels.consumeChanges.toList
-                              .traverse(
-                                getContinuationChanges(_, mainState, baseState, mergingState)
-                              )
-        consumeChanges     = consumeChangesOpt.collect { case Some(c) => c }
-        joinChanges        <- getJoinChanges
-        changes            = dataChanges ++ consumeChanges ++ joinChanges
-        transformedActions = changes.map(transform)
-        historyActions     <- storeLeaves(transformedActions)
-        h                  = history.reset(mainState)
-        mergedState        <- h.process(historyActions)
-        _                  <- rootsRepository.commit(mergedState.root)
+        joinMap     <- Ref.of[F, Map[Blake2b256Hash, Seq[Seq[C]]]](Map.empty)
+        mainHistory <- historyRepo.reset(mainState)
+        historiesWithChanges <- toMerge.toList.traverse(
+                                 m =>
+                                   for {
+                                     start  <- historyRepo.reset(m.startState)
+                                     finish <- historyRepo.reset(m.endState)
+                                   } yield HistoriesWithChanges(start, finish, m.events)
+                               )
+
+        historyActions <- Stopwatch.time(Log[F].info(_))(
+                           s"compute historyActions: ${toMerge.flatMap(_.events).size} events, merged ${historiesWithChanges.size} states"
+                         )(
+                           computeHistoryActions(
+                             mainHistory,
+                             historiesWithChanges,
+                             joinMap
+                           )
+                         )
+
+        // apply history actions
+        mergedState <- Stopwatch.time(Log[F].info(_))("process historyActions")(
+                        mainHistory.history.process(historyActions)
+                      )
+
+        // commit root to roots store
+        _ <- rootsRepository.commit(mergedState.root)
       } yield mergedState.root
 
-    private def getJoinChanges: F[List[StateMergeStoreAction]] =
+    private def computeDataChanges(
+        channelHash: Blake2b256Hash,
+        mainStateHistory: HistoryHashReader[F, C, P, A, K],
+        mergingStatesHistories: Seq[HistoriesWithChanges[F, C, P, A, K]]
+    ): F[StateMergeStoreAction] =
+      for {
+        dataHash <- historyRepo.getChannelHash(channelHash).flatMap {
+                     case Some(DataJoinHash(dataHash, _)) => dataHash.pure[F]
+                     case _ =>
+                       Sync[F].raiseError[Blake2b256Hash](
+                         new Exception("not found produce hash in channel store")
+                       )
+                   }
+        dataAtMain <- mainStateHistory.getDataWithBytes(dataHash).map(_.toVector)
+
+        mergeResult <- mergingStatesHistories.toList.foldLeftM(dataAtMain)(
+                        (acc, mergingStateHistory) =>
+                          for {
+                            // This getDataWithBytes is used to make computation faster
+                            // using `dataAtMerge diff dataAtBase` compared with `filterNot` using ByteVector key
+                            // is about 30% slower
+                            dataAtBase <- mergingStateHistory.startState
+                                           .getDataWithBytes(dataHash)
+                                           .map(_.toVector)
+                            dataAtMerge <- mergingStateHistory.endState
+                                            .getDataWithBytes(dataHash)
+                                            .map(_.toVector)
+                            atMergeAdded = dataAtMerge.filterNot(
+                              d => dataAtBase.map(_._2).contains(d._2)
+                            )
+                            atMergeDeleted = dataAtBase.filterNot(
+                              d => dataAtMerge.map(_._2).contains(d._2)
+                            )
+                            mergeResult = acc.filterNot(
+                              d => atMergeDeleted.map(_._2).contains(d._2)
+                            ) ++ atMergeAdded
+                          } yield mergeResult
+                      )
+        action = if (mergeResult.isEmpty) MergeDeleteData(dataHash)
+        else MergeInsertData(dataHash, mergeResult.map(_._1))
+      } yield action
+
+    private def computeContinuationChanges(
+        channelHashes: Seq[Blake2b256Hash],
+        mainStateHistory: HistoryHashReader[F, C, P, A, K],
+        mergingStatesHistories: Seq[HistoriesWithChanges[F, C, P, A, K]],
+        joinMap: Ref[F, Map[Blake2b256Hash, Seq[Seq[C]]]]
+    ): F[Option[StateMergeStoreAction]] = {
+
+      case class JoinInfo(channelHash: Blake2b256Hash, joinHash: Blake2b256Hash, joins: Seq[Seq[C]])
+
+      def checkJoins(
+          channelHash: Blake2b256Hash,
+          channelHashes: Seq[Blake2b256Hash],
+          shouldRemove: Boolean,
+          mergingStateHistory: HistoryHashReader[F, C, P, A, K]
+      ): F[Unit] = {
+        def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
+          val (l1, l2) = col splitAt index
+          (l1 ++ (l2 tail))
+        }
+
+        for {
+          // get
+          joinHash <- historyRepo
+                       .getChannelHash(channelHash)
+                       .flatMap {
+                         case Some(DataJoinHash(_, j)) => j.pure[F]
+                         case _ =>
+                           Sync[F].raiseError[Blake2b256Hash](
+                             new Exception(
+                               s"hash ${channelHash} not found in channel store when requesting join"
+                             )
+                           )
+                       }
+          mainJoins    <- mainStateHistory.getJoins(joinHash)
+          mergingJoins <- mergingStateHistory.getJoins(joinHash)
+
+          err <- joinMap.modify[Boolean] { s =>
+                  // get
+                  val (s1, joins) = s.get(joinHash) match {
+                    case None =>
+                      val newVal = (mainJoins ++ mergingJoins).distinct
+                      (s.updated(joinHash, newVal), newVal)
+                    case Some(joins) =>
+                      val newVal = (joins ++ mergingJoins).distinct
+                      (s.updated(joinHash, newVal), newVal)
+                  }
+                  // check
+                  val currentJoin = joins.find(
+                    j =>
+                      toOrderedByteVectors(j)(serializeC)
+                        .map(Blake2b256Hash.create) == channelHashes
+                  )
+
+                  currentJoin match {
+                    case Some(join) =>
+                      if (shouldRemove) {
+                        val index = joins.indexOf(join)
+                        if (index != -1) {
+                          val updatedJoins = removeIndex(joins, index)
+                          (s1.updated(joinHash, updatedJoins), false)
+                        } else (s1, false)
+                      } else (s1, false)
+                    case None =>
+                      if (shouldRemove) (s1, false)
+                      else (s1, true)
+                  }
+                }
+          _ <- Sync[F]
+                .raiseError(
+                  new Exception(
+                    s"join ${channelHashes} not found in both main and merging"
+                  )
+                )
+                .whenA(err)
+        } yield ()
+      }
+
+      historyRepo.getChannelHash(continuationKey(channelHashes)).flatMap {
+        case Some(ContinuationHash(consumeHash)) =>
+          for {
+            continuationsAtMain <- mainStateHistory.getContinuationsWithBytes(consumeHash)
+
+            mergeResult <- mergingStatesHistories.toList.foldLeftM(continuationsAtMain)(
+                            (acc, mergingStateHistory) =>
+                              for {
+                                // This getDataWithBytes is used to make coputation faster
+                                // using `dataAtMerge diff dataAtBase` compared with `filterNot` using ByteVector key
+                                // is about 30% slower
+                                continuationsAtBase <- mergingStateHistory.startState
+                                                        .getContinuationsWithBytes(consumeHash)
+                                continuationsAtMerge <- mergingStateHistory.endState
+                                                         .getContinuationsWithBytes(consumeHash)
+                                atMergeAdded = continuationsAtMerge
+                                  .filterNot(d => continuationsAtBase.map(_._2).contains(d._2))
+                                atMergeRemoved = continuationsAtBase
+                                  .filterNot(d => continuationsAtMerge.map(_._2).contains(d._2))
+                                mergeResult = acc
+                                  .filterNot(d => atMergeRemoved.map(_._2).contains(d._2)) ++ atMergeAdded
+                                _ <- channelHashes.toList.traverse_ { channelHash =>
+                                      checkJoins(
+                                        channelHash,
+                                        channelHashes,
+                                        mergeResult.isEmpty,
+                                        mergingStateHistory.endState
+                                      )
+                                    }
+                              } yield mergeResult
+                          )
+
+            consumeAction = if (mergeResult.isEmpty)
+              Some(MergeDeleteContinuations(consumeHash))
+            else
+              Some(
+                MergeInsertContinuations(
+                  consumeHash,
+                  mergeResult.map(_._1)
+                )
+              )
+          } yield consumeAction
+        case _ =>
+          // why getting no result from channelStore can result in non-store-actions here
+          // this is related to how and when channelHashes put channelHashes into the channelStore
+          // channelStore store channelHashes when there are changes in [[HistoryRepository]].
+          // If you can not find channelHashes in channelStore, it means that there were no changes
+          // from both mainState and merging State.
+          // The idea behind it is implicit which is very bad for those who read the codes
+          // TODO fix the logic above
+          none[StateMergeStoreAction].pure[F]
+      }
+    }
+
+    private def computeJoinChanges(
+        joinMap: Ref[F, Map[Blake2b256Hash, Seq[Seq[C]]]]
+    ): F[Vector[StateMergeStoreAction]] =
       for {
         m <- joinMap.get
         changes = m.map {
@@ -165,120 +354,7 @@ object StateMergerImpl {
             if (joins.isEmpty) MergeDeleteJoins(channelHash)
             else MergeInsertJoins(channelHash, joins)
         }
-      } yield changes.toList
-
-    private def getDataChanges(
-        channelHash: Blake2b256Hash,
-        mainState: Blake2b256Hash,
-        baseState: Blake2b256Hash,
-        mergingState: Blake2b256Hash
-    ): F[StateMergeStoreAction] =
-      for {
-        maybeDataHash <- historyRepo.getChannelHash(channelHash)
-        dataHash <- maybeDataHash match {
-                     case Some(DataJoinHash(dataHash, _)) => dataHash.pure[F]
-                     case _ =>
-                       Sync[F].raiseError[Blake2b256Hash](
-                         new Exception("not found produce hash in channel store")
-                       )
-                   }
-        dataAtMerge       <- historyRepo.getData(mergingState, dataHash)
-        dataAtBase        <- historyRepo.getData(baseState, dataHash)
-        dataAtMain        <- historyRepo.getData(mainState, dataHash)
-        dataAddAtMerge    = dataAtMerge diff dataAtBase
-        dataRemoveAtMerge = dataAtBase diff dataAtMerge
-        mergedDataResult  = dataAtMain ++ dataAddAtMerge diff dataRemoveAtMerge
-        action = if (mergedDataResult.isEmpty) MergeDeleteData(dataHash)
-        else MergeInsertData(dataHash, mergedDataResult)
-      } yield action
-
-    private def checkJoins(
-        mainState: Blake2b256Hash,
-        mergingState: Blake2b256Hash,
-        channelHash: Blake2b256Hash,
-        channelHashes: Seq[Blake2b256Hash],
-        shouldRemove: Boolean
-    ) =
-      for {
-        joinInfo <- getJoins(mainState, mergingState, channelHash)
-        currentJoin = joinInfo.joins.find(
-          j =>
-            toOrderedByteVectors(j)(serializeC)
-              .map(Blake2b256Hash.create) == channelHashes
-        )
-        _ <- currentJoin match {
-              case Some(join) =>
-                if (shouldRemove) removeJoins(mainState, mergingState, channelHash, join)
-                else Sync[F].unit
-              case None =>
-                if (shouldRemove) Sync[F].unit
-                else
-                  Sync[F].raiseError(
-                    new Exception(
-                      s"join ${channelHashes} not found in both main and merging ${joinInfo}"
-                    )
-                  )
-            }
-      } yield ()
-
-    private def getContinuationChanges(
-        channelHashes: Seq[Blake2b256Hash],
-        mainState: Blake2b256Hash,
-        baseState: Blake2b256Hash,
-        mergingState: Blake2b256Hash
-    ): F[Option[StateMergeStoreAction]] =
-      for {
-        maybeConsumeHash <- historyRepo.getChannelHash(
-                             continuationKey(channelHashes)
-                           )
-        result <- maybeConsumeHash match {
-                   case Some(ContinuationHash(consumeHash)) =>
-                     for {
-                       continuationAtMerge <- historyRepo.getContinuations(
-                                               mergingState,
-                                               consumeHash
-                                             )
-                       continuationAtBase <- historyRepo.getContinuations(
-                                              baseState,
-                                              consumeHash
-                                            )
-                       continuationAtMain <- historyRepo.getContinuations(
-                                              mainState,
-                                              consumeHash
-                                            )
-                       continuationAddAtMerge    = continuationAtMerge diff continuationAtBase
-                       continuationRemoveAtMerge = continuationAtBase diff continuationAtMerge
-                       mergedContinuationResult  = continuationAtMain ++ continuationAddAtMerge diff continuationRemoveAtMerge
-                       _ <- channelHashes.toList.traverse { channelHash =>
-                             checkJoins(
-                               mainState,
-                               mergingState,
-                               channelHash,
-                               channelHashes,
-                               mergedContinuationResult.isEmpty
-                             )
-                           }
-                       consumeAction = if (mergedContinuationResult.isEmpty)
-                         Some(MergeDeleteContinuations(consumeHash))
-                       else
-                         Some(
-                           MergeInsertContinuations(
-                             consumeHash,
-                             mergedContinuationResult
-                           )
-                         )
-                     } yield consumeAction
-                   case _ =>
-                     // why getting no result from channelStore can result in non-store-actions here
-                     // this is related to how and when channelHashes put channelHashes into the channelStore
-                     // channelStore store channelHashes when there are changes in [[HistoryRepository]].
-                     // If you can not find channelHashes in channelStore, it means that there were no changes
-                     // from both mainState and merging State.
-                     // The idea behind it is implicit which is very bad for those who read the codes
-                     // TODO fix the logic above
-                     none[StateMergeStoreAction].pure[F]
-                 }
-      } yield result
+      } yield changes.toVector
 
     type Result = (Blake2b256Hash, Option[PersistedData], HistoryAction)
 
@@ -315,6 +391,5 @@ object StateMergerImpl {
       val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
       leafStore.put(toBeStored).map(_ => leafs.map(_._3))
     }
-
   }
 }
