@@ -21,8 +21,9 @@ object Hasher {
     hashWithSuffix(codeC.encode(channel).get, joinSuffixBits)
 
   def hashContinuationsChannels[C](channels: Seq[C], serializeC: Serialize[C]): Blake2b256Hash = {
-    val chs = channels
+    val chs = channels.par
       .map(c => serializeC.encode(c))
+      .toList
       .sorted(util.ordByteVector)
     val channelsBits = codecSeq(codecByteVector).encode(chs).get
     hashWithSuffix(channelsBits, continuationSuffixBits)
