@@ -11,11 +11,12 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.blockstorage.util.DoublyLinkedDag
 import coop.rchain.casper.util.ProtoUtil._
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.shared.{Cell, DagOps, Log, LogSource}
+import coop.rchain.shared.{Cell, Log, LogSource}
 
 object EquivocationDetector {
 
