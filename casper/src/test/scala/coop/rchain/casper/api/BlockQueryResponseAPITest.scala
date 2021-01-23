@@ -1,36 +1,30 @@
 package coop.rchain.casper.api
 
 import cats.effect.{Resource, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.engine._
-import EngineCell._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.engine._
-import EngineCell._
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
+import coop.rchain.casper.batch2.EngineWithCasper
+import coop.rchain.casper.engine.EngineCell._
+import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.metrics.Metrics
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockHash._
-import coop.rchain.shared.Cell
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.crypto.PrivateKey
+import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
-import org.scalatest._
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest._
 
 import scala.collection.immutable.HashMap
-import coop.rchain.metrics.NoopSpan
-import coop.rchain.models.blockImplicits.getRandomBlock
 
 class BlockQueryResponseAPITest
     extends FlatSpec
@@ -39,8 +33,9 @@ class BlockQueryResponseAPITest
     with BlockDagStorageFixture {
   implicit val timeEff = new LogicalTime[Task]
   implicit val spanEff = NoopSpan[Task]()
+  implicit val log     = Log.log[Task]
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("block-query-response-api-test")
+    mkRuntimeManager[Task]("block-query-response-api-test")
 
   val tooShortQuery    = "12345"
   val badTestHashQuery = "1234acd"

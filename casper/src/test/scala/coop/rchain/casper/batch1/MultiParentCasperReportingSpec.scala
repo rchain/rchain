@@ -30,7 +30,9 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
 
       for {
         reportingStore <- ReportMemStore
-                           .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+                           .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                             kvm
+                           )
         reportingCasper = ReportingCasper.rhoReporter(node.rhoHistoryRepository, reportingStore)
         deploy          <- ConstructDeploy.sourceDeployNowF(correctRholang)
         signedBlock     <- node.addBlock(deploy)

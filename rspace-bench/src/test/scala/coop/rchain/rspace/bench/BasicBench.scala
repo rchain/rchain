@@ -1,8 +1,5 @@
 package coop.rchain.rspace.bench
 
-import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
-
 import cats.effect.{ContextShift, Sync}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -11,10 +8,10 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
+import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace.{Match, RSpace, ReplayRSpace, _}
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
@@ -25,6 +22,8 @@ import org.scalacheck.Gen.Parameters
 import org.scalacheck.rng.Seed
 import org.scalacheck.{Arbitrary, Gen}
 
+import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeUnit
 import scala.collection.immutable.{BitSet, Seq}
 
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -113,8 +112,9 @@ object BasicBench {
     implicit val m: Match[Task, BindPattern, ListParWithRandom] = matchListPar[Task]
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
-
-    private val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
+    private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
+    implicit val kvm                                            = RholangCLI.mkRSpaceStoreManager[Task](dbDir).runSyncUnsafe()
+    val rSpaceStore                                             = kvm.rSpaceStores.runSyncUnsafe()
 
     val testSpace: ISpace[
       Task,
@@ -130,11 +130,7 @@ object BasicBench {
           BindPattern,
           ListParWithRandom,
           TaggedContinuation
-        ](
-          dbDir,
-          1024L * 1024L * 1024L,
-          Branch("bench")
-        )
+        ](rSpaceStore)
         .unsafeRunSync
 
     implicit val cost = CostAccounting.initialCost[Task](Cost.UNSAFE_MAX).unsafeRunSync
@@ -259,9 +255,7 @@ object BasicBench {
       generate[TaggedContinuation]()(arbitraryContinuation).toVector
 
     @TearDown
-    def tearDown(): Unit = {
-      testSpace.close()
+    def tearDown(): Unit =
       dbDir.recursivelyDelete()
-    }
   }
 }

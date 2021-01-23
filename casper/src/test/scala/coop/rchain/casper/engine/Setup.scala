@@ -1,11 +1,7 @@
 package coop.rchain.casper.engine
 
-import java.nio.file.Path
-
 import cats._
-import cats.implicits._
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
@@ -14,10 +10,9 @@ import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -30,8 +25,8 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.Runtime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
-import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -41,34 +36,29 @@ object Setup {
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
-    val networkId                 = "test"
-    val scheduler                 = Scheduler.io("test")
-    val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
-    val (space, replay, historyRepo) = {
-      implicit val s = scheduler
-      Runtime.setupRSpace[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
-    }
+    implicit val scheduler        = Scheduler.Implicits.global
+
+    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                     = GenesisBuilder.buildGenesis(params)
+
+    val networkId = "test"
+    val spaceKVManager =
+      mkTestRNodeStoreManager[Task](context.storageDirectory).runSyncUnsafe()
+    val store = spaceKVManager.rSpaceStores.runSyncUnsafe()
+    val spaces =
+      Runtime.setupRSpace[Task](store).runSyncUnsafe()
+    val (rspace, replay, historyRepo) = spaces
+    val activeRuntime =
+      Runtime
+        .createWithEmptyCost[Task]((rspace, replay), Seq.empty)
+        .unsafeRunSync
+
     val (exporter, importer) = {
-      implicit val s = scheduler
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task]((space, replay))(
-          Concurrent[Task],
-          log,
-          metrics,
-          span,
-          Parallel[Task]
-        )
-        .unsafeRunSync(scheduler)
-
-    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync(scheduler)
-
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
@@ -147,9 +137,8 @@ object Setup {
       LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
     implicit val blockRetriever = BlockRetriever.of[Task]
 
-    implicit val kvsManager = InMemoryStoreManager[Task]
     implicit val casperBuffer = CasperBufferKeyValueStorage
-      .create[Task]
+      .create[Task](spaceKVManager)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)

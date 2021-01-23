@@ -1,7 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
-
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -10,7 +8,9 @@ import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
 import coop.rchain.rspace.Checkpoint
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
@@ -67,8 +67,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   }
   def pp(term: Par): String = prettyPrinter.buildString(term)
 
-  def cleanUp(): Unit =
-    runtime.close().unsafeRunSync
+  def cleanUp(): Unit = ()
 
   def checkpoint(name: String): Unit =
     checkpoints.update(name, runtime.space.createCheckpoint().unsafeRunSync)
@@ -88,9 +87,14 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    val (space, replay, _) = Runtime
-      .setupRSpace[Task](Files.createTempDirectory("interactive-"), 1024 * 1024L * 1024L)
+    implicit val kvsManager                = InMemoryStoreManager[Task]
+
+    val store = kvsManager.rSpaceStores.unsafeRunSync
+    val spaces = Runtime
+      .setupRSpace[Task](store)
       .unsafeRunSync
-    new Interactive(Runtime.createWithEmptyCost[Task]((space, replay)).runSyncUnsafe(5.seconds))
+    val (rspace, replay, _) = spaces
+
+    new Interactive(Runtime.createWithEmptyCost[Task]((rspace, replay)).runSyncUnsafe(5.seconds))
   }
 }

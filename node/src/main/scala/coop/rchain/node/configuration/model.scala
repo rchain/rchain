@@ -1,18 +1,13 @@
 package coop.rchain.node.configuration
 
-import java.nio.file.Path
-
-import com.typesafe.config.Config
-
-import scala.concurrent.duration.FiniteDuration
+import coop.rchain.casper.CasperConf
 import coop.rchain.casper.util.comm.ListenAtName.Name
 import coop.rchain.comm.PeerNode
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.casper.CasperConf
 import coop.rchain.comm.transport.TlsConf
-import coop.rchain.node.configuration.Configuration.Profile
-import pureconfig._
-import pureconfig.generic.auto._
+import coop.rchain.crypto.{PrivateKey, PublicKey}
+
+import java.nio.file.Path
+import scala.concurrent.duration.FiniteDuration
 
 final case class NodeConf(
     standalone: Boolean,
@@ -85,11 +80,7 @@ final case class ApiServer(
 )
 
 final case class Storage(
-    dataDir: Path,
-    lmdbMapSizeRspace: Long,
-    lmdbMapSizeBlockdagstore: Long,
-    lmdbMapSizeBlockstore: Long,
-    lmdbMapSizeDeploystore: Long
+    dataDir: Path
 )
 
 final case class Metrics(

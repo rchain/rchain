@@ -135,7 +135,8 @@ lazy val shared = (project in file("shared"))
       lmdbjava,
       catsEffectLawsTest,
       catsLawsTest,
-      catsLawsTestkitTest
+      catsLawsTestkitTest,
+      enumeratum,
     )
   )
 
@@ -228,7 +229,6 @@ lazy val models = (project in file("models"))
   .settings(
     libraryDependencies ++= commonDependencies ++ protobufDependencies ++ Seq(
       catsCore,
-      enumeratum,
       magnolia,
       scalapbCompiler,
       scalacheck % "test",

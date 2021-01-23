@@ -1,100 +1,85 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.StandardCopyOption.REPLACE_EXISTING
-import java.nio.file.{Files, Path}
-
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
-import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
+import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
 import coop.rchain.shared.Log
-import monix.eval.Task
+import coop.rchain.store.LmdbDirStoreManager.mb
+import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 import monix.execution.Scheduler
+
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.{Files, Path}
 
 object Resources {
 
-  def mkRuntimeManager(
-      prefix: String,
-      storageSize: Long = 1024 * 1024L
-  )(implicit scheduler: Scheduler): Resource[Task, RuntimeManager[Task]] =
-    mkTempDir[Task](prefix) >>= (mkRuntimeManagerAt(_)(storageSize))
+  def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
+      dirPath: Path
+  ): F[KeyValueStoreManager[F]] = {
+    // Limit maximum environment (file) size for LMDB in tests
+    val limitSize = 100 * mb
+    val dbMappings = Sync[F].delay {
+      rnodeDbMapping().map {
+        case (db, conf) =>
+          val newConf =
+            if (conf.maxEnvSize > limitSize) conf.copy(maxEnvSize = limitSize)
+            else conf
+          (db, newConf)
+      }
+    }
+    dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap))
+  }
 
-  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](storageDirectory: Path)(
-      storageSize: Long = 1024 * 1024 * 1024L
-  )(
+  def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
+      prefix: String
+  )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
+    mkTempDir[F](prefix).evalMap(mkTestRNodeStoreManager[F]).evalMap(mkRuntimeManagerAt[F])
+
+  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](kvm: KeyValueStoreManager[F])(
       implicit scheduler: Scheduler
-  ): Resource[F, RuntimeManager[F]] = {
+  ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
     implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtime        <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(runtime._1))
+      runtime        <- mkRuntimeAt[F](kvm)
+      runtimeManager <- RuntimeManager.fromRuntime(runtime._1)
     } yield runtimeManager
   }
 
   def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
-      storageDirectory: Path
-  )(
-      storageSize: Long = 1024 * 1024 * 1024L
+      kvm: KeyValueStoreManager[F]
   )(
       implicit scheduler: Scheduler
-  ): Resource[F, (RuntimeManager[F], RhoHistoryRepository[F])] = {
+  ): F[(RuntimeManager[F], RhoHistoryRepository[F])] = {
     implicit val log               = Log.log[F]
     implicit val metricsEff        = new metrics.Metrics.MetricsNOP[F]
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      rhr            <- mkRuntimeAt[F](storageDirectory)(storageSize)
-      runtimeManager <- Resource.liftF(RuntimeManager.fromRuntime(rhr._1))
-    } yield (runtimeManager, rhr._2)
+      runtimes           <- mkRuntimeAt[F](kvm)
+      (runtime, history) = runtimes
+      runtimeManager     <- RuntimeManager.fromRuntime(runtime)
+    } yield (runtimeManager, history)
   }
 
-  def mkBlockStoreAt[F[_]: Concurrent: Metrics: Sync: Log](path: Path): Resource[F, BlockStore[F]] =
-    Resource.make(
-      BlockDagStorageTestFixture.createBlockStorage[F](path)
-    )(_.close())
-
-  def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
-      path: Path
-  ): Resource[F, BlockDagStorage[F]] =
-    Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
-      blockDagStorage <- {
-        implicit val kvm = storeManager
-        BlockDagKeyValueStorage.create[F]
-      }
-    } yield blockDagStorage)
-
-  def mkCasperBuferStorate[F[_]: Concurrent: Log: Metrics](
-      path: Path
-  ): Resource[F, CasperBufferStorage[F]] =
-    Resource.liftF(for {
-      storeManager <- RNodeKeyValueStoreManager[F](path)
-      casperBufferStorage <- {
-        implicit val kvm = storeManager
-        CasperBufferKeyValueStorage.create[F]
-      }
-    } yield casperBufferStorage)
+  def mkCasperBufferStorage[F[_]: Concurrent: Log: Metrics](
+      kvm: KeyValueStoreManager[F]
+  ): F[CasperBufferStorage[F]] = CasperBufferKeyValueStorage.create[F](kvm)
 
   def mkDeployStorageAt[F[_]: Sync](path: Path): Resource[F, DeployStorage[F]] =
-    LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, BlockDagStorageTestFixture.mapSize))
+    LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, mapSize = 100 * mb))
 
   case class StoragePaths(
-      blockStoreDir: Path,
-      blockDagDir: Path,
-      lastFinalizedFile: Path,
-      rspaceDir: Path,
+      storageDir: Path,
       deployStorageDir: Path
   )
 
@@ -102,18 +87,11 @@ object Resources {
       storageTemplatePath: Path
   ): Resource[F, StoragePaths] =
     for {
-      storageDirectory  <- mkTempDir(s"casper-test-")
-      _                 <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
-      blockStoreDir     = storageDirectory.resolve("block-store")
-      blockDagDir       = storageDirectory.resolve("block-dag-store")
-      lastFinalizedFile = storageDirectory.resolve("last-finalized-blockhash")
-      rspaceDir         = storageDirectory.resolve("rspace")
-      deployStorageDir  = storageDirectory.resolve("deploy-storage")
+      storageDirectory <- mkTempDir(s"casper-test-")
+      _                <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
+      deployStorageDir = storageDirectory.resolve("deploy-storage")
     } yield StoragePaths(
-      blockStoreDir = blockStoreDir,
-      blockDagDir = blockDagDir,
-      lastFinalizedFile = lastFinalizedFile,
-      rspaceDir = rspaceDir,
+      storageDir = storageDirectory,
       deployStorageDir = deployStorageDir
     )
 

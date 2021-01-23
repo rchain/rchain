@@ -105,13 +105,12 @@ object ReportMemStore {
         )
       )
 
-  def store[F[_]: Sync: Span, C, P, A, K](
+  def store[F[_]: Sync: Span, C, P, A, K](kvm: KeyValueStoreManager[F])(
       implicit
       serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeA: Serialize[A],
-      serializeK: Serialize[K],
-      kvm: KeyValueStoreManager[F]
+      serializeK: Serialize[K]
   ): F[ReportMemStore[F]] = {
     val codecReporting = reportingCodec[C, P, A, K]
     val codec          = codecSeq[ReportingEvent](codecReporting)

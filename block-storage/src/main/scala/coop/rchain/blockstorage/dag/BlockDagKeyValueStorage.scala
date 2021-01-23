@@ -257,7 +257,8 @@ object BlockDagKeyValueStorage {
       lastFinalizedBlockDb: LastFinalizedStorage[F]
   )
 
-  private def createStores[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics] =
+  private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
+    implicit val kvm_ = kvm
     for {
       // Block metadata map
       blockMetadataDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
@@ -311,11 +312,12 @@ object BlockDagKeyValueStorage {
       deployIndexDb,
       lastFinalizedStore
     )
+  }
 
-  def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[BlockDagStorage[F]] =
+  def create[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]): F[BlockDagStorage[F]] =
     for {
       lock   <- MetricsSemaphore.single[F]
-      stores <- createStores
+      stores <- createStores(kvm)
     } yield new BlockDagKeyValueStorage[F](
       lock,
       stores.latestMessages,
@@ -325,7 +327,8 @@ object BlockDagKeyValueStorage {
       stores.equivocations
     )
 
-  def importFromFileStorage[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics](
+  def importFromFileStorage[F[_]: Concurrent: Log: Metrics](
+      kvm: KeyValueStoreManager[F],
       config: BlockDagFileStorage.Config
   ): F[Unit] =
     for {
@@ -339,7 +342,7 @@ object BlockDagKeyValueStorage {
       _ <- Log[F].warn(s"Create new DAG storage.")
 
       // Create new stores
-      stores <- createStores
+      stores <- createStores(kvm)
 
       _ <- Log[F].warn(s"Migrate metadata index.")
 
