@@ -17,7 +17,7 @@ object EquivocationTrackerStore {
   ): F[EquivocationTrackerStore[F]] =
     Sync[F].delay(new EquivocationTrackerStore(store))
 
-  class EquivocationTrackerStore[F[_]: Monad](
+  class EquivocationTrackerStore[F[_]: Sync](
       private val store: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]]
   ) {
     def add(record: EquivocationRecord): F[Unit] =

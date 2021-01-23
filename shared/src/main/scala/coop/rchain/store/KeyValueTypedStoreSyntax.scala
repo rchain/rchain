@@ -32,4 +32,10 @@ final class KeyValueTypedStoreOps[F[_], K, V](
 
   def getOrElse(key: K, elseValue: V)(implicit f: Functor[F]): F[V] =
     get(key).map(_.getOrElse(elseValue))
+
+  def toMap(implicit s: Sync[F]): F[Map[K, V]] =
+    for {
+      stream <- store.iterStream
+      result <- stream.compile.toList.map(_.toMap)
+    } yield result
 }
