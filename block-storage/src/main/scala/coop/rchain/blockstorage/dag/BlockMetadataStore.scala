@@ -117,18 +117,6 @@ object BlockMetadataStore {
       blockMetadataMap: Map[BlockHash, BlockMetadata],
       lastFinalizedBlockHash: Option[BlockHash]
   ): DagState = {
-    @tailrec
-    def collectFinalized(
-        parentHashes: Set[BlockHash],
-        finalizedBlocks: Set[BlockHash]
-    ): Set[BlockHash] = {
-      val parents = parentHashes.flatMap(blockMetadataMap.get)
-      if (parents.nonEmpty) {
-        collectFinalized(parents.flatMap(_.parents), parentHashes ++ finalizedBlocks)
-      } else {
-        finalizedBlocks
-      }
-    }
 
     val emptyState =
       DagState(dagSet = Set(), childMap = Map(), heightMap = SortedMap(), finalizedBlockSet = Set())
