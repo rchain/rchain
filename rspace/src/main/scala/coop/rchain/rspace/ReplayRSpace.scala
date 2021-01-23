@@ -315,6 +315,16 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     comms.tailRecM(go).map(_.toOption)
   }
 
+  def spawn: F[IReplaySpace[F, C, P, A, K]] = {
+    val historyRep  = historyRepositoryAtom.get()
+    implicit val ck = serializeK.toSizeHeadCodec
+    for {
+      newHR <- historyRep.reset(historyRep.history.root)
+      newHS <- HotStore.empty(newHR)
+      r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS), branch)
+      _     <- r.restoreInstalls()
+    } yield r
+  }
 }
 
 object ReplayRSpace {

@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import cats.Parallel
 import cats.effect.concurrent.{MVar, MVar2}
 import cats.effect.{Sync, _}
 import cats.syntax.all._
@@ -16,10 +17,13 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.casper.syntax._
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
+import monix.execution.Scheduler
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
+import fs2.Stream
 import retry._
 
 import scala.concurrent.duration.FiniteDuration
@@ -59,41 +63,46 @@ trait RuntimeManager[F[_]] {
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
-  def withRuntimeLock[A](f: RhoRuntime[F] => F[A]): F[A]
-  def withReplayRuntimeLock[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
+  def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A]
+  def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
-    runtimeContainer: MVar2[F, RhoRuntime[F]],
-    replayRuntimeContainer: MVar2[F, ReplayRhoRuntime[F]]
+// TODO get rid of Parallel instance here and make it use Streams with Concurrent
+class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Parallel](
+    space: RhoISpace[F],
+    replaySpace: RhoReplayISpace[F]
 ) extends RuntimeManager[F] {
 
-  private[this] val RuntimeManagerMetricsSource =
-    Metrics.Source(CasperMetricsSource, "runtime-manager")
+//  private[this] val RuntimeManagerMetricsSource =
+//    Metrics.Source(CasperMetricsSource, "runtime-manager")
 
-  private def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
-    Sync[F].bracket {
-      import coop.rchain.metrics.implicits._
-      implicit val ms: Source = RuntimeManagerMetricsSource
-      for {
-        _       <- Metrics[F].incrementGauge("lock.queue")
-        runtime <- Sync[F].defer(runtimeContainer.take).timer("lock.acquire")
-        _       <- Metrics[F].decrementGauge("lock.queue")
-      } yield runtime
-    }(f)(runtimeContainer.put)
+  def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
+    for {
+      newSpace <- space
+                   .asInstanceOf[
+                     RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+                   ]
+                   .spawn
+      runtime <- RhoRuntime.createRhoRuntime(newSpace)
+      r       <- f(runtime)
+    } yield r
 
-  def withReplayRuntimeLock[A](f: ReplayRhoRuntime[F] => F[A]): F[A] =
-    Sync[F].bracket {
-      import coop.rchain.metrics.implicits._
-      implicit val ms: Source = RuntimeManagerMetricsSource
-      for {
-        _       <- Metrics[F].incrementGauge("lock.queue")
-        runtime <- Sync[F].defer(replayRuntimeContainer.take).timer("lock.acquire")
-        _       <- Metrics[F].decrementGauge("lock.queue")
-      } yield runtime
-    }(f)(replayRuntimeContainer.put)
+  def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A] =
+    for {
+      newReplaySpace <- replaySpace
+                         .asInstanceOf[ReplayRSpace[
+                           F,
+                           Par,
+                           BindPattern,
+                           ListParWithRandom,
+                           TaggedContinuation
+                         ]]
+                         .spawn
+      runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace)
+      r       <- f(runtime)
+    } yield r
 
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
@@ -105,7 +114,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       systemDeploy: S,
       processedSystemDeploy: ProcessedSystemDeploy
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
-    withReplayRuntimeLock(
+    withReplayRuntime(
       replayRuntime =>
         replayRuntime.replaySystemDeploy(stateHash)(systemDeploy, processedSystemDeploy)
     )
@@ -133,7 +142,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    withReplayRuntimeLock(
+    withReplayRuntime(
       replayRuntime =>
         replayRuntime
           .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
@@ -176,9 +185,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log](
   def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] =
     withRuntime(runtime => runtime.playExploratoryDeploy(term, hash))
 
-  def withRuntimeLock[A](f: RhoRuntime[F] => F[A]): F[A] =
-    withRuntime(f)
-
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     withRuntime(
       runtime => runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getDataPar(channel)
@@ -210,13 +216,15 @@ object RuntimeManager {
         Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
       )
 
-  def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log](
+  def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log: Parallel](
       runtime: RhoRuntime[F],
       replayRuntime: ReplayRhoRuntime[F]
   ): F[RuntimeManager[F]] =
     for {
-      runtime       <- MVar[F].of(runtime)
-      replayRuntime <- MVar[F].of(replayRuntime)
-    } yield new RuntimeManagerImpl(runtime, replayRuntime)
+      _ <- ().pure
+    } yield new RuntimeManagerImpl(
+      runtime.getRSpace.asInstanceOf[RhoISpace[F]],
+      replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]]
+    )
 
 }

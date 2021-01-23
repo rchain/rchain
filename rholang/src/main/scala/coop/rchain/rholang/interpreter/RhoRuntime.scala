@@ -18,7 +18,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
-import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.SystemProcesses._
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, HasCost}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
@@ -140,6 +140,8 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     * Currently this is only for debug info mostly.
     */
   def getHotChanges: F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]]
+
+  def getRSpace: RhoTuplespace[F]
 }
 
 trait ReplayRhoRuntime[F[_]] extends RhoRuntime[F] {
@@ -225,6 +227,8 @@ class RhoRuntimeImpl[F[_]: Sync](
       )
     invalidBlocksParam.setParams(invalidBlocksPar)
   }
+
+  override def getRSpace: RhoTuplespace[F] = space
 }
 
 class ReplayRhoRuntimeImpl[F[_]: Sync](
@@ -238,6 +242,8 @@ class ReplayRhoRuntimeImpl[F[_]: Sync](
   override def checkReplayData: F[Unit] = space.checkReplayData()
 
   override def rig(log: trace.Log): F[Unit] = space.rig(log)
+
+  override def getRSpace: RhoTuplespace[F] = space
 }
 
 object ReplayRhoRuntime {

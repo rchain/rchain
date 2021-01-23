@@ -6,6 +6,7 @@ import cats.{Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
@@ -17,7 +18,6 @@ import coop.rchain.casper.util.rholang.costacc.{
 }
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
@@ -129,40 +129,54 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       playSystemDeploy: S,
       replaySystemDeploy: S
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
-    runtimeManager.withRuntimeLock(
-      runtime => runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
-    ) >>
-      runtimeManager.withReplayRuntimeLock(
-        runtime => runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
-      ) >>
-      runtimeManager.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
-      case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
-        assert(resultAssertion(playResult))
-        runtimeManager
-          .replaySystemDeploy(startState)(replaySystemDeploy, processedSystemDeploy)
-          .attempt
-          .map {
-            case Right(Right(systemDeployReplayResult)) =>
-              systemDeployReplayResult match {
-                case ReplaySucceeded(finalReplayStateHash, replayResult) =>
-                  assert(finalPlayStateHash == finalReplayStateHash)
-                  assert(playResult == replayResult)
-                  finalReplayStateHash
-                case ReplayFailed(systemDeployError) =>
-                  fail(
-                    s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
+    runtimeManager.withRuntime(
+      runtime =>
+        for {
+          _ <- runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
+          r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
+                case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
+                  assert(resultAssertion(playResult))
+                  runtimeManager.withReplayRuntime(
+                    runtime =>
+                      for {
+                        _ <- runtime.setBlockData(
+                              BlockData(0, 0, genesisContext.validatorPks.head, 0)
+                            )
+                        r <- runtime
+                              .replaySystemDeploy(startState)(
+                                replaySystemDeploy,
+                                processedSystemDeploy
+                              )
+                              .attempt
+                              .map {
+                                case Right(Right(systemDeployReplayResult)) =>
+                                  systemDeployReplayResult match {
+                                    case ReplaySucceeded(finalReplayStateHash, replayResult) =>
+                                      assert(finalPlayStateHash == finalReplayStateHash)
+                                      assert(playResult == replayResult)
+                                      finalReplayStateHash
+                                    case ReplayFailed(systemDeployError) =>
+                                      fail(
+                                        s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
+                                      )
+                                  }
+                                case Right(Left(replayFailure)) =>
+                                  fail(s"Unexpected replay failure: $replayFailure")
+                                case Left(throwable) =>
+                                  fail(
+                                    s"Unexpected system error during replay: ${throwable.getMessage}"
+                                  )
+                              }
+                      } yield r
                   )
+
+                case Right(PlayFailed(Failed(_, errorMsg))) =>
+                  fail(s"Unexpected user error during play: $errorMsg")
+                case Left(throwable) =>
+                  fail(s"Unexpected system error during play: ${throwable.getMessage}")
               }
-            case Right(Left(replayFailure)) =>
-              fail(s"Unexpected replay failure: $replayFailure")
-            case Left(throwable) =>
-              fail(s"Unexpected system error during replay: ${throwable.getMessage}")
-          }
-      case Right(PlayFailed(Failed(_, errorMsg))) =>
-        fail(s"Unexpected user error during play: $errorMsg")
-      case Left(throwable) =>
-        fail(s"Unexpected system error during play: ${throwable.getMessage}")
-    }
+        } yield r
+    )
 
   "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
     runtimeManagerResource.use { runtimeManager =>

@@ -232,6 +232,17 @@ class RSpace[F[_], C, P, A, K](
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
+
+  def spawn: F[ISpace[F, C, P, A, K]] = {
+    val historyRep  = historyRepositoryAtom.get()
+    implicit val ck = serializeK.toSizeHeadCodec
+    for {
+      nextHistory <- historyRep.reset(historyRep.history.root)
+      hotStore    <- HotStore.empty(nextHistory)
+      r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore), branch)
+      _           <- r.restoreInstalls()
+    } yield r
+  }
 }
 
 object RSpace {

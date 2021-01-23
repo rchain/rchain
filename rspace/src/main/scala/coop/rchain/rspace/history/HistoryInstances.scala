@@ -557,7 +557,8 @@ object HistoryInstances {
 
     override def close(): F[Unit] = historyStore.close()
 
-    override def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
+    override def reset(root: Blake2b256Hash): History[F] =
+      this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
 
   }
 
