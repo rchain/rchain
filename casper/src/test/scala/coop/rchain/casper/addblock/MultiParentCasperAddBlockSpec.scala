@@ -212,7 +212,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
    */
 
-  it should "reject blocks not from bonded validators" in effectTest {
+  it should "reject blocks not from bonded validators" ignore effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -290,7 +290,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
-  it should "ignore adding equivocation blocks" in effectTest {
+  it should "ignore adding equivocation blocks" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         // Creates a pair that constitutes equivocation blocks
@@ -313,7 +313,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   }
 
   // See [[/docs/casper/images/minimal_equivocation_neglect.png]] but cross out genesis block
-  it should "not ignore equivocation blocks that are required for parents of proper nodes" in effectTest {
+  it should "not ignore equivocation blocks that are required for parents of proper nodes" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 5).toList
@@ -377,7 +377,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
-  it should "prepare to slash an block that includes a invalid block pointer" in effectTest {
+  it should "prepare to slash an block that includes a invalid block pointer" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploys <- (0 to 5).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
