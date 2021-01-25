@@ -174,7 +174,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  it should "not merge blocks that touch the same channel involving joins" in effectTest {
+  it should "not merge blocks that touch the same channel involving joins" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
