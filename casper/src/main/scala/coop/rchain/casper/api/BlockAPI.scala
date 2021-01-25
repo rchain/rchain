@@ -52,19 +52,25 @@ object BlockAPI {
   //  of errors and to overcome nesting when validating data.
   final case class BlockRetrievalError(message: String) extends Exception
 
-  def deploy[F[_]: Sync: EngineCell: Log: Span](
-      d: Signed[DeployData]
+  def deploy[F[_]: Concurrent: EngineCell: Log: Span](
+      d: Signed[DeployData],
+      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
-      casper
-        .deploy(d)
-        .map(
-          _.bimap(
-            err => err.show,
-            res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
-          )
-        )
+      for {
+        r <- casper
+              .deploy(d)
+              .map(
+                _.bimap(
+                  err => err.show,
+                  res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+                )
+              )
+        _ <- (Deferred[F, Option[Int]] >>= { d =>
+              proposerQueue.get.enqueue1((casper, d))
+            }).whenA(proposerQueue.isDefined)
+      } yield r
 
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)

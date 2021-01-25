@@ -7,6 +7,7 @@ import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, Ro
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration.{
   ApiServer,
+  DevConf,
   Metrics,
   NodeConf,
   PeersDiscovery,
@@ -143,6 +144,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = true,
+      autopropose = false,
       devMode = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",
@@ -255,7 +257,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         influxdbUdp = true,
         zipkin = true,
         sigar = true
-      )
+      ),
+      dev = DevConf(deployerPrivateKey = None)
     )
     config shouldEqual expectedConfig
   }

@@ -29,6 +29,8 @@ object ProposerInstance {
       .eval(for {
         lock    <- Semaphore[F](1)
         trigger <- MVar[F].of(())
+        // initial position for propose trigger - inactive
+        _ <- trigger.take
       } yield (lock, trigger))
       .flatMap {
         case (lock, trigger) =>
@@ -40,7 +42,7 @@ object ProposerInstance {
                 // if propose is in progress - resolve proposeID to None and stop here.
                 // Cock the trigger, so propose is called again after the one that occupies the lock finishes.
                 .evalFilter { v =>
-                  (proposeIDDef.complete(None) >> trigger.tryPut(())).unlessA(v).as(v)
+                  (trigger.tryPut(()) >> proposeIDDef.complete(None)).unlessA(v).as(v)
                 }
                 // execute propose
                 .evalMap { _ =>
@@ -62,7 +64,7 @@ object ProposerInstance {
                     _ <- lock.release
                     _ <- Log[F].info(s"Propose finished: ${r._1.proposeStatus}")
                     // propose on more time if trigger is cocked
-                    _ <- trigger.tryRead.map {
+                    _ <- trigger.tryTake.flatMap {
                           case Some(_) =>
                             Deferred[F, Option[Int]] >>= { d =>
                               proposeRequestsQueue.enqueue1(c, d)
