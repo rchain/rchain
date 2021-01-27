@@ -219,17 +219,17 @@ object RuntimeManager {
         Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
       )
 
-  def fromRuntimes[F[_]: Concurrent: Sync: Metrics: Span: Log: Parallel: ContextShift](
+  def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](
       runtime: RhoRuntime[F],
       replayRuntime: ReplayRhoRuntime[F],
       historyRepo: RhoHistoryRepository[F]
   ): F[RuntimeManager[F]] =
-    for {
-      _ <- ().pure
-    } yield new RuntimeManagerImpl(
-      runtime.getRSpace.asInstanceOf[RhoISpace[F]],
-      replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
-      historyRepo
+    Concurrent[F].delay(
+      new RuntimeManagerImpl(
+        runtime.getRSpace.asInstanceOf[RhoISpace[F]],
+        replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
+        historyRepo
+      )
     )
 
   def apply[F[_]](implicit instance: RuntimeManager[F]): RuntimeManager[F] = instance
