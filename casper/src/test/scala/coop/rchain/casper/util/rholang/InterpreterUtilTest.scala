@@ -233,7 +233,7 @@ class InterpreterUtilTest
     genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, false))
   }
 
-  it should "merge histories in case of multiple parents with complex contract" in withGenesis(
+  it should "merge histories in case of multiple parents with complex contract" ignore withGenesis(
     genesisContext
   ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
     val contract = registry
@@ -267,7 +267,7 @@ class InterpreterUtilTest
     } yield result
   }
 
-  it should "merge histories in case of multiple parents (uneven histories)" in withGenesis(
+  it should "merge histories in case of multiple parents (uneven histories)" ignore withGenesis(
     genesisContext
   ) { implicit blockStore => implicit blockDagStorage => runtimeManager =>
     val contract = registry
