@@ -2,6 +2,7 @@ package coop.rchain
 
 import coop.rchain.metrics.Metrics
 import coop.rchain.rspace.state.RSpaceExporterSyntax
+import coop.rchain.rspace.store.RSpaceStoreManagerSyntax
 
 package object rspace {
   val RSpaceMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "rspace")
@@ -10,4 +11,4 @@ package object rspace {
   object syntax extends AllSyntaxRSpace
 }
 
-trait AllSyntaxRSpace extends RSpaceExporterSyntax
+trait AllSyntaxRSpace extends RSpaceExporterSyntax with RSpaceStoreManagerSyntax

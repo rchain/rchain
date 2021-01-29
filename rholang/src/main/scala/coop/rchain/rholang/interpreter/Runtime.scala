@@ -1,11 +1,9 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.{Files, Path}
-
 import cats._
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
@@ -22,6 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime._
 import coop.rchain.rholang.interpreter.accounting.{noOpCostLog, _}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
@@ -36,13 +35,7 @@ class Runtime[F[_]: Sync] private (
     val cost: _cost[F],
     val blockData: Ref[F, BlockData],
     val invalidBlocks: InvalidBlocks[F]
-) extends HasCost[F] {
-  def close(): F[Unit] =
-    for {
-      _ <- space.close()
-      _ <- replaySpace.close()
-    } yield ()
-}
+) extends HasCost[F]
 
 trait HasCost[F[_]] {
   def cost: _cost[F]
@@ -275,20 +268,15 @@ object Runtime {
     )
   )
 
-  def createWithEmptyCost[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+  def createWithEmptyCost[F[_]: Concurrent: Parallel: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  ): F[Runtime[F]] = {
-    implicit val P = Parallel[F]
+  ): F[Runtime[F]] =
     createWithEmptyCost_(spaceAndReplay, extraSystemProcesses)
-  }
 
-  private def createWithEmptyCost_[F[_]: Concurrent: Log: Metrics: Span](
+  private def createWithEmptyCost_[F[_]: Concurrent: Parallel: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]]
-  )(
-      implicit
-      P: Parallel[F]
   ): F[Runtime[F]] =
     for {
       cost <- CostAccounting.emptyCost[F]
@@ -381,12 +369,9 @@ object Runtime {
         .map(_.toProcDefs)
     } yield (blockDataRef, invalidBlocks, urnMap, procDefs)
 
-  def create[F[_]: Concurrent: Log: Metrics: Span](
+  def create[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
       spaceAndReplay: ISpaceAndReplay[F],
       extraSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
-  )(
-      implicit P: Parallel[F],
-      cost: _cost[F]
   ): F[Runtime[F]] = {
     val (space, replaySpace) = spaceAndReplay
     for {
@@ -420,7 +405,7 @@ object Runtime {
         replayReducer,
         space,
         replaySpace,
-        cost,
+        _cost[F],
         blockDataRef,
         invalidBlocks
       )
@@ -448,28 +433,20 @@ object Runtime {
   }
 
   def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
+      store: RSpaceStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
-
     import coop.rchain.rholang.interpreter.storage._
+
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createWithReplay[
+    RSpace.createWithReplay[
       F,
       Par,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
-    ](dataDir, mapSize)
+    ](store)
   }
 }

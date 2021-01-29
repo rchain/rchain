@@ -1,25 +1,16 @@
 package coop.rchain.node.configuration.commandline
 
-import java.nio.file.Paths
-
-import scala.concurrent.duration._
-import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
-import coop.rchain.comm.{CommError, PeerNode}
-import coop.rchain.node.configuration.{
-  ApiServer,
-  Metrics,
-  NodeConf,
-  PeersDiscovery,
-  ProtocolClient,
-  ProtocolServer,
-  Storage
-}
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
+import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.node.configuration._
 import org.scalatest.{FunSuite, Matchers}
 import pureconfig._
-import pureconfig.generic.ProductHint
 import pureconfig.generic.auto._
+
+import java.nio.file.Paths
+import scala.concurrent.duration._
 
 class ConfigMapperSpec extends FunSuite with Matchers {
 
@@ -69,10 +60,6 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--api-max-connection-age 111111seconds",
         "--api-max-connection-age-grace 111111seconds",
         "--data-dir /var/lib/rnode",
-        "--lmdb-map-size-rspace 111111",
-        "--lmdb-map-size-blockdagstore 111111",
-        "--lmdb-map-size-blockstore 111111",
-        "--lmdb-map-size-deploystore 111111",
         // other vars?
         "--shard-name root",
         "--fault-tolerance-threshold 111111",
@@ -195,11 +182,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         maxConnectionAgeGrace = 111111L.seconds
       ),
       storage = Storage(
-        dataDir = Paths.get("/var/lib/rnode"),
-        lmdbMapSizeRspace = 111111,
-        lmdbMapSizeBlockdagstore = 111111,
-        lmdbMapSizeBlockstore = 111111,
-        lmdbMapSizeDeploystore = 111111
+        dataDir = Paths.get("/var/lib/rnode")
       ),
       tls = TlsConf(
         certificatePath = Paths.get("/var/lib/rnode/node.certificate.pem"),

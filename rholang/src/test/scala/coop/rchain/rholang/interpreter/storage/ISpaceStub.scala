@@ -51,8 +51,6 @@ class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   override def clear(): F[Unit] = ???
 
-  override def close(): F[Unit] = ???
-
   override def toMap: F[Map[Seq[C], internal.Row[P, A, K]]] = ???
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] = ???

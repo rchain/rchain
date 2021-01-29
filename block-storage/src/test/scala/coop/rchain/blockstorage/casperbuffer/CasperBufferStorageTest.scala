@@ -14,9 +14,10 @@ import coop.rchain.models.blockImplicits._
 
 class CasperBufferStorageTest extends FlatSpecLike with Matchers {
 
-  implicit val log        = new NOPLog[Task]()
-  implicit val metrics    = new Metrics.MetricsNOP[Task]
-  implicit val kvsManager = InMemoryStoreManager[Task]
+  implicit val log     = new NOPLog[Task]()
+  implicit val metrics = new Metrics.MetricsNOP[Task]
+
+  val kvsManager = InMemoryStoreManager[Task]
 
   val underlyingStore = kvsManager
     .database[BlockHash, Set[BlockHash]](
@@ -34,7 +35,7 @@ class CasperBufferStorageTest extends FlatSpecLike with Matchers {
   underlyingStore.put(C, Set(D)).runSyncUnsafe()
 
   val casperBuffer = CasperBufferKeyValueStorage
-    .create[Task]
+    .create[Task](kvsManager)
     .runSyncUnsafe()
 
   it should "be able to restore state on startup" in {

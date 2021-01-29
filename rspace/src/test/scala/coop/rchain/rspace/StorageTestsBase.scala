@@ -1,37 +1,25 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path, Paths}
-
-import cats._
-import cats.implicits._
+import cats.{Parallel, _}
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.Parallel
+import cats.implicits._
 import com.typesafe.scalalogging.Logger
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace._
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.history.{
-  HistoryRepository,
-  HistoryRepositoryInstances,
-  LMDBRSpaceStorageConfig,
-  StoreConfig
-}
-import coop.rchain.shared.PathOps._
+import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
+import monix.eval._
+import monix.execution.atomic.AtomicAny
 import org.scalatest._
-
-import scala.concurrent.ExecutionContext
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import monix.eval._
-import monix.execution.atomic.AtomicAny
-import org.lmdbjava.EnvFlags
-import coop.rchain.metrics.NoopSpan
 
 trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with OptionValues {
   type T    = ISpace[F, C, P, A, K]
@@ -64,37 +52,27 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
   def run[S](f: F[S]): S
 
   protected def setupTestingSpace[S, STORE](
-      createISpace: (HR, ST, Branch) => F[(ST, AtST, T)],
+      createISpace: (HR, ST) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]
-  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): S = {
-    val branch = Branch("inmem")
+  )(
+      implicit codecC: Codec[C],
+      codecP: Codec[P],
+      codecA: Codec[A],
+      codecK: Codec[K]
+  ): S = {
 
-    val dbDir: Path   = Files.createTempDirectory("rchain-storage-test-")
-    val mapSize: Long = 1024L * 1024L * 1024L
-
-    def storeConfig(name: String): StoreConfig =
-      StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)),
-        mapSize,
-        2,
-        2048,
-        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-      )
-
-    val config = LMDBRSpaceStorageConfig(
-      storeConfig("cold"),
-      storeConfig("history"),
-      storeConfig("roots")
-    )
+    val kvm = InMemoryStoreManager[F]
 
     run(for {
-      historyRepository    <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](config)
+      stores                            <- kvm.rSpaceStores
+      RSpaceStore(history, roots, cold) = stores
+      historyRepository <- HistoryRepositoryInstances
+                            .lmdbRepository[F, C, P, A, K](history, roots, cold)
       cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
-      spaceAndStore        <- createISpace(historyRepository, testStore, branch)
+      spaceAndStore        <- createISpace(historyRepository, testStore)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)
-      _                    <- Sync[F].delay(dbDir.recursivelyDelete())
     } yield {
       res
     })
@@ -108,6 +86,7 @@ import coop.rchain.shared.Log
 
 trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
   import coop.rchain.catscontrib.TaskContrib._
+
   import scala.concurrent.ExecutionContext
 
   implicit override val concurrentF: Concurrent[Task] =
@@ -142,11 +121,11 @@ abstract class InMemoryHotStoreTestsBase[F[_]]
     StringExamples.implicits.stringClosureSerialize.toSizeHeadCodec
 
   override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
-    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
-      (hr, ts, b) => {
+    val creator: (HR, ST) => F[(ST, AtST, T)] =
+      (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore, b)
+          new RSpace[F, String, Pattern, String, StringsCaptor](hr, atomicStore)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

@@ -1,8 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import java.nio.file.Files
-
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
@@ -18,8 +17,10 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
@@ -214,21 +215,23 @@ class CryptoChannelsSpec
   protected override def withFixture(test: OneArgTest): Outcome = {
     val randomInt                           = scala.util.Random.nextInt
     val dbDir                               = Files.createTempDirectory(s"rchain-storage-test-$randomInt-")
-    val size                                = 1024L * 1024 * 1024
     implicit val logF: Log[Task]            = new Log.NOPLog[Task]
     implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+    implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      sar     <- Runtime.setupRSpace[Task](dbDir, size)
-      runtime <- Runtime.createWithEmptyCost[Task]((sar._1, sar._2))
-      _       <- runtime.cost.set(Cost.UNSAFE_MAX)
+      store                <- kvm.rSpaceStores
+      spaces               <- Runtime.setupRSpace[Task](store)
+      (rspace, replay, hr) = spaces
+      runtime              <- Runtime.createWithEmptyCost[Task]((rspace, replay), Seq.empty)
+      _                    <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
     try {
       test((runtime.reducer, runtime.space))
     } finally {
-      runtime.close().unsafeRunSync
+      kvm.shutdown.runSyncUnsafe()
       dbDir.recursivelyDelete()
     }
   }

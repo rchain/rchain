@@ -13,7 +13,6 @@ trait History[F[_]] {
   def process(actions: List[HistoryAction]): F[History[F]]
   def root: Blake2b256Hash
   def find(key: KeyPath): F[(TriePointer, Vector[Trie])]
-  def close(): F[Unit]
   def reset(root: Blake2b256Hash): History[F]
 }
 
@@ -128,23 +127,23 @@ object Trie {
       }(provide(EmptyPointer))
       .subcaseP(1) {
         case p: LeafPointer => p
-      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[LeafPointer])
       .subcaseP(2) {
         case p: SkipPointer => p
-      }(Blake2b256Hash.codecBlake2b256Hash.as[SkipPointer])
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[SkipPointer])
       .subcaseP(3) {
         case p: NodePointer => p
-      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
 
   implicit def codecTrieValuePointer: Codec[ValuePointer] =
     discriminated[ValuePointer]
       .by(uint(1))
       .subcaseP(0) {
         case p: LeafPointer => p
-      }(Blake2b256Hash.codecBlake2b256Hash.as[LeafPointer])
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[LeafPointer])
       .subcaseP(1) {
         case p: NodePointer => p
-      }(Blake2b256Hash.codecBlake2b256Hash.as[NodePointer])
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
 
 }
 

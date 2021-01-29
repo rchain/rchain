@@ -1,13 +1,12 @@
 package coop.rchain.rholang.interpreter
 
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
-import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance._
@@ -16,7 +15,6 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
-import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.shared.Serialize
 import monix.eval.Task
@@ -24,9 +22,9 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks._
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
+import scala.collection.SortedSet
 import scala.collection.immutable.BitSet
 import scala.collection.mutable.HashMap
-import scala.collection.{mutable, SortedSet}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.Failure

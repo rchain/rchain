@@ -1,10 +1,8 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
-import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -15,16 +13,18 @@ import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Log
+import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 class DeployerIdTest extends FlatSpec with Matchers {
-
-  implicit val time = new LogicalTime[Task]
+  implicit val time           = new LogicalTime[Task]
+  implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("deployer-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deployer-id-runtime-manager-test")
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(
