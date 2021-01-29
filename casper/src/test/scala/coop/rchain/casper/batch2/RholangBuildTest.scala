@@ -54,7 +54,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
                     deploy.data.timestamp
                   )
                 )
-              ).map(_ shouldBe Seq("""([4, 6, 10, 14], "The timestamp is 2")"""))
+              ).map(
+                _ shouldBe Seq(
+                  s"""([4, 6, 10, 14], "The timestamp is ${signedBlock.header.timestamp}")"""
+                )
+              )
         } yield ()
       }
   }
