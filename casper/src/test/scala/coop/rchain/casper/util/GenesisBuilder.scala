@@ -37,6 +37,14 @@ object GenesisBuilder {
   def buildGenesisParameters(
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
       validatorsNum: Int = 4
+  ): GenesisParameters = buildGenesisParameters(
+    defaultValidatorKeyPairs,
+    bondsFunction(defaultValidatorPks)
+  )
+
+  def buildGenesisParametersWithRandom(
+      bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
+      validatorsNum: Int = 4
   ): GenesisParameters = {
     // 4 default fixed validators, others are random generated
     val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
@@ -46,7 +54,6 @@ object GenesisBuilder {
       bondsFunction(defaultValidatorPks ++ randomValidatorPks)
     )
   }
-
   def buildGenesisParameters(
       validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
       bonds: Map[PublicKey, Long]
