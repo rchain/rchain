@@ -66,6 +66,7 @@ object GenesisCeremonyMaster {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
       _                  <- Time[F].sleep(2.seconds)
       lastApprovedBlockO <- LastApprovedBlock[F].get
+      _                  <- Log[F].info(s"Trying to get the approved block ${lastApprovedBlockO}")
       cont <- lastApprovedBlockO match {
                case None =>
                  waitingForApprovedBlockLoop[F](

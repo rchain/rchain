@@ -251,7 +251,9 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
             )
         _                   <- Span[F].mark("before-process-deploys")
         genesisPreStateHash <- emptyStateHash
+        _                   <- Log[F].info("Genesis pre stateHash.")
         evalResult          <- processDeploys(genesisPreStateHash, terms, processDeploy)
+        _                   <- Log[F].info("Done process deploys")
       } yield (genesisPreStateHash, evalResult._1, evalResult._2)
     }
 
@@ -322,6 +324,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
   ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.createSoftCheckpoint
+      _                            <- Log[F].info(s"Evaluate deploy ${deploy.data.term}")
       evaluateResult               <- evaluate(deploy)
       EvaluateResult(cost, errors) = evaluateResult
       _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
@@ -332,6 +335,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
         checkpoint.log.map(EventConverter.toCasperEvent).toList,
         errors.nonEmpty
       )
+      _ <- Log[F].info(s"Evaluate deploy ${deploy.data.term} done.")
       _ <- if (errors.nonEmpty) runtime.revertToSoftCheckpoint(fallback)
           else Applicative[F].unit
     } yield deployResult

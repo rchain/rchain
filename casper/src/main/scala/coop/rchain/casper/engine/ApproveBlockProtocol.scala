@@ -85,7 +85,7 @@ object ApproveBlockProtocol {
                 autogenShardSize,
                 genesisPath
               )
-
+      _ <- Log[F].info("Done parsing bonds and wallets")
       genesisBlock <- if (bonds.size <= requiredSigs)
                        Sync[F].raiseError[BlockMessage](
                          new Exception(
@@ -112,6 +112,7 @@ object ApproveBlockProtocol {
                          )
                        )
                      }
+      _     <- Log[F].info("Created genesis block")
       sigsF <- Ref.of[F, Set[Signature]](Set.empty)
 
     } yield new ApproveBlockProtocolImpl[F](
