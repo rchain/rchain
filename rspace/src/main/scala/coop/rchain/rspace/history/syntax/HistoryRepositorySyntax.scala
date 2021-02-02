@@ -1,10 +1,10 @@
 package coop.rchain.rspace.history.syntax
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.syntax.syntaxHistoryRepository
+import coop.rchain.rspace.internal.WaitingContinuation
 import coop.rchain.rspace.trace.Event
 import coop.rchain.rspace.trace.Event.{
   containConflictingEvents,
@@ -21,15 +21,15 @@ import coop.rchain.shared.Serialize
 import scala.language.{higherKinds, implicitConversions}
 
 trait HistoryRepositorySyntax {
-  implicit final def syntaxHistoryRepository[F[_]: Sync, C, P, K, A](
-      historyRepo: HistoryRepository[F, C, P, K, A]
-  ): HistoryRepositoryOps[F, C, P, K, A] =
-    new HistoryRepositoryOps[F, C, P, K, A](historyRepo)
+  implicit final def syntaxHistoryRepository[F[_]: Concurrent, C, P, A, K](
+      historyRepo: HistoryRepository[F, C, P, A, K]
+  ): HistoryRepositoryOps[F, C, P, A, K] =
+    new HistoryRepositoryOps[F, C, P, A, K](historyRepo)
 }
-final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
-    private val historyRepo: HistoryRepository[F, C, P, K, A]
+final class HistoryRepositoryOps[F[_]: Concurrent, C, P, A, K](
+    private val historyRepo: HistoryRepository[F, C, P, A, K]
 ) {
-  def getData(state: Blake2b256Hash, channel: C): F[Seq[internal.Datum[K]]] =
+  def getData(state: Blake2b256Hash, channel: C): F[Seq[internal.Datum[A]]] =
     historyRepo.reset(state) >>= { h =>
       h.getData(channel)
     }
@@ -42,7 +42,7 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
   def getContinuations(
       state: Blake2b256Hash,
       channels: Seq[C]
-  ): F[Seq[internal.WaitingContinuation[P, A]]] =
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
     historyRepo.reset(state) >>= { h =>
       h.getContinuations(channels)
     }
@@ -50,7 +50,7 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
   def getData(
       state: Blake2b256Hash,
       dataHash: Blake2b256Hash
-  ): F[Seq[internal.Datum[K]]] =
+  ): F[Seq[internal.Datum[A]]] =
     historyRepo.reset(state) >>= { h =>
       h.getData(dataHash)
     }
@@ -63,14 +63,14 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
   def getContinuations(
       state: Blake2b256Hash,
       continuationHash: Blake2b256Hash
-  ): F[Seq[internal.WaitingContinuation[P, A]]] =
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
     historyRepo.reset(state) >>= { h =>
       h.getContinuations(continuationHash)
     }
 
   def getDataFromChannelHash(
       channelHash: Blake2b256Hash
-  ): F[Seq[internal.Datum[K]]] =
+  ): F[Seq[internal.Datum[A]]] =
     for {
       maybeDataHash <- historyRepo.getChannelHash(channelHash)
       dataHash <- maybeDataHash match {
@@ -86,9 +86,9 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
   def getDataFromChannelHash(
       state: Blake2b256Hash,
       channelHash: Blake2b256Hash
-  ): F[Seq[internal.Datum[K]]] =
+  ): F[Seq[internal.Datum[A]]] =
     historyRepo.reset(state) >>= { h =>
-      h.getDataFromChannelHash(channelHash)
+      getDataFromChannelHash(channelHash)
     }
 
   def getJoinsFromChannelHash(
@@ -111,11 +111,12 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
       channelHash: Blake2b256Hash
   ): F[Seq[Seq[C]]] =
     historyRepo.reset(state) >>= { h =>
-      h.getJoinsFromChannelHash(channelHash)
+      getJoinsFromChannelHash(channelHash)
     }
+
   def getContinuationFromChannelHash(
       channelHash: Blake2b256Hash
-  ): F[Seq[internal.WaitingContinuation[P, A]]] =
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
     for {
       maybeContinuationHash <- historyRepo.getChannelHash(
                                 channelHash
@@ -135,9 +136,9 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
   def getContinuationFromChannelHash(
       state: Blake2b256Hash,
       channelHash: Blake2b256Hash
-  ): F[Seq[internal.WaitingContinuation[P, A]]] =
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
     historyRepo.reset(state) >>= { h =>
-      h.getContinuationFromChannelHash(channelHash)
+      getContinuationFromChannelHash(channelHash)
     }
 
   /**
@@ -164,7 +165,7 @@ final class HistoryRepositoryOps[F[_]: Sync, C, P, K, A](
     for {
       rightJoins <- nonconflictRightProduceChannels.toList.traverse { produce =>
                      for {
-                       joins <- historyRepo.getJoinsFromChannelHash(
+                       joins <- getJoinsFromChannelHash(
                                  baseState,
                                  produce.channelsHash
                                )

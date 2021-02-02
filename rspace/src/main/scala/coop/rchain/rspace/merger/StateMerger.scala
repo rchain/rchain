@@ -35,14 +35,21 @@ trait StateMerger[F[_]] {
     * The target of [[merge]] is to generated the `mergedState` above which merge the mainState and mergingState
     * @param baseState
     * @param mainState
-    * @param mergingState
-    * @param eventLogs
+    * @param toMerge - sequence of tuple
+    *                (
+    *                merging state hash,
+    *                events from eventlog that made a difference between base and merging
+    *                )
     * @return
     */
   def merge(
-      baseState: Blake2b256Hash,
       mainState: Blake2b256Hash,
-      mergingState: Blake2b256Hash,
-      eventLogs: List[Event]
+      toMerge: Seq[EventChain]
   ): F[Blake2b256Hash]
 }
+
+final case class EventChain(
+    startState: Blake2b256Hash,
+    endState: Blake2b256Hash,
+    events: Seq[Event]
+)

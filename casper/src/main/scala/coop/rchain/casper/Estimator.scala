@@ -16,7 +16,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.shared.{DagOps, Log}
+import coop.rchain.dag.DagOps
+import coop.rchain.shared.Log
 
 // Tips of the DAG, ranked against LCA
 final case class ForkChoice(tips: IndexedSeq[BlockHash], lca: BlockHash)

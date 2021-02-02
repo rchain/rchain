@@ -9,7 +9,7 @@ import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
-import coop.rchain.shared.Serialize
+import coop.rchain.shared.{Log, Serialize}
 import org.lmdbjava.EnvFlags
 import scodec.Codec
 
@@ -49,7 +49,7 @@ final case class LMDBRSpaceStorageConfig(
 
 object HistoryRepositoryInstances {
 
-  def lmdbRepository[F[_]: Concurrent: Parallel, C, P, A, K](
+  def lmdbRepository[F[_]: Concurrent: Parallel: Log, C, P, A, K](
       config: LMDBRSpaceStorageConfig
   )(
       implicit codecC: Codec[C],
