@@ -31,6 +31,9 @@ object RNodeKeyValueStoreManager {
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
 
+  // Temporary channel store, remove in hard fork
+  private val channelEnvConfig = LmdbEnvConfig(name = "channels", maxEnvSize = 1 * tb)
+
   // Legacy RSpace paths
   val legacyRSpacePathPrefix = "rspace/casper/v2"
   private def legacyEnvConfig(dir: String) =
@@ -59,7 +62,8 @@ object RNodeKeyValueStoreManager {
       (Db("eval-roots"), evalHistoryEnvConfig),
       (Db("eval-cold"), evalColdEnvConfig),
       // RSpace cache (used for block merge)
-      (Db("rspace-channels"), rspaceCacheEnvConfig)
+      (Db("rspace-channels"), rspaceCacheEnvConfig),
+      (Db("channels"), channelEnvConfig)
     ) ++ (
       // RSpace
       if (!legacyRSpacePaths) {

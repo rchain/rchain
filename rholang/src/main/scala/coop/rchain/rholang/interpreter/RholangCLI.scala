@@ -120,10 +120,12 @@ object RholangCLI {
     // Specify database mapping
     val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "history", mapSize)
     val rspaceColdEnvConfig    = LmdbEnvConfig(name = "cold", mapSize)
+    val channelEnvConfig       = LmdbEnvConfig(name = "channels", mapSize)
     val dbMapping = Map[Db, LmdbEnvConfig](
       (Db("rspace-history"), rspaceHistoryEnvConfig),
       (Db("rspace-roots"), rspaceHistoryEnvConfig),
-      (Db("rspace-cold"), rspaceColdEnvConfig)
+      (Db("rspace-cold"), rspaceColdEnvConfig),
+      (Db("channels"), channelEnvConfig)
     )
     LmdbDirStoreManager[F](dirPath, dbMapping)
   }
