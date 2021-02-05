@@ -4,6 +4,7 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.CommEvent
 import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.casper.{ReportMemStore, ReportingCasper}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -28,10 +29,10 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       import coop.rchain.rholang.interpreter.storage._
-      implicit val timeEff: LogicalTime[Effect]      = new LogicalTime[Effect]
-      implicit val kvm: InMemoryStoreManager[Effect] = InMemoryStoreManager[Effect]
+      implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
       for {
+        kvm <- Resources.mkTestRNodeStoreManager[Effect](node.dataPath.storageDir)
         reportingStore <- ReportMemStore
                            .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                              kvm
