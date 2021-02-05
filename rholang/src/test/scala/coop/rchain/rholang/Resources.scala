@@ -79,14 +79,12 @@ object Resources {
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit scheduler: Scheduler
-  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
-    implicit val kvm_ = kvm
-    import coop.rchain.rholang.interpreter.storage._
+  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     for {
-      store                        <- KeyValueStoreManager[F].rSpaceStores
-      runtimes                     <- RhoRuntime.createRuntimes[F](store)
+      store <- kvm.rSpaceStores
+      runtimes <- RhoRuntime
+                   .createRuntimes[F](store, additionalSystemProcesses = additionalSystemProcesses)
       (runtime, replayRuntime, hr) = runtimes
     } yield (runtime, replayRuntime, hr)
-  }
 
 }
