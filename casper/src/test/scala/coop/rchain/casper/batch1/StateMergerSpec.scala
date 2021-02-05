@@ -108,7 +108,7 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
     import coop.rchain.rholang.interpreter.storage._
     rhoRuntimeEff[Effect](false)
       .use {
-        case (runtime, historyRepo) =>
+        case (runtime, _, historyRepo) =>
           for {
             baseDeploy @ _      <- runtime.processDeploy(deploys(0))
             baseCheckpoint      <- runtime.createCheckpoint

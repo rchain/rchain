@@ -1,16 +1,18 @@
 package coop.rchain.casper.addblock
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.NoNewDeploys
+import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
+import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256

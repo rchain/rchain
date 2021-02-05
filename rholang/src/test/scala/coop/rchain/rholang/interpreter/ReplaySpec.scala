@@ -5,7 +5,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources
-import coop.rchain.rholang.interpreter.accounting.{_cost, Cost}
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.SoftCheckpoint
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -121,12 +121,11 @@ class ReplaySpec extends FlatSpec with Matchers {
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
     val resources = for {
-      dir <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      res <- Resources.mkRuntimesAt[Task](dir)()
+      res <- Resources.mkRuntimes[Task]("cost-accounting-spec-")
     } yield res
 
     resources.use {
-      case (runtime, replayRuntime) =>
+      case (runtime, replayRuntime, _) =>
         // Execute operation
         op(runtime, replayRuntime)
     }

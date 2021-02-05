@@ -7,7 +7,6 @@ import cats.instances.parallel._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.util._
 import coop.rchain.rspace.test._
 import scodec.Codec
@@ -279,11 +278,11 @@ abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     AddressBookExample.implicits.serializeEntriesCaptor.toSizeHeadCodec
 
   override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
-    val creator: (HR, ST, Branch) => F[(ST, AtST, T)] =
-      (hr, ts, b) => {
+    val creator: (HR, ST) => F[(ST, AtST, T)] =
+      (hr, ts) => {
         val atomicStore = AtomicAny(ts)
         val space =
-          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, atomicStore, b)
+          new RSpace[F, Channel, Pattern, Entry, EntriesCaptor](hr, atomicStore)
         Applicative[F].pure((ts, atomicStore, space))
       }
     setupTestingSpace(creator, f)

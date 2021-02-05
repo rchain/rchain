@@ -5,6 +5,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
 import Ordering.Implicits.seqDerivedOrdering
@@ -559,8 +560,6 @@ object HistoryInstances {
 
     }
 
-    override def close(): F[Unit] = historyStore.close()
-
     override def reset(root: Blake2b256Hash): History[F] =
       this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
 
@@ -591,8 +590,6 @@ object HistoryInstances {
                    case Some(v) => Applicative[F].pure(v)
                  }
       } yield result
-
-    override def close(): F[Unit] = historyStore.close()
 
     def clear(): F[Unit] = Sync[F].delay {
       cache.clear()

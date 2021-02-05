@@ -307,8 +307,6 @@ final case class SimplisticHistory[F[_]: Sync](
 
   def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 
-  def close(): F[Unit] = historyStore.close()
-
 }
 
 object SimplisticHistory {

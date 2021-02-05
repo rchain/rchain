@@ -197,7 +197,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
       val ast = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
-        mkRuntime[Task](tmpPrefix, mapSize).use { runtime =>
+        mkRuntime[Task](tmpPrefix).use { runtime =>
           runtime.evaluate(rho)
         }
       }

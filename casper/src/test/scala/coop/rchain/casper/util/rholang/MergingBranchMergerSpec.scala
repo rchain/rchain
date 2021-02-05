@@ -11,6 +11,7 @@ import coop.rchain.casper.blocks.merger.{
   MergingVertex
 }
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
@@ -45,7 +46,8 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    rm   <- Resources.mkRuntimeManagerAt[Task](dirs.rspaceDir)()
+    kvm  <- Resource.liftF(RNodeKeyValueStoreManager[Task](dirs.storageDir))
+    rm   <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
   } yield rm
 
   def makeTxAndCommitState(

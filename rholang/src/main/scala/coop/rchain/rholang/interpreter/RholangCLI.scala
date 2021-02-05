@@ -1,12 +1,8 @@
 package coop.rchain.rholang.interpreter
 
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException}
-import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeoutException
-
 import cats._
-import cats.effect.Sync
-import cats.implicits._
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
@@ -17,11 +13,17 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Resources
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.shared.{Log, Resources}
+import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
+import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
-import coop.rchain.shared.Log
 
+import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException}
+import java.nio.file.{Files, Path}
+import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -67,9 +69,12 @@ object RholangCLI {
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
     implicit val parF: Parallel[Task]    = Task.catsParallel
 
+    val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize()).runSyncUnsafe()
+
     val runtime = (for {
-      space   <- RhoRuntime.setupRhoRSpace[Task](conf.dataDir(), conf.mapSize())
-      runtime <- RhoRuntime.createRhoRuntime[Task](space)
+      store           <- kvm.rSpaceStores
+      sarAndHR        <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, _, _) = sarAndHR
     } yield (runtime)).unsafeRunSync
 
     val problems = try {
@@ -100,11 +105,27 @@ object RholangCLI {
         List()
       }
     } finally {
-      runtime.close.unsafeRunSync
+      // TODO: Refactor with Resource.
+      kvm.shutdown.runSyncUnsafe()
     }
     if (!problems.isEmpty) {
       System.exit(1)
     }
+  }
+
+  def mkRSpaceStoreManager[F[_]: Concurrent: Log](
+      dirPath: Path,
+      mapSize: Long = 100 * mb
+  ): F[KeyValueStoreManager[F]] = {
+    // Specify database mapping
+    val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "history", mapSize)
+    val rspaceColdEnvConfig    = LmdbEnvConfig(name = "cold", mapSize)
+    val dbMapping = Map[Db, LmdbEnvConfig](
+      (Db("rspace-history"), rspaceHistoryEnvConfig),
+      (Db("rspace-roots"), rspaceHistoryEnvConfig),
+      (Db("rspace-cold"), rspaceColdEnvConfig)
+    )
+    LmdbDirStoreManager[F](dirPath, dbMapping)
   }
 
   def errorOrBug(th: Throwable): Either[Throwable, Throwable] = th match {

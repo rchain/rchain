@@ -1,19 +1,18 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, RhoRuntime}
-import java.nio.file.{Files, Path}
-
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, RhoRuntime, RholangCLI}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
+import java.nio.file.{Files, Path}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -33,7 +32,6 @@ abstract class RhoBenchBaseState {
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "rho-1", poolSize = 100)
   lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
-  val mapSize: Long                 = 1024L * 1024L * 1024L * 10L
 
   var runtime: RhoRuntime[Task]             = null
   var replayRuntime: ReplayRhoRuntime[Task] = null
@@ -49,6 +47,14 @@ abstract class RhoBenchBaseState {
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
   implicit val ms: Metrics.Source         = Metrics.BaseSource
   def rand: Blake2b512Random              = Blake2b512Random(128)
+
+  def createRuntime =
+    for {
+      kvm                         <- RholangCLI.mkRSpaceStoreManager[Task](dbDir)
+      store                       <- kvm.rSpaceStores
+      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, _) = spaces
+    } yield (runtime, replayRuntime)
 
   @Setup(value = Level.Iteration)
   def doSetup(): Unit = {
@@ -69,16 +75,9 @@ abstract class RhoBenchBaseState {
       case Left(err)  => throw err
     }
 
-    runtime = (for {
-      space <- RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize)
-      r     <- RhoRuntime.createRhoRuntime[Task](space)
-    } yield r).runSyncUnsafe()
-
-    replayRuntime = (for {
-      space <- RhoRuntime.setupReplaySpace[Task](dbDir, mapSize)
-      r     <- RhoRuntime.createReplayRhoRuntime[Task](space)
-    } yield r).runSyncUnsafe()
-
+    val runtimes = createRuntime.runSyncUnsafe()
+    runtime = runtimes._1
+    replayRuntime = runtimes._2
     randSetup = rand
     randRun = rand
     Await
@@ -90,6 +89,5 @@ abstract class RhoBenchBaseState {
   }
 
   @TearDown
-  def tearDown(): Unit =
-    runtime.close.unsafeRunSync
+  def tearDown(): Unit = ()
 }

@@ -10,6 +10,7 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rspace.ReportingRspace.ReportingComm
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.rspace.syntax._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -32,9 +33,12 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
 
       for {
         reportingStore <- ReportMemStore
-                           .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+                           .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                             kvm
+                           )
+        rspaceStore <- kvm.rSpaceStores
         reportingCasper = ReportingCasper
-          .rhoReporter(reportingStore, node.dataPath.rspaceDir, 1024L * 1024L * 1024L)
+          .rhoReporter(reportingStore, rspaceStore)
         deploy      <- ConstructDeploy.sourceDeployNowF(correctRholang)
         signedBlock <- node.addBlock(deploy)
         _           = logEff.warns.isEmpty should be(true)

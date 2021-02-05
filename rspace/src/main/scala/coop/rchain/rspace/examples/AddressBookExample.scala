@@ -1,23 +1,20 @@
 package coop.rchain.rspace.examples
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
-import java.nio.file.{Files, Path}
-
-import cats.{Applicative, Id, Parallel}
 import cats.effect.{Concurrent, ContextShift}
+import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.ISpace.IdISpace
-import coop.rchain.rspace.history.Branch
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rspace.{RSpace, _}
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.util._
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.rspace.util._
-
-import scala.concurrent.ExecutionContext
+import coop.rchain.store.InMemoryStoreManager
 import scodec.bits.ByteVector
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.ExecutionContext
 import scala.concurrent.ExecutionContext.Implicits.global
 
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
@@ -203,16 +200,11 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-    // Here we define a temporary place to put the store's files
-    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Let's define our store
-    val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L,
-        Branch.MASTER
-      )
+    val store = keyValueStoreManager.rSpaceStores
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
@@ -243,17 +235,11 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
-
-    // Here we define a temporary place to put the store's files
-    val storePath: Path = Files.createTempDirectory("rspace-address-book-example-")
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
     // Let's define our store
-    val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L,
-        Branch.MASTER
-      )
+    val store = keyValueStoreManager.rSpaceStores
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
@@ -327,7 +313,6 @@ object AddressBookExample {
     println("Rollback example: And again second produce result should be empty")
     assert(produceAlice.isEmpty)
 
-    space.close()
   }
 
   private[this] def withSpace(
@@ -337,20 +322,15 @@ object AddressBookExample {
     implicit val log: Log[Id]          = Log.log
     implicit val metricsF: Metrics[Id] = new Metrics.MetricsNOP[Id]()
     implicit val spanF: Span[Id]       = NoopSpan[Id]()
+    implicit val keyValueStoreManager  = InMemoryStoreManager[Id]
 
-    // Here we define a temporary place to put the store's files
-    val storePath = Files.createTempDirectory("rspace-address-book-example-")
     // Let's define our store
-    val space =
-      RSpace.create[Id, Channel, Pattern, Entry, Printer](
-        storePath,
-        1024L * 1024L,
-        Branch.MASTER
-      )
+    val store = keyValueStoreManager.rSpaceStores
+    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
     try {
       f(space)
     } finally {
-      space.close()
+      ()
     }
 
   }

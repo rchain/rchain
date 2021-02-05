@@ -8,13 +8,16 @@ import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
@@ -24,8 +27,8 @@ import org.scalatest.prop.Checkers.check
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{AppendedClues, Assertion, FlatSpec, Matchers}
 
-import scala.concurrent.duration._
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.duration._
 
 class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with AppendedClues {
 
@@ -36,26 +39,19 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val ms: Metrics.Source        = Metrics.BaseSource
+    implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      dir     <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      costLog <- Resource.liftF(costLog[Task]())
-      space   <- Resource.liftF(RhoRuntime.setupRhoRSpace[Task](dir, 1024L * 1024 * 1024))
-      runtime <- {
-        // naming noOpCostLog because want to override package scope noOpCostLog val
-        implicit val noOpCostLog: FunctorTell[Task, Chain[Cost]] = costLog
-        Resource.make(
-          RhoRuntime
-            .createRhoRuntime[Task](space, Seq.empty, false)
-        )(
-          _.close
-        )
-      }
-
+      costLog                     <- costLog[Task]()
+      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store                       <- kvm.rSpaceStores
+      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, _) = spaces
     } yield (runtime, costLog)
 
     resources
-      .use {
+      .flatMap {
         case (runtime, costL) =>
           costL.listen {
             runtime.evaluate(contract, Cost(initialPhlo.toLong))
@@ -72,36 +68,38 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val logF: Log[Task]           = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val ms: Metrics.Source        = Metrics.BaseSource
+    implicit val kvm                       = InMemoryStoreManager[Task]
 
-    val resources = for {
-      dir      <- Resources.mkTempDir[Task]("cost-accounting-spec-")
-      runtimes <- Resources.mkRuntimesAt[Task](dir)()
-    } yield runtimes
-
-    resources
-      .use {
-        case (runtime, replayRuntime) =>
-          implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-          runtime.evaluate(
-            term,
-            initialPhlo,
-            Map.empty
-          )(rand) >>= { playResult =>
-            runtime.createCheckpoint >>= {
-              case Checkpoint(root, log) =>
-                replayRuntime.rig(log) >>
-                  replayRuntime.reset(root) >>
-                  replayRuntime.evaluate(
-                    term,
-                    initialPhlo,
-                    Map.empty
-                  )(rand) >>= { replayResult =>
-                  replayRuntime.checkReplayData.as((playResult, replayResult))
-                }
-            }
+    val evaluaResult = for {
+      costLog                     <- costLog[Task]()
+      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store                       <- kvm.rSpaceStores
+      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, _) = spaces
+      result <- {
+        implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
+        runtime.evaluate(
+          term,
+          initialPhlo,
+          Map.empty
+        )(rand) >>= { playResult =>
+          runtime.createCheckpoint >>= {
+            case Checkpoint(root, log) =>
+              replayRuntime.reset(root) >> replayRuntime.rig(log) >>
+                replayRuntime.evaluate(
+                  term,
+                  initialPhlo,
+                  Map.empty
+                )(rand) >>= { replayResult =>
+                replayRuntime.checkReplayData.as((playResult, replayResult))
+              }
           }
+        }
       }
-      .runSyncUnsafe(75.seconds)
+    } yield result
+
+    evaluaResult.runSyncUnsafe(75.seconds)
   }
 
   // Uses Godel numbering and a https://en.wikipedia.org/wiki/Mixed_radix

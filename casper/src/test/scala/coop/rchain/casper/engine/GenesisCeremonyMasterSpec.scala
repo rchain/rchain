@@ -21,7 +21,6 @@ class GenesisCeremonyMasterSpec extends WordSpec {
 
   "GenesisCeremonyMaster" should {
     "make a transition to Running state after block has been approved" in {
-      import monix.execution.Scheduler.Implicits.global
       val fixture = Setup()
       import fixture._
 

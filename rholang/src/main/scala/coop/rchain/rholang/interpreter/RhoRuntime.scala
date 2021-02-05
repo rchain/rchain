@@ -24,11 +24,13 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, 
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
-import coop.rchain.rspace.history.{Branch, HistoryRepository}
+import coop.rchain.rspace.RSpace.RSpaceStore
+import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
+import monix.execution.Scheduler
 
 import scala.concurrent.ExecutionContext
 
@@ -133,8 +135,6 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     */
   def setInvalidBlocks(invalidBlocks: Map[BlockHash, Validator]): F[Unit]
 
-  def close: F[Unit]
-
   /**
     * Get the hot changes after some executions for the runtime.
     * Currently this is only for debug info mostly.
@@ -158,7 +158,6 @@ class RhoRuntimeImpl[F[_]: Sync](
     val invalidBlocksParam: InvalidBlocks[F]
 ) extends RhoRuntime[F] {
   private val emptyContinuation = TaggedContinuation()
-  def close: F[Unit]            = space.close()
 
   override def getHotChanges
       : F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap
@@ -513,84 +512,6 @@ object RhoRuntime {
     } yield ()
   }
 
-  def setupRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
-  )(
-      implicit scheduler: ExecutionContext
-  ): F[(RhoISpace[F], RhoReplayISpace[F], RhoHistoryRepository[F])] = {
-
-    import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createWithReplay[
-      F,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      TaggedContinuation
-    ](dataDir, mapSize)
-  }
-
-  def setupReplaySpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
-  )(
-      implicit scheduler: ExecutionContext
-  ): F[RhoReplayISpace[F]] = {
-
-    import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.createReplay[
-      F,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      TaggedContinuation
-    ](dataDir, mapSize)
-  }
-
-  def setupRhoRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
-  )(
-      implicit scheduler: ExecutionContext
-  ): F[RhoISpace[F]] = {
-
-    import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _ <- if (notexists) Sync[F].delay(Files.createDirectories(dataDir)) >> ().pure[F]
-            else ().pure[F]
-      } yield ()
-
-    checkCreateDataDir >> RSpace.create[
-      F,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      TaggedContinuation
-    ](dataDir, mapSize, Branch.MASTER)
-  }
-
   /**
     *
     * @param rspace the rspace which the runtime would operate on it
@@ -659,28 +580,39 @@ object RhoRuntime {
           } else ().pure[F]
     } yield runtime
 
+  // this is more for tests currently
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long,
-      initRegistry: Boolean = true
+      stores: RSpaceStore[F],
+      iniRegistry: Boolean = false,
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
-      implicit scheduler: ExecutionContext,
-      costLog: FunctorTell[F, Chain[Cost]]
-  ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
+      implicit scheduler: Scheduler
+  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
-      space            <- RhoRuntime.setupRhoRSpace[F](dataDir, mapSize)
-      rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
-      replaySpace      <- RhoRuntime.setupReplaySpace(dataDir, mapSize)
-      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
-    } yield (rhoRuntime, replayRhoRuntime)
+      hrstores <- RSpace
+                   .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                     stores
+                   )
+      (space, replay, hr)      = hrstores
+      runtimes                 <- createRuntimes[F](space, replay, false, additionalSystemProcesses)
+      (runtime, replayRuntime) = runtimes
+    } yield (runtime, replayRuntime, hr)
+  }
 
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
-      initRegistry: Boolean
+      initRegistry: Boolean,
+      additionalSystemProcesses: Seq[Definition[F]]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      rhoRuntime       <- RhoRuntime.createRhoRuntime[F](space, Seq.empty, initRegistry)
-      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](replaySpace, Seq.empty, initRegistry)
+      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
+      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
+                           replaySpace,
+                           additionalSystemProcesses,
+                           initRegistry
+                         )
     } yield (rhoRuntime, replayRhoRuntime)
 }

@@ -1,33 +1,33 @@
 package coop.rchain.rspace.bench
 
-import cats._, cats.data._, cats.implicits._
-import cats.effect._
-import java.io.{FileNotFoundException, InputStreamReader}
-import java.nio.file.{Files, Path}
-
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime, RholangCLI}
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{Setup, TearDown}
 
+import java.io.{FileNotFoundException, InputStreamReader}
+import java.nio.file.{Files, Path}
+
 trait EvalBenchStateBase {
   private lazy val dbDir: Path            = Files.createTempDirectory("rchain-storage-test-")
-  private val mapSize: Long               = 1024L * 1024L * 1024L
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]       = NoopSpan[Task]()
+  implicit val kvm                        = RholangCLI.mkRSpaceStoreManager[Task](dbDir).runSyncUnsafe()
 
   val rhoScriptSource: String
 
-  lazy val space = RhoRuntime.setupRhoRSpace[Task](dbDir, mapSize).unsafeRunSync
-  lazy val runtime: RhoRuntime[Task] =
-    RhoRuntime.createRhoRuntime[Task](space).unsafeRunSync
+  val store                        = kvm.rSpaceStores.unsafeRunSync
+  lazy val spaces                  = RhoRuntime.createRuntimes[Task](store).unsafeRunSync
+  val (runtime, replayRuntime, hr) = spaces
+
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 
@@ -44,8 +44,7 @@ trait EvalBenchStateBase {
   }
 
   @TearDown
-  def tearDown(): Unit =
-    runtime.close.unsafeRunSync
+  def tearDown(): Unit = ()
 
   def resourceFileReader(path: String): InputStreamReader =
     new InputStreamReader(

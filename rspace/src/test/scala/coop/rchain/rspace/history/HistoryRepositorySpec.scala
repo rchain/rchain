@@ -1,16 +1,11 @@
 package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Path}
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
-import cats.implicits._
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace.trace.{Consume, Log, Produce}
+import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.rspace.{
   util,
   Blake2b256Hash,
@@ -23,26 +18,24 @@ import coop.rchain.rspace.{
   InsertJoins
 }
 import coop.rchain.shared.Log
-import coop.rchain.state.TrieNode
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.lmdbjava.EnvFlags
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
-import scodec.Codec
-import scodec.bits.{BitVector, ByteVector}
+import scodec.bits.ByteVector
 
-import scala.collection.SortedSet
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
-import cats.implicits._
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.util.stringSerialize
+import cats.implicits._
+import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.shared.Log.NOPLog
 import coop.rchain.state.TrieNode
-import org.lmdbjava.EnvFlags
+import coop.rchain.store.InMemoryKeyValueStore
+import coop.rchain.shared.syntax._
 import scodec.Codec
-import scodec.bits.BitVector
 
 import scala.collection.SortedSet
 
@@ -178,21 +171,12 @@ class HistoryRepositorySpec
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
     implicit val codecString: Codec[String] = util.stringCodec
-    implicit val log                        = new Log.NOPLog[Task]
     val emptyHistory                        = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val pastRoots                           = rootRepository
-    val lmdbConfig = StoreConfig(
-      Files.createTempDirectory("test-"),
-      1024L * 1024L * 4096L,
-      2,
-      2048,
-      List(EnvFlags.MDB_NOTLS)
-    )
+    implicit val log: Log[Task]             = new NOPLog()
 
     (for {
-      _                <- pastRoots.commit(History.emptyRootHash)
-      channelLMDBStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      channelStore     = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
+      _ <- pastRoots.commit(History.emptyRootHash)
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
@@ -212,6 +196,13 @@ object RuntimeException {
 }
 
 trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
+  def channelStore = new ChannelStore[Task, String] {
+    override def getChannelHash(hash: Blake2b256Hash): Task[Option[ChannelHash]] = ???
+
+    override def putChannelHash(channel: String): Task[Unit] = ???
+
+    override def putContinuationHash(channels: Seq[String]): Task[Unit] = ???
+  }
   def inmemRootsStore =
     new RootsStore[Task] {
       var roots: Set[Blake2b256Hash]               = Set.empty
@@ -238,63 +229,14 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
           roots += key
         }
 
-      override def close(): Task[Unit] = Task.delay(())
     }
 
   def rootRepository =
     new RootRepository[Task](inmemRootsStore)
 
-  def inMemStore = new Store[Task] {
-    val data: TrieMap[ByteBuffer, ByteBuffer] = TrieMap.empty
-
-    override def close(): Task[Unit] = Task.delay(())
-
-    override def get(key: Blake2b256Hash): Task[Option[BitVector]] = Task.delay {
-      data.get(key.bytes.toByteBuffer).map(BitVector(_))
-    }
-
-    override def get(key: ByteBuffer): Task[Option[BitVector]] = Task.delay {
-      data.get(key).map(BitVector(_))
-    }
-
-    override def get[T](
-        keys: Seq[Blake2b256Hash],
-        fromBuffer: ByteBuffer => T
-    ): Task[Seq[Option[T]]] = Task {
-      keys.map(k => get(k.bytes.toByteBuffer).runSyncUnsafe().map(b => fromBuffer(b.toByteBuffer)))
-    }
-
-    override def put(data: Seq[(Blake2b256Hash, BitVector)]): Task[Unit] = Task {
-      data.map { case (k, v) => put(k, v).runSyncUnsafe() }
-      ()
-    }
-
-    override def put(key: Blake2b256Hash, value: BitVector): Task[Unit] = Task {
-      data.put(key.bytes.toByteBuffer, value.toByteBuffer)
-    }
-
-    override def put(key: ByteBuffer, value: ByteBuffer): Task[Unit] = Task { data.put(key, value) }
-
-    override def put[T](keys: Seq[(Blake2b256Hash, T)], toBuffer: T => ByteBuffer): Task[Unit] =
-      Task {
-        keys.map { case (k, v) => put(k.bytes.toByteBuffer, toBuffer(v)).runSyncUnsafe() }
-        ()
-      }
-  }
-
-  def inMemColdStore: ColdStore[Task] = new ColdStore[Task] {
-    val data: TrieMap[Blake2b256Hash, PersistedData] = TrieMap.empty
-
-    override def put(hash: Blake2b256Hash, d: PersistedData): Task[Unit] =
-      Task.delay { data.put(hash, d) }
-
-    override def get(hash: Blake2b256Hash): Task[Option[PersistedData]] =
-      Task.delay { data.get(hash) }
-
-    override def close(): Task[Unit] = Task.delay(())
-
-    override def put(list: List[(Blake2b256Hash, PersistedData)]): Task[Unit] =
-      list.traverse_(Function.tupled(put))
+  def inMemColdStore: ColdKeyValueStore[Task] = {
+    val store = InMemoryKeyValueStore[Task]
+    store.toTypedStore(codecPureBlake2b256Hash, codecPersistedData)
   }
 
   def emptyExporter[F[_]: Sync]: RSpaceExporter[F] = new RSpaceExporter[F] {

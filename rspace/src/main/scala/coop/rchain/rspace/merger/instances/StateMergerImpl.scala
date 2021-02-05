@@ -6,13 +6,13 @@ import cats.implicits._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.continuationKey
 import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
+import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.HistoryRepositoryImpl.{
   encodeContinuations,
   encodeData,
   encodeJoins
 }
 import coop.rchain.rspace.history.{
-  ColdStore,
   ContinuationsLeaf,
   DataLeaf,
   History,
@@ -64,7 +64,7 @@ object StateMergerImpl {
   final case class StateMergerImpl[F[_]: Concurrent: Log, C, P, A, K](
       historyRepo: HistoryRepository[F, C, P, A, K],
       history: History[F],
-      leafStore: ColdStore[F],
+      leafStore: ColdKeyValueStore[F],
       rootsRepository: RootRepository[F],
       serializeC: Serialize[C]
   )(

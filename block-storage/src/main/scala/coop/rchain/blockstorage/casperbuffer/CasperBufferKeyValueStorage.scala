@@ -91,7 +91,9 @@ object CasperBufferKeyValueStorage {
   implicit private val ms: Source =
     Metrics.Source(BlockStorageMetricsSource, "dag-key-value-store")
 
-  def create[F[_]: Concurrent: KeyValueStoreManager: Log: Metrics]: F[CasperBufferStorage[F]] = {
+  def create[F[_]: Concurrent: Log: Metrics](
+      kvm: KeyValueStoreManager[F]
+  ): F[CasperBufferStorage[F]] = {
 
     def recreateInMemStore(
         parentsStore: KeyValueTypedStore[F, BlockHash, Set[BlockHash]],
@@ -108,7 +110,7 @@ object CasperBufferKeyValueStorage {
       } yield inMemStore
 
     for {
-      parentsStore <- KeyValueStoreManager[F].database[BlockHash, Set[BlockHash]](
+      parentsStore <- kvm.database[BlockHash, Set[BlockHash]](
                        "parents-map",
                        codecBlockHash,
                        codecBlockHashSet
