@@ -43,10 +43,13 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      costLog                     <- costLog[Task]()
-      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
-      store                       <- kvm.rSpaceStores
-      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      costLog <- costLog[Task]()
+      cost    <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store   <- kvm.rSpaceStores
+      spaces <- {
+        implicit val noOpCostLog: FunctorTell[Task, Chain[Cost]] = costLog
+        RhoRuntime.createRuntimesWithCostLog[Task](store)
+      }
       (runtime, replayRuntime, _) = spaces
     } yield (runtime, costLog)
 
