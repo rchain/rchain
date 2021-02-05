@@ -19,7 +19,7 @@ import coop.rchain.blockstorage.dag.{
 }
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
 import coop.rchain.casper
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -496,8 +496,8 @@ object TestNode {
       runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
       (runtime, replayRuntime, history) = runtimes
       runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
-      lastFinalizedPath                 <- mkTempDir(s"casper-test-last-finalized")
-      lastFinalizedStorage              <- Resources.mkLastFinalizedStorage(lastFinalizedPath)
+      lastFinalizedBlockDb              <- Resource.liftF(kvm.store("last-finalized-block"))
+      lastFinalizedStorage              = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
 
       node <- Resource.liftF({
                implicit val bs                           = blockStore
