@@ -15,15 +15,12 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.dag.{DagReader, InMemDAG}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -35,7 +32,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
 
 import scala.collection.Seq
-import scala.io.Source
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
@@ -46,7 +42,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm  <- Resource.liftF(RNodeKeyValueStoreManager[Task](dirs.storageDir))
+    kvm  <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dirs.storageDir))
     rm   <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
   } yield rm
 

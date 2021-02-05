@@ -58,7 +58,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeAndManager: Resource[Task, (interpreter.RhoRuntime[Task], RuntimeManager[Task])] =
     for {
       dirs                         <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-      kvm                          <- Resource.liftF(RNodeKeyValueStoreManager[Task](dirs.storageDir))
+      kvm                          <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dirs.storageDir))
       rspaceStore                  <- Resource.liftF(kvm.rSpaceStores)
       runtimes                     <- Resource.liftF(RhoRuntime.createRuntimes[Task](rspaceStore))
       (runtime, replayRuntime, hr) = runtimes

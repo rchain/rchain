@@ -17,6 +17,7 @@ import coop.rchain.blockstorage.dag.{
   BlockDagRepresentation,
   BlockDagStorage
 }
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
@@ -28,7 +29,6 @@ import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
@@ -486,7 +486,7 @@ object TestNode {
     implicit val spanEff   = new NoopSpan[F]
     for {
       paths                             <- Resources.copyStorage[F](storageMatrixPath)
-      kvm                               <- Resource.liftF(RNodeKeyValueStoreManager[F](paths.storageDir))
+      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(paths.storageDir))
       blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
       blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
       deployStoreConfig                 = Config(paths.deployStorageDir, 1024L * 1024L * 1024L)
