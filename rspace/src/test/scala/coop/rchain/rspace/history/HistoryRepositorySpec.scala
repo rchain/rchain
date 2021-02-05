@@ -183,7 +183,7 @@ class HistoryRepositorySpec
         inMemColdStore,
         emptyExporter,
         emptyImporter,
-        channelStore,
+        noOpChannelStore,
         stringSerialize
       )
       _ <- f(repo)
@@ -196,12 +196,12 @@ object RuntimeException {
 }
 
 trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
-  def channelStore = new ChannelStore[Task, String] {
-    override def getChannelHash(hash: Blake2b256Hash): Task[Option[ChannelHash]] = ???
+  def noOpChannelStore = new ChannelStore[Task, String] {
+    override def getChannelHash(hash: Blake2b256Hash): Task[Option[ChannelHash]] = none.pure[Task]
 
-    override def putChannelHash(channel: String): Task[Unit] = ???
+    override def putChannelHash(channel: String): Task[Unit] = ().pure[Task]
 
-    override def putContinuationHash(channels: Seq[String]): Task[Unit] = ???
+    override def putContinuationHash(channels: Seq[String]): Task[Unit] = ().pure[Task]
   }
   def inmemRootsStore =
     new RootsStore[Task] {
