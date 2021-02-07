@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import coop.rchain.rholang.interpreter.compiler.SourcePosition
-import net.logstash.logback.encoder.org.apache.commons.lang.exception.ExceptionUtils
+import net.logstash.logback.encoder.org.apache.commons.lang3.exception.ExceptionUtils
 
 object errors {
 
@@ -107,7 +107,7 @@ object errors {
       interpreterErrors: Vector[InterpreterError],
       errors: Vector[Throwable]
   ) extends InterpreterError(
-        s"Error: Aggregate Error\n${(interpreterErrors ++ errors).map(ExceptionUtils.getFullStackTrace).mkString}"
+        s"Error: Aggregate Error\n${(interpreterErrors ++ errors).map(ExceptionUtils.getStackTrace).mkString}"
       )
 
   // Current implementation of SpaceMatcher (extractDataCandidates) causes unmatched comms

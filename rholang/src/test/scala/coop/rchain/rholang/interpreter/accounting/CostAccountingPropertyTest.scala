@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.accounting
 
 import cats._
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
@@ -103,7 +103,7 @@ object CostAccountingPropertyTest {
     implicit val ms: Metrics.Source         = Metrics.BaseSource
 
     val prefix = "cost-accounting-property-test"
-    mkRuntime[Task](prefix, 1024 * 1024 * 1024L).use { runtime =>
+    mkRuntime[Task](prefix).use { runtime =>
       for {
         _    <- runtime.cost.set(Cost.UNSAFE_MAX)
         cost <- CostAccounting.emptyCost[Task]

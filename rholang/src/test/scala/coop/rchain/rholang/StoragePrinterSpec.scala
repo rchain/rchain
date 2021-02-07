@@ -1,25 +1,22 @@
 package coop.rchain.rholang
 
-import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.casper.protocol.DeployData
+import coop.rchain.crypto.PrivateKey
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil}
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-import cats.syntax._
-import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 
 import scala.concurrent.duration._
 
 class StoragePrinterSpec extends FlatSpec with Matchers {
-  private val mapSize     = 1024L * 1024L * 1024L
   private val tmpPrefix   = "rspace-store-"
   private val maxDuration = 5.seconds
   private val deployerSk = PrivateKey(
@@ -33,7 +30,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
   behavior of "StoragePrinter.prettyPrintUnmatchedSends"
 
   it should "print unmatched sends" in {
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         for {
           _ <- {
@@ -62,7 +59,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
     )
 
   it should "print unmatched sends of multiple deploys" in {
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         val deploy1 = "@1!(Nil)"
         val deploy2 = "@2!(Nil)"
@@ -84,7 +81,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
   }
 
   it should "not print unmatched sends from previous deploys" in {
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         for {
           _      <- runtime.evaluate("@0!(Nil) | for(_ <- @1) { Nil }")

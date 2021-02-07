@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
@@ -34,8 +34,6 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
 
   "Initializing state" should {
     "make a transition to Running once ApprovedBlock has been received" in {
-      import monix.execution.Scheduler.Implicits.global
-
       val theInit = Task.unit
 
       implicit val engineCell = Cell.unsafe[Task, Engine[Task]](Engine.noop)
@@ -74,14 +72,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       )
 
       // Get exporter for genesis block
-      val genesisExporter = {
-        val genesisStorePath = context.storageDirectory.resolve("rspace")
-        val exporterTask =
-          RhoRuntime.setupRSpace[Task](genesisStorePath, 1024L * 1024 * 1024L) >>= {
-            case (_, _, hr) => hr.exporter
-          }
-        exporterTask.runSyncUnsafe()
-      }
+      val genesisExporter = exporter
 
       val chunkSize = LfsTupleSpaceRequester.pageSize
 

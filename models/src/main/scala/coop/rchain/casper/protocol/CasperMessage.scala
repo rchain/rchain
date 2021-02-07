@@ -367,8 +367,8 @@ sealed trait SystemDeployData
 
 final case class SlashSystemDeployData(invalidBlockHash: BlockHash, issuerPublicKey: PublicKey)
     extends SystemDeployData
-object CloseBlockSystemDeployData extends SystemDeployData
-object Empty                      extends SystemDeployData
+case object CloseBlockSystemDeployData extends SystemDeployData
+case object Empty                      extends SystemDeployData
 
 object SystemDeployData {
   val empty: SystemDeployData = Empty

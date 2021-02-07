@@ -1,6 +1,5 @@
 package coop.rchain.blockstorage.dag
 
-import cats.instances.list._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
@@ -14,15 +13,14 @@ import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
-import scodec.bits.ByteVector
 
 class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   private def createDagStorage: Task[BlockDagStorage[Task]] = {
     implicit val log     = new shared.Log.NOPLog[Task]()
     implicit val metrics = new Metrics.MetricsNOP[Task]
-    implicit val kvm     = InMemoryStoreManager[Task]
-    BlockDagKeyValueStorage.create[Task]
+    val kvm              = InMemoryStoreManager[Task]
+    BlockDagKeyValueStorage.create[Task](kvm)
   }
 
   override def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R =

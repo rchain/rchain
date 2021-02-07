@@ -1,28 +1,26 @@
 package coop.rchain.rspace.bench
 
-import java.nio.file.{Files, Path}
-import java.util.concurrent.TimeUnit
-
 import cats.Id
-import cats.effect._
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace._
-import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.rholang.interpreter.RholangCLI
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.history.Branch
+import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.util._
-import coop.rchain.shared.PathOps._
+import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.shared.Log
+import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
+import java.nio.file.Files
+import java.util.concurrent.TimeUnit
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
 
 @org.openjdk.jmh.annotations.State(Scope.Thread)
 trait RSpaceBenchBase {
@@ -92,27 +90,20 @@ trait RSpaceBenchBase {
 @Measurement(iterations = 10)
 class RSpaceBench extends RSpaceBenchBase {
 
-  val mapSize: Long  = 1024L * 1024L * 1024L
-  val noTls: Boolean = false
-
-  var dbDir: Path                       = null
   implicit val logF: Log[Id]            = new Log.NOPLog[Id]
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
   implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
 
+  val dbDir        = Files.createTempDirectory("rchain-rspace-bench-")
+  val kvm          = RholangCLI.mkRSpaceStoreManager(dbDir)
+  val rspaceStores = kvm.rSpaceStores
+
   @Setup
-  def setup() = {
-    dbDir = Files.createTempDirectory("rchain-rspace-bench-")
-    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](
-      dbDir,
-      mapSize,
-      Branch.MASTER
-    )
-  }
+  def setup() =
+    space = RSpace.create[Id, Channel, Pattern, Entry, EntriesCaptor](rspaceStores)
 
   @TearDown
   def tearDown() = {
-    space.close()
     dbDir.recursivelyDelete()
     ()
   }

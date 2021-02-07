@@ -1,11 +1,7 @@
 package coop.rchain.casper.engine
 
-import java.nio.file.Path
-
 import cats._
-import cats.implicits._
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift}
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, InMemBlockDagStorage}
@@ -14,10 +10,9 @@ import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.{Validator, Vault}
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
@@ -25,14 +20,14 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Match, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.RSpace
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
 import coop.rchain.store.InMemoryStoreManager
 import fs2.concurrent.Queue
@@ -47,21 +42,24 @@ object Setup {
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
-    val networkId                 = "test"
-    implicit val scheduler        = Scheduler.io("test")
-    val runtimeDir                = BlockDagStorageTestFixture.blockStorageDir
-    val (runtime, replayRuntime) =
-      RhoRuntime.createRuntimes[Task](runtimeDir, 1024L * 1024 * 1024L).unsafeRunSync
+    implicit val scheduler        = Scheduler.Implicits.global
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m                     = matchListPar[Task]
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                        = GenesisBuilder.buildGenesis(params)
 
-    val history = RSpace
-      .setUp[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-        runtimeDir,
-        1024L * 1024 * 1024L,
-        Branch.MASTER
-      )
-      .unsafeRunSync
+    val networkId = "test"
+    val spaceKVManager =
+      mkTestRNodeStoreManager[Task](context.storageDirectory).runSyncUnsafe()
+    val store = spaceKVManager.rSpaceStores.runSyncUnsafe()
+    val spaces = RSpace
+      .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      .runSyncUnsafe()
+    val (rspace, replay, historyRepo) = spaces
+    val runtimes =
+      RhoRuntime.createRuntimes[Task](rspace, replay, true, Seq.empty).unsafeRunSync
 
-    val (historyRepo, _) = history
+    val (runtime, replayRuntime) = runtimes
     val (exporter, importer) = {
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
@@ -69,9 +67,6 @@ object Setup {
 
     implicit val runtimeManager =
       RuntimeManager.fromRuntimes(runtime, replayRuntime, historyRepo).unsafeRunSync(scheduler)
-
-    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                        = GenesisBuilder.buildGenesis(params)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
@@ -149,9 +144,8 @@ object Setup {
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
     implicit val blockRetriever                 = BlockRetriever.of[Task]
 
-    implicit val kvsManager = InMemoryStoreManager[Task]
     implicit val casperBuffer = CasperBufferKeyValueStorage
-      .create[Task]
+      .create[Task](spaceKVManager)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 
     implicit val blockProcessingQueue = Queue

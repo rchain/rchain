@@ -12,7 +12,6 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.concurrent.duration._
 
 class RuntimeSpec extends FlatSpec with Matchers {
-  private val mapSize                     = 1024L * 1024L * 1024L
   private val tmpPrefix                   = "rspace-store-"
   private val maxDuration                 = 5.seconds
   implicit val logF: Log[Task]            = Log.log[Task]
@@ -52,7 +51,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
     assert(execute(rho).errors.nonEmpty, s"Expected $rho to fail - it didn't.")
 
   private def execute(source: String): EvaluateResult =
-    mkRuntime[Task](tmpPrefix, mapSize)
+    mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         runtime.evaluate(source)
       }

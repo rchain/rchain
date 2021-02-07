@@ -1,9 +1,7 @@
 package coop.rchain.casper.batch2
 
-import java.nio.file.Files
-
 import cats.Monad
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
@@ -18,6 +16,7 @@ import coop.rchain.casper.helper.{
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper.{
   CasperShardConf,
@@ -33,15 +32,17 @@ import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
-import coop.rchain.models.blockImplicits._
 
+import java.nio.file.Files
 import scala.collection.immutable.HashMap
 
 class ValidateTest
@@ -765,14 +766,15 @@ class ValidateTest
     implicit blockStore => implicit blockDagStorage =>
       val genesis = GenesisBuilder.createGenesis()
 
-      val storageDirectory  = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-      val storageSize: Long = 1024L * 1024L * 1024L
+      val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
+
       for {
-        r              <- RhoRuntime.setupRSpace[Task](storageDirectory, storageSize)
-        historyRepo    = r._3
-        runtimes       <- RhoRuntime.createRuntimes[Task](storageDirectory, storageSize)
-        runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2, historyRepo)
-        dag            <- blockDagStorage.getRepresentation
+        kvm                               <- mkTestRNodeStoreManager[Task](storageDirectory)
+        store                             <- kvm.rSpaceStores
+        runtimes                          <- RhoRuntime.createRuntimes[Task](store)
+        (runtime, replayRuntime, history) = runtimes
+        runtimeManager                    <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, history)
+        dag                               <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
@@ -783,8 +785,6 @@ class ValidateTest
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
-        _ <- runtimes._1.close
-        _ <- runtimes._2.close
       } yield result
   }
 

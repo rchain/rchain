@@ -4,9 +4,8 @@ import java.nio.file.Files
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.casper.storage.LmdbStoreManager
 import coop.rchain.shared.Log
-import coop.rchain.store.KeyValueStoreSut
+import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks

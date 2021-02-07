@@ -1,24 +1,19 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
-import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.syntax.parallel._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.history.{HistoryRepositoryInstances, LMDBRSpaceStorageConfig, StoreConfig}
+import coop.rchain.rspace.history.HistoryRepositoryInstances
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.shared.PathOps._
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.atomic.AtomicAny
@@ -28,7 +23,6 @@ import org.scalatest.prop._
 
 import scala.util.Random
 import scala.util.Random.shuffle
-import org.lmdbjava.EnvFlags
 
 import scala.collection.SortedSet
 
@@ -1280,34 +1274,22 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
 
-    val branch = Branch("inmem")
-
-    val dbDir: Path   = Files.createTempDirectory("replayrspace-test-")
-    val mapSize: Long = 1024L * 1024L * 1024L
-
-    def storeConfig(name: String): StoreConfig =
-      StoreConfig(
-        Files.createDirectories(dbDir.resolve(name)),
-        mapSize,
-        2,
-        2048,
-        List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-      )
-
-    val config = LMDBRSpaceStorageConfig(
-      storeConfig("cold"),
-      storeConfig("history"),
-      storeConfig("roots"),
-      storeConfig("channelHash")
-    )
-
-    implicit val cc = sc.toSizeHeadCodec
-    implicit val cp = sp.toSizeHeadCodec
-    implicit val ca = sa.toSizeHeadCodec
-    implicit val ck = sk.toSizeHeadCodec
-
+    implicit val cc  = sc.toSizeHeadCodec
+    implicit val cp  = sp.toSizeHeadCodec
+    implicit val ca  = sa.toSizeHeadCodec
+    implicit val ck  = sk.toSizeHeadCodec
+    implicit val kvm = InMemoryStoreManager[Task]
     (for {
-      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](config)
+      roots    <- kvm.store("roots")
+      cold     <- kvm.store("cold")
+      history  <- kvm.store("history")
+      channels <- kvm.store("channels")
+      historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
+                            roots,
+                            cold,
+                            history,
+                            channels
+                          )
       cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
               )
@@ -1318,8 +1300,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       }
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
-        store,
-        branch
+        store
       )
       historyCache <- Ref.of[Task, Cache[C, P, A, K]](
                        Cache[C, P, A, K]()
@@ -1331,11 +1312,9 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
-        replayStore,
-        branch
+        replayStore
       )
       res <- f(store, replayStore, space, replaySpace)
-      _   <- Sync[Task].delay(dbDir.recursivelyDelete())
     } yield { res }).unsafeRunSync
   }
 }

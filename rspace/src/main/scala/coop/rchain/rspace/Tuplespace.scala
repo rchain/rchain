@@ -67,9 +67,4 @@ trait Tuplespace[F[_], C, P, A, K] {
   ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]
-
-  /** Closes the ISpace freeing all underlying resources.
-    */
-  def close(): F[Unit]
-
 }

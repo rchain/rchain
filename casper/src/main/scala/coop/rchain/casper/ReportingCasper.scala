@@ -26,7 +26,6 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.history.Branch
 import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
@@ -34,6 +33,7 @@ import coop.rchain.models.Validator.Validator
 
 import scala.concurrent.ExecutionContext
 import coop.rchain.metrics.MetricsSemaphore
+import coop.rchain.rspace.RSpace.RSpaceStore
 
 import scala.collection.concurrent.TrieMap
 
@@ -60,9 +60,8 @@ object ReportingCasper {
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
-      store: ReportMemStore[F],
-      dataDir: Path,
-      mapSize: Long
+      memStore: ReportMemStore[F],
+      rspaceStore: RSpaceStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
@@ -73,7 +72,7 @@ object ReportingCasper {
           block: BlockMessage
       ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
         for {
-          reportingRspace  <- ReportingRuntime.setupReportingRSpace(dataDir, mapSize)
+          reportingRspace  <- ReportingRuntime.setupReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           genesis          <- BlockStore[F].getApprovedBlock
@@ -99,7 +98,7 @@ object ReportingCasper {
                          _ <- Log[F].info(
                                s"Cache ${PrettyPrinter.buildStringNoLimit(block.blockHash)}reporting data into mem."
                              )
-                         _ <- r.traverse(data => store.put(data._1.deploy.sig, data._2))
+                         _ <- r.traverse(data => memStore.put(data._1.deploy.sig, data._2))
                        } yield r.asRight[ReportError]
                    }
         } yield result
@@ -121,7 +120,7 @@ object ReportingCasper {
                          cached <- block.body.deploys.traverse(
                                     pd =>
                                       for {
-                                        data <- store.get(pd.deploy.sig)
+                                        data <- memStore.get(pd.deploy.sig)
                                         re   = data.map((pd, _))
                                       } yield re
                                   )
@@ -204,8 +203,7 @@ object ReportingRuntime {
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
   def setupReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      dataDir: Path,
-      mapSize: Long
+      store: RSpaceStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
@@ -213,19 +211,8 @@ object ReportingRuntime {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
-    def checkCreateDataDir: F[Unit] =
-      for {
-        notexists <- Sync[F].delay(Files.notExists(dataDir))
-        _         <- Sync[F].delay(Files.createDirectories(dataDir)).whenA(notexists)
-      } yield ()
-
     for {
-      _ <- checkCreateDataDir
-      history <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                  dataDir,
-                  mapSize,
-                  Branch.MASTER
-                )
+      history                          <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[
         F,
@@ -235,8 +222,7 @@ object ReportingRuntime {
         TaggedContinuation
       ](
         historyRepository,
-        AtomicAny(replayStore),
-        Branch.REPLAY
+        AtomicAny(replayStore)
       )
     } yield reportingRspace
   }

@@ -11,6 +11,7 @@ import coop.rchain.rspace.history.HistoryRepositoryImpl._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.merger.instances.StateMergerImpl.StateMergerImpl
+import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{
   internal,
@@ -26,13 +27,15 @@ import coop.rchain.rspace.{
   RSpace
 }
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.shared.Serialize
+import coop.rchain.shared.syntax._
 import scodec.Codec
 import scodec.bits.ByteVector
 
 final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A, K](
     history: History[F],
     rootsRepository: RootRepository[F],
-    leafStore: ColdStore[F],
+    leafStore: ColdKeyValueStore[F],
     rspaceExporter: RSpaceExporter[F],
     rspaceImporter: RSpaceImporter[F],
     // Map channel hash in event log -> channel hash in history
@@ -233,7 +236,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
 
   private def storeLeaves(leafs: List[Result]): F[List[HistoryAction]] = {
     val toBeStored = leafs.collect { case (key, Some(data), _) => (key, data) }
-    leafStore.put(toBeStored).map(_ => leafs.map(_._3))
+    leafStore.putIfAbsent(toBeStored).map(_ => leafs.map(_._3))
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
@@ -253,14 +256,6 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
     } yield this.copy(history = next, channelHashesStore = channelHashesStore)
-
-  override def close(): F[Unit] =
-    for {
-      _ <- leafStore.close()
-      _ <- rootsRepository.close()
-      _ <- history.close()
-      _ <- channelHashesStore.close()
-    } yield ()
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
 
@@ -283,7 +278,7 @@ object HistoryRepositoryImpl {
   def fetchData[F[_]: Sync](
       key: Blake2b256Hash,
       history: History[F],
-      leafStore: ColdStore[F]
+      leafStore: ColdKeyValueStore[F]
   ): F[Option[PersistedData]] =
     history.find(key.bytes.toSeq.toList).flatMap {
       case (trie, _) =>

@@ -1,14 +1,13 @@
 package coop.rchain.casper.util
 
-import java.nio.file.{Files, Path}
-
-import cats.implicits._
+import cats.syntax.all._
+import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
-import coop.rchain.casper.helper.BlockDagStorageTestFixture
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -18,9 +17,11 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.Task
 
+import java.nio.file.{Files, Path}
 import scala.collection.mutable
 
 object GenesisBuilder {
@@ -133,7 +134,6 @@ object GenesisBuilder {
 
     val (validavalidatorKeyPairs, genesisVaults, genesisParameters) = parameters
     val storageDirectory                                            = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
-    val storageSize: Long                                           = 1024L * 1024 * 1024
     implicit val log: Log.NOPLog[Task]                              = new Log.NOPLog[Task]
     implicit val metricsEff: Metrics[Task]                          = new metrics.Metrics.MetricsNOP[Task]
     implicit val spanEff                                            = NoopSpan[Task]()
@@ -141,28 +141,16 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      rspaceDir      <- Task.delay(Files.createDirectory(storageDirectory.resolve("rspace")))
-      r              <- RhoRuntime.setupRSpace[Task](rspaceDir, storageSize)
-      rSpacePlay     = r._1
-      rSpaceReplay   = r._2
-      historyRepo    = r._3
-      runtimes       <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true)
-      runtimeManager <- RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2, historyRepo)
-      genesis        <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      _              <- runtimes._1.close
-      _              <- runtimes._2.close
-      blockStoreDir  <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-store")))
-      blockStore     <- BlockDagStorageTestFixture.createBlockStorage[Task](blockStoreDir)
-      _              <- blockStore.put(genesis.blockHash, genesis)
-
-      blockDagDir <- Task.delay(Files.createDirectory(storageDirectory.resolve("block-dag-store")))
-
-      storeManager <- RNodeKeyValueStoreManager[Task](blockDagDir)
-      blockDagStorage <- {
-        implicit val kvm = storeManager
-        BlockDagKeyValueStorage.create[Task]
-      }
-      _ <- blockDagStorage.insert(genesis, invalid = false)
+      kvsManager                   <- mkTestRNodeStoreManager[Task](storageDirectory)
+      store                        <- kvsManager.rSpaceStores
+      runtimes                     <- RhoRuntime.createRuntimes(store)
+      (runtime, replayRuntime, hr) = runtimes
+      runtimeManager               <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, hr)
+      genesis                      <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      blockStore                   <- KeyValueBlockStore[Task](kvsManager)
+      _                            <- blockStore.put(genesis.blockHash, genesis)
+      blockDagStorage              <- BlockDagKeyValueStorage.create[Task](kvsManager)
+      _                            <- blockDagStorage.insert(genesis, invalid = false)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
   }
 

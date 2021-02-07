@@ -21,5 +21,4 @@ trait ChannelStore[F[_], C] {
   def putChannelHash(channel: C): F[Unit]
   def putContinuationHash(channels: Seq[C]): F[Unit]
   def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]]
-  def close(): F[Unit]
 }

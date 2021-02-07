@@ -6,16 +6,13 @@ import cats.{Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.syntax._
+import coop.rchain.rspace.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
-import coop.rchain.casper.util.rholang.costacc.{
-  CheckBalance,
-  CloseBlockDeploy,
-  PreChargeDeploy,
-  RefundDeploy
-}
+import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.crypto.codec.Base16
@@ -30,7 +27,7 @@ import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, RhoRuntime}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.{metrics, rholang}
@@ -51,20 +48,22 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val genesisContext = GenesisBuilder.buildGenesis()
   val genesis        = genesisContext.genesisBlock
 
-  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    rm   <- Resources.mkRuntimeManagerAt[Task](dirs.rspaceDir)()
-  } yield rm
+  val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
+    Resources
+      .copyStorage[Task](genesisContext.storageDirectory)
+      .map(_.storageDir)
+      .evalMap(Resources.mkTestRNodeStoreManager[Task])
+      .evalMap(Resources.mkRuntimeManagerAt[Task])
 
   val runtimeAndManager: Resource[Task, (interpreter.RhoRuntime[Task], RuntimeManager[Task])] =
     for {
-      dirs       <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-      runtimes   <- rholang.Resources.mkRuntimesAt[Task](dirs.rspaceDir)()
-      histryRepo <- rholang.Resources.mkHistoryReposity(dirs.rspaceDir)
-      rm <- Resource.liftF[Task, RuntimeManager[Task]](
-             RuntimeManager.fromRuntimes[Task](runtimes._1, runtimes._2, histryRepo)
-           )
-    } yield (runtimes._1, rm)
+      dirs                         <- Resources.copyStorage[Task](genesisContext.storageDirectory)
+      kvm                          <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dirs.storageDir))
+      rspaceStore                  <- Resource.liftF(kvm.rSpaceStores)
+      runtimes                     <- Resource.liftF(RhoRuntime.createRuntimes[Task](rspaceStore))
+      (runtime, replayRuntime, hr) = runtimes
+      rm                           <- Resource.liftF(RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, hr))
+    } yield (runtime, rm)
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],

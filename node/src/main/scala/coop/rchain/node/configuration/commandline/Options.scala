@@ -352,26 +352,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Path to data directory. Defaults to $HOME/.rnode"
     )
 
-    val lmdbMapSizeRspace = opt[Long](
-      required = false,
-      descr = "Map size (in bytes) for RSpace"
-    )
-
-    val lmdbMapSizeBlockdagstore = opt[Long](
-      required = false,
-      descr = "Map size (in bytes) for blockDAG store index"
-    )
-
-    val lmdbMapSizeBlockstore = opt[Long](
-      required = false,
-      descr = "Map size (in bytes) for block store index"
-    )
-
-    val lmdbMapSizeDeploystore = opt[Long](
-      required = false,
-      descr = "Map size (in bytes) for deploy storage"
-    )
-
     val shardName = opt[String](
       descr = "Name of the shard this node is connected to."
     )

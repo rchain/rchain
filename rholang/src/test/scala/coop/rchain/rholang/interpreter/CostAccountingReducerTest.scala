@@ -10,16 +10,16 @@ import coop.rchain.rholang.Resources.mkRhoISpace
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
-import coop.rchain.rholang.interpreter.storage.ISpaceStub
-import coop.rchain.rholang.interpreter.storage._
+import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}
 import coop.rchain.rspace._
 import coop.rchain.rspace.internal.{Datum, Row}
 import coop.rchain.shared.Log
-
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{FlatSpec, Matchers}
+
 import scala.concurrent.duration._
 
 class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEqualsSupport {
@@ -112,6 +112,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
     implicit val rand            = Blake2b512Random(Array.empty[Byte])
     implicit val logF: Log[Task] = Log.log[Task]
+    implicit val kvm             = InMemoryStoreManager[Task]
 
     def testImplementation(pureRSpace: RhoISpace[Task]): Task[
       (
@@ -171,7 +172,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       map.get(List(channel)) === Some(data(p, rand))
 
     (for {
-      res           <- mkRhoISpace[Task]("cost-accounting-reducer-test-").use(testImplementation(_))
+      res           <- mkRhoISpace[Task].flatMap(testImplementation)
       (result, map) = res
       _             = assert(result === Left(OutOfPhlogistonsError))
       _             = assert(stored(map, a, rand.splitByte(0)) || stored(map, b, rand.splitByte(1)))

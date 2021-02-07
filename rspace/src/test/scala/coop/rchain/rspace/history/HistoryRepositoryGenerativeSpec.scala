@@ -3,7 +3,6 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import java.nio.file.{Files, Path}
 
-import cats.effect.concurrent.Ref
 import coop.rchain.rspace.{
   Blake2b256Hash,
   DeleteContinuations,
@@ -24,11 +23,11 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl.ChannelStoreImpl
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
-import org.lmdbjava.EnvFlags
 import coop.rchain.shared.PathOps._
+import coop.rchain.store.InMemoryStoreManager
 import coop.rchain.shared.{Log, Serialize}
 
 import scala.concurrent.duration._
@@ -39,30 +38,23 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val dbDir: Path = Files.createTempDirectory("rchain-storage-test-")
 
-  def lmdbConfig =
-    StoreConfig(
-      Files.createTempDirectory(dbDir, "test-"),
-      1024L * 1024L * 4096L,
-      2,
-      2048,
-      List(EnvFlags.MDB_NOTLS, EnvFlags.MDB_NORDAHEAD)
-    )
+  val kvm = InMemoryStoreManager[Task]
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     implicit val log: Log[Task] = new Log.NOPLog[Task]
     for {
-      historyLmdbStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      historyStore     = HistoryStoreInstances.historyStore(historyLmdbStore)
-      coldLmdbStore    <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      coldStore        = ColdStoreInstances.coldStore(coldLmdbStore)
-      rootsLmdbStore   <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      rootsStore       = RootsStoreInstances.rootsStore(rootsLmdbStore)
-      rootRepository   = new RootRepository[Task](rootsStore)
-      emptyHistory     = HistoryInstances.merging(History.emptyRootHash, historyStore)
-      exporter         = RSpaceExporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      importer         = RSpaceImporterStore[Task](historyLmdbStore, coldLmdbStore, rootsLmdbStore)
-      channelLMDBStore <- StoreInstances.lmdbStore[Task](lmdbConfig)
-      channelStore     = new ChannelStoreImpl(channelLMDBStore, stringSerialize, codecString)
+      historyLmdbKVStore <- kvm.store("history")
+      historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
+      coldLmdbKVStore    <- kvm.store("cold")
+      coldStore          = ColdStoreInstances.coldStore(coldLmdbKVStore)
+      rootsLmdbKVStore   <- kvm.store("roots")
+      rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
+      rootRepository     = new RootRepository[Task](rootsStore)
+      channelKVStore     <- kvm.store("channels")
+      channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize, codecString)
+      emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
+      exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -88,14 +80,15 @@ class InmemHistoryRepositoryGenerativeSpec
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     implicit val log: Log[Task] = new Log.NOPLog[Task]
+    val kvm                     = InMemoryStoreManager[Task]
     for {
-      channelStore <- Sync[Task].pure {
-                       new ChannelStoreImpl[Task, String](
-                         inMemStore,
-                         stringSerialize,
-                         codecString
-                       )
-                     }
+      channelKVStore <- kvm.store("channels")
+      channelStore = ChannelStoreImpl[Task, String](
+        channelKVStore,
+        stringSerialize,
+        codecString
+      )
+
       r = HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
@@ -107,6 +100,7 @@ class InmemHistoryRepositoryGenerativeSpec
       )
     } yield r
   }
+
 }
 
 abstract class HistoryRepositoryGenerativeDefinition
@@ -165,7 +159,9 @@ abstract class HistoryRepositoryGenerativeDefinition
       case InsertJoins(channel: String, joins) =>
         repo.getJoins(channel).map(checkJoins(_, joins))
       case InsertContinuations(channels, conts) =>
-        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(checkContinuations(_, conts))
+        repo
+          .getContinuations(channels.asInstanceOf[Seq[String]])
+          .map(checkContinuations(_, conts))
       case DeleteData(channel: String) =>
         repo.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>

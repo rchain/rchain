@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
-import cats.effect.{Resource, Sync}
+import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -17,13 +17,14 @@ import coop.rchain.rholang.interpreter.accounting.{CostAccounting, _}
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpaceTest.{ChargingRSpace, _}
 import coop.rchain.shared.Log
+import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest.{fixture, Matchers, Outcome}
 
 import scala.concurrent.duration._
-import coop.rchain.shared.scalatestcontrib._
 
 class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with Matchers {
 
@@ -307,17 +308,16 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
   protected override def withFixture(test: OneArgTest): Outcome = {
     val cost: _cost[Task] = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
     implicit val span     = NoopSpan[Task]
+    implicit val kvm      = InMemoryStoreManager[Task]
+
     def mkChargingRspace(rhoISpace: RhoISpace[Task]): Task[ChargingRSpace] = {
       val s = implicitly[Sync[Task]]
       Task.delay(ChargingRSpace.chargingRSpace(rhoISpace)(s, span, cost))
     }
 
-    val chargingRSpaceResource =
-      mkRhoISpace[Task]("rchain-charging-rspace-test-")
-        .flatMap(rhoISpace => Resource.make(mkChargingRspace(rhoISpace))(_.close()))
-
-    chargingRSpaceResource
-      .use(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, cost)) })
+    mkRhoISpace[Task]
+      .flatMap(mkChargingRspace)
+      .flatMap(chargingRSpace => Task.delay { test(TestFixture(chargingRSpace, cost)) })
       .runSyncUnsafe(10.seconds)
   }
 

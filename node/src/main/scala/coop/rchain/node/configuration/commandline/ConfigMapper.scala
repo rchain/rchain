@@ -1,16 +1,13 @@
 package coop.rchain.node.configuration.commandline
 
-import java.nio.file.Path
-
-import collection.JavaConverters._
-import collection.mutable
-import scala.concurrent.duration.{FiniteDuration, _}
-
-import coop.rchain.catscontrib.ski._
-import coop.rchain.comm.PeerNode
-
 import com.typesafe.config._
+import coop.rchain.comm.PeerNode
 import org.rogach.scallop.ScallopOption
+
+import java.nio.file.Path
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.concurrent.duration.FiniteDuration
 
 object ConfigMapper {
 
@@ -61,10 +58,6 @@ object ConfigMapper {
       add("protocol-client.disable-lfs", run.disableLfs)
 
       add("storage.data-dir", run.dataDir)
-      add("storage.lmdb-map-size-rspace", run.lmdbMapSizeRspace)
-      add("storage.lmdb-map-size-deploystore", run.lmdbMapSizeDeploystore)
-      add("storage.lmdb-map-size-blockdagstore", run.lmdbMapSizeBlockdagstore)
-      add("storage.lmdb-map-size-blockstore", run.lmdbMapSizeBlockstore)
 
       add("casper.shard-name", run.shardName)
       add("casper.fault-tolerance-threshold", run.faultToleranceThreshold)
