@@ -11,7 +11,7 @@ object Dependencies {
   val catsVersion       = "2.3.1"
   val catsEffectVersion = "2.3.1"
   val catsMtlVersion    = "0.7.1"
-  val slf4jVersion      = "1.7.25"
+  val slf4jVersion      = "1.7.30"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.68"
@@ -100,9 +100,9 @@ object Dependencies {
     slf4j,
     "org.typelevel" % "jawn-parser_2.12" % "1.0.0",
     // Added to resolve conflicts in scalapb plugin v0.10.8
-    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
-    "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
-    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.2.0",
+    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.19",
+    "com.google.protobuf"    % "protobuf-java"              % "3.14.0",
+    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.4.1",
     // Strange version conflict, it requires the same version but in square brackets (range?).
     // e.g. io.grpc:grpc-core:1.30.2 ([1.30.2] wanted)
     // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
