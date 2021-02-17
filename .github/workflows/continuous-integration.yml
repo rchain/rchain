@@ -38,12 +38,37 @@ jobs:
     name: Build Base
     runs-on: ubuntu-latest
     container: rchain/buildenv
+    outputs:
+      VERSION: ${{ env.VERSION }}
+      BRANCH: ${{ env.BRANCH }}
     steps:
       - name: Clone Repository
         uses: actions/checkout@v1
 
       - name: Initialize Environment
-        run: ./.github/init-environment
+        shell: bash
+        run: |
+          set -eu -o pipefail
+
+          ./.github/init-environment
+
+          # Version from Git repository (tag-commit)
+          version="`git describe --tags --always`"
+          echo "VERSION=$version" >> $GITHUB_ENV
+
+          # Find related HEAD branch
+          if [[ $GITHUB_REF =~ ^refs/tags/ ]]; then
+            # Tag related to multiple branches leaves empty branch variable
+            raw_branch=$(git branch -r --contains ${{ github.ref }})
+            if [[ $raw_branch =~ ^[\ ]*origin/([^ ]*)$ ]]; then
+              branch="${BASH_REMATCH[1]}"
+            fi
+          elif [[ $GITHUB_REF =~ ^refs/heads/ ]]; then
+            branch=${GITHUB_REF#refs/*/}
+          else
+            branch=$GITHUB_HEAD_REF
+          fi
+          echo "BRANCH=$branch" >> $GITHUB_ENV
 
       - name: Restore Cache
         uses: actions/cache@v1
@@ -275,7 +300,7 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Initialize Environment
-        # Only initlialize cache keys for "Restore Cache". We're running in the
+        # Only initialize cache keys for "Restore Cache". We're running in the
         # host now so we don't want to prepare filesystem here.
         run: _READ_ONLY=1 ./.github/init-environment
 
@@ -327,10 +352,12 @@ jobs:
 
 
   # release_* jobs make built artifacts available to public and run only on new
-  # tags or pushes to "staging" branch used by Bors (bors r+). These jobs
-  # require secrets! See "env" maps and "Secrets" page in GitHub repository
+  # tags or pushes to "staging" or "trying" branches used by Bors (bors r+ and bors try).
+  # These jobs require secrets! See "env" variables and "Secrets" page in GitHub repository
   # settings. Release destinations differ slightly depending on the event that
   # triggered the job (tag or branch push). See "Publish ..." steps for details.
+  # VERSION and BRANCH are used from "build_base" job outputs as a new way to share
+  # data between jobs and steps. Legacy "version" via artifact file is still used.
 
 
   # Upload built Docker image to Docker Hub.
@@ -340,7 +367,8 @@ jobs:
       - run_unit_tests
       - run_integration_tests
       - build_docker_image
-    if: "github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/staging')"
+      - build_base
+    if: "github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/trying' || github.ref == 'refs/heads/staging')"
     runs-on: ubuntu-latest
     steps:
       - name: Load Docker Image
@@ -356,34 +384,51 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
           DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_IMAGE_NAME }}
+          # Output from build_base job
+          VERSION: ${{ needs.build_base.outputs.VERSION }}
+          BRANCH: ${{ needs.build_base.outputs.BRANCH }}
         shell: bash
         run: |
           set -eu -o pipefail
 
           for var in DOCKERHUB_USERNAME DOCKERHUB_PASSWORD DOCKER_IMAGE_NAME; do
-              if [[ ! -v $var || -z ${!var} ]]; then
-                  echo "Required variable $var is not set." >&2
-                  exit 1
-              fi
+            if [[ ! -v $var || -z ${!var} ]]; then
+              echo "Required variable $var is not set." >&2
+              exit 1
+            fi
           done
 
-          version=$(cat artifacts-docker/version.txt)
-          image_name=$DOCKER_IMAGE_NAME
+          suffix=""
+          ci_run=""
 
-          if [[ $GITHUB_REF == refs/heads/* ]]; then
-              image_name+=-staging
+          # Add suffix if trying or merging
+          if [[ $BRANCH =~ ^(trying|staging)$ ]]; then
+            suffix="-$BRANCH"
+
+            # Add CI run number if trying
+            if [[ $BRANCH =~ ^trying$ ]]; then
+              ci_run="-ci-$GITHUB_RUN_NUMBER"
+            fi
           fi
-
-          docker tag coop.rchain/rnode:latest "$image_name:$version"
-          docker tag coop.rchain/rnode:latest "$image_name:latest"
 
           builtin echo "$DOCKERHUB_PASSWORD" \
               | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 
           set -x
-          docker push "$image_name:$version"
-          docker push "$image_name:latest"
 
+          image_name="$DOCKER_IMAGE_NAME$suffix"
+          img_version="$image_name:$VERSION$ci_run"
+          img_latest="$image_name:latest"
+
+          # Release Docker image
+          docker tag coop.rchain/rnode:latest $img_version
+          docker push $img_version
+
+          # Tag Docker image as latest if dev branch is tagged
+          if [[ $GITHUB_REF =~ ^refs/tags/ ]] && [[ $BRANCH =~ ^dev$ ]]; then
+            docker tag coop.rchain/rnode:latest $img_latest
+            docker push $img_latest
+          fi
 
   # GitHub (create) release and packages
   release_packages:
@@ -409,23 +454,8 @@ jobs:
           omitBodyDuringUpdate: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
-
-  # The following is for Bors to work. It's copied almost verbatim from
-  # https://github.com/rust-lang/crater/blob/e8195c31/.github/workflows/bors.yml#L125
-  # Thank you Pietro Albini!
-  #
-  # Bors build status comments in PRs do not link to failed checks. This may be
-  # due to the following commit in bors-ng:
-  # https://github.com/bors-ng/bors-ng/commit/dcf52d8d
-
-  # These jobs doesn't actually test anything, but they're only used to tell
-  # bors the build completed, as there is no practical way to detect when a
-  # workflow is successful listening to webhooks only.
-  #
-  # ALL THE PREVIOUS JOBS NEEDS TO BE ADDED TO THE `needs` SECTION OF THIS JOB!
-
-  # Merge into "trying" branch (bors try) does not trigger release_* jobs.
-
+  # Job to notify bors when run is successful. Skipped and cancelled job is considered
+  # as failure. More info https://github.com/bors-ng/bors-ng/issues/1115.
   bors_success:
     name: bors build finished
     needs:
@@ -434,43 +464,3 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: true
-    
-
-  # IMPORTANT: 
-  # bors_try_failure and bors_merge_failure are no longer needed due to an update to bors 
-  # <https://github.com/bors-ng/bors-ng/issues/1115> that considers skipped checks that share 
-  # names (e.g. 'bors build finished') as failures.
-
-
-  # bors_try_failure:
-  #   name: bors build finished
-  #   needs:
-  #     - run_unit_tests
-  #     - run_integration_tests
-  #   if: "github.event_name == 'push' && github.ref == 'refs/heads/trying' && !success()"
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - run: false
-
-  # Merge into "staging" branch (bors r+ ) triggers release_* jobs which depend
-  # on run_*_tests jobs.
-
-  #bors_merge_success:
-  #  name: bors build finished
-  #  needs:
-  #    - release_docker_image
-  #    #- release_packages
-  #  if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && success()"
-  #  runs-on: ubuntu-latest
-  #  steps:
-  #    - run: true
-
-  #bors_merge_failure:
-  #  name: bors build finished
-  #  needs:
-  #    - release_docker_image
-  #    #- release_packages
-  #  if: "github.event_name == 'push' && github.ref == 'refs/heads/staging' && !success()"
-  #  runs-on: ubuntu-latest
-  #  steps:
-  #    - run: false
