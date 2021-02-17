@@ -9,5 +9,12 @@ trait KeyValueTypedStore[F[_], K, V] {
 
   def contains(keys: Seq[K]): F[Seq[Boolean]]
 
+  /**
+    * Efficient way to iterate and filter the whole KV store
+    *
+    * @param pf Partial function to project and filter values
+    */
+  def collect[T](pf: PartialFunction[(K, () => V), T]): F[Seq[T]]
+
   def toMap: F[Map[K, V]]
 }

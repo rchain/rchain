@@ -16,7 +16,7 @@ class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
       _  <- db.put(data.toSeq)
     } yield db
 
-  def testPutGet(input: Map[Long, String]) =
+  def testPutGet(input: Map[Long, String]): F[Map[Long, String]] =
     for {
       store  <- copyToDb(input)
       keys   = input.keysIterator.toVector
@@ -24,18 +24,26 @@ class KeyValueStoreSut[F[_]: Sync: KeyValueStoreManager] {
       result = keys.zip(values).filter(_._2.nonEmpty).map { case (k, v) => (k, v.get) }.toMap
     } yield result
 
-  def testPutDeleteGet(input: Map[Long, String], deleteKeys: Seq[Long]) =
+  def testPutDeleteGet(input: Map[Long, String], deleteKeys: Seq[Long]): F[Map[Long, String]] =
     for {
       store  <- copyToDb(input)
       _      <- store.delete(deleteKeys)
       result <- store.toMap
     } yield result
 
-  def testPutIterate(input: Map[Long, String]) =
+  def testPutIterate(input: Map[Long, String]): F[Map[Long, String]] =
     for {
       store  <- copyToDb(input)
       result <- store.toMap
     } yield result
+
+  def testPutCollect(
+      input: Map[Long, String]
+  )(pf: PartialFunction[(Long, () => String), (Long, String)]): F[Map[Long, String]] =
+    for {
+      store  <- copyToDb(input)
+      result <- store.collect(pf)
+    } yield result.toMap
 }
 
 class InMemoryKeyValueStoreSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
@@ -65,6 +73,31 @@ class InMemoryKeyValueStoreSpec extends FlatSpec with Matchers with GeneratorDri
       val test = for {
         result <- sut.testPutIterate(expected)
       } yield result shouldBe expected
+
+      test.runSyncUnsafe()
+    }
+  }
+
+  it should "put and collect partial data from the store" in {
+    forAll(genData) { expected =>
+      implicit val kvm = InMemoryStoreManager[Task]
+      val sut          = new KeyValueStoreSut[Task]
+
+      val keys = expected.toList.map(_._1)
+      val kMin = keys.min
+      val kMax = keys.min
+      val kAvg = kMax - kMin / 2
+      // Filter expected values
+      val expectedFiltered = expected.filter {
+        case (k, _) => k >= kAvg
+      }
+
+      val test = for {
+        // Filter using partial function
+        result <- sut.testPutCollect(expected) {
+                   case (k, fv) if k >= kAvg => (k, fv())
+                 }
+      } yield result shouldBe expectedFiltered
 
       test.runSyncUnsafe()
     }
