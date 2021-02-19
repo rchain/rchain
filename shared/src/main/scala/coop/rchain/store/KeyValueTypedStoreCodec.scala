@@ -78,6 +78,24 @@ class KeyValueTypedStoreCodec[F[_]: Sync, K, V](
       results       <- store.get(keysBuf, _ => ())
     } yield results.map(_.nonEmpty)
 
+  override def collect[T](pf: PartialFunction[(K, () => V), T]): F[Seq[T]] =
+    for {
+      values <- store.iterate(
+                 _.map {
+                   case (kBuff, vBuff) =>
+                     val kBytes = BitVector(kBuff)
+                     // Inside LMDB iterator can only be synchronous operation / unsafe decode
+                     val k = kCodec.decodeValue(kBytes).require
+                     // Lazy evaluate/decode value
+                     def fv = {
+                       val vBytes = BitVector(vBuff)
+                       vCodec.decodeValue(vBytes).require
+                     }
+                     (k, fv _)
+                 }.collect(pf).toVector
+               )
+    } yield values
+
   override def toMap: F[Map[K, V]] =
     for {
       valuesBytes <- store.iterate(
