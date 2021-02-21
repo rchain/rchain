@@ -13,7 +13,6 @@ import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.store.KeyValueTypedStore
 import monix.execution.atomic.AtomicAny
 
-import scala.annotation.tailrec
 import scala.collection.immutable.SortedMap
 
 object BlockMetadataStore {
@@ -22,10 +21,15 @@ object BlockMetadataStore {
       lastFinalizedBlock: Option[BlockHash]
   ): F[BlockMetadataStore[F]] =
     for {
-      _                <- Log[F].info("Building in-memory blockMetadataStore.")
-      blockMetadataMap <- blockMetadataStore.toMap
-      dagState         = recreateInMemoryState(blockMetadataMap, lastFinalizedBlock)
-      _                <- Log[F].info("Successfully built in-memory blockMetadataStore.")
+      _ <- Log[F].info("Building in-memory blockMetadataStore.")
+      // Iterate over block metadata store and collect info for in-memory cache
+      blockInfoMap <- blockMetadataStore.collect {
+                       case (hash, metaData) =>
+                         (hash, blockMetadataToInfo(metaData()))
+                     }
+      _        <- Log[F].info("Reading data from blockMetadataStore done.")
+      dagState = recreateInMemoryState(blockInfoMap.toMap, lastFinalizedBlock)
+      _        <- Log[F].info("Successfully built in-memory blockMetadataStore.")
     } yield new BlockMetadataStore[F](
       blockMetadataStore,
       new AtomicMonadState(AtomicAny(dagState))
@@ -40,6 +44,9 @@ object BlockMetadataStore {
       finalizedBlockSet: Set[BlockHash]
   )
 
+  private def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
+    BlockInfo(blockMeta.blockHash, blockMeta.parents.toSet, blockMeta.blockNum, blockMeta.invalid)
+
   class BlockMetadataStore[F[_]: Monad](
       private val store: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       private val dagState: MonadState[F, DagState]
@@ -47,7 +54,11 @@ object BlockMetadataStore {
     def add(block: BlockMetadata): F[Unit] =
       for {
         // Update DAG state with new block
-        _ <- dagState.modify(st => validateDagState(addBlockToDagState(block)(st)))
+        _ <- dagState.modify { st =>
+              val blockInfo   = blockMetadataToInfo(block)
+              val newDagState = addBlockToDagState(blockInfo)(st)
+              validateDagState(newDagState)
+            }
 
         // Update persistent block metadata store
         _ <- store.put(block.blockHash, block)
@@ -85,12 +96,12 @@ object BlockMetadataStore {
     def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }
 
-  private def addBlockToDagState(block: BlockMetadata)(state: DagState): DagState = {
+  private def addBlockToDagState(block: BlockInfo)(state: DagState): DagState = {
     // Update dag set / all blocks in the DAG
-    val newDagSet = state.dagSet + block.blockHash
+    val newDagSet = state.dagSet + block.hash
 
     // Update children relation map
-    val blockChilds = block.parents.map((_, Set(block.blockHash))) :+ (block.blockHash, Set())
+    val blockChilds = block.parents.map((_, Set(block.hash))) + ((block.hash, Set()))
     val newChildMap = blockChilds.foldLeft(state.childMap) {
       case (acc, (key, newChildren)) =>
         val currChildren = acc.getOrElse(key, Set.empty[BlockHash])
@@ -98,9 +109,9 @@ object BlockMetadataStore {
     }
 
     // Update block height map
-    val newHeightMap = if (!block.invalid) {
+    val newHeightMap = if (!block.isInvalid) {
       val currSet = state.heightMap.getOrElse(block.blockNum, Set())
-      state.heightMap.updated(block.blockNum, currSet + block.blockHash)
+      state.heightMap.updated(block.blockNum, currSet + block.hash)
     } else state.heightMap
 
     state.copy(dagSet = newDagSet, childMap = newChildMap, heightMap = newHeightMap)
@@ -114,34 +125,36 @@ object BlockMetadataStore {
     state
   }
 
+  // Used to project part of the block metadata for in-memory initialization
+  private final case class BlockInfo(
+      hash: BlockHash,
+      parents: Set[BlockHash],
+      blockNum: Long,
+      isInvalid: Boolean
+  )
+
   private def recreateInMemoryState(
-      blockMetadataMap: Map[BlockHash, BlockMetadata],
+      blocksInfoMap: Map[BlockHash, BlockInfo],
       lastFinalizedBlockHash: Option[BlockHash]
   ): DagState = {
-    @tailrec
-    def collectFinalized(
-        parentHashes: Set[BlockHash],
-        finalizedBlocks: Set[BlockHash]
-    ): Set[BlockHash] = {
-      val parents = parentHashes.flatMap(blockMetadataMap.get)
-      if (parents.nonEmpty) {
-        collectFinalized(parents.flatMap(_.parents), parentHashes ++ finalizedBlocks)
-      } else {
-        finalizedBlocks
-      }
-    }
-
     val emptyState =
       DagState(dagSet = Set(), childMap = Map(), heightMap = SortedMap(), finalizedBlockSet = Set())
-    val dagState = blockMetadataMap.foldLeft(emptyState) {
+
+    // Add blocks to DAG state
+    val dagState = blocksInfoMap.foldLeft(emptyState) {
       case (state, (_, block)) => addBlockToDagState(block)(state)
     }
 
+    // Calculate set of finalized blocks
     val finalizedBlockSet = lastFinalizedBlockHash.fold(Set.empty[BlockHash])(lbh => {
       DagOps
-        .bfTraverse(List(lbh))(bh => blockMetadataMap.get(bh).map(_.parents).getOrElse(List.empty))
+        .bfTraverse(List(lbh))(
+          bh => blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
+        )
         .toSet
     })
+
+    // Update DAG state with finalized blocks
     val newDagState = dagState.copy(finalizedBlockSet = finalizedBlockSet)
 
     validateDagState(newDagState)
