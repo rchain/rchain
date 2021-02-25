@@ -32,8 +32,8 @@ import coop.rchain.shared.syntax._
 import scodec.Codec
 import scodec.bits.ByteVector
 
-final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A, K](
-    history: History[F],
+final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
+    currentHistory: History[F],
     rootsRepository: RootRepository[F],
     leafStore: ColdKeyValueStore[F],
     rspaceExporter: RSpaceExporter[F],
@@ -255,7 +255,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
     for {
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
-    } yield this.copy(history = next, channelHashesStore = channelHashesStore)
+    } yield this.copy(currentHistory = next)
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
 
@@ -271,7 +271,12 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log, C, P, A,
         sc
       )
     )
+  override def history: History[F] = currentHistory
 
+  override def root: Blake2b256Hash = currentHistory.root
+
+  override def getHistoryReader(stateHash: Blake2b256Hash): HashHistoryReader[F, C, P, A, K] =
+    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), rSpaceCache, leafStore)
 }
 
 object HistoryRepositoryImpl {

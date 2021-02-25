@@ -128,7 +128,7 @@ abstract class HistoryRepositoryGenerativeDefinition
           .foldLeftM(repository) { (repo, action) =>
             for {
               next <- repo.checkpoint(action :: Nil)
-              _    <- checkActionResult(action, next)
+              _    <- checkActionResult(action, next.getHistoryReader(next.root).toRho)
             } yield next
           }
       }
@@ -151,7 +151,7 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def checkActionResult(
       action: HotStoreAction,
-      repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
+      repo: RhoHistoryReader[Task, String, Pattern, String, StringsCaptor]
   ): Task[Unit] =
     action match {
       case InsertData(channel: String, data) =>

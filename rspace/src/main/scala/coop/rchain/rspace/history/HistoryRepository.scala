@@ -13,10 +13,7 @@ import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import scodec.Codec
 
-trait HistoryRepository[F[_], C, P, A, K]
-    extends HistoryReader[F, C, P, A, K]
-    with HistoryHashReader[F, C, P, A, K]
-    with ChannelStore[F, C] {
+trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
   def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]]
 
   def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]]
@@ -27,7 +24,11 @@ trait HistoryRepository[F[_], C, P, A, K]
 
   def importer: F[RSpaceImporter[F]]
 
-  def stateMerger: F[StateMerger[F]]
+  def stateMerger: StateMerger[F]
+
+  def getHistoryReader(stateHash: Blake2b256Hash): HashHistoryReader[F, C, P, A, K]
+
+  def root: Blake2b256Hash
 }
 
 object HistoryRepositoryInstances {

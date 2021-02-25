@@ -248,8 +248,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
-      _           <- restoreInstalls()
+      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
+            serializeK.toSizeHeadCodec
+          )
+      _ <- restoreInstalls()
     } yield (Checkpoint(nextHistory.history.root, Seq.empty))
   }
 
@@ -317,7 +319,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     implicit val ck = serializeK.toSizeHeadCodec
     for {
       newHR <- historyRep.reset(historyRep.history.root)
-      newHS <- HotStore.empty(newHR)
+      newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).toRho)
       r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS))
       _     <- r.restoreInstalls()
     } yield r

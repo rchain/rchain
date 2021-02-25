@@ -7,6 +7,7 @@ import cats.effect.implicits._
 import cats.effect.concurrent.Ref
 import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.catscontrib.seq._
+import coop.rchain.rspace.history.RhoHistoryReader
 import coop.rchain.shared.Language._
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
@@ -58,9 +59,9 @@ final case class Cache[C, P, A, K](
     )
 }
 
-private class InMemHotStore[F[_]: Sync, C, P, A, K](
+private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     implicit S: Ref[F, Cache[C, P, A, K]],
-    HR: HistoryReader[F, C, P, A, K],
+    HR: RhoHistoryReader[F, C, P, A, K],
     ck: Codec[K]
 ) extends HotStore[F, C, P, A, K] {
 
@@ -286,25 +287,25 @@ private class InMemHotStore[F[_]: Sync, C, P, A, K](
 
 object HotStore {
 
-  def inMem[F[_]: Sync, C, P, A, K](
+  def inMem[F[_]: Concurrent, C, P, A, K](
       implicit S: Ref[F, Cache[C, P, A, K]],
-      HR: HistoryReader[F, C, P, A, K],
+      HR: RhoHistoryReader[F, C, P, A, K],
       ck: Codec[K]
   ): HotStore[F, C, P, A, K] =
     new InMemHotStore[F, C, P, A, K]
 
   def from[F[_], C, P, A, K](
       cache: Cache[C, P, A, K],
-      historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K], sync: Sync[F]) =
+      historyReader: RhoHistoryReader[F, C, P, A, K]
+  )(implicit ck: Codec[K], concurrent: Concurrent[F]) =
     for {
       cache <- Ref.of[F, Cache[C, P, A, K]](cache)
-      store = HotStore.inMem(Sync[F], cache, historyReader, ck)
+      store = HotStore.inMem(concurrent, cache, historyReader, ck)
     } yield store
 
   def empty[F[_], C, P, A, K](
-      historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K], sync: Sync[F]) =
+      historyReader: RhoHistoryReader[F, C, P, A, K]
+  )(implicit ck: Codec[K], concurrent: Concurrent[F]) =
     from(Cache(), historyReader)
 
 }

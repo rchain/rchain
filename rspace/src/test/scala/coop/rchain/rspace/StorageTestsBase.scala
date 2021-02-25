@@ -71,6 +71,11 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
                             .lmdbRepository[F, C, P, A, K](history, roots, cold, channels)
       cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
+      testStore = {
+        val hr =
+          historyRepository.getHistoryReader(historyRepository.root).toRho
+        HotStore.inMem[F, C, P, A, K](Concurrent[F], cache, hr, codecK)
+      }
       spaceAndStore        <- createISpace(historyRepository, testStore)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)

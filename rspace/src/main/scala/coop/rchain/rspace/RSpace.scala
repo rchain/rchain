@@ -235,7 +235,7 @@ class RSpace[F[_], C, P, A, K](
     implicit val ck = serializeK.toSizeHeadCodec
     for {
       nextHistory <- historyRep.reset(historyRep.history.root)
-      hotStore    <- HotStore.empty(nextHistory)
+      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).toRho)
       r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore))
       _           <- r.restoreInstalls()
     } yield r
@@ -329,7 +329,7 @@ object RSpace {
                       store.cold,
                       store.channels
                     )
-      store <- HotStore.empty(historyRepo)
+      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).toRho)
     } yield (historyRepo, store)
   }
 }
