@@ -16,6 +16,7 @@ import coop.rchain.graphz._
 import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.monix.Monixable
+import coop.rchain.node.NodeRuntime.ProposeFunction
 import coop.rchain.shared.Log
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
@@ -29,9 +30,8 @@ object DeployGrpcServiceV1 {
   def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
       reportingCasper: ReportingCasper[F],
-      devMode: Boolean = false,
-      proposeOnDeploy: Boolean = false,
-      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])]
+      triggerProposeF: Option[ProposeFunction[F]],
+      devMode: Boolean = false
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -83,11 +83,10 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, if (proposeOnDeploy) proposerQueue.some else None)) {
-                r =>
-                  import DeployResponse.Message
-                  import DeployResponse.Message._
-                  DeployResponse(r.fold[Message](Error, Result))
+              defer(BlockAPI.deploy[F](dd, triggerProposeF)) { r =>
+                import DeployResponse.Message
+                import DeployResponse.Message._
+                DeployResponse(r.fold[Message](Error, Result))
               }
             }
           )

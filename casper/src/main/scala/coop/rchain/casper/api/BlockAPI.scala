@@ -54,7 +54,7 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]]
+      triggerPropose: Option[Casper[F] => F[Option[Int]]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -67,9 +67,8 @@ object BlockAPI {
                   res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
                 )
               )
-        _ <- (Deferred[F, Option[Int]] >>= { d =>
-              proposerQueue.get.enqueue1((casper, d))
-            }).whenA(proposerQueue.isDefined)
+        // call a propose if proposer defined
+        _ <- triggerPropose.traverse(_(casper))
       } yield r
 
     // Check if deploy is signed with system keys
