@@ -26,6 +26,7 @@ import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
@@ -285,7 +286,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") >> validationStatus.value
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") <*
+      runtimeManager.getBlockIndexCache
+        .get(
+          MergingVertex(
+            b.blockHash,
+            ProtoUtil.postStateHash(b),
+            ProtoUtil.preStateHash(b),
+            ProtoUtil.deploys(b).toSet
+          )
+        ) >> validationStatus.value
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
