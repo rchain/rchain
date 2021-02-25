@@ -1,16 +1,18 @@
 package coop.rchain.rspace.history
 
 import cats.Parallel
-import coop.rchain.rspace.channelStore.ChannelStore
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
-import coop.rchain.rspace.merger.StateMerger
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.metrics.Span
+import coop.rchain.rspace.channelStore.ChannelStore
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace.{Blake2b256Hash, HistoryReader, HotStoreAction}
+import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction, InMemRSpaceCache}
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.store.KeyValueStore
+import coop.rchain.store.{KeyValueStore, LazyAdHocKeyValueCache}
 import scodec.Codec
 
 /**
@@ -31,6 +33,8 @@ final case class HistoryCache[F[_], C, P, A, K](
 
 trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
   def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]]
+
+  def doCheckpoint(actions: Seq[HotStoreTrieAction]): F[HistoryRepository[F, C, P, A, K]]
 
   def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]]
 

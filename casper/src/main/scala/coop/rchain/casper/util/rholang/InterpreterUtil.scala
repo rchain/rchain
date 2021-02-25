@@ -250,10 +250,14 @@ object InterpreterUtil {
                            b.body.deploys.toSet
                          )
                      )
-            r <- CasperDagMerger.merge(tips, base, new CasperMergingDagReader(s.dag))
+            r <- CasperDagMerger.merge(
+                  tips,
+                  base,
+                  new CasperMergingDagReader(s.dag),
+                  runtimeManager.getBlockIndexCache
+                )
           } yield r._1
         }
-
       }
     }
 }
