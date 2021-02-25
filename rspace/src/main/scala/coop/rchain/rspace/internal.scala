@@ -13,6 +13,9 @@ import scala.collection.SortedSet
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
+  /** helper class to package data and serialization (encoded by scodec) */
+  final case class Encoded[D](item: D, byteVector: ByteVector)
+
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
   object Datum {
@@ -94,6 +97,7 @@ object internal {
       .as[WaitingContinuation[P, K]]
 
   import scala.collection.concurrent.TrieMap
+
   type MultisetMultiMap[K, V] = TrieMap[K, Multiset[V]]
 
   object MultisetMultiMap {
@@ -148,5 +152,59 @@ object internal {
     elements
       .map(e => serialize.encode(e))
       .sorted(util.ordByteVector)
+
+  def toOrderedByteVectorsWithCodec[A](
+      elements: Seq[A]
+  )(implicit codecC: Codec[A]): Seq[ByteVector] =
+    elements
+      .map(e => codecC.encode(e).get.toByteVector)
+      .sorted(util.ordByteVector)
+
+  /** Datum with ByteVector representation */
+  final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichDatum(_, r) => raw == r
+      case _               => false
+    }
+  }
+
+  object RichDatum {
+    def create[A](datum: Datum[A])(implicit codecA: Codec[A]): RichDatum[A] =
+      RichDatum(datum, Codec.encode[Datum[A]](datum).get.toByteVector)
+  }
+
+  /** Continuation with ByteVector representation */
+  final case class RichKont[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichKont(_, r) => raw == r
+      case _              => false
+    }
+  }
+
+  object RichKont {
+    def create[P, K](
+        wk: WaitingContinuation[P, K]
+    )(implicit codecC: Codec[P], codecP: Codec[K]): RichKont[P, K] =
+      RichKont(wk, Codec.encode[WaitingContinuation[P, K]](wk).get.toByteVector)
+  }
+
+  /** Join with ByteVector representation */
+  final case class RichJoin[C](decoded: Seq[C], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichJoin(_, r) => raw == r
+      case _              => false
+    }
+  }
+
+  object RichJoin {
+    def create[C](join: Seq[C])(implicit codecA: Codec[C]): RichJoin[C] =
+      RichJoin(join, history.encodeJoin(join))
+  }
 
 }

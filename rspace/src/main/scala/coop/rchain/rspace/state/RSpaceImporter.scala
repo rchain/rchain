@@ -3,7 +3,6 @@ package coop.rchain.rspace.state
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryRepositoryImpl.{decodeJoins, decodeSorted}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.AttemptOps._
@@ -102,10 +101,9 @@ object RSpaceImporter {
                     Sync[F]
                       .delay {
                         persistedData match {
-                          case JoinsLeaf(bytes) => decodeJoins[C](bytes)
-                          case DataLeaf(bytes)  => decodeSorted[Datum[A]](bytes)
-                          case ContinuationsLeaf(bytes) =>
-                            decodeSorted[WaitingContinuation[P, K]](bytes)
+                          case JoinsLeaf(bytes)         => decodeJoins[C](bytes)
+                          case DataLeaf(bytes)          => coop.rchain.rspace.history.decodeData[A](bytes)
+                          case ContinuationsLeaf(bytes) => decodeContinuations[P, K](bytes)
                         }
                       }
                       .void
