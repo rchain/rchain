@@ -13,6 +13,7 @@ import coop.rchain.rspace.{
   DeleteData,
   DeleteJoins,
   HotStoreAction,
+  InMemRSpaceCache,
   InsertContinuations,
   InsertData,
   InsertJoins
@@ -27,8 +28,10 @@ import scala.concurrent.duration._
 import scala.util.Random
 import coop.rchain.rspace.util.stringSerialize
 import cats.implicits._
+import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.Log.NOPLog
@@ -184,9 +187,11 @@ class HistoryRepositorySpec
     val emptyHistory                        = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val pastRoots                           = rootRepository
     implicit val log: Log[Task]             = new NOPLog()
+    implicit val span: Span[Task]           = new NoopSpan[Task]()
 
     (for {
-      _ <- pastRoots.commit(History.emptyRootHash)
+      _           <- pastRoots.commit(History.emptyRootHash)
+      rSpaceCache <- InMemRSpaceCache[Task, String, String, String, String]
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
@@ -194,7 +199,8 @@ class HistoryRepositorySpec
         emptyExporter,
         emptyImporter,
         noOpChannelStore,
-        stringSerialize
+        stringSerialize,
+        rSpaceCache
       )
       _ <- f(repo)
     } yield ()).runSyncUnsafe(20.seconds)

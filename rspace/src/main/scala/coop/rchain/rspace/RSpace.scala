@@ -276,17 +276,22 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A],
       scheduler: ExecutionContext
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
+    implicit val cc = sc.toSizeHeadCodec
     for {
       setup                  <- setUp[F, C, P, A, K](store)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-      replayStore            <- HotStore.empty(historyReader)(sk.toSizeHeadCodec, Concurrent[F])
+      replayStore <- HotStore.empty(historyReader.getHistoryReader(historyReader.root).toRho)(
+                      sk.toSizeHeadCodec,
+                      Concurrent[F]
+                    )
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore)
       )
     } yield (space, replay, historyReader)
+  }
 
   def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
@@ -323,11 +328,13 @@ object RSpace {
     implicit val ck = sk.toSizeHeadCodec
 
     for {
+      rSpaceCache <- InMemRSpaceCache[F, C, P, A, K]
       historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
                       store.history,
                       store.roots,
                       store.cold,
-                      store.channels
+                      store.channels,
+                      rSpaceCache
                     )
       store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).toRho)
     } yield (historyRepo, store)

@@ -41,14 +41,25 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     // Map channel hash in event log -> channel hash in history
     // We need to maintain this for event log merge
     channelHashesStore: ChannelStore[F, C],
-    sc: Serialize[C]
-)(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K])
-    extends HistoryRepository[F, C, P, A, K] {
+    sc: Serialize[C],
+    rSpaceCache: HistoryCache[F, C, P, A, K]
+)(
+    implicit codecC: Codec[C],
+    codecP: Codec[P],
+    codecA: Codec[A],
+    codecK: Codec[K]
+) extends HistoryRepository[F, C, P, A, K] {
 
   implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
-  private def fetchData(key: Blake2b256Hash): F[Option[PersistedData]] =
-    HistoryRepositoryImpl.fetchData[F](key, history, leafStore)
+  implicit val ms = Metrics.Source(RSpaceMetricsSource, "history")
+
+  val datumsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichDatum[A]]] =
+    rSpaceCache.dtsCache
+  val contsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichKont[P, K]]] =
+    rSpaceCache.wksCache
+  val joinsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichJoin[C]]] =
+    rSpaceCache.jnsCache
 
   override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
     channelHashesStore.getChannelHash(hash)

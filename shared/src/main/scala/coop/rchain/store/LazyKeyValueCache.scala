@@ -25,6 +25,17 @@ class LazyKeyValueCache[F[_]: Concurrent, K, V] private[LazyKeyValueCache] (
           )
       r <- d.get
     } yield r
+
+  final def toMap: F[Map[K, V]] =
+    for {
+      m <- cache.get
+      r <- m.toList.traverse(
+            t =>
+              t._2.get.map { v =>
+                (t._1, v)
+              }
+          )
+    } yield r.toMap
 }
 
 /**

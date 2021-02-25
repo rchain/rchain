@@ -13,6 +13,22 @@ import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import scodec.Codec
 
+/**
+  * Pointer to data in history (Datums, Continuations or Joins)
+  * @param state - state hash
+  * @param hash - hash of a leaf
+  */
+final case class HistoryPointer(state: Blake2b256Hash, hash: Blake2b256Hash)
+
+/**
+  * Cache of decoded values from history
+  */
+final case class HistoryCache[F[_], C, P, A, K](
+    dtsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichDatum[A]]],
+    wksCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichKont[P, K]]],
+    jnsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichJoin[C]]]
+)
+
 trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
   def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]]
 
@@ -33,11 +49,12 @@ trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
 
 object HistoryRepositoryInstances {
 
-  def lmdbRepository[F[_]: Concurrent: Parallel: Log, C, P, A, K](
+  def lmdbRepository[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
       historyKeyValueStore: KeyValueStore[F],
       rootsKeyValueStore: KeyValueStore[F],
       coldKeyValueStore: KeyValueStore[F],
-      channelKeyValueStore: KeyValueStore[F]
+      channelKeyValueStore: KeyValueStore[F],
+      rSpaceCache: HistoryCache[F, C, P, A, K]
   )(
       implicit codecC: Codec[C],
       codecP: Codec[P],
@@ -67,7 +84,8 @@ object HistoryRepositoryInstances {
       exporter,
       importer,
       channelStore,
-      sc
+      sc,
+      rSpaceCache
     )
   }
 }

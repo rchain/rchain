@@ -1280,15 +1280,17 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val ck  = sk.toSizeHeadCodec
     implicit val kvm = InMemoryStoreManager[Task]
     (for {
-      roots    <- kvm.store("roots")
-      cold     <- kvm.store("cold")
-      history  <- kvm.store("history")
-      channels <- kvm.store("channels")
+      roots       <- kvm.store("roots")
+      cold        <- kvm.store("cold")
+      history     <- kvm.store("history")
+      channels    <- kvm.store("channels")
+      rSpaceCache <- InMemRSpaceCache[Task, C, P, A, K]
       historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
                             roots,
                             cold,
                             history,
-                            channels
+                            channels,
+                            rSpaceCache
                           )
       cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
@@ -1307,9 +1309,9 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                        Cache[C, P, A, K]()
                      )
       replayStore = {
-        implicit val c  = historyCache
         implicit val hr =
           historyRepository.getHistoryReader(historyRepository.root).toRho
+        implicit val c = historyCache
         AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](

@@ -9,6 +9,7 @@ import coop.rchain.rspace.{
   DeleteData,
   DeleteJoins,
   HotStoreAction,
+  InMemRSpaceCache,
   InsertContinuations,
   InsertData,
   InsertJoins
@@ -23,6 +24,7 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import scodec.Codec
 import monix.execution.Scheduler.Implicits.global
 import cats.implicits._
+import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
@@ -41,7 +43,8 @@ class LMDBHistoryRepositoryGenerativeSpec
   val kvm = InMemoryStoreManager[Task]
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
+    implicit val log: Log[Task]   = new Log.NOPLog[Task]
+    implicit val span: Span[Task] = new NoopSpan[Task]
     for {
       historyLmdbKVStore <- kvm.store("history")
       historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
@@ -55,6 +58,7 @@ class LMDBHistoryRepositoryGenerativeSpec
       emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      rSpaceCache        <- InMemRSpaceCache[Task, String, Pattern, String, StringsCaptor]
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -63,7 +67,8 @@ class LMDBHistoryRepositoryGenerativeSpec
           exporter,
           importer,
           channelStore,
-          stringSerialize
+          stringSerialize,
+          rSpaceCache
         )
     } yield repository
   }
@@ -79,8 +84,9 @@ class InmemHistoryRepositoryGenerativeSpec
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
-    implicit val log: Log[Task] = new Log.NOPLog[Task]
-    val kvm                     = InMemoryStoreManager[Task]
+    implicit val log: Log[Task]   = new Log.NOPLog[Task]
+    implicit val span: Span[Task] = new NoopSpan[Task]
+    val kvm                       = InMemoryStoreManager[Task]
     for {
       channelKVStore <- kvm.store("channels")
       channelStore = ChannelStoreImpl[Task, String](
@@ -88,7 +94,7 @@ class InmemHistoryRepositoryGenerativeSpec
         stringSerialize,
         codecString
       )
-
+      rSpaceCache <- InMemRSpaceCache[Task, String, Pattern, String, StringsCaptor]
       r = HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
@@ -96,7 +102,8 @@ class InmemHistoryRepositoryGenerativeSpec
         emptyExporter,
         emptyImporter,
         channelStore,
-        stringSerialize
+        stringSerialize,
+        rSpaceCache
       )
     } yield r
   }
