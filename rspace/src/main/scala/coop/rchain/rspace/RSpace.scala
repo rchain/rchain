@@ -52,40 +52,42 @@ class RSpace[F[_], C, P, A, K](
       peeks: SortedSet[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
-    for {
-      _ <- logF.debug(
-            s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
-          )
-      _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
-      channelToIndexedData <- fetchChannelToIndexData(channels)
-      options <- extractDataCandidates(
-                  channels.zip(patterns),
-                  channelToIndexedData,
-                  Nil
-                ).map(_.sequence)
-      wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-      result <- options.fold(storeWaitingContinuation(channels, wk))(
-                 dataCandidates =>
-                   for {
-                     _ <- logComm(
-                           dataCandidates,
-                           channels,
-                           wk,
-                           COMM(
+    Span[F].trace("locked-consume") {
+      for {
+        _ <- logF.debug(
+              s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
+            )
+        _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+        channelToIndexedData <- fetchChannelToIndexData(channels)
+        options <- extractDataCandidates(
+                    channels.zip(patterns),
+                    channelToIndexedData,
+                    Nil
+                  ).map(_.sequence)
+        wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
+        result <- options.fold(storeWaitingContinuation(channels, wk))(
+                   dataCandidates =>
+                     for {
+                       _ <- logComm(
                              dataCandidates,
-                             consumeRef,
-                             peeks,
-                             produceCounters _
-                           ),
-                           consumeCommLabel
-                         )
-                     _ <- storePersistentData(dataCandidates, peeks)
-                     _ <- logF.debug(
-                           s"consume: data found for <patterns: $patterns> at <channels: $channels>"
-                         )
-                   } yield wrapResult(channels, wk, consumeRef, dataCandidates)
-               )
-    } yield result
+                             channels,
+                             wk,
+                             COMM(
+                               dataCandidates,
+                               consumeRef,
+                               peeks,
+                               produceCounters _
+                             ),
+                             consumeCommLabel
+                           )
+                       _ <- storePersistentData(dataCandidates, peeks)
+                       _ <- logF.debug(
+                             s"consume: data found for <patterns: $patterns> at <channels: $channels>"
+                           )
+                     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
+                 )
+      } yield result
+    }
 
   /*
    * Here, we create a cache of the data at each channel as `channelToIndexedData`
@@ -108,20 +110,22 @@ class RSpace[F[_], C, P, A, K](
       persist: Boolean,
       produceRef: Produce
   ): F[MaybeActionResult] =
-    for {
-      //TODO fix double join fetch
-      groupedChannels <- store.getJoins(channel)
-      _ <- logF.debug(
-            s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
-          )
-      _ <- logProduce(produceRef, channel, data, persist)
-      extracted <- extractProduceCandidate(
-                    groupedChannels,
-                    channel,
-                    Datum(data, persist, produceRef)
-                  )
-      r <- extracted.fold(storeData(channel, data, persist, produceRef))(processMatchFound)
-    } yield r
+    Span[F].trace("locked-produce") {
+      for {
+        //TODO fix double join fetch
+        groupedChannels <- store.getJoins(channel)
+        _ <- logF.debug(
+              s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
+            )
+        _ <- logProduce(produceRef, channel, data, persist)
+        extracted <- extractProduceCandidate(
+                      groupedChannels,
+                      channel,
+                      Datum(data, persist, produceRef)
+                    )
+        r <- extracted.fold(storeData(channel, data, persist, produceRef))(processMatchFound)
+      } yield r
+    }
 
   /*
    * Find produce candidate
@@ -217,20 +221,25 @@ class RSpace[F[_], C, P, A, K](
     produceRef
   }
 
-  override def createCheckpoint(): F[Checkpoint] =
+  override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
-      changes     <- storeAtom.get().changes()
-      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
-      log         = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           = produceCounter.take()
-      _           = produceCounter.put(Map.empty.withDefaultValue(0))
-      _           <- restoreInstalls()
+      changes <- spanF.withMarks("changes") { storeAtom.get().changes() }
+      nextHistory <- spanF.withMarks("history-checkpoint") {
+                      historyRepositoryAtom.get().checkpoint(changes.toList)
+                    }
+      _ = historyRepositoryAtom.set(nextHistory)
+      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
+            serializeK.toSizeHeadCodec
+          )
+      log = eventLog.take()
+      _   = eventLog.put(Seq.empty)
+      _   = produceCounter.take()
+      _   = produceCounter.put(Map.empty.withDefaultValue(0))
+      _   <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
+  }
 
-  def spawn: F[ISpace[F, C, P, A, K]] = {
+  def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     val historyRep  = historyRepositoryAtom.get()
     implicit val ck = serializeK.toSizeHeadCodec
     for {
@@ -252,7 +261,7 @@ object RSpace {
       channels: KeyValueStore[F]
   )
 
-  def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+  def createPlay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -265,6 +274,28 @@ object RSpace {
       scheduler: ExecutionContext
   ): F[ISpace[F, C, P, A, K]] =
     Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
+
+  def createReplay[F[_], C, P, A, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      store: HotStore[F, C, P, A, K]
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      concurrent: Concurrent[F],
+      logF: Log[F],
+      contextShift: ContextShift[F],
+      scheduler: ExecutionContext,
+      metricsF: Metrics[F],
+      spanF: Span[F]
+  ): F[IReplaySpace[F, C, P, A, K]] = {
+    val space: IReplaySpace[F, C, P, A, K] =
+      new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
+    space.pure[F]
+  }
 
   def createWithReplay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
@@ -313,7 +344,7 @@ object RSpace {
       )
     } yield space
 
-  def setUp[F[_]: Concurrent: Parallel: Log, C, P, A, K](store: RSpaceStore[F])(
+  def setUp[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](store: RSpaceStore[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],

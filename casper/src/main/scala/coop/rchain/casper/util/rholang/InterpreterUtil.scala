@@ -18,10 +18,17 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.blocks.merger.{CasperDagMerger, CasperMergingDagReader, MergingVertex}
+import coop.rchain.casper.blocks.merger.{
+  BlockIndex,
+  CasperDagMerger,
+  CasperMergingDagReader,
+  MergingVertex
+}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -91,7 +98,9 @@ object InterpreterUtil {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
+  )(
+      implicit spanF: Span[F]
+  ): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
       val internalDeploys       = ProtoUtil.deploys(block)
       val internalSystemDeploys = ProtoUtil.systemDeploys(block)
@@ -207,7 +216,9 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[StateHash] =
+  )(
+      implicit spanF: Span[F]
+  ): F[StateHash] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
       parents.size match {
         // For genesis, use empty trie's root hash

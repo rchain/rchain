@@ -5,7 +5,7 @@ import cats.syntax.all._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.node.NodeCallCtx
+import coop.rchain.node.runtime.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
 import monix.execution.atomic.AtomicLong
@@ -99,6 +99,9 @@ package object effects {
                   .flatMap(_.map(_.end()).getOrElse(Sync[F].unit))
               }
         } yield r
+
+      override def trace[A](tag: String)(block: F[A])(implicit parentSource: Source): F[A] =
+        trace[A](Source(parentSource, tag))(block)
 
       override def withMarks[A](label: String)(block: F[A]): F[A] =
         Sync[F].bracketCase(

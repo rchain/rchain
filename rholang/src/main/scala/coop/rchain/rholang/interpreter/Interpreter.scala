@@ -1,9 +1,12 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
+import cats.implicits
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
+import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.{
@@ -26,7 +29,8 @@ trait Interpreter[F[_]] {
   )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
-class InterpreterImpl[F[_]: Sync](implicit C: _cost[F]) extends Interpreter[F] {
+class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interpreter[F] {
+  implicit val InterpreterMetricSource = Metrics.Source(RholangMetricsSource, "interpreter")
 
   // Internal helper exception to mark parser error
   case class ParserError(parseError: InterpreterError) extends Throwable
@@ -42,14 +46,16 @@ class InterpreterImpl[F[_]: Sync](implicit C: _cost[F]) extends Interpreter[F] {
 
     val parsingCost = accounting.parsingCost(term)
     val evaluationResult = for {
-      _ <- C.set(initialPhlo)
-      _ <- charge[F](parsingCost)
-      parsed <- ParBuilder[F]
-                 .buildNormalizedTerm(term, normalizerEnv)
-                 .handleErrorWith {
-                   case err: InterpreterError => ParserError(err).raiseError[F, Par]
-                 }
-      _         <- reducer.inj(parsed)
+      _ <- Span[F].trace("set-initial-cost") { C.set(initialPhlo) }
+      _ <- Span[F].trace("charge-parsing-cost") { charge[F](parsingCost) }
+      parsed <- Span[F].trace("build-normalized-term") {
+                 ParBuilder[F]
+                   .buildNormalizedTerm(term, normalizerEnv)
+                   .handleErrorWith {
+                     case err: InterpreterError => ParserError(err).raiseError[F, Par]
+                   }
+               }
+      _         <- Span[F].trace("reduce-term") { reducer.inj(parsed) }
       phlosLeft <- C.get
     } yield EvaluateResult(initialPhlo - phlosLeft, Vector())
 
@@ -101,6 +107,7 @@ object Interpreter {
 
   def apply[F[_]](implicit instance: Interpreter[F]): Interpreter[F] = instance
 
-  def newIntrepreter[F[_]: Sync](implicit cost: _cost[F]): Interpreter[F] = new InterpreterImpl[F]()
+  def newIntrepreter[F[_]: Sync: Span](implicit cost: _cost[F]): Interpreter[F] =
+    new InterpreterImpl[F]()
 
 }
