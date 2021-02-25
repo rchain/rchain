@@ -21,4 +21,7 @@ trait ChannelStore[F[_], C] {
   def putChannelHash(channel: C): F[Unit]
   def putContinuationHash(channels: Seq[C]): F[Unit]
   def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]]
+
+  def continuationKey(channels: Seq[Blake2b256Hash]): Blake2b256Hash =
+    Blake2b256Hash.create(channels.map(_.toByteString.toByteArray).foldLeft(Array[Byte]())(_ ++ _))
 }
