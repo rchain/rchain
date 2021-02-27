@@ -1,7 +1,5 @@
 package coop.rchain.node
 
-import java.nio.file.{Files, Path}
-
 import cats.data.ReaderT
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
@@ -44,6 +42,7 @@ import fs2.concurrent.Queue
 import kamon._
 import monix.execution.Scheduler
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -197,8 +196,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         )
       }
       (
-        blockStore,
-        runtimeCleanup,
         packetHandler,
         apiServers,
         casperLoop,
@@ -210,7 +207,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         adminWebApi,
         proposerOpt,
         proposerQueue,
-        proposerStateRef,
+        proposerStateRefOpt,
         blockProcessor,
         blockProcessorState,
         blockProcessorQueue,
@@ -229,7 +226,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val pn = peerNodeAsk
         implicit val ks = kademliaStore
         implicit val nd = nodeDiscovery
-        //implicit val bs = blockStore
         implicit val ph = packetHandler
         implicit val eb = eventBus
         implicit val mt = metrics
@@ -239,14 +235,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           casperLoop,
           updateForkChoiceLoop,
           engineInit,
-          runtimeCleanup,
           reportingCasper,
           webApi,
           adminWebApi,
           proposerOpt,
           proposerQueue,
           triggerProposeF,
-          proposerStateRef,
+          proposerStateRefOpt,
           blockProcessor,
           blockProcessorState,
           blockProcessorQueue
@@ -275,19 +270,17 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       casperLoop: CasperLoop[F],
       updateForkChoiceLoop: CasperLoop[F],
       engineInit: EngineInit[F],
-      runtimeCleanup: Cleanup[F],
       reportingCasper: ReportingCasper[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       proposer: Option[Proposer[F]],
       proposeRequestsQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
       triggerProposeFOpt: Option[ProposeFunction[F]],
-      proposerStateRef: Ref[F, ProposerState[F]],
+      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
       incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
   )(
-      )(
       implicit
       time: Time[F],
       rpConfState: RPConfState[F],
@@ -298,7 +291,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       kademliaStore: KademliaStore[F],
       nodeDiscovery: NodeDiscovery[F],
       rpConnections: ConnectionsCell[F],
-      //blockStore: BlockStore[F],
       packetHandler: PacketHandler[F],
       consumer: EventConsumer[F]
   ): F[Unit] = {
@@ -401,7 +393,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
       proposerStream = if (proposer.isDefined)
         ProposerInstance
-          .create[F](proposeRequestsQueue, proposer.get, proposerStateRef)
+          .create[F](proposeRequestsQueue, proposer.get, proposerStateRefOpt.get)
       else fs2.Stream.empty
 
       updateForkChoiceLoopStream = fs2.Stream.eval(updateForkChoiceLoop).repeat
@@ -473,8 +465,6 @@ object NodeRuntime {
 
   type CasperLoop[F[_]] = F[Unit]
   type EngineInit[F[_]] = F[Unit]
-
-  type ProposeFunction[F[_]] = (Casper[F] => F[Option[Int]])
 
   def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log: EventLog](
       nodeConf: NodeConf,

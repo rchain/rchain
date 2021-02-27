@@ -98,9 +98,7 @@ object InterpreterUtil {
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
       runtimeManager: RuntimeManager[F]
-  )(
-      implicit spanF: Span[F]
-  ): F[Either[ReplayFailure, StateHash]] =
+  )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
       val internalDeploys       = ProtoUtil.deploys(block)
       val internalSystemDeploys = ProtoUtil.systemDeploys(block)
@@ -216,9 +214,7 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
-  )(
-      implicit spanF: Span[F]
-  ): F[StateHash] =
+  )(implicit spanF: Span[F]): F[StateHash] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
       parents.size match {
         // For genesis, use empty trie's root hash

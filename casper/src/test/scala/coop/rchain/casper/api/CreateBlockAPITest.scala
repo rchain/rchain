@@ -38,11 +38,11 @@ class CreateBlockAPITest extends FlatSpec with Matchers with EitherValues {
   import TestNode.Effect
 
   def createBlock(
-      proposerQueue: Queue[Task, (Casper[Task], Deferred[Task, Option[Int]])]
+      triggerProposeF: ProposeFunction[Task]
   )(engineCell: Cell[Task, Engine[Task]])(
       implicit log: Log[Task]
   ): Task[Either[String, String]] =
-    BlockAPI.createBlock[Task](proposerQueue)(
+    BlockAPI.createBlock[Task](triggerProposeF)(
       Concurrent[Task],
       engineCell,
       log

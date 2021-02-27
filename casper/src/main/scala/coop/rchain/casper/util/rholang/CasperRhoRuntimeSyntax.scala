@@ -632,7 +632,7 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
                       _ <- Span[F].mark("deploy-eval-done")
                       r <- runtime.createSoftCheckpoint
                             .whenA(evalResult.succeeded)
-                            .map(_ => evalResult.succeeded)
+                            .as(evalResult.succeeded)
                       _ <- Span[F].mark("deploy-done")
                     } yield r
                 )
@@ -644,7 +644,7 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
                       SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
                     ),
                     None
-                  ).map(_ => succeeded)
+                  ).as(succeeded)
                 }
                 .flatTap(_ => EitherT.liftF(Span[F].mark("refund-done")))
             else EitherT.rightT(true)

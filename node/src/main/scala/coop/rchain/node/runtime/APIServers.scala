@@ -1,27 +1,19 @@
 package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.{
-  Casper,
-  LastFinalizedHeightConstraintChecker,
-  ReportingCasper,
-  SafetyOracle,
-  SynchronyConstraintChecker
-}
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.ProposerState
+import coop.rchain.casper._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
-import coop.rchain.node.NodeRuntime.ProposeFunction
 import coop.rchain.node.api.{DeployGrpcServiceV1, ProposeGrpcServiceV1, ReplGrpcService}
 import coop.rchain.node.model.repl.ReplGrpcMonix
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.shared.Log
-import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 final case class APIServers(
@@ -33,8 +25,8 @@ final case class APIServers(
 object APIServers {
   def build[F[_]: Monixable](
       runtime: RhoRuntime[F],
-      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]],
-      proposerStateRef: Option[Ref[F, ProposerState[F]]],
+      triggerProposeFOpt: Option[ProposeFunction[F]],
+      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       apiMaxBlocksLimit: Int,
       devMode: Boolean,
       proposeFOpt: Option[ProposeFunction[F]]
@@ -60,7 +52,7 @@ object APIServers {
         proposeFOpt,
         devMode
       )
-    val propose = ProposeGrpcServiceV1(proposerQueue, proposerStateRef)
+    val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
     APIServers(repl, propose, deploy)
   }
 }

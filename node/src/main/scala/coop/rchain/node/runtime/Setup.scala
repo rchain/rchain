@@ -1,9 +1,7 @@
 package coop.rchain.node.runtime
 
-import java.nio.file.{Files, Path}
-
 import cats.Parallel
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
@@ -50,6 +48,8 @@ import coop.rchain.store.LmdbDirStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
+import java.nio.file.{Files, Path}
+
 object Setup {
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
       rpConnections: ConnectionsCell[F],
@@ -64,8 +64,6 @@ object Setup {
       deployStorageConfig: LMDBDeployStorage.Config
   )(implicit mainScheduler: Scheduler): F[
     (
-        BlockStore[F],
-        Cleanup[F],
         PacketHandler[F],
         APIServers,
         CasperLoop[F],
@@ -78,7 +76,7 @@ object Setup {
         Option[Proposer[F]],
         Queue[F, (Casper[F], Deferred[F, Option[Int]])],
         // TODO move towards having a single node state
-        Ref[F, ProposerState[F]],
+        Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
         Queue[F, (Casper[F], BlockMessage)],
@@ -273,8 +271,7 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       // Propose request is a tuple - Casper plus deferred proposeID that will be resolved by proposer
-      proposerQueue    <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
-      proposerStateRef <- Ref.of[F, ProposerState[F]](ProposerState[F]())
+      proposerQueue <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
       proposer = validatorIdentityOpt match {
         case Some(validatorIdentity) => {
           implicit val rm         = runtimeManager
@@ -300,7 +297,7 @@ object Setup {
         case None => None
       }
 
-      triggerProposeF: Option[ProposeFunction[F]] = if (proposer.isDefined)
+      triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
           (casper: Casper[F]) =>
             for {
@@ -310,6 +307,10 @@ object Setup {
             } yield r
         )
       else none[ProposeFunction[F]]
+
+      proposerStateRefOpt <- triggerProposeFOpt.traverse(
+                              _ => Ref.of[F, ProposerState[F]](ProposerState[F]())
+                            )
 
       casperLaunch = {
         implicit val bs     = blockStore
@@ -358,7 +359,6 @@ object Setup {
           conf.roundRobinDispatcher.dropPeerAfterRetries
         )
       }*/
-      blockApiLock <- Semaphore[F](1)
       apiServers = {
         implicit val bs = blockStore
         implicit val ec = engineCell
@@ -369,11 +369,11 @@ object Setup {
         implicit val rc = reportingRuntime
         APIServers.build[F](
           evalRuntime,
-          if (proposer.isDefined) proposerQueue.some else None,
-          if (proposer.isDefined) proposerStateRef.some else None,
+          triggerProposeFOpt,
+          proposerStateRefOpt,
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeF
+          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]]
         )
       }
@@ -412,7 +412,7 @@ object Setup {
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
-          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeF
+          if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]]
         )
       }
@@ -422,14 +422,11 @@ object Setup {
         implicit val sc     = synchronyConstraintChecker
         implicit val lfhscc = lastFinalizedHeightConstraintChecker
         new AdminWebApiImpl[F](
-          if (proposer.isDefined) proposerQueue.some else None,
-          if (proposer.isDefined) proposerStateRef.some else None,
-          rnodeStateManager
+          triggerProposeFOpt,
+          proposerStateRefOpt
         )
       }
     } yield (
-      blockStore,
-      runtimeCleanup,
       packetHandler,
       apiServers,
       casperLoop,
@@ -441,10 +438,10 @@ object Setup {
       adminWebApi,
       proposer,
       proposerQueue,
-      proposerStateRef,
+      proposerStateRefOpt,
       blockProcessor,
       blockProcessorStateRef,
       blockProcessorQueue,
-      triggerProposeF
+      triggerProposeFOpt
     )
 }

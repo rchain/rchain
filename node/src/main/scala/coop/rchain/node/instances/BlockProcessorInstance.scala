@@ -6,9 +6,8 @@ import cats.instances.list._
 import cats.syntax.all._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.{Casper, PrettyPrinter, ValidBlockProcessing}
+import coop.rchain.casper.{Casper, PrettyPrinter, ProposeFunction, ValidBlockProcessing}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.node.NodeRuntime.ProposeFunction
 import coop.rchain.shared.Log
 import fs2.Stream
 import fs2.concurrent.Queue
