@@ -12,36 +12,50 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
 
-trait ParBuilder[F[_]] {
-  def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
+trait Compiler[F[_]] {
 
-  def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
+  def sourceToADT(source: String): F[Par] =
+    sourceToADT(source, Map.empty[String, Par])
 
-  def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
-  private[interpreter] def buildAST(reader: Reader): F[Proc]
+  def sourceToADT(source: String, normalizerEnv: Map[String, Par]): F[Par] =
+    sourceToADT(new StringReader(source), normalizerEnv)
+
+  def sourceToADT(reader: Reader): F[Par] =
+    sourceToADT(reader, Map.empty[String, Par])
+
+  def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
+
+  def astToADT(proc: Proc): F[Par] =
+    astToADT(proc, Map.empty[String, Par])
+
+  def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
+
+  def sourceToAST(source: String): F[Proc] =
+    sourceToAST(new StringReader(source))
+
+  def sourceToAST(reader: Reader): F[Proc]
+
 }
 
-object ParBuilder {
+object Compiler {
 
-  def apply[F[_]](implicit parBuilder: ParBuilder[F]): ParBuilder[F] = parBuilder
+  def apply[F[_]](implicit compiler: Compiler[F]): Compiler[F] = compiler
 
-  implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
-    def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par] =
-      buildNormalizedTerm(new StringReader(source), normalizerEnv)
+  implicit def parBuilder[F[_]](implicit F: Sync[F]): Compiler[F] = new Compiler[F] {
 
-    def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
+    def sourceToADT(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
       for {
-        proc <- buildAST(reader)
-        par  <- buildPar(proc, normalizerEnv)
+        proc <- sourceToAST(reader)
+        par  <- astToADT(proc, normalizerEnv)
       } yield par
 
-    def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par] =
+    def astToADT(proc: Proc, normalizerEnv: Map[String, Par]): F[Par] =
       for {
         par       <- normalizeTerm(proc)(normalizerEnv)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
-    private[interpreter] def buildAST(reader: Reader): F[Proc] =
+    def sourceToAST(reader: Reader): F[Proc] =
       for {
         lexer  <- lexer(reader)
         parser <- parser(lexer)
@@ -65,25 +79,25 @@ object ParBuilder {
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
-          ProcVisitInputs(VectorPar(), IndexMapChain.empty, DeBruijnLevelMap.empty)
+          ProcVisitInputs(VectorPar(), BoundMapChain.empty, FreeMap.empty)
         )
         .flatMap { normalizedTerm =>
-          if (normalizedTerm.knownFree.count > 0) {
-            if (normalizedTerm.knownFree.wildcards.isEmpty && normalizedTerm.knownFree.connectives.isEmpty) {
-              val topLevelFreeList = normalizedTerm.knownFree.levelBindings.map {
-                case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
+          if (normalizedTerm.freeMap.count > 0) {
+            if (normalizedTerm.freeMap.wildcards.isEmpty && normalizedTerm.freeMap.connectives.isEmpty) {
+              val topLevelFreeList = normalizedTerm.freeMap.levelBindings.map {
+                case (name, FreeContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
                 TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
               )
-            } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
+            } else if (normalizedTerm.freeMap.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
                 if (conn.isConnAndBody) "/\\ (conjunction)"
                 else if (conn.isConnOrBody) "\\/ (disjunction)"
                 else if (conn.isConnNotBody) "~ (negation)"
                 else conn.toString
 
-              val connectives = normalizedTerm.knownFree.connectives
+              val connectives = normalizedTerm.freeMap.connectives
                 .map {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"
@@ -91,7 +105,7 @@ object ParBuilder {
                 .mkString("", ", ", "")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
-              val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
+              val topLevelWildcardList = normalizedTerm.freeMap.wildcards.map { sourcePosition =>
                 s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(

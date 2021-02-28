@@ -100,7 +100,7 @@ class InterpreterUtilTest
     ).map(d => ConstructDeploy.sourceDeploy(d, time + 2))
 
     val b2Deploys = Vector(
-      "for(@a <- @123; @b <- @456){ @1!(a + b) }"
+      "for(@a <- @123 & @b <- @456){ @1!(a + b) }"
     ).map(d => ConstructDeploy.sourceDeploy(d, time + 3))
 
     val b3Deploys = Vector(
@@ -154,7 +154,7 @@ class InterpreterUtilTest
     ).map(ConstructDeploy.sourceDeployNow(_))
 
     val b3Deploys = Vector(
-      "for(@a <- @123; @b <- @456){ @1!(a + b) }"
+      "for(@a <- @123 & @b <- @456){ @1!(a + b) }"
     ).map(ConstructDeploy.sourceDeployNow(_))
 
     /*
@@ -466,21 +466,21 @@ class InterpreterUtilTest
               } |
               delay!(0) |
               y!(0) |
-              for (_ <- x; @0 <- y) { y!(1) } |
-              for (_ <- x; @1 <- y) { y!(2) } |
-              for (_ <- x; @2 <- y) { y!(3) } |
-              for (_ <- x; @3 <- y) { y!(4) } |
-              for (_ <- x; @4 <- y) { y!(5) } |
-              for (_ <- x; @5 <- y) { y!(6) } |
-              for (_ <- x; @6 <- y) { y!(7) } |
-              for (_ <- x; @7 <- y) { y!(8) } |
-              for (_ <- x; @8 <- y) { y!(9) } |
-              for (_ <- x; @9 <- y) { y!(10) } |
-              for (_ <- x; @10 <- y) { y!(11) } |
-              for (_ <- x; @11 <- y) { y!(12) } |
-              for (_ <- x; @12 <- y) { y!(13) } |
-              for (_ <- x; @13 <- y) { y!(14) } |
-              for (_ <- x; @14 <- y) { Nil }
+              for (_ <- x & @0 <- y) { y!(1) } |
+              for (_ <- x & @1 <- y) { y!(2) } |
+              for (_ <- x & @2 <- y) { y!(3) } |
+              for (_ <- x & @3 <- y) { y!(4) } |
+              for (_ <- x & @4 <- y) { y!(5) } |
+              for (_ <- x & @5 <- y) { y!(6) } |
+              for (_ <- x & @6 <- y) { y!(7) } |
+              for (_ <- x & @7 <- y) { y!(8) } |
+              for (_ <- x & @8 <- y) { y!(9) } |
+              for (_ <- x & @9 <- y) { y!(10) } |
+              for (_ <- x & @10 <- y) { y!(11) } |
+              for (_ <- x & @11 <- y) { y!(12) } |
+              for (_ <- x & @12 <- y) { y!(13) } |
+              for (_ <- x & @13 <- y) { y!(14) } |
+              for (_ <- x & @14 <- y) { Nil }
              }
           """)
           .map(ConstructDeploy.sourceDeployNow(_))
@@ -738,7 +738,7 @@ class InterpreterUtilTest
       |        if (x == 1) {}.xxx() // Simulates error in one branch
       |      }
       |    } |
-      |    for (@(_, RevVault) <= RevVaultCh; @x<= ackCh) {
+      |    for (@(_, RevVault) <= RevVaultCh & @x<= ackCh) {
       |      @(*ackCh, "parallel universe")!("Rick and Morty")
       |    }
       |  }

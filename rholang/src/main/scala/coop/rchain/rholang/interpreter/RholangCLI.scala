@@ -8,7 +8,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -210,8 +210,8 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    ParBuilder[Coeval]
-      .buildNormalizedTerm(source, Map.empty[String, Par])
+    Compiler[Coeval]
+      .sourceToADT(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
 
@@ -219,7 +219,7 @@ object RholangCLI {
 
   def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
     implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source, Map.empty).map {
+    Interpreter[Task].evaluate(runtime, source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -287,7 +287,7 @@ object RholangCLI {
             })
         result <- {
           implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source, Map.empty)
+          Interpreter[Task].evaluate(runtime, source)
         }
       } yield result
 

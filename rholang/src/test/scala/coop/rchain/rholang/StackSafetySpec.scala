@@ -8,7 +8,8 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
-import coop.rchain.rholang.interpreter.{InterpreterUtil, ParBuilderUtil, PrettyPrinter}
+import coop.rchain.rholang.interpreter.compiler.Compiler
+import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -179,7 +180,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |  for (@x <- @0) { @1 ! (x) | @2 ! (x) } |
          |
          |  //receive both duplicated terms
-         |  for (@y <- @1; @z <- @2) {
+         |  for (@y <- @1 & @z <- @2) {
          |
          |    //create a set to test term's hashCode
          |    @3!(Set(y, z)) |
@@ -193,12 +194,12 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
          |""".stripMargin
 
     isolateStackOverflow {
-      val ast = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+      val ast = Compiler[Coeval].sourceToADT(rho).value()
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix).use { runtime =>
           implicit val c = runtime.cost
-          InterpreterUtil.evaluateResult(runtime, rho)
+          Interpreter[Task].evaluate(runtime, rho)
         }
       }
     }

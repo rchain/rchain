@@ -46,7 +46,7 @@ match (
         new RevVaultCh, MultiSigRevVaultCh in {
           rl!(`rho:rchain:revVault`, *RevVaultCh) |
           rl!(`rho:rchain:multiSigRevVault`, *MultiSigRevVaultCh) |
-          for (@(_, RevVault) <- RevVaultCh; @(_, MultiSigRevVault) <- MultiSigRevVaultCh) {
+          for (@(_, RevVault) <- RevVaultCh & @(_, MultiSigRevVault) <- MultiSigRevVaultCh) {
             ret!((RevVault, MultiSigRevVault))
           }
         }
@@ -59,7 +59,7 @@ match (
           for (@(_, carolUnsealer) <- carolAuthCh) {
             // Single sig as a special case of multisig.
             @MultiSigRevVault!("create", [], [carolUnsealer], 1, *carolVaultCh) |
-            for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- carolVaultCh) {
+            for (genesisVault, @genesisVaultKey <- genesisVaultCh & @maybeVault <- carolVaultCh) {
               match maybeVault {
                 (false, msg) => {
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
@@ -83,7 +83,7 @@ match (
           for (@(carolSealer, carolUnsealer) <- carolAuthCh) {
             // Single sig as a special case of multisig.
             @MultiSigRevVault!("create", [], [carolUnsealer], 1, *carolVaultCh) |
-            for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- carolVaultCh) {
+            for (genesisVault, @genesisVaultKey <- genesisVaultCh & @maybeVault <- carolVaultCh) {
               match maybeVault {
                 (false, msg) => {
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
@@ -127,11 +127,11 @@ match (
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *daveAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *eveAuthCh) |
-          for(@(carolSealer, carolUnsealer) <- carolAuthCh;
-              @(daveSealer, daveUnsealer) <- daveAuthCh;
+          for(@(carolSealer, carolUnsealer) <- carolAuthCh &
+              @(daveSealer, daveUnsealer) <- daveAuthCh &
               @(eveSealer, eveUnsealer) <- eveAuthCh) {
             @MultiSigRevVault!("create", [], [carolUnsealer, daveUnsealer, eveUnsealer], 2, *msVaultCh) |
-            for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- msVaultCh) {
+            for (genesisVault, @genesisVaultKey <- genesisVaultCh & @maybeVault <- msVaultCh) {
               match maybeVault {
                 (false, msg) => {
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
@@ -203,11 +203,11 @@ match (
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *daveAuthCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *eveAuthCh) |
-          for(@(carolSealer, carolUnsealer) <- carolAuthCh;
-              @(daveSealer, daveUnsealer) <- daveAuthCh;
+          for(@(carolSealer, carolUnsealer) <- carolAuthCh &
+              @(daveSealer, daveUnsealer) <- daveAuthCh &
               @(eveSealer, eveUnsealer) <- eveAuthCh) {
             @MultiSigRevVault!("create", [], [carolUnsealer, daveUnsealer, eveUnsealer], 2, *msVaultCh) |
-            for (genesisVault, @genesisVaultKey <- genesisVaultCh; @maybeVault <- msVaultCh) {
+            for (genesisVault, @genesisVaultKey <- genesisVaultCh & @maybeVault <- msVaultCh) {
               match maybeVault {
                 (false, msg) => {
                   rhoSpec!("assert", (false, "==", true), msg, *ackCh)
@@ -278,7 +278,7 @@ match (
               RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
               for (@revAddr <- revAddrCh) {
                 @RevVault!("findOrCreate", revAddr, *vaultCh) |
-                for (@(true, vault) <- vaultCh; deployerId <- deployerIdCh) {
+                for (@(true, vault) <- vaultCh & deployerId <- deployerIdCh) {
                   @RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
                   for (@authKey <- authKeyCh) {
                     ret!(vault, authKey)

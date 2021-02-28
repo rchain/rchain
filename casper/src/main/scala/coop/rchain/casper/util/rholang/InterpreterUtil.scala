@@ -20,7 +20,7 @@ import coop.rchain.rholang.interpreter.Runtime.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -42,7 +42,7 @@ object InterpreterUtil {
   def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
   ): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
+    Compiler[Coeval].sourceToADT(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

@@ -5,8 +5,9 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, RholangCLI, Runtime}
+import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
@@ -37,9 +38,7 @@ trait EvalBenchStateBase {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
 
-    term = ParBuilderUtil
-      .buildNormalizedTerm[Coeval](resourceFileReader(rhoScriptSource))
-      .runAttempt match {
+    term = Compiler[Coeval].sourceToADT(resourceFileReader(rhoScriptSource)).runAttempt match {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }

@@ -61,17 +61,37 @@ PAnd.            Proc5  ::= Proc5 "and" Proc6 ;
 POr.             Proc4  ::= Proc4 "or" Proc5 ;
 PSend.           Proc3  ::= Name Send "(" [Proc] ")" ;
 PContr.          Proc2  ::= "contract" Name "(" [Name] NameRemainder")" "=" "{" Proc "}" ;
-PInput.          Proc2  ::= "for" "(" Receipt ")" "{" Proc "}" ;
+PInput.          Proc2  ::= "for" "(" [Receipt] ")" "{" Proc "}" ;
 PChoice.         Proc2  ::= "select" "{" [Branch] "}" ;
 PMatch.          Proc2  ::= "match" Proc4 "{" [Case] "}" ;
 PBundle.         Proc2  ::= Bundle "{" Proc "}" ;
+PLet.            Proc2  ::= "let" Decl Decls "in" "{" Proc "}" ;
 PIf.             Proc1  ::= "if" "(" Proc ")" Proc2 ;
 -- Use precedence to force braces around an interior if.
 PIfElse.      Proc1 ::= "if" "(" Proc ")" Proc2 "else" Proc1 ;
 PNew.         Proc1 ::= "new" [NameDecl] "in" Proc1 ;
+PSendSynch.   Proc1 ::= Name "!?" "(" [Proc] ")" SynchSendCont ;
 PPar.         Proc  ::= Proc "|" Proc1 ;
 
 separator Proc "," ;
+
+-- Let declarations
+DeclImpl.    Decl ::= [Name] NameRemainder "<-" [Proc] ;
+
+LinearDeclImpl.    LinearDecl ::= Decl ;
+separator nonempty LinearDecl ";" ;
+
+ConcDeclImpl.    ConcDecl ::= Decl ;
+separator nonempty ConcDecl "&" ;
+
+EmptyDeclImpl.      Decls ::= ;
+LinearDeclsImpl.    Decls ::= ";" [LinearDecl] ;
+ConcDeclsImpl.      Decls ::= "&" [ConcDecl] ;
+
+-- Continuation for synchronous send
+
+EmptyCont.      SynchSendCont ::= "." ;
+NonEmptyCont.   SynchSendCont ::= ";" Proc1 ;
 
 -- Process variables
 ProcVarWildcard. ProcVar ::= "_" ;
@@ -93,6 +113,7 @@ BundleReadWrite. Bundle ::= "bundle"  ;
 ReceiptLinear.    Receipt ::= ReceiptLinearImpl ;
 ReceiptRepeated.  Receipt ::= ReceiptRepeatedImpl ;
 ReceiptPeek.      Receipt ::= ReceiptPeekImpl ;
+separator nonempty Receipt ";" ;
 
 -- Linear Receipts
 LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
@@ -101,20 +122,24 @@ LinearSimple. ReceiptLinearImpl ::= [LinearBind] ;
 -- LinearCond.   Linear ::= [LinearBind] "if" Proc ;
 
 -- Single Linear Bind
-LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" Name ;
-separator nonempty LinearBind ";" ;
+LinearBindImpl. LinearBind ::= [Name] NameRemainder "<-" NameSource ;
+separator nonempty LinearBind "&" ;
+
+SimpleSource.         NameSource ::= Name ;
+ReceiveSendSource.    NameSource ::= Name "?!" ;
+SendReceiveSource.    NameSource ::= Name "!?" "(" [Proc] ")" ;
 
 -- Repeated Receipts
 RepeatedSimple. ReceiptRepeatedImpl ::= [RepeatedBind] ;
 -- Single Repeated Bind
 RepeatedBindImpl. RepeatedBind ::= [Name] NameRemainder "<=" Name ;
-separator nonempty RepeatedBind ";" ;
+separator nonempty RepeatedBind "&" ;
 
 -- Peek Receipts
 PeekSimple. ReceiptPeekImpl ::= [PeekBind] ;
 -- Single Peek
 PeekBindImpl. PeekBind ::= [Name] NameRemainder "<<-" Name ;
-separator nonempty PeekBind ";" ;
+separator nonempty PeekBind "&" ;
 
 -- Types of Send:
 SendSingle.   Send ::= "!" ;

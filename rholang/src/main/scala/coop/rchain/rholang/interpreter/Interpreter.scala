@@ -5,7 +5,7 @@ import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.{
   AggregateError,
   InterpreterError,
@@ -19,11 +19,17 @@ final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
 
 trait Interpreter[F[_]] {
 
+  def evaluate(runtime: Runtime[F], term: String): F[EvaluateResult] =
+    evaluate(runtime, term, Cost.UNSAFE_MAX, Map.empty[String, Par])
+
   def evaluate(
       runtime: Runtime[F],
       term: String,
       normalizerEnv: Map[String, Par]
-  ): F[EvaluateResult]
+  ): F[EvaluateResult] = evaluate(runtime, term, Cost.UNSAFE_MAX, normalizerEnv)
+
+  def evaluate(runtime: Runtime[F], term: String, cost: Cost): F[EvaluateResult] =
+    evaluate(runtime, term, cost, Map.empty[String, Par])
 
   def evaluate(
       runtime: Runtime[F],
@@ -49,13 +55,6 @@ object Interpreter {
       C: _cost[F]
   ): Interpreter[F] =
     new Interpreter[F] {
-
-      def evaluate(
-          runtime: Runtime[F],
-          term: String,
-          normalizerEnv: Map[String, Par]
-      ): F[EvaluateResult] =
-        evaluate(runtime, term, Cost.UNSAFE_MAX, normalizerEnv)
 
       def evaluate(
           runtime: Runtime[F],
@@ -90,8 +89,8 @@ object Interpreter {
         val evaluationResult = for {
           _ <- C.set(initialPhlo)
           _ <- charge[F](parsingCost)
-          parsed <- ParBuilder[F]
-                     .buildNormalizedTerm(term, normalizerEnv)
+          parsed <- Compiler[F]
+                     .sourceToADT(term, normalizerEnv)
                      .handleErrorWith {
                        case err: InterpreterError => ParserError(err).raiseError[F, Par]
                      }
@@ -141,6 +140,5 @@ object Interpreter {
           case error: Throwable =>
             error.raiseError[F, EvaluateResult]
         }
-
     }
 }

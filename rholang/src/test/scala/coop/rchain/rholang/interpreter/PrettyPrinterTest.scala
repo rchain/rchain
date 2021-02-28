@@ -7,9 +7,10 @@ import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
   BoolNormalizeMatcher,
-  DeBruijnLevelMap,
+  BoundMapChain,
+  Compiler,
+  FreeMap,
   GroundNormalizeMatcher,
-  IndexMapChain,
   NameNormalizeMatcher,
   NameSort,
   NameVisitInputs,
@@ -63,10 +64,10 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 
   val inputs = ProcVisitInputs(
     Par(),
-    IndexMapChain
+    BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
-    DeBruijnLevelMap.empty
+    FreeMap.empty
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
@@ -150,7 +151,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 }
 
 class ProcPrinterSpec extends FlatSpec with Matchers {
-  val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty, DeBruijnLevelMap.empty)
+  val inputs                                   = ProcVisitInputs(Par(), BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "New" should "use 0-based indexing" in {
@@ -243,13 +244,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new SimpleSource(new NameVar("x")))
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PEval(new NameVar("z"))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PEval(new NameVar("z"))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, receive)
     val result =
@@ -273,13 +276,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new SimpleSource(new NameVar("x")))
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, receive)
     val result =
@@ -297,7 +302,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print multiple binds" in {
-    // new x in { for( y <- x ; z <- x ){ *y | *z } }
+    // new x in { for( y <- x  & z <- x ){ *y | *z } }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("y"))
@@ -305,16 +310,26 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x0"))
+      new LinearBindImpl(
+        listBindings,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("x0"))
+      )
     )
     listLinearBinds.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x1"))
+      new LinearBindImpl(
+        listBindings1,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("x1"))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
-    val receive      = new PInput(receipt, cont)
-    val nameDec      = new ListNameDecl()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont    = new PPar(new PEval(new NameVar("y")), new PEval(new NameVar("z")))
+    val receive = new PInput(listReceipt, cont)
+    val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x0"))
     nameDec.add(new NameDeclSimpl("x1"))
     val source = new PNew(nameDec, receive)
@@ -324,7 +339,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2} <- x1 ; @{x3} <- x0 ) {
+        |  for( @{x2} <- x1  & @{x3} <- x0 ) {
         |    x2 |
         |    x3
         |  }
@@ -333,7 +348,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print multiple binds with multiple patterns" in {
-    // new x, y in { for( z, v <- x ; a, b <- y ){ *z | *v | *a | *b }
+    // new x, y in { for( z, v <- x  & a, b <- y ){ *z | *v | *a | *b }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
@@ -343,18 +358,24 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("b"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new SimpleSource(new NameVar("x")))
     )
     listLinearBinds.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("y"))
+      new LinearBindImpl(
+        listBindings1,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("y"))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
     val cont = new PPar(
       new PPar(new PEval(new NameVar("z")), new PEval(new NameVar("v"))),
       new PPar(new PEval(new NameVar("a")), new PEval(new NameVar("b")))
     )
-    val receive = new PInput(receipt, cont)
+    val receive = new PInput(listReceipt, cont)
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     nameDec.add(new NameDeclSimpl("y"))
@@ -365,7 +386,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    x3 |
         |    x2 |
         |    x5 |
@@ -376,7 +397,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "Receive" should "Print partially empty Pars" in {
-    // new x, y in { for( z, v <- x ; a, b <- y ){ *b!(Nil) | *z | *v | *a }
+    // new x, y in { for( z, v <- x  & a, b <- y ){ *b!(Nil) | *z | *v | *a }
 
     val listBindings = new ListName()
     listBindings.add(new NameVar("z"))
@@ -386,21 +407,27 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings1.add(new NameVar("b"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new SimpleSource(new NameVar("x")))
     )
     listLinearBinds.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("y"))
+      new LinearBindImpl(
+        listBindings1,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("y"))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val sentData     = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val sentData = new ListProc()
     sentData.add(new PNil())
     val pSend = new PSend(new NameVar("b"), new SendSingle(), sentData)
     val cont = new PPar(
       new PPar(new PEval(new NameVar("z")), new PEval(new NameVar("v"))),
       new PPar(new PEval(new NameVar("a")), pSend)
     )
-    val receive = new PInput(receipt, cont)
+    val receive = new PInput(listReceipt, cont)
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     nameDec.add(new NameDeclSimpl("y"))
@@ -411,7 +438,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
       )
     val target =
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x3}!(Nil) |
         |    x2 |
         |    x5 |
@@ -428,15 +455,20 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new SimpleSource(new NameVar("x")))
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val cont         = new PEval(new NameVar("z"))
-    val sentData     = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val cont     = new PEval(new NameVar("z"))
+    val sentData = new ListProc()
     sentData.add(new PEval(new NameVar("x")))
     val body =
-      new PPar(new PSend(new NameVar("x"), new SendSingle(), sentData), new PInput(receipt, cont))
+      new PPar(
+        new PSend(new NameVar("x"), new SendSingle(), sentData),
+        new PInput(listReceipt, cont)
+      )
     val nameDec = new ListNameDecl()
     nameDec.add(new NameDeclSimpl("x"))
     val source = new PNew(nameDec, body)
@@ -464,7 +496,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   val pvar = new PVar(new ProcVarVar("x"))
   "PVar" should "Print with fresh identifier" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pvar, boundInputs).value.par
@@ -488,8 +521,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PEval" should "Print eval with fresh identifier" in {
-    val pEval       = new PEval(new NameVar("x"))
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val pEval = new PEval(new NameVar("x"))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
@@ -501,7 +535,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val pEval = new PEval(
       new NameQuote(new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x"))))
     )
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pEval, boundInputs).value.par
@@ -562,8 +597,9 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val sentData = new ListProc()
     sentData.add(new PGround(new GroundInt("7")))
     sentData.add(new PGround(new GroundInt("8")))
-    val pSend       = new PSend(new NameVar("x"), new SendSingle(), sentData)
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val pSend = new PSend(new NameVar("x"), new SendSingle(), sentData)
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pSend, boundInputs).value.par
@@ -584,7 +620,8 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
 
   "PPar" should "Print" in {
     val parDoubleBound = new PPar(new PVar(new ProcVarVar("x")), new PVar(new ProcVarVar("x")))
-    val boundInputs    = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", ProcSort, SourcePosition(0, 0))))
     val result = PrettyPrinter(0, 1).buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](parDoubleBound, boundInputs).value.par
     )
@@ -612,28 +649,40 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameVar("z"))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil()))
+      new LinearBindImpl(
+        listBindings,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameQuote(new PNil()))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
     val body = new PPar(
       new PVar(new ProcVarVar("y")),
       new PPar(new PEval(new NameVar("z")), new PVar(new ProcVarVar("u")))
     )
-    val basicInput    = new PInput(receipt, body)
+    val basicInput    = new PInput(listReceipt, body)
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x"))
     listBindings1.add(new NameQuote(basicInput))
     val listLinearBinds1 = new ListLinearBind()
     listLinearBinds1.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameQuote(new PNil()))
+      new LinearBindImpl(
+        listBindings1,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameQuote(new PNil()))
+      )
     )
     val linearSimple1 = new LinearSimple(listLinearBinds1)
     val receipt1      = new ReceiptLinear(linearSimple1)
-    val listSend1     = new ListProc()
+    val listReceipt1  = new ListReceipt()
+    listReceipt1.add(receipt1)
+    val listSend1 = new ListProc()
     listSend1.add(new PVar(new ProcVarVar("u")))
     val body1       = new PSend(new NameVar("x"), new SendSingle(), listSend1)
-    val basicInput1 = new PInput(receipt1, body1)
+    val basicInput1 = new PInput(listReceipt1, body1)
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](basicInput1, inputs).value.par
@@ -646,7 +695,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
   }
 
   "PInput" should "Print a more complicated receive" in {
-    // new x, y in { for ( z, @a <- y ; b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil case e => c } }
+    // new x, y in { for ( z, @a <- y  & b, @c <- x ) { z!(c) | b!(a) | for( d <- b ){ *d | match d { case 42 => Nil case e => c } }
 
     val listBindings1 = new ListName()
     listBindings1.add(new NameVar("x1"))
@@ -656,14 +705,24 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings2.add(new NameQuote(new PVar(new ProcVarVar("y2"))))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings1, new NameRemainderEmpty(), new NameVar("x"))
+      new LinearBindImpl(
+        listBindings1,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("x"))
+      )
     )
     listLinearBinds.add(
-      new LinearBindImpl(listBindings2, new NameRemainderEmpty(), new NameVar("v"))
+      new LinearBindImpl(
+        listBindings2,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("v"))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val listSend1    = new ListProc()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val listSend1 = new ListProc()
     listSend1.add(new PVar(new ProcVarVar("y2")))
     val listSend2 = new ListProc()
     listSend2.add(new PVar(new ProcVarVar("y1")))
@@ -671,9 +730,15 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings3.add(new NameVar("z"))
     val listLinearBinds2 = new ListLinearBind()
     listLinearBinds2.add(
-      new LinearBindImpl(listBindings3, new NameRemainderEmpty(), new NameVar("x1"))
+      new LinearBindImpl(
+        listBindings3,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameVar("x1"))
+      )
     )
-    val receipt2 = new ReceiptLinear(new LinearSimple(listLinearBinds2))
+    val receipt2     = new ReceiptLinear(new LinearSimple(listLinearBinds2))
+    val listReceipt2 = new ListReceipt()
+    listReceipt2.add(receipt2)
     val body = new PPar(
       new PSend(new NameVar("x1"), new SendSingle(), listSend1),
       new PSend(new NameVar("x2"), new SendSingle(), listSend2)
@@ -684,21 +749,21 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     val body3 = new PPar(
       body,
       new PInput(
-        receipt2,
+        listReceipt2,
         new PPar(new PEval(new NameVar("z")), new PMatch(new PEval(new NameVar("z")), listCases))
       )
     )
     val listNameDecl = new ListNameDecl()
     listNameDecl.add(new NameDeclSimpl("x"))
     listNameDecl.add(new NameDeclSimpl("v"))
-    val pInput = new PNew(listNameDecl, new PInput(receipt, body3))
+    val pInput = new PNew(listNameDecl, new PInput(listReceipt, body3))
     val result =
       PrettyPrinter().buildString(
         ProcNormalizeMatcher.normalizeMatch[Coeval](pInput, inputs).value.par
       )
     result shouldBe
       """new x0, x1 in {
-        |  for( @{x2}, @{x3} <- x1 ; @{x4}, @{x5} <- x0 ) {
+        |  for( @{x2}, @{x3} <- x1  & @{x4}, @{x5} <- x0 ) {
         |    @{x2}!(x5) |
         |    @{x4}!(x3) |
         |    for( @{x6} <- @{x4} ) {
@@ -761,11 +826,17 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameQuote(new PVar(new ProcVarVar("x"))))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil()))
+      new LinearBindImpl(
+        listBindings,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameQuote(new PNil()))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val listCases    = new ListCase()
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val listCases = new ListCase()
     listCases.add(new CaseImpl(new PGround(new GroundInt("42")), new PNil()))
     listCases.add(new CaseImpl(new PVar(new ProcVarVar("y")), new PNil()))
     val body     = new PMatch(new PVar(new ProcVarVar("x")), listCases)
@@ -773,7 +844,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listData.add(new PGround(new GroundInt("47")))
     val send47OnNil = new PSend(new NameQuote(new PNil()), new SendSingle(), listData)
     val pPar = new PPar(
-      new PInput(receipt, body),
+      new PInput(listReceipt, body),
       send47OnNil
     )
     val result = PrettyPrinter().buildString(
@@ -875,11 +946,17 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     listBindings.add(new NameQuote(pMatch))
     val listLinearBinds = new ListLinearBind()
     listLinearBinds.add(
-      new LinearBindImpl(listBindings, new NameRemainderEmpty(), new NameQuote(new PNil()))
+      new LinearBindImpl(
+        listBindings,
+        new NameRemainderEmpty(),
+        new SimpleSource(new NameQuote(new PNil()))
+      )
     )
     val linearSimple = new LinearSimple(listLinearBinds)
     val receipt      = new ReceiptLinear(linearSimple)
-    val input        = new PInput(receipt, new PNil())
+    val listReceipt  = new ListReceipt()
+    listReceipt.add(receipt)
+    val input = new PInput(listReceipt, new PNil())
     val result = PrettyPrinter().buildString(
       ProcNormalizeMatcher.normalizeMatch[Coeval](input, inputs).value.par
     )
@@ -902,7 +979,7 @@ class ProcPrinterSpec extends FlatSpec with Matchers {
     assert(parseAndPrint(prettySource) == prettySource)
 
   private def parseAndPrint(source: String): String = PrettyPrinter().buildString(
-    ParBuilderUtil.buildNormalizedTerm[Coeval](new StringReader(source)).runAttempt().right.get
+    Compiler[Coeval].sourceToADT(new StringReader(source)).runAttempt().right.get
   )
 }
 
@@ -937,13 +1014,13 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty, DeBruijnLevelMap.empty)
+  val inputs                                   = NameVisitInputs(BoundMapChain.empty, FreeMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "Print" in {
     val nw = new NameWildcard()
     val result = PrettyPrinter().buildString(
-      NameNormalizeMatcher.normalizeMatch[Coeval](nw, inputs).value.chan
+      NameNormalizeMatcher.normalizeMatch[Coeval](nw, inputs).value.par
     )
     result shouldBe "_"
   }
@@ -951,10 +1028,11 @@ class NamePrinterSpec extends FlatSpec with Matchers {
   val nvar = new NameVar("x")
 
   "NameVar" should "Print" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value.chan
+        NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value.par
       )
     result shouldBe "x0"
   }
@@ -962,11 +1040,12 @@ class NamePrinterSpec extends FlatSpec with Matchers {
   val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
 
   "NameQuote" should "Print" in {
-    val nqeval      = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val nqeval = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
+    val boundInputs =
+      inputs.copy(boundMapChain = inputs.boundMapChain.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
-        NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value.chan
+        NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value.par
       )
     result shouldBe "x0 |\nx0"
   }

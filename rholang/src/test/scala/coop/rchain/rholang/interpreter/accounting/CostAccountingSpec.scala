@@ -53,7 +53,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         case (runtime, costL) =>
           costL.listen {
             implicit val cost = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+            Interpreter[Task].evaluate(runtime, contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)
@@ -153,7 +153,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
             remainder /= 4
             joins += f"_ ${arrow} @${ch}"
           }
-          val joinStr = joins.mkString("; ")
+          val joinStr = joins.mkString(" & ")
           result += f"for (${joinStr}) { 0 }"
           nonlinearRecv ||= (arrow == "<=")
         }
@@ -172,7 +172,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     ("@0!!(0) | for (x <- @0) { 0 }", 342L),
     ("@0!!(0) | for (@0 <- @0) { 0 }", 336L),
     ("@0!!(0) | @0!!(0) | for (_ <- @0) { 0 }", 443L),
-    ("@0!!(0) | @1!!(1) | for (_ <- @0;_ <- @1) { 0 }", 594L),
+    ("@0!!(0) | @1!!(1) | for (_ <- @0 & _ <- @1) { 0 }", 596L),
     ("@0!(0) | for (_ <- @0) { 0 }", 333L),
     ("@0!(0) | for (x <- @0) { 0 }", 333L),
     ("@0!(0) | for (@0 <- @0) { 0 }", 327L),
@@ -240,7 +240,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     assert(result1._1.errors.isEmpty)
     assert(result1._2.errors.isEmpty)
     assert(result1._1.cost == result1._2.cost)
-    // Try contract fromLong(510661906) = @1!(0) | @1!(0) | for (_ <= @1; _ <= @1) { 0 }
+    // Try contract fromLong(510661906) = @1!(0) | @1!(0) | for (_ <= @1 & _ <= @1) { 0 }
     // because of bug RCHAIN-3917
     val result2 = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(510661906))
     assert(result2._1.errors.isEmpty)
