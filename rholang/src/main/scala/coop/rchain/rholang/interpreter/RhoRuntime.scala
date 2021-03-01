@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
-
 import cats._
 import cats.data.Chain
 import cats.effect._
@@ -17,7 +16,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.diag.Tracing.CasperMetricsSource
+import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.SystemProcesses._
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, HasCost}
@@ -259,7 +258,7 @@ object ReplayRhoRuntime {
 
 object RhoRuntime {
 
-  implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "runtime")
+  implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
   private[this] val createReplayRuntime     = Metrics.Source(RuntimeMetricsSource, "create-replay")
   private[this] val createPlayRuntime       = Metrics.Source(RuntimeMetricsSource, "create-play")
 

@@ -12,6 +12,7 @@ import coop.rchain.rspace.merger.{computeChannelChange, ChannelChange, EventChai
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.syntax._
+import coop.rchain.shared.Language._
 import coop.rchain.shared.{Log, Serialize, Stopwatch}
 import coop.rchain.store.LazyKeyValueCache
 
@@ -97,24 +98,34 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
           m.events.foldLeft((Seq.empty[COMM], Seq.empty[Produce], Seq.empty[Consume]))(
             (acc, v) =>
               v match {
-                case c: COMM    => acc.copy(_1 = acc._1 :+ c)
-                case p: Produce => acc.copy(_2 = acc._2 :+ p)
-                case c: Consume => acc.copy(_3 = acc._3 :+ c)
+                case c: COMM => acc.copy(_1 = acc._1 :+ c)
+                // `distinct` here is required because when persistent consume or produce created
+                // and immediately comm-ed, produce/consume event appears twice
+                case p: Produce => acc.copy(_2 = (acc._2 :+ p).distinct)
+                case c: Consume => acc.copy(_3 = (acc._3 :+ c).distinct)
               }
           )
 
         // changes that history actions have to be computed for
         val mergeChanges = {
-          // only produces and consumes that are not volatile in the scope of event log are subject to merge
-          // volatile events cannot have any effect outside if the scope
+          // only produces and consumes that are not volatile in the scope of event chain are subject to merge
+          // volatile events cannot have any effect outside of the scope
           val newActiveProduces =
             prods.filter(
               p => p.persistent || !comms.exists(c => c.produces.contains(p) && c.peeks.isEmpty)
             )
           val newActiveConsumes = conss.filter(c => c.persistent || !comms.exists(_.consume == c))
           val destroyedExternalProduces =
-            comms.filter(_.peeks.isEmpty).flatMap(_.produces).filterNot(p => prods.contains(p))
-          val destroyedExternalConsumes = comms.map(_.consume).filterNot(c => conss.contains(c))
+            comms                                // for all comm events
+              .filter(_.peeks.isEmpty)           // peeks won't affect channel state
+              .flatMap(_.produces)               // get produces
+              .filterNot(p => prods.contains(p)) // that are created outside of this event chain
+              .filterNot(_.persistent)           // and not persistent, therefore might be destroyed
+          val destroyedExternalConsumes =
+            comms                                // for all comm events
+              .map(_.consume)                    // get consumes
+              .filterNot(c => conss.contains(c)) // that are created outside of this event chain
+              .filterNot(c => c.persistent)      // and not persistent, therefore might be destroyed
           (
             newActiveProduces ++ destroyedExternalProduces,
             newActiveConsumes ++ destroyedExternalConsumes
@@ -140,10 +151,12 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
                 .compile
                 .drain
 
+          // `distinct` required here to not compute for the same hash several times
+          // if channel is mentioned several times in event chain
           // hashes storing datums that can potentially be affected
-          changedProduceHashes = produceMappings.map(_.historyHash)
+          changedProduceHashes = produceMappings.map(_.historyHash).distinct
           // hashes storing waiting continuations that can potentially be affected
-          changedConsumeHashes = consumeMappings.map(_.historyHash)
+          changedConsumeHashes = consumeMappings.map(_.historyHash).distinct
 
           // streams for compute data changes
           produceChangeComputes = changedProduceHashes.map(
@@ -242,7 +255,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       produceActions = produceChanges.toList.par.map {
         case (dataHash, changes) =>
           val newDatumsAtProduce =
-            (initData(dataHash) ++ changes.added diff changes.removed).distinct
+            (initData(dataHash) diff changes.removed) ++ changes.added
 
           if (newDatumsAtProduce.isEmpty) TrieDeleteProduce(dataHash)
           else TrieInsertProduce(dataHash, newDatumsAtProduce.map(_.decoded))
@@ -251,7 +264,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       consumeActions = consumeChanges.toList.par.map {
         case (consumeHash, changes) =>
           val newKontsAtConsume =
-            (initCons(consumeHash) ++ changes.added diff changes.removed).distinct
+            (initCons(consumeHash) diff changes.removed) ++ changes.added
 
           if (newKontsAtConsume.isEmpty)
             TrieDeleteConsume(consumeHash)
@@ -275,11 +288,6 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
               case _ => none[Blake2b256Hash]
             }
           }.collect { case Some(v) => v }
-
-          def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
-            val (l1, l2) = col splitAt index
-            (l1 ++ l2.drop(1))
-          }
 
           val mergeResult = consumesToDelete
             .foldLeft(consumes) { (acc, hashToDel) =>
@@ -305,12 +313,6 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       joinsActions = joinsOptActions
         .filter(_.isDefined)
         .map(_.get)
-
-//      _ = println(produceChanges)
-//      _ = println(consumeChanges)
-//      _ = println(produceActions)
-//      _ = println(consumeActions)
-//      _ = println(joinsActions)
 
     } yield (produceActions ++ consumeActions ++ joinsActions).toVector
   }

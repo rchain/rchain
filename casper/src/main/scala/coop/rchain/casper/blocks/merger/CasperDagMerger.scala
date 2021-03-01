@@ -3,12 +3,11 @@ package coop.rchain.casper.blocks.merger
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.{MergingMetricsSource, PrettyPrinter}
 import coop.rchain.dag._
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -61,8 +60,11 @@ object CasperDagMerger {
   ): F[(StateHash, Seq[ProcessedDeploy])] = {
 
     // ordering is required to be able to replay computing branches procedure
+    // there is no ordering for Seq[Byte] in standard lib, so conversion toSeq with implicits below is required
+    import scala.math.Ordered.orderingToOrdered
+    import scala.math.Ordering.Implicits.seqDerivedOrdering
     implicit val ord: Ordering[MergingVertex] = (x: MergingVertex, y: MergingVertex) =>
-      Base16.encode(x.postStateHash.toByteArray).compare(Base16.encode(y.postStateHash.toByteArray))
+      x.postStateHash.toByteArray.toSeq.compare(y.postStateHash.toByteArray.toSeq)
 
     val historyRepo = RuntimeManager[F].getHistoryRepo
 

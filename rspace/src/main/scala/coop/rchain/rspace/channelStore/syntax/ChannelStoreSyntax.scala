@@ -14,9 +14,8 @@ trait ChannelStoreSyntax {
     new ChannelStoreOps[F, C](channelStore)
 }
 
-final case class DatumMapping(historyHash: Blake2b256Hash, eventLogHash: Blake2b256Hash)
+final case class ProduceMapping(historyHash: Blake2b256Hash, eventLogHash: Blake2b256Hash)
 final case class ConsumeMapping(historyHash: Blake2b256Hash, eventLogHashes: Seq[Blake2b256Hash])
-final case class JoinMapping(joinHash: Blake2b256Hash, eventLogHashe: Blake2b256Hash)
 
 // TODO remove
 class ChannelStoreOps[F[_], C](
@@ -24,7 +23,7 @@ class ChannelStoreOps[F[_], C](
 ) {
   def getProduceMappings(
       produces: Seq[Produce]
-  )(implicit c: Concurrent[F]): F[Vector[DatumMapping]] =
+  )(implicit c: Concurrent[F]): F[Vector[ProduceMapping]] =
     fs2.Stream
       .emits(
         produces
@@ -35,8 +34,8 @@ class ChannelStoreOps[F[_], C](
               fs2.Stream
                 .eval(
                   channelStore.getChannelHash(h).flatMap {
-                    case Some(DataJoinHash(dataHash, _)) => DatumMapping(dataHash, h).some.pure[F]
-                    case _                               => none[DatumMapping].pure[F]
+                    case Some(DataJoinHash(dataHash, _)) => ProduceMapping(dataHash, h).some.pure[F]
+                    case _                               => none[ProduceMapping].pure[F]
                   }
                 )
                 .filter(_.isDefined)

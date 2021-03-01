@@ -14,6 +14,8 @@ package object casper {
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
 
+  val MergingMetricsSource: Metrics.Source = Metrics.Source(CasperMetricsSource, "merging")
+
   // Importing syntax object means using all extensions in the project
   object syntax
       extends AllSyntaxCasper

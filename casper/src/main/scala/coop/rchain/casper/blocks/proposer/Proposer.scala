@@ -8,14 +8,13 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.{Casper, _}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.diag.Tracing.CasperMetricsSource
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}

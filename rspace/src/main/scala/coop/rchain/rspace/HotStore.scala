@@ -261,11 +261,6 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
         .toVector
     } yield (continuations ++ data ++ joins)
 
-  private def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
-    val (l1, l2) = col splitAt index
-    (l1 ++ (l2 tail))
-  }
-
   private def checkIndex[E](col: Seq[E], index: Int): F[Unit] =
     Applicative[F].unlessA(col.isDefinedAt(index)) {
       Sync[F].raiseError(
