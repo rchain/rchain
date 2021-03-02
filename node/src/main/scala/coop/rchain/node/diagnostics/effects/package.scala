@@ -100,9 +100,6 @@ package object effects {
               }
         } yield r
 
-      override def trace[A](tag: String)(block: F[A])(implicit parentSource: Source): F[A] =
-        trace[A](Source(parentSource, tag))(block)
-
       override def withMarks[A](label: String)(block: F[A]): F[A] =
         Sync[F].bracketCase(
           mark(s"started-$label")

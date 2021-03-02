@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   OutOfPhlogistonsError
 }
+import coop.rchain.metrics.implicits._
 
 final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
   val failed: Boolean    = errors.nonEmpty
@@ -46,16 +47,16 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
 
     val parsingCost = accounting.parsingCost(term)
     val evaluationResult = for {
-      _ <- Span[F].trace("set-initial-cost") { C.set(initialPhlo) }
-      _ <- Span[F].trace("charge-parsing-cost") { charge[F](parsingCost) }
-      parsed <- Span[F].trace("build-normalized-term") {
+      _ <- Span[F].traceI("set-initial-cost") { C.set(initialPhlo) }
+      _ <- Span[F].traceI("charge-parsing-cost") { charge[F](parsingCost) }
+      parsed <- Span[F].traceI("build-normalized-term") {
                  ParBuilder[F]
                    .buildNormalizedTerm(term, normalizerEnv)
                    .handleErrorWith {
                      case err: InterpreterError => ParserError(err).raiseError[F, Par]
                    }
                }
-      _         <- Span[F].trace("reduce-term") { reducer.inj(parsed) }
+      _         <- Span[F].traceI("reduce-term") { reducer.inj(parsed) }
       phlosLeft <- C.get
     } yield EvaluateResult(initialPhlo - phlosLeft, Vector())
 

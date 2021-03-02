@@ -62,6 +62,7 @@ import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRun
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
+import coop.rchain.metrics.implicits._
 
 trait RhoRuntimeSyntax {
   implicit final def syntaxRuntime[F[_]: Sync: Span: Log](
@@ -240,7 +241,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    Span[F].trace("compute-genesis") {
+    Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
               BlockData(blockTime, 0, PublicKey(Array[Byte]()), 0)
@@ -258,7 +259,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
           s"PreCharging ${Base16.encode(deploy.pk.bytes)} for ${deploy.data.totalPhloCharge}"
         ) >>
           /* execute pre-charge */
-          Span[F].trace("precharge") {
+          Span[F].traceI("precharge") {
             playSystemDeployInternal(
               new PreChargeDeploy(
                 deploy.data.totalPhloCharge,
@@ -272,7 +273,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
         _ =>
           WriterT(
             Span[F]
-              .trace("user-deploy") { processDeploy(deploy) }
+              .traceI("user-deploy") { processDeploy(deploy) }
               .map(pd => (pd.deployLog.toVector, pd))
           )
       )
@@ -284,7 +285,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
               Log[F].info(
                 s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
               ) >>
-                Span[F].trace("refund") {
+                Span[F].traceI("refund") {
                   playSystemDeployInternal(
                     new RefundDeploy(
                       pd.refundAmount,
@@ -355,13 +356,13 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
     for {
-      evaluateResult <- Span[F].trace("evaluate-system-source") {
+      evaluateResult <- Span[F].traceI("evaluate-system-source") {
                          evaluateSystemSource(systemDeploy)
                        }
       maybeConsumedTuple <- if (evaluateResult.failed)
                              UnexpectedSystemErrors(evaluateResult.errors).raiseError
                            else
-                             Span[F].trace("consume-system-result") {
+                             Span[F].traceI("consume-system-result") {
                                consumeSystemResult(systemDeploy)
                              }
       resultOrSystemDeployError <- maybeConsumedTuple match {
@@ -458,7 +459,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    Span[F].trace("compute-state") {
+    Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
         _ <- runtime.setInvalidBlocks(invalidBlocks)
@@ -689,7 +690,7 @@ In both cases we want to check reply data and see if everything is in order */
               if (ts.isEmpty)
                 ().asRight[ReplayFailure].asRight[Seq[ProcessedDeploy]].pure[F]
               else
-                Span[F].trace("replay-deploy") {
+                Span[F].traceI("replay-deploy") {
                   replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
                 }
             }
@@ -699,12 +700,12 @@ In both cases we want to check reply data and see if everything is in order */
               if (ts.isEmpty)
                 ().asRight[ReplayFailure].asRight[Seq[ProcessedSystemDeploy]].pure[F]
               else
-                Span[F].trace("replay-sys-deploy") {
+                Span[F].traceI("replay-sys-deploy") {
                   replaySystemDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
                 }
             }
           )
-      res <- EitherT.right[ReplayFailure](Span[F].trace("create-checkpoint") {
+      res <- EitherT.right[ReplayFailure](Span[F].traceI("create-checkpoint") {
               runtime.createCheckpoint
             })
     } yield res.root.toByteString).value
@@ -716,7 +717,7 @@ In both cases we want to check reply data and see if everything is in order */
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    Span[F].trace("replay-compute-state") {
+    Span[F].traceI("replay-compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
         _ <- runtime.setInvalidBlocks(invalidBlocks)

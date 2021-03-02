@@ -15,6 +15,7 @@ import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import monix.execution.atomic.AtomicAny
 import java.lang
+import coop.rchain.metrics.implicits._
 
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
@@ -52,7 +53,7 @@ class RSpace[F[_], C, P, A, K](
       peeks: SortedSet[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
-    Span[F].trace("locked-consume") {
+    Span[F].traceI("locked-consume") {
       for {
         _ <- logF.debug(
               s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
@@ -110,7 +111,7 @@ class RSpace[F[_], C, P, A, K](
       persist: Boolean,
       produceRef: Produce
   ): F[MaybeActionResult] =
-    Span[F].trace("locked-produce") {
+    Span[F].traceI("locked-produce") {
       for {
         //TODO fix double join fetch
         groupedChannels <- store.getJoins(channel)

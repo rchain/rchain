@@ -19,6 +19,7 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
+import coop.rchain.metrics.implicits._
 
 class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
@@ -45,7 +46,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
       s: CasperSnapshot[F],
       casper: Casper[F]
   ): F[(ProposeResult, Option[BlockMessage])] =
-    Span[F].trace("do-propose") {
+    Span[F].traceI("do-propose") {
       for {
         // TODO this genesis should not be here, but required for sync constraint code. Remove
         genesis <- casper.getApprovedBlock

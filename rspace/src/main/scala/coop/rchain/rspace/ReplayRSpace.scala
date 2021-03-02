@@ -17,6 +17,7 @@ import coop.rchain.shared.SyncVarOps._
 import com.google.common.collect.Multiset
 import com.typesafe.scalalogging.Logger
 import monix.execution.atomic.AtomicAny
+import coop.rchain.metrics.implicits._
 
 class ReplayRSpace[F[_]: Sync, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
@@ -52,7 +53,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       peeks: SortedSet[Int],
       consumeRef: Consume
   ): F[MaybeActionResult] =
-    Span[F].trace("locked-consume") {
+    Span[F].traceI("locked-consume") {
       for {
         _ <- logF.debug(
               s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
@@ -125,7 +126,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       persist: Boolean,
       produceRef: Produce
   ): F[MaybeActionResult] =
-    Span[F].trace("locked-produce") {
+    Span[F].traceI("locked-produce") {
       for {
         groupedChannels <- store.getJoins(channel)
         _ <- logF.debug(
