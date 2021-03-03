@@ -145,17 +145,11 @@ object CasperLaunch {
           timestamp <- conf.genesisBlockData.deployTimestamp.fold(Time[F].currentMillis)(_.pure[F])
           bonds <- BondsParser.parse[F](
                     conf.genesisBlockData.bondsFile,
-                    conf.genesisBlockData.genesisDataDir.resolve("bonds.txt"),
-                    conf.genesisCeremony.autogenShardSize,
-                    conf.genesisBlockData.genesisDataDir
+                    conf.genesisCeremony.autogenShardSize
                   )
 
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          vaults <- VaultParser.parse(
-                     conf.genesisBlockData.walletsFile
-                       .map(Paths.get(_))
-                       .getOrElse(conf.genesisBlockData.genesisDataDir.resolve("wallets.txt"))
-                   )
+          vaults      <- VaultParser.parse(conf.genesisBlockData.walletsFile)
           bap <- BlockApproverProtocol.of(
                   validatorId.get,
                   timestamp,
