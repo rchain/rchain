@@ -1,22 +1,11 @@
 package coop.rchain.rspace.history.syntax
 
-import cats.effect.{Concurrent, Sync}
-import cats.syntax.all._
-import coop.rchain.rspace.channelStore.{ContinuationHash, DataJoinHash}
+import cats.effect.Concurrent
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.internal.WaitingContinuation
-import coop.rchain.rspace.trace.Event
-import coop.rchain.rspace.trace.Event.{
-  containConflictingEvents,
-  extractJoinedChannels,
-  extractRSpaceEventGroup,
-  produceChannels,
-  Conflict,
-  IsConflict,
-  NonConflict
-}
-import coop.rchain.rspace.{internal, Blake2b256Hash, StableHashProvider}
+import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.{internal, Blake2b256Hash}
 import coop.rchain.shared.Serialize
+import scodec.Codec
 
 import scala.language.{higherKinds, implicitConversions}
 
@@ -29,169 +18,54 @@ trait HistoryRepositorySyntax {
 final class HistoryRepositoryOps[F[_]: Concurrent, C, P, A, K](
     private val historyRepo: HistoryRepository[F, C, P, A, K]
 ) {
-  def getData(state: Blake2b256Hash, channel: C): F[Seq[internal.Datum[A]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getData(channel)
-    }
 
-  def getJoins(state: Blake2b256Hash, channel: C): F[Seq[Seq[C]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getJoins(channel)
-    }
-
-  def getContinuations(
-      state: Blake2b256Hash,
-      channels: Seq[C]
-  ): F[Seq[internal.WaitingContinuation[P, K]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getContinuations(channels)
-    }
-
-  def getData(
-      state: Blake2b256Hash,
-      dataHash: Blake2b256Hash
+  /**
+    * get content at particular state, addressing by channel or channel encoded into hash
+    */
+  def getData(state: Blake2b256Hash, channel: C)(
+      implicit codecC: Codec[C]
   ): F[Seq[internal.Datum[A]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getData(dataHash)
-    }
+    historyRepo.getHistoryReader(state).getData(channel)
+
+  def getJoins(state: Blake2b256Hash, channel: C)(
+      implicit codecC: Codec[C]
+  ): F[Seq[Seq[C]]] =
+    historyRepo.getHistoryReader(state).getJoins(channel)
+
+  def getContinuations(state: Blake2b256Hash, channels: Seq[C])(
+      implicit serializeC: Serialize[C]
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
+    historyRepo.getHistoryReader(state).getContinuations(channels)
+
+  def getData(state: Blake2b256Hash, dataHash: Blake2b256Hash): F[Seq[internal.Datum[A]]] =
+    historyRepo.getHistoryReader(state).getData(dataHash)
 
   def getJoins(state: Blake2b256Hash, joinHash: Blake2b256Hash): F[Seq[Seq[C]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getJoins(joinHash)
-    }
+    historyRepo.getHistoryReader(state).getJoins(joinHash)
 
   def getContinuations(
       state: Blake2b256Hash,
       continuationHash: Blake2b256Hash
   ): F[Seq[internal.WaitingContinuation[P, K]]] =
-    historyRepo.reset(state) >>= { h =>
-      h.getContinuations(continuationHash)
-    }
-
-  def getDataFromChannelHash(
-      channelHash: Blake2b256Hash
-  ): F[Seq[internal.Datum[A]]] =
-    for {
-      maybeDataHash <- historyRepo.getChannelHash(channelHash)
-      dataHash <- maybeDataHash match {
-                   case Some(DataJoinHash(dataHash, _)) => dataHash.pure[F]
-                   case _ =>
-                     Sync[F].raiseError[Blake2b256Hash](
-                       new Exception(s"not found data hash for $channelHash in channel store")
-                     )
-                 }
-      data <- historyRepo.getData(dataHash)
-    } yield data
-
-  def getDataFromChannelHash(
-      state: Blake2b256Hash,
-      channelHash: Blake2b256Hash
-  ): F[Seq[internal.Datum[A]]] =
-    historyRepo.reset(state) >>= { h =>
-      getDataFromChannelHash(channelHash)
-    }
-
-  def getJoinsFromChannelHash(
-      channelHash: Blake2b256Hash
-  ): F[Seq[Seq[C]]] =
-    for {
-      maybeJoinHash <- historyRepo.getChannelHash(channelHash)
-      joinHash <- maybeJoinHash match {
-                   case Some(DataJoinHash(_, joinHash)) => joinHash.pure[F]
-                   case _ =>
-                     Sync[F].raiseError[Blake2b256Hash](
-                       new Exception(s"not found join hash for $channelHash in channel store")
-                     )
-                 }
-      data <- historyRepo.getJoins(joinHash)
-    } yield data
-
-  def getJoinsFromChannelHash(
-      state: Blake2b256Hash,
-      channelHash: Blake2b256Hash
-  ): F[Seq[Seq[C]]] =
-    historyRepo.reset(state) >>= { h =>
-      getJoinsFromChannelHash(channelHash)
-    }
-
-  def getContinuationFromChannelHash(
-      channelHash: Blake2b256Hash
-  ): F[Seq[internal.WaitingContinuation[P, K]]] =
-    for {
-      maybeContinuationHash <- historyRepo.getChannelHash(
-                                channelHash
-                              )
-      continuationHash <- maybeContinuationHash match {
-                           case Some(ContinuationHash(continuationHash)) => continuationHash.pure[F]
-                           case _ =>
-                             Sync[F].raiseError[Blake2b256Hash](
-                               new Exception(
-                                 s"not found continuation hash for $channelHash in channel store"
-                               )
-                             )
-                         }
-      continuations <- historyRepo.getContinuations(continuationHash)
-    } yield continuations
-
-  def getContinuationFromChannelHash(
-      state: Blake2b256Hash,
-      channelHash: Blake2b256Hash
-  ): F[Seq[internal.WaitingContinuation[P, K]]] =
-    historyRepo.reset(state) >>= { h =>
-      getContinuationFromChannelHash(channelHash)
-    }
+    historyRepo.getHistoryReader(state).getContinuations(continuationHash)
 
   /**
-    * detect conflict events between rightEvents and rightEvents.
-    * In conflict case, conflict set contains the conflict channel hash.
-    * @param baseState baseState needed here for detect conflict in joins
-    * @return
+    * get from channel hash written in event log (TODO to be removed)
     */
-  def isConflict(
-      baseState: Blake2b256Hash,
-      leftEvents: List[Event],
-      rightEvents: List[Event]
-  )(implicit sc: Serialize[C]): F[IsConflict] = {
-    val leftEventGroup  = extractRSpaceEventGroup(leftEvents)
-    val rightEventGroup = extractRSpaceEventGroup(rightEvents)
-    val conflictJoinInLeft =
-      extractJoinedChannels(leftEventGroup).intersect(produceChannels(rightEventGroup))
-    val conflictJoinInRight =
-      extractJoinedChannels(rightEventGroup).intersect(produceChannels(leftEventGroup))
-    val otherConflict          = containConflictingEvents(leftEventGroup, rightEventGroup)
-    val normalConflictChannels = conflictJoinInLeft ++ conflictJoinInRight ++ otherConflict
-    val nonconflictRightProduceChannels =
-      rightEventGroup.produces.filter(p => !normalConflictChannels.contains(p.channelsHash))
-    for {
-      rightJoins <- nonconflictRightProduceChannels.toList.traverse { produce =>
-                     for {
-                       joins <- getJoinsFromChannelHash(
-                                 baseState,
-                                 produce.channelsHash
-                               )
-                       joinM = joins.filter(_.length > 1)
-                     } yield (produce, joinM)
-                   }
-      leftProduceChannel = leftEventGroup.produces.map(_.channelsHash).toSet
-      conflictJoinChannels = rightJoins
-        .filter {
-          case (produce, joins) => {
-            val joinsChannelHashes  = joins.map(_.map(StableHashProvider.hash(_)(sc))).flatten
-            val joinsWithoutProduce = joinsChannelHashes diff Seq(produce.channelsHash)
-            joinsWithoutProduce.exists(p => leftProduceChannel.contains(p))
-          }
-        }
-        .map(_._1.channelsHash)
-        .toSet
-    } yield
-      if (normalConflictChannels.isEmpty && conflictJoinChannels.isEmpty) {
-        NonConflict(leftEventGroup, rightEventGroup)
-      } else {
-        Conflict(
-          leftEventGroup,
-          rightEventGroup,
-          normalConflictChannels ++ conflictJoinChannels
-        )
-      }
-  }
+  def getDataFromChannelHash(
+      state: Blake2b256Hash,
+      channelHash: Blake2b256Hash
+  ): F[Seq[internal.Datum[A]]] =
+    historyRepo.getHistoryReader(state).getDataFromChannelHash(channelHash)(historyRepo)
+  def getJoinsFromChannelHash(
+      state: Blake2b256Hash,
+      channelHash: Blake2b256Hash
+  ): F[Seq[Seq[C]]] =
+    historyRepo.getHistoryReader(state).getJoinsFromChannelHash(channelHash)(historyRepo)
+  def getContinuationFromChannelHash(
+      state: Blake2b256Hash,
+      channelHash: Blake2b256Hash
+  ): F[Seq[internal.WaitingContinuation[P, K]]] =
+    historyRepo.getHistoryReader(state).getContinuationFromChannelHash(channelHash)(historyRepo)
+
 }

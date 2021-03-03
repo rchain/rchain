@@ -9,6 +9,7 @@ import cats.effect.implicits._
 import cats.mtl._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.history.{HashHistoryReader, HistoryReader, RhoHistoryReader}
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.Cell
@@ -1256,8 +1257,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 }
 
 class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
-    extends HistoryReader[F, C, P, A, K] {
-
+    extends RhoHistoryReader[F, C, P, A, K] {
   def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.get.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.modify { prev =>
@@ -1283,6 +1283,11 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
     ignore(prev.continuations.put(channels, continuations))
     (prev, ())
   }
+
+  override def getRichDatums(key: C): F[Seq[RichDatum[A]]]               = ???
+  override def getRichJoins(key: C): F[Seq[RichJoin[C]]]                 = ???
+  override def getRichContinuations(key: Seq[C]): F[Seq[RichKont[P, K]]] = ???
+  override def root: Blake2b256Hash                                      = ???
 }
 
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {

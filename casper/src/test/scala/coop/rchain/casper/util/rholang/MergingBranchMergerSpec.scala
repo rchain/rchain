@@ -4,12 +4,7 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.blocks.merger.{
-  CasperDagMerger,
-  ConflictDetectors,
-  MergingBranchIndex,
-  MergingVertex
-}
+import coop.rchain.casper.blocks.merger.{BlockIndex, CasperDagMerger, Indexer, MergingVertex}
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -17,16 +12,20 @@ import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.dag.{DagReader, InMemDAG}
+import coop.rchain.metrics.Metrics.MetricsNOP
+import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
+import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.LazyKeyValueCache
 import fs2.Stream
+import kamon.trace.Span.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -35,7 +34,7 @@ import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
+  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 10)
   val genesis                    = genesisContext.genesisBlock
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]
@@ -134,20 +133,29 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             mergingPostStateHash = s2._1
             mergeEvents          = s2._2.flatMap(_.deployLog).map(EventConverter.toRspaceEvent)
             // merge top state to the bottom state
-            merger <- runtimeManager.getHistoryRepo.stateMerger
+            merger = runtimeManager.getHistoryRepo.stateMerger
             // result of merge execution
+            mainHistory <- runtimeManager.getHistoryRepo
+                            .reset(Blake2b256Hash.fromByteString(mainPostStateHash))
+                            .map(_.history)
+            baseHistory <- runtimeManager.getHistoryRepo
+                            .reset(Blake2b256Hash.fromByteString(genesisPostStateHash))
+                            .map(_.history)
+            mergingHistory <- runtimeManager.getHistoryRepo
+                               .reset(Blake2b256Hash.fromByteString(mergingPostStateHash))
+                               .map(_.history)
             mergeHash <- merger
                           .merge(
-                            Blake2b256Hash.fromByteString(mainPostStateHash),
+                            mainHistory,
                             Seq(
                               EventChain(
-                                startState = Blake2b256Hash.fromByteString(genesisPostStateHash),
-                                endState = Blake2b256Hash.fromByteString(mergingPostStateHash),
+                                startState = baseHistory,
+                                endState = mergingHistory,
                                 events = mergeEvents
                               )
                             )
                           )
-                          .map(_.toByteString)
+                          .map(_.root.toByteString)
 
             // result hashes should be the same
           } yield (serialHash.toStringUtf8 == mergeHash.toStringUtf8)
@@ -170,10 +178,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         implicit val rm: RuntimeManager[Task] = runtimeManager
         implicit val conc                     = Concurrent[Task]
         val genesisPostStateHash              = genesis.body.state.postStateHash
+        val baseStateReader = runtimeManager.getHistoryRepo
+          .getHistoryReader(Blake2b256Hash.fromByteString(genesisPostStateHash))
 
         for {
-          baseStateReader <- runtimeManager.getHistoryRepo
-                              .reset(Blake2b256Hash.fromByteString(genesisPostStateHash))
 
           // a0 and a1 are states created by the same validator, so event logs should expose conflict
           a0 <- mkState(genesisPostStateHash, 1, 1L, 0)
@@ -181,31 +189,58 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
           // a0 and b are ceated by different validators, there should be no conflicts
           b <- mkState(genesisPostStateHash, 1, 1L, 1)
 
-          a0Index <- MergingBranchIndex.create(
-                      Seq(MergingVertex(postStateHash = a0._1, processedDeploys = a0._2.toSet))
-                    )
-          a1Index <- MergingBranchIndex.create(
-                      Seq(MergingVertex(postStateHash = a1._1, processedDeploys = a1._2.toSet))
-                    )
-          bIndex <- MergingBranchIndex.create(
-                     Seq(MergingVertex(postStateHash = b._1, processedDeploys = b._2.toSet))
-                   )
+          blockIndexCache <- LazyKeyValueCache[Task, MergingVertex, BlockIndex](
+                              Indexer.createBlockIndex[Task]
+                            )
+
+          a0Index <- {
+            implicit val ch = blockIndexCache
+            Indexer.createBranchIndex(
+              Seq(MergingVertex(postStateHash = a0._1, processedDeploys = a0._2.toSet))
+            )
+          }
+          a1Index <- {
+            implicit val ch = blockIndexCache
+            Indexer.createBranchIndex(
+              Seq(MergingVertex(postStateHash = a1._1, processedDeploys = a1._2.toSet))
+            )
+          }
+          bIndex <- {
+            implicit val ch = blockIndexCache
+            Indexer.createBranchIndex(
+              Seq(MergingVertex(postStateHash = b._1, processedDeploys = b._2.toSet))
+            )
+          }
 
           baseDataReader <- LazyKeyValueCache(
-                             (ch: Blake2b256Hash) =>
+                             (ch: Blake2b256Hash) => {
+                               implicit val c = runtimeManager.getHistoryRepo
                                baseStateReader
                                  .getDataFromChannelHash(ch)
+                             }
                            )
           baseJoinsReader <- LazyKeyValueCache(
-                              (ch: Blake2b256Hash) =>
+                              (ch: Blake2b256Hash) => {
+                                implicit val c = runtimeManager.getHistoryRepo
                                 baseStateReader
                                   .getJoinsFromChannelHash(ch)
+                              }
                             )
 
           // branches having the same validator blocks should be confliting
-          c <- ConflictDetectors.findConflicts(a0Index, a1Index, baseDataReader, baseJoinsReader)
+          c <- EventsIndexConflictDetectors.findConflicts(
+                a0Index.eventLogIndex,
+                a1Index.eventLogIndex,
+                baseDataReader,
+                baseJoinsReader
+              )
           // branches having different validator blocks should not conflict
-          c1 <- ConflictDetectors.findConflicts(a0Index, bIndex, baseDataReader, baseJoinsReader)
+          c1 <- EventsIndexConflictDetectors.findConflicts(
+                 a0Index.eventLogIndex,
+                 bIndex.eventLogIndex,
+                 baseDataReader,
+                 baseJoinsReader
+               )
 
         } yield assert(c.nonEmpty && c1.isEmpty)
       }
@@ -217,8 +252,11 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
     runtimeManagerResource.use { runtimeManager =>
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
-        val emptyDag                          = InMemDAG[Task, MergingVertex](Map.empty, Map.empty)
-        val genesisPostStateHash              = genesis.body.state.postStateHash
+        implicit val span                     = NoopSpan[Task]
+        implicit val metrics                  = new MetricsNOP[Task]
+
+        val emptyDag             = InMemDAG[Task, MergingVertex](Map.empty, Map.empty)
+        val genesisPostStateHash = genesis.body.state.postStateHash
 
         val genesisLayer =
           Seq(
@@ -229,6 +267,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               Set.empty
             )
           )
+
+        val blockIndexCache = LazyKeyValueCache[Task, MergingVertex, BlockIndex](
+          Indexer.createBlockIndex[Task]
+        ).runSyncUnsafe()
 
         dag.toList
           .foldLeftM[
@@ -241,7 +283,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               println(s"creating lvl ${blockNum}, template: ${levelTemplate}")
               for {
                 v <- if (prevLayer.size == 1) (prevLayer.head.postStateHash, Seq.empty).pure[Task]
-                    else CasperDagMerger.merge(prevLayer, genesisLayer.head, dag)
+                    else CasperDagMerger.merge(prevLayer, genesisLayer.head, dag, blockIndexCache)
                 (preStateHash, rejectedAtLevel) = v
                 newLayer <- fs2.Stream
                              .emits(
@@ -298,8 +340,14 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
     runtimeManagerResource.use { runtimeManager =>
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
+        implicit val span                     = NoopSpan[Task]
+        implicit val metrics                  = new MetricsNOP[Task]
         val emptyDag                          = InMemDAG[Task, MergingVertex](Map.empty, Map.empty)
         val genesisPostStateHash              = genesis.body.state.postStateHash
+
+        val blockIndexCache = LazyKeyValueCache[Task, MergingVertex, BlockIndex](
+          Indexer.createBlockIndex[Task]
+        ).runSyncUnsafe()
 
         // simulates 0.99 sync threshold - first validator create state, then all other create on top of that/
         // merge state of resulting blocks returned
@@ -327,7 +375,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             dag <- mergingTips.foldLeftM(emptyDag)((acc, tip) => acc.addEdge(tip, base))
 
             // merge children to get next preStateHash
-            v                                   <- CasperDagMerger.merge(mergingTips, base, dag)
+            v                                   <- CasperDagMerger.merge(mergingTips, base, dag, blockIndexCache)
             (nextPreStateHash, rejectedDeploys) = v
             _                                   = assert(rejectedDeploys.size == 0)
             _                                   = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")

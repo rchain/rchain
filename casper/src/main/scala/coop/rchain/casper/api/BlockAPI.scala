@@ -1,16 +1,15 @@
 package coop.rchain.casper.api
 
 import cats.Monad
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.blocks.proposer.{ProposeResult, Proposer}
+import coop.rchain.casper.blocks.proposer.ProposeResult
 import coop.rchain.casper.blocks.proposer.ProposeResult._
-import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -19,22 +18,20 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
-import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.{BlockMetadata, Par}
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
-import fs2.concurrent.Queue
 
 import scala.collection.immutable
 
@@ -54,7 +51,7 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      proposerQueue: Option[Queue[F, (Casper[F], Deferred[F, Option[Int]])]]
+      triggerPropose: Option[Casper[F] => F[Option[Int]]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -67,9 +64,8 @@ object BlockAPI {
                   res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
                 )
               )
-        _ <- (Deferred[F, Option[Int]] >>= { d =>
-              proposerQueue.get.enqueue1((casper, d))
-            }).whenA(proposerQueue.isDefined)
+        // call a propose if proposer defined
+        _ <- triggerPropose.traverse(_(casper))
       } yield r
 
     // Check if deploy is signed with system keys
@@ -99,7 +95,7 @@ object BlockAPI {
   }
 
   def createBlock[F[_]: Concurrent: EngineCell: Log](
-      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      triggerProposeF: ProposeFunction[F],
       printUnmatchedSends: Boolean = false
   ): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
@@ -109,10 +105,9 @@ object BlockAPI {
       _.withCasper[ApiErr[String]](
         casper =>
           for {
-            proposeIDDef <- Deferred[F, Option[Int]]
-            _            <- proposerQueue.enqueue1((casper, proposeIDDef))
+            proposeID <- triggerProposeF(casper)
             // wait till propose pipe assign proposeID to propose and resolve proposeIDDef
-            r <- proposeIDDef.get.flatMap {
+            r <- proposeID match {
                   case Some(r) => logSucess(s"Success: proposing block with seqNum ${r}")
                   case None    => logDebug(s"Failure: another propose is in progress")
                 }

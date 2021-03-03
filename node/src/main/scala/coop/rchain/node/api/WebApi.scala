@@ -59,9 +59,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
-      proposeOnDeploy: Boolean = false,
-      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
-      stateManager: StateManager[F]
+      triggerProposeF: Option[Casper[F] => F[Option[Int]]]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -84,7 +82,7 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, if (proposeOnDeploy) proposerQueue.some else None))
+        .flatMap(BlockAPI.deploy(_, triggerProposeF))
         .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =

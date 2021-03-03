@@ -18,10 +18,17 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
-import coop.rchain.casper.blocks.merger.{CasperDagMerger, CasperMergingDagReader, MergingVertex}
+import coop.rchain.casper.blocks.merger.{
+  BlockIndex,
+  CasperDagMerger,
+  CasperMergingDagReader,
+  MergingVertex
+}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
 import monix.eval.Coeval
 
 object InterpreterUtil {
@@ -250,10 +257,14 @@ object InterpreterUtil {
                            b.body.deploys.toSet
                          )
                      )
-            r <- CasperDagMerger.merge(tips, base, new CasperMergingDagReader(s.dag))
+            r <- CasperDagMerger.merge(
+                  tips,
+                  base,
+                  new CasperMergingDagReader(s.dag),
+                  runtimeManager.getBlockIndexCache
+                )
           } yield r._1
         }
-
       }
     }
 }

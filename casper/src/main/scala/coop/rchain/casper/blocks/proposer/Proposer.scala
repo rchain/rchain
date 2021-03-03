@@ -8,18 +8,20 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.{Casper, _}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.shared.{EventPublisher, Log, Time}
+import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
+import coop.rchain.metrics.implicits._
 
-class Proposer[F[_]: Concurrent](
+class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
     getCasperSnapshot: Casper[F] => F[CasperSnapshot[F]],
     // propose constraint checkers
@@ -37,41 +39,45 @@ class Proposer[F[_]: Concurrent](
     proposeEffect: (Casper[F], BlockMessage) => F[Unit],
     validator: ValidatorIdentity
 ) {
+
+  implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
   private def doPropose(
       s: CasperSnapshot[F],
       casper: Casper[F]
   ): F[(ProposeResult, Option[BlockMessage])] =
-    for {
-      // TODO this genesis should not be here, but required for sync constraint code. Remove
-      genesis <- casper.getApprovedBlock
-      // check if node is allowed to propose a block
-      chk <- checkProposeConstraints(genesis, s)
-      r <- chk match {
-            case v: CheckProposeConstraintsFailure =>
-              (ProposeResult.failure(v), none[BlockMessage]).pure[F]
-            case CheckProposeConstraintsSuccess =>
-              for {
-                b <- createBlock(s, validator)
-                r <- b match {
-                      case NoNewDeploys =>
-                        (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
-                      case Created(b) =>
-                        validateBlock(casper, s, b).flatMap {
-                          case Right(v) =>
-                            proposeEffect(casper, b) >>
-                              (ProposeResult.success(v), b.some).pure[F]
-                          case Left(v) =>
-                            Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
-                              new Throwable(
-                                s"Validation of self created block failed with reason: $v, cancelling propose."
+    Span[F].traceI("do-propose") {
+      for {
+        // TODO this genesis should not be here, but required for sync constraint code. Remove
+        genesis <- casper.getApprovedBlock
+        // check if node is allowed to propose a block
+        chk <- checkProposeConstraints(genesis, s)
+        r <- chk match {
+              case v: CheckProposeConstraintsFailure =>
+                (ProposeResult.failure(v), none[BlockMessage]).pure[F]
+              case CheckProposeConstraintsSuccess =>
+                for {
+                  b <- createBlock(s, validator)
+                  r <- b match {
+                        case NoNewDeploys =>
+                          (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
+                        case Created(b) =>
+                          validateBlock(casper, s, b).flatMap {
+                            case Right(v) =>
+                              proposeEffect(casper, b) >>
+                                (ProposeResult.success(v), b.some).pure[F]
+                            case Left(v) =>
+                              Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
+                                new Throwable(
+                                  s"Validation of self created block failed with reason: $v, cancelling propose."
+                                )
                               )
-                            )
-                        }
-                    }
-              } yield r
-          }
-    } yield r
+                          }
+                      }
+                } yield r
+            }
+      } yield r
+    }
 
   // Check if proposer can issue a block
   private def checkProposeConstraints(
@@ -96,7 +102,7 @@ class Proposer[F[_]: Concurrent](
   ): F[(ProposeResult, Option[BlockMessage])] =
     for {
       // get snapshot to serve as a base for propose
-      s       <- getCasperSnapshot(c)
+      s       <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
       nextSeq = ((s.maxSeqNums.getOrElse(ByteString.copyFrom(validator.publicKey.bytes), 0)) + 1)
       // resolve proposeID for the caller
       _ <- proposeIdDef.complete(nextSeq.some)

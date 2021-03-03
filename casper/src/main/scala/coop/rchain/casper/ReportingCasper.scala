@@ -188,7 +188,7 @@ object ReportingCasper {
 
 }
 
-class ReportingRuntime[F[_]: Sync](
+class ReportingRuntime[F[_]: Sync: Span](
     override val reducer: Reduce[F],
     override val space: RhoReportingRspace[F],
     override val cost: _cost[F],

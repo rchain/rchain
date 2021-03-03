@@ -54,7 +54,7 @@ import coop.rchain.models.{
   TaggedContinuation,
   Var
 }
-import coop.rchain.rholang.interpreter.RhoRuntime.bootstrapRand
+import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRand, RuntimeMetricsSource}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
@@ -62,6 +62,7 @@ import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRun
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
 import coop.rchain.shared.Log
+import coop.rchain.metrics.implicits._
 
 trait RhoRuntimeSyntax {
   implicit final def syntaxRuntime[F[_]: Sync: Span: Log](
@@ -79,12 +80,8 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
     private val runtime: RhoRuntime[F]
 ) {
 
-  private[this] val RuntimeMetricsSource =
-    Metrics.Source(CasperMetricsSource, "runtime")
+  implicit val RuntimeMetricsSource = Metrics.Source(CasperMetricsSource, "rho-runtime")
 
-  private[this] val computeStateLabel = Metrics.Source(RuntimeMetricsSource, "compute-state")
-  private[this] val computeGenesisLabel =
-    Metrics.Source(RuntimeMetricsSource, "compute-genesis")
   private val systemDeployConsumeAllPattern = {
     import coop.rchain.models.rholang.{implicits => toPar}
     BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
@@ -244,12 +241,11 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    Span[F].trace(computeGenesisLabel) {
+    Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
               BlockData(blockTime, 0, PublicKey(Array[Byte]()), 0)
             )
-        _                   <- Span[F].mark("before-process-deploys")
         genesisPreStateHash <- emptyStateHash
         evalResult          <- processDeploys(genesisPreStateHash, terms, processDeploy)
       } yield (genesisPreStateHash, evalResult._1, evalResult._2)
@@ -263,16 +259,23 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
           s"PreCharging ${Base16.encode(deploy.pk.bytes)} for ${deploy.data.totalPhloCharge}"
         ) >>
           /* execute pre-charge */
-          playSystemDeployInternal(
-            new PreChargeDeploy(
-              deploy.data.totalPhloCharge,
-              deploy.pk,
-              SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
+          Span[F].traceI("precharge") {
+            playSystemDeployInternal(
+              new PreChargeDeploy(
+                deploy.data.totalPhloCharge,
+                deploy.pk,
+                SystemDeployUtil.generatePreChargeDeployRandomSeed(deploy)
+              )
             )
-          )
+          }
       )
     ).semiflatMap( // execute user deploy
-        _ => WriterT(processDeploy(deploy).map(pd => (pd.deployLog.toVector, pd)))
+        _ =>
+          WriterT(
+            Span[F]
+              .traceI("user-deploy") { processDeploy(deploy) }
+              .map(pd => (pd.deployLog.toVector, pd))
+          )
       )
       .flatTap(
         pd =>
@@ -282,12 +285,14 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
               Log[F].info(
                 s"Refunding ${Base16.encode(deploy.pk.bytes)} with ${pd.refundAmount}"
               ) >>
-                playSystemDeployInternal(
-                  new RefundDeploy(
-                    pd.refundAmount,
-                    SystemDeployUtil.generateRefundDeployRandomSeed(deploy)
+                Span[F].traceI("refund") {
+                  playSystemDeployInternal(
+                    new RefundDeploy(
+                      pd.refundAmount,
+                      SystemDeployUtil.generateRefundDeployRandomSeed(deploy)
+                    )
                   )
-                )
+                }
             )
           ).leftSemiflatMap(
             error =>
@@ -324,7 +329,6 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       fallback                     <- runtime.createSoftCheckpoint
       evaluateResult               <- evaluate(deploy)
       EvaluateResult(cost, errors) = evaluateResult
-      _                            <- Span[F].mark("before-process-deploy-create-soft-checkpoint")
       checkpoint                   <- runtime.createSoftCheckpoint
       deployResult = ProcessedDeploy(
         deploy,
@@ -352,10 +356,15 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       systemDeploy: S
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
     for {
-      evaluateResult <- evaluateSystemSource(systemDeploy)
+      evaluateResult <- Span[F].traceI("evaluate-system-source") {
+                         evaluateSystemSource(systemDeploy)
+                       }
       maybeConsumedTuple <- if (evaluateResult.failed)
                              UnexpectedSystemErrors(evaluateResult.errors).raiseError
-                           else consumeSystemResult(systemDeploy)
+                           else
+                             Span[F].traceI("consume-system-result") {
+                               consumeSystemResult(systemDeploy)
+                             }
       resultOrSystemDeployError <- maybeConsumedTuple match {
                                     case Some((_, Seq(ListParWithRandom(Seq(par), _)))) =>
                                       systemDeploy.extractResult(par) match {
@@ -403,7 +412,6 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
     for {
       _               <- runtime.reset(Blake2b256Hash.fromByteString(startHash))
       res             <- terms.toList.traverse(processDeploy)
-      _               <- Span[F].mark("before-process-deploys-create-checkpoint")
       finalCheckpoint <- runtime.createCheckpoint
       finalStateHash  = finalCheckpoint.root
     } yield (finalStateHash.toByteString, res)
@@ -451,16 +459,17 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    Span[F].trace(computeStateLabel) {
+    Span[F].traceI("compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
         _ <- runtime.setInvalidBlocks(invalidBlocks)
-        _ <- Span[F].mark("before-process-deploys")
-        deployProcessResult <- processDeploys(
-                                startHash,
-                                terms,
-                                processDeployWithCostAccounting
-                              )
+        deployProcessResult <- Span[F].withMarks("process-deploys") {
+                                processDeploys(
+                                  startHash,
+                                  terms,
+                                  processDeployWithCostAccounting
+                                )
+                              }
         (startHash, processedDeploys) = deployProcessResult
         systemDeployProcessResult <- {
           import cats.instances.list._
@@ -485,8 +494,6 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
     private val runtime: ReplayRhoRuntime[F]
 ) {
   implicit val rhoRuntimeOps = new RhoRuntimeOps(runtime)
-  private[this] val replayComputeStateLabel =
-    Metrics.Source(CasperMetricsSource, "replay-compute-state")
 
   case class ReplayResult[B](deploysResults: Seq[B], systemDeploysResults: Seq[B])
 
@@ -616,55 +623,57 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
             SystemDeployUtil.generatePreChargeDeployRandomSeed(processedDeploy.deploy)
           ),
           expectedFailure
-        ).flatMap(
-          _ =>
+        ).flatTap(_ => EitherT.liftF(Span[F].mark("precharge-done")))
+          .flatMap { _ =>
             if (expectedFailure.isEmpty)
               deployEvaluator
                 .semiflatMap(
                   evalResult =>
-                    runtime.createSoftCheckpoint
-                      .whenA(evalResult.succeeded)
-                      .map(_ => evalResult.succeeded)
+                    for {
+                      _ <- Span[F].mark("deploy-eval-done")
+                      r <- runtime.createSoftCheckpoint
+                            .whenA(evalResult.succeeded)
+                            .as(evalResult.succeeded)
+                      _ <- Span[F].mark("deploy-done")
+                    } yield r
                 )
-                .flatTap(
-                  succeeded =>
-                    replaySystemDeployInternal(
-                      new RefundDeploy(
-                        refundAmount,
-                        SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
-                      ),
-                      None
-                    ).map(_ => succeeded)
-                )
+                .flatTap(_ => EitherT.liftF(Span[F].mark("refund-started")))
+                .flatTap { succeeded =>
+                  replaySystemDeployInternal(
+                    new RefundDeploy(
+                      refundAmount,
+                      SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
+                    ),
+                    None
+                  ).as(succeeded)
+                }
+                .flatTap(_ => EitherT.liftF(Span[F].mark("refund-done")))
             else EitherT.rightT(true)
-        )
+          }
       } else deployEvaluator.map(_.succeeded)
 
-    Span[F].withMarks("replay-deploy") {
-      for {
-        _ <- runtime.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
-        _ <- Span[F].mark("before-replay-deploy-compute-effect")
-        failureOption = evaluatorT
-          .flatMap { succeeded =>
-            /* This deployment represents either correct program `Some(result)`,
+    for {
+      _ <- runtime.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
+      failureOption = evaluatorT
+        .flatMap { succeeded =>
+          /* This deployment represents either correct program `Some(result)`,
 or we have a failed pre-charge (`None`) but we agree on that it failed.
 In both cases we want to check reply data and see if everything is in order */
-            runtime.checkReplayData.attemptT
-              .leftMap {
-                case replayException: ReplayException =>
-                  ReplayFailure.unusedCOMMEvent(replayException)
-                case throwable => ReplayFailure.internalError(throwable)
-              }
-              .leftFlatMap {
-                case UnusedCOMMEvent(_) if !succeeded =>
-                  // TODO: temp fix for replay error mismatch
-                  // https://rchain.atlassian.net/browse/RCHAIN-3505
-                  EitherT.rightT[F, ReplayFailure](())
-                case ex: ReplayFailure => EitherT.leftT[F, Unit](ex)
-              }
-          }
-      } yield failureOption
-    }
+          runtime.checkReplayData.attemptT
+            .leftMap {
+              case replayException: ReplayException =>
+                ReplayFailure.unusedCOMMEvent(replayException)
+              case throwable => ReplayFailure.internalError(throwable)
+            }
+            .leftFlatMap {
+              case UnusedCOMMEvent(_) if !succeeded =>
+                // TODO: temp fix for replay error mismatch
+                // https://rchain.atlassian.net/browse/RCHAIN-3505
+                EitherT.rightT[F, ReplayFailure](())
+              case ex: ReplayFailure => EitherT.leftT[F, Unit](ex)
+            }
+        }
+    } yield failureOption
   }
 
   def replayDeploys(
@@ -680,7 +689,10 @@ In both cases we want to check reply data and see if everything is in order */
             terms.tailRecM { ts =>
               if (ts.isEmpty)
                 ().asRight[ReplayFailure].asRight[Seq[ProcessedDeploy]].pure[F]
-              else replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+              else
+                Span[F].traceI("replay-deploy") {
+                  replayDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+                }
             }
           )
       _ <- EitherT(
@@ -688,11 +700,14 @@ In both cases we want to check reply data and see if everything is in order */
               if (ts.isEmpty)
                 ().asRight[ReplayFailure].asRight[Seq[ProcessedSystemDeploy]].pure[F]
               else
-                replaySystemDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+                Span[F].traceI("replay-sys-deploy") {
+                  replaySystemDeploy(ts.head).map(_.map(_.asLeft[Unit]).toRight(ts.tail))
+                }
             }
           )
-      _   <- EitherT.right(Span[F].mark("before-replay-deploys-create-checkpoint"))
-      res <- EitherT.right[ReplayFailure](runtime.createCheckpoint)
+      res <- EitherT.right[ReplayFailure](Span[F].traceI("create-checkpoint") {
+              runtime.createCheckpoint
+            })
     } yield res.root.toByteString).value
 
   def replayComputeState(startHash: StateHash)(
@@ -702,11 +717,10 @@ In both cases we want to check reply data and see if everything is in order */
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    Span[F].trace(replayComputeStateLabel) {
+    Span[F].traceI("replay-compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
         _ <- runtime.setInvalidBlocks(invalidBlocks)
-        _ <- Span[F].mark("before-replay-deploys")
         result <- replayDeploys(
                    startHash,
                    terms,
@@ -751,7 +765,6 @@ In both cases we want to check reply data and see if everything is in order */
         _ <- runtime.rig(
               processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
             )
-        _ <- Span[F].mark("before-replay-system-deploy-compute-effect")
         failureOption = deployEvaluator
           .semiflatMap { evalResult =>
             runtime.createSoftCheckpoint

@@ -6,6 +6,7 @@ import cats.effect.{Sync, _}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.CasperMetricsSource
+import coop.rchain.casper.blocks.merger.{BlockIndex, Indexer, MergingVertex}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.signatures.Signed
@@ -21,6 +22,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpa
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
+import coop.rchain.store.LazyKeyValueCache
 import monix.execution.Scheduler
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import fs2.Stream
@@ -68,16 +70,15 @@ trait RuntimeManager[F[_]] {
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
   def getHistoryRepo: RhoHistoryRepository[F]
+  def getBlockIndexCache: LazyKeyValueCache[F, MergingVertex, BlockIndex]
 }
 
 class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
-    historyRepo: RhoHistoryRepository[F]
+    historyRepo: RhoHistoryRepository[F],
+    blockIndexCache: LazyKeyValueCache[F, MergingVertex, BlockIndex]
 ) extends RuntimeManager[F] {
-
-//  private[this] val RuntimeManagerMetricsSource =
-//    Metrics.Source(CasperMetricsSource, "runtime-manager")
 
   def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
     for {
@@ -201,6 +202,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo
 
+  override def getBlockIndexCache: LazyKeyValueCache[F, MergingVertex, BlockIndex] = blockIndexCache
 }
 
 object RuntimeManager {
@@ -224,12 +226,15 @@ object RuntimeManager {
       replayRuntime: ReplayRhoRuntime[F],
       historyRepo: RhoHistoryRepository[F]
   ): F[RuntimeManager[F]] =
-    Concurrent[F].delay(
-      new RuntimeManagerImpl(
-        runtime.getRSpace.asInstanceOf[RhoISpace[F]],
-        replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
-        historyRepo
-      )
+    for {
+      blockIndexCache <- LazyKeyValueCache[F, MergingVertex, BlockIndex](
+                          Indexer.createBlockIndex[F]
+                        )
+    } yield new RuntimeManagerImpl(
+      runtime.getRSpace.asInstanceOf[RhoISpace[F]],
+      replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
+      historyRepo,
+      blockIndexCache
     )
 
   def apply[F[_]](implicit instance: RuntimeManager[F]): RuntimeManager[F] = instance

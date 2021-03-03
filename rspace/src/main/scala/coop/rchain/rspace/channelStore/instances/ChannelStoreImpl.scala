@@ -48,9 +48,6 @@ object ChannelStoreImpl {
     override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] = store.get(hash)
   }
 
-  def continuationKey(channels: Seq[Blake2b256Hash]): Blake2b256Hash =
-    Blake2b256Hash.create(channels.map(_.toByteString.toByteArray).foldLeft(Array[Byte]())(_ ++ _))
-
   def codecChannelHash: Codec[ChannelHash] =
     discriminated[ChannelHash]
       .by(uint2)

@@ -2,15 +2,14 @@ package coop.rchain.node.api
 
 import cats.data.State
 import cats.effect.Concurrent
-import cats.effect.concurrent.Deferred
 import cats.mtl.implicits._
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{Casper, ReportingCasper, SafetyOracle}
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
+import coop.rchain.casper.{ProposeFunction, ReportingCasper, SafetyOracle}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
@@ -19,7 +18,6 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared.Log
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
-import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -29,9 +27,8 @@ object DeployGrpcServiceV1 {
   def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
       reportingCasper: ReportingCasper[F],
-      devMode: Boolean = false,
-      proposeOnDeploy: Boolean = false,
-      proposerQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])]
+      triggerProposeF: Option[ProposeFunction[F]],
+      devMode: Boolean = false
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -83,11 +80,10 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, if (proposeOnDeploy) proposerQueue.some else None)) {
-                r =>
-                  import DeployResponse.Message
-                  import DeployResponse.Message._
-                  DeployResponse(r.fold[Message](Error, Result))
+              defer(BlockAPI.deploy[F](dd, triggerProposeF)) { r =>
+                import DeployResponse.Message
+                import DeployResponse.Message._
+                DeployResponse(r.fold[Message](Error, Result))
               }
             }
           )

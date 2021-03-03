@@ -10,7 +10,11 @@ package object casper {
   type BlockProcessing[A]   = Either[BlockError, A]
   type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
+  type ProposeFunction[F[_]] = (Casper[F] => F[Option[Int]])
+
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
+
+  val MergingMetricsSource: Metrics.Source = Metrics.Source(CasperMetricsSource, "merging")
 
   // Importing syntax object means using all extensions in the project
   object syntax

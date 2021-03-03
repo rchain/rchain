@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import java.nio.file.{Files, Path}
-
 import cats._
 import cats.data.Chain
 import cats.effect._
@@ -31,8 +30,6 @@ import coop.rchain.rspace.util.unpackOption
 import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
-
-import scala.concurrent.ExecutionContext
 
 trait RhoRuntime[F[_]] extends HasCost[F] {
 
@@ -150,7 +147,7 @@ trait ReplayRhoRuntime[F[_]] extends RhoRuntime[F] {
   def checkReplayData: F[Unit]
 }
 
-class RhoRuntimeImpl[F[_]: Sync](
+class RhoRuntimeImpl[F[_]: Sync: Span](
     val reducer: Reduce[F],
     val space: RhoISpace[F],
     val cost: _cost[F],
@@ -186,11 +183,15 @@ class RhoRuntimeImpl[F[_]: Sync](
 
   override def reset(root: Blake2b256Hash): F[Unit] = space.reset(root)
 
-  override def createCheckpoint: F[Checkpoint] = space.createCheckpoint()
+  override def createCheckpoint: F[Checkpoint] = Span[F].withMarks("create-checkpoint") {
+    space.createCheckpoint()
+  }
 
   override def createSoftCheckpoint
       : F[SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]] =
-    space.createSoftCheckpoint()
+    Span[F].withMarks("create-soft-heckpoint") {
+      space.createSoftCheckpoint()
+    }
 
   override def revertToSoftCheckpoint(
       softCheckpoint: SoftCheckpoint[Name, BindPattern, ListParWithRandom, TaggedContinuation]
@@ -230,7 +231,7 @@ class RhoRuntimeImpl[F[_]: Sync](
   override def getRSpace: RhoTuplespace[F] = space
 }
 
-class ReplayRhoRuntimeImpl[F[_]: Sync](
+class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
     override val reducer: Reduce[F],
     override val space: RhoReplayISpace[F],
     override val cost: _cost[F],
@@ -246,7 +247,7 @@ class ReplayRhoRuntimeImpl[F[_]: Sync](
 }
 
 object ReplayRhoRuntime {
-  def apply[F[_]: Sync](
+  def apply[F[_]: Sync: Span](
       reducer: Reduce[F],
       space: RhoReplayISpace[F],
       cost: _cost[F],
@@ -258,7 +259,10 @@ object ReplayRhoRuntime {
 object RhoRuntime {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(RholangMetricsSource, "runtime")
-  def apply[F[_]: Sync](
+  private[this] val createReplayRuntime     = Metrics.Source(RuntimeMetricsSource, "create-replay")
+  private[this] val createPlayRuntime       = Metrics.Source(RuntimeMetricsSource, "create-play")
+
+  def apply[F[_]: Sync: Span](
       reducer: Reduce[F],
       space: RhoISpace[F],
       cost: _cost[F],
@@ -549,36 +553,40 @@ object RhoRuntime {
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
       initRegistry: Boolean = true
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] =
-    for {
-      cost <- CostAccounting.emptyCost[F]
-      rhoEnv <- {
-        implicit val c: _cost[F] = cost
-        createRhoEnv(rspace, extraSystemProcesses)
-      }
-      (reducer, blockRef, invalidBlocks) = rhoEnv
-      runtime                            = new ReplayRhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-      _ <- if (initRegistry) {
-            bootstrapRegistry(runtime) >> runtime.createCheckpoint
-          } else ().pure[F]
-    } yield runtime
+    Span[F].trace(createReplayRuntime) {
+      for {
+        cost <- CostAccounting.emptyCost[F]
+        rhoEnv <- {
+          implicit val c: _cost[F] = cost
+          createRhoEnv(rspace, extraSystemProcesses)
+        }
+        (reducer, blockRef, invalidBlocks) = rhoEnv
+        runtime                            = new ReplayRhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
+        _ <- if (initRegistry) {
+              bootstrapRegistry(runtime) >> runtime.createCheckpoint
+            } else ().pure[F]
+      } yield runtime
+    }
 
   private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
       extraSystemProcesses: Seq[Definition[F]],
       initRegistry: Boolean
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
-    for {
-      cost <- CostAccounting.emptyCost[F]
-      rhoEnv <- {
-        implicit val c: _cost[F] = cost
-        createRhoEnv(rspace, extraSystemProcesses)
-      }
-      (reducer, blockRef, invalidBlocks) = rhoEnv
-      runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-      _ <- if (initRegistry) {
-            bootstrapRegistry(runtime) >> runtime.createCheckpoint
-          } else ().pure[F]
-    } yield runtime
+    Span[F].trace(createPlayRuntime) {
+      for {
+        cost <- CostAccounting.emptyCost[F]
+        rhoEnv <- {
+          implicit val c: _cost[F] = cost
+          createRhoEnv(rspace, extraSystemProcesses)
+        }
+        (reducer, blockRef, invalidBlocks) = rhoEnv
+        runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
+        _ <- if (initRegistry) {
+              bootstrapRegistry(runtime) >> runtime.createCheckpoint
+            } else ().pure[F]
+      } yield runtime
+    }
 
   // this is more for tests currently
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
