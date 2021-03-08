@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.accounting
 
-import coop.rchain.models.{ProtoM, StacksafeMessage}
+import coop.rchain.models.{StacksafeMessage}
 
 /* TODO: Make Chargeable instances for requisite rspace type parameters. Then, create an instance of PureRSpace
          that uses the generic instances, _cost, and _error for a single, charging PureRSpace. */
@@ -14,6 +14,7 @@ object Chargeable {
 
   implicit def fromProtobuf[T <: StacksafeMessage[_]] =
     new Chargeable[T] {
-      override def cost(a: T): Long = ProtoM.serializedSize(a).value.toLong
+//      override def cost(a: T): Long = ProtoM.serializedSize(a).value.toLong
+      override def cost(a: T): Long = a.serializedSize.toLong
     }
 }

@@ -90,56 +90,56 @@ class StacksafeMessagePrinter(
     new FunctionalPrinter(Vector(extended), printer.indentLevel)
   }
 
-  // Override size calculation
-  override def generateSerializedSize(
-      message: Descriptor
-  )(fp: FunctionalPrinter): FunctionalPrinter = {
+//  // Override size calculation
+//  override def generateSerializedSize(
+//      message: Descriptor
+//  )(fp: FunctionalPrinter): FunctionalPrinter = {
+//
+//    //we piggy-back on this method to emit a stacksafe equals and hashCode overrides
+//    val withEquals            = generateEqualsOverride(message, fp.newline)
+//    val withEqualsAndHashCode = generateHashCodeOverride(message, withEquals)
+//
+//    super
+//      .generateSerializedSize(message)(withEqualsAndHashCode)
+//      .newline
+//      .add("@transient var _serializedSizeM: coop.rchain.models.Memo[Int] = null")
+//      .newline
+//      .add("def serializedSizeM: coop.rchain.models.Memo[Int] = synchronized {")
+//      .add("  if(_serializedSizeM == null) {")
+//      .add(
+//        "    _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
+//      )
+//      .add("    _serializedSizeM")
+//      .add("  } else _serializedSizeM")
+//      .add("}")
+//  }
 
-    //we piggy-back on this method to emit a stacksafe equals and hashCode overrides
-    val withEquals            = generateEqualsOverride(message, fp.newline)
-    val withEqualsAndHashCode = generateHashCodeOverride(message, withEquals)
-
-    super
-      .generateSerializedSize(message)(withEqualsAndHashCode)
-      .newline
-      .add("@transient var _serializedSizeM: coop.rchain.models.Memo[Int] = null")
-      .newline
-      .add("def serializedSizeM: coop.rchain.models.Memo[Int] = synchronized {")
-      .add("  if(_serializedSizeM == null) {")
-      .add(
-        "    _serializedSizeM = new coop.rchain.models.Memo(coop.rchain.models.ProtoM.serializedSize(this))"
-      )
-      .add("    _serializedSizeM")
-      .add("  } else _serializedSizeM")
-      .add("}")
-  }
-
-  private def generateEqualsOverride(
-      message: Descriptor,
-      fp: FunctionalPrinter
-  ): FunctionalPrinter = {
-    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
-    fp.add(
-        s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
-      )
-      .newline
-  }
-
-  private def generateHashCodeOverride(
-      message: Descriptor,
-      fp: FunctionalPrinter
-  ): FunctionalPrinter = {
-    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
-
-    val printer = fp
-      .add(
-        s"override def hashCode(): Int = coop.rchain.models.HashM[$myFullScalaName].hash[monix.eval.Coeval](this).value"
-      )
-
-    // In new version of scalapb (0.10.8) `merge` method is moved to companion object
-    //  so it's added here to be a member method.
-    generateMergeM(message)(printer)
-  }
+//  private def generateEqualsOverride(
+//      message: Descriptor,
+//      fp: FunctionalPrinter
+//  ): FunctionalPrinter = {
+//    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
+//    fp.add(
+//        s"override def equals(x: Any): Boolean = coop.rchain.models.EqualM[$myFullScalaName].equals[monix.eval.Coeval](this, x).value"
+//      )
+//      .newline
+//  }
+//
+//  private def generateHashCodeOverride(
+//      message: Descriptor,
+//      fp: FunctionalPrinter
+//  ): FunctionalPrinter = {
+//    val myFullScalaName = message.scalaType.fullNameWithMaybeRoot(message)
+//
+//    val printer = fp
+//      .add(
+//        s"override def hashCode(): Int = coop.rchain.models.HashM[$myFullScalaName].hash[monix.eval.Coeval](this).value"
+//      )
+//
+//    // In new version of scalapb (0.10.8) `merge` method is moved to companion object
+//    //  so it's added here to be a member method.
+//    generateMergeM(message)(printer)
+//  }
 
   // Generated as member method
   private def generateMergeM(message: Descriptor)(printer: FunctionalPrinter): FunctionalPrinter = {
