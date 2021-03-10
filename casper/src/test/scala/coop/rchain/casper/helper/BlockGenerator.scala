@@ -89,7 +89,7 @@ object BlockGenerator {
                  BlockData.fromBlock(b),
                  Map.empty[BlockHash, Validator]
                ).attempt
-      Right((preStateHash, postStateHash, processedDeploys, _)) = result
+      Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)
   }
 

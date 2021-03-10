@@ -131,6 +131,7 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
+                  rejectedDeploys,
                   processedSystemDeploys
                 )             = checkpointData
                 newBonds      <- runtimeManager.computeBonds(postStateHash)
@@ -144,6 +145,7 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
+                  rejectedDeploys,
                   processedSystemDeploys,
                   newBonds,
                   shardId,
@@ -165,13 +167,20 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
+      rejectedDeploys: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
       version: Long
   ): BlockMessage = {
-    val state  = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
-    val body   = Body(state, deploys.toList, systemDeploys.toList)
+    val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
+    val body =
+      Body(
+        state,
+        deploys.toList,
+        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig)).toList,
+        systemDeploys.toList
+      )
     val header = Header(parents.toList, blockData.timeStamp, version)
     ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
   }

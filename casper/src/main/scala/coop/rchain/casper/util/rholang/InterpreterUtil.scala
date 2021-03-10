@@ -31,6 +31,8 @@ import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
 import monix.eval.Coeval
 
+import scala.collection.Seq
+
 object InterpreterUtil {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
@@ -61,15 +63,15 @@ object InterpreterUtil {
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
     for {
-      _                  <- Span[F].mark("before-unsafe-get-parents")
-      parents            <- ProtoUtil.getParents(block)
-      _                  <- Span[F].mark("before-compute-parents-post-state")
-      preStateHashEither <- computeParentsPostState(parents, s, runtimeManager).attempt
-      _                  <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
-      result <- preStateHashEither match {
+      _                   <- Span[F].mark("before-unsafe-get-parents")
+      parents             <- ProtoUtil.getParents(block)
+      _                   <- Span[F].mark("before-compute-parents-post-state")
+      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
+      _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
+      result <- computedParentsInfo match {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
-                 case Right(computedPreStateHash) =>
+                 case Right((computedPreStateHash, rejectedDeploys @ _)) =>
                    if (incomingPreStateHash == computedPreStateHash) {
                      for {
                        replayResult <- replayBlock(
@@ -192,14 +194,17 @@ object InterpreterUtil {
       invalidBlocks: Map[BlockHash, Validator]
   )(
       implicit spanF: Span[F]
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
+  ): F[
+    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+  ] =
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
       for {
         nonEmptyParents <- parents.pure
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
-        preStateHash <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
+        preStateHashReject              <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
+        (preStateHash, rejectedDeploys) = preStateHashReject
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
@@ -207,23 +212,29 @@ object InterpreterUtil {
                    invalidBlocks
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
-      } yield (preStateHash, postStateHash, processedDeploys, processedSystemDeploys)
+      } yield (
+        preStateHash,
+        postStateHash,
+        processedDeploys,
+        rejectedDeploys,
+        processedSystemDeploys
+      )
     }
 
   private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[StateHash] =
+  )(implicit spanF: Span[F]): F[(StateHash, Seq[ProcessedDeploy])] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
       parents.size match {
         // For genesis, use empty trie's root hash
         case 0 =>
-          RuntimeManager.emptyStateHashFixed.pure[F]
+          (RuntimeManager.emptyStateHashFixed, Seq.empty[ProcessedDeploy]).pure[F]
 
         // For single parent, get itd post state hash
         case 1 =>
-          ProtoUtil.postStateHash(parents.head).pure
+          (ProtoUtil.postStateHash(parents.head), Seq.empty[ProcessedDeploy]).pure[F]
 
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
@@ -263,7 +274,7 @@ object InterpreterUtil {
                   new CasperMergingDagReader(s.dag),
                   runtimeManager.getBlockIndexCache
                 )
-          } yield r._1
+          } yield r
         }
       }
     }
