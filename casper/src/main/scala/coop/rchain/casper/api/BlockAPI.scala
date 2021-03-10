@@ -670,7 +670,10 @@ object BlockAPI {
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
-      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
+      rejectedDeploys = block.body.rejectedDeploys.map(
+        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
+      )
     ).pure[F]
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem

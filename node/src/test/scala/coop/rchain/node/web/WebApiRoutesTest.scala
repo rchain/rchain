@@ -6,7 +6,8 @@ import coop.rchain.casper.protocol.{
   BondInfo,
   DeployInfo,
   JustificationInfo,
-  LightBlockInfo
+  LightBlockInfo,
+  RejectedDeployInfo
 }
 import coop.rchain.crypto.codec._
 import coop.rchain.node.api.WebApi._
@@ -176,7 +177,9 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   implicit val decodeBondInfo: Decoder[BondInfo] = deriveDecoder[BondInfo]
   implicit val decodeJustificationInfo: Decoder[JustificationInfo] =
     deriveDecoder[JustificationInfo]
-  implicit val decodeLightBlockInfo: Decoder[LightBlockInfo]     = deriveDecoder[LightBlockInfo]
+  implicit val decodeLightBlockInfo: Decoder[LightBlockInfo] = deriveDecoder[LightBlockInfo]
+  implicit val decodeRejectedDeployInfo: Decoder[RejectedDeployInfo] =
+    deriveDecoder[RejectedDeployInfo]
   implicit val decodeDeployInfo: Decoder[DeployInfo]             = deriveDecoder[DeployInfo]
   implicit val decodeBlockInfo: Decoder[BlockInfo]               = deriveDecoder[BlockInfo]
   implicit val decodeApiStatus: Decoder[ApiStatus]               = deriveDecoder[ApiStatus]

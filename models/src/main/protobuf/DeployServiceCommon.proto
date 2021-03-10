@@ -134,6 +134,11 @@ message LightBlockInfo {
   float faultTolerance = 19;
 
   repeated JustificationInfo justifications = 20;
+  repeated RejectedDeployInfo rejectedDeploys = 21;
+}
+
+message RejectedDeployInfo{
+  string sig = 1;
 }
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation
