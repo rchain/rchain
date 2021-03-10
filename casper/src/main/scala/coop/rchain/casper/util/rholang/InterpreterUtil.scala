@@ -18,6 +18,7 @@ import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, LogSource}
 import com.google.protobuf.ByteString
+import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper.blocks.merger.{
   BlockIndex,
   CasperDagMerger,
@@ -72,7 +73,25 @@ object InterpreterUtil {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right((computedPreStateHash, rejectedDeploys @ _)) =>
-                   if (incomingPreStateHash == computedPreStateHash) {
+                   val rejectedDeployIds = rejectedDeploys.map(_.deploy.sig).toSet
+                   if (incomingPreStateHash != computedPreStateHash) {
+                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
+                     Log[F]
+                       .warn(
+                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+                           .buildString(incomingPreStateHash)}"
+                       )
+                       .as(none[StateHash].asRight[BlockError])
+                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
+                     Log[F]
+                       .warn(
+                         s"Computed rejected deploys " +
+                           s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
+                           s"block's rejected deploy " +
+                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
+                       )
+                       .as(InvalidRejectedDeploy.asLeft)
+                   } else {
                      for {
                        replayResult <- replayBlock(
                                         incomingPreStateHash,
@@ -82,14 +101,6 @@ object InterpreterUtil {
                                       )
                        result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
                      } yield result
-                   } else {
-                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
-                     Log[F]
-                       .warn(
-                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-                           .buildString(incomingPreStateHash)}"
-                       )
-                       .as(none[StateHash].asRight[BlockError])
                    }
                }
     } yield result
@@ -203,8 +214,8 @@ object InterpreterUtil {
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
-        preStateHashReject              <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
-        (preStateHash, rejectedDeploys) = preStateHashReject
+        computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
+        (preStateHash, rejectedDeploys) = computedParentsInfo
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
