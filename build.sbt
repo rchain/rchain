@@ -278,6 +278,7 @@ lazy val node = (project in file("node"))
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
+    mainClass in Compile := Some("coop.rchain.node.Main"),
     mainClass in assembly := Some("coop.rchain.node.Main"),
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
