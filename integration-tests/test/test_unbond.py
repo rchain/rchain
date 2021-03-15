@@ -3,11 +3,11 @@ import pytest
 from docker.client import DockerClient
 
 from rchain.crypto import PrivateKey
+from rchain.client import RClientException
 from rchain.pb.DeployServiceCommon_pb2 import BlockInfo
 from . import conftest
 from .common import (
     CommandLineOptions,
-    NotAnActiveValidatorError
 )
 from .rnode import (
     bootstrap_connected_peer,
@@ -106,7 +106,7 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         # block number 4
         # validator_1 is no longer a active validator after block number 3
         # validator_1 should fail on proposing
-        with pytest.raises(NotAnActiveValidatorError):
+        with pytest.raises(RClientException):
             validator_1.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
             validator_1.propose()
 

@@ -15,6 +15,7 @@ option (scalapb.options) = {
   preserve_unknown_fields: false
 };
 
+// TODO remove it
 message PrintUnmatchedSendsQuery {
   bool printUnmatchedSends = 1;
 }
@@ -22,3 +23,6 @@ message PrintUnmatchedSendsQuery {
 message ProposeResultQuery{
 }
 
+message ProposeQuery{
+  bool isAsync = 1;
+}

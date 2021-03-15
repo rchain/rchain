@@ -11,7 +11,12 @@ import coop.rchain.casper.protocol.propose.v1.{
   ProposeResultResponse,
   ProposeServiceV1GrpcMonix
 }
-import coop.rchain.casper.protocol.{PrintUnmatchedSendsQuery, ProposeResultQuery, ServiceError}
+import coop.rchain.casper.protocol.{
+  PrintUnmatchedSendsQuery,
+  ProposeQuery,
+  ProposeResultQuery,
+  ServiceError
+}
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.{
   LastFinalizedHeightConstraintChecker,
@@ -59,11 +64,11 @@ object ProposeGrpcServiceV1 {
 
       // This method should return immediately, only trggerred propose if allowed
       def propose(
-          request: PrintUnmatchedSendsQuery
+          request: ProposeQuery
       ): Task[ProposeResponse] =
         defer(triggerProposeFOpt match {
           case Some(q) =>
-            BlockAPI.createBlock[F](q, request.printUnmatchedSends)
+            BlockAPI.createBlock[F](q, request.isAsync)
           case None => "Propose error: read-only node.".asLeft[String].pure[F]
         }) { r =>
           import ProposeResponse.Message

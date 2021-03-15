@@ -81,7 +81,7 @@ object BlockProcessorInstance {
               } yield ()
             }
             .evalTap { v =>
-              triggerProposeF.traverse(f => f(v._1))
+              triggerProposeF.traverse(f => f(v._1, true))
             }
             // ensure to remove hash from state
             .onFinalize(state.update(s => s - b.blockHash))

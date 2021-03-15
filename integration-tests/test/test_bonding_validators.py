@@ -3,11 +3,11 @@ from random import Random
 import pytest
 
 from rchain.crypto import PrivateKey
+from rchain.client import RClientException
 from docker.client import DockerClient
 from . import conftest
 from .common import (
     CommandLineOptions,
-    NonZeroExitCodeError,
 )
 from .rnode import (
     bootstrap_connected_peer,
@@ -63,7 +63,7 @@ def test_bonding_validators(command_line_options: CommandLineOptions, random_gen
                 wait_for_approved_block_received_handler_state(context, joining_validator)
 
                 # new joining validator can not propose before bonding
-                with pytest.raises(NonZeroExitCodeError):
+                with pytest.raises(RClientException):
                     joining_validator.deploy(contract_path, JOINING_VALIDATOR_KEY)
                     joining_validator.propose()
 
@@ -91,10 +91,9 @@ def test_bonding_validators(command_line_options: CommandLineOptions, random_gen
 
                 wait_for_node_sees_block(context, joining_validator, b3)
 
-
                 # block number 4 is not proposed yet
                 # joining validator is still not active
-                with pytest.raises(NonZeroExitCodeError):
+                with pytest.raises(RClientException):
                     joining_validator.deploy(contract_path, JOINING_VALIDATOR_KEY)
                     joining_validator.propose()
 

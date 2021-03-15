@@ -8,12 +8,16 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.shared.Log
 import cats.syntax.all._
+import coop.rchain.models.BlockHash.BlockHash
 import fs2.Stream
 import fs2.concurrent.Queue
 
 object ProposerInstance {
   def create[F[_]: Concurrent: Log](
-      proposeRequestsQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      proposeRequestsQueue: Queue[
+        F,
+        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
+      ],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]
   ): Stream[F, (ProposeResult, Option[BlockMessage])] = {
@@ -35,7 +39,7 @@ object ProposerInstance {
       .flatMap {
         case (lock, trigger) =>
           in.map { i =>
-              val (c, proposeIDDef) = i
+              val (c, isAsync, proposeIDDef) = i
 
               Stream
                 .eval(lock.tryAcquire)
@@ -54,7 +58,7 @@ object ProposerInstance {
                           .update { s =>
                             s.copy(currProposeResult = rDef.some)
                           }
-                    r <- proposer.propose(c, proposeIDDef)
+                    r <- proposer.propose(c, isAsync, proposeIDDef)
                     // complete deferred with propose result, update state
                     _ <- rDef.complete(r)
                     _ <- state
@@ -66,8 +70,8 @@ object ProposerInstance {
                     // propose on more time if trigger is cocked
                     _ <- trigger.tryTake.flatMap {
                           case Some(_) =>
-                            Deferred[F, Option[Int]] >>= { d =>
-                              proposeRequestsQueue.enqueue1(c, d)
+                            Deferred[F, Option[Either[Int, BlockHash]]] >>= { d =>
+                              proposeRequestsQueue.enqueue1(c, false, d)
                             }
                           case None => ().pure[F]
                         }

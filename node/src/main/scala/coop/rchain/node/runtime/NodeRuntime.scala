@@ -274,7 +274,10 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       proposer: Option[Proposer[F]],
-      proposeRequestsQueue: Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+      proposeRequestsQueue: Queue[
+        F,
+        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
+      ],
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
