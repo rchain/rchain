@@ -20,7 +20,7 @@ final class LastFinalizedBlockCalculator[F[_]: Sync: Log: Concurrent: BlockStore
       newFinalizedBlock <- maybeFinalizedChild match {
                             case Some(finalizedChild) =>
                               removeDeploysInFinalizedBlock(finalizedChild) >> BlockDagStorage[F]
-                                .addFinalizedBlockHash(finalizedChild) >> run(
+                                .setFinalizedHash(finalizedChild) >> run(
                                 dag,
                                 finalizedChild
                               )

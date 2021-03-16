@@ -124,7 +124,7 @@ object Proposer {
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
-    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
+    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot()
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)

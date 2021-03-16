@@ -59,8 +59,8 @@ class InterpreterUtilTest
     CasperSnapshot(
       dag,
       ByteString.EMPTY,
-      ByteString.EMPTY,
-      IndexedSeq.empty,
+      //ByteString.EMPTY,
+      //IndexedSeq.empty,
       List.empty,
       Set.empty,
       Map.empty,

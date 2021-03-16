@@ -12,7 +12,6 @@ import coop.rchain.blockstorage._
 import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{
-  BlockDagFileStorage,
   BlockDagKeyValueStorage,
   BlockDagRepresentation,
   BlockDagStorage
@@ -219,7 +218,7 @@ class TestNode[F[_]: Timer](
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot
+      cs                <- casperEff.getSnapshot()
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
     } yield createBlockResult
@@ -228,7 +227,7 @@ class TestNode[F[_]: Timer](
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot
+      cs                <- casperEff.getSnapshot()
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {
@@ -543,7 +542,7 @@ object TestNode {
                    in.evalMap(v => {
                      val (c, b) = v
                      for {
-                       snapShot <- c.getSnapshot
+                       snapShot <- c.getSnapshot(b.some)
                        _        <- BlockStore[F].put(b)
                        r <- blockProcessor
                              .validateWithEffects(c, b, snapShot.some)

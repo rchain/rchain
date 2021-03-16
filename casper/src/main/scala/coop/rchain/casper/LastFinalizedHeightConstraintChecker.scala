@@ -11,6 +11,7 @@ import coop.rchain.casper.blocks.proposer.{
 }
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
 final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: Log] {
@@ -23,9 +24,10 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
     val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
     val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
     for {
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(genesis.blockHash)
-      lastFinalizedBlock     <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
-      latestMessageOpt       <- s.dag.latestMessage(validator)
+      lastFinalizedBlockHash <- LastFinalizedStorage[F]
+                                 .getOrElse(genesis.blockHash, none[Validator])
+      lastFinalizedBlock <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
+      latestMessageOpt   <- s.dag.latestMessage(validator)
       result <- latestMessageOpt match {
                  case Some(latestMessage) =>
                    val latestFinalizedHeight = lastFinalizedBlock.blockNum

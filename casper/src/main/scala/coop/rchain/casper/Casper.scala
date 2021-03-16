@@ -49,7 +49,14 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot: F[CasperSnapshot[F]]
+
+  /**
+    * Get snapshot of Casper related data
+    * @param targetBlockOpt when defined, creates snapshot as per view from particular block,
+    *                       when None, makes a snapshot of current view on the network of this particular node
+    * @return
+    */
+  def getSnapshot(targetBlockOpt: Option[BlockMessage] = None): F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -76,7 +83,7 @@ trait MultiParentCasper[F[_]] extends Casper[F] {
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
-  def lastFinalizedBlock: F[BlockMessage]
+  def lastFinalizedBlock(validatorOpt: Option[Validator] = None): F[BlockMessage]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 
@@ -101,8 +108,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
     lastFinalizedBlock: BlockHash,
-    lca: BlockHash,
-    tips: IndexedSeq[BlockHash],
+    //lca: BlockHash,
+    //tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
     invalidBlocks: Map[Validator, BlockHash],

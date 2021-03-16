@@ -9,10 +9,9 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -21,6 +20,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.dag.DagOps
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -29,6 +29,7 @@ import scala.collection.immutable.SortedMap
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     lock: Semaphore[F],
     latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
+    lastFinalizedBlocks: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
     invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata],
@@ -99,6 +100,56 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] =
       lookup(vertex).map(_.map(_.parents.toSet))
+
+    override def view(
+        validator: Validator,
+        justificationHashes: Set[BlockHash]
+    ): F[BlockDagRepresentation[F]] = {
+      // This only works when tips that are going to be used are subset of full latest messages
+      // It means this API won't let to reconstruct some historical view, only truncate the most recent view,
+      // having some latest messages excluded
+      assert(justificationHashes.subsetOf(latestMessagesMap.values.toSet))
+
+      val excessTips = latestMessagesMap.values.filterNot(justificationHashes).toList
+      val activeValidators = latestMessagesMap.iterator
+        .filter { case (_, hash) => justificationHashes.contains(hash) }
+        .map { case (validator, _) => validator }
+        .toSet
+
+      for {
+        excessMetas <- this.lookupUnsafe(excessTips).compile.toList
+        toRemove <- DagOps
+                     .bfTraverseF(excessMetas)(
+                       m =>
+                         this
+                           .lookupUnsafe(m.parents)
+                           .filterNot(pm => activeValidators.contains(pm.sender))
+                           .compile
+                           .toList
+                     )
+                     .toSet
+        toRemoveByHeight = toRemove.map(m => (m.blockNum, m.blockHash)).groupBy(_._1).map {
+          case (k, v) => (k, v.map(_._2))
+        }
+        parentsToAdjust = toRemove.flatMap(_.parents)
+        allToRemove     = toRemove.map(_.blockHash)
+      } yield KeyValueDagRepresentation(
+        dagSet = dagSet diff allToRemove,
+        latestMessagesMap = latestMessagesMap.filterNot {
+          case (_, msg) => allToRemove.contains(msg)
+        },
+        childMap = parentsToAdjust.foldLeft(childMap)(
+          (acc, p) => acc.updated(p, acc(p) -- allToRemove)
+        ), //TODO this is quite inefficient
+        heightMap = toRemoveByHeight.foldLeft(heightMap)((acc, lineToRemove) => {
+          val height       = lineToRemove._1
+          val msgsToRemove = lineToRemove._2
+          acc.updated(height, acc(height).diff(msgsToRemove))
+        }),
+        invalidBlocksSet = invalidBlocksSet.filterNot(ib => allToRemove.contains(ib.blockHash)),
+        finalizedBlocksSet = finalizedBlocksSet diff allToRemove
+      )
+    }
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
@@ -120,6 +171,12 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
   }
 
+  /**
+    * Calculate view on the DAG
+    * @param latestMessagesToUse if none - returns view as per the most recent state of BlockDagStorage
+    *                            if block supplied - returns view including only latestMessages
+    * @return
+    */
   private def representation: F[BlockDagRepresentation[F]] =
     for {
       // Take current DAG state / view of the DAG
@@ -230,7 +287,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     lock.withPermit(
-      blockMetadataIndex.contains(block.blockHash).ifM(logAlreadyStored, doInsert) >> representation
+      blockMetadataIndex
+        .contains(block.blockHash)
+        .ifM(logAlreadyStored, doInsert) >> representation
     )
   }
 
@@ -243,11 +302,18 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
     blockMetadataIndex.addFinalizedBlock(blockHash)
+
+  override def setFinalizedHash(validator: Validator, blockHash: BlockHash): F[Unit] = ???
+
+  override def getFinalizedHash(validator: Validator): F[BlockHash] = ???
 }
 
 object BlockDagKeyValueStorage {
   implicit private val BlockDagKeyValueStorage_FromFileMetricsSource: Source =
     Metrics.Source(BlockStorageMetricsSource, "dag-key-value-store")
+
+  type LastFinalizedStorage[F[_]] = KeyValueTypedStore[F, Validator, BlockHash]
+  val NotValidator = ByteString.EMPTY
 
   private final case class DagStores[F[_]](
       metadata: BlockMetadataStore[F],
@@ -257,7 +323,7 @@ object BlockDagKeyValueStorage {
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       deploys: KeyValueTypedStore[F, DeployId, BlockHash],
-      lastFinalizedBlockDb: LastFinalizedStorage[F]
+      lastFinalizedBlocks: LastFinalizedStorage[F]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -270,13 +336,12 @@ object BlockDagKeyValueStorage {
                           codecBlockMetadata
                         )
       // last finalized block
-      lastFinalizedBlockDb <- KeyValueStoreManager[F].database[Int, BlockHash](
-                               "last-finalized-block",
-                               codecSeqNum,
-                               codecBlockHash
-                             )
-      lastFinalizedStore = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-      lastFinalizedBlock <- lastFinalizedStore.get
+      lastFinalizedStore <- KeyValueStoreManager[F].database[ByteString, BlockHash](
+                             "last-finalized-block",
+                             codecByteString,
+                             codecBlockHash
+                           )
+      lastFinalizedBlock <- lastFinalizedStore.get(NotValidator)
       blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb, lastFinalizedBlock)
       // Equivocation tracker map
       equivocationTrackerDb <- KeyValueStoreManager[F]
@@ -324,66 +389,10 @@ object BlockDagKeyValueStorage {
     } yield new BlockDagKeyValueStorage[F](
       lock,
       stores.latestMessages,
+      stores.lastFinalizedBlocks,
       stores.metadata,
       stores.deploys,
       stores.invalidBlocks,
       stores.equivocations
     )
-
-  def importFromFileStorage[F[_]: Concurrent: Log: Metrics](
-      kvm: KeyValueStoreManager[F],
-      config: BlockDagFileStorage.Config
-  ): F[Unit] =
-    for {
-      _ <- Log[F].warn(s"Starting DAG file storage migration, loading existing data.")
-
-      // Load old DAG file storage
-      oldStores <- BlockDagFileStorage.createStores(config)
-      // Old indexes
-      (_, oldLatestMessages, oldMetadata, oldDeploys, oldInvalidBlocks, oldEquivocations) = oldStores
-
-      _ <- Log[F].warn(s"Create new DAG storage.")
-
-      // Create new stores
-      stores <- createStores(kvm)
-
-      _ <- Log[F].warn(s"Migrate metadata index.")
-
-      // Migrate metadata index
-      oldMetadataMap <- oldMetadata.blockMetadataData
-      _              <- stores.metadataDb.put(oldMetadataMap.toSeq)
-
-      _ <- Log[F].warn(s"Migrate latest messages index.")
-
-      // Migrate latest messages index
-      oldLatestMessages <- oldLatestMessages.data
-      _                 <- stores.latestMessages.put(oldLatestMessages.toSeq)
-
-      _ <- Log[F].warn(s"Migrate invalid blocks index.")
-
-      // Migrate invalid blocks index
-      oldInvalidBlocksRaw  <- oldInvalidBlocks.data
-      oldInvalidBlocksData = oldInvalidBlocksRaw.keys.map(b => (b.blockHash, b)).toSeq
-      _                    <- stores.invalidBlocks.put(oldInvalidBlocksData)
-
-      _ <- Log[F].warn(s"Migrate equivocations tracker index.")
-
-      // Migrate equivocation tracker index
-      oldEquivocationsRaw <- oldEquivocations.data
-      oldEquivocationsData = oldEquivocationsRaw
-        .map(
-          x => ((x.equivocator, x.equivocationBaseBlockSeqNum), x.equivocationDetectedBlockHashes)
-        )
-        .toSeq
-      _ <- stores.equivocationsDb.put(oldEquivocationsData)
-
-      _ <- Log[F].warn(s"Migrate deploys index.")
-
-      // Migrate deploys index
-      oldDeploysData <- oldDeploys.data
-      _              <- stores.deploys.put(oldDeploysData.toSeq)
-
-      _ <- Log[F].warn(s"DAG storage migration successful.")
-    } yield ()
-
 }

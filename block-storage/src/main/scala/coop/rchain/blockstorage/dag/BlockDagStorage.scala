@@ -16,8 +16,8 @@ trait BlockDagStorage[F[_]] {
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def checkpoint(): F[Unit]
+  def runFinalization()
   def close(): F[Unit]
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit]
 }
 
 object BlockDagStorage {
@@ -40,6 +40,14 @@ trait BlockDagRepresentation[F[_]] extends DagReader[F, BlockHash] {
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
   def isFinalized(blockHash: BlockHash): F[Boolean]
+
+  // get view as per particular Casper message, which is defined by message originator and its justifications
+  def view(
+      validator: Validator,
+      justifications: Set[BlockHash]
+  ): F[BlockDagRepresentation[F]]
+  // get last finalized block for this representation
+  def getLFB: F[BlockHash]
 }
 
 trait EquivocationsTracker[F[_]] {

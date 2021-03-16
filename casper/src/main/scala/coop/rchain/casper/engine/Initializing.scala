@@ -24,6 +24,7 @@ import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared
@@ -113,8 +114,12 @@ class Initializing[F[_]
               )
             )
 
-        // Update last finalized block with received block hash
-        _ <- LastFinalizedStorage[F].put(block.blockHash)
+        // Update last finalized block for all bonded validators with received block hash
+        _ <- block.body.state.bonds
+              .map(_.validator)
+              .traverse(v => LastFinalizedStorage[F].put(v.some, block.blockHash))
+        // Update last finalized block for self readonly
+        _ <- LastFinalizedStorage[F].put(none[Validator], block.blockHash)
 
         _ <- Log[F].info(
               s"Approved state for block ${PrettyPrinter.buildString(block, short = true)} is successfully restored."

@@ -34,23 +34,25 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     Applicative[F].pure(Right(ByteString.EMPTY))
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     estimatorFunc.pure[F]
-  def blockDag: F[BlockDagRepresentation[F]]                          = BlockDagStorage[F].getRepresentation
+  def blockDag: F[BlockDagRepresentation[F]] =
+    BlockDagStorage[F].getRepresentation
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float] = 0f.pure[F]
-  def lastFinalizedBlock: F[BlockMessage]                             = getRandomBlock().pure[F]
-  def getRuntimeManager: F[RuntimeManager[F]]                         = runtimeManager.pure[F]
-  def fetchDependencies: F[Unit]                                      = ().pure[F]
-  def getApprovedBlock: F[BlockMessage]                               = getRandomBlock().pure[F]
-  def getValidator: F[Option[ValidatorIdentity]]                      = none[ValidatorIdentity].pure[F]
-  def getVersion: F[Long]                                             = 1L.pure[F]
-  def getDeployLifespan: F[Int]                                       = Int.MaxValue.pure[F]
-  def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
+  def lastFinalizedBlock(validatorOpt: Option[Validator]): F[BlockMessage] =
+    getRandomBlock().pure[F]
+  def getRuntimeManager: F[RuntimeManager[F]]    = runtimeManager.pure[F]
+  def fetchDependencies: F[Unit]                 = ().pure[F]
+  def getApprovedBlock: F[BlockMessage]          = getRandomBlock().pure[F]
+  def getValidator: F[Option[ValidatorIdentity]] = none[ValidatorIdentity].pure[F]
+  def getVersion: F[Long]                        = 1L.pure[F]
+  def getDeployLifespan: F[Int]                  = Int.MaxValue.pure[F]
+  def approvedBlockStateComplete: F[Boolean]     = true.pure[F]
   def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =
     for {
       b <- BlockStore[F].get(bh)
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
-  override def getSnapshot: F[CasperSnapshot[F]] = ???
+  override def getSnapshot(targetBlockOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = ???
   override def validate(
       b: BlockMessage,
       s: CasperSnapshot[F]

@@ -2,7 +2,7 @@ package coop.rchain.rspace.merger.instances
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.shared.syntax._
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.merger.EventLogIndex

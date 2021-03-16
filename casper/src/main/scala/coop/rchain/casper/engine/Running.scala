@@ -293,7 +293,9 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHashOpt <- LastFinalizedStorage[F].get()
+        lfBlockHashOpt <- LastFinalizedStorage[F].get(
+                           validatorId.map(v => ByteString.copyFrom(v.publicKey.bytes))
+                         )
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {

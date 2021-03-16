@@ -1,6 +1,7 @@
 package coop.rchain.casper.batch1
 
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.BlockMessage
@@ -27,7 +28,9 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
         node: TestNode[Effect]
     )(expected: BlockMessage)(implicit file: sourcecode.File, line: sourcecode.Line) =
       for {
-        lastFinalizedBlock <- node.casperEff.lastFinalizedBlock
+        lastFinalizedBlock <- node.casperEff.lastFinalizedBlock(
+                               node.validatorId.map(v => ByteString.copyFrom(v.publicKey.bytes))
+                             )
         //state              = node.casperBufferStorage
       } yield {
         withClue(s"Assertion failed at ${file.value}:${line.value}:\n\n") {

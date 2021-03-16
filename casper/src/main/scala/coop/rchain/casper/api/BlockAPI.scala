@@ -389,7 +389,7 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb   <- casper.lastFinalizedBlock
+        lfb   <- casper.lastFinalizedBlock()
         graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
       } yield serialize(graph).asRight[Error]
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
@@ -745,7 +745,7 @@ object BlockAPI {
       _.withCasper[ApiErr[BlockInfo]](
         implicit casper =>
           for {
-            lastFinalizedBlock <- casper.lastFinalizedBlock
+            lastFinalizedBlock <- casper.lastFinalizedBlock()
             blockInfo          <- getFullBlockInfo[F](lastFinalizedBlock)
           } yield blockInfo.asRight,
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
@@ -780,7 +780,7 @@ object BlockAPI {
       _.withCasper[ApiErr[Boolean]](
         implicit casper =>
           for {
-            lastFinalizedBlock <- casper.lastFinalizedBlock
+            lastFinalizedBlock <- casper.lastFinalizedBlock()
             runtimeManager     <- casper.getRuntimeManager
             postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
             bonds              <- runtimeManager.computeBonds(postStateHash)
@@ -815,7 +815,7 @@ object BlockAPI {
             result <- if (isReadOnly || devMode) {
                        for {
                          targetBlock <- if (blockHash.isEmpty)
-                                         casper.lastFinalizedBlock.map(_.some)
+                                         casper.lastFinalizedBlock().map(_.some)
                                        else
                                          for {
                                            hashByteString <- Base16

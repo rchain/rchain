@@ -2,10 +2,15 @@ package coop.rchain.blockstorage.dag
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.dag.DagOps
+import coop.rchain.shared.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
+import fs2.Stream
 
 trait BlockDagRepresentationSyntax {
   implicit final def blockStorageSyntaxBlockDagRepresentation[F[_]: Sync](
@@ -43,9 +48,9 @@ final class BlockDagRepresentationOps[F[_]: Sync](
       file: sourcecode.File,
       enclosing: sourcecode.Enclosing,
       concurrent: Concurrent[F]
-  ): F[List[BlockMetadata]] = {
+  ): Stream[F, BlockMetadata] = {
     val streams = hashes.map(h => fs2.Stream.eval(lookupUnsafe(h)))
-    fs2.Stream.emits(streams).parJoinUnbounded.compile.toList
+    fs2.Stream.emits(streams).parJoinUnbounded
   }
 
   def childrensMetas(hashes: Seq[BlockHash])(
@@ -100,4 +105,14 @@ final class BlockDagRepresentationOps[F[_]: Sync](
       ib <- dag.invalidBlocks
       r  = ib.map(block => (block.blockHash, block.sender)).toMap
     } yield r
+
+  def getNonFinalizedAncestors(blockHash: BlockHash): F[Set[BlockHash]] =
+    DagOps
+      .bfTraverseF[F, BlockHash](List(blockHash))(
+        hash =>
+          dag
+            .parents(hash)
+            .flatMap(_.getOrElse(Set.empty[BlockHash]).toList.filterA(v => dag.isFinalized(v).not))
+      )
+      .toSet
 }

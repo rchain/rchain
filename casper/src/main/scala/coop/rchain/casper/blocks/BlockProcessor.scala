@@ -30,7 +30,7 @@ class BlockProcessor[F[_]: Concurrent](
     requestMissingDependencies: Set[BlockHash] => F[Unit],
     ackProcessed: (BlockMessage) => F[Unit],
     // Casper state to validate block against
-    getCasperSnapshot: Casper[F] => F[CasperSnapshot[F]],
+    getCasperSnapshot: (Casper[F], BlockMessage) => F[CasperSnapshot[F]],
     validateBlock: (Casper[F], CasperSnapshot[F], BlockMessage) => F[ValidBlockProcessing],
     effValidBlock: (Casper[F], BlockMessage) => F[BlockDagRepresentation[F]],
     effInvalidVBlock: (
@@ -94,7 +94,7 @@ class BlockProcessor[F[_]: Concurrent](
       s: Option[CasperSnapshot[F]] = None
   ): F[ValidBlockProcessing] =
     for {
-      cs     <- if (s.isDefined) s.get.pure[F] else getCasperSnapshot(c)
+      cs     <- if (s.isDefined) s.get.pure[F] else getCasperSnapshot(c, b)
       status <- validateBlock(c, cs, b)
       _ <- status
             .map(s => effValidBlock(c, b))
@@ -125,7 +125,7 @@ object BlockProcessor {
 
     val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
 
-    val getCasperStateSnapshot = (c: Casper[F]) => c.getSnapshot
+    val getCasperStateSnapshot = (c: Casper[F], b: BlockMessage) => c.getSnapshot(b.some)
 
     val getNonValidatedDependencies = (c: Casper[F], b: BlockMessage) => {
       import cats.instances.list._
@@ -174,7 +174,7 @@ object BlockProcessor {
 
     val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) => c.validate(b, s)
 
-    def ackProcessed =
+    def ackProcessed: BlockMessage => F[Unit] =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)
 
     val effectsForInvalidBlock =

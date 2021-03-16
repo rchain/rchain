@@ -37,6 +37,23 @@ final case class InMemDAG[F[_]: Applicative, A](
 }
 
 object DagOps {
+//  def dagTraverseF[F[_]: Monad, A](
+//      start: fs2.Stream[F, A]
+//  )(neighbours: A => fs2.Stream[F, A]): fs2.Stream[F, A] = {
+//    def build(q: fs2.concurrent.Queue[F, A], prevVisited: HashSet[A]): StreamT[F, A] =
+//
+//        val (curr, rest) = q.dequeue
+//        if (prevVisited(curr)) build(rest, prevVisited)
+//        else {
+//          val ns      = neighbours(curr)
+//          val visited = prevVisited + curr
+//          val newQ    = rest.enqueue[A](ns.filterNot(visited))
+//          StreamT.cons(curr, Eval.always(build(newQ, visited)))
+//        }
+//
+//    StreamT.delay(Eval.now(build(Queue.empty[A].enqueue[A](start), HashSet.empty[A])))
+//  }
+
   def bfTraverseF[F[_]: Monad, A](start: List[A])(neighbours: A => F[List[A]]): StreamT[F, A] = {
     def build(q: Queue[A], prevVisited: HashSet[A]): F[StreamT[F, A]] =
       if (q.isEmpty) StreamT.empty[F, A].pure[F]
@@ -170,4 +187,5 @@ object DagOps {
           }
         }
     } yield nonIntersectingBranches
+
 }

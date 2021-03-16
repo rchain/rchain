@@ -5,13 +5,14 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
+import coop.rchain.casper.util.ProtoUtil.{deploys, _}
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -24,15 +25,16 @@ import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage.LastFinalizedStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.finality.Finalizer
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
     // todo this should be read from chain, for now read from startup options
     casperShardConf: CasperShardConf,
@@ -57,10 +59,55 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
 
   def getApprovedBlock: F[BlockMessage] = approvedBlock.pure[F]
 
-  private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
-    lastFinalizedBlock.whenA(
-      newBlock.body.state.blockNumber % casperShardConf.finalizationRate == 0
-    )
+  private def updateLastFinalizedBlock(
+      newBlock: BlockMessage,
+      targetView: Option[Validator]
+  ): F[Unit] = {
+
+    val finalizationEffect = (h: BlockHash) =>
+      for {
+        // add finalized block to storage
+        _ <- BlockDagStorage[F].setFinalizedHash(targetView.getOrElse(), h)
+        // remove deploys that are finalized, if any found in storage
+        finalisedDeploys <- BlockStore[F].getUnsafe(h).map(_.body.deploys.map(_.deploy))
+        deploysRemoved   <- DeployStorage[F].remove(finalisedDeploys)
+        _ <- Log[F].info(
+              s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                .buildString(h)}."
+            )
+      } yield ()
+
+    (for {
+      dag <- blockDag.flatMap(_.view(newBlock.header.parentsHashList.toSet))
+      currLFB <- BlockDagStorage[F]
+                  .getFinalizedHash(targetView.getOrElse())
+                  .getOrElse(approvedBlock.blockHash, targetView)
+      _ <- Finalizer
+            .run(
+              dag,
+              currLFB,
+              finalizationEffect,
+              SafetyOracle[F].normalizedFaultTolerance,
+              casperShardConf.faultToleranceThreshold
+            )
+            .flatMap { newLFBOpt =>
+              newLFBOpt.traverse { newLFB =>
+                LastFinalizedStorage[F].put(
+                  validatorId.map(vid => ByteString.copyFrom(vid.publicKey.bytes)),
+                  newLFB
+                ) >>
+                  EventPublisher[F]
+                    .publish(
+                      RChainEvent.blockFinalised(newLFB.base16String)
+                    )
+              }
+
+            }
+    } yield ())
+      .whenA(
+        newBlock.body.state.blockNumber % casperShardConf.finalizationRate == 0
+      )
+  }
 
   /**
     * Check if there are blocks in CasperBuffer available with all dependencies met.
@@ -112,20 +159,10 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock).map(_.tips)
 
-  def lastFinalizedBlock: F[BlockMessage] =
-    for {
-      dag                    <- blockDag
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
-      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
-      _ <- EventPublisher[F]
-            .publish(
-              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
-            )
-            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
-      blockMessage <- BlockStore[F].getUnsafe(updatedLastFinalizedBlockHash)
-    } yield blockMessage
+  def lastFinalizedBlock(validatorOpt: Option[Validator]): F[BlockMessage] =
+    LastFinalizedStorage[F]
+      .getOrElse(approvedBlock.blockHash, validatorOpt)
+      .flatMap(h => BlockStore[F].getUnsafe(h))
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -163,7 +200,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     } yield ()
   }
 
-  override def getSnapshot: F[CasperSnapshot[F]] = {
+  override def getSnapshot(targetBlockOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
     def getOnChainState(
@@ -176,43 +213,72 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         shardConfig = casperShardConf
       } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
 
+    /**
+      * After introducing block merge, all parents that share the same bonds map should be parents.
+      * Parents that have different bonds maps are only one that cannot be merged in any way.
+      */
+    def calculateParents(dag: BlockDagRepresentation[F]): F[List[BlockMessage]] =
+      for {
+        r         <- Estimator[F].tips(dag, approvedBlock)
+        (_, tips) = (r.lca, r.tips)
+        parents <- for {
+                    // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
+                    // bond maps that has biggest cumulative stake.
+                    blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
+                    parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
+                  } yield parents
+
+      } yield parents
+
+    /**
+      * Justifications are latest messages from bonded validators.
+      * If validator is not bonded - no reason to use its message as justification, as Casper does not care about
+      * that validator
+      */
+    def calculateJustifications(
+        dag: BlockDagRepresentation[F],
+        onChainState: OnChainCasperState
+    ): F[List[Justification]] =
+      for {
+        justifications <- {
+          for {
+            lms <- dag.latestMessages
+            r = lms.toList
+              .map {
+                case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
+              }
+              .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
+          } yield r
+        }
+      } yield justifications
+
     for {
-      dag         <- BlockDagStorage[F].getRepresentation
-      r           <- Estimator[F].tips(dag, approvedBlock)
-      (lca, tips) = (r.lca, r.tips)
+      dag <- BlockDagStorage[F].getRepresentation
+
+      // read or calculate parents
+      parents <- if (targetBlockOpt.isDefined) ProtoUtil.getParents(targetBlockOpt.get)
+                else calculateParents(dag)
 
       /**
-        * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
-        * have conflicting parents. With introducing block merge, all parents that share the same bonds map
-        * should be parents. Parents that have different bond maps are only one that cannot be merged in any way.
+        * read on chain state from main parent
+        *
+        * On chain state can potentially be modified by quorum of validators or any other procedure.
+        * As on chain state is atomic thing defining rules of a shard, it does not make sense to merge changes
+        * introduced by different validators. There always should be a single source of truth,
+        * which is parent with the most stake.
         */
-      parents <- for {
-                  // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
-                  // bond maps that has biggest cumulative stake.
-                  blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
-                  parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
-                } yield parents
       onChainState <- getOnChainState(parents.head)
 
-      /**
-        * We ensure that only the justifications given in the block are those
-        * which are bonded validators in the chosen parent. This is safe because
-        * any latest message not from a bonded validator will not change the
-        * final fork-choice.
-        */
-      justifications <- {
-        for {
-          lms <- dag.latestMessages
-          r = lms.toList
-            .map {
-              case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
-            }
-            .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
-        } yield r.toSet
-      }
+      // read or calculate justifications
+      justifications <- if (targetBlockOpt.isDefined) targetBlockOpt.get.justifications.pure[F]
+                       else calculateJustifications(dag, onChainState)
+
+      // calculate misc data required
       parentMetas <- parents.traverse(b => dag.lookupUnsafe(b.blockHash))
       maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
       maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
+
+      // read deploys that are still in scope of block created/replayed
       deploysInScope <- {
         val currentBlockNumber  = maxBlockNum + 1
         val earliestBlockNumber = currentBlockNumber - onChainState.shardConf.deployLifespan
@@ -235,15 +301,29 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
                      }
         } yield result
       }
+
+      // get all invalid blocks known
       invalidBlocks <- dag.invalidBlocksMap
-      lfb           <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+
+      // if snapshot is created for some target block - update finalization state for block creator
+      _ <- targetBlockOpt.traverse(b => updateLastFinalizedBlock(b, b.sender.some))
+      // get last finalized block for block producer or for local view
+      lfb <- LastFinalizedStorage[F]
+              .getOrElse(
+                approvedBlock.blockHash,
+                targetBlockOpt
+                  .map(_.sender.some)
+                  .getOrElse(
+                    validatorId.map(id => ByteString.copyFrom(id.publicKey.bytes))
+                  )
+              )
     } yield CasperSnapshot(
       dag,
       lfb,
-      lca,
-      tips,
+      //lca,
+      //tips,
       parents,
-      justifications,
+      justifications.toSet,
       invalidBlocks,
       deploysInScope,
       maxBlockNum,
@@ -302,7 +382,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
       _          <- casperBuffer.remove(block.blockHash)
-      _          <- updateLastFinalizedBlock(block)
+      // update local view on finalization after each new valida lock is added
+      _ <- updateLastFinalizedBlock(
+            block,
+            validatorId.map(v => ByteString.copyFrom(v.publicKey.bytes))
+          )
     } yield updatedDag
 
   override def handleInvalidBlock(

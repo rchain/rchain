@@ -84,8 +84,10 @@ class LastFinalizedAPITest
           b6 <- n1.propagateBlock(produceDeploys(5))(nodes: _*)
           b7 <- n2.propagateBlock(produceDeploys(6))(nodes: _*)
 
-          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
-          _                  = lastFinalizedBlock shouldBe b5
+          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock(
+                                 n1.validatorId.map(v => ByteString.copyFrom(v.publicKey.bytes))
+                               )
+          _ = lastFinalizedBlock shouldBe b5
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if last finalized block is finalized
@@ -130,8 +132,10 @@ class LastFinalizedAPITest
           b6 <- n3.propagateBlock(produceDeploys(5))(nodes: _*)
           b7 <- n3.propagateBlock(produceDeploys(6))(nodes: _*)
 
-          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock
-          _                  = lastFinalizedBlock shouldBe b3
+          lastFinalizedBlock <- n1.casperEff.lastFinalizedBlock(
+                                 n1.validatorId.map(v => ByteString.copyFrom(v.publicKey.bytes))
+                               )
+          _ = lastFinalizedBlock shouldBe b3
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           // Checking if child of last finalized block is finalized
