@@ -68,7 +68,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   implicit val codecC = serializeC.toSizeHeadCodec
   val syncF: Sync[F]  = Concurrent[F]
 
-  private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF(MetricsSource)
+  private val lockF = new ConcurrentTwoStepLockF[F, Blake2b256Hash](MetricsSource)
 
   //private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
   //private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
@@ -326,6 +326,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
       _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
       _           <- restoreInstalls()
+
+      // TODO: temp fix to release Semaphores inside TwoStepLock
+      //  Adjust when runtime changes got in, create instance on spawn runtime.
+      _ <- lockF.cleanUp
     } yield ()
   }
 
