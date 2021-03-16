@@ -1,8 +1,7 @@
 package coop.rchain.rspace.concurrent
 
-import cats.implicits._
 import cats.effect.Concurrent
-
+import cats.syntax.all._
 import coop.rchain.metrics.Metrics
 
 trait TwoStepLock[F[_], K] {
@@ -27,4 +26,10 @@ class ConcurrentTwoStepLockF[F[_]: Concurrent: Metrics, K](ms: Metrics.Source)
         res   <- phaseB.acquire(keysB)(thunk)
       } yield res
     }
+
+  def cleanUp: F[Unit] =
+    for {
+      _ <- phaseA.cleanUp
+      _ <- phaseB.cleanUp
+    } yield ()
 }
