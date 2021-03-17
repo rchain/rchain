@@ -688,48 +688,6 @@ object BlockAPI {
       case None             => none[BlockMessage]
     }
 
-//  private def addResponse[F[_]: Concurrent](
-//      status: ValidBlockProcessing,
-//      block: BlockMessage,
-//      casper: MultiParentCasper[F],
-//      printUnmatchedSends: Boolean
-//  ): F[ApiErr[String]] =
-//    status
-//      .map { _ =>
-//        val hash    = block.blockHash.base16String
-//        val deploys = block.body.deploys.map(_.deploy)
-//        val maybeUnmatchedSendsOutputF =
-//          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
-//          else none[String].pure[F]
-//        maybeUnmatchedSendsOutputF >>= (
-//            maybeOutput =>
-//              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
-//                .asRight[Error]
-//                .pure[F]
-//          )
-//      }
-//      .leftMap {
-//        case _: InvalidBlock =>
-//          s"Failure! Invalid block: $status".asLeft[String].pure[F]
-//        case BlockError.BlockException(ex) =>
-//          s"Error during block processing: $ex".asLeft[String].pure[F]
-//        case BlockError.Processed =>
-//          "No action taken since other thread has already processed the block."
-//            .asLeft[String]
-//            .pure[F]
-//        case BlockError.CasperIsBusy =>
-//          s"Casper put block in the queue: $status".asLeft[String].pure[F]
-//      }
-//      .merge
-
-//  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
-//      casper: MultiParentCasper[F],
-//      deploys: Seq[Signed[DeployData]]
-//  ): F[String] =
-//    casper.getRuntimeManager >>= (
-//      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
-//    )
-
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
       timestamp: Long,
