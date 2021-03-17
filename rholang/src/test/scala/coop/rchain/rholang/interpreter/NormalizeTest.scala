@@ -22,11 +22,8 @@ import coop.rchain.models.rholang.implicits
 import errors._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
-  BoolNormalizeMatcher,
   DeBruijnLevelMap,
-  GroundNormalizeMatcher,
   IndexMapChain,
-  NameNormalizeMatcher,
   NameSort,
   NameVisitInputs,
   ProcNormalizeMatcher,
@@ -34,6 +31,11 @@ import coop.rchain.rholang.interpreter.compiler.{
   ProcVisitInputs,
   SourcePosition,
   VarSort
+}
+import coop.rchain.rholang.interpreter.compiler.normalizer.{
+  BoolNormalizeMatcher,
+  GroundNormalizeMatcher,
+  NameNormalizeMatcher
 }
 import monix.eval.Coeval
 
