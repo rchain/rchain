@@ -49,7 +49,7 @@ object GenesisBuilder {
   ): GenesisParameters = {
     // 4 default fixed validators, others are random generated
     val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
-    val (_, randomValidatorPks) = defaultValidatorKeyPairs.unzip
+    val (_, randomValidatorPks) = randomValidatorKeyPairs.unzip
     buildGenesisParameters(
       defaultValidatorKeyPairs ++ randomValidatorKeyPairs,
       bondsFunction(defaultValidatorPks ++ randomValidatorPks)

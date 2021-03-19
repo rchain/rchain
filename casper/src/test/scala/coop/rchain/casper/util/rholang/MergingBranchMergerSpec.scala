@@ -34,7 +34,8 @@ import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 10)
+  val genesisParams              = GenesisBuilder.buildGenesisParametersWithRandom(validatorsNum = 40)
+  val genesisContext             = GenesisBuilder.buildGenesis(genesisParams)
   val genesis                    = genesisContext.genesisBlock
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]
@@ -377,7 +378,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             // merge children to get next preStateHash
             v                                   <- CasperDagMerger.merge(mergingTips, base, dag, blockIndexCache)
             (nextPreStateHash, rejectedDeploys) = v
-            _                                   = assert(rejectedDeploys.size == 0)
+            _                                   = assert(rejectedDeploys.map(_.deploy.sig).isEmpty)
             _                                   = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
           } yield nextPreStateHash
 
