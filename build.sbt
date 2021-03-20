@@ -196,9 +196,8 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                                      -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.gen()                        -> (sourceManaged in Compile).value
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -268,10 +267,8 @@ lazy val node = (project in file("node"))
         pureconfig
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java -> (sourceManaged in Compile).value / "protobuf",
-      scalapb
-        .gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.gen()                   -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
