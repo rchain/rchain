@@ -51,7 +51,7 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[Casper[F] => F[Option[Int]]]
+      triggerPropose: Option[(Casper[F], Boolean) => F[Option[Either[Int, BlockHash]]]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -65,7 +65,7 @@ object BlockAPI {
                 )
               )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(casper))
+        _ <- triggerPropose.traverse(_(casper, true))
       } yield r
 
     // Check if deploy is signed with system keys
@@ -96,7 +96,7 @@ object BlockAPI {
 
   def createBlock[F[_]: Concurrent: EngineCell: Log](
       triggerProposeF: ProposeFunction[F],
-      printUnmatchedSends: Boolean = false
+      isAsync: Boolean = false
   ): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
     def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
@@ -105,11 +105,14 @@ object BlockAPI {
       _.withCasper[ApiErr[String]](
         casper =>
           for {
-            proposeID <- triggerProposeF(casper)
+            resultOpt <- triggerProposeF(casper, isAsync)
             // wait till propose pipe assign proposeID to propose and resolve proposeIDDef
-            r <- proposeID match {
-                  case Some(r) => logSucess(s"Success: proposing block with seqNum ${r}")
-                  case None    => logDebug(s"Failure: another propose is in progress")
+            r <- resultOpt match {
+                  case Some(Right(blockHash)) =>
+                    logSucess(s"Success! Block ${blockHash.base16String} created and added.")
+                  case Some(Left(seqNum)) =>
+                    logSucess(s"Success: proposing block with seqNum ${seqNum}")
+                  case None => logDebug(s"Failure: another propose is in progress")
                 }
           } yield r,
         default = logWarn("Failure: casper instance is not available.")
@@ -684,48 +687,6 @@ object BlockAPI {
       case Some((_, block)) => Some(block)
       case None             => none[BlockMessage]
     }
-
-//  private def addResponse[F[_]: Concurrent](
-//      status: ValidBlockProcessing,
-//      block: BlockMessage,
-//      casper: MultiParentCasper[F],
-//      printUnmatchedSends: Boolean
-//  ): F[ApiErr[String]] =
-//    status
-//      .map { _ =>
-//        val hash    = block.blockHash.base16String
-//        val deploys = block.body.deploys.map(_.deploy)
-//        val maybeUnmatchedSendsOutputF =
-//          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
-//          else none[String].pure[F]
-//        maybeUnmatchedSendsOutputF >>= (
-//            maybeOutput =>
-//              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
-//                .asRight[Error]
-//                .pure[F]
-//          )
-//      }
-//      .leftMap {
-//        case _: InvalidBlock =>
-//          s"Failure! Invalid block: $status".asLeft[String].pure[F]
-//        case BlockError.BlockException(ex) =>
-//          s"Error during block processing: $ex".asLeft[String].pure[F]
-//        case BlockError.Processed =>
-//          "No action taken since other thread has already processed the block."
-//            .asLeft[String]
-//            .pure[F]
-//        case BlockError.CasperIsBusy =>
-//          s"Casper put block in the queue: $status".asLeft[String].pure[F]
-//      }
-//      .merge
-
-//  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
-//      casper: MultiParentCasper[F],
-//      deploys: Seq[Signed[DeployData]]
-//  ): F[String] =
-//    casper.getRuntimeManager >>= (
-//      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
-//    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,

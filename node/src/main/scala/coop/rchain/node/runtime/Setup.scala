@@ -74,7 +74,7 @@ object Setup {
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
-        Queue[F, (Casper[F], Deferred[F, Option[Int]])],
+        Queue[F, (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])],
         // TODO move towards having a single node state
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
@@ -271,7 +271,10 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       // Propose request is a tuple - Casper plus deferred proposeID that will be resolved by proposer
-      proposerQueue <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
+      proposerQueue <- Queue.unbounded[
+                        F,
+                        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
+                      ]
       proposer = validatorIdentityOpt match {
         case Some(validatorIdentity) => {
           implicit val rm         = runtimeManager
@@ -299,10 +302,10 @@ object Setup {
 
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
-          (casper: Casper[F]) =>
+          (casper: Casper[F], isAsync: Boolean) =>
             for {
-              d <- Deferred[F, Option[Int]]
-              _ <- proposerQueue.enqueue1((casper, d))
+              d <- Deferred[F, Option[Either[Int, BlockHash]]]
+              _ <- proposerQueue.enqueue1((casper, isAsync, d))
               r <- d.get
             } yield r
         )

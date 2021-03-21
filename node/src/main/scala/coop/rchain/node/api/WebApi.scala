@@ -14,6 +14,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
@@ -59,7 +60,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
-      triggerProposeF: Option[Casper[F] => F[Option[Int]]]
+      triggerProposeF: Option[(Casper[F], Boolean) => F[Option[Either[Int, BlockHash]]]]
   ) extends WebApi[F] {
     import WebApiSyntax._
 

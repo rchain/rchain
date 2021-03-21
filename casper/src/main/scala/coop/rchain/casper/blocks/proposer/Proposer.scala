@@ -20,6 +20,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
 import coop.rchain.metrics.implicits._
+import coop.rchain.models.BlockHash.BlockHash
 
 class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
@@ -98,17 +99,29 @@ class Proposer[F[_]: Concurrent: Log: Span](
 
   def propose(
       c: Casper[F],
-      proposeIdDef: Deferred[F, Option[Int]]
+      isAsync: Boolean,
+      proposeIdDef: Deferred[F, Option[Either[Int, BlockHash]]]
   ): F[(ProposeResult, Option[BlockMessage])] =
     for {
       // get snapshot to serve as a base for propose
-      s       <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
-      nextSeq = ((s.maxSeqNums.getOrElse(ByteString.copyFrom(validator.publicKey.bytes), 0)) + 1)
-      // resolve proposeID for the caller
-      _ <- proposeIdDef.complete(nextSeq.some)
-      // propose
-      r <- doPropose(s, c)
-    } yield r
+      s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
+      result <- if (isAsync) for {
+                 nextSeq <- ((s.maxSeqNums
+                             .getOrElse(ByteString.copyFrom(validator.publicKey.bytes), 0)) + 1)
+                             .pure[F]
+
+                 _ <- proposeIdDef.complete(Some(Left(nextSeq)))
+                 // propose
+                 r <- doPropose(s, c)
+               } yield r
+               else
+                 for {
+                   // propose
+                   r <- doPropose(s, c)
+                   _ <- proposeIdDef.complete(r._2.map(b => Right(b.blockHash)))
+                 } yield r
+
+    } yield result
 }
 
 object Proposer {

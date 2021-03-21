@@ -19,7 +19,7 @@ option (scalapb.options) = {
 };
 
 service ProposeService {
-  rpc propose(PrintUnmatchedSendsQuery) returns (ProposeResponse) {}
+  rpc propose(ProposeQuery) returns (ProposeResponse) {}
   rpc proposeResult(ProposeResultQuery) returns (ProposeResultResponse) {}
 }
 

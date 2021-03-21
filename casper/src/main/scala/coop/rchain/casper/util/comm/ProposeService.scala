@@ -14,7 +14,7 @@ import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 import scala.util.Either
 
 trait ProposeService[F[_]] {
-  def propose(printUnmatchedSends: Boolean): F[Either[Seq[String], String]]
+  def propose(isAsync: Boolean): F[Either[Seq[String], String]]
 }
 
 object ProposeService {
@@ -34,9 +34,9 @@ class GrpcProposeService[F[_]: Monixable: Sync](host: String, port: Int, maxMess
 
   private val stub = ProposeServiceV1GrpcMonix.stub(channel)
 
-  def propose(printUnmatchedSends: Boolean): F[Either[Seq[String], String]] =
+  def propose(isAsync: Boolean): F[Either[Seq[String], String]] =
     stub
-      .propose(PrintUnmatchedSendsQuery(printUnmatchedSends))
+      .propose(ProposeQuery(isAsync))
       .fromTask
       .toEitherF(
         _.message.error,
