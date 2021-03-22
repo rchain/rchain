@@ -43,9 +43,6 @@ object InterpreterUtil {
 
   private[this] val ComputeParentPostStateMetricsSource =
     Metrics.Source(CasperMetricsSource, "compute-parents-post-state")
-//
-//  private[this] val ReplayIntoMergeBlockMetricsSource =
-//    Metrics.Source(CasperMetricsSource, "replay-into-merge-block")
 
   private[this] val ReplayBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "replay-block")
@@ -238,19 +235,19 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[(StateHash, Seq[ProcessedDeploy])] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
-      parents.size match {
+      parents match {
         // For genesis, use empty trie's root hash
-        case 0 =>
+        case Seq() =>
           (RuntimeManager.emptyStateHashFixed, Seq.empty[ProcessedDeploy]).pure[F]
 
         // For single parent, get itd post state hash
-        case 1 =>
-          (ProtoUtil.postStateHash(parents.head), Seq.empty[ProcessedDeploy]).pure[F]
+        case Seq(parent) =>
+          (ProtoUtil.postStateHash(parent), Seq.empty[ProcessedDeploy]).pure[F]
 
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
         // such system deploys are not mergeable, so take them from one of the parents.
-        case _ => {
+        case parents => {
           implicit val r = runtimeManager
           val tipsHashes = parents.map(_.blockHash)
           val lfbHash    = s.lastFinalizedBlock
