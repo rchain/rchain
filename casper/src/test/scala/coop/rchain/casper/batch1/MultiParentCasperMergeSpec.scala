@@ -46,39 +46,6 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
     }
   }
 
-  // TODO enable tests below
-//  it should "handle multi-parent blocks correctly when they operate on stdout" in effectTest {
-//    def echoContract(no: Int) =
-//      Rho(s"""new stdout(`rho:io:stdout`) in { stdout!("Contract $no") }""")
-//    merges(echoContract(1), echoContract(2), Rho("Nil"))
-//  }
-//
-//  it should "not conflict on registry lookups" in effectTest {
-//    val uri         = "rho:id:i1kuw4znrkazgbmc4mxe7ua4s1x41zd7qd8md96edxh1n87a5seht3"
-//    val toSign: Par = ETuple(Seq(GInt(0), GString("foo")))
-//    val toByteArray = Serialize[Par].encode(toSign).toArray
-//    val sig         = Secp256k1.sign(Blake2b256.hash(toByteArray), ConstructDeploy.defaultSec)
-//    val setup =
-//      Rho(s"""
-//             |new rs(`rho:registry:insertSigned:secp256k1`) in {
-//             |  rs!(
-//             |    "${ConstructDeploy.defaultPub.bytes.toHex}".hexToBytes(),
-//             |    (0, "foo"),
-//             |    "${sig.toHex}".hexToBytes(),
-//             |    Nil
-//             |  )
-//             |}
-//        """.stripMargin)
-//    val lookup =
-//      Rho(s"""
-//             |new rl(`rho:registry:lookup`) in {
-//             |  rl!(`$uri`, Nil)
-//             |}
-//        """.stripMargin)
-//
-//    merges(lookup, lookup, setup)
-//  }
-
   it should "not produce UnusedCommEvent while merging non conflicting blocks in the presence of conflicting ones" in effectTest {
 
     val registryRho =
@@ -208,62 +175,4 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       } yield ()
     }
   }
-
-//  "This spec" should "cover all mergeability cases" in {
-//    val allMergeabilityCases = {
-//      val events = List(
-//        "!X",
-//        "!4",
-//        "!C",
-//        "4X",
-//        "4!",
-//        "4!!",
-//        "PX",
-//        "P!",
-//        "P!!",
-//        "!!X",
-//        "!!4",
-//        "!!C",
-//        "CX",
-//        "C!",
-//        "C!!"
-//      )
-//
-//      val pairs    = events.combinations(2)
-//      val diagonal = events.map(x => List(x, x))
-//      val cases    = (pairs ++ diagonal).toList
-//
-//      def isComm(s: String) = !s.contains("X")
-//
-//      def makeVolatile(s: String): List[String] = isComm(s) match {
-//        case false => List(s)
-//        case true  => List(s, s"($s)")
-//      }
-//
-//      def makeVolatiles(v: List[String]): List[List[String]] =
-//        for {
-//          a <- makeVolatile(v(0))
-//          b <- makeVolatile(v(1))
-//        } yield List(a, b)
-//
-//      val withVolatiles = cases.flatMap(makeVolatiles)
-//
-//      // TODO: Do not filter out missing cases
-//      withVolatiles
-//        .map(_.mkString(" "))
-//        .toSet
-//    }
-//
-//    val testedMergeabilityCases =
-//      (MergeabilityRules.baseMergeabilityCases ++ MergeabilityRules.peekMergeabilityCases)
-//        .map(_._1)
-//    withClue(s"""Missing cases: ${allMergeabilityCases
-//      .diff(testedMergeabilityCases.toSet)
-//      .toList
-//      .sorted
-//      .mkString(", ")}\n""") {
-//      testedMergeabilityCases should contain allElementsOf allMergeabilityCases
-//    }
-//  }
-
 }
