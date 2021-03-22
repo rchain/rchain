@@ -2,12 +2,12 @@ package coop.rchain.casper.helper
 
 import java.net.URLEncoder
 import java.nio.file.Path
-
 import cats.{Monad, Parallel}
 import cats.data.State
 import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
+import cats.syntax.all.none
 import coop.rchain.blockstorage._
 import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -75,6 +75,7 @@ class TestNode[F[_]: Timer](
     shardId: String = "root",
     finalizationRate: Int = 1,
     isReadOnly: Boolean = false,
+    triggerProposeFOpt: Option[ProposeFunction[F]],
     blockProcessorQueue: Queue[F, (Casper[F], BlockMessage)],
     blockProcessorState: Ref[F, Set[BlockHash]],
     blockProcessingPipe: Pipe[
@@ -188,6 +189,20 @@ class TestNode[F[_]: Timer](
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
 
+  def proposeSync: F[BlockHash] =
+    for {
+      v <- (triggerProposeFOpt match {
+            case Some(p) => p(casperEff, false)
+            case None =>
+              Sync[F]
+                .raiseError(new Exception("Propose is called in read-only mode."))
+                .as(none[Either[Int, BlockHash]])
+          }).map(_.get)
+    } yield v.right.get
+
+  def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
+    Stream((casperEff, block)).through(blockProcessingPipe).compile.lastOrError
+
   def addBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
 
@@ -289,7 +304,7 @@ class TestNode[F[_]: Timer](
           )
           .toList
       )
-    val allSynced = RequestedBlocks[F].get.map(!_.exists(_._2.received == false))
+    val allSynced = RequestedBlocks[F].get.map(b => { !b.exists(_._2.received == false) })
     val doNothing = concurrentF.unit
 
     def drainQueueOf(peerNode: PeerNode) =
@@ -531,23 +546,45 @@ object TestNode {
                    none[ValidatorIdentity]
                  else
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
+
+                 proposerQueue <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
                  proposer = validatorId match {
                    case Some(vi) => Proposer[F](vi).some
                    case None     => None
                  }
+                 // propose function in casper tests is always synchronous
+                 triggerProposeFOpt = proposer.map(
+                   p =>
+                     (casper: Casper[F], _: Boolean) =>
+                       for {
+                         d <- Deferred[F, Option[Either[Int, BlockHash]]]
+                         r <- p.propose(casper, false, d)
+                       } yield r._2.map(_.blockHash.asRight[Int])
+                 )
                  // Block processor
                  blockProcessor = BlockProcessor[F]
 
-                 blockProcessingPipe = { in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
-                   in.evalMap(v => {
-                     val (c, b) = v
-                     for {
-                       snapShot <- c.getSnapshot
-                       _        <- BlockStore[F].put(b)
-                       r <- blockProcessor
-                             .validateWithEffects(c, b, snapShot.some)
-                     } yield r
-                   })
+                 blockProcessingPipe = {
+                   in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
+                     in.evalMap(v => {
+                       val (c, b) = v
+                       blockProcessor
+                         .checkIfOfInterest(c, b)
+                         .ifM(
+                           blockProcessor
+                             .checkIfWellFormedAndStore(b)
+                             .ifM(
+                               blockProcessor
+                                 .checkDependenciesWithEffects(c, b)
+                                 .ifM(
+                                   blockProcessor.validateWithEffects(c, b),
+                                   BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]
+                                 ),
+                               BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
+                             ),
+                           BlockStatus.notOfInterest.asLeft[ValidBlock].pure[F]
+                         )
+                     })
                  }
                  blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
                  blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
@@ -565,6 +602,7 @@ object TestNode {
                    maxNumberOfParents,
                    maxParentDepth,
                    isReadOnly = isReadOnly,
+                   triggerProposeFOpt = triggerProposeFOpt,
                    blockProcessorQueue = blockProcessorQueue,
                    blockProcessorState = blockProcessorState,
                    blockProcessingPipe = blockProcessingPipe,
