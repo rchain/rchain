@@ -608,7 +608,7 @@ object BlockAPI {
       constructor: (
           BlockMessage,
           Float
-      ) => F[A]
+      ) => A
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
@@ -625,34 +625,34 @@ object BlockAPI {
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
 
-      blockInfo <- constructor(block, faultTolerance)
+      blockInfo = constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
-    getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
+    getBlockInfo[BlockInfo, F](block, constructBlockInfo)
   private def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
-    getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo[F])
+    getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
 
-  private def constructBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  private def constructBlockInfo(
       block: BlockMessage,
       faultTolerance: Float
-  ): F[BlockInfo] =
-    for {
-      lightBlockInfo <- constructLightBlockInfo[F](block, faultTolerance)
-      deploys        = block.body.deploys.toSeq.map(_.toDeployInfo)
-    } yield BlockInfo(
+  ): BlockInfo = {
+    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
+    val deploys        = block.body.deploys.map(_.toDeployInfo)
+    BlockInfo(
       blockInfo = Some(lightBlockInfo),
       deploys = deploys
     )
+  }
 
-  private def constructLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  private def constructLightBlockInfo(
       block: BlockMessage,
       faultTolerance: Float
-  ): F[LightBlockInfo] =
+  ): LightBlockInfo =
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       sender = PrettyPrinter.buildStringNoLimit(block.sender),
@@ -673,8 +673,11 @@ object BlockAPI {
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
-      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-    ).pure[F]
+      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
+      rejectedDeploys = block.body.rejectedDeploys.map(
+        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
+      )
+    )
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred

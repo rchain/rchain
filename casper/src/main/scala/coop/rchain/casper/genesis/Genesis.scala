@@ -93,7 +93,12 @@ object Genesis {
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val body    = Body(state = state, deploys = sortedDeploys.toList, systemDeploys = List.empty)
+    val body = Body(
+      state = state,
+      deploys = sortedDeploys.toList,
+      rejectedDeploys = List.empty,
+      systemDeploys = List.empty
+    )
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
 

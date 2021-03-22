@@ -241,9 +241,22 @@ object Header {
       .withExtraBytes(h.extraBytes)
 }
 
+final case class RejectedDeploy(
+    sig: ByteString
+)
+
+object RejectedDeploy {
+  def from(r: RejectedDeployProto): Either[String, RejectedDeploy] =
+    Right(RejectedDeploy(r.sig))
+
+  def toProto(r: RejectedDeploy): RejectedDeployProto =
+    RejectedDeployProto().withSig(r.sig)
+}
+
 final case class Body(
     state: RChainState,
     deploys: List[ProcessedDeploy],
+    rejectedDeploys: List[RejectedDeploy],
     systemDeploys: List[ProcessedSystemDeploy],
     extraBytes: ByteString = ByteString.EMPTY
 ) {
@@ -253,15 +266,17 @@ final case class Body(
 object Body {
   def from(b: BodyProto): Either[String, Body] =
     for {
-      state         <- b.state.toRight("RChainState not available").map(RChainState.from)
-      deploys       <- b.deploys.toList.traverse(ProcessedDeploy.from)
-      systemDeploys <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
-    } yield Body(state, deploys, systemDeploys, b.extraBytes)
+      state           <- b.state.toRight("RChainState not available").map(RChainState.from)
+      deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
+      systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
+      rejectedDeploys <- b.rejectedDeploys.toList.traverse(RejectedDeploy.from)
+    } yield Body(state, deploys, rejectedDeploys, systemDeploys, b.extraBytes)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
       .withState(RChainState.toProto(b.state))
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
+      .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
       .withExtraBytes(b.extraBytes)
 

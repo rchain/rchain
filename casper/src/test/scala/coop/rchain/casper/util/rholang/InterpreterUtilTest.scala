@@ -81,7 +81,10 @@ class InterpreterUtilTest
       blockNumber: Long = 0L,
       seqNum: Int = 0
   ): F[
-    Either[Throwable, (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
+    Either[
+      Throwable,
+      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+    ]
   ] =
     Time[F].currentMillis >>= (
         now =>
@@ -327,7 +330,7 @@ class InterpreterUtilTest
                         dag,
                         runtimeManager
                       )
-      Right((_, _, processedDeploys, _)) = computeResult
+      Right((_, _, processedDeploys, _, _)) = computeResult
     } yield processedDeploys.map(_.cost)
 
   "computeDeploysCheckpoint" should "aggregate cost of deploying rholang programs within the block" in withGenesis(
@@ -414,7 +417,7 @@ class InterpreterUtilTest
                             dag1,
                             runtimeManager
                           )
-      Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+      Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
       block <- createBlock[Task](
                 Seq(genesis.blockHash),
                 genesis,
@@ -465,7 +468,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -524,7 +527,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -580,7 +583,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         block <- createBlock[Task](
                   Seq(genesis.blockHash),
                   genesis,
@@ -630,7 +633,7 @@ class InterpreterUtilTest
                                 (i + 1).toLong,
                                 (i + 1)
                               )
-          Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+          Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
@@ -665,7 +668,7 @@ class InterpreterUtilTest
                               dag1,
                               runtimeManager
                             )
-        Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+        Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
         //create single deploy with log that includes excess comm events
         badProcessedDeploy = processedDeploys.head.copy(
           deployLog = processedDeploys.head.deployLog ++ processedDeploys.last.deployLog.take(5)
@@ -721,7 +724,7 @@ class InterpreterUtilTest
                                 (i + 1).toLong,
                                 (i + 1)
                               )
-          Right((preStateHash, computedTsHash, processedDeploys, _)) = deploysCheckpoint
+          Right((preStateHash, computedTsHash, processedDeploys, _, _)) = deploysCheckpoint
           block <- createBlock[Task](
                     Seq(genesis.blockHash),
                     genesis,
