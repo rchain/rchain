@@ -46,6 +46,7 @@ object CasperLaunch {
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
       blocksInProcessing: Ref[F, Set[BlockHash]],
+      proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
       disableStateExporter: Boolean
@@ -149,6 +150,8 @@ object CasperLaunch {
           init = for {
             _ <- askPeersForForkChoiceTips
             _ <- sendBufferPendantsToCasper(casper)
+            // try to propose (async way) if proposer is defined
+            _ <- proposeFOpt.traverse(p => p(casper, true))
           } yield ()
           _ <- Engine
                 .transitionToRunning[F](

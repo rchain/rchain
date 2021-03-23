@@ -342,6 +342,7 @@ object Setup {
         CasperLaunch.of[F](
           blockProcessorQueue,
           blockProcessorStateRef,
+          if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
           conf.protocolServer.disableStateExporter
