@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
-import cats.implicits._
-import cats.{Eval => _}
+import cats.syntax.all._
+import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -40,14 +40,10 @@ trait Reduce[M[_]] {
 
 }
 
-class DebruijnInterpreter[M[_]](
+class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
-)(
-    implicit parallel: cats.Parallel[M],
-    syncM: Sync[M],
-    cost: _cost[M]
 ) extends Reduce[M] {
 
   type Application =
@@ -99,7 +95,7 @@ class DebruijnInterpreter[M[_]](
     ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
   }
 
-  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
+  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean): M[Unit] =
     res match {
       case Some((continuation, dataList, _)) if persistent =>
         dispatchAndRun(continuation, dataList)(
@@ -111,27 +107,27 @@ class DebruijnInterpreter[M[_]](
         )
       case Some((continuation, dataList, _)) =>
         dispatch(continuation, dataList)
-      case None => syncM.unit
+      case None => Sync[M].unit
     }
 
   private[this] def dispatchAndRun(
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  )(ops: M[Unit]*) =
+  )(ops: M[Unit]*): M[Unit] =
     // Collect errors from all parallel execution paths (pars)
     parTraverseSafe(dispatch(continuation, dataList) +: ops.toVector)(identity)
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ) = dispatcher.dispatch(
+  ): M[Unit] = dispatcher.dispatch(
     continuation,
     dataList.map(_._2)
   )
 
   private[this] def producePeeks(
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ) =
+  ): Seq[M[Unit]] =
     dataList
       .withFilter {
         case (_, _, _, persist) => !persist
@@ -476,7 +472,7 @@ class DebruijnInterpreter[M[_]](
     }
 
   private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = {
-    syncM.defer {
+    Sync[M].defer {
       def relop(
           p1: Par,
           p2: Par,
@@ -492,8 +488,7 @@ class DebruijnInterpreter[M[_]](
                      case (GInt(i1), GInt(i2))       => GBool(relopi(i1, i2)).pure[M]
                      case (GString(s1), GString(s2)) => GBool(relops(s1, s2)).pure[M]
                      case _ =>
-                       ReduceError("Unexpected compare: " + v1 + " vs. " + v2)
-                         .raiseError[M, GBool]
+                       ReduceError("Unexpected compare: " + v1 + " vs. " + v2).raiseError[M, GBool]
                    }
         } yield result
 
@@ -832,11 +827,11 @@ class DebruijnInterpreter[M[_]](
           v      <- evalSingleExpr(p)
           result <- v.exprInstance match {
                      case EListBody(EList(ps, _, _, _)) =>
-                       syncM.fromEither(localNth(ps, nth))
+                       Sync[M].fromEither(localNth(ps, nth))
                      case ETupleBody(ETuple(ps, _, _)) =>
-                       syncM.fromEither(localNth(ps, nth))
+                       Sync[M].fromEither(localNth(ps, nth))
                      case GByteArray(bs) =>
-                       syncM.fromEither(if (0 <= nth && nth < bs.size) {
+                       Sync[M].fromEither(if (0 <= nth && nth < bs.size) {
                          val b      = bs.byteAt(nth) & 0xff // convert to unsigned
                          val p: Par = Expr(GInt(b.toLong))
                          p.asRight[ReduceError]
@@ -864,7 +859,7 @@ class DebruijnInterpreter[M[_]](
           exprEvaled <- evalExpr(p)
           exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
           _          <- charge[M](toByteArrayCost(exprSubst))
-          ba         <- syncM.fromEither(serialize(exprSubst))
+          ba         <- Sync[M].fromEither(serialize(exprSubst))
         } yield Expr(GByteArray(ByteString.copyFrom(ba)))
       }
   }
@@ -1261,11 +1256,11 @@ class DebruijnInterpreter[M[_]](
     def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
       baseExpr.exprInstance match {
         case GString(string) =>
-          syncM.delay(GString(string.slice(from, until)))
+          Sync[M].delay(GString(string.slice(from, until)))
         case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-          syncM.delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
+          Sync[M].delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
         case GByteArray(bytes) =>
-          syncM.delay(GByteArray(bytes.substring(from, until)))
+          Sync[M].delay(GByteArray(bytes.substring(from, until)))
         case other =>
           MethodNotDefined("slice", other.typ).raiseError[M, Par]
       }
@@ -1289,7 +1284,7 @@ class DebruijnInterpreter[M[_]](
     def take(baseExpr: Expr, n: Int): M[Par] =
       baseExpr.exprInstance match {
         case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-          syncM.delay(EList(ps.take(n), locallyFree, connectiveUsed, remainder))
+          Sync[M].delay(EList(ps.take(n), locallyFree, connectiveUsed, remainder))
         case other =>
           MethodNotDefined("take", other.typ).raiseError[M, Par]
       }
@@ -1514,7 +1509,7 @@ class DebruijnInterpreter[M[_]](
       }
 
   private def restrictToInt(long: Long): M[Int] =
-    syncM.catchNonFatal(Math.toIntExact(long)).adaptError {
+    Sync[M].catchNonFatal(Math.toIntExact(long)).adaptError {
       case _: ArithmeticException => ReduceError(s"Integer overflow for value $long")
     }
 

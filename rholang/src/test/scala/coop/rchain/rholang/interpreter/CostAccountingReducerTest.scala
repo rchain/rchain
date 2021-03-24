@@ -125,7 +125,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
       lazy val (_, reducer) =
         RholangAndScalaDispatcher
-          .create[Task, Task.Par](
+          .create[Task](
             pureRSpace,
             Map.empty,
             Map.empty

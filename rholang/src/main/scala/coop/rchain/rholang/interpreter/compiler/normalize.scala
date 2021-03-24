@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.compiler
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Applicative, MonadError}
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -65,8 +65,9 @@ object GroundNormalizeMatcher {
 }
 
 object RemainderNormalizeMatcher {
-  def handleProcVar[M[_]](pv: ProcVar, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit sync: Sync[M]
+  def handleProcVar[M[_]: Sync](
+      pv: ProcVar,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
@@ -81,14 +82,15 @@ object RemainderNormalizeMatcher {
             val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
             (Option(Var(FreeVar(knownFree.nextLevel))), newBindingsPair).pure[M]
           case Some(LevelContext(_, _, firstSourcePosition)) =>
-            sync.raiseError(
+            Sync[M].raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
             )
         }
     }
 
-  def normalizeMatchProc[M[_]](r: ProcRemainder, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit err: Sync[M]
+  def normalizeMatchProc[M[_]: Sync](
+      r: ProcRemainder,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     r match {
       case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[M]
@@ -96,8 +98,9 @@ object RemainderNormalizeMatcher {
         handleProcVar[M](pr.procvar_, knownFree)
     }
 
-  def normalizeMatchName[M[_]](nr: NameRemainder, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit err: Sync[M]
+  def normalizeMatchName[M[_]: Sync](
+      nr: NameRemainder,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): M[(Option[Var], DeBruijnLevelMap[VarSort])] =
     nr match {
       case _: NameRemainderEmpty => (None: Option[Var], knownFree).pure[M]
@@ -107,9 +110,8 @@ object RemainderNormalizeMatcher {
 }
 
 object CollectionNormalizeMatcher {
-  def normalizeMatch[M[_]](c: Collection, input: CollectVisitInputs)(
-      implicit sync: Sync[M],
-      env: Map[String, Par]
+  def normalizeMatch[M[_]: Sync](c: Collection, input: CollectVisitInputs)(
+      implicit env: Map[String, Par]
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DeBruijnLevelMap[VarSort],
@@ -239,9 +241,8 @@ object CollectionNormalizeMatcher {
 }
 
 object NameNormalizeMatcher {
-  def normalizeMatch[M[_]](n: Name, input: NameVisitInputs)(
-      implicit err: Sync[M],
-      env: Map[String, Par]
+  def normalizeMatch[M[_]: Sync](n: Name, input: NameVisitInputs)(
+      implicit env: Map[String, Par]
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -254,7 +255,7 @@ object NameNormalizeMatcher {
             NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[M]
           }
           case Some(IndexContext(_, ProcSort, sourcePosition)) => {
-            err.raiseError(
+            Sync[M].raiseError(
               UnexpectedNameContext(n.var_, sourcePosition, SourcePosition(n.line_num, n.col_num))
             )
           }
@@ -265,7 +266,7 @@ object NameNormalizeMatcher {
                   input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
                 NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)), newBindingsPair).pure[M]
               case Some(LevelContext(_, _, sourcePosition)) =>
-                err.raiseError(
+                Sync[M].raiseError(
                   UnexpectedReuseOfNameContextFree(
                     n.var_,
                     sourcePosition,
@@ -288,11 +289,9 @@ object NameNormalizeMatcher {
 }
 
 object ProcNormalizeMatcher {
-  // FIXME before adding any more implicits, or fields to the `*VisitInputs` classes, make the normalizer use
-  // ApplicativeAsk / MonadState instead
-  def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
-      implicit sync: Sync[M],
-      env: Map[String, Par]
+
+  def normalizeMatch[M[_]: Sync](p: Proc, input: ProcVisitInputs)(
+      implicit env: Map[String, Par]
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
@@ -509,7 +508,7 @@ object ProcNormalizeMatcher {
                   input.knownFree
                 ).pure[M]
               case Some(IndexContext(_, NameSort, sourcePosition)) =>
-                sync.raiseError(
+                Sync[M].raiseError(
                   UnexpectedProcContext(
                     pvv.var_,
                     sourcePosition,
@@ -530,7 +529,7 @@ object ProcNormalizeMatcher {
                       newBindingsPair
                     ).pure[M]
                   case Some(LevelContext(_, _, firstSourcePosition)) =>
-                    sync.raiseError(
+                    Sync[M].raiseError(
                       UnexpectedReuseOfProcContextFree(
                         pvv.var_,
                         firstSourcePosition,
@@ -551,7 +550,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         input.env.find(p.var_) match {
           case None =>
-            sync.raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
+            Sync[M].raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
           case Some((IndexContext(idx, kind, sourcePosition), depth)) =>
             kind match {
               case ProcSort =>
@@ -563,7 +562,7 @@ object ProcNormalizeMatcher {
                       input.knownFree
                     ).pure[M]
                   case _ =>
-                    sync.raiseError(
+                    Sync[M].raiseError(
                       UnexpectedProcContext(
                         p.var_,
                         sourcePosition,
@@ -580,7 +579,7 @@ object ProcNormalizeMatcher {
                       input.knownFree
                     ).pure[M]
                   case _ =>
-                    sync.raiseError(
+                    Sync[M].raiseError(
                       UnexpectedNameContext(
                         p.var_,
                         sourcePosition,
@@ -908,9 +907,9 @@ object ProcNormalizeMatcher {
                   }
                   .map(x => (x, false, true))
               case default =>
-                sync.raiseError(NormalizerError(s"Unknown receipt impl type $default"))
+                Sync[M].raiseError(NormalizerError(s"Unknown receipt impl type $default"))
             }
-          case default => sync.raiseError(NormalizerError(s"Unknown receipt type $default"))
+          case default => Sync[M].raiseError(NormalizerError(s"Unknown receipt type $default"))
         }
 
         for {
@@ -933,11 +932,11 @@ object ProcNormalizeMatcher {
                           .foldM[M, DeBruijnLevelMap[VarSort]](DeBruijnLevelMap.empty)(
                             (env, receipt) =>
                               env.merge(receipt._2) match {
-                                case (newEnv, Nil) => (newEnv: DeBruijnLevelMap[VarSort]).pure[M]
+                                case (newEnv, Nil) => newEnv.pure[M]
                                 case (_, (shadowingVar, sourcePosition) :: _) =>
                                   val Some(LevelContext(_, _, firstSourcePosition)) =
                                     env.get(shadowingVar)
-                                  sync.raiseError(
+                                  Sync[M].raiseError(
                                     UnexpectedReuseOfNameContextFree(
                                       shadowingVar,
                                       firstSourcePosition,
@@ -974,7 +973,7 @@ object ProcNormalizeMatcher {
       }
 
       case p: PPar =>
-        sync.suspend {
+        Sync[M].defer {
           for {
             result       <- normalizeMatch[M](p.proc_1, input)
             chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
@@ -1039,7 +1038,7 @@ object ProcNormalizeMatcher {
             wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
               freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
           }
-          sync.raiseError(
+          Sync[M].raiseError(
             UnexpectedBundleContent(
               s"Bundle's content must not have free variables or wildcards.$errMsg"
             )
@@ -1056,7 +1055,7 @@ object ProcNormalizeMatcher {
             case _: BundleEquiv     => Bundle(targetResult.par, writeFlag = false, readFlag = false)
           }
           res <- if (targetResult.par.connectives.nonEmpty) {
-                  sync.raiseError(
+                  Sync[M].raiseError(
                     UnexpectedBundleContent(
                       s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
                     )
@@ -1077,7 +1076,7 @@ object ProcNormalizeMatcher {
         def liftCase(c: Case): M[(Proc, Proc)] = c match {
           case ci: CaseImpl => Applicative[M].pure[(Proc, Proc)]((ci.proc_1, ci.proc_2))
           case _ =>
-            sync.raiseError(UnrecognizedNormalizerError("Unexpected Case implementation."))
+            Sync[M].raiseError(UnrecognizedNormalizerError("Unexpected Case implementation."))
         }
 
         for {
@@ -1136,7 +1135,9 @@ object ProcNormalizeMatcher {
           .map(n => n.copy(par = n.par ++ input.par))
 
       case _ =>
-        sync.raiseError(UnrecognizedNormalizerError("Compilation of construct not yet supported."))
+        Sync[M].raiseError(
+          UnrecognizedNormalizerError("Compilation of construct not yet supported.")
+        )
     }
   }
 
