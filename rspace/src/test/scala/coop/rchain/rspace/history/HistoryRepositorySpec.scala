@@ -13,7 +13,6 @@ import coop.rchain.rspace.{
   DeleteData,
   DeleteJoins,
   HotStoreAction,
-  InMemRSpaceCache,
   InsertContinuations,
   InsertData,
   InsertJoins
@@ -190,8 +189,7 @@ class HistoryRepositorySpec
     implicit val span: Span[Task]           = new NoopSpan[Task]()
 
     (for {
-      _           <- pastRoots.commit(History.emptyRootHash)
-      rSpaceCache <- InMemRSpaceCache[Task, String, String, String, String]
+      _ <- pastRoots.commit(History.emptyRootHash)
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
@@ -199,8 +197,7 @@ class HistoryRepositorySpec
         emptyExporter,
         emptyImporter,
         noOpChannelStore,
-        stringSerialize,
-        rSpaceCache
+        stringSerialize
       )
       _ <- f(repo)
     } yield ()).runSyncUnsafe(20.seconds)

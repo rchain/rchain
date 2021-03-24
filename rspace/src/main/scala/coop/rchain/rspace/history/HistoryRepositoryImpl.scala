@@ -29,8 +29,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     // Map channel hash in event log -> channel hash in history
     // We need to maintain this for event log merge
     channelHashesStore: ChannelStore[F, C],
-    sc: Serialize[C],
-    rSpaceCache: HistoryCache[F, C, P, A, K]
+    sc: Serialize[C]
 )(
     implicit codecC: Codec[C],
     codecP: Codec[P],
@@ -41,13 +40,6 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
   implicit val ms = Metrics.Source(RSpaceMetricsSource, "history")
-
-  val datumsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichDatum[A]]] =
-    rSpaceCache.dtsCache
-  val contsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichKont[P, K]]] =
-    rSpaceCache.wksCache
-  val joinsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichJoin[C]]] =
-    rSpaceCache.jnsCache
 
   override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
     channelHashesStore.getChannelHash(hash)
@@ -60,7 +52,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   type CacheAction = Blake2b256Hash => F[Unit]
   type ColdAction  = (Blake2b256Hash, Option[PersistedData])
 
-  type Result = (ColdAction, (HistoryAction, CacheAction))
+  type Result = (ColdAction, HistoryAction)
 
   protected[this] val dataLogger: Logger =
     Logger("coop.rchain.rspace.datametrics")
@@ -113,57 +105,39 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         channelHashesStore.putChannelHash(d.channel)
     }
 
-  private def calculateStorageActions(action: HotStoreTrieAction): Result = {
-    val cacheNoAction = (_: Blake2b256Hash) => ().pure[F]
-
+  private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
       case i: TrieInsertProduce[A] =>
-        val (data, encoded) = encodeDataRich(i.data)
-        val dataLeaf        = DataLeaf(data)
-        val dataHash        = Blake2b256Hash.create(data)
-        val cacheAdjust = (stateHash: Blake2b256Hash) =>
-          datumsCache.put(
-            HistoryPointer(stateHash, i.hash),
-            encoded.map(v => RichDatum(v.item, v.byteVector))
-          )
+        val (data, _) = encodeDataRich(i.data)
+        val dataLeaf  = DataLeaf(data)
+        val dataHash  = Blake2b256Hash.create(data)
         (
           (dataHash, Some(dataLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, dataHash), cacheAdjust)
+          (InsertAction(i.hash.bytes.toSeq.toList, dataHash))
         )
       case i: TrieInsertConsume[P, K] =>
-        val (data, encoded)   = encodeContinuationsRich(i.continuations)
+        val (data, _)         = encodeContinuationsRich(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsHash = Blake2b256Hash.create(data)
-        val cacheAdjust = (stateHash: Blake2b256Hash) =>
-          contsCache.put(
-            HistoryPointer(stateHash, i.hash),
-            encoded.map(v => RichKont(v.item, v.byteVector))
-          )
         (
           (continuationsHash, Some(continuationsLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, continuationsHash), cacheAdjust)
+          (InsertAction(i.hash.bytes.toSeq.toList, continuationsHash))
         )
       case i: TrieInsertJoins[C] =>
-        val (data, encoded) = encodeJoinsRich(i.joins)
-        val joinsLeaf       = JoinsLeaf(data)
-        val joinsHash       = Blake2b256Hash.create(data)
-        val cacheAdjust = (stateHash: Blake2b256Hash) =>
-          joinsCache.put(
-            HistoryPointer(stateHash, i.hash),
-            encoded.map(v => RichJoin(v.item, v.byteVector))
-          )
+        val (data, _) = encodeJoinsRich(i.joins)
+        val joinsLeaf = JoinsLeaf(data)
+        val joinsHash = Blake2b256Hash.create(data)
         (
           (joinsHash, Some(joinsLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, joinsHash), cacheAdjust)
+          (InsertAction(i.hash.bytes.toSeq.toList, joinsHash))
         )
       case d: TrieDeleteProduce =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList), cacheNoAction))
+        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
       case d: TrieDeleteConsume =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList), cacheNoAction))
+        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
       case d: TrieDeleteJoins =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList), cacheNoAction))
+        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
     }
-  }
 
   private def transform(hotStoreAction: HotStoreAction): HotStoreTrieAction =
     hotStoreAction match {
@@ -192,16 +166,10 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   def doCheckpoint(trieActions: Seq[HotStoreTrieAction]): F[HistoryRepository[F, C, P, A, K]] = {
     val storageActions = trieActions.par.map(calculateStorageActions)
     val coldActions    = storageActions.map(_._1).collect { case (key, Some(data)) => (key, data) }
-    val historyActions = storageActions.map(_._2._1)
-    val cacheActions   = storageActions.map(_._2._2)
+    val historyActions = storageActions.map(_._2)
 
     // save new root for state after checkpoint
     val storeRoot = (root: Blake2b256Hash) => Stream.eval(rootsRepository.commit(root))
-    // save data put into new state into cache
-    val storeCache = (stateHash: Blake2b256Hash) =>
-      Stream
-        .emits(cacheActions.toList.map(a => Stream.eval(a(stateHash))))
-        .parJoinProcBounded
 
     // store cold data
     val storeLeaves =
@@ -213,9 +181,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
           .process(historyActions.toList)
           .flatMap(
             resultHistory =>
-              for {
-                _ <- (storeRoot(resultHistory.root) concurrently storeCache(resultHistory.root)).compile.drain
-              } yield resultHistory.asRight[Unit]
+              storeRoot(resultHistory.root).compile.drain.as(resultHistory.asRight[Unit])
           )
       )
 
@@ -262,7 +228,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def root: Blake2b256Hash = currentHistory.root
 
   override def getHistoryReader(stateHash: Blake2b256Hash): HashHistoryReader[F, C, P, A, K] =
-    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), rSpaceCache, leafStore)
+    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), leafStore)
 }
 
 object HistoryRepositoryImpl {
