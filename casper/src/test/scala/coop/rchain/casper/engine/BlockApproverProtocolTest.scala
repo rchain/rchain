@@ -146,7 +146,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
     }
   }
 
-  it should "reject candidate with incorrect genesis params" in effectTest {
+  it should "reject candidate with incorrect blessed contracts" in effectTest {
     createProtocol.flatMap {
       case (approver, node) =>
         val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
@@ -168,7 +168,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 quarantineLength = approver.quarantineLength + 1,
                 numberOfActiveValidators = approver.numberOfActiveValidators + 1
               )
-        } yield r shouldBe Left("Tuplespace hash mismatch.")
+        } yield r.isLeft shouldBe true
     }
   }
 }
@@ -185,13 +185,7 @@ object BlockApproverProtocolTest {
     val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
     val context                     = GenesisBuilder.buildGenesis(params)
 
-    val bonds = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
-    val vaults = Traverse[List]
-      .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
-        RevAddress.fromPublicKey
-      )
-      .get
-      .map(Vault(_, 0L))
+    val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1
 
     TestNode.networkEff(context, networkSize = 1).use { nodes =>
@@ -200,7 +194,7 @@ object BlockApproverProtocolTest {
         .of[Effect](
           node.validatorId.get,
           genesisParams.timestamp,
-          vaults,
+          genesisParams.vaults,
           bonds,
           genesisParams.proofOfStake.minimumBond,
           genesisParams.proofOfStake.maximumBond,

@@ -9,7 +9,6 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
@@ -173,16 +172,34 @@ object BlockApproverProtocol {
             vaults,
             Long.MaxValue
           )
-          .toSet
         blockDeploys = block.body.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
+
+        // check if expected blessed contracts and ones reported by candidate are equal
+        // order should be the same and terms should be the same
+        wrongDeploys = (blockDeploys zip genesisBlessedContracts)
+          .mapFilter {
+            case (candidateDeploy, expectedContract) => {
+              val term    = candidateDeploy.deploy.data.term
+              val isWrong = term != expectedContract.data.term
+              if (isWrong) term.lines.findFirst.get.some else none[String]
+            }
+          }
+
+        _ <- wrongDeploys.isEmpty
+              .either(())
+              .or(
+                s"Genesis candidate deploys do not match expected blessed contracts.\nBad contracts:\n${wrongDeploys
+                  .mkString("\n")}"
+              )
       } yield (blockDeploys, block.body.state)
 
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
+      // check if candidate blessed contracts match candidate postStateHash
       stateHash <- EitherT(
                     runtimeManager
                       .replayComputeState(runtimeManager.emptyStateHash)(
