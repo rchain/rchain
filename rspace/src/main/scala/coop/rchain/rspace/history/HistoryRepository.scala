@@ -10,7 +10,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction, InMemRSpaceCache}
+import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction}
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{KeyValueStore, LazyAdHocKeyValueCache}
 import scodec.Codec
@@ -57,8 +57,7 @@ object HistoryRepositoryInstances {
       historyKeyValueStore: KeyValueStore[F],
       rootsKeyValueStore: KeyValueStore[F],
       coldKeyValueStore: KeyValueStore[F],
-      channelKeyValueStore: KeyValueStore[F],
-      rSpaceCache: HistoryCache[F, C, P, A, K]
+      channelKeyValueStore: KeyValueStore[F]
   )(
       implicit codecC: Codec[C],
       codecP: Codec[P],
@@ -88,8 +87,7 @@ object HistoryRepositoryInstances {
       exporter,
       importer,
       channelStore,
-      sc,
-      rSpaceCache
+      sc
     )
   }
 }

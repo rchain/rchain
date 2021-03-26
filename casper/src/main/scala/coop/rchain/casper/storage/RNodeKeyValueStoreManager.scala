@@ -27,7 +27,6 @@ object RNodeKeyValueStoreManager {
   private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
   private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
   // Temporary storage / cache
-  private val rspaceCacheEnvConfig  = LmdbEnvConfig(name = "rspace-cache")
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
 
@@ -61,8 +60,6 @@ object RNodeKeyValueStoreManager {
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),
       (Db("eval-cold"), evalColdEnvConfig),
-      // RSpace cache (used for block merge)
-      (Db("rspace-channels"), rspaceCacheEnvConfig),
       (Db("channels"), channelEnvConfig)
     ) ++ (
       // RSpace

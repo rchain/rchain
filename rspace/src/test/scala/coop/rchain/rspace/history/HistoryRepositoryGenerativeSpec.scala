@@ -9,7 +9,6 @@ import coop.rchain.rspace.{
   DeleteData,
   DeleteJoins,
   HotStoreAction,
-  InMemRSpaceCache,
   InsertContinuations,
   InsertData,
   InsertJoins
@@ -58,7 +57,6 @@ class LMDBHistoryRepositoryGenerativeSpec
       emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
-      rSpaceCache        <- InMemRSpaceCache[Task, String, Pattern, String, StringsCaptor]
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -67,8 +65,7 @@ class LMDBHistoryRepositoryGenerativeSpec
           exporter,
           importer,
           channelStore,
-          stringSerialize,
-          rSpaceCache
+          stringSerialize
         )
     } yield repository
   }
@@ -94,7 +91,6 @@ class InmemHistoryRepositoryGenerativeSpec
         stringSerialize,
         codecString
       )
-      rSpaceCache <- InMemRSpaceCache[Task, String, Pattern, String, StringsCaptor]
       r = HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
@@ -102,8 +98,7 @@ class InmemHistoryRepositoryGenerativeSpec
         emptyExporter,
         emptyImporter,
         channelStore,
-        stringSerialize,
-        rSpaceCache
+        stringSerialize
       )
     } yield r
   }
