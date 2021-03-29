@@ -305,12 +305,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     charge[M](VAR_EVAL_COST) >> {
       valproc.varInstance match {
         case BoundVar(level) =>
-          env.get(level) match {
-            case Some(par) =>
-              par.pure[M]
-            case None =>
-              ReduceError("Unbound variable: " + level + " in " + env.envMap).raiseError[M, Par]
-          }
+          env.get(level).liftTo[M](ReduceError("Unbound variable: " + level + " in " + env.envMap))
         case Wildcard(_) =>
           ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
         case FreeVar(_) =>
@@ -326,15 +321,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   ): M[Unit] = {
 
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
-      Range(0, freeCount).foldLeft(env)(
-        (acc, e) =>
-          acc.put(
-            freeMap.get(e) match {
-              case Some(p) => p
-              case None    => Par()
-            }
-          )
-      )
+      Range(0, freeCount).foldLeft(env)((acc, e) => acc.put(freeMap.getOrElse(e, Par())))
 
     def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
       def firstMatchM(
@@ -392,7 +379,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         )
 
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
-        if (urnMap.get(urn).isEmpty)
+        if (!urnMap.contains(urn))
           // If `urn` can't be found in `urnMap`, it must be referencing an injection
           neu.injections
             .get(urn)
@@ -408,15 +395,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             }
             .getOrElse(normalizerBugFound(urn).asLeft[Env[Par]])
         else
-          urnMap.get(urn) match {
-            case Some(p) => newEnv.put(p).asRight[InterpreterError]
-            case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
-          }
+          urnMap.get(urn).map(newEnv.put).toRight(left = ReduceError(s"Unknown urn for new: $urn"))
 
-      urns.toList.foldM(simpleNews)(addUrn) match {
-        case Right(tmpEnv) => tmpEnv.pure[M]
-        case Left(e)       => e.raiseError[M, Env[Par]]
-      }
+      urns.toList.foldM(simpleNews)(addUrn).fold(_.raiseError[M, Env[Par]], _.pure[M])
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>
@@ -454,11 +435,10 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           _            <- charge[M](METHOD_CALL_COST)
           evaledTarget <- evalExpr(target)
           evaledArgs   <- arguments.toList.traverse(evalExpr)
-          resultPar <- methodTable.get(method) match {
-                        case None =>
-                          ReduceError("Unimplemented method: " + method).raiseError[M, Par]
-                        case Some(f) => f(evaledTarget, evaledArgs)
-                      }
+          resultPar <- methodTable
+                        .get(method)
+                        .liftTo[M](ReduceError("Unimplemented method: " + method))
+                        .flatMap(_(evaledTarget, evaledArgs))
         } yield resultPar
       }
       case _ => evalExprToExpr(expr).map(fromExpr(_)(identity))
@@ -785,11 +765,10 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             _            <- charge[M](METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(evalExpr)
-            resultPar <- methodTable.get(method) match {
-                          case None =>
-                            ReduceError("Unimplemented method: " + method).raiseError[M, Par]
-                          case Some(f) => f(evaledTarget, evaledArgs)
-                        }
+            resultPar <- methodTable
+                          .get(method)
+                          .liftTo[M](ReduceError("Unimplemented method: " + method))
+                          .flatMap(_(evaledTarget, evaledArgs))
             resultExpr <- evalSingleExpr(resultPar)
           } yield resultExpr
         case _ => ReduceError("Unimplemented expression: " + expr).raiseError[M, Expr]

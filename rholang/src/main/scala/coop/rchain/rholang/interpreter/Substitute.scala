@@ -66,11 +66,7 @@ object Substitute {
     else
       term.varInstance match {
         case BoundVar(index) =>
-          env.get(index) match {
-            case Some(par) => Applicative[M].pure(Right(par))
-            case None =>
-              Applicative[M].pure(Left(term))
-          }
+          Sync[M].delay(env.get(index).toRight(left = term))
         case _ =>
           Sync[M].raiseError(SubstituteError(s"Illegal Substitution [$term]"))
       }
@@ -78,22 +74,13 @@ object Substitute {
   def maybeSubstitute[M[_]: Sync](
       term: EVar
   )(implicit depth: Int, env: Env[Par]): M[Either[EVar, Par]] =
-    maybeSubstitute[M](term.v).map {
-      case Left(v)    => Left(EVar(v))
-      case Right(par) => Right(par)
-    }
+    maybeSubstitute[M](term.v).map(_.leftMap(EVar(_)))
 
   def maybeSubstitute[M[_]: Sync](
       term: VarRef
   )(implicit depth: Int, env: Env[Par]): M[Either[VarRef, Par]] =
-    if (term.depth != depth)
-      Applicative[M].pure(Left(term))
-    else
-      env.get(term.index) match {
-        case Some(par) => Applicative[M].pure(Right(par))
-        case None =>
-          Applicative[M].pure(Left(term))
-      }
+    if (term.depth != depth) term.asLeft[Par].pure[M]
+    else Sync[M].delay(env.get(term.index).toRight(left = term))
 
   implicit def substituteBundle[M[_]: Sync]: Substitute[M, Bundle] =
     new Substitute[M, Bundle] {
@@ -101,17 +88,12 @@ object Substitute {
 
       override def substitute(term: Bundle)(implicit depth: Int, env: Env[Par]): M[Bundle] =
         substitutePar[M].substitute(term.body).map { subBundle =>
-          subBundle.singleBundle() match {
-            case Some(value) => term.merge(value)
-            case None        => term.copy(body = subBundle)
-          }
+          subBundle.singleBundle().map(term.merge).getOrElse(term.copy(body = subBundle))
         }
+
       override def substituteNoSort(term: Bundle)(implicit depth: Int, env: Env[Par]): M[Bundle] =
         substitutePar[M].substituteNoSort(term.body).map { subBundle =>
-          subBundle.singleBundle() match {
-            case Some(value) => term.merge(value)
-            case None        => term.copy(body = subBundle)
-          }
+          subBundle.singleBundle().map(term.merge).getOrElse(term.copy(body = subBundle))
         }
     }
 
@@ -351,13 +333,7 @@ object Substitute {
 
           case EMapBody(ParMap(spm, connectiveUsed, locallyFree, remainder)) =>
             for {
-              kvps <- spm.sortedList.traverse {
-                       case (p1, p2) =>
-                         for {
-                           pk1 <- s1(p1)
-                           pk2 <- s1(p2)
-                         } yield (pk1, pk2)
-                     }
+              kvps <- spm.sortedList.traverse(_.bimap(s1, s1).bisequence)
             } yield Expr(
               exprInstance = EMapBody(
                 ParMap(kvps, connectiveUsed, locallyFree.map(_.until(env.shift)), remainder)
