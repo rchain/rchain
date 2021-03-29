@@ -847,13 +847,14 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           case Some(Expr(GString(encoded))) =>
             for {
               _ <- charge[M](hexToBytesCost(encoded))
-              res <- Try(ByteString.copyFrom(Base16.unsafeDecode(encoded))).fold(
-                      th =>
+              res <- Sync[M]
+                      .delay(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
+                      .handleErrorWith { ex =>
                         ReduceError(
-                          s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
-                        ).raiseError[M, Par],
-                      ba => (Expr(GByteArray(ba)): Par).pure[M]
-                    )
+                          s"Error: exception was thrown when decoding input string to hexadecimal: ${ex.getMessage}"
+                        ).raiseError[M, ByteString]
+                      }
+                      .map(ba => Expr(GByteArray(ba)): Par)
             } yield res
           case Some(Expr(other)) =>
             MethodNotDefined("hexToBytes", other.typ).raiseError[M, Par]
@@ -873,16 +874,15 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         p.singleExpr() match {
           case Some(Expr(GByteArray(bytes))) =>
             for {
-              _ <- charge[M](bytesToHexCost(bytes.toByteArray()))
-              res <- {
-                Try(Base16.encode(bytes.toByteArray())).fold(
-                  th =>
-                    ReduceError(
-                      s"Error: exception was thrown when encoding input byte array to hexadecimal string: ${th.getMessage}"
-                    ).raiseError[M, Par],
-                  str => (Expr(GString(str)): Par).pure[M]
-                )
-              }
+              _ <- charge[M](bytesToHexCost(bytes.toByteArray))
+              res <- Sync[M]
+                      .delay(Base16.encode(bytes.toByteArray))
+                      .handleErrorWith { ex =>
+                        ReduceError(
+                          s"Error: exception was thrown when encoding input byte array to hexadecimal string: ${ex.getMessage}"
+                        ).raiseError[M, String]
+                      }
+                      .map(str => Expr(GString(str)): Par)
             } yield res
           case Some(Expr(other)) =>
             MethodNotDefined("bytesToHex", other.typ).raiseError[M, Par]
