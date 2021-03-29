@@ -617,7 +617,7 @@ object ProcNormalizeMatcher {
                          normalizeMatch[M](e, acc._2).map(
                            procMatchResult =>
                              (
-                               procMatchResult.par :: acc._1,
+                               procMatchResult.par +: acc._1,
                                ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
                                acc._3 | procMatchResult.par.locallyFree,
                                acc._4 || procMatchResult.par.connectiveUsed
