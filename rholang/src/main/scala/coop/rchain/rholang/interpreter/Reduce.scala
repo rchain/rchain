@@ -955,9 +955,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("union", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("union", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr  <- evalSingleExpr(p)
         otherExpr <- evalSingleExpr(args.head)
         result    <- union(baseExpr, otherExpr)
@@ -983,9 +983,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("diff", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("diff", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr  <- evalSingleExpr(p)
         otherExpr <- evalSingleExpr(args.head)
         result    <- diff(baseExpr, otherExpr)
@@ -1012,9 +1012,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("add", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("add", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](ADD_COST)
@@ -1054,9 +1054,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("delete", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("delete", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
@@ -1077,9 +1077,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("contains", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("contains", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](LOOKUP_COST)
@@ -1098,9 +1098,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("get", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("get", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         _        <- charge[M](LOOKUP_COST)
@@ -1119,9 +1119,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("getOrElse", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("getOrElse", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         default  <- evalExpr(args(1))
@@ -1141,9 +1141,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("set", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("set", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         value    <- evalExpr(args(1))
@@ -1164,9 +1164,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("keys", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("keys", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         _        <- charge[M](KEYS_METHOD_COST)
         result   <- keys(baseExpr)
@@ -1189,9 +1189,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("size", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("size", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- size(baseExpr)
         _        <- charge[M](sizeMethodCost(result._1))
@@ -1214,9 +1214,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("length", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("length", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         _        <- charge[M](LENGTH_METHOD_COST)
         result   <- length(baseExpr)
@@ -1239,9 +1239,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("slice", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("slice", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr   <- evalSingleExpr(p)
         fromArgRaw <- evalToLong(args.head)
         fromArg    <- restrictToInt(fromArgRaw)
@@ -1263,9 +1263,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("take", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("take", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         nArgRaw  <- evalToLong(args.head)
         nArg     <- restrictToInt(nArgRaw)
@@ -1300,9 +1300,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toList", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toList", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toList(baseExpr)
       } yield result
@@ -1337,9 +1337,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toSet", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toSet", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toSet(baseExpr)
       } yield result
@@ -1379,9 +1379,9 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toMap", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toMap", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toMap(baseExpr)
       } yield result
