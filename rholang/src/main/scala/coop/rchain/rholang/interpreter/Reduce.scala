@@ -57,7 +57,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     * @param chan  The channel on which data is being sent.
     * @param data  The par objects holding the processes being sent.
     * @param persistent  True if the write should remain in the tuplespace indefinitely.
-    * @return  An optional continuation resulting from a match in the tuplespace.
     */
   private def produce(
       chan: Par,
@@ -78,8 +77,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Par].
     *               The Seq is for arity matching, and each term in the Seq is a name pattern.
     * @param body  A Par object which will be run in the envirnoment resulting from the match.
-    * @return  An optional continuation resulting from a match. The body of the continuation
-    *          will be @param body if the continuation is not None.
     */
   private def consume(
       binds: Seq[(BindPattern, Par)],
@@ -154,7 +151,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       implicit env: Env[Par],
       rand: Blake2b512Random
   ): M[Unit] = {
-    // for lack of a better type...
     val terms: Seq[GeneratedMessage] = Seq(
       par.sends,
       par.receives,
@@ -246,7 +242,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     *    correctly used as a key in the tuple space.
     * 3. Evaluate any top level expressions in the data being sent.
     * 4. Call produce
-    * 5. If produce returned a continuation, evaluate it.
     *
     * @param send An output process
     * @param env An execution context
@@ -386,9 +381,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   /**
     * Adds neu.bindCount new GPrivate from UUID's to the environment and then
     * proceeds to evaluate the body.
-    *
-    * @param neu
-    * @return
     */
   // TODO: Eliminate variable shadowing
   private def eval(
@@ -1042,7 +1034,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
               )
             )
           ).pure[M]
-        //TODO(mateusz.gorski): think whether cost accounting for addition should be dependend on the operands
         case other => MethodNotDefined("add", other.typ).raiseError[M, Expr]
       }
 
