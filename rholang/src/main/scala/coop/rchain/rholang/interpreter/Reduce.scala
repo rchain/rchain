@@ -140,7 +140,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       }
       .map {
         case (chan, _, removedData, _) =>
-          produce(chan, removedData, false)
+          produce(chan, removedData, persistent = false)
       }
 
   /**
@@ -229,8 +229,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       case term: Bundle  => eval(term)
       case term: Expr =>
         term.exprInstance match {
-          case e: EVarBody    => eval(e.value.v) >>= (eval(_))
-          case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
+          case e: EVarBody    => eval(e.value.v) >>= eval
+          case e: EMethodBody => evalExprToPar(e) >>= eval
           case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
         }
       case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
@@ -255,7 +255,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     for {
       _        <- charge[M](SEND_EVAL_COST)
       evalChan <- evalExpr(send.chan)
-      subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
+      subChan  <- substituteAndCharge[Par, M](evalChan, depth = 0, env)
       unbundled <- subChan.singleBundle() match {
                     case Some(value) =>
                       if (!value.writeFlag)
@@ -264,7 +264,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
                     case None => subChan.pure[M]
                   }
       data      <- send.data.toList.traverse(evalExpr)
-      substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
+      substData <- data.traverse(substituteAndCharge[Par, M](_, depth = 0, env))
       _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent)
     } yield ()
 
@@ -274,26 +274,20 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   ): M[Unit] =
     for {
       _ <- charge[M](RECEIVE_EVAL_COST)
-      binds <- receive.binds.toList.traverse(
-                rb =>
-                  for {
-                    q <- unbundleReceive(rb)
-                    substPatterns <- rb.patterns.toList
-                                      .traverse(substituteAndCharge[Par, M](_, 1, env))
-                  } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
-              )
+      binds <- receive.binds.toList.traverse { rb =>
+                for {
+                  q <- unbundleReceive(rb)
+                  substPatterns <- rb.patterns.toList
+                                    .traverse(substituteAndCharge[Par, M](_, depth = 1, env))
+                } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
+              }
       // TODO: Allow for the environment to be stored with the body in the Tuplespace
       substBody <- substituteNoSortAndCharge[Par, M](
                     receive.body,
-                    0,
+                    depth = 0,
                     env.shift(receive.bindCount)
                   )
-      _ <- consume(
-            binds,
-            ParWithRandom(substBody, rand),
-            receive.persistent,
-            receive.peek
-          )
+      _ <- consume(binds, ParWithRandom(substBody, rand), receive.persistent, receive.peek)
     } yield ()
 
   /**
@@ -305,7 +299,6 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     * @return If the variable has a binding (par), lift the
     *                  binding into the monadic context, else signal
     *                  an exception.
-    *
     */
   private def eval(
       valproc: Var
@@ -353,7 +346,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           case Nil => ().asRight[(Par, Seq[MatchCase])].pure[M]
           case singleCase +: caseRem =>
             for {
-              pattern     <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
+              pattern     <- substituteAndCharge[Par, M](singleCase.pattern, depth = 1, env)
               matchResult <- spatialMatchResult[M](target, pattern)
               res <- matchResult match {
                       case None =>
@@ -374,7 +367,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       _            <- charge[M](MATCH_EVAL_COST)
       evaledTarget <- evalExpr(mat.target)
       // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
-      substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
+      substTarget <- substituteAndCharge[Par, M](evaledTarget, depth = 0, env)
       _           <- firstMatch(substTarget, mat.cases)
     } yield ()
   }
@@ -434,7 +427,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Par] =
     for {
       evalSrc <- evalExpr(rb.source)
-      subst   <- substituteAndCharge[Par, M](evalSrc, 0, env)
+      subst   <- substituteAndCharge[Par, M](evalSrc, depth = 0, env)
       // Check if we try to read from bundled channel
       unbndl <- subst.singleBundle() match {
                  case Some(value) =>
@@ -584,8 +577,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             v1 <- evalExpr(p1)
             v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            sv1 <- substituteAndCharge[Par, M](v1, depth = 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, depth = 0, env)
             _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
 
@@ -593,8 +586,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
           for {
             v1  <- evalExpr(p1)
             v2  <- evalExpr(p2)
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            sv1 <- substituteAndCharge[Par, M](v1, depth = 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, depth = 0, env)
             _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
 
@@ -615,8 +608,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
             evaledTarget <- evalExpr(target)
-            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
-            substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
+            substTarget  <- substituteAndCharge[Par, M](evaledTarget, depth = 0, env)
+            substPattern <- substituteAndCharge[Par, M](pattern, depth = 1, env)
             matchResult  <- spatialMatchResult[M](substTarget, substPattern)
           } yield GBool(matchResult.isDefined)
 
@@ -858,7 +851,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       else {
         for {
           exprEvaled <- evalExpr(p)
-          exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
+          exprSubst  <- substituteAndCharge[Par, M](exprEvaled, depth = 0, env)
           _          <- charge[M](toByteArrayCost(exprSubst))
           ba         <- Sync[M].fromEither(serialize(exprSubst))
         } yield Expr(GByteArray(ByteString.copyFrom(ba)))
