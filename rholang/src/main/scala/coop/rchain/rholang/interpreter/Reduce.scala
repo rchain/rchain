@@ -19,7 +19,7 @@ import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
-import coop.rchain.rspace.util._
+import coop.rchain.rspace.util.unpackOptionWithPeek
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
@@ -65,11 +65,13 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       data: ListParWithRandom,
       persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent) >>= (continue(
-      _,
-      produce(chan, data, persistent),
-      persistent
-    ))
+    space.produce(chan, data, persist = persistent) >>= { produceResult =>
+      continue(
+        unpackOptionWithPeek(produceResult),
+        produce(chan, data, persistent),
+        persistent
+      )
+    }
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -93,7 +95,13 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
+    ) >>= { consumeResult =>
+      continue(
+        unpackOptionWithPeek(consumeResult),
+        consume(binds, body, persistent, peek),
+        persistent
+      )
+    }
   }
 
   private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean): M[Unit] =
