@@ -179,19 +179,21 @@ object BlockApproverProtocol {
 
         // check if expected blessed contracts and ones reported by candidate are equal
         // order should be the same and terms should be the same
-        wrongDeploys = (blockDeploys zip genesisBlessedContracts)
-          .mapFilter {
-            case (candidateDeploy, expectedContract) => {
-              val term    = candidateDeploy.deploy.data.term
-              val isWrong = term != expectedContract.data.term
-              if (isWrong) term.lines.findFirst.get.some else none[String]
-            }
+        wrongDeploys = (blockDeploys.iterator zip genesisBlessedContracts.iterator)
+          .filter {
+            case (candidateDeploy, expectedContract) =>
+              candidateDeploy.deploy.data.term != expectedContract.data.term
           }
+          .map {
+            case (candidateDeploy, _) =>
+              candidateDeploy.deploy.data.term.substring(0, 100)
+          }
+          .take(5)
 
         _ <- wrongDeploys.isEmpty
               .either(())
               .or(
-                s"Genesis candidate deploys do not match expected blessed contracts.\nBad contracts:\n${wrongDeploys
+                s"Genesis candidate deploys do not match expected blessed contracts.\nBad contracts (5 first):\n${wrongDeploys
                   .mkString("\n")}"
               )
       } yield (blockDeploys, block.body.state)
