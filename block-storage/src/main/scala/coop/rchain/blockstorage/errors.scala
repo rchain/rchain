@@ -1,8 +1,6 @@
 package coop.rchain.blockstorage
 
-import cats.data.EitherT
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
 
 import java.nio.file.Path
 
@@ -15,22 +13,5 @@ final case class TopoSortFragmentParameterError(startBlockNumber: Long, endBlock
 final case class BlockSenderIsMalformed(block: BlockMessage) extends StorageError
 
 object StorageError {
-  type StorageErr[A]        = Either[StorageError, A]
-  type StorageErrT[F[_], A] = EitherT[F, StorageError, A]
-
-  def errorMessage(ce: StorageError): String =
-    ce match {
-      case CheckpointsDoNotStartFromZero(sortedCheckpoints) =>
-        s"Checkpoints do not start from block number 0: ${sortedCheckpoints.mkString(",")}"
-      case CheckpointsAreNotConsecutive(sortedCheckpoints) =>
-        s"Checkpoints are not consecutive: ${sortedCheckpoints.mkString(",")}"
-      case TopoSortFragmentParameterError(startBlockNumber, endBlockNumber) =>
-        s"Topological sorting of the dag with bad parameter ${startBlockNumber} and ${endBlockNumber}."
-      case BlockSenderIsMalformed(block) =>
-        s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
-    }
-
-  implicit class StorageErrorToMessage(storageError: StorageError) {
-    val message: String = StorageError.errorMessage(storageError)
-  }
+  type StorageErr[A] = Either[StorageError, A]
 }
