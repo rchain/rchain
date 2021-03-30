@@ -1,10 +1,10 @@
 package coop.rchain.blockstorage
 
-import java.nio.file.Path
-
 import cats.data.EitherT
-import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16
+
+import java.nio.file.Path
 
 sealed abstract class StorageError extends Exception
 
@@ -14,13 +14,6 @@ final case class TopoSortLengthIsTooBig(length: Long)                         ex
 final case class TopoSortFragmentParameterError(startBlockNumber: Long, endBlockNumber: Long)
     extends StorageError
 final case class BlockSenderIsMalformed(block: BlockMessage) extends StorageError
-final case class CheckpointDoesNotExist(offset: Long)        extends StorageError
-final case object LatestMessagesLogIsMalformed               extends StorageError
-final case object EquivocationsTrackerLogIsMalformed         extends StorageError
-final case object LatestMessagesLogIsCorrupted               extends StorageError
-final case object DataLookupIsCorrupted                      extends StorageError
-final case object InvalidBlocksIsCorrupted                   extends StorageError
-final case object BlockHashesByDeployLogIsCorrupted          extends StorageError
 final case object LastFinalizedBlockIsCorrupted              extends StorageError
 
 object StorageError {
@@ -39,20 +32,6 @@ object StorageError {
         s"Topological sorting of the dag with bad parameter ${startBlockNumber} and ${endBlockNumber}."
       case BlockSenderIsMalformed(block) =>
         s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is malformed: ${Base16.encode(block.sender.toByteArray)}"
-      case CheckpointDoesNotExist(offset) =>
-        s"Requested a block with block number $offset, but there is no checkpoint for it"
-      case LatestMessagesLogIsMalformed =>
-        "Latest messages log is malformed"
-      case EquivocationsTrackerLogIsMalformed =>
-        "Equivocations tracker log is malformed"
-      case LatestMessagesLogIsCorrupted =>
-        "Latest messages log is corrupted"
-      case DataLookupIsCorrupted =>
-        "Data lookup log is corrupted"
-      case InvalidBlocksIsCorrupted =>
-        "Invalid blocks log is corrupted"
-      case BlockHashesByDeployLogIsCorrupted =>
-        "Block hashes by deploy log is corrupted"
       case LastFinalizedBlockIsCorrupted =>
         "Last finalized block file is corrupted"
     }

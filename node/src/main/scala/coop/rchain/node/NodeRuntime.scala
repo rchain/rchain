@@ -746,15 +746,7 @@ object NodeRuntime {
       }
 
       // Block DAG storage
-      blockDagStorage <- {
-        for {
-          // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- rnodeStoreManager.store("block-metadata")
-          dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
-          // Create DAG store
-          dagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
-        } yield dagStorage
-      }
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
       // Casper requesting blocks cache
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)

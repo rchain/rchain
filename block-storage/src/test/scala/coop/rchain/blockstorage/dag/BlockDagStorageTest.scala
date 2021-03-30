@@ -1,32 +1,14 @@
 package coop.rchain.blockstorage.dag
 
-import java.nio.file.StandardOpenOption
-
-import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.LatestMessagesLogIsCorrupted
-import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
-import coop.rchain.blockstorage.util.io._
-import coop.rchain.casper.protocol._
-import coop.rchain.catscontrib.TaskContrib.TaskOps
-import coop.rchain.metrics.Metrics
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.blockImplicits._
-import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
-import coop.rchain.shared
-import coop.rchain.shared.AttemptOps._
-import coop.rchain.shared.PathOps._
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scodec.codecs._
-
-import scala.util.Random
 
 trait BlockDagStorageTest
     extends FlatSpecLike
