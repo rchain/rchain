@@ -734,14 +734,8 @@ object NodeRuntime {
       // Last finalized Block storage
       lastFinalizedStorage <- {
         for {
-          lastFinalizedBlockDb   <- rnodeStoreManager.store("last-finalized-block")
-          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
-          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
-          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
-          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-          _ <- LastFinalizedKeyValueStorage
-                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
-                .whenA(shouldMigrate)
+          lastFinalizedBlockDb <- rnodeStoreManager.store("last-finalized-block")
+          lastFinalizedStore   = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
         } yield lastFinalizedStore
       }
 
