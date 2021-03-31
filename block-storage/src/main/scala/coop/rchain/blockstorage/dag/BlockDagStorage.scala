@@ -14,8 +14,6 @@ trait BlockDagStorage[F[_]] {
       invalid: Boolean
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def checkpoint(): F[Unit]
-  def close(): F[Unit]
   def addFinalizedBlockHash(blockHash: BlockHash): F[Unit]
 }
 

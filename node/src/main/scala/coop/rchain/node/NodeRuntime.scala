@@ -10,7 +10,7 @@ import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.blockstorage.util.io.IOError
@@ -89,7 +89,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   /** Configuration */
   private val dataDir                  = nodeConf.storage.dataDir
   private val blockstorePath           = dataDir.resolve("blockstore")
-  private val blockdagStoragePath      = dataDir.resolve("dagstorage")
   private val deployStoragePath        = dataDir.resolve("deploystorage")
   private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
 
@@ -184,22 +183,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         */
       _ <- mkDirs(dataDir)
 
-      dagConfig = BlockDagFileStorage.Config(
-        latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
-        latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
-        blockMetadataLogPath = blockdagStoragePath.resolve("blockMetadataLogPath"),
-        blockMetadataCrcPath = blockdagStoragePath.resolve("blockMetadataCrcPath"),
-        equivocationsTrackerLogPath = blockdagStoragePath.resolve("equivocationsTrackerLogPath"),
-        equivocationsTrackerCrcPath = blockdagStoragePath.resolve("equivocationsTrackerCrcPath"),
-        invalidBlocksLogPath = blockdagStoragePath.resolve("invalidBlocksLogPath"),
-        invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
-        blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
-        blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
-        checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
-        blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
-        mapSize = 10 * gb
-      )
-
       deployStorageConfig = LMDBDeployStorage.Config(storagePath = deployStoragePath, mapSize = gb)
 
       eventBus <- RchainEvents[F]
@@ -214,7 +197,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           commUtil,
           blockRetriever,
           nodeConf,
-          dagConfig,
           blockstorePath,
           lastFinalizedStoragePath,
           rspaceScheduler,
@@ -697,7 +679,6 @@ object NodeRuntime {
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
-      dagConfig: BlockDagFileStorage.Config,
       blockstorePath: Path,
       lastFinalizedPath: Path,
       rspaceScheduler: Scheduler,
@@ -753,33 +734,13 @@ object NodeRuntime {
       // Last finalized Block storage
       lastFinalizedStorage <- {
         for {
-          lastFinalizedBlockDb   <- rnodeStoreManager.store("last-finalized-block")
-          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
-          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
-          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
-          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-          _ <- LastFinalizedKeyValueStorage
-                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
-                .whenA(shouldMigrate)
+          lastFinalizedBlockDb <- rnodeStoreManager.store("last-finalized-block")
+          lastFinalizedStore   = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
         } yield lastFinalizedStore
       }
 
       // Block DAG storage
-      blockDagStorage <- {
-        for {
-          // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- rnodeStoreManager.store("block-metadata")
-          dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
-          oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
-          shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists
-          // TODO: remove `dagConfig`, it's not used anymore (after migration)
-          _ <- BlockDagKeyValueStorage
-                .importFromFileStorage(rnodeStoreManager, dagConfig)
-                .whenA(shouldMigrate)
-          // Create DAG store
-          dagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
-        } yield dagStorage
-      }
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
       // Casper requesting blocks cache
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
