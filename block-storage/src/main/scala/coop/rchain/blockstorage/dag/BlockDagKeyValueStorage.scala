@@ -234,10 +234,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
 
-  def checkpoint(): F[Unit] = ().pure[F]
-
-  def close(): F[Unit] = ().pure[F]
-
   def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
     blockMetadataIndex.addFinalizedBlock(blockHash)
 }
