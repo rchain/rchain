@@ -74,12 +74,7 @@ object Setup {
       .of[Task](
         validatorId,
         deployTimestamp,
-        Traverse[List]
-          .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
-            RevAddress.fromPublicKey
-          )
-          .get
-          .map(Vault(_, 0L)),
+        genesisParams.vaults,
         bonds,
         genesisParams.proofOfStake.minimumBond,
         genesisParams.proofOfStake.maximumBond,
