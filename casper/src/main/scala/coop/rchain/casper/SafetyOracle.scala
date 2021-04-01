@@ -55,6 +55,8 @@ trait SafetyOracle[F[_]] {
 }
 
 object SafetyOracle extends SafetyOracleInstances {
+  val MIN_FAULT_TOLERANCE                                        = -1f
+  val MAX_FAULT_TOLERANCE                                        = 1f
   def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
 }
 

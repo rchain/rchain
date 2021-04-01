@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.Applicative
+import cats.{Applicative, Show}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
@@ -28,11 +28,13 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.finality.Finalizer
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
+class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
     // todo this should be read from chain, for now read from startup options
     casperShardConf: CasperShardConf,
@@ -112,20 +114,45 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock).map(_.tips)
 
-  def lastFinalizedBlock: F[BlockMessage] =
+  def lastFinalizedBlock: F[BlockMessage] = {
+
+    def finalisationEffect(finalizedChildHash: BlockHash): F[Unit] =
+      for {
+        block          <- BlockStore[F].getUnsafe(finalizedChildHash)
+        deploys        = block.body.deploys.map(_.deploy)
+        deploysRemoved <- DeployStorage[F].remove(deploys)
+        _ <- Log[F].info(
+              s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                .buildString(finalizedChildHash)}."
+            )
+        _ <- BlockDagStorage[F].addFinalizedBlockHash(finalizedChildHash)
+      } yield ()
+
+    def newLfbEffect(newLFB: BlockHash): F[Unit] =
+      LastFinalizedStorage[F].put(newLFB) >>
+        EventPublisher[F]
+          .publish(
+            RChainEvent.blockFinalised(newLFB.base16String)
+          )
+
+    import coop.rchain.models.BlockHash._
+
     for {
       dag                    <- blockDag
       lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
-      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
-      _ <- EventPublisher[F]
-            .publish(
-              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
-            )
-            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
-      blockMessage <- BlockStore[F].getUnsafe(updatedLastFinalizedBlockHash)
+      updatedLastFinalizedBlockHash <- Finalizer.run(dag)(
+                                        lastFinalizedBlockHash,
+                                        dag.isFinalized,
+                                        finalisationEffect,
+                                        newLfbEffect,
+                                        hash => SafetyOracle[F].normalizedFaultTolerance(dag, hash),
+                                        casperShardConf.faultToleranceThreshold
+                                      )
+      blockMessage <- BlockStore[F].getUnsafe(
+                       updatedLastFinalizedBlockHash.getOrElse(lastFinalizedBlockHash)
+                     )
     } yield blockMessage
+  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation

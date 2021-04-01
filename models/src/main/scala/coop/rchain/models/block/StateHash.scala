@@ -1,5 +1,6 @@
 package coop.rchain.models.block
 
+import cats.Show
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 
@@ -9,5 +10,10 @@ object StateHash {
   val Length = 32
   implicit class StateHashOps(bs: StateHash) {
     def base16String: String = Base16.encode(bs.toByteArray)
+  }
+
+  implicit val show = new Show[StateHash] {
+    def show(validator: StateHash): String =
+      Base16.encode(validator.toByteArray).take(10)
   }
 }
