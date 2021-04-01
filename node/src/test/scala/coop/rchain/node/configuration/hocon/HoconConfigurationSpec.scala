@@ -135,8 +135,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
-          bondsFile = Some("/var/lib/rnode/genesis/bonds.txt"),
-          walletsFile = Some("/var/lib/rnode/genesis/wallets.txt"),
+          bondsFile = "/var/lib/rnode/genesis/bonds.txt",
+          walletsFile = "/var/lib/rnode/genesis/wallets.txt",
           bondMaximum = 9223372036854775807L,
           bondMinimum = 1,
           epochLength = 10000,

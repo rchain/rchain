@@ -106,14 +106,14 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
           _ = log.warns.count(
             _.contains(
-              "Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
+              "Creating file with random bonds"
             )
           ) should be(1)
-        } yield log.infos.count(_.contains("Created validator")) should be(autogenShardSize)
+        } yield log.infos.count(_.contains("Bond generated")) should be(autogenShardSize)
     }
   )
 
-  it should "fail with error when bonds file does not exist" in taskTest(
+  it should "tell when bonds file does not exist" in taskTest(
     withGenResources {
       (
           runtimeManager: RuntimeManager[Task],
@@ -128,9 +128,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                              log,
                              time
                            ).attempt
-        } yield genesisAttempt.left.value.getMessage should be(
-          "Specified bonds file not/a/real/file does not exist"
-        )
+        } yield log.warns.exists(_.contains("BONDS FILE NOT FOUND"))
     }
   )
 
@@ -156,7 +154,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                              time
                            ).attempt
         } yield genesisAttempt.left.value.getMessage should include(
-          "misformatted.txt cannot be parsed"
+          "FAILED PARSING BONDS FILE"
         )
     }
   )
@@ -180,7 +178,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                       time
                     )
           bonds = ProtoUtil.bonds(genesis)
-          _     = log.infos.length should be(2)
+          _     = log.infos.length should be(3)
           result = validators
             .map {
               case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
@@ -266,12 +264,12 @@ object GenesisTest {
   ): Task[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[Task].currentMillis)(x => x.pure[Task])
-      vaults    <- VaultParser.parse[Task](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      vaults <- VaultParser.parse[Task](
+                 maybeVaultsPath.getOrElse(genesisPath + "/wallets.txt")
+               )
       bonds <- BondsParser.parse[Task](
-                maybeBondsPath,
-                genesisPath.resolve("bonds.txt"),
-                autogenShardSize,
-                genesisPath
+                maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
+                autogenShardSize
               )
       validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(

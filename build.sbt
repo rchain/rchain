@@ -59,10 +59,7 @@ lazy val projectSettings = Seq(
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
-  javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
-    case None    => Seq()
-    case Some(v) => Seq("-source", v, "-target", v)
-  }),
+  javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
@@ -199,9 +196,8 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                                      -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.gen()                        -> (sourceManaged in Compile).value
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -271,13 +267,12 @@ lazy val node = (project in file("node"))
         pureconfig
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java -> (sourceManaged in Compile).value / "protobuf",
-      scalapb
-        .gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.gen()                   -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
+    mainClass in Compile := Some("coop.rchain.node.Main"),
     mainClass in assembly := Some("coop.rchain.node.Main"),
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
@@ -485,7 +480,6 @@ lazy val rspace = (project in file("rspace"))
       ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")
     ),
     git.remoteRepo := scmInfo.value.get.connection,
-    useGpg := true,
     pomIncludeRepository := { _ =>
       false
     },

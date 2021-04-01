@@ -30,17 +30,4 @@ object LastFinalizedKeyValueStorage {
 
   def apply[F[_]: Sync](keyValueStore: KeyValueStore[F]): LastFinalizedKeyValueStorage[F] =
     apply(keyValueStore.toTypedStore(codecSeqNum, codecBlockHash))
-
-  def importFromFileStorage[F[_]: Concurrent: Log: Metrics](
-      oldLastFinalizedPath: Path,
-      lastFinalizedBlockDb: LastFinalizedKeyValueStorage[F]
-  ): F[Unit] =
-    for {
-      _                       <- Log[F].warn(s"Starting Last Finalized Block migration, loading existing data.")
-      oldLastFinalizedStorage <- LastFinalizedFileStorage.make[F](oldLastFinalizedPath)
-      lastFinalizedBlock      <- oldLastFinalizedStorage.getUnSafe
-      _                       <- Log[F].warn(s"Last Finalized Block is $lastFinalizedBlock .")
-      _                       <- lastFinalizedBlockDb.put(lastFinalizedBlock)
-      _                       <- Log[F].warn(s"Migrate Last Finalized Block done.")
-    } yield ()
 }
