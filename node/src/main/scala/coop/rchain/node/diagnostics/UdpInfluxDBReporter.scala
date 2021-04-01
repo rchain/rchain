@@ -7,9 +7,10 @@ import java.nio.channels.DatagramChannel
 import coop.rchain.node.diagnostics.UdpInfluxDBReporter.{MetricDataPacketBuffer, Settings}
 
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import kamon.Kamon
+import kamon.module.MetricReporter
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
+import kamon.util.EnvironmentTags
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
@@ -17,8 +18,6 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
   private var settings: Settings             = readConfiguration(config)
   private val clientChannel: DatagramChannel = DatagramChannel.open()
-
-  override def start(): Unit = {}
 
   override def stop(): Unit = {}
 
@@ -30,76 +29,96 @@ class UdpInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporte
     val influxConfig = config.getConfig("kamon.influxdb")
     val address =
       new InetSocketAddress(influxConfig.getString("hostname"), influxConfig.getInt("port"))
-    val maxPacketSize  = influxConfig.getBytes("max-packet-size")
-    val percentiles    = influxConfig.getDoubleList("percentiles").asScala.map(_.toDouble)
-    val additionalTags = EnvironmentTagBuilder.create(influxConfig.getConfig("additional-tags"))
+    val maxPacketSize = influxConfig.getBytes("max-packet-size")
+    val percentiles   = influxConfig.getDoubleList("percentiles").asScala.map(_.toDouble)
+    val additionalTags = TagSetToMap.tagSetToMap(
+      EnvironmentTags.from(Kamon.environment, influxConfig.getConfig("additional-tags"))
+    )
 
     Settings(address, maxPacketSize, percentiles, additionalTags)
   }
 
   def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit = {
-    import snapshot.metrics._
+    import snapshot._
     val packetBuffer =
       new MetricDataPacketBuffer(settings.maxPacketSize, clientChannel, settings.address)
     val builder   = StringBuilder.newBuilder
     val timestamp = snapshot.to.toEpochMilli
 
-    counters.foreach { c =>
-      writeMetricValue(builder, c, "count", timestamp)
-      packetBuffer.appendMeasurement(builder.toString)
-      builder.clear()
-    }
+    counters.foreach(counterSnapshot => {
+      val name = counterSnapshot.name
+      counterSnapshot.instruments.foreach(counterInstrument => {
+        writeMetricValue(builder, counterInstrument, "count", timestamp, name)
+        packetBuffer.appendMeasurement(builder.toString)
+        builder.clear()
+      })
+    })
+    gauges.foreach(gaugeSnapshot => {
+      val name = gaugeSnapshot.name
+      gaugeSnapshot.instruments.foreach(gaugeInstrument => {
+        writeMetricValue(builder, gaugeInstrument, "value", timestamp, name)
+        packetBuffer.appendMeasurement(builder.toString)
+        builder.clear()
+      })
+    })
+    histograms.foreach(histogramSnapshot => {
+      val name = histogramSnapshot.name
+      histogramSnapshot.instruments.foreach(histogramInstrument => {
+        writeMetricDistribution(builder, histogramInstrument, settings.percentiles, timestamp, name)
+        packetBuffer.appendMeasurement(builder.toString)
+        builder.clear()
+      })
+    })
+    rangeSamplers.foreach(rangeSamplerSnapshot => {
+      val name = rangeSamplerSnapshot.name
+      rangeSamplerSnapshot.instruments.foreach(rangeSamplerInstrument => {
+        writeMetricDistribution(
+          builder,
+          rangeSamplerInstrument,
+          settings.percentiles,
+          timestamp,
+          name
+        )
+        packetBuffer.appendMeasurement(builder.toString)
+        builder.clear()
+      })
+    })
 
-    gauges.foreach { g =>
-      writeMetricValue(builder, g, "value", timestamp)
-      packetBuffer.appendMeasurement(builder.toString)
-      builder.clear()
-    }
-
-    histograms.foreach { h =>
-      writeMetricDistribution(builder, h, settings.percentiles, timestamp)
-      packetBuffer.appendMeasurement(builder.toString)
-      builder.clear()
-    }
-
-    rangeSamplers.foreach { rs =>
-      writeMetricDistribution(builder, rs, settings.percentiles, timestamp)
-      packetBuffer.appendMeasurement(builder.toString)
-      builder.clear()
-    }
   }
 
   private def writeMetricValue(
       builder: StringBuilder,
-      metric: MetricValue,
+      metric: Instrument.Snapshot[_],
       fieldName: String,
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, fieldName, metric.value, appendSeparator = false)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, fieldName, metric.value.asInstanceOf[Long], appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 
   private def writeMetricDistribution(
       builder: StringBuilder,
-      metric: MetricDistribution,
+      metric: Instrument.Snapshot[Distribution],
       percentiles: Seq[Double],
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, "count", metric.distribution.count)
-    writeIntField(builder, "sum", metric.distribution.sum)
-    writeIntField(builder, "min", metric.distribution.min)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, "count", metric.value.count)
+    writeIntField(builder, "sum", metric.value.sum)
+    writeIntField(builder, "min", metric.value.min)
 
     percentiles.foreach(p => {
       writeDoubleField(
         builder,
         "p" + String.valueOf(p),
-        metric.distribution.percentile(p).value.toDouble
+        metric.value.percentile(p).value.toDouble
       )
     })
 
-    writeIntField(builder, "max", metric.distribution.max, appendSeparator = false)
+    writeIntField(builder, "max", metric.value.max, appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 

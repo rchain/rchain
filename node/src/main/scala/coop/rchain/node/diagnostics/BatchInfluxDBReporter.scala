@@ -9,17 +9,26 @@ import scala.util.Try
 import coop.rchain.node.diagnostics.BatchInfluxDBReporter.Settings
 
 import com.typesafe.config.Config
-import kamon.{Kamon, MetricReporter}
+import kamon.Kamon
+import kamon.module.MetricReporter
 import kamon.metric._
-import kamon.util.EnvironmentTagBuilder
+import kamon.util.EnvironmentTags
 import monix.eval.Task
 import monix.execution.Cancelable
 import monix.execution.Scheduler.Implicits.global
 import monix.reactive.subjects._
 import okhttp3._
 import org.slf4j.LoggerFactory
+//add override create to replace start
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+class BatchInfluxDBReporterFactory extends kamon.module.ModuleFactory {
+  override def create(settings: kamon.module.ModuleFactory.Settings): BatchInfluxDBReporter = {
+    val reporter = new BatchInfluxDBReporter()
+    reporter.start()
+    reporter
+  }
+}
 class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricReporter {
   private val logger = LoggerFactory.getLogger(classOf[BatchInfluxDBReporter])
   @SuppressWarnings(Array("org.wartremover.warts.Var"))
@@ -28,7 +37,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   private val subject      = PublishSubject[String]
   private val subscription = new AtomicReference(Option.empty[Cancelable])
 
-  override def start(): Unit = {
+  def start(): Unit = {
     subscription.getAndSet(None).foreach(_.cancel())
     val s =
       Some(
@@ -48,7 +57,6 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   override def reconfigure(config: Config): Unit = {
     stop()
     settings = readSettings(config)
-    start()
   }
 
   private def readSettings(config: Config): Settings = {
@@ -67,7 +75,9 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
         Duration.fromNanos(root.getDuration("batch-interval").toNanos)
       else 10.seconds
 
-    val additionalTags = EnvironmentTagBuilder.create(root.getConfig("additional-tags"))
+    val additionalTags = TagSetToMap.tagSetToMap(
+      EnvironmentTags.from(Kamon.environment, root.getConfig("additional-tags"))
+    )
 
     Settings(
       url,
@@ -79,8 +89,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   }
 
   override def reportPeriodSnapshot(snapshot: PeriodSnapshot): Unit =
-    subject.onNext(translateToLineProtocol(snapshot))
-
+    subject.onNext(translateToLineProtocol(snapshot)).asInstanceOf[Unit]
   private def postMetrics(metrics: Seq[String]): Task[Unit] =
     Task.create { (_, cb) =>
       val body = RequestBody.create(MediaType.parse("text/plain"), metrics.mkString)
@@ -117,51 +126,77 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
     }
 
   private def translateToLineProtocol(periodSnapshot: PeriodSnapshot): String = {
-    import periodSnapshot.metrics._
+    import periodSnapshot._
     val builder   = StringBuilder.newBuilder
     val timestamp = periodSnapshot.to.toEpochMilli
 
-    counters.foreach(c => writeMetricValue(builder, c, "count", timestamp))
-    gauges.foreach(g => writeMetricValue(builder, g, "value", timestamp))
-    histograms.foreach(h => writeMetricDistribution(builder, h, settings.percentiles, timestamp))
-    rangeSamplers.foreach(
-      rs => writeMetricDistribution(builder, rs, settings.percentiles, timestamp)
-    )
+    counters.foreach(counterSnapshot => {
+      val name = counterSnapshot.name
+      counterSnapshot.instruments.foreach(counterInstrument => {
+        writeMetricValue(builder, counterInstrument, "count", timestamp, name)
+      })
+    })
+    gauges.foreach(gaugeSnapshot => {
+      val name = gaugeSnapshot.name
+      gaugeSnapshot.instruments.foreach(gaugeInstrument => {
+        writeMetricValue(builder, gaugeInstrument, "value", timestamp, name)
+      })
+    })
+    histograms.foreach(histogramSnapshot => {
+      val name = histogramSnapshot.name
+      histogramSnapshot.instruments.foreach(histogramInstrument => {
+        writeMetricDistribution(builder, histogramInstrument, settings.percentiles, timestamp, name)
+      })
+    })
+    rangeSamplers.foreach(rangeSamplerSnapshot => {
+      val name = rangeSamplerSnapshot.name
+      rangeSamplerSnapshot.instruments.foreach(rangeSamplerInstrument => {
+        writeMetricDistribution(
+          builder,
+          rangeSamplerInstrument,
+          settings.percentiles,
+          timestamp,
+          name
+        )
+      })
+    })
 
     builder.result()
   }
 
   private def writeMetricValue(
       builder: StringBuilder,
-      metric: MetricValue,
+      metric: Instrument.Snapshot[_],
       fieldName: String,
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, fieldName, metric.value, appendSeparator = false)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, fieldName, metric.value.asInstanceOf[Long], appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 
   private def writeMetricDistribution(
       builder: StringBuilder,
-      metric: MetricDistribution,
+      metric: Instrument.Snapshot[Distribution],
       percentiles: Seq[Double],
-      timestamp: Long
+      timestamp: Long,
+      name: String
   ): Unit = {
-    writeNameAndTags(builder, metric.name, metric.tags)
-    writeIntField(builder, "count", metric.distribution.count)
-    writeIntField(builder, "sum", metric.distribution.sum)
-    writeIntField(builder, "min", metric.distribution.min)
+    writeNameAndTags(builder, name, TagSetToMap.tagSetToMap(metric.tags))
+    writeIntField(builder, "count", metric.value.count)
+    writeIntField(builder, "sum", metric.value.sum)
+    writeIntField(builder, "min", metric.value.min)
 
     percentiles.foreach(p => {
       writeDoubleField(
         builder,
         "p" + String.valueOf(p),
-        metric.distribution.percentile(p).value.toDouble
+        metric.value.percentile(p).value.toDouble
       )
     })
 
-    writeIntField(builder, "max", metric.distribution.max, appendSeparator = false)
+    writeIntField(builder, "max", metric.value.max, appendSeparator = false)
     writeTimestamp(builder, timestamp)
   }
 
@@ -172,6 +207,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
   ): Unit = {
     builder
       .append(name)
+      .asInstanceOf[Unit]
 
     val tags =
       if (settings.additionalTags.nonEmpty) metricTags ++ settings.additionalTags else metricTags
@@ -187,7 +223,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       }
     }
 
-    builder.append(' ')
+    builder.append(' ').asInstanceOf[Unit]
   }
 
   private def escapeString(in: String): String =
@@ -205,9 +241,10 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append(fieldName)
       .append('=')
       .append(String.valueOf(value))
+      .asInstanceOf[Unit]
 
     if (appendSeparator)
-      builder.append(',')
+      builder.append(',').asInstanceOf[Unit]
   }
 
   def writeIntField(
@@ -221,9 +258,10 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append('=')
       .append(String.valueOf(value))
       .append('i')
+      .asInstanceOf[Unit]
 
     if (appendSeparator)
-      builder.append(',')
+      builder.append(',').asInstanceOf[Unit]
   }
 
   def writeTimestamp(builder: StringBuilder, timestamp: Long): Unit =
@@ -231,6 +269,7 @@ class BatchInfluxDBReporter(config: Config = Kamon.config()) extends MetricRepor
       .append(' ')
       .append(timestamp)
       .append("\n")
+      .asInstanceOf[Unit]
 
   protected def buildClient(settings: Settings): OkHttpClient = {
     val basicBuilder = new OkHttpClient.Builder()
