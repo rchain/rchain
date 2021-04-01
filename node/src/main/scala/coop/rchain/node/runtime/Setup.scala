@@ -5,8 +5,9 @@ import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagFileStorage, BlockDagKeyValueStorage}
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.blockstorage.util.io.IOError
@@ -31,13 +32,13 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.monix.Monixable
-import coop.rchain.node.NodeRuntime._
+import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
-import coop.rchain.node.{diagnostics, NodeRuntime}
+import coop.rchain.node.diagnostics
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
@@ -57,7 +58,6 @@ object Setup {
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
-      dagConfig: BlockDagFileStorage.Config,
       blockstorePath: Path,
       lastFinalizedPath: Path,
       eventPublisher: EventPublisher[F],
@@ -117,33 +117,13 @@ object Setup {
       // Last finalized Block storage
       lastFinalizedStorage <- {
         for {
-          lastFinalizedBlockDb   <- rnodeStoreManager.store("last-finalized-block")
-          lastFinalizedIsEmpty   = lastFinalizedBlockDb.iterate(_.isEmpty)
-          oldLastFinalizedExists = Sync[F].delay(Files.exists(lastFinalizedPath))
-          shouldMigrate          <- lastFinalizedIsEmpty &&^ oldLastFinalizedExists
-          lastFinalizedStore     = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-          _ <- LastFinalizedKeyValueStorage
-                .importFromFileStorage(lastFinalizedPath, lastFinalizedStore)
-                .whenA(shouldMigrate)
+          lastFinalizedBlockDb <- rnodeStoreManager.store("last-finalized-block")
+          lastFinalizedStore   = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
         } yield lastFinalizedStore
       }
 
       // Block DAG storage
-      blockDagStorage <- {
-        for {
-          // Check if migration from DAG file storage to LMDB should be executed
-          blockMetadataDb   <- rnodeStoreManager.store("block-metadata")
-          dagStorageIsEmpty = blockMetadataDb.iterate(_.isEmpty)
-          oldStorageExists  = Sync[F].delay(Files.exists(dagConfig.blockMetadataLogPath))
-          shouldMigrate     <- dagStorageIsEmpty &&^ oldStorageExists
-          // TODO: remove `dagConfig`, it's not used anymore (after migration)
-          _ <- BlockDagKeyValueStorage
-                .importFromFileStorage(rnodeStoreManager, dagConfig)
-                .whenA(shouldMigrate)
-          // Create DAG store
-          dagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
-        } yield dagStorage
-      }
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
       // Casper requesting blocks cache
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
