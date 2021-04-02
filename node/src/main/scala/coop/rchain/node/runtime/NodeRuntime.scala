@@ -1,4 +1,4 @@
-package coop.rchain.node
+package coop.rchain.node.runtime
 
 import cats.data.ReaderT
 import cats.effect._
@@ -8,7 +8,6 @@ import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.BlockDagFileStorage
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.Proposer
@@ -27,12 +26,12 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.monix.Monixable
-import coop.rchain.node.NodeRuntime._
+import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
+import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
-import coop.rchain.node.runtime.{APIServers, NodeCallCtx, ServersInstances, Setup}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -64,7 +63,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   /** Configuration */
   private val dataDir                  = nodeConf.storage.dataDir
   private val blockstorePath           = dataDir.resolve("blockstore")
-  private val blockdagStoragePath      = dataDir.resolve("dagstorage")
   private val deployStoragePath        = dataDir.resolve("deploystorage")
   private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
 
@@ -158,22 +156,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         */
       _ <- mkDirs(dataDir)
 
-      dagConfig = BlockDagFileStorage.Config(
-        latestMessagesLogPath = blockdagStoragePath.resolve("latestMessagesLogPath"),
-        latestMessagesCrcPath = blockdagStoragePath.resolve("latestMessagesCrcPath"),
-        blockMetadataLogPath = blockdagStoragePath.resolve("blockMetadataLogPath"),
-        blockMetadataCrcPath = blockdagStoragePath.resolve("blockMetadataCrcPath"),
-        equivocationsTrackerLogPath = blockdagStoragePath.resolve("equivocationsTrackerLogPath"),
-        equivocationsTrackerCrcPath = blockdagStoragePath.resolve("equivocationsTrackerCrcPath"),
-        invalidBlocksLogPath = blockdagStoragePath.resolve("invalidBlocksLogPath"),
-        invalidBlocksCrcPath = blockdagStoragePath.resolve("invalidBlocksCrcPath"),
-        blockHashesByDeployLogPath = blockdagStoragePath.resolve("blockHashesByDeployLogPath"),
-        blockHashesByDeployCrcPath = blockdagStoragePath.resolve("blockHashesByDeployCrcPath"),
-        checkpointsDirPath = blockdagStoragePath.resolve("checkpointsDirPath"),
-        blockNumberIndexPath = blockdagStoragePath.resolve("blockNumberIndexPath"),
-        mapSize = 10 * gb
-      )
-
       deployStorageConfig = LMDBDeployStorage.Config(storagePath = deployStoragePath, mapSize = gb)
 
       eventBus <- RchainEvents[F]
@@ -188,7 +170,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           commUtil,
           blockRetriever,
           nodeConf,
-          dagConfig,
           blockstorePath,
           lastFinalizedStoragePath,
           eventBus,

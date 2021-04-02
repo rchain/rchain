@@ -173,9 +173,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
     lock.withPermit(
       f(InMemEquivocationsTracker)
     )
-  override def checkpoint(): F[Unit] = ().pure[F]
-
-  override def close(): F[Unit] = ().pure[F]
 
   override def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
     finalizedBlocksRef.update(_ + blockHash)

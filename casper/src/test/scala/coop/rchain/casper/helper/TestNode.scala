@@ -12,7 +12,6 @@ import coop.rchain.blockstorage._
 import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{
-  BlockDagFileStorage,
   BlockDagKeyValueStorage,
   BlockDagRepresentation,
   BlockDagStorage

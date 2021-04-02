@@ -25,6 +25,16 @@ object BondsParser {
     SourceIO
       .open[F](bondsPath)
       .use(_.getLines)
+      .flatTap(
+        bondsStrs =>
+          Sync[F]
+            .raiseError(
+              new Exception(
+                s"BONDS FILE $bondsPath IS EMPTY. Please fill it or remove so populated bonds file is created on startup."
+              )
+            )
+            .whenA(bondsStrs.isEmpty)
+      )
       .map { lines =>
         Try {
           lines
@@ -40,52 +50,45 @@ object BondsParser {
           bonds.toList
             .traverse_ {
               case (pk, stake) =>
-                Log[F].info(s"Parsed validator ${Base16.encode(pk.bytes)} with bond $stake")
+                Log[F].info(s"Bond loaded ${Base16.encode(pk.bytes)} => $stake")
             }
             .as(bonds)
-        case Failure(_) =>
-          Sync[F].raiseError(new Exception(s"Bonds file $bondsPath cannot be parsed"))
+        case Failure(e) =>
+          Sync[F].raiseError(
+            new Exception(s"FAILED PARSING BONDS FILE $bondsPath: ${e}")
+          )
       }
 
   def parse[F[_]: Sync: Log: RaiseIOError](
-      maybeBondsPath: Option[String],
-      defaultBondsPath: Path,
-      autogenShardShize: Int,
-      genesisPath: Path
-  ): F[Map[PublicKey, Long]] =
-    maybeBondsPath match {
-      case Some(bondsPathStr) =>
-        val bondsPath = Paths.get(bondsPathStr)
-        exists(bondsPath).ifM(
-          parse(bondsPath),
-          Sync[F].raiseError(new Exception(s"Specified bonds file $bondsPath does not exist"))
-        )
-      case None =>
-        exists(defaultBondsPath).ifM(
-          Log[F].info(s"Using default file $defaultBondsPath") >> parse(defaultBondsPath),
-          Log[F].warn(
-            s"Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
-          ) >> newValidators[F](autogenShardShize, genesisPath)
-        )
-    }
+      bondsPathStr: String,
+      autogenShardSize: Int
+  ): F[Map[PublicKey, Long]] = {
+    val bondsPath = Paths.get(bondsPathStr)
+    exists(bondsPath).ifM(
+      Log[F].info(s"Parsing bonds file ${bondsPath}.") >> parse(bondsPath),
+      Log[F].warn(s"BONDS FILE NOT FOUND: ${bondsPath}. Creating file with random bonds.") >>
+        newValidators[F](autogenShardSize, Path.of(bondsPathStr).toAbsolutePath)
+    )
+  }
 
   private def newValidators[F[_]: Monad: Sync: Log](
       autogenShardSize: Int,
-      genesisPath: Path
+      bondsFilePath: Path
   ): F[Map[PublicKey, Long]] = {
-    val keys         = Vector.fill(autogenShardSize)(Secp256k1.newKeyPair)
-    val (_, pubKeys) = keys.unzip
-    val bonds        = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
-    val genBondsFile = genesisPath.resolve(s"bonds.txt").toFile
+    val genesisFolder = bondsFilePath.getParent
+    val keys          = Vector.fill(autogenShardSize)(Secp256k1.newKeyPair)
+    val (_, pubKeys)  = keys.unzip
+    val bonds         = pubKeys.zipWithIndex.toMap.mapValues(_.toLong + 1L)
+    val genBondsFile  = bondsFilePath.toFile
 
     val skFiles =
-      Sync[F].delay(genesisPath.toFile.mkdir()) >>
+      Sync[F].delay(genesisFolder.toFile.mkdirs()) >>
         Sync[F].delay {
           keys.foreach { //create files showing the secret key for each public key
             case (sec, pub) =>
               val sk      = Base16.encode(sec.bytes)
               val pk      = Base16.encode(pub.bytes)
-              val skFile  = genesisPath.resolve(s"$pk.sk").toFile
+              val skFile  = genesisFolder.resolve(s"$pk.sk").toFile
               val printer = new PrintWriter(skFile)
               printer.println(sk)
               printer.close()
@@ -99,7 +102,7 @@ object BondsParser {
       _ <- bonds.toList.traverse_ {
             case (pub, stake) =>
               val pk = Base16.encode(pub.bytes)
-              Log[F].info(s"Created validator $pk with bond $stake") >> Sync[F].delay(
+              Log[F].info(s"Bond generated $pk => $stake") >> Sync[F].delay(
                 printer.println(s"$pk $stake")
               )
           }

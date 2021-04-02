@@ -27,8 +27,8 @@ final case class CasperConf(
 
 final case class GenesisBlockData(
     genesisDataDir: Path,
-    bondsFile: Option[String],
-    walletsFile: Option[String],
+    bondsFile: String,
+    walletsFile: String,
     bondMinimum: Long,
     bondMaximum: Long,
     epochLength: Int,

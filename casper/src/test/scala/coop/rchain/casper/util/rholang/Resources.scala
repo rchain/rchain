@@ -20,7 +20,7 @@ import java.nio.file.{Files, Path}
 
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.blockstorage.finality.{LastFinalizedFileStorage, LastFinalizedStorage}
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 
 object Resources {
@@ -75,13 +75,6 @@ object Resources {
       runtimeManager                    <- RuntimeManager.fromRuntimes(runtime, replayRuntime, history)
     } yield (runtimeManager, history)
   }
-
-  def mkLastFinalizedStorage[F[_]: Concurrent: Metrics: Sync: Log](
-      path: Path
-  ): Resource[F, LastFinalizedStorage[F]] =
-    Resource.liftF(
-      LastFinalizedFileStorage.make[F](path)
-    )
 
   def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
       path: Path

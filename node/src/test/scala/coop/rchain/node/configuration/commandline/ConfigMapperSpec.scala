@@ -230,8 +230,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
-          bondsFile = Some("/var/lib/rnode/genesis/bonds1.txt"),
-          walletsFile = Some("/var/lib/rnode/genesis/wallets1.txt"),
+          bondsFile = "/var/lib/rnode/genesis/bonds1.txt",
+          walletsFile = "/var/lib/rnode/genesis/wallets1.txt",
           bondMaximum = 111111,
           bondMinimum = 111111,
           epochLength = 111111,
