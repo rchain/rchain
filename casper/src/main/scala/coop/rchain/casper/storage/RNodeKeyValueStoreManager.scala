@@ -20,6 +20,8 @@ object RNodeKeyValueStoreManager {
   // RSpace
   private val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "rspace/history", maxEnvSize = 1 * tb)
   private val rspaceColdEnvConfig    = LmdbEnvConfig(name = "rspace/cold", maxEnvSize = 1 * tb)
+  // Temporary channel store, remove in hard fork
+  private val rspaceChannelsMapEnvConfig = LmdbEnvConfig(name = "rspace/channels")
   // RSpace evaluator
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)
@@ -29,9 +31,6 @@ object RNodeKeyValueStoreManager {
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
-
-  // Temporary channel store, remove in hard fork
-  private val channelEnvConfig = LmdbEnvConfig(name = "channels", maxEnvSize = 1 * tb)
 
   // Legacy RSpace paths
   val legacyRSpacePathPrefix = "rspace/casper/v2"
@@ -59,8 +58,7 @@ object RNodeKeyValueStoreManager {
       // Rholang evaluator store
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),
-      (Db("eval-cold"), evalColdEnvConfig),
-      (Db("channels"), channelEnvConfig)
+      (Db("eval-cold"), evalColdEnvConfig)
     ) ++ (
       // RSpace
       if (!legacyRSpacePaths) {
@@ -68,14 +66,17 @@ object RNodeKeyValueStoreManager {
         Seq(
           (Db("rspace-history"), rspaceHistoryEnvConfig),
           (Db("rspace-roots"), rspaceHistoryEnvConfig),
-          (Db("rspace-cold"), rspaceColdEnvConfig)
+          (Db("rspace-cold"), rspaceColdEnvConfig),
+          // TEMP: remove after hard fork
+          (Db("rspace-channels"), rspaceChannelsMapEnvConfig)
         )
       } else
         // Legacy config has the same database name for all maps
         Seq(
           (Db("rspace-history", nameOverride = "db".some), legacyEnvConfig("history")),
           (Db("rspace-roots", nameOverride = "db".some), legacyEnvConfig("roots")),
-          (Db("rspace-cold", nameOverride = "db".some), legacyEnvConfig("cold"))
+          (Db("rspace-cold", nameOverride = "db".some), legacyEnvConfig("cold")),
+          (Db("rspace-channels", nameOverride = "db".some), legacyEnvConfig("channels"))
         )
     )
 }
