@@ -125,7 +125,7 @@ object RholangCLI {
       (Db("rspace-history"), rspaceHistoryEnvConfig),
       (Db("rspace-roots"), rspaceHistoryEnvConfig),
       (Db("rspace-cold"), rspaceColdEnvConfig),
-      (Db("channels"), channelEnvConfig)
+      (Db("rspace-channels"), channelEnvConfig)
     )
     LmdbDirStoreManager[F](dirPath, dbMapping)
   }
