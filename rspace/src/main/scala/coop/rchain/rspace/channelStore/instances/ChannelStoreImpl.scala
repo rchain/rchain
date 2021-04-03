@@ -1,14 +1,15 @@
 package coop.rchain.rspace.channelStore.instances
 
+import cats.Applicative
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore, ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.internal.toOrderedByteVectors
 import coop.rchain.rspace.{Blake2b256Hash, StableHashProvider}
-import coop.rchain.shared.syntax._
 import coop.rchain.shared.Serialize
+import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import scodec.Codec
 import scodec.codecs.{discriminated, uint2}
@@ -57,4 +58,16 @@ object ChannelStoreImpl {
       .subcaseP(1) {
         case continuationHash: ContinuationHash => continuationHash
       }(Codec[ContinuationHash])
+
+  /**
+    * No operation implementation of [[ChannelStore]]
+    *
+    * Useful in places where we want to have disabled or dummy storage.
+    */
+  final case class NoOpChannelStore[F[_]: Applicative, C]() extends ChannelStore[F, C] {
+    override def putChannelHash(channel: C): F[Unit]            = ().pure[F]
+    override def putContinuationHash(channels: Seq[C]): F[Unit] = ().pure[F]
+    override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
+      none[ChannelHash].pure[F]
+  }
 }
