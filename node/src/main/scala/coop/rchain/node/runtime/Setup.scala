@@ -171,8 +171,10 @@ object Setup {
         implicit val sp = span
         import coop.rchain.rholang.interpreter.storage._
         implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+        // Use channels map only in block-merging (multi parents)
+        val useChannelsMap = conf.casper.maxNumberOfParents > 1
         for {
-          store <- rnodeStoreManager.rSpaceStores
+          store <- rnodeStoreManager.rSpaceStores(useChannelsMap)
           spaces <- RSpace
                      .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                        store
@@ -195,7 +197,8 @@ object Setup {
           reporter <- if (conf.apiServer.enableReporting) {
                        import coop.rchain.rholang.interpreter.storage._
                        for {
-                         store <- rnodeStoreManager.rSpaceStores
+                         // In reporting replay channels map is not needed
+                         store <- rnodeStoreManager.rSpaceStores(useChannelsMap = false)
                          reportingCache <- ReportMemStore
                                             .store[
                                               F,
