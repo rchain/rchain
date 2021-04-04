@@ -1,35 +1,28 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Monad
+import cats.data.EitherT
 import cats.effect._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.InvalidBlock.{InvalidPreStateHash, InvalidRejectedDeploy}
 import coop.rchain.casper._
+import coop.rchain.casper.blocks.merger.{CasperDagMerger, CasperMergingDagReader, MergingVertex}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.catscontrib.Catscontrib._
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Log, LogSource}
-import com.google.protobuf.ByteString
-import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
-import coop.rchain.casper.blocks.merger.{
-  BlockIndex,
-  CasperDagMerger,
-  CasperMergingDagReader,
-  MergingVertex
-}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
+import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
 
 import scala.collection.Seq
@@ -43,9 +36,6 @@ object InterpreterUtil {
 
   private[this] val ComputeParentPostStateMetricsSource =
     Metrics.Source(CasperMetricsSource, "compute-parents-post-state")
-//
-//  private[this] val ReplayIntoMergeBlockMetricsSource =
-//    Metrics.Source(CasperMetricsSource, "replay-into-merge-block")
 
   private[this] val ReplayBlockMetricsSource =
     Metrics.Source(CasperMetricsSource, "replay-block")
@@ -63,46 +53,71 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
+    val parents              = block.header.parentsHashList
+    // use merging root specified in block or compute it
+    val validateMergingRoot = false
     for {
-      _                   <- Span[F].mark("before-unsafe-get-parents")
-      parents             <- ProtoUtil.getParents(block)
-      _                   <- Span[F].mark("before-compute-parents-post-state")
-      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
-      _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
-      result <- computedParentsInfo match {
+      preState <- computeParentsPostState(
+                   parents,
+                   s,
+                   runtimeManager,
+                   if (validateMergingRoot) none else block.body.mergingSpec.mergingRoot.some
+                 ).attempt
+      _ <- Log[F].info(
+            s"Computed parents post state for ${PrettyPrinter.buildString(block, true)}."
+          )
+      result <- (preState match {
                  case Left(ex) =>
-                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
-                 case Right((computedPreStateHash, rejectedDeploys @ _)) =>
-                   val rejectedDeployIds = rejectedDeploys.map(_.deploy.sig).toSet
-                   if (incomingPreStateHash != computedPreStateHash) {
-                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
-                     Log[F]
-                       .warn(
-                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
-                           .buildString(incomingPreStateHash)}"
-                       )
-                       .as(none[StateHash].asRight[BlockError])
-                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
-                     Log[F]
-                       .warn(
-                         s"Computed rejected deploys " +
-                           s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
-                           s"block's rejected deploy " +
-                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
-                       )
-                       .as(InvalidRejectedDeploy.asLeft)
-                   } else {
-                     for {
-                       replayResult <- replayBlock(
-                                        incomingPreStateHash,
-                                        block,
-                                        s.dag,
-                                        runtimeManager
-                                      )
-                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
-                     } yield result
-                   }
-               }
+                   EitherT.fromEither(BlockStatus.exception(ex).asLeft[Option[StateHash]])
+
+                 case Right((computedPreStateHash, _ @MergingSpec(mergingRoot, rejectedDeploys))) => {
+                   val preStateHashCheck =
+                     if (incomingPreStateHash != computedPreStateHash) {
+                       val actual   = PrettyPrinter.buildString(computedPreStateHash)
+                       val expected = PrettyPrinter.buildString(incomingPreStateHash)
+                       val logStr =
+                         s"Computed pre-state hash $actual does not match expected $expected."
+                       Log[F]
+                         .warn(logStr)
+                         .as(BlockStatus.invalidPreStateHash.asLeft[Unit])
+                     } else ().asRight[BlockError].pure[F]
+
+                   val mergingRootCheck =
+                     if (parents.size > 1 && mergingRoot != block.body.mergingSpec.mergingRoot) {
+                       val actual   = PrettyPrinter.buildString(mergingRoot)
+                       val expected = PrettyPrinter.buildString(block.body.mergingSpec.mergingRoot)
+                       val logStr =
+                         s"Computed merging root $actual does not match expected $expected."
+                       Log[F]
+                         .warn(logStr)
+                         .as(BlockStatus.invalidMergingRoot.asLeft[Unit])
+                     } else ().asRight[BlockError].pure[F]
+
+                   val rejectedDeploysCheck =
+                     if (rejectedDeploys.toSet != block.body.mergingSpec.rejectedDeploys.toSet) {
+                       val actual = rejectedDeploys.map(PrettyPrinter.buildString).mkString(",")
+                       val expected = block.body.mergingSpec.rejectedDeploys
+                         .map(PrettyPrinter.buildString)
+                         .mkString(",")
+                       val logStr =
+                         s"Computed rejected deploys $actual do not match expected $expected."
+                       Log[F]
+                         .warn(logStr)
+                         .as(BlockStatus.invalidRejectedDeploy.asLeft[Unit])
+                     } else ().asRight[BlockError].pure[F]
+
+                   val stateTransitionCheck =
+                     replayBlock(incomingPreStateHash, block, s.dag, runtimeManager)
+                       .flatMap(r => handleErrors(ProtoUtil.postStateHash(block), r))
+
+                   for {
+                     _ <- EitherT(mergingRootCheck)
+                     _ <- EitherT(rejectedDeploysCheck)
+                     _ <- EitherT(preStateHashCheck)
+                     r <- EitherT(stateTransitionCheck)
+                   } yield r
+                 }
+               }).value
     } yield result
   }
 
@@ -206,7 +221,7 @@ object InterpreterUtil {
   )(
       implicit spanF: Span[F]
   ): F[
-    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+    (StateHash, StateHash, Seq[ProcessedDeploy], MergingSpec, Seq[ProcessedSystemDeploy])
   ] =
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
       for {
@@ -214,8 +229,8 @@ object InterpreterUtil {
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
-        computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
-        (preStateHash, rejectedDeploys) = computedParentsInfo
+        preState                    <- computeParentsPostState(nonEmptyParents.map(_.blockHash), s, runtimeManager)
+        (preStateHash, mergingSpec) = preState
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
                    systemDeploys,
@@ -227,36 +242,36 @@ object InterpreterUtil {
         preStateHash,
         postStateHash,
         processedDeploys,
-        rejectedDeploys,
+        mergingSpec,
         processedSystemDeploys
       )
     }
 
   private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
-      parents: Seq[BlockMessage],
+      parents: Seq[BlockHash],
       s: CasperSnapshot[F],
-      runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[(StateHash, Seq[ProcessedDeploy])] =
+      runtimeManager: RuntimeManager[F],
+      mergingRoot: Option[BlockHash] = None
+  )(implicit spanF: Span[F]): F[(StateHash, MergingSpec)] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
-      parents.size match {
+      parents match {
         // For genesis, use empty trie's root hash
-        case 0 =>
-          (RuntimeManager.emptyStateHashFixed, Seq.empty[ProcessedDeploy]).pure[F]
+        case Seq() =>
+          (RuntimeManager.emptyStateHashFixed, MergingSpec.noMerge).pure[F]
 
-        // For single parent, get itd post state hash
-        case 1 =>
-          (ProtoUtil.postStateHash(parents.head), Seq.empty[ProcessedDeploy]).pure[F]
+        // For single parent, get its post state hash
+        case Seq(p) =>
+          BlockStore[F].getUnsafe(p).map(b => (ProtoUtil.postStateHash(b), MergingSpec.noMerge))
 
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
         // such system deploys are not mergeable, so take them from one of the parents.
         case _ => {
           implicit val r = runtimeManager
-          val tipsHashes = parents.map(_.blockHash)
           val lfbHash    = s.lastFinalizedBlock
           for {
             tips <- BlockStore[F]
-                     .getUnsafe(tipsHashes)
+                     .getUnsafe(parents)
                      .map(
                        b =>
                          MergingVertex(
@@ -269,7 +284,7 @@ object InterpreterUtil {
                      .compile
                      .toList
             base <- BlockStore[F]
-                     .getUnsafe(lfbHash)
+                     .getUnsafe(mergingRoot.getOrElse(lfbHash))
                      .map(
                        b =>
                          MergingVertex(
@@ -285,7 +300,8 @@ object InterpreterUtil {
                   new CasperMergingDagReader(s.dag),
                   runtimeManager.getBlockIndexCache
                 )
-          } yield r
+            (preStatHash, mergingRoot, rejectedDeploys) = r
+          } yield (preStatHash, MergingSpec(mergingRoot, rejectedDeploys.map(_.deploy.sig)))
         }
       }
     }

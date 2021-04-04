@@ -674,9 +674,8 @@ object BlockAPI {
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
-      rejectedDeploys = block.body.rejectedDeploys.map(
-        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
-      )
+      rejectedDeploys = block.body.mergingSpec.rejectedDeploys
+        .map(r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r)))
     )
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem

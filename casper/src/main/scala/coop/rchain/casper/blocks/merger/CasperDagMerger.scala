@@ -11,6 +11,7 @@ import coop.rchain.casper.{MergingMetricsSource, PrettyPrinter}
 import coop.rchain.dag._
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
 import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
@@ -57,7 +58,7 @@ object CasperDagMerger {
       base: MergingVertex,
       dag: DagReader[F, MergingVertex],
       blockIndexCache: LazyKeyValueCache[F, MergingVertex, BlockIndex]
-  ): F[(StateHash, Seq[ProcessedDeploy])] = {
+  ): F[(StateHash, BlockHash, Seq[ProcessedDeploy])] = {
 
     // ordering is required to be able to replay computing branches procedure
     // there is no ordering for Seq[Byte] in standard lib, so conversion toSeq with implicits below is required
@@ -193,11 +194,20 @@ object CasperDagMerger {
                     )
                 }
 
-      _ <- Log[F].debug(s"Merging {${toMerge
-            .map(m => PrettyPrinter.buildString(m.endState.root.toByteString) + s" (${m.events.size})")
-            .mkString("; ")}} into ${PrettyPrinter.buildString(main.endState)} (${main.index.deploys
-            .flatMap(_.deployLog)
-            .size}), base ${PrettyPrinter.buildString(base.postStateHash)}")
+      _ <- Log[F].debug(
+            s"Merging {${toMerge
+              .map(m => {
+                val endState  = m.endState.root.toByteString
+                val blockHash = tips.find(_.postStateHash == endState).map(_.blockHash)
+                s"b_${PrettyPrinter.buildString(blockHash)}_s_${PrettyPrinter.buildString(endState)}_e_${m.events.size})"
+              })
+              .mkString("; ")}} " +
+              s"into b_${PrettyPrinter.buildString(
+                tips.find(_.postStateHash == main.endState).map(_.blockHash)
+              )}_s_${PrettyPrinter.buildString(main.endState)}" +
+              s"num of deploys: (${main.index.deploys.flatMap(_.deployLog).size}), " +
+              s"base b_${PrettyPrinter.buildString(base.blockHash)}_s_${PrettyPrinter.buildString(base.postStateHash)}"
+          )
 
       // execute merge
       mainHistory <- historyRepo.reset(Blake2b256Hash.fromByteString(main.endState)).map(_.history)
@@ -207,7 +217,7 @@ object CasperDagMerger {
                      )
                    )
 
-    } yield (resultHash.root.toByteString, toReject.toVector)
+    } yield (resultHash.root.toByteString, base.blockHash, toReject.toVector)
   }
 }
 

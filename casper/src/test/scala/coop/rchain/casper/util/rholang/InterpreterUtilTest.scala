@@ -5,6 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.InvalidBlock.InvalidPreStateHash
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
@@ -83,7 +84,7 @@ class InterpreterUtilTest
   ): F[
     Either[
       Throwable,
-      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+      (StateHash, StateHash, Seq[ProcessedDeploy], MergingSpec, Seq[ProcessedSystemDeploy])
     ]
   ] =
     Time[F].currentMillis >>= (
@@ -390,8 +391,7 @@ class InterpreterUtilTest
                              mkCasperSnapshot(dag),
                              runtimeManager
                            )
-          Right(stateHash) = validateResult
-        } yield stateHash should be(None)
+        } yield validateResult should be(Left(InvalidPreStateHash))
       }
   }
 

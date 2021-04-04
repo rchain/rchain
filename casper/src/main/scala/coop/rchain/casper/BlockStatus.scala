@@ -29,6 +29,9 @@ object BlockStatus {
   def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
   def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
   def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
+  def invalidRejectedDeploy: BlockError    = InvalidBlock.InvalidRejectedDeploy
+  def invalidMergingRoot: BlockError       = InvalidBlock.invalidMergingRoot
+  def invalidPreStateHash: BlockError      = InvalidBlock.InvalidPreStateHash
 
   def isInDag(blockStatus: BlockStatus): Boolean =
     blockStatus match {
@@ -81,7 +84,9 @@ object InvalidBlock {
   case object InvalidTransaction      extends InvalidBlock
   case object InvalidBondsCache       extends InvalidBlock
   case object InvalidBlockHash        extends InvalidBlock
+  case object InvalidPreStateHash     extends InvalidBlock
   case object InvalidRejectedDeploy   extends InvalidBlock
+  case object invalidMergingRoot      extends InvalidBlock
   case object ContainsExpiredDeploy   extends InvalidBlock
   case object ContainsFutureDeploy    extends InvalidBlock
 

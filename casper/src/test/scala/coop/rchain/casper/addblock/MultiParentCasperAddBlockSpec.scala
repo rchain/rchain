@@ -531,7 +531,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       version = 0L
     )
     val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-    val body      = Body(postState, deploys.toList, List.empty, List.empty)
+    val body      = Body(postState, deploys.toList, MergingSpec.noMerge, List.empty)
     val serializedJustifications =
       List(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)

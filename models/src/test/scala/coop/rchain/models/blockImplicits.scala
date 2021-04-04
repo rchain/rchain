@@ -175,7 +175,7 @@ object blockImplicits {
           ),
           deploys = deploys.toList,
           systemDeploys = List.empty,
-          rejectedDeploys = List.empty
+          mergingSpec = MergingSpec.noMerge
         ),
         justifications = justifications.toList,
         sender = validator,

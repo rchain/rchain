@@ -178,11 +178,12 @@ message BodyProto {
   repeated ProcessedDeployProto deploys      = 2;
   repeated ProcessedSystemDeployProto systemDeploys = 3;
   bytes                    extraBytes   = 4;
-  repeated RejectedDeployProto rejectedDeploys = 5;
+  MergingSpecProto mergingSpec = 5;
 }
 
-message RejectedDeployProto{
-  bytes sig = 1;
+message MergingSpecProto {
+  bytes mergingRoot                 = 1; // root block used as the bottom for merging scope
+  repeated bytes rejectedDeploys = 2; // deploys rejected when merging the scope
 }
 
 message JustificationProto {

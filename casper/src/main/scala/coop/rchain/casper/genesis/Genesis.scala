@@ -96,7 +96,7 @@ object Genesis {
     val body = Body(
       state = state,
       deploys = sortedDeploys.toList,
-      rejectedDeploys = List.empty,
+      mergingSpec = MergingSpec.noMerge,
       systemDeploys = List.empty
     )
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream

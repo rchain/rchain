@@ -282,9 +282,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             case ((prevLayer, dag, blockNum, rejectedAcc), levelTemplate) =>
               println(s"creating lvl ${blockNum}, template: ${levelTemplate}")
               for {
-                v <- if (prevLayer.size == 1) (prevLayer.head.postStateHash, Seq.empty).pure[Task]
+                v <- if (prevLayer.size == 1)
+                      (prevLayer.head.postStateHash, ByteString.EMPTY, Seq.empty).pure[Task]
                     else CasperDagMerger.merge(prevLayer, genesisLayer.head, dag, blockIndexCache)
-                (preStateHash, rejectedAtLevel) = v
+                (preStateHash, _, rejectedAtLevel) = v
                 newLayer <- fs2.Stream
                              .emits(
                                levelTemplate.map(
@@ -375,10 +376,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             dag <- mergingTips.foldLeftM(emptyDag)((acc, tip) => acc.addEdge(tip, base))
 
             // merge children to get next preStateHash
-            v                                   <- CasperDagMerger.merge(mergingTips, base, dag, blockIndexCache)
-            (nextPreStateHash, rejectedDeploys) = v
-            _                                   = assert(rejectedDeploys.size == 0)
-            _                                   = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
+            v                                      <- CasperDagMerger.merge(mergingTips, base, dag, blockIndexCache)
+            (nextPreStateHash, _, rejectedDeploys) = v
+            _                                      = assert(rejectedDeploys.size == 0)
+            _                                      = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
           } yield nextPreStateHash
 
         for {
