@@ -74,7 +74,7 @@ object ParBuilder {
                 case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
-                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString(", "))
               )
             } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
@@ -88,14 +88,14 @@ object ParBuilder {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"
                 }
-                .mkString("", ", ", "")
+                .mkString(", ")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
               val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
                 s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
-                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
           } else normalizedTerm.pure[F].map(_.par)
