@@ -9,5 +9,6 @@ final case class MergingVertex(
     blockHash: BlockHash = ByteString.EMPTY,
     postStateHash: StateHash,
     preStateHash: StateHash = ByteString.EMPTY,
-    processedDeploys: Set[ProcessedDeploy]
+    processedDeploys: Set[ProcessedDeploy],
+    rejectedDeploys: Set[ByteString] = Set.empty
 )

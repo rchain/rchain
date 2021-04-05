@@ -278,7 +278,8 @@ object InterpreterUtil {
                            b.blockHash,
                            b.body.state.postStateHash,
                            b.body.state.preStateHash,
-                           b.body.deploys.toSet
+                           b.body.deploys.toSet,
+                           b.body.mergingSpec.rejectedDeploys.toSet
                          )
                      )
                      .compile
@@ -291,7 +292,8 @@ object InterpreterUtil {
                            b.blockHash,
                            b.body.state.postStateHash,
                            b.body.state.preStateHash,
-                           b.body.deploys.toSet
+                           b.body.deploys.toSet,
+                           b.body.mergingSpec.rejectedDeploys.toSet
                          )
                      )
             r <- CasperDagMerger.merge(

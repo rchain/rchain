@@ -3,6 +3,7 @@ package coop.rchain.casper.blocks.merger
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.rspace.Blake2b256Hash
@@ -23,14 +24,16 @@ final case class BlockIndex private (
     chanToDeployMap: Map[Blake2b256Hash, Set[ProcessedDeploy]],
     deployToChanMap: Map[ProcessedDeploy, Set[Blake2b256Hash]],
     eventLogIndex: EventLogIndex,
-    deploys: Set[ProcessedDeploy]
+    deploys: Set[ProcessedDeploy],
+    rejectedDeploys: Set[ByteString]
 ) {
   def +(that: BlockIndex) =
     BlockIndex(
       this.chanToDeployMap ++ that.chanToDeployMap,
       this.deployToChanMap ++ that.deployToChanMap,
       this.eventLogIndex + that.eventLogIndex,
-      this.deploys ++ that.deploys
+      this.deploys ++ that.deploys,
+      this.rejectedDeploys ++ that.rejectedDeploys
     )
 }
 
@@ -38,7 +41,8 @@ final case class BranchIndex(
     chanToDeployMap: Map[Blake2b256Hash, Set[ProcessedDeploy]],
     deployToChanMap: Map[ProcessedDeploy, Set[Blake2b256Hash]],
     eventLogIndex: EventLogIndex,
-    deploys: Set[ProcessedDeploy]
+    deploys: Set[ProcessedDeploy],
+    rejectedDeploys: Set[ByteString]
 ) {
   def calculateRejectedDeploys(conflicts: Set[Blake2b256Hash]): Set[ProcessedDeploy] =
     conflicts.flatMap(c => chanToDeployMap.getOrElse(c, Set.empty[ProcessedDeploy]))
@@ -47,7 +51,7 @@ final case class BranchIndex(
 object BranchIndex {
   def apply(blocksIndexes: Seq[BlockIndex]): BranchIndex = {
     val r = blocksIndexes.reduce((a, b) => a + b)
-    BranchIndex(r.chanToDeployMap, r.deployToChanMap, r.eventLogIndex, r.deploys)
+    BranchIndex(r.chanToDeployMap, r.deployToChanMap, r.eventLogIndex, r.deploys, r.rejectedDeploys)
   }
 }
 
@@ -70,7 +74,8 @@ object Indexer {
 
       producesPeekedRef <- Ref.of[F, Set[Produce]](Set.empty)
 
-      deploys = vertex.processedDeploys
+      deploys         = vertex.processedDeploys
+      rejectedDeploys = vertex.rejectedDeploys
       events = deploys.toParArray.flatMap(
         d => d.deployLog.par.map(e => (EventConverter.toRspaceEvent(e), d))
       )
@@ -157,16 +162,24 @@ object Indexer {
         consumesDestroyed = consumesDestroyed
       ),
       deploys = deploys,
+      rejectedDeploys = rejectedDeploys,
       deployToChanMap = deployToChanMap
     )
 
   def createBranchIndex[F[_]: Concurrent](
-      vertices: Seq[MergingVertex]
+      vertices: Seq[MergingVertex],
+      deploysToIgnore: Set[ByteString] = Set.empty
   )(implicit indexCache: LazyKeyValueCache[F, MergingVertex, BlockIndex]): F[BranchIndex] =
     for {
       indexes <- fs2.Stream
                   .emits(vertices)
                   .parEvalMapProcBounded(indexCache.get)
+                  .map(
+                    i =>
+                      i.copy(
+                        deploys = i.deploys.filterNot(d => deploysToIgnore.contains(d.deploy.sig))
+                      )
+                  )
                   .compile
                   .toList
     } yield BranchIndex(indexes)

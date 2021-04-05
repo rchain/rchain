@@ -72,15 +72,23 @@ object CasperDagMerger {
     for {
       // compute branches that can be merged
       branchesSorted <- DagOps.computeSortedDistinctBranches(tips, base, dag)
+
+      // get deploys rejected in blocks inside scope. They should be removed from this merge.
+      rejectedInScope = branchesSorted.flatten.map(_.rejectedDeploys).reduce(_ ++ _)
+
       // compute branch indexes, preserving order
-      _ <- Log[F].debug(s"Attempting to merge ${branchesSorted.size} branches. Indexing...")
+      _ <- Log[F].debug(
+            s"Attempting to merge ${branchesSorted.size} branches. " +
+              s"Deploys rejected in scope: ${rejectedInScope.size}. " +
+              s"Indexing..."
+          )
       branchesIndexed <- Span[F].trace(indexBranchesLabel)(
                           Stopwatch.time(Log[F].info(_))(s"Indexing done.")(
                             fs2.Stream
                               .emits(branchesSorted)
                               .parEvalMapProcBounded { b =>
                                 implicit val c = blockIndexCache
-                                Indexer.createBranchIndex(b).map { i =>
+                                Indexer.createBranchIndex(b, rejectedInScope).map { i =>
                                   IndexedBranch(b.last.preStateHash, b.head.postStateHash, i)
                                 }
                               }

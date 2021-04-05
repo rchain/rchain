@@ -320,7 +320,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
             b.blockHash,
             ProtoUtil.postStateHash(b),
             ProtoUtil.preStateHash(b),
-            ProtoUtil.deploys(b).toSet
+            ProtoUtil.deploys(b).toSet,
+            b.body.mergingSpec.rejectedDeploys.toSet
           )
         ) >> validationStatus.value
   }

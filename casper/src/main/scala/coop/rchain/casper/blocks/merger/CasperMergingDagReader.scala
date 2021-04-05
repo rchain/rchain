@@ -25,7 +25,8 @@ final class CasperMergingDagReader[F[_]: Concurrent: BlockStore](
                   b.blockHash,
                   b.body.state.postStateHash,
                   b.body.state.preStateHash,
-                  b.body.deploys.toSet
+                  b.body.deploys.toSet,
+                  b.body.mergingSpec.rejectedDeploys.toSet
                 )
             ).toSet.some
           )
@@ -46,7 +47,8 @@ final class CasperMergingDagReader[F[_]: Concurrent: BlockStore](
                   b.blockHash,
                   b.body.state.postStateHash,
                   b.body.state.preStateHash,
-                  b.body.deploys.toSet
+                  b.body.deploys.toSet,
+                  b.body.mergingSpec.rejectedDeploys.toSet
                 )
             ).toSet.some
           )
