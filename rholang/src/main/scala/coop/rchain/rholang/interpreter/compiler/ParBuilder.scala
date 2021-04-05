@@ -98,7 +98,7 @@ object ParBuilder {
                 TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
-          } else normalizedTerm.pure[F].map(_.par)
+          } else normalizedTerm.par.pure[F]
         }
 
     /**
