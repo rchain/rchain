@@ -16,8 +16,6 @@ trait Dispatch[M[_], A, K] {
 }
 
 object Dispatch {
-
-  // TODO: Make this function total
   def buildEnv(dataList: Seq[ListParWithRandom]): Env[Par] =
     Env.makeEnv(dataList.flatMap(_.pars): _*)
 }
