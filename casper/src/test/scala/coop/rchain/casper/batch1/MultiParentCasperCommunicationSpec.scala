@@ -12,7 +12,6 @@ import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-// casper and communication has little to do with each other, so commented out
 class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
@@ -32,35 +31,15 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
         deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
         signedBlock2 <- nodes(0).addBlock(deploy2)
-        _            <- nodes(2).syncWith(nodes)
-        //1 receives block2
-        //2 receives block2; asks if who has block1
-        //1 receives request for has block1; sends i have block1
-        //2 receives I have block1; asks for block1
-        //1 receives request block1; sends block1
-        //2 receives block2; asks for block1
-        //2 receives block1; adds both block1 and block2
 
-        // due to asynchronous processing of blocks syncWith ends before blocks are added to DAG
-        // as this test is supposed to check that node is asking for block, just checking blockstore
-        // for presence of block is enough
-        _ <- nodes(2).blockStore.contains(signedBlock1.blockHash) shouldBeF true
-        _ <- nodes(2).blockStore.contains(signedBlock2.blockHash) shouldBeF true
-
-        /*       this test is too restrictive in the presence of block hashes (see RCHAIN-3819).
-                 Node #1 at this point only "knows" about block2 - which is nonetheless sufficient for recovering missing blocks.
-                 Leaving for reference:
- _ <- nodes.toList.traverse_ { node =>
-              for {
-                maybeBlock1 <- node.blockStore.get(signedBlock1.blockHash)
-                maybeBlock2 <- node.blockStore.get(signedBlock2.blockHash)
-              } yield {
-                withClue(s"Assertion failed for node ${node.local} --") {
-                  maybeBlock1 shouldBe Some(signedBlock1)
-                  maybeBlock2 shouldBe Some(signedBlock2)
-                }
-              }
-            }*/
+        _ <- nodes(2).addBlock(signedBlock2)
+        // signedBlock2 have signedBlock1 as a dependency, therefore ir should be put in requestedBlocks
+        r <- nodes(2).requestedBlocks.get.map(v => v.get(signedBlock1.blockHash)).map {
+              case Some(_) => true
+              case None    => false
+            }
+        // block retriever should contain record with hash
+        _ = r shouldBe true
       } yield ()
     }
   }
