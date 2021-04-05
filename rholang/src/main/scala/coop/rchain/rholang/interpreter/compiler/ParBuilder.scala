@@ -134,7 +134,7 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   import java_cup.runtime.Symbol
 
   override def unrecovered_syntax_error(cur_token: Symbol): Unit =
-    throw new SyntaxError(
+    throw SyntaxError(
       cur_token match {
         case cs: ComplexSymbol =>
           s"syntax error(${cs.getName}): ${s
@@ -160,5 +160,5 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   override def report_error(message: String, info: Object): Unit = ()
 
   override def report_fatal_error(message: String, info: Object): Unit =
-    throw new ParserError(message + info)
+    throw ParserError(message + info)
 }
