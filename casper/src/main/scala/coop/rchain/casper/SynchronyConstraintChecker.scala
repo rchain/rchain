@@ -96,7 +96,9 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
                              else checkConstraint
         } yield allowedToPropose
       case None =>
-        CheckProposeConstraintsResult.success.pure[F]
+        Sync[F].raiseError[CheckProposeConstraintsResult](
+          new IllegalStateException("Validator does not have a latest message")
+        )
     }
   }
 }
