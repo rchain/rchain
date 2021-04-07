@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
-
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
@@ -35,6 +34,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   SourcePosition,
   VarSort
 }
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import monix.eval.Coeval
 
 class BoolMatcherSpec extends FlatSpec with Matchers {
@@ -76,8 +76,11 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
     DeBruijnLevelMap.empty[VarSort]
   )
+
   implicit val normalizerEnv: Map[String, Par] = Map.empty
-  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+  implicit val debugInfo: DebugInfo            = DebugInfo()
+
+  def getNormalizedPar(rho: String): Par = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -241,6 +244,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
 class ProcMatcherSpec extends FlatSpec with Matchers {
   val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
+  implicit val debugInfo: DebugInfo            = DebugInfo()
 
   "PNil" should "Compile as no modification to the par object" in {
     val nil = new PNil()
@@ -1639,6 +1643,7 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
 class NameMatcherSpec extends FlatSpec with Matchers {
   val inputs                                   = NameVisitInputs(IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
+  implicit val debugInfo: DebugInfo            = DebugInfo()
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
     val nw                  = new NameWildcard()

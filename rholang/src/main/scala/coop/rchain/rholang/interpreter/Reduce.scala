@@ -1,8 +1,8 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
-import cats.implicits._
-import cats.{Eval => _}
+import cats.syntax.all._
+import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -16,9 +16,10 @@ import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
-import coop.rchain.rspace.util._
+import coop.rchain.rspace.util.unpackOptionWithPeek
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
@@ -38,16 +39,15 @@ trait Reduce[M[_]] {
   final def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
     eval(par)(Env[Par](), rand)
 
+  final def inj(par: Par, debugInfo: DebugInfo)(implicit rand: Blake2b512Random): M[Unit] =
+    eval(par)(Env[Par](debugInfo), rand)
+
 }
 
-class DebruijnInterpreter[M[_]](
+class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par]
-)(
-    implicit parallel: cats.Parallel[M],
-    syncM: Sync[M],
-    cost: _cost[M]
 ) extends Reduce[M] {
 
   type Application =
@@ -61,18 +61,19 @@ class DebruijnInterpreter[M[_]](
     * @param chan  The channel on which data is being sent.
     * @param data  The par objects holding the processes being sent.
     * @param persistent  True if the write should remain in the tuplespace indefinitely.
-    * @return  An optional continuation resulting from a match in the tuplespace.
     */
   private def produce(
       chan: Par,
       data: ListParWithRandom,
       persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent) >>= (continue(
-      _,
-      produce(chan, data, persistent),
-      persistent
-    ))
+    space.produce(chan, data, persist = persistent) >>= { produceResult =>
+      continue(
+        unpackOptionWithPeek(produceResult),
+        produce(chan, data, persistent),
+        persistent
+      )
+    }
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -80,8 +81,6 @@ class DebruijnInterpreter[M[_]](
     * @param binds  A Seq of pattern, channel pairs. Each pattern is a Seq[Par].
     *               The Seq is for arity matching, and each term in the Seq is a name pattern.
     * @param body  A Par object which will be run in the envirnoment resulting from the match.
-    * @return  An optional continuation resulting from a match. The body of the continuation
-    *          will be @param body if the continuation is not None.
     */
   private def consume(
       binds: Seq[(BindPattern, Par)],
@@ -96,10 +95,16 @@ class DebruijnInterpreter[M[_]](
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
+    ) >>= { consumeResult =>
+      continue(
+        unpackOptionWithPeek(consumeResult),
+        consume(binds, body, persistent, peek),
+        persistent
+      )
+    }
   }
 
-  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
+  private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean): M[Unit] =
     res match {
       case Some((continuation, dataList, _)) if persistent =>
         dispatchAndRun(continuation, dataList)(
@@ -111,34 +116,34 @@ class DebruijnInterpreter[M[_]](
         )
       case Some((continuation, dataList, _)) =>
         dispatch(continuation, dataList)
-      case None => syncM.unit
+      case None => Sync[M].unit
     }
 
   private[this] def dispatchAndRun(
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  )(ops: M[Unit]*) =
+  )(ops: M[Unit]*): M[Unit] =
     // Collect errors from all parallel execution paths (pars)
     parTraverseSafe(dispatch(continuation, dataList) +: ops.toVector)(identity)
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ) = dispatcher.dispatch(
+  ): M[Unit] = dispatcher.dispatch(
     continuation,
     dataList.map(_._2)
   )
 
   private[this] def producePeeks(
       dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
-  ) =
+  ): Seq[M[Unit]] =
     dataList
       .withFilter {
         case (_, _, _, persist) => !persist
       }
       .map {
         case (chan, _, removedData, _) =>
-          produce(chan, removedData, false)
+          produce(chan, removedData, persistent = false)
       }
 
   /**
@@ -150,7 +155,6 @@ class DebruijnInterpreter[M[_]](
       implicit env: Env[Par],
       rand: Blake2b512Random
   ): M[Unit] = {
-    // for lack of a better type...
     val terms: Seq[GeneratedMessage] = Seq(
       par.sends,
       par.receives,
@@ -228,8 +232,8 @@ class DebruijnInterpreter[M[_]](
       case term: Bundle  => eval(term)
       case term: Expr =>
         term.exprInstance match {
-          case e: EVarBody    => eval(e.value.v) >>= (eval(_))
-          case e: EMethodBody => evalExprToPar(e) >>= (eval(_))
+          case e: EVarBody    => eval(e.value.v) >>= eval
+          case e: EMethodBody => evalExprToPar(e) >>= eval
           case other          => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
         }
       case other => BugFoundError(s"Undefined term: \n $other").raiseError[M, Unit]
@@ -242,7 +246,6 @@ class DebruijnInterpreter[M[_]](
     *    correctly used as a key in the tuple space.
     * 3. Evaluate any top level expressions in the data being sent.
     * 4. Call produce
-    * 5. If produce returned a continuation, evaluate it.
     *
     * @param send An output process
     * @param env An execution context
@@ -255,7 +258,7 @@ class DebruijnInterpreter[M[_]](
     for {
       _        <- charge[M](SEND_EVAL_COST)
       evalChan <- evalExpr(send.chan)
-      subChan  <- substituteAndCharge[Par, M](evalChan, 0, env)
+      subChan  <- substituteAndCharge[Par, M](evalChan, depth = 0, env)
       unbundled <- subChan.singleBundle() match {
                     case Some(value) =>
                       if (!value.writeFlag)
@@ -264,7 +267,7 @@ class DebruijnInterpreter[M[_]](
                     case None => subChan.pure[M]
                   }
       data      <- send.data.toList.traverse(evalExpr)
-      substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
+      substData <- data.traverse(substituteAndCharge[Par, M](_, depth = 0, env))
       _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent)
     } yield ()
 
@@ -274,26 +277,20 @@ class DebruijnInterpreter[M[_]](
   ): M[Unit] =
     for {
       _ <- charge[M](RECEIVE_EVAL_COST)
-      binds <- receive.binds.toList.traverse(
-                rb =>
-                  for {
-                    q <- unbundleReceive(rb)
-                    substPatterns <- rb.patterns.toList
-                                      .traverse(substituteAndCharge[Par, M](_, 1, env))
-                  } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
-              )
+      binds <- receive.binds.toList.traverse { rb =>
+                for {
+                  q <- unbundleReceive(rb)
+                  substPatterns <- rb.patterns.toList
+                                    .traverse(substituteAndCharge[Par, M](_, depth = 1, env))
+                } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
+              }
       // TODO: Allow for the environment to be stored with the body in the Tuplespace
       substBody <- substituteNoSortAndCharge[Par, M](
                     receive.body,
-                    0,
+                    depth = 0,
                     env.shift(receive.bindCount)
                   )
-      _ <- consume(
-            binds,
-            ParWithRandom(substBody, rand),
-            receive.persistent,
-            receive.peek
-          )
+      _ <- consume(binds, ParWithRandom(substBody, rand), receive.persistent, receive.peek)
     } yield ()
 
   /**
@@ -305,7 +302,6 @@ class DebruijnInterpreter[M[_]](
     * @return If the variable has a binding (par), lift the
     *                  binding into the monadic context, else signal
     *                  an exception.
-    *
     */
   private def eval(
       valproc: Var
@@ -313,12 +309,7 @@ class DebruijnInterpreter[M[_]](
     charge[M](VAR_EVAL_COST) >> {
       valproc.varInstance match {
         case BoundVar(level) =>
-          env.get(level) match {
-            case Some(par) =>
-              par.pure[M]
-            case None =>
-              ReduceError("Unbound variable: " + level + " in " + env.envMap).raiseError[M, Par]
-          }
+          env.get(level).liftTo[M](ReduceError("Unbound variable: " + level + " in " + env.envMap))
         case Wildcard(_) =>
           ReduceError("Unbound variable: attempting to evaluate a pattern").raiseError[M, Par]
         case FreeVar(_) =>
@@ -334,15 +325,7 @@ class DebruijnInterpreter[M[_]](
   ): M[Unit] = {
 
     def addToEnv(env: Env[Par], freeMap: Map[Int, Par], freeCount: Int): Env[Par] =
-      Range(0, freeCount).foldLeft(env)(
-        (acc, e) =>
-          acc.put(
-            freeMap.get(e) match {
-              case Some(p) => p
-              case None    => Par()
-            }
-          )
-      )
+      Range(0, freeCount).foldLeft(env)((acc, e) => acc.put(freeMap.getOrElse(e, Par())))
 
     def firstMatch(target: Par, cases: Seq[MatchCase])(implicit env: Env[Par]): M[Unit] = {
       def firstMatchM(
@@ -353,7 +336,7 @@ class DebruijnInterpreter[M[_]](
           case Nil => ().asRight[(Par, Seq[MatchCase])].pure[M]
           case singleCase +: caseRem =>
             for {
-              pattern     <- substituteAndCharge[Par, M](singleCase.pattern, 1, env)
+              pattern     <- substituteAndCharge[Par, M](singleCase.pattern, depth = 1, env)
               matchResult <- spatialMatchResult[M](target, pattern)
               res <- matchResult match {
                       case None =>
@@ -374,7 +357,7 @@ class DebruijnInterpreter[M[_]](
       _            <- charge[M](MATCH_EVAL_COST)
       evaledTarget <- evalExpr(mat.target)
       // TODO(kyle): Make the matcher accept an environment, instead of substituting it.
-      substTarget <- substituteAndCharge[Par, M](evaledTarget, 0, env)
+      substTarget <- substituteAndCharge[Par, M](evaledTarget, depth = 0, env)
       _           <- firstMatch(substTarget, mat.cases)
     } yield ()
   }
@@ -382,9 +365,6 @@ class DebruijnInterpreter[M[_]](
   /**
     * Adds neu.bindCount new GPrivate from UUID's to the environment and then
     * proceeds to evaluate the body.
-    *
-    * @param neu
-    * @return
     */
   // TODO: Eliminate variable shadowing
   private def eval(
@@ -392,8 +372,20 @@ class DebruijnInterpreter[M[_]](
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
 
     def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
-      val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
-        val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
+      val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, i) =>
+        val nextRnd   = rand.next()
+        val addr: Par = GPrivate(ByteString.copyFrom(nextRnd))
+
+        // DEBUG
+        val normMap        = env.debugInfo.normMap
+        val sourceNames    = normMap(neu).toVector
+        val srcName        = sourceNames(i)
+        val addrHex        = Base16.encode(nextRnd)
+        val newScrName     = s"$srcName, addr: $addrHex"
+        val newSourceNames = sourceNames.updated(i, newScrName)
+        normMap.update(neu, newSourceNames)
+        // DEBUG
+
         _env.put(addr)
       }
 
@@ -403,7 +395,7 @@ class DebruijnInterpreter[M[_]](
         )
 
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
-        if (urnMap.get(urn).isEmpty)
+        if (!urnMap.contains(urn))
           // If `urn` can't be found in `urnMap`, it must be referencing an injection
           neu.injections
             .get(urn)
@@ -419,15 +411,9 @@ class DebruijnInterpreter[M[_]](
             }
             .getOrElse(normalizerBugFound(urn).asLeft[Env[Par]])
         else
-          urnMap.get(urn) match {
-            case Some(p) => newEnv.put(p).asRight[InterpreterError]
-            case None    => ReduceError(s"Unknown urn for new: $urn").asLeft[Env[Par]]
-          }
+          urnMap.get(urn).map(newEnv.put).toRight(left = ReduceError(s"Unknown urn for new: $urn"))
 
-      urns.toList.foldM(simpleNews)(addUrn) match {
-        case Right(tmpEnv) => tmpEnv.pure[M]
-        case Left(e)       => e.raiseError[M, Env[Par]]
-      }
+      urns.toList.foldM(simpleNews)(addUrn).fold(_.raiseError[M, Env[Par]], _.pure[M])
     }
 
     charge[M](newBindingsCost(neu.bindCount)) >>
@@ -437,7 +423,7 @@ class DebruijnInterpreter[M[_]](
   private[this] def unbundleReceive(rb: ReceiveBind)(implicit env: Env[Par]): M[Par] =
     for {
       evalSrc <- evalExpr(rb.source)
-      subst   <- substituteAndCharge[Par, M](evalSrc, 0, env)
+      subst   <- substituteAndCharge[Par, M](evalSrc, depth = 0, env)
       // Check if we try to read from bundled channel
       unbndl <- subst.singleBundle() match {
                  case Some(value) =>
@@ -465,18 +451,17 @@ class DebruijnInterpreter[M[_]](
           _            <- charge[M](METHOD_CALL_COST)
           evaledTarget <- evalExpr(target)
           evaledArgs   <- arguments.toList.traverse(evalExpr)
-          resultPar <- methodTable.get(method) match {
-                        case None =>
-                          ReduceError("Unimplemented method: " + method).raiseError[M, Par]
-                        case Some(f) => f(evaledTarget, evaledArgs)
-                      }
+          resultPar <- methodTable
+                        .get(method)
+                        .liftTo[M](ReduceError("Unimplemented method: " + method))
+                        .flatMap(_(evaledTarget, evaledArgs))
         } yield resultPar
       }
       case _ => evalExprToExpr(expr).map(fromExpr(_)(identity))
     }
 
   private def evalExprToExpr(expr: Expr)(implicit env: Env[Par]): M[Expr] = {
-    syncM.defer {
+    Sync[M].defer {
       def relop(
           p1: Par,
           p2: Par,
@@ -492,8 +477,7 @@ class DebruijnInterpreter[M[_]](
                      case (GInt(i1), GInt(i2))       => GBool(relopi(i1, i2)).pure[M]
                      case (GString(s1), GString(s2)) => GBool(relops(s1, s2)).pure[M]
                      case _ =>
-                       ReduceError("Unexpected compare: " + v1 + " vs. " + v2)
-                         .raiseError[M, GBool]
+                       ReduceError("Unexpected compare: " + v1 + " vs. " + v2).raiseError[M, GBool]
                    }
         } yield result
 
@@ -588,8 +572,8 @@ class DebruijnInterpreter[M[_]](
             v1 <- evalExpr(p1)
             v2 <- evalExpr(p2)
             // TODO: build an equality operator that takes in an environment.
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            sv1 <- substituteAndCharge[Par, M](v1, depth = 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, depth = 0, env)
             _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 == sv2)
 
@@ -597,8 +581,8 @@ class DebruijnInterpreter[M[_]](
           for {
             v1  <- evalExpr(p1)
             v2  <- evalExpr(p2)
-            sv1 <- substituteAndCharge[Par, M](v1, 0, env)
-            sv2 <- substituteAndCharge[Par, M](v2, 0, env)
+            sv1 <- substituteAndCharge[Par, M](v1, depth = 0, env)
+            sv2 <- substituteAndCharge[Par, M](v2, depth = 0, env)
             _   <- charge[M](equalityCheckCost(sv1, sv2))
           } yield GBool(sv1 != sv2)
 
@@ -619,8 +603,8 @@ class DebruijnInterpreter[M[_]](
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
             evaledTarget <- evalExpr(target)
-            substTarget  <- substituteAndCharge[Par, M](evaledTarget, 0, env)
-            substPattern <- substituteAndCharge[Par, M](pattern, 1, env)
+            substTarget  <- substituteAndCharge[Par, M](evaledTarget, depth = 0, env)
+            substPattern <- substituteAndCharge[Par, M](pattern, depth = 1, env)
             matchResult  <- spatialMatchResult[M](substTarget, substPattern)
           } yield GBool(matchResult.isDefined)
 
@@ -797,11 +781,10 @@ class DebruijnInterpreter[M[_]](
             _            <- charge[M](METHOD_CALL_COST)
             evaledTarget <- evalExpr(target)
             evaledArgs   <- arguments.toList.traverse(evalExpr)
-            resultPar <- methodTable.get(method) match {
-                          case None =>
-                            ReduceError("Unimplemented method: " + method).raiseError[M, Par]
-                          case Some(f) => f(evaledTarget, evaledArgs)
-                        }
+            resultPar <- methodTable
+                          .get(method)
+                          .liftTo[M](ReduceError("Unimplemented method: " + method))
+                          .flatMap(_(evaledTarget, evaledArgs))
             resultExpr <- evalSingleExpr(resultPar)
           } yield resultExpr
         case _ => ReduceError("Unimplemented expression: " + expr).raiseError[M, Expr]
@@ -832,11 +815,11 @@ class DebruijnInterpreter[M[_]](
           v      <- evalSingleExpr(p)
           result <- v.exprInstance match {
                      case EListBody(EList(ps, _, _, _)) =>
-                       syncM.fromEither(localNth(ps, nth))
+                       Sync[M].fromEither(localNth(ps, nth))
                      case ETupleBody(ETuple(ps, _, _)) =>
-                       syncM.fromEither(localNth(ps, nth))
+                       Sync[M].fromEither(localNth(ps, nth))
                      case GByteArray(bs) =>
-                       syncM.fromEither(if (0 <= nth && nth < bs.size) {
+                       Sync[M].fromEither(if (0 <= nth && nth < bs.size) {
                          val b      = bs.byteAt(nth) & 0xff // convert to unsigned
                          val p: Par = Expr(GInt(b.toLong))
                          p.asRight[ReduceError]
@@ -862,9 +845,9 @@ class DebruijnInterpreter[M[_]](
       else {
         for {
           exprEvaled <- evalExpr(p)
-          exprSubst  <- substituteAndCharge[Par, M](exprEvaled, 0, env)
+          exprSubst  <- substituteAndCharge[Par, M](exprEvaled, depth = 0, env)
           _          <- charge[M](toByteArrayCost(exprSubst))
-          ba         <- syncM.fromEither(serialize(exprSubst))
+          ba         <- Sync[M].fromEither(serialize(exprSubst))
         } yield Expr(GByteArray(ByteString.copyFrom(ba)))
       }
   }
@@ -879,13 +862,14 @@ class DebruijnInterpreter[M[_]](
           case Some(Expr(GString(encoded))) =>
             for {
               _ <- charge[M](hexToBytesCost(encoded))
-              res <- Try(ByteString.copyFrom(Base16.unsafeDecode(encoded))).fold(
-                      th =>
+              res <- Sync[M]
+                      .delay(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
+                      .handleErrorWith { ex =>
                         ReduceError(
-                          s"Error: exception was thrown when decoding input string to hexadecimal: ${th.getMessage}"
-                        ).raiseError[M, Par],
-                      ba => (Expr(GByteArray(ba)): Par).pure[M]
-                    )
+                          s"Error: exception was thrown when decoding input string to hexadecimal: ${ex.getMessage}"
+                        ).raiseError[M, ByteString]
+                      }
+                      .map(ba => Expr(GByteArray(ba)): Par)
             } yield res
           case Some(Expr(other)) =>
             MethodNotDefined("hexToBytes", other.typ).raiseError[M, Par]
@@ -905,16 +889,15 @@ class DebruijnInterpreter[M[_]](
         p.singleExpr() match {
           case Some(Expr(GByteArray(bytes))) =>
             for {
-              _ <- charge[M](bytesToHexCost(bytes.toByteArray()))
-              res <- {
-                Try(Base16.encode(bytes.toByteArray())).fold(
-                  th =>
-                    ReduceError(
-                      s"Error: exception was thrown when encoding input byte array to hexadecimal string: ${th.getMessage}"
-                    ).raiseError[M, Par],
-                  str => (Expr(GString(str)): Par).pure[M]
-                )
-              }
+              _ <- charge[M](bytesToHexCost(bytes.toByteArray))
+              res <- Sync[M]
+                      .delay(Base16.encode(bytes.toByteArray))
+                      .handleErrorWith { ex =>
+                        ReduceError(
+                          s"Error: exception was thrown when encoding input byte array to hexadecimal string: ${ex.getMessage}"
+                        ).raiseError[M, String]
+                      }
+                      .map(str => Expr(GString(str)): Par)
             } yield res
           case Some(Expr(other)) =>
             MethodNotDefined("bytesToHex", other.typ).raiseError[M, Par]
@@ -987,9 +970,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("union", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("union", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr  <- evalSingleExpr(p)
         otherExpr <- evalSingleExpr(args.head)
         result    <- union(baseExpr, otherExpr)
@@ -1015,9 +998,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("diff", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("diff", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr  <- evalSingleExpr(p)
         otherExpr <- evalSingleExpr(args.head)
         result    <- diff(baseExpr, otherExpr)
@@ -1039,15 +1022,14 @@ class DebruijnInterpreter[M[_]](
               )
             )
           ).pure[M]
-        //TODO(mateusz.gorski): think whether cost accounting for addition should be dependend on the operands
         case other => MethodNotDefined("add", other.typ).raiseError[M, Expr]
       }
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("add", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("add", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](ADD_COST)
@@ -1087,9 +1069,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("delete", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("delete", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](REMOVE_COST) //TODO(mateusz.gorski): think whether deletion of an element from the collection should dependent on the collection type/size
@@ -1110,9 +1092,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("contains", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("contains", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         element  <- evalExpr(args.head)
         _        <- charge[M](LOOKUP_COST)
@@ -1131,9 +1113,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("get", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("get", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         _        <- charge[M](LOOKUP_COST)
@@ -1152,9 +1134,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("getOrElse", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("getOrElse", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         default  <- evalExpr(args(1))
@@ -1174,9 +1156,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("set", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("set", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr <- evalSingleExpr(p)
         key      <- evalExpr(args.head)
         value    <- evalExpr(args(1))
@@ -1197,9 +1179,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("keys", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("keys", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         _        <- charge[M](KEYS_METHOD_COST)
         result   <- keys(baseExpr)
@@ -1222,9 +1204,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("size", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("size", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- size(baseExpr)
         _        <- charge[M](sizeMethodCost(result._1))
@@ -1247,9 +1229,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("length", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("length", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         _        <- charge[M](LENGTH_METHOD_COST)
         result   <- length(baseExpr)
@@ -1261,20 +1243,20 @@ class DebruijnInterpreter[M[_]](
     def slice(baseExpr: Expr, from: Int, until: Int): M[Par] =
       baseExpr.exprInstance match {
         case GString(string) =>
-          syncM.delay(GString(string.slice(from, until)))
+          Sync[M].delay(GString(string.slice(from, until)))
         case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-          syncM.delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
+          Sync[M].delay(EList(ps.slice(from, until), locallyFree, connectiveUsed, remainder))
         case GByteArray(bytes) =>
-          syncM.delay(GByteArray(bytes.substring(from, until)))
+          Sync[M].delay(GByteArray(bytes.substring(from, until)))
         case other =>
           MethodNotDefined("slice", other.typ).raiseError[M, Par]
       }
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 2)
-              MethodArgumentNumberMismatch("slice", 2, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("slice", 2, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 2)
         baseExpr   <- evalSingleExpr(p)
         fromArgRaw <- evalToLong(args.head)
         fromArg    <- restrictToInt(fromArgRaw)
@@ -1289,16 +1271,16 @@ class DebruijnInterpreter[M[_]](
     def take(baseExpr: Expr, n: Int): M[Par] =
       baseExpr.exprInstance match {
         case EListBody(EList(ps, locallyFree, connectiveUsed, remainder)) =>
-          syncM.delay(EList(ps.take(n), locallyFree, connectiveUsed, remainder))
+          Sync[M].delay(EList(ps.take(n), locallyFree, connectiveUsed, remainder))
         case other =>
           MethodNotDefined("take", other.typ).raiseError[M, Par]
       }
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.length != 1)
-              MethodArgumentNumberMismatch("take", 1, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("take", 1, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.length != 1)
         baseExpr <- evalSingleExpr(p)
         nArgRaw  <- evalToLong(args.head)
         nArg     <- restrictToInt(nArgRaw)
@@ -1333,9 +1315,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toList", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toList", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toList(baseExpr)
       } yield result
@@ -1370,9 +1352,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toSet", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toSet", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toSet(baseExpr)
       } yield result
@@ -1412,9 +1394,9 @@ class DebruijnInterpreter[M[_]](
 
     override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
       for {
-        _ <- if (args.nonEmpty)
-              MethodArgumentNumberMismatch("toMap", 0, args.length).raiseError[M, Unit]
-            else ().pure[M]
+        _ <- MethodArgumentNumberMismatch("toMap", 0, args.length)
+              .raiseError[M, Unit]
+              .whenA(args.nonEmpty)
         baseExpr <- evalSingleExpr(p)
         result   <- toMap(baseExpr)
       } yield result
@@ -1514,7 +1496,7 @@ class DebruijnInterpreter[M[_]](
       }
 
   private def restrictToInt(long: Long): M[Int] =
-    syncM.catchNonFatal(Math.toIntExact(long)).adaptError {
+    Sync[M].catchNonFatal(Math.toIntExact(long)).adaptError {
       case _: ArithmeticException => ReduceError(s"Integer overflow for value $long")
     }
 

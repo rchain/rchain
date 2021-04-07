@@ -1,16 +1,17 @@
 package coop.rchain.rholang.interpreter.compiler
 
-import java.io.{Reader, StringReader}
-
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+
+import java.io.{Reader, StringReader}
 
 trait ParBuilder[F[_]] {
   def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
@@ -18,6 +19,23 @@ trait ParBuilder[F[_]] {
   def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
 
   def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
+
+  // DEBUG
+  def buildNormalizedTerm(
+      source: String,
+      normalizerEnv: Map[String, Par],
+      debugInfo: DebugInfo
+  ): F[Par]
+
+  def buildNormalizedTerm(
+      reader: Reader,
+      normalizerEnv: Map[String, Par],
+      debugInfo: DebugInfo
+  ): F[Par]
+
+  def buildPar(proc: Proc, normalizerEnv: Map[String, Par], debugInfo: DebugInfo): F[Par]
+  // DEBUG
+
   private[interpreter] def buildAST(reader: Reader): F[Proc]
 }
 
@@ -27,17 +45,40 @@ object ParBuilder {
 
   implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
     def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par] =
-      buildNormalizedTerm(new StringReader(source), normalizerEnv)
+      buildNormalizedTerm(source, normalizerEnv, DebugInfo())
 
     def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par] =
+      buildNormalizedTerm(reader, normalizerEnv, DebugInfo())
+
+    def buildNormalizedTerm(
+        source: String,
+        normalizerEnv: Map[String, Par],
+        debugInfo: DebugInfo
+    ): F[Par] =
+      buildNormalizedTerm(new StringReader(source), normalizerEnv, debugInfo)
+
+    def buildNormalizedTerm(
+        reader: Reader,
+        normalizerEnv: Map[String, Par],
+        debugInfo: DebugInfo
+    ): F[Par] =
       for {
         proc <- buildAST(reader)
-        par  <- buildPar(proc, normalizerEnv)
+        par  <- buildPar(proc, normalizerEnv, debugInfo)
       } yield par
 
-    def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par] =
+    def buildPar(
+        proc: Proc,
+        normalizerEnv: Map[String, Par]
+    ): F[Par] = buildPar(proc, normalizerEnv, DebugInfo())
+
+    def buildPar(
+        proc: Proc,
+        normalizerEnv: Map[String, Par],
+        debugInfo: DebugInfo
+    ): F[Par] =
       for {
-        par       <- normalizeTerm(proc)(normalizerEnv)
+        par       <- normalizeTerm(proc)(normalizerEnv, debugInfo)
         sortedPar <- Sortable[Par].sortMatch(par)
       } yield sortedPar.term
 
@@ -61,7 +102,9 @@ object ParBuilder {
                }
       } yield proc
 
-    private def normalizeTerm(term: Proc)(implicit normalizerEnv: Map[String, Par]): F[Par] =
+    private def normalizeTerm(
+        term: Proc
+    )(implicit normalizerEnv: Map[String, Par], debugInfo: DebugInfo): F[Par] =
       ProcNormalizeMatcher
         .normalizeMatch[F](
           term,
@@ -74,7 +117,7 @@ object ParBuilder {
                 case (name, LevelContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
-                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString(", "))
               )
             } else if (normalizedTerm.knownFree.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
@@ -88,17 +131,17 @@ object ParBuilder {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"
                 }
-                .mkString("", ", ", "")
+                .mkString(", ")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
               val topLevelWildcardList = normalizedTerm.knownFree.wildcards.map { sourcePosition =>
                 s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
-                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
-          } else normalizedTerm.pure[F].map(_.par)
+          } else normalizedTerm.par.pure[F]
         }
 
     /**
@@ -134,7 +177,7 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   import java_cup.runtime.Symbol
 
   override def unrecovered_syntax_error(cur_token: Symbol): Unit =
-    throw new SyntaxError(
+    throw SyntaxError(
       cur_token match {
         case cs: ComplexSymbol =>
           s"syntax error(${cs.getName}): ${s
@@ -160,5 +203,5 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   override def report_error(message: String, info: Object): Unit = ()
 
   override def report_fatal_error(message: String, info: Object): Unit =
-    throw new ParserError(message + info)
+    throw ParserError(message + info)
 }

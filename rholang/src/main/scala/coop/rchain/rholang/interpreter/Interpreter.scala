@@ -6,6 +6,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.interpreter.errors.{
   AggregateError,
   InterpreterError,
@@ -87,15 +88,20 @@ object Interpreter {
           normalizerEnv: Map[String, Par]
       )(implicit rand: Blake2b512Random): F[EvaluateResult] = {
         val parsingCost = accounting.parsingCost(term)
+
+        // DEBUG
+        implicit val debugInfo = DebugInfo()
+        // DEBUG
+
         val evaluationResult = for {
           _ <- C.set(initialPhlo)
           _ <- charge[F](parsingCost)
           parsed <- ParBuilder[F]
-                     .buildNormalizedTerm(term, normalizerEnv)
+                     .buildNormalizedTerm(term, normalizerEnv, debugInfo)
                      .handleErrorWith {
                        case err: InterpreterError => ParserError(err).raiseError[F, Par]
                      }
-          _         <- reducer.inj(parsed)
+          _         <- reducer.inj(parsed, debugInfo)
           phlosLeft <- C.get
         } yield EvaluateResult(initialPhlo - phlosLeft, Vector())
 

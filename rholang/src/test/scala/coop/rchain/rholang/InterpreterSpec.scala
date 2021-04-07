@@ -143,6 +143,28 @@ class InterpreterSpec extends FlatSpec with Matchers {
     cost.value shouldEqual initialPhlo.value
   }
 
+  it should "evaluate Rholang" in {
+    val sendRho =
+      """
+        | new x, y in {
+        |   @{0}!(*y) |
+        |   new xx in {
+        |     Nil
+        |   }
+        | }
+        |""".stripMargin
+    val initialPhlo = Cost(100000)
+    val EvaluateResult(_, errors) =
+      mkRuntime[Task](tmpPrefix)
+        .use { runtime =>
+          implicit val c = runtime.cost
+          InterpreterUtil.evaluateResult(runtime, sendRho, initialPhlo)
+        }
+        .runSyncUnsafe(maxDuration)
+
+    errors shouldBe empty
+  }
+
   private def storageContents(runtime: Runtime[Task]): Task[String] =
     StoragePrinter.prettyPrint(runtime.space)
 

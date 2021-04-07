@@ -1,13 +1,10 @@
 package coop.rchain.models.rholang
 
+import com.google.protobuf.ByteString
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
 import coop.rchain.models.Expr.ExprInstance._
-import coop.rchain.models.Var.VarInstance
-import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models._
-import com.google.protobuf.ByteString
 import coop.rchain.models.GUnforgeable.UnfInstance
 import coop.rchain.models.GUnforgeable.UnfInstance.{
   GDeployIdBody,
@@ -15,6 +12,9 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   GPrivateBody,
   GSysAuthTokenBody
 }
+import coop.rchain.models.Var.VarInstance
+import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
+import coop.rchain.models._
 
 import scala.collection.immutable.{BitSet, Vector}
 
@@ -252,17 +252,14 @@ object implicits {
     def prepend(n: New): Par =
       p.copy(
         news = n +: p.news,
-        locallyFree =
-          p.locallyFree | n.locallyFree,
+        locallyFree = p.locallyFree | n.locallyFree,
         connectiveUsed = p.connectiveUsed || n.connectiveUsed
       )
     def prepend(e: Expr, depth: Int): Par =
       p.copy(
         exprs = e +: p.exprs,
-        locallyFree = p.locallyFree | ExprLocallyFree
-          .locallyFree(e, depth),
-        connectiveUsed = p.connectiveUsed || ExprLocallyFree
-          .connectiveUsed(e)
+        locallyFree = p.locallyFree | ExprLocallyFree.locallyFree(e, depth),
+        connectiveUsed = p.connectiveUsed || ExprLocallyFree.connectiveUsed(e)
       )
     def prepend(m: Match): Par =
       p.copy(
@@ -297,7 +294,7 @@ object implicits {
 
     def singleBundle(): Option[Bundle] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.unforgeables.isEmpty && p.connectives.isEmpty) {
-        p.bundles.toList match {
+        p.bundles match {
           case Seq(single) => Some(single)
           case _           => None
         }
@@ -307,7 +304,7 @@ object implicits {
 
     def singleUnforgeable(): Option[GUnforgeable] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.unforgeables.toList match {
+        p.unforgeables match {
           case Seq(single) => Some(single)
           case _           => None
         }
@@ -317,7 +314,7 @@ object implicits {
 
     def singleDeployId(): Option[GDeployId] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.unforgeables.toList match {
+        p.unforgeables match {
           case Seq(GUnforgeable(GDeployIdBody(single))) => Some(single)
           case _                                        => None
         }
@@ -327,7 +324,7 @@ object implicits {
 
     def singleDeployerId(): Option[GDeployerId] =
       if (p.sends.isEmpty && p.receives.isEmpty && p.news.isEmpty && p.exprs.isEmpty && p.matches.isEmpty && p.bundles.isEmpty && p.connectives.isEmpty) {
-        p.unforgeables.toList match {
+        p.unforgeables match {
           case Seq(GUnforgeable(GDeployerIdBody(single))) => Some(single)
           case _                                          => None
         }
@@ -342,7 +339,7 @@ object implicits {
         None
       }
 
-    def ++(that: Par) =
+    def ++(that: Par): Par =
       Par(
         that.sends ++ p.sends,
         that.receives ++ p.receives,
