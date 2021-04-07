@@ -8,6 +8,7 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
@@ -111,7 +112,8 @@ object RemainderNormalizeMatcher {
 
 object CollectionNormalizeMatcher {
   def normalizeMatch[M[_]: Sync](c: Collection, input: CollectVisitInputs)(
-      implicit env: Map[String, Par]
+      implicit env: Map[String, Par],
+      debugInfo: DebugInfo
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DeBruijnLevelMap[VarSort],
@@ -242,7 +244,8 @@ object CollectionNormalizeMatcher {
 
 object NameNormalizeMatcher {
   def normalizeMatch[M[_]: Sync](n: Name, input: NameVisitInputs)(
-      implicit env: Map[String, Par]
+      implicit env: Map[String, Par],
+      debugInfo: DebugInfo
   ): M[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -291,7 +294,8 @@ object NameNormalizeMatcher {
 object ProcNormalizeMatcher {
 
   def normalizeMatch[M[_]: Sync](p: Proc, input: ProcVisitInputs)(
-      implicit env: Map[String, Par]
+      implicit env: Map[String, Par],
+      debugInfo: DebugInfo
   ): M[ProcVisitOutputs] = Sync[M].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
@@ -1022,6 +1026,12 @@ object ProcNormalizeMatcher {
                 injections = env,
                 locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
               )
+
+              // DEBUG
+              val newVars = newBindings.map { case (name, _, pos) => s"new: $name, pos: $pos" }
+              debugInfo.normMap.update(resultNew, newVars)
+              // DEBUG
+
               ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)
           }
         }

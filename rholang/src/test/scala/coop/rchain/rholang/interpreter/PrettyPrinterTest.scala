@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
-
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
@@ -19,6 +18,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   SourcePosition,
   VarSort
 }
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
 import monix.eval.Coeval
 import org.scalatest.{Assertion, FlatSpec, Matchers}
@@ -69,6 +69,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
     DeBruijnLevelMap.empty
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
+  implicit val debugInfo: DebugInfo            = DebugInfo()
 
   "List" should "Print" in {
     val listData = new ListProc()
@@ -152,6 +153,7 @@ class CollectPrinterSpec extends FlatSpec with Matchers {
 class ProcPrinterSpec extends FlatSpec with Matchers {
   val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty, DeBruijnLevelMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
+  implicit val debugInfo: DebugInfo            = DebugInfo()
 
   "New" should "use 0-based indexing" in {
     val source = Par(news = Seq(New(3, Par())))
@@ -939,6 +941,7 @@ class NamePrinterSpec extends FlatSpec with Matchers {
 
   val inputs                                   = NameVisitInputs(IndexMapChain.empty, DeBruijnLevelMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
+  implicit val debugInfo: DebugInfo            = DebugInfo()
 
   "NameWildcard" should "Print" in {
     val nw = new NameWildcard()

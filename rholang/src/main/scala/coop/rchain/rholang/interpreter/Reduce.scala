@@ -16,6 +16,7 @@ import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.Runtime.{RhoDispatch, RhoTuplespace}
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
+import coop.rchain.rholang.interpreter.debugger.DebugInfo
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.util.unpackOptionWithPeek
@@ -37,6 +38,9 @@ trait Reduce[M[_]] {
 
   final def inj(par: Par)(implicit rand: Blake2b512Random): M[Unit] =
     eval(par)(Env[Par](), rand)
+
+  final def inj(par: Par, debugInfo: DebugInfo)(implicit rand: Blake2b512Random): M[Unit] =
+    eval(par)(Env[Par](debugInfo), rand)
 
 }
 
@@ -368,8 +372,20 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   )(implicit env: Env[Par], rand: Blake2b512Random): M[Unit] = {
 
     def alloc(count: Int, urns: Seq[String]): M[Env[Par]] = {
-      val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, _) =>
-        val addr: Par = GPrivate(ByteString.copyFrom(rand.next()))
+      val simpleNews = (0 until (count - urns.size)).toList.foldLeft(env) { (_env, i) =>
+        val nextRnd   = rand.next()
+        val addr: Par = GPrivate(ByteString.copyFrom(nextRnd))
+
+        // DEBUG
+        val normMap        = env.debugInfo.normMap
+        val sourceNames    = normMap(neu).toVector
+        val srcName        = sourceNames(i)
+        val addrHex        = Base16.encode(nextRnd)
+        val newScrName     = s"$srcName, addr: $addrHex"
+        val newSourceNames = sourceNames.updated(i, newScrName)
+        normMap.update(neu, newSourceNames)
+        // DEBUG
+
         _env.put(addr)
       }
 
