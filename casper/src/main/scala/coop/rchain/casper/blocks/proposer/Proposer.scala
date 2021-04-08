@@ -19,6 +19,21 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
+
+sealed abstract class ProposerResult
+object ProposerEmpty                                                         extends ProposerResult
+final case class ProposerSuccess(status: ProposeStatus, block: BlockMessage) extends ProposerResult
+final case class ProposerFailure(status: ProposeStatus, seqNumber: Int)      extends ProposerResult
+final case class ProposerStarted(seqNumber: Int)                             extends ProposerResult
+
+object ProposerResult {
+  def empty: ProposerResult = ProposerEmpty
+  def success(status: ProposeStatus, block: BlockMessage): ProposerResult =
+    ProposerSuccess(status, block)
+  def failure(status: ProposeStatus, seqNumber: Int): ProposerResult =
+    ProposerFailure(status, seqNumber)
+  def started(seqNumber: Int): ProposerResult = ProposerStarted(seqNumber)
+}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash.BlockHash
 
