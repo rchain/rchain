@@ -3,7 +3,7 @@ package coop.rchain.rspace.store
 import cats.Monad
 import cats.syntax.all._
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.store.KeyValueStoreManager
+import coop.rchain.store.{KeyValueStoreManager, NoOpKeyValueStore}
 
 trait RSpaceStoreManagerSyntax {
   implicit final def rspaceSyntaxKeyValueStoreManager[F[_]](
@@ -20,22 +20,30 @@ final class RSpaceStoreManagerOps[F[_]](
   /**
     * Create stores used in RSpace
     */
+  def rSpaceStores(useChannelsMap: Boolean)(implicit m: Monad[F]): F[RSpaceStore[F]] =
+    getStores("rspace", useChannelsMap)
+
+  /**
+    * Create stores used in RSpace
+    */
   def rSpaceStores(implicit m: Monad[F]): F[RSpaceStore[F]] =
-    for {
-      history  <- kvm.store("rspace-history")
-      roots    <- kvm.store("rspace-roots")
-      cold     <- kvm.store("rspace-cold")
-      channels <- kvm.store("channels")
-    } yield RSpaceStore[F](history, roots, cold, channels)
+    getStores("rspace", useChannelsMap = true)
 
   /**
     * Create stores used in Rholang evaluator
     */
   def evalStores(implicit m: Monad[F]): F[RSpaceStore[F]] =
+    getStores("eval", useChannelsMap = false)
+
+  private def getStores(dbPrefix: String, useChannelsMap: Boolean)(
+      implicit m: Monad[F]
+  ): F[RSpaceStore[F]] =
     for {
-      history  <- kvm.store("eval-history")
-      roots    <- kvm.store("eval-roots")
-      cold     <- kvm.store("eval-cold")
-      channels <- kvm.store("channels")
+      history <- kvm.store(s"$dbPrefix-history")
+      roots   <- kvm.store(s"$dbPrefix-roots")
+      cold    <- kvm.store(s"$dbPrefix-cold")
+      // Use dummy KV-store if channels map is not used
+      channels <- if (useChannelsMap) kvm.store(s"$dbPrefix-channels")
+                 else NoOpKeyValueStore().pure[F]
     } yield RSpaceStore[F](history, roots, cold, channels)
 }
