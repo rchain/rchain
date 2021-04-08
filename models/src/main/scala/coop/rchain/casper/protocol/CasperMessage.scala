@@ -242,15 +242,16 @@ object Header {
 }
 
 final case class RejectedDeploy(
-    sig: ByteString
+    sig: ByteString,
+    rejected: Boolean
 )
 
 object RejectedDeploy {
   def from(r: RejectedDeployProto): Either[String, RejectedDeploy] =
-    Right(RejectedDeploy(r.sig))
+    Right(RejectedDeploy(r.sig, r.rejected))
 
   def toProto(r: RejectedDeploy): RejectedDeployProto =
-    RejectedDeployProto().withSig(r.sig)
+    RejectedDeployProto().withSig(r.sig).withRejected(r.rejected)
 }
 
 final case class Body(

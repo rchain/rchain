@@ -183,6 +183,7 @@ message BodyProto {
 
 message RejectedDeployProto{
   bytes sig = 1;
+  bool  rejected = 2;
 }
 
 message JustificationProto {

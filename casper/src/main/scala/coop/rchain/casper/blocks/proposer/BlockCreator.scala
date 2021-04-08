@@ -178,7 +178,9 @@ object BlockCreator {
       Body(
         state,
         deploys.toList,
-        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig)).toList,
+        // TODO check if the deploys are unrejected
+        // https://github.com/rchain/rchain/issues/3372#issuecomment-815492081
+        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig, rejected = true)).toList,
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)

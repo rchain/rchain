@@ -139,6 +139,7 @@ message LightBlockInfo {
 
 message RejectedDeployInfo{
   string sig = 1;
+  bool   rejected = 2;
 }
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation

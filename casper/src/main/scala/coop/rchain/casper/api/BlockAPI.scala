@@ -675,7 +675,7 @@ object BlockAPI {
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
       rejectedDeploys = block.body.rejectedDeploys.map(
-        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
+        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig), r.rejected)
       )
     )
 

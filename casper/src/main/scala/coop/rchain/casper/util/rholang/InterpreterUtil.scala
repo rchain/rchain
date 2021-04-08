@@ -73,7 +73,9 @@ object InterpreterUtil {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right((computedPreStateHash, rejectedDeploys @ _)) =>
-                   val rejectedDeployIds = rejectedDeploys.map(_.deploy.sig).toSet
+                   // TODO check if the deploys are unrejected
+                   // https://github.com/rchain/rchain/issues/3372#issuecomment-815492081
+                   val rejectedDeployIds = rejectedDeploys.map(r => (r.deploy.sig, true)).toSet //true here means rejected
                    if (incomingPreStateHash != computedPreStateHash) {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F]
@@ -86,7 +88,7 @@ object InterpreterUtil {
                      Log[F]
                        .warn(
                          s"Computed rejected deploys " +
-                           s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
+                           s"${rejectedDeployIds.map(r => PrettyPrinter.buildString(r._1) + s":${r._2}").mkString(",")} does not equal " +
                            s"block's rejected deploy " +
                            s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
                        )
@@ -214,6 +216,8 @@ object InterpreterUtil {
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
+        // TODO check if the deploys are unrejected
+        // https://github.com/rchain/rchain/issues/3372#issuecomment-815492081
         computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
         (preStateHash, rejectedDeploys) = computedParentsInfo
         result <- runtimeManager.computeState(preStateHash)(
