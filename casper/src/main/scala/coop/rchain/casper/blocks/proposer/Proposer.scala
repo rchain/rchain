@@ -98,18 +98,23 @@ class Proposer[F[_]: Concurrent: Log: Span](
   private def checkProposeConstraints(
       genesis: BlockMessage,
       s: CasperSnapshot[F]
-  ): F[CheckProposeConstraintsResult] = {
-    val s1   = Stream[F, CheckProposeConstraintsResult](checkActiveValidator(s, validator))
-    val s2   = Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(genesis, s))
-    val s3   = Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(genesis, s))
-    val work = Stream(s1, s2, s3)
-    work
-      .parJoin(3)
-      .compile
-      .toList
-      // pick some result that is not Success, or return Success
-      .map(_.find(_ != CheckProposeConstraintsSuccess).getOrElse(CheckProposeConstraintsSuccess))
-  }
+  ): F[CheckProposeConstraintsResult] =
+    checkActiveValidator(s, validator) match {
+      case NotBonded => CheckProposeConstraintsResult.notBonded.pure[F]
+      case _ =>
+        val work = Stream(
+          Stream.eval[F, CheckProposeConstraintsResult](checkEnoughBaseStake(genesis, s)),
+          Stream.eval[F, CheckProposeConstraintsResult](checkFinalizedHeight(genesis, s))
+        )
+        work
+          .parJoin(2)
+          .compile
+          .toList
+          // pick some result that is not Success, or return Success
+          .map(
+            _.find(_ != CheckProposeConstraintsSuccess).getOrElse(CheckProposeConstraintsSuccess)
+          )
+    }
 
   def propose(
       c: Casper[F],
