@@ -105,14 +105,21 @@ object BlockAPI {
       _.withCasper[ApiErr[String]](
         casper =>
           for {
-            resultOpt <- triggerProposeF(casper, isAsync)
-            // wait till propose pipe assign proposeID to propose and resolve proposeIDDef
-            r <- resultOpt match {
-                  case Some(Right(blockHash)) =>
-                    logSucess(s"Success! Block ${blockHash.base16String} created and added.")
-                  case Some(Left(seqNum)) =>
-                    logSucess(s"Success: proposing block with seqNum ${seqNum}")
-                  case None => logDebug(s"Failure: another propose is in progress")
+            // Trigger propose
+            proposerResult <- triggerProposeF(casper, isAsync)
+            r <- proposerResult match {
+                  case ProposerEmpty =>
+                    logDebug(s"Propose failed: another propose is in progress")
+                  case ProposerFailure(status, seqNumber) =>
+                    logDebug(s"Propose failed: $status (seqNum $seqNumber)")
+                  case ProposerStarted(seqNumber) =>
+                    logSucess(s"Propose started (seqNum $seqNumber)")
+                  case ProposerSuccess(_, block) =>
+                    // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
+                    //  Fix to use structured result with transport errors/codes.
+                    // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
+                    val blockHashHex = block.blockHash.base16String
+                    logSucess(s"Success! Block $blockHashHex created and added.")
                 }
           } yield r,
         default = logWarn("Failure: casper instance is not available.")
