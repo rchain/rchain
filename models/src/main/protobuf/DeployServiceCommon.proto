@@ -134,10 +134,10 @@ message LightBlockInfo {
   float faultTolerance = 19;
 
   repeated JustificationInfo justifications = 20;
-  repeated RejectedDeployInfo rejectedDeploys = 21;
+  repeated MergingDeployStatusInfo mergingDeployStatuses = 21;
 }
 
-message RejectedDeployInfo{
+message MergingDeployStatusInfo{
   string sig = 1;
   bool   rejected = 2;
 }

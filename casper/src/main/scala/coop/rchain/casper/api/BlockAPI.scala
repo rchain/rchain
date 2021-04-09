@@ -674,8 +674,8 @@ object BlockAPI {
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
-      rejectedDeploys = block.body.rejectedDeploys.map(
-        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig), r.rejected)
+      mergingDeployStatuses = block.body.mergingDeployStatuses.map(
+        r => MergingDeployStatusInfo(PrettyPrinter.buildStringNoLimit(r.sig), r.rejected)
       )
     )
 

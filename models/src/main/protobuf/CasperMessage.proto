@@ -178,10 +178,10 @@ message BodyProto {
   repeated ProcessedDeployProto deploys      = 2;
   repeated ProcessedSystemDeployProto systemDeploys = 3;
   bytes                    extraBytes   = 4;
-  repeated RejectedDeployProto rejectedDeploys = 5;
+  repeated MergingDeployStatusProto mergingDeployStatuses = 5;
 }
 
-message RejectedDeployProto{
+message MergingDeployStatusProto{
   bytes sig = 1;
   bool  rejected = 2;
 }

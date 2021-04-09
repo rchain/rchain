@@ -84,13 +84,15 @@ object InterpreterUtil {
                            .buildString(incomingPreStateHash)}"
                        )
                        .as(none[StateHash].asRight[BlockError])
-                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
+                   } else if (rejectedDeployIds != block.body.mergingDeployStatuses
+                                .map(_.sig)
+                                .toSet) {
                      Log[F]
                        .warn(
                          s"Computed rejected deploys " +
                            s"${rejectedDeployIds.map(r => PrettyPrinter.buildString(r._1) + s":${r._2}").mkString(",")} does not equal " +
                            s"block's rejected deploy " +
-                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
+                           s"${block.body.mergingDeployStatuses.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
                        )
                        .as(InvalidRejectedDeploy.asLeft)
                    } else {

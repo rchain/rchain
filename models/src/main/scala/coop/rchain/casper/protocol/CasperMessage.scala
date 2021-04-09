@@ -241,23 +241,23 @@ object Header {
       .withExtraBytes(h.extraBytes)
 }
 
-final case class RejectedDeploy(
+final case class MergingDeployStatus(
     sig: ByteString,
     rejected: Boolean
 )
 
-object RejectedDeploy {
-  def from(r: RejectedDeployProto): Either[String, RejectedDeploy] =
-    Right(RejectedDeploy(r.sig, r.rejected))
+object MergingDeployStatus {
+  def from(r: MergingDeployStatusProto): Either[String, MergingDeployStatus] =
+    Right(MergingDeployStatus(r.sig, r.rejected))
 
-  def toProto(r: RejectedDeploy): RejectedDeployProto =
-    RejectedDeployProto().withSig(r.sig).withRejected(r.rejected)
+  def toProto(r: MergingDeployStatus): MergingDeployStatusProto =
+    MergingDeployStatusProto().withSig(r.sig).withRejected(r.rejected)
 }
 
 final case class Body(
     state: RChainState,
     deploys: List[ProcessedDeploy],
-    rejectedDeploys: List[RejectedDeploy],
+    mergingDeployStatuses: List[MergingDeployStatus],
     systemDeploys: List[ProcessedSystemDeploy],
     extraBytes: ByteString = ByteString.EMPTY
 ) {
@@ -267,17 +267,17 @@ final case class Body(
 object Body {
   def from(b: BodyProto): Either[String, Body] =
     for {
-      state           <- b.state.toRight("RChainState not available").map(RChainState.from)
-      deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
-      systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
-      rejectedDeploys <- b.rejectedDeploys.toList.traverse(RejectedDeploy.from)
-    } yield Body(state, deploys, rejectedDeploys, systemDeploys, b.extraBytes)
+      state                 <- b.state.toRight("RChainState not available").map(RChainState.from)
+      deploys               <- b.deploys.toList.traverse(ProcessedDeploy.from)
+      systemDeploys         <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
+      mergingDeployStatuses <- b.mergingDeployStatuses.toList.traverse(MergingDeployStatus.from)
+    } yield Body(state, deploys, mergingDeployStatuses, systemDeploys, b.extraBytes)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
       .withState(RChainState.toProto(b.state))
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
-      .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
+      .withMergingDeployStatuses(b.mergingDeployStatuses.map(MergingDeployStatus.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
       .withExtraBytes(b.extraBytes)
 

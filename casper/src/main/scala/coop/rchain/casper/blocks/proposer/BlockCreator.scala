@@ -131,7 +131,7 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
-                  rejectedDeploys,
+                  mergingDeploysStatus,
                   processedSystemDeploys
                 )             = checkpointData
                 newBonds      <- runtimeManager.computeBonds(postStateHash)
@@ -145,7 +145,7 @@ object BlockCreator {
                   preStateHash,
                   postStateHash,
                   processedDeploys,
-                  rejectedDeploys,
+                  mergingDeploysStatus,
                   processedSystemDeploys,
                   newBonds,
                   shardId,
@@ -167,7 +167,7 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: Seq[ProcessedDeploy],
+      mergingDeploysStatus: Seq[ProcessedDeploy],
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
@@ -180,7 +180,7 @@ object BlockCreator {
         deploys.toList,
         // TODO check if the deploys are unrejected
         // https://github.com/rchain/rchain/issues/3372#issuecomment-815492081
-        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig, rejected = true)).toList,
+        mergingDeploysStatus.map(r => MergingDeployStatus(r.deploy.sig, rejected = true)).toList,
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)
