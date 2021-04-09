@@ -39,10 +39,12 @@ object ProposerInstance {
 
               Stream
                 .eval(lock.tryAcquire)
-                // if propose is in progress - resolve proposeID to None and stop here.
+                // if propose is in progress - resolve proposeID to ProposerEmpty result and stop here.
                 // Cock the trigger, so propose is called again after the one that occupies the lock finishes.
                 .evalFilter { v =>
-                  (trigger.tryPut(()) >> proposeIDDef.complete(None)).unlessA(v).as(v)
+                  (trigger.tryPut(()) >> proposeIDDef.complete(ProposerResult.empty))
+                    .unlessA(v)
+                    .as(v)
                 }
                 // execute propose
                 .evalMap { _ =>
@@ -62,7 +64,16 @@ object ProposerInstance {
                             s.copy(latestProposeResult = r.some, currProposeResult = None)
                           }
                     _ <- lock.release
-                    _ <- Log[F].info(s"Propose finished: ${r._1.proposeStatus}")
+
+                    (result, blockHashOpt) = r
+                    infoMsg = blockHashOpt.fold {
+                      s"Propose failed: ${result.proposeStatus}"
+                    } { block =>
+                      val blockInfo = PrettyPrinter.buildString(block, short = true)
+                      s"Propose finished: ${result.proposeStatus} Block $blockInfo created and added."
+                    }
+                    _ <- Log[F].info(infoMsg)
+
                     // propose on more time if trigger is cocked
                     _ <- trigger.tryTake.flatMap {
                           case Some(_) =>

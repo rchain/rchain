@@ -116,15 +116,17 @@ class Proposer[F[_]: Concurrent: Log: Span](
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
+    def getValidatorNextSeqNumber(cs: CasperSnapshot[F]): Int = {
+      val valBytes = ByteString.copyFrom(validator.publicKey.bytes)
+      cs.maxSeqNums.getOrElse(valBytes, 0) + 1
+    }
     for {
       // get snapshot to serve as a base for propose
       s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
       result <- if (isAsync) for {
-                 nextSeq <- ((s.maxSeqNums
-                             .getOrElse(ByteString.copyFrom(validator.publicKey.bytes), 0)) + 1)
-                             .pure[F]
+                 nextSeq <- getValidatorNextSeqNumber(s).pure[F]
+                 _       <- proposeIdDef.complete(ProposerResult.started(nextSeq))
 
-                 _ <- proposeIdDef.complete(Some(Left(nextSeq)))
                  // propose
                  r <- doPropose(s, c)
                } yield r
@@ -132,10 +134,19 @@ class Proposer[F[_]: Concurrent: Log: Span](
                  for {
                    // propose
                    r <- doPropose(s, c)
-                   _ <- proposeIdDef.complete(r._2.map(b => Right(b.blockHash)))
+
+                   (result, blockHashOpt) = r
+                   proposerResult = blockHashOpt.fold {
+                     val seqNumber = getValidatorNextSeqNumber(s)
+                     ProposerResult.failure(result.proposeStatus, seqNumber)
+                   } { block =>
+                     ProposerResult.success(result.proposeStatus, block)
+                   }
+                   _ <- proposeIdDef.complete(proposerResult)
                  } yield r
 
     } yield result
+  }
 }
 
 object Proposer {
