@@ -253,29 +253,26 @@ object Setup {
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
-      proposer = validatorIdentityOpt match {
-        case Some(validatorIdentity) => {
-          implicit val rm         = runtimeManager
-          implicit val bs         = blockStore
-          implicit val lf         = lastFinalizedStorage
-          implicit val bd         = blockDagStorage
-          implicit val sc         = synchronyConstraintChecker
-          implicit val lfhscc     = lastFinalizedHeightConstraintChecker
-          implicit val sp         = span
-          implicit val e          = estimator
-          implicit val ds         = deployStorage
-          implicit val br         = blockRetriever
-          implicit val cu         = commUtil
-          implicit val eb         = eventPublisher
-          val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
-          val dummyDeployerKey =
-            if (dummyDeployerKeyOpt.isEmpty) None
-            else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+      proposer = validatorIdentityOpt.map { validatorIdentity =>
+        implicit val rm         = runtimeManager
+        implicit val bs         = blockStore
+        implicit val lf         = lastFinalizedStorage
+        implicit val bd         = blockDagStorage
+        implicit val sc         = synchronyConstraintChecker
+        implicit val lfhscc     = lastFinalizedHeightConstraintChecker
+        implicit val sp         = span
+        implicit val e          = estimator
+        implicit val ds         = deployStorage
+        implicit val br         = blockRetriever
+        implicit val cu         = commUtil
+        implicit val eb         = eventPublisher
+        val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
+        val dummyDeployerKey =
+          if (dummyDeployerKeyOpt.isEmpty) None
+          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
 
-          // TODO make term for dummy deploy configurable
-          Proposer[F](validatorIdentity, (dummyDeployerKey.map((_, "Nil")))).some
-        }
-        case None => None
+        // TODO make term for dummy deploy configurable
+        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
@@ -292,9 +289,7 @@ object Setup {
         )
       else none[ProposeFunction[F]]
 
-      proposerStateRefOpt <- triggerProposeFOpt.traverse(
-                              _ => Ref.of[F, ProposerState[F]](ProposerState[F]())
-                            )
+      proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
 
       casperLaunch = {
         implicit val bs     = blockStore
