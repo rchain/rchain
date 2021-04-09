@@ -8,8 +8,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.blocks.proposer.ProposeResult
 import coop.rchain.casper.blocks.proposer.ProposeResult._
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -51,7 +51,7 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[(Casper[F], Boolean) => F[Option[Either[Int, BlockHash]]]]
+      triggerPropose: Option[ProposeFunction[F]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =

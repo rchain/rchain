@@ -10,7 +10,7 @@ import com.typesafe.config.Config
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.casper.blocks.BlockProcessor
-import coop.rchain.casper.blocks.proposer.Proposer
+import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
@@ -255,10 +255,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       proposer: Option[Proposer[F]],
-      proposeRequestsQueue: Queue[
-        F,
-        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
-      ],
+      proposeRequestsQueue: Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],

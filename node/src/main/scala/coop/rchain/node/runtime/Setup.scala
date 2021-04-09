@@ -14,7 +14,7 @@ import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.blockstorage.{BlockStore, FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
-import coop.rchain.casper.blocks.proposer.Proposer
+import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
@@ -74,7 +74,7 @@ object Setup {
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
-        Queue[F, (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])],
+        Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
         // TODO move towards having a single node state
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
@@ -239,9 +239,7 @@ object Setup {
       raiseIOError        = IOError.raiseIOErrorThroughSync[F]
       blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
       // block processing state - set of items currently in processing
-      blockProcessorStateRef <- Ref.of[F, Set[BlockHash]](
-                                 Set.empty[BlockHash]
-                               )
+      blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
         implicit val bd = blockDagStorage
         implicit val br = blockRetriever
@@ -250,14 +248,11 @@ object Setup {
         implicit val cb = casperBufferStorage
         BlockProcessor[F]
       }
+
+      // Proposer instance
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
-      // Propose request is a tuple - Casper plus deferred proposeID that will be resolved by proposer
-      proposerQueue <- Queue.unbounded[
-                        F,
-                        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
-                      ]
       proposer = validatorIdentityOpt match {
         case Some(validatorIdentity) => {
           implicit val rm         = runtimeManager
@@ -283,11 +278,14 @@ object Setup {
         case None => None
       }
 
+      // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
+      proposerQueue <- Queue.unbounded[F, (Casper[F], Boolean, Deferred[F, ProposerResult])]
+
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
           (casper: Casper[F], isAsync: Boolean) =>
             for {
-              d <- Deferred[F, Option[Either[Int, BlockHash]]]
+              d <- Deferred[F, ProposerResult]
               _ <- proposerQueue.enqueue1((casper, isAsync, d))
               r <- d.get
             } yield r

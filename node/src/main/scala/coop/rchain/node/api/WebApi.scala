@@ -5,9 +5,10 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{Casper, SafetyOracle}
+import coop.rchain.casper.{Casper, ProposeFunction, SafetyOracle}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
+import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
@@ -60,7 +61,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
-      triggerProposeF: Option[(Casper[F], Boolean) => F[Option[Either[Int, BlockHash]]]]
+      triggerProposeF: Option[ProposeFunction[F]]
   ) extends WebApi[F] {
     import WebApiSyntax._
 

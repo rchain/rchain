@@ -2,22 +2,18 @@ package coop.rchain.node.instances
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, MVar, Ref, Semaphore}
-import coop.rchain.casper.Casper
-import coop.rchain.casper.blocks.proposer.{BugError, ProposeResult, Proposer}
+import cats.syntax.all._
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
+import coop.rchain.casper.{Casper, PrettyPrinter}
 import coop.rchain.shared.Log
-import cats.syntax.all._
-import coop.rchain.models.BlockHash.BlockHash
 import fs2.Stream
 import fs2.concurrent.Queue
 
 object ProposerInstance {
   def create[F[_]: Concurrent: Log](
-      proposeRequestsQueue: Queue[
-        F,
-        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
-      ],
+      proposeRequestsQueue: Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]
   ): Stream[F, (ProposeResult, Option[BlockMessage])] = {
@@ -70,7 +66,7 @@ object ProposerInstance {
                     // propose on more time if trigger is cocked
                     _ <- trigger.tryTake.flatMap {
                           case Some(_) =>
-                            Deferred[F, Option[Either[Int, BlockHash]]] >>= { d =>
+                            Deferred[F, ProposerResult] >>= { d =>
                               proposeRequestsQueue.enqueue1(c, false, d)
                             }
                           case None => ().pure[F]

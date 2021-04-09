@@ -16,6 +16,7 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
@@ -34,8 +35,6 @@ object ProposerResult {
     ProposerFailure(status, seqNumber)
   def started(seqNumber: Int): ProposerResult = ProposerStarted(seqNumber)
 }
-import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash.BlockHash
 
 class Proposer[F[_]: Concurrent: Log: Span](
     // base state on top of which block will be created
@@ -115,8 +114,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
   def propose(
       c: Casper[F],
       isAsync: Boolean,
-      proposeIdDef: Deferred[F, Option[Either[Int, BlockHash]]]
-  ): F[(ProposeResult, Option[BlockMessage])] =
+      proposeIdDef: Deferred[F, ProposerResult]
+  ): F[(ProposeResult, Option[BlockMessage])] = {
     for {
       // get snapshot to serve as a base for propose
       s <- Stopwatch.time(Log[F].info(_))(s"getCasperSnapshot")(getCasperSnapshot(c))
