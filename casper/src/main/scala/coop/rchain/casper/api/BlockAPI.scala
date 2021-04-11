@@ -109,9 +109,9 @@ object BlockAPI {
             proposerResult <- triggerProposeF(casper, isAsync)
             r <- proposerResult match {
                   case ProposerEmpty =>
-                    logDebug(s"Propose failed: another propose is in progress")
+                    logDebug(s"Failure: another propose is in progress")
                   case ProposerFailure(status, seqNumber) =>
-                    logDebug(s"Propose failed: $status (seqNum $seqNumber)")
+                    logDebug(s"Failure: $status (seqNum $seqNumber)")
                   case ProposerStarted(seqNumber) =>
                     logSucess(s"Propose started (seqNum $seqNumber)")
                   case ProposerSuccess(_, block) =>
