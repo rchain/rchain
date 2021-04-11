@@ -134,12 +134,7 @@ message LightBlockInfo {
   float faultTolerance = 19;
 
   repeated JustificationInfo justifications = 20;
-  repeated MergingDeployStatusInfo mergingDeployStatuses = 21;
-}
-
-message MergingDeployStatusInfo{
-  string sig = 1;
-  bool   rejected = 2;
+  repeated MergingDeployStatusProto mergingDeployStatuses = 21;
 }
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation
