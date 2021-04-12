@@ -8,8 +8,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.blocks.proposer.ProposeResult
 import coop.rchain.casper.blocks.proposer.ProposeResult._
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -51,7 +51,7 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[(Casper[F], Boolean) => F[Option[Either[Int, BlockHash]]]]
+      triggerPropose: Option[ProposeFunction[F]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -105,14 +105,21 @@ object BlockAPI {
       _.withCasper[ApiErr[String]](
         casper =>
           for {
-            resultOpt <- triggerProposeF(casper, isAsync)
-            // wait till propose pipe assign proposeID to propose and resolve proposeIDDef
-            r <- resultOpt match {
-                  case Some(Right(blockHash)) =>
-                    logSucess(s"Success! Block ${blockHash.base16String} created and added.")
-                  case Some(Left(seqNum)) =>
-                    logSucess(s"Success: proposing block with seqNum ${seqNum}")
-                  case None => logDebug(s"Failure: another propose is in progress")
+            // Trigger propose
+            proposerResult <- triggerProposeF(casper, isAsync)
+            r <- proposerResult match {
+                  case ProposerEmpty =>
+                    logDebug(s"Failure: another propose is in progress")
+                  case ProposerFailure(status, seqNumber) =>
+                    logDebug(s"Failure: $status (seqNum $seqNumber)")
+                  case ProposerStarted(seqNumber) =>
+                    logSucess(s"Propose started (seqNum $seqNumber)")
+                  case ProposerSuccess(_, block) =>
+                    // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
+                    //  Fix to use structured result with transport errors/codes.
+                    // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
+                    val blockHashHex = block.blockHash.base16String
+                    logSucess(s"Success! Block $blockHashHex created and added.")
                 }
           } yield r,
         default = logWarn("Failure: casper instance is not available.")

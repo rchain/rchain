@@ -2,22 +2,18 @@ package coop.rchain.node.instances
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Deferred, MVar, Ref, Semaphore}
-import coop.rchain.casper.Casper
-import coop.rchain.casper.blocks.proposer.{BugError, ProposeResult, Proposer}
+import cats.syntax.all._
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
+import coop.rchain.casper.{Casper, PrettyPrinter}
 import coop.rchain.shared.Log
-import cats.syntax.all._
-import coop.rchain.models.BlockHash.BlockHash
 import fs2.Stream
 import fs2.concurrent.Queue
 
 object ProposerInstance {
   def create[F[_]: Concurrent: Log](
-      proposeRequestsQueue: Queue[
-        F,
-        (Casper[F], Boolean, Deferred[F, Option[Either[Int, BlockHash]]])
-      ],
+      proposeRequestsQueue: Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
       proposer: Proposer[F],
       state: Ref[F, ProposerState[F]]
   ): Stream[F, (ProposeResult, Option[BlockMessage])] = {
@@ -43,10 +39,12 @@ object ProposerInstance {
 
               Stream
                 .eval(lock.tryAcquire)
-                // if propose is in progress - resolve proposeID to None and stop here.
+                // if propose is in progress - resolve proposeID to ProposerEmpty result and stop here.
                 // Cock the trigger, so propose is called again after the one that occupies the lock finishes.
                 .evalFilter { v =>
-                  (trigger.tryPut(()) >> proposeIDDef.complete(None)).unlessA(v).as(v)
+                  (trigger.tryPut(()) >> proposeIDDef.complete(ProposerResult.empty))
+                    .unlessA(v)
+                    .as(v)
                 }
                 // execute propose
                 .evalMap { _ =>
@@ -66,11 +64,20 @@ object ProposerInstance {
                             s.copy(latestProposeResult = r.some, currProposeResult = None)
                           }
                     _ <- lock.release
-                    _ <- Log[F].info(s"Propose finished: ${r._1.proposeStatus}")
+
+                    (result, blockHashOpt) = r
+                    infoMsg = blockHashOpt.fold {
+                      s"Propose failed: ${result.proposeStatus}"
+                    } { block =>
+                      val blockInfo = PrettyPrinter.buildString(block, short = true)
+                      s"Propose finished: ${result.proposeStatus} Block $blockInfo created and added."
+                    }
+                    _ <- Log[F].info(infoMsg)
+
                     // propose on more time if trigger is cocked
                     _ <- trigger.tryTake.flatMap {
                           case Some(_) =>
-                            Deferred[F, Option[Either[Int, BlockHash]]] >>= { d =>
+                            Deferred[F, ProposerResult] >>= { d =>
                               proposeRequestsQueue.enqueue1(c, false, d)
                             }
                           case None => ().pure[F]
