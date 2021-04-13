@@ -1,7 +1,6 @@
 package coop.rchain.casper.batch1
 
 import cats.implicits._
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
@@ -115,10 +114,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).contains(br.blockHash) shouldBeF true
 
         nr <- makeDeploy(0) >>= (nodes(2).addBlock(_))
-      } yield {
-        PrettyPrinter.buildString(nr.header.parentsHashList) shouldBe PrettyPrinter
-          .buildString(List(br.blockHash))
-      }
+      } yield nr.header.parentsHashList shouldBe List(br.blockHash)
     }
   }
 

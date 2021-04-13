@@ -43,14 +43,7 @@ class NodeBox(val node: TestNode[Effect], var lastBlock: Option[BlockMessage]) {
 object HashSetCasperActions {
   import GenesisBuilder._
 
-  def context(
-      amount: Int,
-      bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
-  ): GenesisContext = {
-    val genesis =
-      buildGenesis(amount)
-    genesis
-  }
+  def context(amount: Int): GenesisContext = buildGenesis(amount)
 
   def deploy(
       node: TestNode[Effect],
@@ -101,10 +94,7 @@ object HashSetCasperSpecification extends Commands {
   override def initialPreCondition(state: State): Boolean = true
 
   override def newSut(state: State): Sut = {
-    val genesisContext = context(state.size, validators => {
-      val weights = Random.shuffle((1L to validators.size.toLong).toList)
-      validators.zip(weights).toMap
-    })
+    val genesisContext = context(state.size)
 
     val nodesResource = TestNode
       .networkEff(genesisContext, networkSize = state.size)

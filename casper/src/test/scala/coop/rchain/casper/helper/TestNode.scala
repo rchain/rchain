@@ -8,6 +8,7 @@ import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
 import cats.syntax.all.none
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -196,9 +197,16 @@ class TestNode[F[_]: Timer](
             case None =>
               Sync[F]
                 .raiseError(new Exception("Propose is called in read-only mode."))
-                .as(none[Either[Int, BlockHash]])
-          }).map(_.get)
-    } yield v.right.get
+                .as(ProposerEmpty)
+          })
+      r <- v match {
+            case ProposerSuccess(_, b) => b.blockHash.pure[F]
+            case _ =>
+              Sync[F]
+                .raiseError(new Exception("Propose failed or another in progress"))
+                .as(ByteString.EMPTY)
+          }
+    } yield r
 
   def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
     Stream((casperEff, block)).through(blockProcessingPipe).compile.lastOrError
@@ -547,7 +555,6 @@ object TestNode {
                  else
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
-                 proposerQueue <- Queue.unbounded[F, (Casper[F], Deferred[F, Option[Int]])]
                  proposer = validatorId match {
                    case Some(vi) => Proposer[F](vi).some
                    case None     => None
@@ -557,9 +564,10 @@ object TestNode {
                    p =>
                      (casper: Casper[F], _: Boolean) =>
                        for {
-                         d <- Deferred[F, Option[Either[Int, BlockHash]]]
+                         d <- Deferred[F, ProposerResult]
                          r <- p.propose(casper, false, d)
-                       } yield r._2.map(_.blockHash.asRight[Int])
+                         r <- d.get
+                       } yield r
                  )
                  // Block processor
                  blockProcessor = BlockProcessor[F]

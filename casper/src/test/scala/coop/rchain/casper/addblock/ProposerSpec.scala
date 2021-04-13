@@ -99,7 +99,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             )
 
             for {
-              d      <- Deferred[Task, Option[Either[Int, BlockHash]]]
+              d      <- Deferred[Task, ProposerResult]
               pr     <- p.propose(casper, false, d)
               (r, b) = pr
             } yield assert(r == ProposeResult.notBonded && b.isEmpty)
@@ -129,7 +129,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             )
 
             for {
-              d      <- Deferred[Task, Option[Either[Int, BlockHash]]]
+              d      <- Deferred[Task, ProposerResult]
               pr     <- p.propose(casper, false, d)
               (r, b) = pr
             } yield assert(r == ProposeResult.notEnoughBlocks && b.isEmpty)
@@ -157,7 +157,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               validator = dummyValidatorIdentity
             )
             for {
-              d      <- Deferred[Task, Option[Either[Int, BlockHash]]]
+              d      <- Deferred[Task, ProposerResult]
               pr     <- p.propose(casper, false, d)
               (r, b) = pr
             } yield assert(r == ProposeResult.tooFarAheadOfLastFinalized && b.isEmpty)
@@ -186,7 +186,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               )
 
               for {
-                d <- Deferred[Task, Option[Either[Int, BlockHash]]]
+                d <- Deferred[Task, ProposerResult]
                 _ <- p.propose(casper, false, d)
               } yield ()
             }
@@ -215,7 +215,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             )
 
             for {
-              d      <- Deferred[Task, Option[Either[Int, BlockHash]]]
+              d      <- Deferred[Task, ProposerResult]
               pr     <- p.propose(casper, false, d)
               (r, b) = pr
             } yield assert(
