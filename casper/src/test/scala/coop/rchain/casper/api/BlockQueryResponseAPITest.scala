@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -286,7 +286,7 @@ class BlockQueryResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
       } yield (logEff, engineCell, cliqueOracleEffect)
     }
 
@@ -307,7 +307,7 @@ class BlockQueryResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
       } yield (logEff, engineCell, cliqueOracleEffect)
     }
 }
