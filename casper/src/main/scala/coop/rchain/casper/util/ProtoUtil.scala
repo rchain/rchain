@@ -10,18 +10,17 @@ import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.dag.DagOps
+import coop.rchain.dag.{Casper, DagOps}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
+import coop.rchain.shared.syntax._
 
 import scala.collection.immutable
 import scala.collection.immutable.Map
@@ -31,26 +30,14 @@ object ProtoUtil {
   /*
    * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
    */
-  def isInMainChain[F[_]: Monad](
+  def isInMainChain[F[_]: Sync](
       dag: BlockDagRepresentation[F],
       candidateMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] = {
-    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
-    import cats.instances.option._
-
-    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^
-      dag.lookup(targetBlockHash).flatMap {
-        case Some(targetBlock) =>
-          if (targetBlock.blockNum <= candidateMetadata.blockNum) {
-            false.pure[F]
-          } else {
-            val mainParentOpt = targetBlock.parents.headOption
-            mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _)).map(_.getOrElse(false))
-          }
-        case None =>
-          false.pure[F]
-      }
+    import BlockHash._
+    val heightF: BlockHash => F[Long] = h => dag.lookupUnsafe(h).map(_.blockNum)
+    dag.isInMainChain(targetBlockHash, candidateMetadata.blockHash, heightF)
   }
 
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
@@ -94,25 +81,43 @@ object ProtoUtil {
     * requires a list to be returned. When we reach the goalFunc,
     * we return an empty list.
     */
-  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Monad](
+  def getCreatorJustificationAsListUntilGoalInMemory[F[_]: Sync](
       blockDag: BlockDagRepresentation[F],
       blockHash: BlockHash,
       goalFunc: BlockHash => Boolean = _ => false
-  ): F[List[BlockHash]] =
-    (for {
-      block <- OptionT(blockDag.lookup(blockHash))
-      creatorJustificationHash <- OptionT.fromOption(
-                                   block.justifications
-                                     .find(_.validator == block.sender)
-                                     .map(_.latestBlockHash)
-                                 )
-      creatorJustification <- OptionT(blockDag.lookup(creatorJustificationHash))
-      creatorJustificationAsList = if (goalFunc(creatorJustification.blockHash)) {
-        List.empty[BlockHash]
-      } else {
-        List(creatorJustification.blockHash)
-      }
-    } yield creatorJustificationAsList).fold(List.empty[BlockHash])(identity)
+  ): F[List[BlockHash]] = {
+    import coop.rchain.blockstorage.syntax._
+    val getJ = (h: BlockHash) =>
+      blockDag
+        .lookupUnsafe(h)
+        .map(_.justifications.map { case Justification(m, v) => Casper.Justification(m, v) })
+        .map(_.toSet)
+    val toJ = (h: BlockHash) =>
+      blockDag
+        .lookupUnsafe(h)
+        .map(m => Casper.Justification(m.blockHash, m.sender))
+
+    for {
+      r <- getCreatorJustification[F, BlockHash, Validator](blockHash, goalFunc, toJ, getJ)
+            .map(_.map(List(_)).getOrElse(List.empty))
+    } yield r
+
+  }
+
+  def getCreatorJustification[F[_]: Sync, A, V](
+      message: A,
+      stopF: A => Boolean,
+      toJustification: A => F[Casper.Justification[A, V]],
+      getJustifications: A => F[Set[Casper.Justification[A, V]]]
+  ): F[Option[A]] =
+    for {
+      j <- toJustification(message)
+      r <- getJustifications(message).map(
+            _.find(_.creator == j.creator)
+              .map(_.message)
+              .flatMap(v => if (stopF(v)) none[A] else v.some)
+          )
+    } yield r
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
     weightMap(blockMessage.body.state)
