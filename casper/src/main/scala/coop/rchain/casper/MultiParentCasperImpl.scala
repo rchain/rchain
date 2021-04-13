@@ -286,16 +286,21 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") <*
-      runtimeManager.getBlockIndexCache
-        .get(
+    // if merging is enabled - populate block index cache while validating block
+    val populateBlockIndexCache =
+      if (casperShardConf.maxNumberOfParents > 1)
+        runtimeManager.getBlockIndexCache.get(
           MergingVertex(
             b.blockHash,
             ProtoUtil.postStateHash(b),
             ProtoUtil.preStateHash(b),
             ProtoUtil.deploys(b).toSet
           )
-        ) >> validationStatus.value
+        )
+      else ().pure[F]
+
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *>
+      populateBlockIndexCache *> validationStatus.value
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
