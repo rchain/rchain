@@ -84,4 +84,10 @@ class Fs2StreamOps[F[_], A](
     */
   def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
     stream.parEvalMapUnordered[F2, B](availableProcessors)(f)
+
+  /**
+    * Variant of [[Stream.evalFilterAsync]] with parallelism bound to number of processors.
+    */
+  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[Boolean]): Stream[F2, A] =
+    stream.evalFilterAsync[F2](availableProcessors)(f)
 }

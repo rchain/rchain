@@ -345,7 +345,7 @@ object EquivocationDetector {
         )
     }
 
-  private def findCreatorJustificationAncestorWithSeqNum[F[_]: Monad](
+  private def findCreatorJustificationAncestorWithSeqNum[F[_]: Sync](
       blockDag: BlockDagRepresentation[F],
       b: BlockMessage,
       seqNum: SequenceNumber
