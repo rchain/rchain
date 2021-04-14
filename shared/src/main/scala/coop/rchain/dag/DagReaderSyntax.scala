@@ -4,6 +4,7 @@ import cats.Show
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.dag.DagOps.bfTraverseF
+import coop.rchain.shared.StreamT
 import coop.rchain.shared.syntax._
 import fs2.Stream
 
@@ -16,6 +17,19 @@ trait DagReaderSyntax {
 final class DagReaderOps[F[_], A](
     private val dag: DagReader[F, A]
 ) extends AnyVal {
+
+  def withAncestors(start: A, condition: A => F[Boolean])(
+      implicit concurrent: Concurrent[F]
+  ): StreamT[F, A] =
+    bfTraverseF[F, A](List(start))(
+      hash =>
+        Stream(hash)
+          .evalMap(h => dag.parents(h).map(_.getOrElse(Seq.empty[A])))
+          .flatMap(xs => Stream.fromIterator(xs.toIterator))
+          .evalFilterAsyncProcBounded(v => condition(v))
+          .compile
+          .toList
+    )
 
   def parentsUnsafe(item: A)(
       implicit sync: Sync[F],
