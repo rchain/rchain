@@ -2,7 +2,7 @@ package coop.rchain.casper.safety
 
 import cats.Show
 import cats.data.OptionT
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.util.{Clique, ProtoUtil}
 import coop.rchain.dag.{Casper, DagOps, DagReader}
@@ -105,6 +105,50 @@ object CliqueOracle {
     }
   }
 
+  def computeOutput[F[_]: Concurrent: Span, M, V: ClassTag](
+      target: M,
+      dag: DagReader[F, M],
+      totalStake: Long,
+      agreeingWeightMap: WeightMap[V],
+      agreeingLatestMessages: Map[V, M],
+      toJustificationF: M => F[Casper.Justification[M, V]],
+      justificationsF: M => F[Set[Casper.Justification[M, V]]],
+      heightF: M => F[Long]
+  )(implicit show: Show[M]): F[Float] =
+    // if less then 1/2+ of stake agrees on message - it can be orphaned
+    if (agreeingWeightMap.values.sum <= totalStake.toFloat / 2) (-1f).pure[F]
+    else {
+      computeMaxCliqueWeight[F, M, V](
+        target,
+        dag,
+        agreeingWeightMap,
+        agreeingLatestMessages,
+        toJustificationF,
+        justificationsF,
+        heightF
+      ).map(
+        mqw => (mqw * 2 - totalStake).toFloat / totalStake
+      )
+    }
+
+  /** weight map of main parent (fallbacks to message itself if no parents)
+     TODO - why not use local weight map but seek for parent?
+    P.S. This is directly related to the fact that we create latest message for newly bonded validator
+    equal to message where bonding deploy has been submitted. So stake from validator that did not create anything is
+    put behind this message. So here is one more place where this logic makes things more complex.*/
+  def getCorrespondingWeightMap[F[_]: Sync, M, V](
+      target: M,
+      dag: DagReader[F, M],
+      getWeightMapF: M => F[WeightMap[V]]
+  ): F[WeightMap[V]] =
+    dag
+      .mainParent(target)
+      .map {
+        case Some(mainParent) => mainParent
+        case None             => target
+      }
+      .flatMap(getWeightMapF)
+
   def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span, M, V: ClassTag](
       target: M,
       dag: DagReader[F, M],
@@ -118,15 +162,7 @@ object CliqueOracle {
       Log[F].error(s"Fault tolerance for non existing message ${target.show} requested.").as(-1f)
 
     val compute = for {
-      // weight map of main parent (fallbacks to message itself if no parents)
-      fullWeightMap <- {
-        dag
-          .mainParent(target)
-          .map {
-            case Some(mainParent) => mainParent
-            case None             => target
-          }
-      }.flatMap(getWeightMapF)
+      fullWeightMap <- getCorrespondingWeightMap(target, dag, getWeightMapF)
       // stake that agrees on a target message
       agreeingWeightMap <- fs2.Stream
                             .emits(fullWeightMap.toList)
@@ -144,7 +180,6 @@ object CliqueOracle {
                             .compile
                             .toList
                             .map(_.toMap)
-      agreeingStake = agreeingWeightMap.values.sum
       // total stake
       totalStake = fullWeightMap.values.sum
       _ <- new ArithmeticException("Long overflow when computing total stake").raiseError
@@ -157,21 +192,16 @@ object CliqueOracle {
                                    } yield (k, lm)
                                  }
                                  .map(_.toMap)
-      // compute fault tolerance
-      faultToleranceF = computeMaxCliqueWeight[F, M, V](
-        target,
-        dag,
-        agreeingWeightMap,
-        agreeingLatestMessages,
-        toJustificationF,
-        getJustificationsF,
-        heightF
-      ).map(
-        mqw => (mqw * 2 - totalStake).toFloat / totalStake
-      )
-      // if less then 1/2+ of stake agrees on message - it can be orphaned
-      r <- if (agreeingStake <= totalStake.toFloat / 2) (-1f).pure[F]
-          else faultToleranceF
+      r <- computeOutput[F, M, V](
+            target,
+            dag,
+            totalStake,
+            agreeingWeightMap,
+            agreeingLatestMessages,
+            toJustificationF,
+            getJustificationsF,
+            heightF
+          )
     } yield r
 
     dag

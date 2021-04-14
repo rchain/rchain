@@ -11,9 +11,10 @@
 
     <!--This is needed for RhoSpec tests output-->
     <logger name="coop.rchain.casper.helper.RhoLoggerContract" level="info"/>
+    <logger name="coop.rchain.rspace" level="info"/>
     <logger name="coop.rchain.blockstorage" level="error"/>
 
-    <root level="warn">
+    <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>
 
