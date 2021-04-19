@@ -46,8 +46,8 @@ object CliqueOracle {
       * 2. check if any self justifications between latest message of b (lmB) and lmAjB are NOT in main chain
       *    with target message. If one found - this is a source of disagreement.
       * */
-    def neverEventuallySeeDisagreement(a: V, b: V): F[Boolean] =
-      (for {
+    def neverEventuallySeeDisagreement(a: V, b: V): F[Boolean] = {
+      val noDisagreement = for {
         // latest messages of validators matched
         lmA <- OptionT.fromOption(agreeingLatestMessages.get(a))
         lmB <- OptionT.fromOption(agreeingLatestMessages.get(b))
@@ -81,7 +81,10 @@ object CliqueOracle {
 
         r <- OptionT.liftF(disagreements.map(_.isEmpty))
 
-      } yield r).fold(false)(identity)
+      } yield r
+
+      noDisagreement.getOrElse(false)
+    }
 
     /** across combination of validators compute pairs that do not have disagreement */
     def computeAgreeingValidatorPairs: F[List[(V, V)]] = {
@@ -114,67 +117,68 @@ object CliqueOracle {
     val nonExistingMessage =
       Log[F].error(s"Fault tolerance for non existing message ${target.show} requested.").as(-1f)
 
-    val compute = Span[F].traceI("normalized-fault-tolerance") {
-      for {
-        // weight map of main parent (fallbacks to message itself if no parents)
-        fullWeightMap <- {
-          dag
-            .mainParent(target)
-            .map {
-              case Some(mainParent) => mainParent
-              case None             => target
-            }
-        }.flatMap(getWeightMapF)
-        // stake that agrees on a target message
-        agreeingWeightMap <- fs2.Stream
-                              .emits(fullWeightMap.toList)
-                              .evalFilterAsyncProcBounded {
-                                case (validator, _) =>
-                                  for {
-                                    lm <- latestMessageF(validator)
-                                    r <- dag.isInMainChain(
-                                          lm,
-                                          target,
-                                          heightF
-                                        )
-                                  } yield r
-                              }
-                              .compile
-                              .toList
-                              .map(_.toMap)
-        agreeingStake = agreeingWeightMap.values.sum
-        // total stake
-        totalStake = fullWeightMap.values.sum
-        // latest messages of agreeing validators
-        agreeingLatestMessages <- agreeingWeightMap.keys.toList
-                                   .traverse { k =>
-                                     for {
-                                       lm <- latestMessageF(k)
-                                     } yield (k, lm)
-                                   }
-                                   .map(_.toMap)
-        // compute fault tolerance
-        faultToleranceF = computeMaxCliqueWeight[F, M, V](
-          target,
-          dag,
-          agreeingWeightMap,
-          agreeingLatestMessages,
-          toJustificationF,
-          getJustificationsF,
-          heightF
-        ).map(
-          mqw => (mqw * 2 - totalStake).toFloat / totalStake
-        )
-        // if less then half of stake agrees on message - it can be orphaned
-        r <- if (2L * agreeingStake < totalStake) (-1f).pure[F]
-            else faultToleranceF
-      } yield r
-    }
+    val compute = for {
+      // weight map of main parent (fallbacks to message itself if no parents)
+      fullWeightMap <- {
+        dag
+          .mainParent(target)
+          .map {
+            case Some(mainParent) => mainParent
+            case None             => target
+          }
+      }.flatMap(getWeightMapF)
+      // stake that agrees on a target message
+      agreeingWeightMap <- fs2.Stream
+                            .emits(fullWeightMap.toList)
+                            .evalFilterAsyncProcBounded {
+                              case (validator, _) =>
+                                for {
+                                  lm <- latestMessageF(validator)
+                                  r <- dag.isInMainChain(
+                                        lm,
+                                        target,
+                                        heightF
+                                      )
+                                } yield r
+                            }
+                            .compile
+                            .toList
+                            .map(_.toMap)
+      agreeingStake = agreeingWeightMap.values.sum
+      // total stake
+      totalStake = fullWeightMap.values.sum
+      _ <- new ArithmeticException("Long overflow when computing total stake").raiseError
+            .whenA(totalStake < 0)
+      // latest messages of agreeing validators
+      agreeingLatestMessages <- agreeingWeightMap.keys.toList
+                                 .traverse { k =>
+                                   for {
+                                     lm <- latestMessageF(k)
+                                   } yield (k, lm)
+                                 }
+                                 .map(_.toMap)
+      // compute fault tolerance
+      faultToleranceF = computeMaxCliqueWeight[F, M, V](
+        target,
+        dag,
+        agreeingWeightMap,
+        agreeingLatestMessages,
+        toJustificationF,
+        getJustificationsF,
+        heightF
+      ).map(
+        mqw => (mqw * 2 - totalStake).toFloat / totalStake
+      )
+      // if less then 1/2+ of stake agrees on message - it can be orphaned
+      r <- if (agreeingStake <= totalStake.toFloat / 2) (-1f).pure[F]
+          else faultToleranceF
+    } yield r
 
     dag
       .contains(target)
       .ifM(
-        Log[F].debug(s"Calculating fault tolerance for ${target.show}.") >> compute,
+        Log[F].debug(s"Calculating fault tolerance for ${target.show}.") >>
+          Span[F].traceI("normalized-fault-tolerance")(compute),
         nonExistingMessage
       )
   }
