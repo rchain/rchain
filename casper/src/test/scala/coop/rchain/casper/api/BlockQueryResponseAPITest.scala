@@ -59,10 +59,11 @@ class BlockQueryResponseAPITest
       setValidator = sender.some,
       setDeploys = randomDeploys.some,
       setJustifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)).some,
+      setParentsHashList = List(genesisBlock.blockHash).some,
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = 1f
+  val faultTolerance = -1f
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
