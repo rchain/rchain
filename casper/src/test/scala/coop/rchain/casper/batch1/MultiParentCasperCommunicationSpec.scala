@@ -69,8 +69,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
    * only when hashes are synchroznied precisely as in the test - otherwise it will see 2 parents of h1
    *
    */
-  // TODO this test fails because `TestNode.propagate(nodes)` returns prematurely.
-  it should "ask peers for blocks it is missing and add them" ignore effectTest {
+  it should "ask peers for blocks it is missing and add them" in effectTest {
     def makeDeploy(i: Int): Effect[Signed[DeployData]] =
       ConstructDeploy.sourceDeployNowF(
         Vector("@2!(2)", "@1!(1)")(i),
@@ -111,10 +110,10 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
         _ <- TestNode.propagate(nodes) // force the network to communicate
 
+        // Casper in node2 should contain block and its parents, requested as dependencies
         _ <- nodes(2).contains(br.blockHash) shouldBeF true
-
-        nr <- makeDeploy(0) >>= (nodes(2).addBlock(_))
-      } yield nr.header.parentsHashList shouldBe List(br.blockHash)
+        _ <- br.header.parentsHashList.traverse(p => nodes(2).contains(p) shouldBeF true)
+      } yield ()
     }
   }
 
