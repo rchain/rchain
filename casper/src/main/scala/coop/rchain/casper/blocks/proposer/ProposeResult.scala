@@ -24,7 +24,10 @@ case object NotEnoughNewBlocks         extends CheckProposeConstraintsFailure
 case object TooFarAheadOfLastFinalized extends CheckProposeConstraintsFailure
 
 object CheckProposeConstraintsResult {
-  def success: CheckProposeConstraintsResult = CheckProposeConstraintsSuccess
+  def success: CheckProposeConstraintsResult                    = CheckProposeConstraintsSuccess
+  def notBonded: CheckProposeConstraintsResult                  = NotBonded
+  def notEnoughNewBlock: CheckProposeConstraintsResult          = NotEnoughNewBlocks
+  def tooFarAheadOfLastFinalized: CheckProposeConstraintsResult = TooFarAheadOfLastFinalized
 }
 
 object ProposeResult {

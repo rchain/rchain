@@ -38,10 +38,9 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
                      s"Latest message is $heightDifference blocks ahead of the last finalized block"
                    ) >> result.pure[F]
                  case None =>
-                   CheckProposeConstraintsResult.success.pure[F]
-//                   Sync[F].raiseError[CheckProposeConstraintsResult](
-//                     new IllegalStateException("Validator does not have a latest message")
-//                   )
+                   Sync[F].raiseError[CheckProposeConstraintsResult](
+                     new IllegalStateException("Validator does not have a latest message")
+                   )
                }
     } yield result
   }

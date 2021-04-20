@@ -1,27 +1,34 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
+import cats.{Applicative, Parallel}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{
+  BlockDagKeyValueStorage,
+  BlockDagRepresentation,
+  BlockDagStorage
+}
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
+import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.mb
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
-import coop.rchain.casper.helper.BlockDagStorageFixture
 import monix.execution.Scheduler
+
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
-
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 
 object Resources {
 
@@ -113,4 +120,51 @@ object Resources {
       .walk(src)
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
   }
+
+  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot[F]] = {
+    val dummyRepresentation = new BlockDagRepresentation[F] {
+      override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] = ???
+
+      override def contains(blockHash: BlockHash): F[Boolean] = ???
+
+      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
+
+      override def latestMessageHashes: F[Map[Validator, BlockHash]] = ???
+
+      override def invalidBlocks: F[Set[BlockMetadata]] = ???
+
+      override def latestBlockNumber: F[Long] = ???
+
+      override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
+
+      override def topoSort(
+          startBlockNumber: Long,
+          maybeEndBlockNumber: Option[Long]
+      ): F[Vector[Vector[BlockHash]]] = ???
+
+      override def isFinalized(blockHash: BlockHash): F[Boolean] = ???
+
+      override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
+
+      override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
+    }
+    CasperSnapshot[F](
+      dummyRepresentation,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
+  }.pure[F]
+
 }

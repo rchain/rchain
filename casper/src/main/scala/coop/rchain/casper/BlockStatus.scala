@@ -29,6 +29,7 @@ object BlockStatus {
   def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
   def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
   def containsFutureDeploy: BlockError     = InvalidBlock.ContainsFutureDeploy
+  def notOfInterest: BlockError            = InvalidBlock.NotOfInterest
 
   def isInDag(blockStatus: BlockStatus): Boolean =
     blockStatus match {
@@ -84,6 +85,7 @@ object InvalidBlock {
   case object InvalidRejectedDeploy   extends InvalidBlock
   case object ContainsExpiredDeploy   extends InvalidBlock
   case object ContainsFutureDeploy    extends InvalidBlock
+  case object NotOfInterest           extends InvalidBlock
 
   val slashableOffenses: Set[InvalidBlock] =
     Set(

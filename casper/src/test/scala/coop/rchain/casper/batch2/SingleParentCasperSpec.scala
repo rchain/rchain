@@ -40,30 +40,30 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
     }
   }
 
-//  it should "reject multi-parent blocks" in effectTest {
-//    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1).use {
-//      case n1 +: n2 +: _ =>
-//        for {
-//          deployDatas <- (0 to 2).toList
-//                          .traverse[Effect, Signed[DeployData]](
-//                            i => ConstructDeploy.basicDeployData[Effect](i)
-//                          )
-//          b1 <- n1.addBlock(deployDatas(0))
-//          b2 <- n2.addBlock(deployDatas(1))
-//
-//          _ <- n1.syncWith(n2)
-//          _ <- n2.syncWith(n1)
-//
-//          b3           <- n2.addBlock(deployDatas(2))
-//          twoParents   = List(b2.blockHash, b1.blockHash)
-//          dualParentB3 = b3.copy(header = b3.header.copy(parentsHashList = twoParents))
-//
-//          validateResult <- {
-//            import n1._
-//            n1.blockDagStorage.getRepresentation >>=
-//              (dag => Validate.parents(dualParentB3, n1.genesis, dag))
-//          }
-//        } yield validateResult shouldBe BlockStatus.invalidParents.asLeft[ValidBlock]
-//    }
-//  }
+  it should "reject multi-parent blocks" in effectTest {
+    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1).use {
+      case n1 +: n2 +: _ =>
+        for {
+          deployDatas <- (0 to 2).toList
+                          .traverse[Effect, Signed[DeployData]](
+                            i => ConstructDeploy.basicDeployData[Effect](i)
+                          )
+          b1 <- n1.addBlock(deployDatas(0))
+          b2 <- n2.addBlock(deployDatas(1))
+
+          _ <- n1.syncWith(n2)
+          _ <- n2.syncWith(n1)
+
+          b3           <- n2.addBlock(deployDatas(2))
+          twoParents   = List(b2.blockHash, b1.blockHash)
+          dualParentB3 = b3.copy(header = b3.header.copy(parentsHashList = twoParents))
+
+          validateResult <- {
+            import n1._
+            n1.casperEff.getSnapshot >>=
+              (snap => Validate.parents(dualParentB3, n1.genesis, snap))
+          }
+        } yield validateResult shouldBe BlockStatus.invalidParents.asLeft[ValidBlock]
+    }
+  }
 }
