@@ -75,7 +75,7 @@ object HistoryInstances {
         case TriePath(Vector(s @ Skip(skippedPath, LeafPointer(_))), None, common)
             if common == skippedPath.toSeq.toList => // update 1 element trie
           historyStore.drop(s :: Nil) >>
-            Applicative[F].pure(Skip(ByteVector(common), newLeaf) :: Nil)
+            Applicative[F].pure((Skip(ByteVector(common), newLeaf): Trie) :: Nil)
 
         case TriePath(Vector(), Some(s @ Skip(affix, existingPointer)), Nil) => // split skip at root
           val (dividedElems, _) = divideSkip(
@@ -136,7 +136,8 @@ object HistoryInstances {
                 val updated = pointerBlock.updated((toInt(remainingPath.last), ptr) :: Nil)
                 historyStore.drop(pointerBlock :: Nil) >>
                   Applicative[F].pure(
-                    (remainingPath.init, head, updated, currentAcc :+ nextLastSeen).asLeft
+                    (remainingPath.init, head, updated: Trie, currentAcc :+ nextLastSeen)
+                      .asLeft[List[Trie]]
                   )
 
               case (head :+ (s @ Skip(affix, _)), pb: PointerBlock) =>
@@ -146,11 +147,11 @@ object HistoryInstances {
                       (
                         remainingPath.dropRight(affix.size.toInt),
                         head,
-                        Skip(affix, NodePointer(pb.hash)),
+                        Skip(affix, NodePointer(pb.hash)): Trie,
                         currentAcc :+ nextLastSeen
                       )
                     )
-                    .map(_.asLeft)
+                    .map(_.asLeft[List[Trie]])
 
               case (Vector(), _) => Applicative[F].pure(currentAcc :+ nextLastSeen).map(_.asRight)
               case _             => Sync[F].raiseError(MalformedTrieError)
@@ -167,13 +168,13 @@ object HistoryInstances {
           case (currentKey, init :+ (s @ Skip(affix, _)), None) => // remove empty skip
             historyStore.drop(s :: Nil) >>
               Applicative[F]
-                .pure((currentKey.dropRight(affix.size.toInt), init, None))
-                .map(_.asLeft)
+                .pure((currentKey.dropRight(affix.size.toInt), init, none[Trie]))
+                .map(_.asLeft[List[Trie]])
 
           case (currentKey, init :+ (l @ Skip(affix, _)), Some((r @ Skip(eaffix, ep)))) => // merge skips
             historyStore.drop(l :: r :: Nil) >>
               rehash(currentKey.dropRight(affix.size.toInt), init, Skip(affix ++ eaffix, ep), Nil)
-                .map(_.asRight)
+                .map(_.asRight[Params])
 
           case (keyInit :+ keyLast, init :+ (pointerBlock: PointerBlock), None) => // handle pointer block
             pointerBlock match {
@@ -200,7 +201,7 @@ object HistoryInstances {
                 }
                 historyStore.drop(pointerBlock :: Nil) >>
                   r.map { nv =>
-                    (keyInit, init, Some(nv)).asLeft
+                    (keyInit, init, nv.some).asLeft[List[Trie]]
                   }
               case _ => // pb contains 3+ elements, drop one, rehash
                 val updated = pointerBlock.updated((toInt(keyLast), EmptyPointer) :: Nil)
@@ -209,7 +210,7 @@ object HistoryInstances {
 
           case (key, rest @ _ :+ (pb: PointerBlock), Some(s: Skip)) =>
             historyStore.drop(pb :: Nil) >>
-              rehash(key, rest, s, Nil).map(_.asRight)
+              rehash(key, rest, s, Nil).map(_.asRight[Params])
 
           case (Nil, Vector(), Some(t)) =>
             Applicative[F].pure(t :: Nil).map(_.asRight) // collapse to one element in trie

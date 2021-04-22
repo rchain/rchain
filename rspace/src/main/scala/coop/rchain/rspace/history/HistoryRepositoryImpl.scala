@@ -192,7 +192,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
                      .collect { case Right(history) => history }
                      .compile
                      .lastOrError
-    } yield this.copy(
+    } yield this.copy[F, C, P, A, K](
       currentHistory = newHistory,
       channelHashesStore = channelHashesStore
     )
@@ -215,13 +215,13 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     for {
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
       next = history.reset(root = root)
-    } yield this.copy(currentHistory = next)
+    } yield this.copy[F, C, P, A, K](currentHistory = next)
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
 
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 
-  override def stateMerger: StateMerger[F] = DiffStateMerger[F, C, P, A, K](this, sc)
+  override def stateMerger: StateMerger[F] = DiffStateMerger[F, C, P, A, K](historyRepo = this, sc)
 
   override def history: History[F] = currentHistory
 
