@@ -150,7 +150,7 @@ object internal {
 
   def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
     elements
-      .map(e => serialize.encode(e))
+      .map(serialize.encode)
       .sorted(util.ordByteVector)
 
   def toOrderedByteVectorsWithCodec[A](
