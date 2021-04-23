@@ -1,6 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.Resource
+import cats.implicits.catsSyntaxApplicativeId
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.shared.scalatestcontrib._
@@ -41,7 +42,13 @@ class DeployIdTest extends FlatSpec with Matchers {
     val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
     val result =
       runtimeManager
-        .use(mgr => mgr.captureResults(mgr.emptyStateHash, d))
+        .use(
+          mgr =>
+            for {
+              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              res  <- mgr.captureResults(hash, d)
+            } yield res
+        )
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)

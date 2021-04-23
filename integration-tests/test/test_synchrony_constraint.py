@@ -4,10 +4,10 @@ from docker.client import DockerClient
 import pytest
 
 from rchain.crypto import PrivateKey
+from rchain.client import RClientException
 from . import conftest
 from .common import (
     CommandLineOptions,
-    SynchronyConstraintError,
 )
 from .rnode import (
     bootstrap_connected_peer,
@@ -80,7 +80,7 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
 
         wait_for_node_sees_block(context, bonded_validator_1, block_hash_2)
 
-        with pytest.raises(SynchronyConstraintError):
+        with pytest.raises(RClientException):
             bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
             bonded_validator_1.propose()
 
@@ -100,7 +100,7 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
 
         #-- validator_3 can propose when all other validators already propose
         wait_for_node_sees_block(context, bonded_validator_3, block_hash_5)
-        with pytest.raises(SynchronyConstraintError):
+        with pytest.raises(RClientException):
             bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
             bonded_validator_3.propose()
         bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)

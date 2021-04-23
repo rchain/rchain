@@ -19,45 +19,26 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
   val genesis = buildGenesis()
 
-  //put a new casper instance at the start of each
-  //test since we cannot reset it
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
 
         signedBlock1 <- nodes(0).addBlock(deploy1)
-        _            <- nodes(1).receive()
+        _            <- nodes(1).handleReceive()
         _            <- nodes(2).shutoff() //nodes(2) misses this block
 
         deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
         signedBlock2 <- nodes(0).addBlock(deploy2)
-        _            <- nodes(2).syncWith(nodes)
-        //1 receives block2
-        //2 receives block2; asks if who has block1
-        //1 receives request for has block1; sends i have block1
-        //2 receives I have block1; asks for block1
-        //1 receives request block1; sends block1
-        //2 receives block2; asks for block1
-        //2 receives block1; adds both block1 and block2
 
-        _ <- nodes(2).contains(signedBlock1.blockHash) shouldBeF true
-        _ <- nodes(2).contains(signedBlock2.blockHash) shouldBeF true
-
-        /*       this test is too restrictive in the presence of block hashes (see RCHAIN-3819).
-                 Node #1 at this point only "knows" about block2 - which is nonetheless sufficient for recovering missing blocks.
-                 Leaving for reference:
- _ <- nodes.toList.traverse_ { node =>
-              for {
-                maybeBlock1 <- node.blockStore.get(signedBlock1.blockHash)
-                maybeBlock2 <- node.blockStore.get(signedBlock2.blockHash)
-              } yield {
-                withClue(s"Assertion failed for node ${node.local} --") {
-                  maybeBlock1 shouldBe Some(signedBlock1)
-                  maybeBlock2 shouldBe Some(signedBlock2)
-                }
-              }
-            }*/
+        _ <- nodes(2).addBlock(signedBlock2)
+        // signedBlock2 have signedBlock1 as a dependency, therefore ir should be put in requestedBlocks
+        r <- nodes(2).requestedBlocks.get.map(v => v.get(signedBlock1.blockHash)).map {
+              case Some(_) => true
+              case None    => false
+            }
+        // block retriever should contain record with hash
+        _ = r shouldBe true
       } yield ()
     }
   }
@@ -90,7 +71,10 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
    */
   it should "ask peers for blocks it is missing and add them" in effectTest {
     def makeDeploy(i: Int): Effect[Signed[DeployData]] =
-      ConstructDeploy.sourceDeployNowF(Vector("@2!(2)", "@1!(1)")(i))
+      ConstructDeploy.sourceDeployNowF(
+        Vector("@2!(2)", "@1!(1)")(i),
+        sec = if (i == 0) ConstructDeploy.defaultSec else ConstructDeploy.defaultSec2
+      )
 
     def stepSplit(nodes: Seq[TestNode[Effect]]) =
       for {
@@ -126,10 +110,10 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
         _ <- TestNode.propagate(nodes) // force the network to communicate
 
+        // Casper in node2 should contain block and its parents, requested as dependencies
         _ <- nodes(2).contains(br.blockHash) shouldBeF true
-
-        nr <- makeDeploy(0) >>= (nodes(2).addBlock(_))
-      } yield { nr.header.parentsHashList shouldBe List(br.blockHash) }
+        _ <- br.header.parentsHashList.traverse(p => nodes(2).contains(p) shouldBeF true)
+      } yield ()
     }
   }
 
@@ -152,16 +136,17 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
           // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)
           _ <- (0 to 8).toList.traverse_[Effect, Unit] { i =>
-                nodes(1).receive() >> nodes(0).receive() >> nodes(1).receive() >> nodes(0)
-                  .receive() >> nodes(1).receive() >> nodes(0).receive()
+                nodes(1).handleReceive() >> nodes(0).handleReceive() >> nodes(1)
+                  .handleReceive() >> nodes(0)
+                  .handleReceive() >> nodes(1).handleReceive() >> nodes(0).handleReceive()
               }
 
           // We simulate a network failure here by not allowing block #2 to get passed to nodes(1)
 
           // And then we assume fetchDependencies eventually gets called
           _ <- nodes(1).casperEff.fetchDependencies
-          _ <- nodes(0).receive()
-          _ <- nodes(0).receive()
+          _ <- nodes(0).handleReceive()
+          _ <- nodes(0).handleReceive()
 
           _ = nodes(1).logEff.infos.count(_ startsWith "Requested missing block") should be(10)
           result = nodes(0).logEff.infos.count(

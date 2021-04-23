@@ -6,18 +6,19 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.{RhoHistoryRepository, RhoISpace, SystemProcess}
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace}
+import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rspace
-import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.KeyValueStoreManager
 import monix.execution.Scheduler
-
 import java.io.File
 import java.nio.file.{Files, Path}
+
 import scala.reflect.io.Directory
 
 object Resources {
@@ -58,25 +59,32 @@ object Resources {
 
   def mkRuntime[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String
-  )(implicit scheduler: Scheduler): Resource[F, Runtime[F]] =
+  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(mkRuntimeAt(_))
       .map(_._1)
 
-  def mkRuntimeAt[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
-      kvm: KeyValueStoreManager[F],
-      additionalSystemProcesses: Seq[SystemProcess.Definition[F]] = Seq.empty
+  def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+      prefix: String
   )(
       implicit scheduler: Scheduler
-  ): F[(Runtime[F], RhoHistoryRepository[F])] = {
-    implicit val kvm_ = kvm
+  ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
+    mkTempDir(prefix)
+      .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
+      .evalMap(mkRuntimeAt(_))
+
+  def mkRuntimeAt[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
+      kvm: KeyValueStoreManager[F],
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+  )(
+      implicit scheduler: Scheduler
+  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     for {
-      store               <- KeyValueStoreManager[F].rSpaceStores
-      spaces              <- Runtime.setupRSpace[F](store)
-      (space, replay, hr) = spaces
-      runtime             <- Runtime.createWithEmptyCost[F]((space, replay), additionalSystemProcesses)
-    } yield (runtime, hr)
-  }
+      store <- kvm.rSpaceStores
+      runtimes <- RhoRuntime
+                   .createRuntimes[F](store, additionalSystemProcesses = additionalSystemProcesses)
+      (runtime, replayRuntime, hr) = runtimes
+    } yield (runtime, replayRuntime, hr)
 
 }

@@ -3,8 +3,11 @@ package coop.rchain.casper
 import scala.util.{Random, Try}
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
+import coop.rchain.casper.blocks.proposer.Created
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.helper.TestNode
@@ -14,6 +17,7 @@ import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.PublicKey
+import coop.rchain.models.BlockHash
 import coop.rchain.rholang.interpreter.util.RevAddress
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -39,36 +43,7 @@ class NodeBox(val node: TestNode[Effect], var lastBlock: Option[BlockMessage]) {
 object HashSetCasperActions {
   import GenesisBuilder._
 
-  def context(
-      amount: Int,
-      bondsGen: Seq[PublicKey] => Map[PublicKey, Long]
-  ): GenesisContext = {
-    val keyPairs        = (1 to amount).map(_ => Secp256k1.newKeyPair)
-    val (_, validators) = keyPairs.unzip
-    val bonds           = bondsGen(validators)
-    val genesis =
-      buildGenesis(
-        keyPairs,
-        Genesis(
-          shardId = "HashSetCasperSpecification",
-          proofOfStake = ProofOfStake(
-            minimumBond = 0L,
-            maximumBond = Long.MaxValue,
-            validators = bonds.toSeq.map(Validator.tupled),
-            epochLength = 10000,
-            quarantineLength = 50000,
-            numberOfActiveValidators = 100
-          ),
-          timestamp = 0L,
-          vaults = bonds.toList.map {
-            case (pk, stake) =>
-              RevAddress.fromPublicKey(pk).map(Vault(_, stake))
-          }.flattenOption,
-          supply = Long.MaxValue
-        )
-      )
-    genesis
-  }
+  def context(amount: Int): GenesisContext = buildGenesis(amount)
 
   def deploy(
       node: TestNode[Effect],
@@ -78,16 +53,16 @@ object HashSetCasperActions {
 
   def create(node: TestNode[Effect]): Task[BlockMessage] =
     for {
-      createBlockResult1    <- node.casperEff.createBlock
-      Created(signedBlock1) = createBlockResult1
-    } yield signedBlock1
+      createBlockResult1 <- node.proposeSync
+      block              <- node.blockStore.getUnsafe(createBlockResult1)
+    } yield block
 
   def add(
       node: TestNode[Effect],
       signed: BlockMessage
   ): Effect[Either[Throwable, ValidBlockProcessing]] =
     Sync[Effect].attempt(
-      node.casperEff.addBlock(signed)
+      node.addBlock(signed)
     )
 
   def deployment(i: Int, ts: Long = System.currentTimeMillis()): Signed[DeployData] =
@@ -119,10 +94,7 @@ object HashSetCasperSpecification extends Commands {
   override def initialPreCondition(state: State): Boolean = true
 
   override def newSut(state: State): Sut = {
-    val genesisContext = context(state.size, validators => {
-      val weights = Random.shuffle((1L to validators.size.toLong).toList)
-      validators.zip(weights).toMap
-    })
+    val genesisContext = context(state.size)
 
     val nodesResource = TestNode
       .networkEff(genesisContext, networkSize = state.size)
@@ -233,7 +205,7 @@ object HashSetCasperSpecification extends Commands {
 
     override def run(sut: Sut): List[String] = {
       val validator = sut.nodes(node.idx).node
-      validator.receive().result
+      validator.handleReceive().result
       validator.logEff.errors ++ validator.logEff.warns
     }
 

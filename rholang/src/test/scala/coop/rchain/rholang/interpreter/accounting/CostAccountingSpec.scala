@@ -1,11 +1,17 @@
 package coop.rchain.rholang.interpreter.accounting
 
+import cats.Parallel
 import cats.data.Chain
+import cats.effect._
+import cats.mtl.FunctorTell
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter._
+import coop.rchain.rholang.Resources
+import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rspace.Checkpoint
@@ -13,6 +19,7 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
+import monix.eval.instances.CatsParallelForTask
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.Prop.forAllNoShrink
 import org.scalacheck._
@@ -36,24 +43,21 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val resources = for {
-      costLog             <- costLog[Task]()
-      cost                <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
-      store               <- kvm.rSpaceStores
-      spaces              <- Runtime.setupRSpace[Task](store)
-      (rspace, replay, _) = spaces
-      runtime <- {
-        // naming noOpCostLog because want to override package scope noOpCostLog val
-        implicit val c: _cost[Task] = cost
-        Runtime.create[Task]((rspace, replay), Seq.empty)
+      costLog <- costLog[Task]()
+      cost    <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store   <- kvm.rSpaceStores
+      spaces <- {
+        implicit val noOpCostLog: FunctorTell[Task, Chain[Cost]] = costLog
+        RhoRuntime.createRuntimesWithCostLog[Task](store)
       }
+      (runtime, replayRuntime, _) = spaces
     } yield (runtime, costLog)
 
     resources
       .flatMap {
         case (runtime, costL) =>
           costL.listen {
-            implicit val cost = runtime.cost
-            InterpreterUtil.evaluateResult(runtime, contract, Cost(initialPhlo.toLong))
+            runtime.evaluate(contract, Cost(initialPhlo.toLong))
           }
       }
       .runSyncUnsafe(75.seconds)
@@ -71,35 +75,27 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     implicit val kvm                       = InMemoryStoreManager[Task]
 
     val evaluaResult = for {
-      costLog             <- costLog[Task]()
-      cost                <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
-      store               <- kvm.rSpaceStores
-      spaces              <- Runtime.setupRSpace[Task](store)
-      (rspace, replay, _) = spaces
-      runtime <- {
-        implicit val c: _cost[Task] = cost
-        Runtime.create[Task]((rspace, replay), Seq.empty)
-      }
+      costLog                     <- costLog[Task]()
+      cost                        <- CostAccounting.emptyCost[Task](implicitly, metricsEff, costLog, ms)
+      store                       <- kvm.rSpaceStores
+      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, _) = spaces
       result <- {
         implicit def rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
-        implicit val c: _cost[Task]         = cost
-
-        Interpreter[Task].injAttempt(
-          runtime.reducer,
+        runtime.evaluate(
           term,
           initialPhlo,
           Map.empty
         )(rand) >>= { playResult =>
-          runtime.space.createCheckpoint() >>= {
+          runtime.createCheckpoint >>= {
             case Checkpoint(root, log) =>
-              runtime.replaySpace.rigAndReset(root, log) >>
-                Interpreter[Task].injAttempt(
-                  runtime.replayReducer,
+              replayRuntime.reset(root) >> replayRuntime.rig(log) >>
+                replayRuntime.evaluate(
                   term,
                   initialPhlo,
                   Map.empty
                 )(rand) >>= { replayResult =>
-                runtime.replaySpace.checkReplayData().as((playResult, replayResult))
+                replayRuntime.checkReplayData.as((playResult, replayResult))
               }
           }
         }

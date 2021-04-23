@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
@@ -15,9 +16,17 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps.RichPath
+import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
+import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.genesis.Genesis.createGenesisBlock
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -31,6 +40,25 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = NoopSpan[Task]()
+
+  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+    CasperSnapshot(
+      dag,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -176,7 +204,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
-                                            dag,
+                                            mkCasperSnapshot(dag),
                                             runtimeManager
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
@@ -264,7 +292,12 @@ object GenesisTest {
     } yield genesisBlock
 
   def withRawGenResources(
-      body: (Runtime[Task], Path, LogicalTime[Task]) => Task[Unit]
+      body: (
+          RhoHistoryRepository[Task],
+          (RhoRuntime[Task], ReplayRhoRuntime[Task]),
+          Path,
+          LogicalTime[Task]
+      ) => Task[Unit]
   ): Task[Unit] = {
     val storePath                           = storageLocation
     val gp                                  = genesisPath
@@ -273,14 +306,13 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      kvsManager          <- Resources.mkTestRNodeStoreManager[Task](storePath)
-      store               <- kvsManager.rSpaceStores
-      spaces              <- Runtime.setupRSpace[Task](store)
-      (rspace, replay, _) = spaces
-      runtime             <- Runtime.createWithEmptyCost((rspace, replay))
-      result              <- body(runtime, genesisPath, time)
-      _                   <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _                   <- Sync[Task].delay { gp.recursivelyDelete() }
+      kvsManager                   <- Resources.mkTestRNodeStoreManager[Task](storePath)
+      store                        <- kvsManager.rSpaceStores
+      spaces                       <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, hr) = spaces
+      result                       <- body(hr, (runtime, replayRuntime), genesisPath, time)
+      _                            <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _                            <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
@@ -289,8 +321,15 @@ object GenesisTest {
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       implicit val log = new LogStub[Task]
-      (runtime: Runtime[Task], genesisPath: Path, time: LogicalTime[Task]) =>
-        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+      (
+          historyRepo: RhoHistoryRepository[Task],
+          runtimes: (RhoRuntime[Task], ReplayRhoRuntime[Task]),
+          genesisPath: Path,
+          time: LogicalTime[Task]
+      ) =>
+        RuntimeManager
+          .fromRuntimes(runtimes._1, runtimes._2, historyRepo)
+          .flatMap(body(_, genesisPath, log, time))
     }
 
   def taskTest[R](f: Task[R]): R =

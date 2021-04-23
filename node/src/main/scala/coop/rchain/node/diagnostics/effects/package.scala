@@ -5,7 +5,7 @@ import cats.syntax.all._
 import cats.mtl.ApplicativeLocal
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.node.NodeCallCtx
+import coop.rchain.node.runtime.NodeCallCtx
 import kamon.Kamon
 import kamon.trace.{Span => KSpan}
 import monix.execution.atomic.AtomicLong

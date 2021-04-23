@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.registry
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.FixedChannels
+import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 
 object RegistryBootstrap {
   val AST: Par = Par(

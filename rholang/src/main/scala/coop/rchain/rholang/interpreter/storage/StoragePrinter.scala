@@ -9,8 +9,10 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
-import coop.rchain.rholang.interpreter.{Interpreter, PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
+import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
@@ -19,9 +21,9 @@ import scala.collection.SortedSet
 object StoragePrinter {
   val noUnmatchedSends = "No unmatched sends."
 
-  def prettyPrint[F[_]: FlatMap](space: RhoISpace[F]): F[String] =
+  def prettyPrint[F[_]: FlatMap](runtime: RhoRuntime[F]): F[String] =
     for {
-      mapped <- space.toMap
+      mapped <- runtime.getHotChanges
       pars = mapped.map {
         case (
             channels: Seq[Par],
@@ -52,8 +54,8 @@ object StoragePrinter {
         PrettyPrinter().buildString(pars.reduce(_ ++ _))
     }
 
-  def prettyPrintUnmatchedSends[F[_]: FlatMap](space: RhoISpace[F]): F[String] =
-    space.toMap.map(getUnmatchedSends).map { unmatchedSends =>
+  def prettyPrintUnmatchedSends[F[_]: FlatMap](runtime: RhoRuntime[F]): F[String] =
+    runtime.getHotChanges.map(getUnmatchedSends).map { unmatchedSends =>
       if (unmatchedSends.isEmpty)
         noUnmatchedSends
       else
@@ -62,19 +64,18 @@ object StoragePrinter {
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
       deploy: Signed[DeployData],
-      runtime: Runtime[F]
+      runtime: RhoRuntime[F]
   ): F[String] = {
-    def unmatchedSends: F[List[Par]] = runtime.space.toMap.map(getUnmatchedSends)
+    def unmatchedSends: F[List[Par]] = runtime.getHotChanges.map(getUnmatchedSends)
     for {
-      checkpoint <- runtime.space.createCheckpoint()
+      checkpoint <- runtime.createCheckpoint
       beforeEval <- unmatchedSends
       _ <- {
-        implicit val c = runtime.cost
-        Interpreter[F].evaluate(runtime, deploy.data.term, NormalizerEnv(deploy).toEnv)
+        runtime.evaluate(deploy.data.term, NormalizerEnv(deploy).toEnv)
       }
       afterEval <- unmatchedSends
       diff      = afterEval.diff(beforeEval)
-      _         <- runtime.space.reset(checkpoint.root)
+      _         <- runtime.reset(checkpoint.root)
     } yield {
       if (diff.isEmpty)
         noUnmatchedSends
@@ -85,7 +86,7 @@ object StoragePrinter {
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
       deploys: Seq[Signed[DeployData]],
-      runtime: Runtime[F]
+      runtime: RhoRuntime[F]
   ): F[String] =
     deploys.toStream
       .traverse(

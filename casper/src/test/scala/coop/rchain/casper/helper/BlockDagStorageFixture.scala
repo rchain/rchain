@@ -2,8 +2,12 @@ package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, IndexedBlockDagStorage}
+import coop.rchain.blockstorage.{KeyValueBlockStore, _}
+import coop.rchain.blockstorage.dag.{
+  BlockDagKeyValueStorage,
+  BlockDagStorage,
+  IndexedBlockDagStorage
+}
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -14,8 +18,9 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}
+import java.nio.file.{Files, Path}
 
-import java.nio.file.Path
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
@@ -38,8 +43,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
     Resources
       .copyStorage[Task](context.storageDirectory)
-      .map(_.storageDir)
-      .evalMap(create)
+      .evalMap(r => create(r.storageDir))
       .use(Function.uncurried(f).tupled)
       .unsafeRunSync
   }
@@ -49,8 +53,30 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     implicit val metrics = new MetricsNOP[Task]()
     implicit val log     = Log.log[Task]
 
-    withStorageF[Task, R](f).unsafeRunSync
+    BlockDagStorageTestFixture.withStorageF[Task, R](f).unsafeRunSync
   }
+}
+object BlockDagStorageTestFixture {
+  def blockDagStorageDir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
+  def blockStorageDir: Path    = Files.createTempDirectory("casper-block-storage-test-")
+
+  val mapSize: Long = 1024L * 1024L * 1024L
+  def createBlockStorage[F[_]: Concurrent: Log](
+      blockStorageDir: Path
+  ): F[BlockStore[F]] =
+    for {
+      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
+      blockStore   <- KeyValueBlockStore[F](storeManager)
+    } yield blockStore
+
+  def createBlockDagStorage[F[_]: Concurrent](blockDagStorageDir: Path)(
+      implicit log: Log[F],
+      metrics: Metrics[F]
+  ): F[BlockDagStorage[F]] =
+    for {
+      storeManager    <- RNodeKeyValueStoreManager[F](blockDagStorageDir)
+      blockDagStorage <- BlockDagKeyValueStorage.create[F](storeManager)
+    } yield blockDagStorage
 
   def withStorageF[F[_]: Concurrent: Metrics: Log, R](
       f: BlockStore[F] => IndexedBlockDagStorage[F] => F[R]

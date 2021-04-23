@@ -42,6 +42,8 @@ trait ISpace[F[_], C, P, A, K] extends Tuplespace[F, C, P, A, K] {
 
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]]
 
+  def getJoins(channel: C): F[Seq[Seq[C]]]
+
   /** Clears the store.  Does not affect the history trie.
     */
   def clear(): F[Unit]

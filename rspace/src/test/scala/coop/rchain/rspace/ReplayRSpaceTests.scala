@@ -1,24 +1,18 @@
 package coop.rchain.rspace
 
-import java.nio.file.{Files, Path}
-
 import cats.Functor
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
-import cats.effect._
 import cats.effect.concurrent.Ref
 import cats.implicits._
-import cats.syntax.parallel._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.HistoryRepositoryInstances
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.shared.PathOps._
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
@@ -29,7 +23,6 @@ import org.scalatest.prop._
 
 import scala.util.Random
 import scala.util.Random.shuffle
-import org.lmdbjava.EnvFlags
 
 import scala.collection.SortedSet
 
@@ -1294,14 +1287,16 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
                             roots,
                             cold,
-                            history
+                            history,
+                            channels
                           )
       cache <- Ref.of[Task, Cache[C, P, A, K]](
                 Cache[C, P, A, K]()
               )
       store = {
-        implicit val hr = historyRepository
-        implicit val c  = cache
+        implicit val hr =
+          historyRepository.getHistoryReader(historyRepository.root).toRho
+        implicit val c = cache
         AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
       space = new RSpace[Task, C, P, A, K](
@@ -1312,8 +1307,9 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                        Cache[C, P, A, K]()
                      )
       replayStore = {
-        implicit val hr = historyRepository
-        implicit val c  = historyCache
+        implicit val hr =
+          historyRepository.getHistoryReader(historyRepository.root).toRho
+        implicit val c = historyCache
         AtomicAny(HotStore.inMem[Task, C, P, A, K])
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](

@@ -16,8 +16,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
-import coop.rchain.rholang.interpreter.Runtime.SystemProcess
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -73,57 +72,57 @@ class RhoSpec(
 
   private def testFrameworkContracts[F[_]: Log: Concurrent: Span](
       testResultCollector: TestResultCollector[F]
-  ): Seq[SystemProcess.Definition[F]] = {
+  ): Seq[SystemProcesses.Definition[F]] = {
     val testResultCollectorService =
       Seq((5, "assertAck", 101), (1, "testSuiteCompleted", 102))
         .map {
           case (arity, name, n) =>
-            SystemProcess.Definition[F](
+            SystemProcesses.Definition[F](
               s"rho:test:$name",
-              Runtime.byteName(n.toByte),
+              SystemProcesses.byteName(n.toByte),
               arity,
               n.toLong,
               ctx => testResultCollector.handleMessage(ctx)(_)
             )
         } ++ Seq(
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "rho:io:stdlog",
-          Runtime.byteName(103),
+          SystemProcesses.byteName(103),
           2,
           103L,
           ctx => RhoLoggerContract.handleMessage(ctx)(_)
         ),
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "rho:test:deployerId:make",
-          Runtime.byteName(104),
+          SystemProcesses.byteName(104),
           3,
           104L,
           ctx => DeployerIdContract.get(ctx)(_)
         ),
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "rho:test:crypto:secp256k1Sign",
-          Runtime.byteName(105),
+          SystemProcesses.byteName(105),
           3,
           105L,
           ctx => Secp256k1SignContract.get(ctx)(_)
         ),
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "sys:test:authToken:make",
-          Runtime.byteName(106),
+          SystemProcesses.byteName(106),
           1,
           106L,
           ctx => SysAuthTokenContract.get(ctx)(_)
         ),
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "rho:test:block:data:set",
-          Runtime.byteName(107),
+          SystemProcesses.byteName(107),
           3,
           107L,
           ctx => BlockDataContract.set(ctx)(_)
         ),
-        SystemProcess.Definition[F](
+        SystemProcesses.Definition[F](
           "rho:test:casper:invalidBlocks:set",
-          Runtime.byteName(108),
+          SystemProcesses.byteName(108),
           2,
           108L,
           ctx => CasperInvalidBlocksContract.set(ctx)(_)
@@ -172,9 +171,9 @@ class RhoSpec(
     }
 
   private def setupRuntime[F[_]: Sync](
-      runtime: Runtime[F],
+      runtime: RhoRuntime[F],
       otherLibs: Seq[Signed[DeployData]]
-  ): F[Runtime[F]] =
+  ): F[RhoRuntime[F]] =
     for {
       _ <- evalDeploy(rhoSpecDeploy, runtime)
       _ <- otherLibs.toList.traverse(evalDeploy(_, runtime))
@@ -182,7 +181,7 @@ class RhoSpec(
 
   private def evalDeploy[F[_]: Sync](
       deploy: Signed[DeployData],
-      runtime: Runtime[F]
+      runtime: RhoRuntime[F]
   ): F[Unit] = {
     import coop.rchain.models.rholang.implicits._
     val rand = Tools.unforgeableNameRng(deploy.pk, deploy.data.timestamp)

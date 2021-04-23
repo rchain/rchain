@@ -19,6 +19,8 @@ class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   implicit val m: Match[F, P, A] = (_: P, _: A) => Applicative[F].pure(none)
 
+  override def getJoins(channel: C): F[Seq[Seq[C]]] = ???
+
   override def consume(
       channels: Seq[C],
       patterns: Seq[P],

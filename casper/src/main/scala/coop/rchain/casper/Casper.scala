@@ -22,6 +22,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 
@@ -47,22 +48,25 @@ object DeployError {
   }
 }
 
-final case class BlockProcessingState(enqueued: Set[BlockHash], processing: Set[BlockHash])
-
 trait Casper[F[_]] {
-  def addBlockFromStore(b: BlockHash, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
-  def addBlock(b: BlockMessage, allowAddFromBuffer: Boolean = false): F[ValidBlockProcessing]
+  def getSnapshot: F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
-  def createBlock: F[CreateBlockStatus]
   def getApprovedBlock: F[BlockMessage]
-  def getValidator: F[Option[PublicKey]]
+  def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
-  def getBlockProcessingState: F[BlockProcessingState]
+  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Either[BlockError, ValidBlock]]
+  def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]]
+  def handleInvalidBlock(
+      block: BlockMessage,
+      status: InvalidBlock,
+      dag: BlockDagRepresentation[F]
+  ): F[BlockDagRepresentation[F]]
+  def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -89,29 +93,67 @@ object MultiParentCasper extends MultiParentCasperInstances {
     } yield tipHash
 }
 
+/**
+  * Casper snapshot is a state that is changing in discrete manner with each new block added.
+  * This class represents full information about the state. It is required for creating new blocks
+  * as well as for validating blocks.
+  */
+final case class CasperSnapshot[F[_]](
+    dag: BlockDagRepresentation[F],
+    lastFinalizedBlock: BlockHash,
+    lca: BlockHash,
+    tips: IndexedSeq[BlockHash],
+    parents: List[BlockMessage],
+    justifications: Set[Justification],
+    invalidBlocks: Map[Validator, BlockHash],
+    deploysInScope: Set[Signed[DeployData]],
+    maxBlockNum: Long,
+    maxSeqNums: Map[Validator, Int],
+    onChainState: OnChainCasperState
+)
+
+final case class OnChainCasperState(
+    shardConf: CasperShardConf,
+    bondsMap: Map[Validator, Long],
+    activeValidators: Seq[Validator]
+)
+
+final case class CasperShardConf(
+    faultToleranceThreshold: Float,
+    shardName: String,
+    parentShardId: String,
+    finalizationRate: Int,
+    maxNumberOfParents: Int,
+    maxParentDepth: Int,
+    synchronyConstraintThreshold: Float,
+    heightConstraintThreshold: Long,
+    // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+    // Required to enable protection from re-submitting duplicate deploys
+    deployLifespan: Int,
+    casperVersion: Long,
+    configVersion: Long,
+    bondMinimum: Long,
+    bondMaximum: Long,
+    epochLength: Int,
+    quarantineLength: Int
+)
+
 sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      approvedBlock: BlockMessage,
-      shardId: String,
-      finalizationRate: Int
+      casperShardConf: CasperShardConf,
+      approvedBlock: BlockMessage
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
-      blockProcessingLock <- MetricsSemaphore.single[F]
-      blockProcessingState <- Ref.of[F, BlockProcessingState](
-                               BlockProcessingState(Set.empty, Set.empty)
-                             )
+      _ <- ().pure
     } yield {
       new MultiParentCasperImpl(
         validatorId,
-        approvedBlock,
-        shardId,
-        finalizationRate,
-        blockProcessingLock,
-        blockProcessingState
+        casperShardConf,
+        approvedBlock
       )
     }
 }

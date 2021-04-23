@@ -174,7 +174,8 @@ object blockImplicits {
             blockNumber = setBlockNumber.get
           ),
           deploys = deploys.toList,
-          systemDeploys = List.empty
+          systemDeploys = List.empty,
+          rejectedDeploys = List.empty
         ),
         justifications = justifications.toList,
         sender = validator,

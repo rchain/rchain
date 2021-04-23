@@ -3,6 +3,7 @@ package coop.rchain.rholang.interpreter
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
+import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -52,8 +53,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
   private def execute(source: String): EvaluateResult =
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
-        implicit val c = runtime.cost
-        InterpreterUtil.evaluateResult(runtime, source)
+        runtime.evaluate(source)
       }
       .runSyncUnsafe(maxDuration)
 }

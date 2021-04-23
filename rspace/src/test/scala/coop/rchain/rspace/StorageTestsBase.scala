@@ -12,7 +12,7 @@ import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
@@ -58,18 +58,28 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
       implicit codecC: Codec[C],
       codecP: Codec[P],
       codecA: Codec[A],
-      codecK: Codec[K]
+      codecK: Codec[K],
+      serializedC: Serialize[C]
   ): S = {
 
     val kvm = InMemoryStoreManager[F]
 
     run(for {
-      stores                            <- kvm.rSpaceStores
-      RSpaceStore(history, roots, cold) = stores
+      stores                                      <- kvm.rSpaceStores
+      RSpaceStore(history, roots, cold, channels) = stores
       historyRepository <- HistoryRepositoryInstances
-                            .lmdbRepository[F, C, P, A, K](history, roots, cold)
-      cache                <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      testStore            = HotStore.inMem[F, C, P, A, K](Sync[F], cache, historyRepository, codecK)
+                            .lmdbRepository[F, C, P, A, K](
+                              history,
+                              roots,
+                              cold,
+                              channels
+                            )
+      cache <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
+      testStore = {
+        val hr =
+          historyRepository.getHistoryReader(historyRepository.root).toRho
+        HotStore.inMem[F, C, P, A, K](Concurrent[F], cache, hr, codecK)
+      }
       spaceAndStore        <- createISpace(historyRepository, testStore)
       (store, atom, space) = spaceAndStore
       res                  <- f(store, atom, space)

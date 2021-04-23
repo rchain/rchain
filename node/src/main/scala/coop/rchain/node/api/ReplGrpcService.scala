@@ -2,21 +2,23 @@ package coop.rchain.node.api
 
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.monix.Monixable
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Interpreter._
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{Runtime, _}
+import coop.rchain.rholang.interpreter.{RhoRuntime, _}
 import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object ReplGrpcService {
 
-  def apply[F[_]: Monixable: Sync](runtime: Runtime[F], worker: Scheduler): ReplGrpcMonix.Repl =
+  def apply[F[_]: Monixable: Sync](runtime: RhoRuntime[F], worker: Scheduler): ReplGrpcMonix.Repl =
     new ReplGrpcMonix.Repl {
       def exec(source: String, printUnmatchedSendsOnly: Boolean = false): F[ReplResponse] =
         Sync[F]
@@ -34,12 +36,12 @@ object ReplGrpcService {
               for {
                 _ <- Sync[F].delay(printNormalizedTerm(term))
                 res <- {
-                  implicit val c = runtime.cost
-                  Interpreter[F].evaluate(runtime, source, Map.empty[String, Par])
+                  implicit val rand = Blake2b512Random(10)
+                  runtime.evaluate(source, Cost.UNSAFE_MAX, Map.empty[String, Par])
                 }
                 prettyStorage <- if (printUnmatchedSendsOnly)
-                                  StoragePrinter.prettyPrintUnmatchedSends(runtime.space)
-                                else StoragePrinter.prettyPrint(runtime.space)
+                                  StoragePrinter.prettyPrintUnmatchedSends(runtime)
+                                else StoragePrinter.prettyPrint(runtime)
                 EvaluateResult(cost, errors) = res
               } yield {
                 val errorStr =

@@ -17,11 +17,11 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
-import coop.rchain.shared.DagOps
 
 import scala.collection.immutable
 import scala.collection.immutable.Map
@@ -437,25 +437,5 @@ object ProtoUtil {
         }
       case None =>
         List.empty[BlockMetadata].pure
-    }
-
-  def invalidLatestMessages[F[_]: Sync](
-      dag: BlockDagRepresentation[F]
-  ): F[Map[Validator, BlockHash]] =
-    dag.latestMessages.flatMap(
-      latestMessages =>
-        invalidLatestMessages(dag, latestMessages.map {
-          case (validator, block) => (validator, block.blockHash)
-        })
-    )
-
-  def invalidLatestMessages[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
-      latestMessagesHashes: Map[Validator, BlockHash]
-  ): F[Map[Validator, BlockHash]] =
-    dag.invalidBlocks.map { invalidBlocks =>
-      latestMessagesHashes.filter {
-        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
-      }
     }
 }

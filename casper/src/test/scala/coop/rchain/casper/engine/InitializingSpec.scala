@@ -10,6 +10,7 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
@@ -43,8 +44,9 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
       // interval and duration don't really matter since we don't require and signs from validators
       val initializingEngine =
         new Initializing[Task](
-          shardId,
-          finalizationRate,
+          fixture.blockProcessingQueue,
+          fixture.blockProcessingState,
+          fixture.casperShardConf,
           Some(validatorId),
           theInit,
           blockResponseQueue,

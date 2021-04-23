@@ -5,6 +5,7 @@ import cats.syntax.all._
 import cats.~>
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.protocol.RejectedDeployInfo
 import coop.rchain.node.api.WebApi
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log

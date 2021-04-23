@@ -7,7 +7,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 
@@ -50,6 +50,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 }
 
 object RholangAndScalaDispatcher {
+  type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandom, TaggedContinuation]
 
   def create[M[_], F[_]](
       tuplespace: RhoTuplespace[M],

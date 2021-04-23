@@ -1,5 +1,20 @@
 package coop.rchain.node.configuration.commandline
 
+import java.nio.file.Paths
+
+import scala.concurrent.duration._
+import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
+import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.node.configuration.{
+  ApiServer,
+  DevConf,
+  Metrics,
+  NodeConf,
+  PeersDiscovery,
+  ProtocolClient,
+  ProtocolServer,
+  Storage
+}
 import com.typesafe.config.ConfigFactory
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
@@ -130,6 +145,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = true,
+      autopropose = false,
       devMode = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",
@@ -238,7 +254,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         influxdbUdp = true,
         zipkin = true,
         sigar = true
-      )
+      ),
+      dev = DevConf(deployerPrivateKey = None)
     )
     config shouldEqual expectedConfig
   }

@@ -28,7 +28,8 @@ object ConstructDeploy {
       timestamp: Long,
       phloLimit: Long = 90000,
       phloPrice: Long = 1L,
-      sec: PrivateKey = defaultSec
+      sec: PrivateKey = defaultSec,
+      vabn: Long = 0
   ): Signed[DeployData] = {
     val data =
       DeployData(
@@ -36,7 +37,7 @@ object ConstructDeploy {
         timestamp = timestamp,
         phloLimit = phloLimit,
         phloPrice = phloPrice,
-        validAfterBlockNumber = 0L
+        validAfterBlockNumber = vabn
       )
 
     Signed(data, Secp256k1, sec)
@@ -44,18 +45,22 @@ object ConstructDeploy {
 
   def sourceDeployNow(
       source: String,
-      sec: PrivateKey = defaultSec
+      sec: PrivateKey = defaultSec,
+      vabn: Long = 0
   ): Signed[DeployData] =
-    sourceDeploy(source = source, timestamp = System.currentTimeMillis(), sec = sec)
+    sourceDeploy(source = source, timestamp = System.currentTimeMillis(), sec = sec, vabn = vabn)
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
       phloLimit: Long = 1000000,
       phloPrice: Long = 1L,
-      sec: PrivateKey = defaultSec
+      sec: PrivateKey = defaultSec,
+      vabn: Long = 0
   ): F[Signed[DeployData]] =
     Time[F].currentMillis
-      .map(sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec))
+      .map(
+        sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec, vabn: Long)
+      )
 
   // TODO: replace usages with basicSendDeployData
   def basicDeployData[F[_]: Monad: Time](

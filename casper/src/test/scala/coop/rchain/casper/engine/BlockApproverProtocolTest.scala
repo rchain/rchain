@@ -182,8 +182,8 @@ object BlockApproverProtocolTest {
   def createProtocol: Effect[(BlockApproverProtocol, TestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                        = GenesisBuilder.buildGenesis(params)
 
     val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1

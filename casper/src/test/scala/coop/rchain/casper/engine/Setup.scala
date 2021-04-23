@@ -20,45 +20,53 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Match, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
+import coop.rchain.store.InMemoryStoreManager
+import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
 
 object Setup {
   def apply() = new {
+    import coop.rchain.rholang.interpreter.storage._
+
     implicit val log              = new LogStub[Task]
     implicit val eventLogStub     = new EventLogStub[Task]
     implicit val metrics          = new Metrics.MetricsNOP[Task]
     implicit val span: Span[Task] = NoopSpan[Task]()
     implicit val scheduler        = Scheduler.Implicits.global
-
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m                     = matchListPar[Task]
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                        = GenesisBuilder.buildGenesis(params)
 
     val networkId = "test"
     val spaceKVManager =
       mkTestRNodeStoreManager[Task](context.storageDirectory).runSyncUnsafe()
     val store = spaceKVManager.rSpaceStores.runSyncUnsafe()
-    val spaces =
-      Runtime.setupRSpace[Task](store).runSyncUnsafe()
+    val spaces = RSpace
+      .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      .runSyncUnsafe()
     val (rspace, replay, historyRepo) = spaces
-    val activeRuntime =
-      Runtime
-        .createWithEmptyCost[Task]((rspace, replay), Seq.empty)
-        .unsafeRunSync
+    val runtimes =
+      RhoRuntime.createRuntimes[Task](rspace, replay, true, Seq.empty).unsafeRunSync
 
+    val (runtime, replayRuntime) = runtimes
     val (exporter, importer) = {
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
-    implicit val runtimeManager = RuntimeManager.fromRuntime(activeRuntime).unsafeRunSync
+    implicit val runtimeManager =
+      RuntimeManager.fromRuntimes(runtime, replayRuntime, historyRepo).unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
@@ -125,16 +133,41 @@ object Setup {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
-    implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[Task](0f)
-    implicit val estimator                    = Estimator[Task](Estimator.UnlimitedParents, None)
-    implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[Task](0d)
-    implicit val lastFinalizedConstraintChecker =
-      LastFinalizedHeightConstraintChecker[Task](Long.MaxValue)
-    implicit val blockRetriever = BlockRetriever.of[Task]
+    implicit val lastFinalizedBlockCalculator   = LastFinalizedBlockCalculator[Task](0f)
+    implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
+    implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
+    implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
+    implicit val blockRetriever                 = BlockRetriever.of[Task]
 
     implicit val casperBuffer = CasperBufferKeyValueStorage
       .create[Task](spaceKVManager)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val blockProcessingQueue = Queue
+      .unbounded[Task, (Casper[Task], BlockMessage)]
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val blockProcessingState = Ref
+      .of[Task, Set[BlockHash]](Set.empty)
+      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+
+    implicit val casperShardConf = CasperShardConf(
+      -1,
+      shardId,
+      "",
+      finalizationRate,
+      Int.MaxValue,
+      Int.MaxValue,
+      0,
+      Long.MaxValue,
+      50,
+      1,
+      1,
+      genesisParams.proofOfStake.minimumBond,
+      genesisParams.proofOfStake.maximumBond,
+      genesisParams.proofOfStake.epochLength,
+      genesisParams.proofOfStake.quarantineLength
+    )
   }
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
 
