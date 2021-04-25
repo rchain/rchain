@@ -306,6 +306,7 @@ class EstimatorTest
                      )
         _ = forkchoice.lca should be(genesis.blockHash)
         _ = forkchoice.tips.head should be(r4.blockHash)
+        _ = forkchoice.tips.size should be(latestBlocks.size)
       } yield ()
   }
 }

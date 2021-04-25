@@ -64,13 +64,19 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
               BlockMetadata.fromBlock(genesis, false),
               filteredLatestMessagesHashes
             )
-      _                          <- Span[F].mark("lca")
-      scoresMap                  <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _                          <- Span[F].mark("score-map")
-      rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
-      _                          <- Span[F].mark("ranked-latest-messages-hashes")
-      rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
-      _                          <- Span[F].mark("filtered-deep-parents")
+      _         <- Span[F].mark("lca")
+      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+      _         <- Span[F].mark("score-map")
+      rankedLatestMessagesHashes <- rankForkChoices(List(lca), dag, scoresMap)
+                                     .map(
+                                       mp =>
+                                         mp ++ filteredLatestMessagesHashes.values.filterNot(
+                                           _ == mp.head
+                                         )
+                                     )
+      _                   <- Span[F].mark("ranked-latest-messages-hashes")
+      rankedShallowHashes <- filterDeepParents(rankedLatestMessagesHashes, dag)
+      _                   <- Span[F].mark("filtered-deep-parents")
     } yield ForkChoice(rankedShallowHashes.take(maxNumberOfParents), lca)
   }
 
@@ -168,7 +174,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
     }
   }
 
-  private def rankForkchoices(
+  private def rankForkChoices(
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
@@ -183,7 +189,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       result <- if (stillSame(blocks, newBlocks)) {
                  blocks.toVector.pure[F]
                } else {
-                 rankForkchoices(newBlocks, blockDag, scores)
+                 rankForkChoices(List(newBlocks.head), blockDag, scores)
                }
     } yield result
 
