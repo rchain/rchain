@@ -319,9 +319,10 @@ object HistoryInstances {
         // TODO: make processing of subtries parallel again,
         //  sequential execution is now to prevent the bug with root hash mismatch.
         // https://rchain.atlassian.net/browse/RCHAIN-3940
+        trieRoot <- historyStore.get(this.root)
         roots <- fs2.Stream
                   .emits(
-                    partitions.map(p => fs2.Stream.eval(processSubtree(this.root)(p._1, p._2)))
+                    partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
                   )
                   .parJoin(1)
                   .compile
@@ -341,7 +342,7 @@ object HistoryInstances {
       actions.map(_.key).toSet.size == actions.size
 
     private[rspace] def processSubtree(
-        start: Blake2b256Hash
+        start: Trie
     )(index: Index, actions: List[HistoryAction]): F[(Index, Trie)] =
       for {
         result <- actions
@@ -358,28 +359,28 @@ object HistoryInstances {
                          ) =>
                        delete(currentRoot, previousModificationOpt, remainingPath)
                    }
-        root <- historyStore.get(result._1)
+        (root, _) = result
       } yield (index, root)
 
     private def insert(
-        currentRoot: Blake2b256Hash,
+        currentRoot: Trie,
         previousModificationOpt: Option[LastModification],
         remainingPath: KeyPath,
         value: Blake2b256Hash
-    ): F[(Blake2b256Hash, Option[LastModification])] =
+    ): F[(Trie, Option[LastModification])] =
       for {
         _              <- commitPreviousModification(remainingPath, previousModificationOpt)
         traverseResult <- findPath(remainingPath, currentRoot)
         (_, triePath)  = traverseResult
         elements       <- rebalanceInsert(LeafPointer(value), remainingPath, triePath)
         _              <- historyStore.put(elements)
-      } yield (Trie.hash(elements.last), (remainingPath, elements.last).some)
+      } yield (elements.last, (remainingPath, elements.last).some)
 
     private def delete(
-        currentRoot: Blake2b256Hash,
+        currentRoot: Trie,
         previousModificationOpt: Option[LastModification],
         remainingPath: KeyPath
-    ): F[(Blake2b256Hash, Option[LastModification])] =
+    ): F[(Trie, Option[LastModification])] =
       for {
         _              <- commitPreviousModification(remainingPath, previousModificationOpt)
         traverseResult <- findPath(remainingPath, currentRoot)
@@ -392,7 +393,7 @@ object HistoryInstances {
                    }
         _ <- historyStore.put(elements)
       } yield (
-        elements.lastOption.map(Trie.hash).getOrElse(currentRoot),
+        elements.lastOption.getOrElse(currentRoot),
         elements.lastOption.map(t => (remainingPath, t)).orElse(previousModificationOpt)
       )
 
@@ -510,11 +511,11 @@ object HistoryInstances {
     }
 
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
-      findPath(key, root)
+      historyStore.get(root) >>= (findPath(key, _))
 
     private[history] def findPath(
         key: KeyPath,
-        start: Blake2b256Hash
+        start: Trie
     ): F[(TriePointer, TriePath)] = {
       type Params = (Trie, KeyPath, TriePath)
       def traverse(params: Params): F[Either[Params, (TriePointer, TriePath)]] =
@@ -554,11 +555,7 @@ object HistoryInstances {
             }
           case _ => Sync[F].raiseError(MalformedTrieError)
         }
-      for {
-        node   <- historyStore.get(start)
-        result <- FlatMap[F].tailRecM((node, key, TriePath.empty))(traverse)
-      } yield result
-
+      (start, key, TriePath.empty).tailRecM(traverse)
     }
 
     override def reset(root: Blake2b256Hash): History[F] =

@@ -54,7 +54,7 @@ class CachingHistorySpec
           Nil
       val zero = setupActions()
       for {
-        _ <- history.processSubtree(History.emptyRootHash)(0.toByte, zero)
+        _ <- history.processSubtree(EmptyTrie)(0.toByte, zero)
         _ = cache.cache.size shouldBe 4
       } yield ()
   }

@@ -27,12 +27,15 @@ object ChannelStoreImpl {
       sc: Serialize[C],
       codecC: Codec[C]
   ) extends ChannelStore[F, C] {
-    implicit val serializeC: Serialize[C]    = sc
+    val serializeC: Serialize[C]             = sc
     val continuationSerializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
     override def putChannelHash(channel: C): F[Unit] =
       for {
+        // C => hash(C)
         eventKey <- StableHashProvider.hash(channel)(sc).pure[F]
+
+        // C => hashPrefix(C)
         dataHash = hashDataChannel(channel, codecC)
         joinHash = hashJoinsChannel(channel, codecC)
         _        <- store.put(eventKey, DataJoinHash(dataHash, joinHash))
@@ -40,8 +43,16 @@ object ChannelStoreImpl {
 
     override def putContinuationHash(channels: Seq[C]): F[Unit] =
       for {
-        channelsHashes   <- toOrderedByteVectors(channels).map(Blake2b256Hash.create).pure[F]
-        eventKey         = continuationKey(channelsHashes)
+        // Hash each channel in a list
+        channelsHashes <- toOrderedByteVectors(channels)(serializeC)
+                           .map(Blake2b256Hash.create)
+                           .pure[F]
+        // Concatenate channel hashes and hash result
+        // Seq[C] => Seq[hash(C)] => Seq[bytes(C)] => bytes(C) => hash(C)
+        eventKey = continuationKey(channelsHashes)
+
+        // Concatenate channels and hash result
+        // Seq[C] => Seq[bytes(C)] => bytes(C) => hashPrefix(C)
         continuationHash = hashContinuationsChannels(channels, continuationSerializeC)
         _                <- store.put(eventKey, ContinuationHash(continuationHash))
       } yield ()
