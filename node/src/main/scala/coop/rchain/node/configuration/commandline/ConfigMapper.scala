@@ -84,6 +84,7 @@ object ConfigMapper {
       add("casper.genesis-block-data.quarantine-length", run.quarantineLength)
       add("casper.genesis-block-data.number-of-active-validators", run.numberOfActiveValidators)
       add("casper.genesis-block-data.deploy-timestamp", run.deployTimestamp)
+      add("casper.genesis-block-data.genesis-block-number", run.genesisBlockNumber)
 
       add("casper.genesis-ceremony.required-signatures", run.requiredSignatures)
       add("casper.genesis-ceremony.genesis-validator-mode", run.genesisValidator)

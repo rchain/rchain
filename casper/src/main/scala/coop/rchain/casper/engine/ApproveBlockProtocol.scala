@@ -72,7 +72,8 @@ object ApproveBlockProtocol {
       deployTimestamp: Option[Long],
       requiredSigs: Int,
       duration: FiniteDuration,
-      interval: FiniteDuration
+      interval: FiniteDuration,
+      blockNumber: Long
   ): F[ApproveBlockProtocol[F]] =
     for {
       now       <- Time[F].currentMillis
@@ -106,7 +107,8 @@ object ApproveBlockProtocol {
                              validators = validators
                            ),
                            vaults = vaults,
-                           supply = Long.MaxValue
+                           supply = Long.MaxValue,
+                           blockNumber = blockNumber
                          )
                        )
                      }

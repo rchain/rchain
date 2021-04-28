@@ -217,7 +217,8 @@ object CasperLaunch {
                     conf.genesisBlockData.deployTimestamp,
                     conf.genesisCeremony.requiredSignatures,
                     conf.genesisCeremony.approveDuration,
-                    conf.genesisCeremony.approveInterval
+                    conf.genesisCeremony.approveInterval,
+                    conf.genesisBlockData.genesisBlockNumber
                   )
           // TODO track fiber
           _ <- Concurrent[F].start(

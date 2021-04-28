@@ -142,7 +142,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           epochLength = 10000,
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
-          deployTimestamp = None
+          deployTimestamp = None,
+          genesisBlockNumber = 0
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 0,

@@ -85,7 +85,8 @@ object GenesisBuilder {
               // Initial validator vaults contain 0 Rev
               RevAddress.fromPublicKey(pk).map(Vault(_, 0))
           }.flattenOption,
-        supply = Long.MaxValue
+        supply = Long.MaxValue,
+        blockNumber = 0
       )
     )
   }
