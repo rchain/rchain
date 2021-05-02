@@ -19,7 +19,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Log, Stopwatch, Time}
 
 object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
@@ -99,8 +99,7 @@ object BlockCreator {
         case None => Seq.empty[Signed[DeployData]]
       }
 
-      for {
-        now <- Time[F].currentMillis
+      val createBlockProcess = for {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
@@ -158,6 +157,18 @@ object BlockCreator {
             else
               BlockCreatorResult.noNewDeploys.pure[F]
       } yield r
+
+      for {
+        // Create block and measure duration
+        r                      <- Stopwatch.duration(createBlockProcess)
+        (blockStatus, elapsed) = r
+        _ <- blockStatus match {
+              case Created(block) =>
+                val blockInfo = PrettyPrinter.buildString(block, short = true)
+                Log[F].info(s"Block created: $blockInfo [$elapsed]")
+              case _ => ().pure[F]
+            }
+      } yield blockStatus
     }
 
   private def packageBlock(
