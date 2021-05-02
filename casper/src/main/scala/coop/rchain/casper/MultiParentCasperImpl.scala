@@ -256,7 +256,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       b: BlockMessage,
       s: CasperSnapshot[F]
   ): F[Either[BlockError, ValidBlock]] = {
-    val validationStatus: EitherT[F, BlockError, ValidBlock] =
+    val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
         _ <- EitherT(
               Validate
@@ -299,8 +299,20 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         )
       else ().pure[F]
 
+    val validationProcessDiag = for {
+      // Create block and measure duration
+      r                    <- Stopwatch.duration(validationProcess.value)
+      (valResult, elapsed) = r
+      _ <- valResult
+            .map { status =>
+              val blockInfo = PrettyPrinter.buildString(b, short = true)
+              Log[F].info(s"Block replayed: $blockInfo ($status) [$elapsed]")
+            }
+            .getOrElse(().pure[F])
+    } yield valResult
+
     Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *>
-      populateBlockIndexCache *> validationStatus.value
+      populateBlockIndexCache *> validationProcessDiag
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
