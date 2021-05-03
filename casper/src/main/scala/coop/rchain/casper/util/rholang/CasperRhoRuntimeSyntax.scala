@@ -731,14 +731,6 @@ In both cases we want to check reply data and see if everything is in order */
       } yield result
     }
 
-  def replaySystemDeployInternal(
-      systemDeploy: SystemDeploy,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Option[ReplayFailure]] =
-    replaySystemDeployInternalE(systemDeploy, processedSystemDeploy).flatMap(
-      _.swap.value.map(_.toOption)
-    )
-
   def replaySystemDeployInternalE(
       systemDeploy: SystemDeploy,
       processedSystemDeploy: ProcessedSystemDeploy
@@ -786,7 +778,14 @@ In both cases we want to check reply data and see if everything is in order */
 
   def replaySystemDeploy(
       blockData: BlockData
-  )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = {
+  )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] =
+    replaySystemDeployE(blockData)(processedSystemDeploy).flatMap(
+      _.swap.value.map(_.toOption)
+    )
+
+  def replaySystemDeployE(
+      blockData: BlockData
+  )(processedSystemDeploy: ProcessedSystemDeploy): F[EitherT[F, ReplayFailure, Unit]] = {
     import processedSystemDeploy._
     val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
@@ -797,13 +796,16 @@ In both cases we want to check reply data and see if everything is in order */
             issuerPublicKey,
             SystemDeployUtil.generateSlashDeployRandomSeed(sender, blockData.seqNum)
           )
-        replaySystemDeployInternal(slashDeploy, processedSystemDeploy)
+        replaySystemDeployInternalE(slashDeploy, processedSystemDeploy)
       case CloseBlockSystemDeployData =>
         val closeBlockDeploy = CloseBlockDeploy(
           SystemDeployUtil.generateCloseDeployRandomSeed(sender, blockData.seqNum)
         )
-        replaySystemDeployInternal(closeBlockDeploy, processedSystemDeploy)
-      case Empty => ReplayFailure.internalError(new Exception("Expected system deploy")).some.pure
+        replaySystemDeployInternalE(closeBlockDeploy, processedSystemDeploy)
+      case Empty =>
+        EitherT(
+          ReplayFailure.internalError(new Exception("Expected system deploy")).asLeft[Unit].pure
+        ).pure
     }
   }
 }
