@@ -493,64 +493,6 @@ object BlockAPI {
           .as(s"Error: errorMessage".asLeft)
       )
     )
-  def blockReport[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
-      hash: String
-  )(reportingCasper: ReportingCasper[F]): F[ApiErr[BlockEventInfo]] = {
-    val errorMessage =
-      "Could not get event data."
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): F[ApiErr[BlockEventInfo]] =
-      for {
-        isReadOnly <- casper.getValidator
-        result <- isReadOnly match {
-                   case None =>
-                     for {
-                       reportResult <- reportingCasper.trace(
-                                        ByteString.copyFrom(Base16.unsafeDecode(hash))
-                                      )
-                       mayberesult = createBlockReportResponse(reportResult)
-                       block       <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
-                       lightBlock  <- block.traverse(getLightBlockInfo[F](_))
-
-                       res = mayberesult.map(BlockEventInfo(lightBlock, _))
-                     } yield res
-                   case Some(_) =>
-                     "Block report can only be executed on read-only RNode."
-                       .asLeft[BlockEventInfo]
-                       .pure[F]
-                 }
-      } yield result
-    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockEventInfo]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-    ))
-  }
-  private def createBlockReportResponse(
-      maybeResult: Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
-  ): ApiErr[List[DeployInfoWithEventData]] =
-    maybeResult match {
-      case Left(ReportBlockNotFound(hash)) => Left(s"Block ${hash} not found")
-      case Left(ReportReplayError(r))      => Left(s"Block replayed error ${r}")
-      case Right(result) =>
-        result
-          .map(
-            p =>
-              DeployInfoWithEventData(
-                deployInfo = p._1.toDeployInfo.some,
-                report = p._2
-                  .map(
-                    a =>
-                      SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                        case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                        case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                        case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                      }))
-                  )
-              )
-          )
-          .asRight[Error]
-    }
 
   def getBlock[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore: Span](
       hash: String
@@ -639,7 +581,7 @@ object BlockAPI {
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
     getBlockInfo[BlockInfo, F](block, constructBlockInfo)
-  private def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
     getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
