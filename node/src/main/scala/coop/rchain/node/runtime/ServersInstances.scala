@@ -3,13 +3,12 @@ package coop.rchain.node.runtime
 import cats.effect.{Concurrent, ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import com.typesafe.config.Config
-import coop.rchain.casper.ReportingCasper
 import coop.rchain.comm.discovery
 import coop.rchain.comm.discovery.{KademliaHandleRPC, KademliaStore, NodeDiscovery}
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, CommunicationResponse, GrpcTransportServer}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
@@ -19,6 +18,7 @@ import coop.rchain.node.diagnostics.{
   UdpInfluxDBReporter
 }
 import coop.rchain.node.effects.EventConsumer
+import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
 import coop.rchain.node.{api, web}
 import coop.rchain.shared.Log
 import kamon.Kamon
@@ -46,7 +46,7 @@ object ServersInstances {
   /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: off
   (
       apiServers: APIServers,
-      reportingCasper: ReportingCasper[F],
+      reportingRoutes: ReportingHTTPRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       grpcPacketHandler: Protocol => F[CommunicationResponse],
@@ -148,9 +148,9 @@ object ServersInstances {
                            nodeConf.apiServer.host,
                            nodeConf.apiServer.portHttp,
                            prometheusReporter,
-                           reportingCasper,
                            webApi,
-                           nodeConf.apiServer.maxConnectionIdle
+                           nodeConf.apiServer.maxConnectionIdle,
+                           reportingRoutes
                          )
       // Note - here http servers are not really stated, only worker streams are created.
       _ <- Log[F].info(

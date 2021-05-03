@@ -32,6 +32,7 @@ import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
+import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -183,7 +184,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         updateForkChoiceLoop,
         engineInit,
         casperLaunch,
-        reportingCasper,
+        reportingHTTPRoutes,
         webApi,
         adminWebApi,
         proposerOpt,
@@ -216,7 +217,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           casperLoop,
           updateForkChoiceLoop,
           engineInit,
-          reportingCasper,
+          reportingHTTPRoutes,
           webApi,
           adminWebApi,
           proposerOpt,
@@ -251,7 +252,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       casperLoop: CasperLoop[F],
       updateForkChoiceLoop: CasperLoop[F],
       engineInit: EngineInit[F],
-      reportingCasper: ReportingCasper[F],
+      reportingRoutes: ReportingHTTPRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       proposer: Option[Proposer[F]],
@@ -330,7 +331,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       host    = local.endpoint.host
       servers <- ServersInstances.build(
                   apiServers,
-                  reportingCasper,
+                  reportingRoutes,
                   webApi,
                   adminWebApi,
                   HandleMessages.handle[F](_),
