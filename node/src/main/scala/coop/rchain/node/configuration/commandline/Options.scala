@@ -456,6 +456,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Minimum bond accepted by the PoS contract in the genesis block."
     )
 
+    val genesisBlockNumber = opt[Long](
+      descr = "Configure genesis blockNumber for hard fork."
+    )
+
     val bondMaximum = opt[Long](
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )

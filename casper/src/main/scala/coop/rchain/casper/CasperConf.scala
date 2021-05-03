@@ -33,6 +33,7 @@ final case class GenesisBlockData(
     bondMaximum: Long,
     epochLength: Int,
     quarantineLength: Int,
+    genesisBlockNumber: Long,
     numberOfActiveValidators: Int,
     deployTimestamp: Option[Long]
 )

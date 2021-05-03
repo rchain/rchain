@@ -14,6 +14,7 @@ import coop.rchain.crypto.signatures.Signed
 final case class Genesis(
     shardId: String,
     timestamp: Long,
+    blockNumber: Long,
     proofOfStake: ProofOfStake,
     vaults: Seq[Vault],
     supply: Long
@@ -85,7 +86,7 @@ object Genesis {
     val state = RChainState(
       preStateHash = startHash,
       postStateHash = stateHash,
-      blockNumber = 0,
+      blockNumber = genesis.blockNumber,
       bonds = bondsProto(proofOfStake).toList
     )
 

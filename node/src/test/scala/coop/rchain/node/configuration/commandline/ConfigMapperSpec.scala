@@ -99,6 +99,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--bond-maximum 111111",
         "--epoch-length 111111",
         "--quarantine-length 111111",
+        "--genesis-block-number 222",
         "--number-of-active-validators 111111",
         "--deploy-timestamp 111111",
         "--required-signatures 111111",
@@ -237,7 +238,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           epochLength = 111111,
           quarantineLength = 111111,
           numberOfActiveValidators = 111111,
-          deployTimestamp = Some(111111)
+          deployTimestamp = Some(111111),
+          genesisBlockNumber = 222
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 111111,
