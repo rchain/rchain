@@ -1,12 +1,9 @@
 package coop.rchain.rspace
 
-import java.nio.charset.StandardCharsets
-
-import cats.Functor
 import coop.rchain.shared.Serialize
-import scodec.Codec
 import scodec.bits.ByteVector
 
+import java.nio.charset.StandardCharsets
 import scala.util.Try
 
 package object util {
@@ -93,6 +90,4 @@ package object util {
     def decode(bytes: ByteVector): Either[Throwable, String] =
       Try.apply(new String(bytes.toArray, StandardCharsets.UTF_8)).toEither
   }
-
-  val stringCodec: Codec[String] = stringSerialize.toSizeHeadCodec
 }

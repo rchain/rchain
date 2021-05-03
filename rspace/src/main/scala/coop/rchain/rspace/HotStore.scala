@@ -1,18 +1,12 @@
 package coop.rchain.rspace
 
-import cats._
-import cats.implicits._
-import cats.effect._
-import cats.effect.implicits._
+import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import coop.rchain.catscontrib.mtl.implicits._
-import coop.rchain.catscontrib.seq._
-import coop.rchain.rspace.history.RhoHistoryReader
+import cats.syntax.all._
+import coop.rchain.rspace.history.HistoryReaderBase
+import coop.rchain.rspace.internal._
 import coop.rchain.shared.Language._
 import coop.rchain.shared.MapOps._
-import coop.rchain.rspace.internal._
-import coop.rchain.shared.Serialize._
-import scodec.Codec
 
 import scala.collection.concurrent.TrieMap
 
@@ -60,63 +54,60 @@ final case class Cache[C, P, A, K](
 }
 
 private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
-    implicit S: Ref[F, Cache[C, P, A, K]],
+    cacheRef: Ref[F, Cache[C, P, A, K]],
     HR: RhoHistoryReader[F, C, P, A, K],
     ck: Codec[K]
 ) extends HotStore[F, C, P, A, K] {
 
-  implicit val codec = fromCodec(ck)
-
-  def snapshot(): F[Snapshot[C, P, A, K]] = S.get.map(_.snapshot())
+  def snapshot(): F[Snapshot[C, P, A, K]] = cacheRef.get.map(_.snapshot())
 
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       cached <- internalGetContinuations(channels)
-      state  <- S.get
+      state  <- cacheRef.get
       result = state.installedContinuations.get(channels) ++: cached
     } yield result
 
   private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
-      state <- S.get
+      state <- cacheRef.get
       res <- state.continuations.get(channels) match {
               case None =>
                 for {
-                  historyContinuations <- HR.getContinuations(channels)
-                  _ <- S.update { cache =>
+                  historyContinuations <- historyReader.getContinuations(channels)
+                  _ <- cacheRef.update { cache =>
                         ignore(cache.continuations.putIfAbsent(channels, historyContinuations))
                         cache
                       }
-                } yield (historyContinuations)
-              case Some(continuations) => Applicative[F].pure(continuations)
+                } yield historyContinuations
+              case Some(continuations) => continuations.pure[F]
             }
     } yield (res)
 
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- internalGetContinuations(channels)
-      _ <- S.update { cache =>
+      _ <- cacheRef.update { cache =>
             ignore(cache.continuations.put(channels, wc +: continuations))
             cache
           }
     } yield ()
 
-  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] = S.update {
-    cache =>
+  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
+    cacheRef.update { cache =>
       ignore(cache.installedContinuations.put(channels, wc))
       cache
-  }
+    }
 
   def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
     for {
       continuations <- getContinuations(channels)
-      cache         <- S.get
+      cache         <- cacheRef.get
       installed     = cache.installedContinuations.get(channels)
-      _ <- if (installed.isDefined && index == 0)
-            Sync[F].raiseError {
-              new IllegalArgumentException("Attempted to remove an installed continuation")
-            } else
-            checkIndex(continuations, index) >> S.update { cache =>
+      _ <- if (installed.isDefined && index == 0) {
+            new IllegalArgumentException("Attempted to remove an installed continuation").raiseError
+          } else
+            checkIndex(continuations, index) >> cacheRef.update { cache =>
               val updated = removeIndex(
                 continuations,
                 index
@@ -131,24 +122,24 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
   def getData(channel: C): F[Seq[Datum[A]]] =
     for {
-      state <- S.get
+      state <- cacheRef.get
       res <- state.data.get(channel) match {
               case None =>
                 for {
-                  historyData <- HR.getData(channel)
-                  _ <- S.update { cache =>
+                  historyData <- historyReader.getData(channel)
+                  _ <- cacheRef.update { cache =>
                         ignore(cache.data.putIfAbsent(channel, historyData))
                         cache
                       }
                 } yield (historyData)
-              case Some(data) => Applicative[F].pure(data)
+              case Some(data) => data.pure[F]
             }
     } yield (res)
 
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
     for {
       data <- getData(channel)
-      _ <- S.update { cache =>
+      _ <- cacheRef.update { cache =>
             ignore(cache.data.put(channel, datum +: data))
             cache
           }
@@ -157,9 +148,9 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def removeDatum(channel: C, index: Int): F[Unit] =
     for {
       data <- getData(channel)
-      s    <- S.get
+      s    <- cacheRef.get
       _    <- checkIndex(s.data(channel), index)
-      _ <- S.update { cache =>
+      _ <- cacheRef.update { cache =>
             val updated = removeIndex(cache.data(channel), index)
             ignore(cache.data.put(channel, updated))
             cache
@@ -170,37 +161,39 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def getJoins(channel: C): F[Seq[Seq[C]]] =
     for {
       cached <- internalGetJoins(channel)
-      state  <- S.get
-    } yield (state.installedJoins.getOrElse(channel, Seq.empty) ++: cached)
+      state  <- cacheRef.get
+    } yield state.installedJoins.getOrElse(channel, Seq.empty) ++: cached
 
   private[this] def internalGetJoins(channel: C): F[Seq[Seq[C]]] =
     for {
-      state <- S.get
+      state <- cacheRef.get
       res <- state.joins.get(channel) match {
               case None =>
                 for {
-                  historyJoins <- HR.getJoins(channel)
-                  _ <- S.update { cache =>
+                  historyJoins <- historyReader.getJoins(channel)
+                  _ <- cacheRef.update { cache =>
                         ignore(cache.joins.putIfAbsent(channel, historyJoins))
                         cache
                       }
                 } yield (historyJoins)
-              case Some(joins) => Applicative[F].pure(joins)
+              case Some(joins) => joins.pure[F]
             }
-    } yield (res)
+    } yield res
 
   def putJoin(channel: C, join: Seq[C]): F[Unit] =
     for {
       joins <- getJoins(channel)
-      _ <- Applicative[F].whenA(!joins.contains(join))(S.update { cache =>
-            ignore(cache.joins.put(channel, join +: joins))
-            cache
-          })
+      _ <- cacheRef
+            .update { cache =>
+              ignore(cache.joins.put(channel, join +: joins))
+              cache
+            }
+            .whenA(!joins.contains(join))
     } yield ()
 
-  def installJoin(channel: C, join: Seq[C]): F[Unit] = S.update { cache =>
+  def installJoin(channel: C, join: Seq[C]): F[Unit] = cacheRef.update { cache =>
     ignore {
-      val installed = cache.installedJoins.get(channel).getOrElse(Seq.empty)
+      val installed = cache.installedJoins.getOrElse(channel, Seq.empty)
 
       if (!installed.contains(join))
         cache.installedJoins
@@ -213,11 +206,11 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       joins         <- internalGetJoins(channel)
       continuations <- getContinuations(join)
-      s             <- S.get
+      s             <- cacheRef.get
       index         = s.joins(channel).indexOf(join)
       _ <- if (continuations.isEmpty && index != -1)
             checkIndex(s.joins(channel), index) >>
-              S.update { cache =>
+              cacheRef.update { cache =>
                 val updated =
                   removeIndex(
                     cache.joins(
@@ -232,12 +225,12 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                   )
                 )
                 cache
-              } else Applicative[F].unit
+              } else ().pure[F]
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
     for {
-      cache <- S.get
+      cache <- cacheRef.get
       continuations = (cache.continuations
         .readOnlySnapshot()
         .map {
@@ -259,20 +252,16 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
           case (k, v)                => InsertJoins(k, v)
         })
         .toVector
-    } yield (continuations ++ data ++ joins)
+    } yield continuations ++ data ++ joins
 
   private def checkIndex[E](col: Seq[E], index: Int): F[Unit] =
-    Applicative[F].unlessA(col.isDefinedAt(index)) {
-      Sync[F].raiseError(
-        new IndexOutOfBoundsException(
-          s"Tried to remove index ${index} from a Vector of size ${col.size}"
-        )
-      )
-    }
+    new IndexOutOfBoundsException(
+      s"Tried to remove index ${index} from a Vector of size ${col.size}"
+    ).raiseError.unlessA(col.isDefinedAt(index))
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] =
     for {
-      cache         <- S.get
+      cache         <- cacheRef.get
       data          = cache.data.readOnlySnapshot().map(_.leftMap(Seq(_))).toMap
       continuations = (cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))).toMap
       zipped        = zip(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])

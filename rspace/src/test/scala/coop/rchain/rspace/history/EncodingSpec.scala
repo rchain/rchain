@@ -1,32 +1,17 @@
 package coop.rchain.rspace.history
 
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
-import coop.rchain.rspace.internal.Datum
+import coop.rchain.rspace.internal.{Datum, _}
+import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rspace.util.stringCodec
-import scodec.Codec
-import coop.rchain.rspace.examples.StringExamples._
-import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.test.ArbitraryInstances._
 
 class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
   type Join         = Seq[String]
-
-  implicit val codecChannel: Codec[String] = stringCodec
-
-  implicit val codecDatumString: Codec[Datum[String]] = codecDatum(stringCodec)
-
-  implicit val codecContinuation: Codec[WaitingContinuation[Pattern, StringsCaptor]] =
-    codecWaitingContinuation(
-      implicits.patternSerialize.toSizeHeadCodec,
-      implicits.stringClosureSerialize.toSizeHeadCodec
-    )
 
   "Datum list encode" should "return same hash for different orderings of each datum" in forAll {
     (datum1: Datum[String], datum2: Datum[String]) =>

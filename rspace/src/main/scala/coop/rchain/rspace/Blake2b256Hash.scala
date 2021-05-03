@@ -3,10 +3,9 @@ package coop.rchain.rspace
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.internal.codecSeq
-import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
+import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
 
 /**
   * Represents a Blake2b256 Hash
@@ -95,12 +94,10 @@ object Blake2b256Hash {
   implicit val codecWithBytesStringBlake2b256Hash: Codec[Blake2b256Hash] =
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 
-  implicit val codecSeqBlake2b256Hash: Codec[Seq[Blake2b256Hash]] = codecSeq(
-    codecWithBytesStringBlake2b256Hash
-  )
-
   implicit val ordering: Ordering[Blake2b256Hash] =
     (x: Blake2b256Hash, y: Blake2b256Hash) => {
       x.bytes.toHex.compare(y.bytes.toHex)
+      // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
+      // x.bytes.compare(y.bytes)
     }
 }
