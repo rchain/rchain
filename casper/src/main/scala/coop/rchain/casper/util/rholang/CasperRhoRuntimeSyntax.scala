@@ -54,7 +54,11 @@ import coop.rchain.models.{
   TaggedContinuation,
   Var
 }
-import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRand, RuntimeMetricsSource}
+import coop.rchain.rholang.interpreter.RhoRuntime.{
+  bootstrapRand,
+  bootstrapRegistry,
+  RuntimeMetricsSource
+}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
@@ -95,20 +99,10 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
   def emptyStateHash: F[StateHash] =
     for {
       _          <- runtime.reset(emptyRootHash)
-      _          <- bootstrapRuntime
+      _          <- bootstrapRegistry(runtime)
       checkpoint <- runtime.createCheckpoint
       hash       = ByteString.copyFrom(checkpoint.root.bytes.toArray)
     } yield hash
-
-  def bootstrapRuntime: F[Unit] = {
-    implicit val rand = bootstrapRand
-    for {
-      cost <- runtime.cost.get
-      _    <- runtime.cost.set(Cost.UNSAFE_MAX)
-      _    <- runtime.inj(RegistryBootstrap.AST)
-      _    <- runtime.cost.set(cost)
-    } yield ()
-  }
 
   private def activateValidatorQuerySource: String =
     s"""
