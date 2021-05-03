@@ -1,16 +1,21 @@
 package coop.rchain.casper
 
 import java.nio.file.{Files, Path}
-
 import cats.data.EitherT
 import cats.effect.concurrent.{MVar, MVar2, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.{Monad, Parallel}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.protocol.{
+  BlockMessage,
+  ProcessedDeploy,
+  ProcessedSystemDeploy,
+  SystemDeployData
+}
 import coop.rchain.casper.util.{EventConverter, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.syntax._
@@ -38,43 +43,51 @@ import coop.rchain.rspace.RSpace.RSpaceStore
 import scala.collection.concurrent.TrieMap
 
 sealed trait ReportError
-final case class ReportBlockNotFound(hash: BlockHash)    extends ReportError
 final case class ReportReplayError(error: ReplayFailure) extends ReportError
+final case class DeployReportResult(
+    processedDeploy: ProcessedDeploy,
+    events: Seq[Seq[ReportingEvent]]
+)
+final case class SystemDeployReportResult(
+    processedSystemDeploy: SystemDeployData,
+    events: Seq[Seq[ReportingEvent]]
+)
+final case class ReplayResult(
+    deployReportResult: List[DeployReportResult],
+    systemDeployReportResult: List[SystemDeployReportResult],
+    postStateHash: ByteString
+)
 
 trait ReportingCasper[F[_]] {
   def trace(
-      hash: BlockHash
-  ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]]
+      block: BlockMessage
+  ): F[Either[ReportError, ReplayResult]]
 }
 
 object ReportingCasper {
   def noop[F[_]: Sync]: ReportingCasper[F] = new ReportingCasper[F] {
 
     override def trace(
-        hash: BlockHash
-    ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
-      Sync[F].delay(Right(List.empty[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]))
+        block: BlockMessage
+    ): F[Either[ReportError, ReplayResult]] =
+      Sync[F].delay(Right(ReplayResult(List.empty, List.empty, ByteString.copyFromUtf8("empty"))))
   }
 
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
-      memStore: ReportMemStore[F],
       rspaceStore: RSpaceStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
-      implicit val source = Metrics.Source(CasperMetricsSource, "report-replay")
-
-      val blockLockMap = TrieMap[BlockHash, (MetricsSemaphore[F], Boolean)]()
-
-      private def replayGetReport(
+      override def trace(
           block: BlockMessage
-      ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
+      ): F[Either[ReportError, ReplayResult]] =
         for {
           reportingRspace  <- ReportingRuntime.setupReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
+          // TODO approvedBlock is not equal to genesisBlock
           genesis          <- BlockStore[F].getApprovedBlock
           isGenesis        = genesis.exists(a => block.blockHash == a.candidate.block.blockHash)
           invalidBlocksSet <- dag.invalidBlocks
@@ -82,83 +95,31 @@ object ReportingCasper {
             .map(block => (block.blockHash, block.sender))
             .toMap
           preStateHash = ProtoUtil.preStateHash(block)
-          _            <- reportingRuntime.setBlockData(BlockData.fromBlock(block))
+          blockdata    = BlockData.fromBlock(block)
+          _            <- reportingRuntime.setBlockData(blockdata)
           _            <- reportingRuntime.setInvalidBlocks(invalidBlocks)
-          res          <- replayDeploys(reportingRuntime, preStateHash, block.body.deploys, !isGenesis)
+          res <- replayDeploys(
+                  reportingRuntime,
+                  preStateHash,
+                  block.body.deploys,
+                  block.body.systemDeploys,
+                  !isGenesis,
+                  blockdata
+                )
           result <- res match {
                      case Left(replayError) =>
                        Log[F].info(
                          s"Relay ${PrettyPrinter.buildStringNoLimit(block.blockHash)} error ${replayError} from reporting"
                        ) >> Concurrent[F].delay(
                          ReportReplayError(replayError)
-                           .asLeft[List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
+                           .asLeft[ReplayResult]
                        )
                      case Right(r) =>
                        for {
                          _ <- Log[F].info(
-                               s"Cache ${PrettyPrinter.buildStringNoLimit(block.blockHash)}reporting data into mem."
+                               s"Cache ${PrettyPrinter.buildStringNoLimit(block.blockHash)} reporting data into mem."
                              )
-                         _ <- r.traverse(data => memStore.put(data._1.deploy.sig, data._2))
                        } yield r.asRight[ReportError]
-                   }
-        } yield result
-
-      private def traceBlock(
-          hash: BlockHash
-      ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
-        for {
-          maybeBlock <- BlockStore[F].get(hash)
-          _          <- Log[F].info(s"trace block ${maybeBlock}")
-          result <- maybeBlock match {
-                     case None =>
-                       Concurrent[F].delay(
-                         ReportBlockNotFound(hash)
-                           .asLeft[List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
-                       )
-                     case Some(block) =>
-                       for {
-                         cached <- block.body.deploys.traverse(
-                                    pd =>
-                                      for {
-                                        data <- memStore.get(pd.deploy.sig)
-                                        re   = data.map((pd, _))
-                                      } yield re
-                                  )
-                         maybeCached = cached.sequence
-                         outcome <- maybeCached match {
-                                     case None =>
-                                       for {
-                                         _ <- Log[F].info(
-                                               s"No ${PrettyPrinter.buildStringNoLimit(block.blockHash)} reporting data in cached, going to replay"
-                                             )
-                                         result <- replayGetReport(block)
-                                       } yield result
-                                     case Some(cached) =>
-                                       for {
-                                         _ <- Log[F].info(
-                                               s"Find ${PrettyPrinter.buildStringNoLimit(block.blockHash)} reporting data in cached"
-                                             )
-                                       } yield cached.asRight[ReportError]
-                                   }
-                       } yield outcome
-                   }
-        } yield result
-
-      override def trace(
-          hash: BlockHash
-      ): F[Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
-        for {
-          semaphore    <- MetricsSemaphore.single
-          lockWithDone = blockLockMap.getOrElseUpdate(hash, (semaphore, false))
-          result <- if (lockWithDone._2) {
-                     traceBlock(hash)
-                   } else {
-                     lockWithDone._1.withPermit[Either[ReportError, List[
-                       (ProcessedDeploy, Seq[Seq[ReportingEvent]])
-                     ]]](for {
-                       re <- traceBlock(hash)
-                       _  = blockLockMap.update(hash, (lockWithDone._1, true))
-                     } yield re)
                    }
         } yield result
 
@@ -166,8 +127,10 @@ object ReportingCasper {
           runtime: ReportingRuntime[F],
           startHash: StateHash,
           terms: Seq[ProcessedDeploy],
-          withCostAccounting: Boolean
-      ): F[Either[ReplayFailure, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]] =
+          systemDeploys: Seq[ProcessedSystemDeploy],
+          withCostAccounting: Boolean,
+          blockData: BlockData
+      ): F[Either[ReplayFailure, ReplayResult]] =
         (for {
           _ <- EitherT.right(runtime.reset(Blake2b256Hash.fromByteString(startHash)))
           res <- EitherT.right(terms.toList.traverse { term =>
@@ -180,10 +143,27 @@ object ReportingCasper {
                       case Left(_)  => Seq.empty[Seq[ReportingEvent]]
                       case Right(s) => s
                     }
-                  } yield (term, r)
+                  } yield DeployReportResult(term, r)
                 })
-          _ <- EitherT.right[ReplayFailure](runtime.createCheckpoint)
-        } yield res).value
+          sysRes <- EitherT.right(
+                     systemDeploys.toList.traverse { term =>
+                       for {
+                         rd <- runtime
+                                .replaySystemDeployE(blockData)(term)
+                                .map(_.semiflatMap(_ => runtime.getReport))
+                         res <- rd.value
+                         r = res match {
+                           case Left(_)  => Seq.empty[Seq[ReportingEvent]]
+                           case Right(s) => s
+                         }
+                       } yield SystemDeployReportResult(term.systemDeploy, r)
+                     }
+                   )
+          checkPoint <- EitherT.right[ReplayFailure](runtime.createCheckpoint)
+          result <- EitherT.right[ReplayFailure](
+                     ReplayResult(res, sysRes, checkPoint.root.toByteString).pure[F]
+                   )
+        } yield result).value
     }
 
 }
