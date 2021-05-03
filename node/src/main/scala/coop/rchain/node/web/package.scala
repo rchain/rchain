@@ -3,14 +3,19 @@ package coop.rchain.node
 import cats.effect.{Async, ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import cats.~>
-import coop.rchain.casper.ReportingCasper
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.casper.{ReportingCasper, SafetyOracle}
+import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.diagnostics.NewPrometheusReporter
 import coop.rchain.node.effects.EventConsumer
+import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
+import org.http4s.HttpRoutes
 import org.http4s.implicits._
 import org.http4s.server.Router
 import org.http4s.server.blaze.BlazeServerBuilder
@@ -27,9 +32,9 @@ package object web {
       host: String = "0.0.0.0",
       httpPort: Int,
       prometheusReporter: NewPrometheusReporter,
-      reportingCasper: ReportingCasper[F],
       webApiRoutes: WebApi[F],
-      connectionIdleTimeout: FiniteDuration
+      connectionIdleTimeout: FiniteDuration,
+      reportingRoutes: ReportingHTTPRoutes[F]
   )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]
@@ -45,10 +50,7 @@ package object web {
       )
       extraRoutes = if (reporting)
         Map(
-          "/reporting" -> CORS({
-            implicit val n = natId[F]
-            ReportingRoutes.service[F, F](reportingCasper)
-          })
+          "/reporting" -> CORS(reportingRoutes)
         )
       else
         Map.empty
