@@ -3,7 +3,6 @@ import BNFC._
 import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
-
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
@@ -456,7 +455,7 @@ lazy val blockStorage = (project in file("block-storage"))
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
     scalacOptions ++= Seq(
@@ -474,7 +473,6 @@ lazy val rspace = (project in file("rspace"))
       guava
     ),
     /* Tutorial */
-    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
     scmInfo := Some(
       ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")
