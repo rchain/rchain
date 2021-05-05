@@ -1252,22 +1252,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 }
 
 class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
-    extends RhoHistoryReader[F, C, P, A, K] {
-  def getJoins(channel: C): F[Seq[Seq[C]]] =
+    extends HistoryReaderBase[F, C, P, A, K] {
+  override def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.get.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.modify { prev =>
     ignore(prev.joins.put(channel, joins))
     (prev, ())
   }
 
-  def getData(channel: C): F[Seq[Datum[A]]] =
+  override def getData(channel: C): F[Seq[Datum[A]]] =
     R.get.map(_.data.get(channel).toSeq.flatten)
   def putData(channel: C, data: Seq[Datum[A]]): F[Unit] = R.modify { prev =>
     ignore(prev.data.put(channel, data))
     (prev, ())
   }
 
-  def getContinuations(
+  override def getContinuations(
       channels: Seq[C]
   ): F[Seq[WaitingContinuation[P, K]]] =
     R.get.map(_.continuations.get(channels).toSeq.flatten)
@@ -1279,10 +1279,12 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
     (prev, ())
   }
 
-  override def getRichDatums(key: C): F[Seq[RichDatum[A]]]               = ???
-  override def getRichJoins(key: C): F[Seq[RichJoin[C]]]                 = ???
-  override def getRichContinuations(key: Seq[C]): F[Seq[RichKont[P, K]]] = ???
-  override def root: Blake2b256Hash                                      = ???
+  // Not used in testing (instead defaults are implemented: getData, getContinuations, getJoins)
+  override def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]] = ???
+  override def getContinuationsProj[R](
+      key: Seq[C]
+  ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]]                 = ???
+  override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] = ???
 }
 
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {

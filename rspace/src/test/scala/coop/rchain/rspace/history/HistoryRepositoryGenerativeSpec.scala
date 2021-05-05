@@ -42,7 +42,7 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
       rootRepository     = new RootRepository[Task](rootsStore)
       channelKVStore     <- kvm.store("channels")
-      channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize, codecString)
+      channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
       emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
@@ -121,7 +121,7 @@ abstract class HistoryRepositoryGenerativeDefinition
           .foldLeftM(repository) { (repo, action) =>
             for {
               next <- repo.checkpoint(action :: Nil)
-              _    <- checkActionResult(action, next.getHistoryReader(next.root).toRho)
+              _    <- checkActionResult(action, next.getHistoryReader(next.root))
             } yield next
           }
       }
@@ -144,25 +144,27 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def checkActionResult(
       action: HotStoreAction,
-      repo: RhoHistoryReader[Task, String, Pattern, String, StringsCaptor]
-  ): Task[Unit] =
+      historyReader: HistoryReader[Task, Blake2b256Hash, String, Pattern, String, StringsCaptor]
+  ): Task[Unit] = {
+    val reader = historyReader.base
     action match {
       case InsertData(channel: String, data) =>
-        repo.getData(channel).map(checkData(_, data))
+        reader.getData(channel).map(checkData(_, data))
       case InsertJoins(channel: String, joins) =>
-        repo.getJoins(channel).map(checkJoins(_, joins))
+        reader.getJoins(channel).map(checkJoins(_, joins))
       case InsertContinuations(channels, conts) =>
-        repo
+        reader
           .getContinuations(channels.asInstanceOf[Seq[String]])
           .map(checkContinuations(_, conts))
       case DeleteData(channel: String) =>
-        repo.getData(channel).map(_ shouldBe empty)
+        reader.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>
-        repo.getJoins(channel).map(_ shouldBe empty)
+        reader.getJoins(channel).map(_ shouldBe empty)
       case DeleteContinuations(channels) =>
-        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
+        reader.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
       case _ => Sync[Task].raiseError(new RuntimeException("unknown action"))
     }
+  }
 
   implicit def limitedArbitraryHotStoreActions: Arbitrary[List[HotStoreAction]] =
     Arbitrary(Gen.listOf(arbitraryHotStoreActions.arbitrary))
