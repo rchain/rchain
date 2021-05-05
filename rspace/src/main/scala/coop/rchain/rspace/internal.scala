@@ -6,7 +6,7 @@ import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, bytes, int32, int64, uint8, variableSizeBytesLong}
+import scodec.codecs.{bytes, int32, int64, variableSizeBytesLong}
 
 import scala.collection.SortedSet
 
@@ -73,28 +73,21 @@ object internal {
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
-  implicit val codecByteVector: Codec[ByteVector] =
-    variableSizeBytesLong(int64, bytes)
+  val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
 
-  implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
+  def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
     seqOfN(int32, codecA)
 
-  implicit def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
+  def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
     seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
-
-  implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
-    (codecA :: bool :: Codec[Produce]).as[Datum[A]]
 
   def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
     codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
 
-  implicit def codecWaitingContinuation[P, K](
-      implicit
-      codecP: Codec[P],
-      codecK: Codec[K]
-  ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Codec[Consume])
-      .as[WaitingContinuation[P, K]]
+  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
+    elements
+      .map(serialize.encode)
+      .sorted(util.ordByteVector)
 
   import scala.collection.concurrent.TrieMap
 
@@ -148,18 +141,6 @@ object internal {
       }
   }
 
-  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
-    elements
-      .map(serialize.encode)
-      .sorted(util.ordByteVector)
-
-  def toOrderedByteVectorsWithCodec[A](
-      elements: Seq[A]
-  )(implicit codecC: Codec[A]): Seq[ByteVector] =
-    elements
-      .map(e => codecC.encode(e).get.toByteVector)
-      .sorted(util.ordByteVector)
-
   /** Datum with ByteVector representation */
   final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
     override def hashCode(): Int = raw.hashCode
@@ -168,11 +149,6 @@ object internal {
       case RichDatum(_, r) => raw == r
       case _               => false
     }
-  }
-
-  object RichDatum {
-    def create[A](datum: Datum[A])(implicit codecA: Codec[A]): RichDatum[A] =
-      RichDatum(datum, Codec.encode[Datum[A]](datum).get.toByteVector)
   }
 
   /** Continuation with ByteVector representation */
@@ -185,13 +161,6 @@ object internal {
     }
   }
 
-  object RichKont {
-    def create[P, K](
-        wk: WaitingContinuation[P, K]
-    )(implicit codecC: Codec[P], codecP: Codec[K]): RichKont[P, K] =
-      RichKont(wk, Codec.encode[WaitingContinuation[P, K]](wk).get.toByteVector)
-  }
-
   /** Join with ByteVector representation */
   final case class RichJoin[C](decoded: Seq[C], raw: ByteVector) {
     override def hashCode(): Int = raw.hashCode
@@ -201,10 +170,4 @@ object internal {
       case _              => false
     }
   }
-
-  object RichJoin {
-    def create[C](join: Seq[C])(implicit codecA: Codec[C]): RichJoin[C] =
-      RichJoin(join, history.encodeJoin(join))
-  }
-
 }

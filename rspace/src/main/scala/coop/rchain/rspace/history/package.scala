@@ -1,152 +1,170 @@
 package coop.rchain.rspace
 
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
+import scodec.codecs.{bool, uint8}
+
+import scala.collection.concurrent.TrieMap
 
 package object history {
 
-  /** datum codecs */
-  def encodeData[A](datums: Seq[Datum[A]])(implicit codec: Codec[Datum[A]]): ByteVector =
-    encodeSorted[Datum[A]](datums)
+  /**
+    * Datum serializer
+    */
+  def encodeData[A](datums: Seq[Datum[A]])(implicit sa: Serialize[A]): ByteVector = {
+    val codec = serializeToCodecDatumMemo(sa)
 
-  def decodeData[A](bytes: ByteVector)(implicit codec: Codec[Datum[A]]): Seq[Datum[A]] =
-    decodeSorted[Datum[A]](bytes)
+    encodeSortedSeq[Datum[A]](datums, codec)
+  }
 
-  def encodeDataRich[A](datums: Seq[Datum[A]])(
-      implicit codec: Codec[Datum[A]]
-  ): (ByteVector, Seq[Encoded[Datum[A]]]) = encodeSortedRich[Datum[A]](datums)
+  def decodeData[A](bytes: ByteVector)(implicit sa: Serialize[A]): Seq[Datum[A]] =
+    decodeDataProj[A, Datum[A]](bytes)((d, _) => d)
 
-  def decodeDataRich[A](
+  def decodeDataProj[A, R](
       bytes: ByteVector
-  )(implicit codec: Codec[Datum[A]]): Seq[Encoded[Datum[A]]] =
-    decodeSortedRich[Datum[A]](bytes)
+  )(proj: (Datum[A], ByteVector) => R)(implicit sa: Serialize[A]): Seq[R] = {
+    val codec = serializeToCodecDatumMemo(sa)
 
-  /** continuations codecs */
+    decodeSeqProj(bytes, codec)(proj)
+  }
+
+  /**
+    * Continuation serializer
+    */
   def encodeContinuations[P, K](konts: Seq[WaitingContinuation[P, K]])(
-      implicit codec: Codec[WaitingContinuation[P, K]]
-  ): ByteVector =
-    encodeSorted[WaitingContinuation[P, K]](konts)
+      implicit
+      sp: Serialize[P],
+      sk: Serialize[K]
+  ): ByteVector = {
+    val codec = serializeToCodecContinuationMemo(sp, sk)
+
+    encodeSortedSeq[WaitingContinuation[P, K]](konts, codec)
+  }
 
   def decodeContinuations[P, K](bytes: ByteVector)(
-      implicit codec: Codec[WaitingContinuation[P, K]]
+      implicit
+      sp: Serialize[P],
+      sk: Serialize[K]
   ): Seq[WaitingContinuation[P, K]] =
-    decodeSorted[WaitingContinuation[P, K]](bytes)
+    decodeContinuationsProj[P, K, WaitingContinuation[P, K]](bytes)((d, _) => d)
 
-  def encodeContinuationsRich[P, K](konts: Seq[WaitingContinuation[P, K]])(
-      implicit codec: Codec[WaitingContinuation[P, K]]
-  ): (ByteVector, Seq[Encoded[WaitingContinuation[P, K]]]) =
-    encodeSortedRich[WaitingContinuation[P, K]](konts)
+  def decodeContinuationsProj[P, K, R](bytes: ByteVector)(
+      proj: (WaitingContinuation[P, K], ByteVector) => R
+  )(
+      implicit
+      sp: Serialize[P],
+      sk: Serialize[K]
+  ): Seq[R] = {
+    val codec = serializeToCodecContinuationMemo(sp, sk)
 
-  def decodeContinuationsRich[P, K](bytes: ByteVector)(
-      implicit codec: Codec[WaitingContinuation[P, K]]
-  ): Seq[Encoded[WaitingContinuation[P, K]]] =
-    decodeSortedRich[WaitingContinuation[P, K]](bytes)
-
-  /** joins codecs */
-  def encodeJoins[C](joins: Seq[Seq[C]])(implicit codec: Codec[C]): ByteVector =
-    codecSeqByteVector
-      .encode(
-        joins.par
-          .map(
-            channels => encodeSorted(channels)
-          )
-          .toVector
-          .sorted(util.ordByteVector)
-      )
-      .get
-      .toByteVector
-
-  def decodeJoins[C](bytes: ByteVector)(implicit codec: Codec[C]): Seq[Seq[C]] =
-    codecSeqByteVector
-      .decode(bytes.bits)
-      .get
-      .value
-      .par
-      .map(
-        bv => codecSeqByteVector.decode(bv.bits).get.value.map(v => codec.decode(v.bits).get.value)
-      )
-      .toVector
-
-  def encodeJoin[C](join: Seq[C])(implicit codec: Codec[C]): ByteVector = encodeSorted(join)
-
-  def encodeJoinsRich[C](
-      joins: Seq[Seq[C]]
-  )(implicit codec: Codec[C]): (ByteVector, Seq[Encoded[Seq[C]]]) = {
-    val encodedJoins = joins.par
-      .map(join => Encoded(join, encodeSorted(join)))
-      .toVector
-      .sortBy(v => v.byteVector)(util.ordByteVector)
-
-    val result = codecSeqByteVector.encode(encodedJoins.map(_.byteVector)).get.toByteVector
-
-    (result, encodedJoins)
+    decodeSeqProj(bytes, codec)(proj)
   }
 
-  def decodeJoinsRich[C](bytes: ByteVector)(implicit codec: Codec[C]): Seq[Encoded[Seq[C]]] =
+  /**
+    * Joins serializer
+    */
+  def encodeJoins[C](joins: Seq[Seq[C]])(implicit sc: Serialize[C]): ByteVector = {
+    val codec = serializeToCodecMemo(sc)
+
+    codecSeqByteVector
+      .encode(joins.map(encodeSortedSeq(_, codec)).toVector.sorted(util.ordByteVector))
+      .get
+      .toByteVector
+  }
+
+  def decodeJoins[C](bytes: ByteVector)(implicit sc: Serialize[C]): Seq[Seq[C]] =
+    decodeJoinsProj[C, Seq[C]](bytes)((d, _) => d)
+
+  def decodeJoinsProj[C, R](
+      bytes: ByteVector
+  )(proj: (Seq[C], ByteVector) => R)(implicit sc: Serialize[C]): Seq[R] = {
+    val codec = serializeToCodecMemo(sc)
+
     codecSeqByteVector
       .decode(bytes.bits)
       .get
       .value
-      .par
-      .map(
-        bv =>
-          Encoded[Seq[C]](
-            codecSeqByteVector.decode(bv.bits).get.value.map(v => codec.decode(v.bits).get.value),
-            bv
-          )
-      )
-      .toVector
+      .map(bv => proj(decodeSeq(bv, codec), bv))
+  }
 
-  /** private */
+  /**
+    * Serializers for [[Datum]] and [[WaitingContinuation]]
+    */
+  private def codecDatum[A](codecA: Codec[A]): Codec[Datum[A]] =
+    (codecA :: bool :: Produce.codecProduce).as[Datum[A]]
+
+  private def codecWaitingContinuation[P, K](
+      codecP: Codec[P],
+      codecK: Codec[K]
+  ): Codec[WaitingContinuation[P, K]] =
+    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Consume.codecConsume)
+      .as[WaitingContinuation[P, K]]
+
+  /**
+    * Converters from Serialize to scodecs
+    */
+  private def serializeToCodec[A](sa: Serialize[A]): Codec[A] = {
+    sa.toSizeHeadCodec
+  }
+
+  private def serializeToCodecDatum[A](sa: Serialize[A]): Codec[Datum[A]] = {
+    val codecA = sa.toSizeHeadCodec
+    codecDatum(codecA)
+  }
+
+  private def serializeToCodecContinuation[P, K](
+      sp: Serialize[P],
+      sk: Serialize[K]
+  ): Codec[WaitingContinuation[P, K]] = {
+    val codecP = sp.toSizeHeadCodec
+    val codecK = sk.toSizeHeadCodec
+    codecWaitingContinuation(codecP, codecK)
+  }
+
+  /**
+    * Simple memoization for generated scodecs from Serialize interface
+    */
+  private val memoSt = TrieMap[Any, Any]()
+
+  private def memoize[A, B](prefix: String, f: A => B): A => B = { key =>
+    memoSt.getOrElseUpdate((prefix, key), f(key)).asInstanceOf[B]
+  }
+
+  private def serializeToCodecMemo[A]: Serialize[A] => Codec[A] =
+    memoize("Codec", serializeToCodec)
+
+  private def serializeToCodecDatumMemo[A]: Serialize[A] => Codec[Datum[A]] =
+    memoize("Datum", serializeToCodecDatum)
+
+  private def serializeToCodecContinuationMemo[P, K](
+      sp: Serialize[P],
+      sk: Serialize[K]
+  ): Codec[WaitingContinuation[P, K]] =
+    memoize("Cont", (serializeToCodecContinuation[P, K] _).tupled)(sp, sk)
+
+  /**
+    * Sequence scodecs
+    */
   private val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
 
-  private def encodeSorted[D](data: Seq[D])(implicit codec: Codec[D]): ByteVector =
+  private def encodeSortedSeq[D](data: Seq[D], codec: Codec[D]): ByteVector =
     codecSeqByteVector
-      .encode(
-        data.par
-          .map(d => Codec.encode[D](d).get.toByteVector)
-          .toVector
-          .sorted(util.ordByteVector)
-      )
+      .encode(data.map(codec.encode(_).get.toByteVector).toVector.sorted(util.ordByteVector))
       .get
       .toByteVector
 
-  private def decodeSorted[D](data: ByteVector)(implicit codec: Codec[D]): Seq[D] =
+  private def decodeSeq[D](data: ByteVector, codec: Codec[D]): Seq[D] =
+    decodeSeqProj(data, codec)((d, _) => d)
+
+  private def decodeSeqProj[D, R](data: ByteVector, codec: Codec[D])(
+      proj: (D, ByteVector) => R
+  ): Seq[R] =
     codecSeqByteVector
       .decode(data.bits)
       .get
       .value
-      .par
-      .map(bv => codec.decode(bv.bits).get.value)
-      .toVector
-
-  private def encodeSortedRich[D](
-      items: Seq[D]
-  )(implicit codec: Codec[D]): (ByteVector, Seq[Encoded[D]]) = {
-    val itemsEncoded = items.par
-      .map(i => Encoded(i, Codec.encode[D](i).get.toByteVector))
-      .toVector
-      .sortBy(v => v.byteVector)(util.ordByteVector)
-
-    val byteVectors = itemsEncoded.map(_.byteVector)
-
-    val result = codecSeqByteVector
-      .encode(byteVectors)
-      .get
-      .toByteVector
-
-    (result, itemsEncoded)
-  }
-
-  private def decodeSortedRich[D](
-      data: ByteVector
-  )(implicit codec: Codec[D]): Seq[Encoded[D]] =
-    codecSeqByteVector
-      .decode(data.bits)
-      .get
-      .value
-      .par
-      .map(bv => Encoded(codec.decode(bv.bits).get.value, bv))
-      .toVector
+      .map(bv => proj(codec.decode(bv.bits).get.value, bv))
 }

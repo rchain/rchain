@@ -1,17 +1,15 @@
 package coop.rchain.rspace.trace
 
 import cats.effect.Sync
-import coop.rchain.rspace.StableHashProvider._
-import coop.rchain.rspace.internal._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.internal.codecSeq
+import coop.rchain.rspace.StableHashProvider._
+import coop.rchain.rspace.internal.{codecSeq, _}
 import coop.rchain.rspace.trace.TuplespaceEvent.TuplespaceEventOps
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
-import shapeless.syntax.std.tuple.productTupleOps
 
 import scala.collection.SortedSet
 
@@ -30,13 +28,13 @@ object Event {
       .by(uint2)
       .subcaseP(0) {
         case (comm: COMM) => comm
-      }(Codec[COMM])
+      }(COMM.codecCOMM)
       .subcaseP(1) {
         case produce: Produce => produce
-      }(Codec[Produce])
+      }(Produce.codecProduce)
       .subcaseP(2) {
         case consume: Consume => consume
-      }(Codec[Consume])
+      }(Consume.codecConsume)
 
   implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
 
@@ -108,16 +106,15 @@ object Event {
 
   }
   def produceChannels(events: EventGroup) =
-    events.produces.map(_.channelsHash).toSet ++ events.comms.flatMap { comm =>
+    events.produces.map(_.channelsHash) ++ events.comms.flatMap { comm =>
       comm.produces.map(_.channelsHash)
-    }.toSet
+    }
 
   def allChannels(events: EventGroup) =
-    events.produces.map(_.channelsHash).toSet ++ events.consumes
-      .flatMap(_.channelsHashes)
-      .toSet ++ events.comms.flatMap { comm =>
+    events.produces.map(_.channelsHash) ++ events.consumes
+      .flatMap(_.channelsHashes) ++ events.comms.flatMap { comm =>
       comm.consume.channelsHashes ++ comm.produces.map(_.channelsHash)
-    }.toSet
+    }
 
   def tuplespaceEventsPerChannel(
       b: EventGroup
@@ -199,9 +196,13 @@ object COMM {
 
     COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
   }
-  implicit val codecInt = int32
-  implicit val codecCOMM: Codec[COMM] =
-    (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8) :: Codec[Map[Produce, Int]]).as[COMM]
+
+  implicit private val ci = int32
+  implicit private val cp = Produce.codecProduce
+  implicit private val cc = Consume.codecConsume
+
+  val codecCOMM: Codec[COMM] =
+    (Codec[Consume] :: codecSeq[Produce] :: sortedSet(uint8) :: codecMap[Produce, Int]).as[COMM]
 }
 
 sealed trait IOEvent extends Event
@@ -250,7 +251,7 @@ object Produce {
   ): Produce =
     new Produce(channelsHash, hash, persistent)
 
-  implicit val codecProduce: Codec[Produce] =
+  val codecProduce: Codec[Produce] =
     (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Produce]
 }
 
@@ -276,6 +277,9 @@ final case class EventGroup(produces: Set[Produce], consumes: Set[Consume], comm
 }
 
 object Consume {
+
+  val codecConsume: Codec[Consume] =
+    (codecSeq[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Consume]
 
   def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
     Some((arg.channelsHashes, arg.hash, 0))
@@ -317,9 +321,6 @@ object Consume {
       persistent: Boolean
   ): Consume =
     new Consume(channelsHashes, hash, persistent)
-
-  implicit val codecConsume: Codec[Consume] =
-    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool).as[Consume]
 
   def hasJoins(consume: Consume): Boolean = consume.channelsHashes.size > 1
 }
