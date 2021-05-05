@@ -1,25 +1,25 @@
 package coop.rchain.rspace.history.instances
 
-import cats.Applicative
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.{Blake2b256Hash, Hasher}
+import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
-import coop.rchain.store.LazyAdHocKeyValueCache
-import scodec.Codec
+import scodec.bits.ByteVector
 
 class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
     targetHistory: History[F],
     leafStore: ColdKeyValueStore[F]
 )(
-    implicit codecC: Codec[C],
-    codecP: Codec[P],
-    codecA: Codec[A],
-    codecK: Codec[K]
-) extends HashHistoryReader[F, C, P, A, K] {
+    implicit
+    sc: Serialize[C],
+    sp: Serialize[P],
+    sa: Serialize[A],
+    sk: Serialize[K]
+) extends HistoryReader[F, Blake2b256Hash, C, P, A, K] {
 
   /** read methods for datums */
   override def getData(hash: Blake2b256Hash): F[Seq[Datum[A]]] =

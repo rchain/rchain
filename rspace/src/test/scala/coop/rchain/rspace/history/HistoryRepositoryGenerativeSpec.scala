@@ -1,36 +1,25 @@
 package coop.rchain.rspace.history
 
 import cats.effect.Sync
-import java.nio.file.{Files, Path}
-
-import coop.rchain.rspace.{
-  Blake2b256Hash,
-  DeleteContinuations,
-  DeleteData,
-  DeleteJoins,
-  HotStoreAction,
-  InsertContinuations,
-  InsertData,
-  InsertJoins
-}
+import cats.syntax.all._
+import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.rspace._
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
-import monix.eval.Task
-import org.scalacheck.{Arbitrary, Gen, Shrink}
-import org.scalatest.{Assertion, BeforeAndAfterAll, FlatSpec, Matchers, OptionValues}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scodec.Codec
-import monix.execution.Scheduler.Implicits.global
-import cats.implicits._
-import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
+import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
 import coop.rchain.shared.PathOps._
-import coop.rchain.store.InMemoryStoreManager
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.InMemoryStoreManager
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 
 class LMDBHistoryRepositoryGenerativeSpec
@@ -65,7 +54,10 @@ class LMDBHistoryRepositoryGenerativeSpec
           exporter,
           importer,
           channelStore,
-          stringSerialize
+          serializeString,
+          serializePattern,
+          serializeString,
+          serializeCont
         )
     } yield repository
   }
@@ -86,19 +78,18 @@ class InmemHistoryRepositoryGenerativeSpec
     val kvm                       = InMemoryStoreManager[Task]
     for {
       channelKVStore <- kvm.store("channels")
-      channelStore = ChannelStoreImpl[Task, String](
-        channelKVStore,
-        stringSerialize,
-        codecString
-      )
-      r = HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
+      channelStore   = ChannelStoreImpl[Task, String](channelKVStore, stringSerialize)
+      r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
         inMemColdStore,
         emptyExporter,
         emptyImporter,
         channelStore,
-        stringSerialize
+        serializeString,
+        serializePattern,
+        serializeString,
+        serializeCont
       )
     } yield r
   }
@@ -111,9 +102,9 @@ abstract class HistoryRepositoryGenerativeDefinition
     with OptionValues
     with GeneratorDrivenPropertyChecks {
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toSizeHeadCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
+  val serializeString  = implicitly[Serialize[String]]
+  val serializePattern = implicitly[Serialize[Pattern]]
+  val serializeCont    = implicitly[Serialize[StringsCaptor]]
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 

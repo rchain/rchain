@@ -1,23 +1,21 @@
 package coop.rchain.rspace
 
-import cats.{Parallel, _}
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
+import cats.{Parallel, _}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
 import org.scalatest._
-import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -55,11 +53,11 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
       createISpace: (HR, ST) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]
   )(
-      implicit codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K],
-      serializedC: Serialize[C]
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]
   ): S = {
 
     val kvm = InMemoryStoreManager[F]

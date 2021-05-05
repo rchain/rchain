@@ -13,7 +13,6 @@ import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction}
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{KeyValueStore, LazyAdHocKeyValueCache}
-import scodec.Codec
 
 /**
   * Pointer to data in history (Datums, Continuations or Joins)
@@ -59,11 +58,11 @@ object HistoryRepositoryInstances {
       coldKeyValueStore: KeyValueStore[F],
       channelKeyValueStore: KeyValueStore[F]
   )(
-      implicit codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K],
-      sc: Serialize[C]
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]
   ): F[HistoryRepository[F, C, P, A, K]] = {
     // Roots store
     val rootsRepository = new RootRepository[F](
@@ -79,7 +78,7 @@ object HistoryRepositoryInstances {
       // RSpace importer/exporter / directly operates on Store (lmdb)
       exporter     = RSpaceExporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
       importer     = RSpaceImporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
-      channelStore = ChannelStoreImpl(channelKeyValueStore, sc, codecC)
+      channelStore = ChannelStoreImpl(channelKeyValueStore, sc)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
       history,
       rootsRepository,
@@ -87,7 +86,10 @@ object HistoryRepositoryInstances {
       exporter,
       importer,
       channelStore,
-      sc
+      sc,
+      sp,
+      sa,
+      sk
     )
   }
 }

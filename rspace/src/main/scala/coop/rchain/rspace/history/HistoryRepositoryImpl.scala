@@ -1,23 +1,20 @@
 package coop.rchain.rspace.history
 
+import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Parallel}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
+import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.CachingHashHistoryReaderImpl
-import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace._
 import coop.rchain.rspace.merger.instances.DiffStateMerger
-import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.syntax._
-import coop.rchain.store.LazyAdHocKeyValueCache
-import scodec.Codec
+import coop.rchain.shared.{Log, Serialize}
 import fs2.Stream
 
 final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
@@ -29,15 +26,11 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     // Map channel hash in event log -> channel hash in history
     // We need to maintain this for event log merge
     channelHashesStore: ChannelStore[F, C],
-    sc: Serialize[C]
-)(
-    implicit codecC: Codec[C],
-    codecP: Codec[P],
-    codecA: Codec[A],
-    codecK: Codec[K]
+    serializeC: Serialize[C],
+    serializeP: Serialize[P],
+    serializeA: Serialize[A],
+    serializeK: Serialize[K]
 ) extends HistoryRepository[F, C, P, A, K] {
-
-  implicit val serializeC: Serialize[C] = Serialize.fromCodec(codecC)
 
   implicit val ms = Metrics.Source(RSpaceMetricsSource, "history")
 
