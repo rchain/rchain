@@ -224,10 +224,8 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }
-      _ = historyRepositoryAtom.set(nextHistory)
-      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
-            serializeK.toSizeHeadCodec
-          )
+      _   = historyRepositoryAtom.set(nextHistory)
+      _   <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
       log = eventLog.take()
       _   = eventLog.put(Seq.empty)
       _   = produceCounter.take()
@@ -237,11 +235,10 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
   }
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
-    val historyRep  = historyRepositoryAtom.get()
-    implicit val ck = serializeK.toSizeHeadCodec
+    val historyRep = historyRepositoryAtom.get()
     for {
       nextHistory <- historyRep.reset(historyRep.history.root)
-      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).toRho)
+      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).base)
       r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore))
       _           <- r.restoreInstalls()
     } yield r
@@ -299,22 +296,19 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A],
       scheduler: ExecutionContext
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
-    implicit val cc = sc.toSizeHeadCodec
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
       setup                  <- setUp[F, C, P, A, K](store)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-      replayStore <- HotStore.empty(historyReader.getHistoryReader(historyReader.root).toRho)(
-                      sk.toSizeHeadCodec,
-                      Concurrent[F]
+      replayStore <- HotStore.empty(
+                      historyReader.getHistoryReader(historyReader.root).base
                     )
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore)
       )
     } yield (space, replay, historyReader)
-  }
 
   def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
@@ -352,7 +346,7 @@ object RSpace {
                       store.cold,
                       store.channels
                     )
-      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).toRho)
+      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).base)
     } yield (historyRepo, store)
   }
 }

@@ -55,8 +55,7 @@ final case class Cache[C, P, A, K](
 
 private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     cacheRef: Ref[F, Cache[C, P, A, K]],
-    HR: RhoHistoryReader[F, C, P, A, K],
-    ck: Codec[K]
+    historyReader: HistoryReaderBase[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
   def snapshot(): F[Snapshot[C, P, A, K]] = cacheRef.get.map(_.snapshot())
@@ -272,24 +271,22 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 object HotStore {
 
   def inMem[F[_]: Concurrent, C, P, A, K](
-      implicit S: Ref[F, Cache[C, P, A, K]],
-      HR: RhoHistoryReader[F, C, P, A, K],
-      ck: Codec[K]
+      cache: Ref[F, Cache[C, P, A, K]],
+      historyReader: HistoryReaderBase[F, C, P, A, K]
   ): HotStore[F, C, P, A, K] =
-    new InMemHotStore[F, C, P, A, K]
+    new InMemHotStore[F, C, P, A, K](cache, historyReader)
 
-  def from[F[_], C, P, A, K](
+  def from[F[_]: Concurrent, C, P, A, K](
       cache: Cache[C, P, A, K],
-      historyReader: RhoHistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K], concurrent: Concurrent[F]) =
+      historyReader: HistoryReaderBase[F, C, P, A, K]
+  ): F[HotStore[F, C, P, A, K]] =
     for {
       cache <- Ref.of[F, Cache[C, P, A, K]](cache)
-      store = HotStore.inMem(concurrent, cache, historyReader, ck)
+      store = HotStore.inMem(cache, historyReader)
     } yield store
 
-  def empty[F[_], C, P, A, K](
-      historyReader: RhoHistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K], concurrent: Concurrent[F]) =
-    from(Cache(), historyReader)
+  def empty[F[_]: Concurrent, C, P, A, K](
+      historyReader: HistoryReaderBase[F, C, P, A, K]
+  ): F[HotStore[F, C, P, A, K]] = from(Cache(), historyReader)
 
 }

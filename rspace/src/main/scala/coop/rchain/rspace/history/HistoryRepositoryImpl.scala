@@ -60,25 +60,25 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.par.map {
       case i: InsertData[C, A] =>
-        val key  = hashDataChannel(i.channel, codecC).bytes
-        val data = encodeData(i.data)
+        val key  = hashDataChannel(i.channel, serializeC).bytes
+        val data = encodeData(i.data)(serializeA)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[C, P, K] =>
         val key  = hashContinuationsChannels(i.channels, serializeC).bytes
-        val data = encodeContinuations(i.continuations)
+        val data = encodeContinuations(i.continuations)(serializeP, serializeK)
         s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
       case i: InsertJoins[C] =>
-        val key  = hashJoinsChannel(i.channel, codecC).bytes
-        val data = encodeJoins(i.joins)
+        val key  = hashJoinsChannel(i.channel, serializeC).bytes
+        val data = encodeJoins(i.joins)(serializeC)
         s"${key.toHex};insert-join;${data.length}"
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel, codecC).bytes
+        val key = hashDataChannel(d.channel, serializeC).bytes
         s"${key.toHex};delete-data;0"
       case d: DeleteContinuations[C] =>
         val key = hashContinuationsChannels(d.channels, serializeC).bytes
         s"${key.toHex};delete-continuation;0"
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel, codecC).bytes
+        val key = hashJoinsChannel(d.channel, serializeC).bytes
         s"${key.toHex};delete-join;0"
     }.toList
 
@@ -101,56 +101,56 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
       case i: TrieInsertProduce[A] =>
-        val (data, _) = encodeDataRich(i.data)
-        val dataLeaf  = DataLeaf(data)
-        val dataHash  = Blake2b256Hash.create(data)
+        val data     = encodeData(i.data)(serializeA)
+        val dataLeaf = DataLeaf(data)
+        val dataHash = Blake2b256Hash.create(data)
         (
           (dataHash, Some(dataLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, dataHash))
+          InsertAction(i.hash.bytes.toSeq.toList, dataHash)
         )
       case i: TrieInsertConsume[P, K] =>
-        val (data, _)         = encodeContinuationsRich(i.continuations)
+        val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
         val continuationsLeaf = ContinuationsLeaf(data)
         val continuationsHash = Blake2b256Hash.create(data)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, continuationsHash))
+          InsertAction(i.hash.bytes.toSeq.toList, continuationsHash)
         )
       case i: TrieInsertJoins[C] =>
-        val (data, _) = encodeJoinsRich(i.joins)
+        val data      = encodeJoins(i.joins)(serializeC)
         val joinsLeaf = JoinsLeaf(data)
         val joinsHash = Blake2b256Hash.create(data)
         (
           (joinsHash, Some(joinsLeaf)),
-          (InsertAction(i.hash.bytes.toSeq.toList, joinsHash))
+          InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
         )
       case d: TrieDeleteProduce =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
+        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
       case d: TrieDeleteConsume =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
+        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
       case d: TrieDeleteJoins =>
-        ((d.hash, None), (DeleteAction(d.hash.bytes.toSeq.toList)))
+        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
     }
 
   private def transform(hotStoreAction: HotStoreAction): HotStoreTrieAction =
     hotStoreAction match {
       case i: InsertData[C, A] =>
-        val key = hashDataChannel(i.channel, codecC)
+        val key = hashDataChannel(i.channel, serializeC)
         TrieInsertProduce(key, i.data)
       case i: InsertContinuations[C, P, K] =>
         val key = hashContinuationsChannels(i.channels, serializeC)
         TrieInsertConsume(key, i.continuations)
       case i: InsertJoins[C] =>
-        val key = hashJoinsChannel(i.channel, codecC)
+        val key = hashJoinsChannel(i.channel, serializeC)
         TrieInsertJoins(key, i.joins)
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel, codecC)
+        val key = hashDataChannel(d.channel, serializeC)
         TrieDeleteProduce(key)
       case d: DeleteContinuations[C] =>
         val key = hashContinuationsChannels(d.channels, serializeC)
         TrieDeleteConsume(key)
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel, codecC)
+        val key = hashJoinsChannel(d.channel, serializeC)
         TrieDeleteJoins(key)
     }
 
@@ -214,7 +214,8 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 
-  override def stateMerger: StateMerger[F] = DiffStateMerger[F, C, P, A, K](historyRepo = this, sc)
+  override def stateMerger: StateMerger[F] =
+    DiffStateMerger[F, C, P, A, K](historyRepo = this, serializeC)
 
   override def history: History[F] = currentHistory
 

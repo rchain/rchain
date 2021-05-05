@@ -51,7 +51,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       channelsStore: ChannelStore[F, C],
       mergings: Seq[EventChain[F]]
   ): F[Seq[HotStoreTrieAction]] = {
-    val mainReader = historyRepo.getHistoryReader(mainState)
+    val mainReader = historyRepo.getHistoryReader(mainState).readerBinary
 
     for {
       // accumulators for data required to create history actions
@@ -61,9 +61,9 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       jAccRef  <- Ref.of[F, Map[Blake2b256Hash, Seq[RichJoin[C]]]](Map.empty)
 
       // main state data readers, used in computation for all mergings => so this is lazy cache
-      readProduces = (hash: Blake2b256Hash) => mainReader.getRichDatums(hash)
-      readConsumes = (hash: Blake2b256Hash) => mainReader.getRichContinuations(hash)
-      readJoin     = (hash: Blake2b256Hash) => mainReader.getRichJoins(hash)
+      readProduces = (hash: Blake2b256Hash) => mainReader.getData(hash)
+      readConsumes = (hash: Blake2b256Hash) => mainReader.getContinuations(hash)
+      readJoin     = (hash: Blake2b256Hash) => mainReader.getJoins(hash)
       mainProduces <- LazyKeyValueCache(readProduces)
       mainConsumes <- LazyKeyValueCache(readConsumes)
       mainJoins    <- LazyKeyValueCache(readJoin)
@@ -90,8 +90,8 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       // each merging can be processed in parallel
       work = fs2.Stream.emits(mergings.map(m => {
         // history reader for end state
-        val startStateReader = historyRepo.getHistoryReader(m.startState.root)
-        val endStateReader   = historyRepo.getHistoryReader(m.endState.root)
+        val startStateReader = historyRepo.getHistoryReader(m.startState.root).readerBinary
+        val endStateReader   = historyRepo.getHistoryReader(m.endState.root).readerBinary
 
         // compute channels which are affected in merging
         val (comms, prods, conss) =
@@ -164,8 +164,8 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
               fs2.Stream.eval(for {
                 r <- computeChannelChange[F, RichDatum[A]](
                       dataHash,
-                      startStateReader.getRichDatums,
-                      endStateReader.getRichDatums
+                      startStateReader.getData,
+                      endStateReader.getData
                     )
                 // populate main state content store with data on this key
                 _ <- mainProduces.get(dataHash)
@@ -187,8 +187,8 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
                 .eval(for {
                   r <- computeChannelChange[F, RichKont[P, K]](
                         consumeHash,
-                        startStateReader.getRichContinuations,
-                        endStateReader.getRichContinuations
+                        startStateReader.getContinuations,
+                        endStateReader.getContinuations
                       )
                   // populate main state content store with continuations on this key
                   _ <- mainConsumes.get(consumeHash)
@@ -215,7 +215,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
                     for {
                       joinHash    <- joinLeafForChannel.get(channelHash)
                       joinAtMain  <- mainJoins.get(joinHash)
-                      joinAtMerge <- endStateReader.getRichJoins(joinHash)
+                      joinAtMerge <- endStateReader.getJoins(joinHash)
                       _ <- jAccRef.update(s => {
                             val curVal = s.getOrElse(joinHash, joinAtMain)
                             val newVal = (curVal ++ joinAtMerge).distinct

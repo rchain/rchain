@@ -250,10 +250,8 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
-      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
-            serializeK.toSizeHeadCodec
-          )
-      _ <- restoreInstalls()
+      _           <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
+      _           <- restoreInstalls()
     } yield (Checkpoint(nextHistory.history.root, Seq.empty))
   }
 
@@ -317,11 +315,10 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
   }
 
   def spawn: F[IReplaySpace[F, C, P, A, K]] = {
-    val historyRep  = historyRepositoryAtom.get()
-    implicit val ck = serializeK.toSizeHeadCodec
+    val historyRep = historyRepositoryAtom.get()
     for {
       newHR <- historyRep.reset(historyRep.history.root)
-      newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).toRho)
+      newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).base)
       r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS))
       _     <- r.restoreInstalls()
     } yield r
