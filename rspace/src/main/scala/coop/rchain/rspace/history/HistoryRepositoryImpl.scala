@@ -220,24 +220,14 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def root: Blake2b256Hash = currentHistory.root
 
-  override def getHistoryReader(stateHash: Blake2b256Hash): HashHistoryReader[F, C, P, A, K] =
-    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), leafStore)
-}
-
-object HistoryRepositoryImpl {
-  def fetchData[F[_]: Sync](
-      key: Blake2b256Hash,
-      history: History[F],
-      leafStore: ColdKeyValueStore[F]
-  ): F[Option[PersistedData]] =
-    history.find(key.bytes.toSeq.toList).flatMap {
-      case (trie, _) =>
-        trie match {
-          case LeafPointer(dataHash) => leafStore.get(dataHash)
-          case EmptyPointer          => Applicative[F].pure(None)
-          case _ =>
-            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
-
-        }
-    }
+  override def getHistoryReader(
+      stateHash: Blake2b256Hash
+  ): HistoryReader[F, Blake2b256Hash, C, P, A, K] =
+    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), leafStore)(
+      Concurrent[F],
+      serializeC,
+      serializeP,
+      serializeA,
+      serializeK
+    )
 }

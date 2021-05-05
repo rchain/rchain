@@ -21,67 +21,37 @@ class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
     sk: Serialize[K]
 ) extends HistoryReader[F, Blake2b256Hash, C, P, A, K] {
 
-  /** read methods for datums */
-  override def getData(hash: Blake2b256Hash): F[Seq[Datum[A]]] =
-    getRichDatums(hash).map(_.map(_.decoded))
+  override def root: Blake2b256Hash = targetHistory.root
 
-  override def getRichDatums(hash: Blake2b256Hash): F[Seq[RichDatum[A]]] =
-    fetchData(hash).flatMap {
+  override def getDataProj[R](key: Blake2b256Hash)(proj: (Datum[A], ByteVector) => R): F[Seq[R]] =
+    fetchData(key).flatMap {
       case Some(DataLeaf(bytes)) =>
-        Sync[F].delay(
-          decodeDataRich[A](bytes).map(v => RichDatum(v.item, v.byteVector))
-        )
+        Sync[F].delay(decodeDataProj(bytes)(proj))
       case Some(p) =>
-        Sync[F].raiseError[Seq[RichDatum[A]]](
-          new RuntimeException(
-            s"Found unexpected leaf while looking for data at key $hash, data: $p"
-          )
-        )
-      case None => Seq.empty[RichDatum[A]].pure
+        new RuntimeException(s"Found unexpected leaf while looking for data at key $key, data: $p").raiseError
+      case None => Seq[R]().pure[F]
     }
 
-  /** read methods for continuations */
-  override def getContinuations(hash: Blake2b256Hash): F[Seq[WaitingContinuation[P, K]]] =
-    getRichContinuations(hash).map(_.map(_.decoded))
-
-  // This methods returning raw bytes along with decode value is performnce optimisatoin
-  // Making diff for two Seq[(WaitingContinuation[P, K]] is 5-10 tims slower then Seq[ByteVector],
-  // so the second val of the tuple is exposed to compare values
-  override def getRichContinuations(
-      hash: Blake2b256Hash
-  ): F[Seq[RichKont[P, K]]] =
-    fetchData(hash).flatMap {
+  override def getContinuationsProj[R](key: Blake2b256Hash)(
+      proj: (WaitingContinuation[P, K], ByteVector) => R
+  ): F[Seq[R]] =
+    fetchData(key).flatMap {
       case Some(ContinuationsLeaf(bytes)) =>
-        Sync[F].delay(
-          decodeContinuationsRich[P, K](bytes)
-            .map(v => RichKont(v.item, v.byteVector))
-        )
+        Sync[F].delay(decodeContinuationsProj[P, K, R](bytes)(proj))
       case Some(p) =>
-        Sync[F].raiseError[Seq[RichKont[P, K]]](
-          new RuntimeException(
-            s"Found unexpected leaf while looking for continuations at key $hash, data: $p"
-          )
-        )
-      case None => Seq.empty[RichKont[P, K]].pure
+        new RuntimeException(
+          s"Found unexpected leaf while looking for continuations at key $key, data: $p"
+        ).raiseError
+      case None => Seq[R]().pure[F]
     }
 
-  /** read methods for joins */
-  override def getJoins(hash: Blake2b256Hash): F[Seq[Seq[C]]] =
-    getRichJoins(hash).map(_.map(_.decoded))
-
-  override def getRichJoins(hash: Blake2b256Hash): F[Seq[RichJoin[C]]] =
-    fetchData(hash).flatMap {
+  override def getJoinsProj[R](key: Blake2b256Hash)(proj: (Seq[C], ByteVector) => R): F[Seq[R]] =
+    fetchData(key).flatMap {
       case Some(JoinsLeaf(bytes)) =>
-        Sync[F].delay(
-          decodeJoinsRich[C](bytes).map(v => RichJoin(v.item, v.byteVector))
-        )
+        Sync[F].delay(decodeJoinsProj[C, R](bytes)(proj))
       case Some(p) =>
-        Sync[F].raiseError[Seq[RichJoin[C]]](
-          new RuntimeException(
-            s"Found unexpected leaf while looking for join at key $hash, data: $p"
-          )
-        )
-      case None => Seq.empty[RichJoin[C]].pure
+        new RuntimeException(s"Found unexpected leaf while looking for join at key $key, data: $p").raiseError
+      case None => Seq[R]().pure[F]
     }
 
   /** Fetch data on a hash pointer */
@@ -92,12 +62,25 @@ class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
       case (trie, _) =>
         trie match {
           case LeafPointer(dataHash) => leafStore.get(dataHash)
-          case EmptyPointer          => Applicative[F].pure(None)
-          case _ =>
-            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
-
+          case EmptyPointer          => none[PersistedData].pure[F]
+          case _                     => new RuntimeException(s"unexpected data at key $key, data: $trie").raiseError
         }
     }
 
-  override def root: Blake2b256Hash = targetHistory.root
+  override def base: HistoryReaderBase[F, C, P, A, K] = {
+    val historyReader = this
+
+    new HistoryReaderBase[F, C, P, A, K] {
+      override def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]] =
+        historyReader.getDataProj[R](Hasher.hashDataChannel(key, sc))
+
+      override def getContinuationsProj[R](
+          key: Seq[C]
+      ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]] =
+        historyReader.getContinuationsProj[R](Hasher.hashContinuationsChannels(key, sc))
+
+      override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] =
+        historyReader.getJoinsProj[R](Hasher.hashJoinsChannel(key, sc))
+    }
+  }
 }

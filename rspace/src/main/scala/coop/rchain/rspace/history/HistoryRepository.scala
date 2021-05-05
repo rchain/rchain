@@ -45,7 +45,7 @@ trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
 
   def stateMerger: StateMerger[F]
 
-  def getHistoryReader(stateHash: Blake2b256Hash): HashHistoryReader[F, C, P, A, K]
+  def getHistoryReader(stateHash: Blake2b256Hash): HistoryReader[F, Blake2b256Hash, C, P, A, K]
 
   def root: Blake2b256Hash
 }
