@@ -100,9 +100,10 @@ object Engine {
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
       disableStateExporter: Boolean
-  ): F[Unit] =
+  ): F[Unit] = {
+    val approvedBlockInfo = PrettyPrinter.buildString(approvedBlock.candidate.block, short = true)
     for {
-      _ <- Log[F].info("Making a transition to Running state.")
+      _ <- Log[F].info(s"Making a transition to Running state. Approved $approvedBlockInfo")
       _ <- EventLog[F].publish(
             shared.Event.EnteredRunningState(
               PrettyPrinter.buildStringNoLimit(approvedBlock.candidate.block.blockHash)
@@ -120,6 +121,7 @@ object Engine {
       _ <- EngineCell[F].set(running)
 
     } yield ()
+  }
 
   // format: off
   def transitionToInitializing[F[_]
