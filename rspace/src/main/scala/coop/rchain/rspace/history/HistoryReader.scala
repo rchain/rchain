@@ -2,7 +2,7 @@ package coop.rchain.rspace.history
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
-import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
+import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import scodec.bits.ByteVector
 
 /**
@@ -75,9 +75,9 @@ trait HistoryReaderBase[F[_], C, P, A, K] {
   * History reader with binary data included in result
   */
 trait HistoryReaderBinary[F[_], C, P, A, K] {
-  def getData(key: Blake2b256Hash): F[Seq[RichDatum[A]]]
+  def getData(key: Blake2b256Hash): F[Seq[DatumB[A]]]
 
-  def getContinuations(key: Blake2b256Hash): F[Seq[RichKont[P, K]]]
+  def getContinuations(key: Blake2b256Hash): F[Seq[WaitingContinuationB[P, K]]]
 
-  def getJoins(key: Blake2b256Hash): F[Seq[RichJoin[C]]]
+  def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]]
 }

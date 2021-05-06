@@ -9,7 +9,7 @@ import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
-import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
+import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{HotStoreAction, HotStoreTrieAction}
@@ -27,9 +27,9 @@ final case class HistoryPointer(state: Blake2b256Hash, hash: Blake2b256Hash)
   * Cache of decoded values from history
   */
 final case class HistoryCache[F[_], C, P, A, K](
-    dtsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichDatum[A]]],
-    wksCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichKont[P, K]]],
-    jnsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[RichJoin[C]]]
+    dtsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[DatumB[A]]],
+    wksCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[WaitingContinuationB[P, K]]],
+    jnsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[JoinsB[C]]]
 )
 
 trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {

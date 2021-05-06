@@ -5,7 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
+import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.internal
 
 trait HistoryReaderSyntax {
@@ -28,14 +28,14 @@ final class HistoryReaderOps[F[_]: Sync, C, P, A, K](
     */
   def readerBinary: HistoryReaderBinary[F, C, P, A, K] =
     new HistoryReaderBinary[F, C, P, A, K] {
-      override def getData(key: Blake2b256Hash): F[Seq[RichDatum[A]]] =
-        historyReader.getDataProj(key)(RichDatum(_, _))
+      override def getData(key: Blake2b256Hash): F[Seq[DatumB[A]]] =
+        historyReader.getDataProj(key)(DatumB(_, _))
 
-      override def getContinuations(key: Blake2b256Hash): F[Seq[RichKont[P, K]]] =
-        historyReader.getContinuationsProj(key)(RichKont(_, _))
+      override def getContinuations(key: Blake2b256Hash): F[Seq[WaitingContinuationB[P, K]]] =
+        historyReader.getContinuationsProj(key)(WaitingContinuationB(_, _))
 
-      override def getJoins(key: Blake2b256Hash): F[Seq[RichJoin[C]]] =
-        historyReader.getJoinsProj(key)(RichJoin(_, _))
+      override def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]] =
+        historyReader.getJoinsProj(key)(JoinsB(_, _))
     }
 
   /**

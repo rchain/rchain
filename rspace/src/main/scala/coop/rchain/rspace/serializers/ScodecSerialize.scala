@@ -298,36 +298,31 @@ object ScodecSerialize {
       .map(bv => proj(codec.decode(bv.bits).get.value, bv))
 
   /*
-   * RSpace values with raw binary encoded data
+   * RSpace values with attached raw binary encoded data
    */
 
   /** Datum with ByteVector representation */
-  final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
-    override def hashCode(): Int = raw.hashCode
-
-    override def equals(obj: Any): Boolean = obj match {
-      case RichDatum(_, r) => raw == r
-      case _               => false
-    }
-  }
+  final case class DatumB[A](decoded: Datum[A], raw: ByteVector)
+      extends WrapWithBinary[Datum[A]](raw)
 
   /** Continuation with ByteVector representation */
-  final case class RichKont[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector) {
+  final case class WaitingContinuationB[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector)
+      extends WrapWithBinary[WaitingContinuation[P, K]](raw)
+
+  /** Joins with ByteVector representation */
+  final case class JoinsB[C](decoded: Seq[C], raw: ByteVector) extends WrapWithBinary[Seq[C]](raw)
+
+  /**
+    * Equality for Datum, WaitingContinuation and Joins defined with binary equality.
+    */
+  sealed abstract class WrapWithBinary[A](raw: ByteVector) {
     override def hashCode(): Int = raw.hashCode
 
     override def equals(obj: Any): Boolean = obj match {
-      case RichKont(_, r) => raw == r
-      case _              => false
-    }
-  }
-
-  /** Join with ByteVector representation */
-  final case class RichJoin[C](decoded: Seq[C], raw: ByteVector) {
-    override def hashCode(): Int = raw.hashCode
-
-    override def equals(obj: Any): Boolean = obj match {
-      case RichJoin(_, r) => raw == r
-      case _              => false
+      case DatumB(_, r)               => raw == r
+      case WaitingContinuationB(_, r) => raw == r
+      case JoinsB(_, r)               => raw == r
+      case _                          => false
     }
   }
 

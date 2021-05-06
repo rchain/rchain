@@ -57,9 +57,10 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
     for {
       // accumulators for data required to create history actions
       // changes to produces, to consumes and cumulative list of joins
-      pDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[RichDatum[A]]]](Map.empty)
-      cDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[RichKont[P, K]]]](Map.empty)
-      jAccRef  <- Ref.of[F, Map[Blake2b256Hash, Seq[RichJoin[C]]]](Map.empty)
+      pDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[DatumB[A]]]](Map.empty)
+      cDiffRef <- Ref
+                   .of[F, Map[Blake2b256Hash, ChannelChange[WaitingContinuationB[P, K]]]](Map.empty)
+      jAccRef <- Ref.of[F, Map[Blake2b256Hash, Seq[JoinsB[C]]]](Map.empty)
 
       // main state data readers, used in computation for all mergings => so this is lazy cache
       readProduces = (hash: Blake2b256Hash) => mainReader.getData(hash)
@@ -163,7 +164,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
           produceChangeComputes = changedProduceHashes.map(
             dataHash =>
               fs2.Stream.eval(for {
-                r <- computeChannelChange[F, RichDatum[A]](
+                r <- computeChannelChange[F, DatumB[A]](
                       dataHash,
                       startStateReader.getData,
                       endStateReader.getData
@@ -186,7 +187,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
             consumeHash =>
               fs2.Stream
                 .eval(for {
-                  r <- computeChannelChange[F, RichKont[P, K]](
+                  r <- computeChannelChange[F, WaitingContinuationB[P, K]](
                         consumeHash,
                         startStateReader.getContinuations,
                         endStateReader.getContinuations
