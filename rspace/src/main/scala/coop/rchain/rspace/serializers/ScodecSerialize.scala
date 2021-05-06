@@ -7,16 +7,26 @@ import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, bytes, discriminated, int32, int64, uint2, uint8, variableSizeBytesLong}
+import scodec.codecs.{bool, discriminated, int32, uint2, uint8}
 
 import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
 
+/**
+  * This file represents RSpace serializers based on scodec library.
+  *
+  * With [[Serialize]] interface RSpace accepts parametrized serializers
+  * for the main types (channel, pattern, attributes, continuation).
+  *
+  * In the current implementation RSpace internally also uses concrete scodec
+  * serializers for additional types and collections.
+  */
 object ScodecSerialize {
 
-  /**
-    * Datum serializer
-    */
+  /*
+   * Datum serializer
+   */
+
   def encodeData[A](datums: Seq[Datum[A]])(implicit sa: Serialize[A]): ByteVector = {
     val codec = serializeToCodecDatumMemo(sa)
 
@@ -34,9 +44,10 @@ object ScodecSerialize {
     decodeSeqProj(bytes, codec)(proj)
   }
 
-  /**
-    * Continuation serializer
-    */
+  /*
+   * Continuation serializer
+   */
+
   def encodeContinuations[P, K](konts: Seq[WaitingContinuation[P, K]])(
       implicit
       sp: Serialize[P],
@@ -66,9 +77,10 @@ object ScodecSerialize {
     decodeSeqProj(bytes, codec)(proj)
   }
 
-  /**
-    * Joins serializer
-    */
+  /*
+   * Joins serializer
+   */
+
   def encodeJoins[C](joins: Seq[Seq[C]])(implicit sc: Serialize[C]): ByteVector = {
     val codec = serializeToCodecMemo(sc)
 
@@ -93,9 +105,15 @@ object ScodecSerialize {
       .map(bv => proj(decodeSeq(bv, codec), bv))
   }
 
-  /**
-    * Serializers for [[Datum]] and [[WaitingContinuation]]
-    */
+  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
+    elements
+      .map(serialize.encode)
+      .sorted(util.ordByteVector)
+
+  /*
+   * Serializers for [[Datum]] and [[WaitingContinuation]]
+   */
+
   private def codecDatum[A](codecA: Codec[A]): Codec[Datum[A]] =
     (codecA :: bool :: codecProduce).as[Datum[A]]
 
@@ -106,19 +124,20 @@ object ScodecSerialize {
     (codecSeq(codecP) :: codecK :: bool :: sortedSet(uint8) :: codecConsume)
       .as[WaitingContinuation[P, K]]
 
-  /**
-    * Serializers for RSpace event log
-    */
+  /*
+   * Serializers for RSpace event log
+   */
+
   implicit def codecEvent: Codec[Event] =
     discriminated[Event]
       .by(uint2)
-      .subcaseP(0) {
-        case (comm: COMM) => comm
+      .subcaseP(tag = 0) {
+        case comm: COMM => comm
       }(codecCOMM)
-      .subcaseP(1) {
+      .subcaseP(tag = 1) {
         case produce: Produce => produce
       }(codecProduce)
-      .subcaseP(2) {
+      .subcaseP(tag = 2) {
         case consume: Consume => consume
       }(codecConsume)
 
@@ -134,9 +153,10 @@ object ScodecSerialize {
     (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
       .as[COMM]
 
-  /**
-    * Converters from Serialize to scodec
-    */
+  /*
+   * Converters from Serialize to scodec
+   */
+
   private def serializeToCodec[A](sa: Serialize[A]): Codec[A] =
     sa.toSizeHeadCodec
 
@@ -154,9 +174,10 @@ object ScodecSerialize {
     codecWaitingContinuation(codecP, codecK)
   }
 
-  /**
-    * Simple memoization for generated scodec from Serialize interface
-    */
+  /*
+   * Simple memoization for generated scodec from Serialize interface
+   */
+
   private val memoSt = TrieMap[Any, Any]()
 
   private def memoize[A, B](prefix: String, f: A => B): A => B = { key =>
@@ -175,24 +196,24 @@ object ScodecSerialize {
   ): Codec[WaitingContinuation[P, K]] =
     memoize("Cont", (serializeToCodecContinuation[P, K] _).tupled)(sp, sk)
 
-  def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
+  /*
+   * scodec serializers (collection, map, set)
+   */
+
+  val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(Serialize.codecByteVector)
+
+  private def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
     seqOfN(int32, codecA)
 
-  def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
+  private def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
     seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
 
-  def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
+  private def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
     codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
 
-  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
-    elements
-      .map(serialize.encode)
-      .sorted(util.ordByteVector)
-
-  /**
-    * Sequence scodec
-    */
-  val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(Serialize.codecByteVector)
+  /*
+   * scodec sequence encoder/decoder
+   */
 
   private def encodeSortedSeq[D](data: Seq[D], codec: Codec[D]): ByteVector =
     codecSeqByteVector
@@ -211,6 +232,10 @@ object ScodecSerialize {
       .get
       .value
       .map(bv => proj(codec.decode(bv.bits).get.value, bv))
+
+  /*
+   * RSpace values with raw binary encoded data
+   */
 
   /** Datum with ByteVector representation */
   final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
