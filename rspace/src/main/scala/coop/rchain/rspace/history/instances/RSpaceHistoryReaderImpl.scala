@@ -11,7 +11,7 @@ import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
-class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
+class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
     targetHistory: History[F],
     leafStore: ColdKeyValueStore[F]
 )(

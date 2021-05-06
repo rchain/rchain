@@ -14,7 +14,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
-import coop.rchain.rspace.history.instances.CachingHashHistoryReaderImpl
+import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.merger.instances.DiffStateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize._
@@ -230,7 +230,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def getHistoryReader(
       stateHash: Blake2b256Hash
   ): HistoryReader[F, Blake2b256Hash, C, P, A, K] =
-    new CachingHashHistoryReaderImpl(history.reset(root = stateHash), leafStore)(
+    new RSpaceHistoryReaderImpl(history.reset(root = stateHash), leafStore)(
       Concurrent[F],
       serializeC,
       serializeP,
