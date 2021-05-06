@@ -63,8 +63,3 @@ trait ISpace[F[_], C, P, A, K] extends Tuplespace[F, C, P, A, K] {
     */
   def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit]
 }
-
-//TODO lookinto to removing  ISpace object.
-object ISpace {
-  type IdISpace[C, P, A, K] = ISpace[Id, C, P, A, K]
-}
