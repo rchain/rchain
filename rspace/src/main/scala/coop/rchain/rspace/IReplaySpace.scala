@@ -5,6 +5,7 @@ import cats.implicits._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
+import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
 
 trait IReplaySpace[F[_], C, P, A, K] extends ISpace[F, C, P, A, K] {

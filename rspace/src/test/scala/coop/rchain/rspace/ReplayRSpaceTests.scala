@@ -12,6 +12,7 @@ import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.HistoryRepositoryInstances
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
+import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
