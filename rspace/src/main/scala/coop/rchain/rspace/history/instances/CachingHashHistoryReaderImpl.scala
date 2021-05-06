@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.{Blake2b256Hash, Hasher}
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._

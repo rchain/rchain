@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.internal._
+import coop.rchain.rspace.serializers.ScodecSerialize.RichAttempt
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 import scodec.codecs._

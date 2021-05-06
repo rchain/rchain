@@ -2,11 +2,8 @@ package coop.rchain.rspace
 
 import com.google.common.collect.{HashMultiset, Multiset}
 import coop.rchain.rspace.trace.{Consume, Produce}
-import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
-import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bytes, int32, int64, variableSizeBytesLong}
 
 import scala.collection.SortedSet
 
@@ -24,7 +21,7 @@ object internal {
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist))
+      Datum(a, persist, Produce(channel, a, persist))
   }
 
   final case class WaitingContinuation[P, K](
@@ -53,7 +50,7 @@ object internal {
         continuation,
         persist,
         peek,
-        Consume.create(channels, patterns, continuation, persist)
+        Consume(channels, patterns, continuation, persist)
       )
   }
 
@@ -72,22 +69,6 @@ object internal {
   )
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
-
-  val codecByteVector: Codec[ByteVector] = variableSizeBytesLong(int64, bytes)
-
-  def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
-    seqOfN(int32, codecA)
-
-  def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
-    seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
-
-  def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
-    codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
-
-  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
-    elements
-      .map(serialize.encode)
-      .sorted(util.ordByteVector)
 
   import scala.collection.concurrent.TrieMap
 
@@ -128,46 +109,4 @@ object internal {
   final case class Install[F[_], P, A, K](patterns: Seq[P], continuation: K)
 
   type Installs[F[_], C, P, A, K] = Map[Seq[C], Install[F, P, A, K]]
-
-  import scodec.Attempt
-
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  implicit class RichAttempt[T](a: Attempt[T]) {
-    def get: T =
-      a match {
-        case Attempt.Successful(res) => res
-        case Attempt.Failure(err) =>
-          throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
-      }
-  }
-
-  /** Datum with ByteVector representation */
-  final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
-    override def hashCode(): Int = raw.hashCode
-
-    override def equals(obj: Any): Boolean = obj match {
-      case RichDatum(_, r) => raw == r
-      case _               => false
-    }
-  }
-
-  /** Continuation with ByteVector representation */
-  final case class RichKont[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector) {
-    override def hashCode(): Int = raw.hashCode
-
-    override def equals(obj: Any): Boolean = obj match {
-      case RichKont(_, r) => raw == r
-      case _              => false
-    }
-  }
-
-  /** Join with ByteVector representation */
-  final case class RichJoin[C](decoded: Seq[C], raw: ByteVector) {
-    override def hashCode(): Int = raw.hashCode
-
-    override def equals(obj: Any): Boolean = obj match {
-      case RichJoin(_, r) => raw == r
-      case _              => false
-    }
-  }
 }

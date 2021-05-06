@@ -1,13 +1,13 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.rspace.Blake2b256Hash
-import scodec.{Attempt, Codec}
+import coop.rchain.rspace.history.History._
+import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
+import coop.rchain.shared.Serialize._
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs.{discriminated, provide, uint, uint2, vectorOfN}
-import coop.rchain.rspace.internal.codecByteVector
-import coop.rchain.shared.AttemptOps._
-import History._
-import coop.rchain.crypto.codec.Base16
+import scodec.{Attempt, Codec}
 
 trait History[F[_]] {
   def process(actions: List[HistoryAction]): F[History[F]]

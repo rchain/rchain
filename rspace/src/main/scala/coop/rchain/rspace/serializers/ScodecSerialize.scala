@@ -1,15 +1,18 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.serializers
 
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
+import coop.rchain.rspace.{util, Blake2b256Hash}
+import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, uint8}
+import scodec.codecs.{bool, bytes, discriminated, int32, int64, uint2, uint8, variableSizeBytesLong}
 
+import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
 
-package object history {
+object ScodecSerialize {
 
   /**
     * Datum serializer
@@ -94,21 +97,48 @@ package object history {
     * Serializers for [[Datum]] and [[WaitingContinuation]]
     */
   private def codecDatum[A](codecA: Codec[A]): Codec[Datum[A]] =
-    (codecA :: bool :: Produce.codecProduce).as[Datum[A]]
+    (codecA :: bool :: codecProduce).as[Datum[A]]
 
   private def codecWaitingContinuation[P, K](
       codecP: Codec[P],
       codecK: Codec[K]
   ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Consume.codecConsume)
+    (codecSeq(codecP) :: codecK :: bool :: sortedSet(uint8) :: codecConsume)
       .as[WaitingContinuation[P, K]]
 
   /**
-    * Converters from Serialize to scodecs
+    * Serializers for RSpace event log
     */
-  private def serializeToCodec[A](sa: Serialize[A]): Codec[A] = {
+  implicit def codecEvent: Codec[Event] =
+    discriminated[Event]
+      .by(uint2)
+      .subcaseP(0) {
+        case (comm: COMM) => comm
+      }(codecCOMM)
+      .subcaseP(1) {
+        case produce: Produce => produce
+      }(codecProduce)
+      .subcaseP(2) {
+        case consume: Consume => consume
+      }(codecConsume)
+
+  implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
+
+  private val codecProduce: Codec[Produce] =
+    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Produce]
+
+  private val codecConsume: Codec[Consume] =
+    (codecSeq[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Consume]
+
+  private val codecCOMM: Codec[COMM] =
+    (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
+      .as[COMM]
+
+  /**
+    * Converters from Serialize to scodec
+    */
+  private def serializeToCodec[A](sa: Serialize[A]): Codec[A] =
     sa.toSizeHeadCodec
-  }
 
   private def serializeToCodecDatum[A](sa: Serialize[A]): Codec[Datum[A]] = {
     val codecA = sa.toSizeHeadCodec
@@ -125,7 +155,7 @@ package object history {
   }
 
   /**
-    * Simple memoization for generated scodecs from Serialize interface
+    * Simple memoization for generated scodec from Serialize interface
     */
   private val memoSt = TrieMap[Any, Any]()
 
@@ -145,10 +175,24 @@ package object history {
   ): Codec[WaitingContinuation[P, K]] =
     memoize("Cont", (serializeToCodecContinuation[P, K] _).tupled)(sp, sk)
 
+  def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
+    seqOfN(int32, codecA)
+
+  def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
+    seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
+
+  def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
+    codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
+
+  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
+    elements
+      .map(serialize.encode)
+      .sorted(util.ordByteVector)
+
   /**
-    * Sequence scodecs
+    * Sequence scodec
     */
-  private val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(codecByteVector)
+  val codecSeqByteVector: Codec[Seq[ByteVector]] = codecSeq(Serialize.codecByteVector)
 
   private def encodeSortedSeq[D](data: Seq[D], codec: Codec[D]): ByteVector =
     codecSeqByteVector
@@ -167,4 +211,51 @@ package object history {
       .get
       .value
       .map(bv => proj(codec.decode(bv.bits).get.value, bv))
+
+  /** Datum with ByteVector representation */
+  final case class RichDatum[A](decoded: Datum[A], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichDatum(_, r) => raw == r
+      case _               => false
+    }
+  }
+
+  /** Continuation with ByteVector representation */
+  final case class RichKont[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichKont(_, r) => raw == r
+      case _              => false
+    }
+  }
+
+  /** Join with ByteVector representation */
+  final case class RichJoin[C](decoded: Seq[C], raw: ByteVector) {
+    override def hashCode(): Int = raw.hashCode
+
+    override def equals(obj: Any): Boolean = obj match {
+      case RichJoin(_, r) => raw == r
+      case _              => false
+    }
+  }
+
+  /**
+    * scodec extension to unsafe get value
+    *
+    * TODO: Very similar extension is defined in shared [[coop.rchain.shared.AttemptOps.RichAttempt]]
+    */
+  import scodec.Attempt
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  implicit class RichAttempt[T](a: Attempt[T]) {
+    def get: T =
+      a match {
+        case Attempt.Successful(res) => res
+        case Attempt.Failure(err) =>
+          throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
+      }
+  }
 }

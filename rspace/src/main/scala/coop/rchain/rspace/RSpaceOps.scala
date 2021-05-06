@@ -11,7 +11,6 @@ import coop.rchain.rspace.concurrent.ConcurrentTwoStepLockF
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
-import coop.rchain.rspace.syntax._
 import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
@@ -196,7 +195,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
           .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
       } else
         (for {
-          consumeRef <- Consume.createF(channels, patterns, continuation, persist)
+          consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
           result <- consumeLockF(channels) {
                      lockedConsume(
                        channels,
@@ -226,7 +225,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   ): F[MaybeActionResult] =
     ContextShift[F].evalOn(scheduler) {
       (for {
-        produceRef <- Produce.createF(channel, data, persist)
+        produceRef <- Sync[F].delay(Produce(channel, data, persist))
         result <- produceLockF(channel)(
                    lockedProduce(channel, data, persist, produceRef)
                  )
@@ -276,7 +275,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
         _ <- Log[F].debug(
               s"install: searching for data matching <patterns: $patterns> at <channels: $channels>"
             )
-        consumeRef = Consume.create(channels, patterns, continuation, true)
+        consumeRef = Consume(channels, patterns, continuation, true)
         channelToIndexedData <- channels
                                  .traverse { c =>
                                    store.getData(c).shuffleWithIndex.map(c -> _)

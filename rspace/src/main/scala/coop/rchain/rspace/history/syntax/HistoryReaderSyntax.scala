@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{RichDatum, RichJoin, RichKont}
+import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
 import coop.rchain.rspace.{internal, Blake2b256Hash}
 
 trait HistoryReaderSyntax {

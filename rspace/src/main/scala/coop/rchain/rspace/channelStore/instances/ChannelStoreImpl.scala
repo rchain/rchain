@@ -6,7 +6,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore, ContinuationHash, DataJoinHash}
-import coop.rchain.rspace.internal.toOrderedByteVectors
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._

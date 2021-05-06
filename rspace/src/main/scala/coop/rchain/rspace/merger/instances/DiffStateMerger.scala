@@ -2,17 +2,17 @@ package coop.rchain.rspace.merger.instances
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.syntax.ConsumeMapping
 import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{toOrderedByteVectors, RichDatum, RichJoin, RichKont}
 import coop.rchain.rspace.merger.{computeChannelChange, ChannelChange, EventChain, StateMerger}
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
-import coop.rchain.shared.syntax._
 import coop.rchain.shared.Language._
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize, Stopwatch}
 import coop.rchain.store.LazyKeyValueCache
 

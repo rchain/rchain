@@ -8,6 +8,7 @@ import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
+import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction}

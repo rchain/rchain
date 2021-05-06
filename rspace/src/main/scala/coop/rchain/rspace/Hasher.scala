@@ -1,6 +1,10 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.internal.{codecByteVector, codecSeq, toOrderedByteVectors, RichAttempt}
+import coop.rchain.rspace.serializers.ScodecSerialize.{
+  codecSeqByteVector,
+  toOrderedByteVectors,
+  RichAttempt
+}
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
@@ -34,7 +38,7 @@ object Hasher {
 
     // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
     // val chs = toOrderedByteVectors(channels)(serializeC)
-    val channelsBits = codecSeq(codecByteVector).encode(chs).get
+    val channelsBits = codecSeqByteVector.encode(chs).get
     hashWithSuffix(channelsBits, continuationSuffixBits)
   }
 

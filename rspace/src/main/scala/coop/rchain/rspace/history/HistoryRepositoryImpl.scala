@@ -12,6 +12,7 @@ import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.CachingHashHistoryReaderImpl
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.merger.instances.DiffStateMerger
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Serialize}

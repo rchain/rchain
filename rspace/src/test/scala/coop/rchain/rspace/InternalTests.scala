@@ -1,9 +1,8 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.serializers.ScodecSerialize.RichAttempt
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.{Attempt, Err}
-
-import internal._
 
 class InternalTests extends FlatSpec with Matchers {
 

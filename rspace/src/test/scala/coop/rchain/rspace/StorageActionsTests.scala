@@ -1093,7 +1093,7 @@ trait StorageActionsTests[F[_]]
       s1 <- space.createSoftCheckpoint()
       // the log contains the above operation
       _ = s1.log should contain only
-        Consume.create[String, Pattern, StringsCaptor](
+        Consume[String, Pattern, StringsCaptor](
           channels,
           patterns,
           continuation,
