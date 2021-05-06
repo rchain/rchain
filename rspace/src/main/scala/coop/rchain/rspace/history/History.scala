@@ -39,7 +39,7 @@ trait History[F[_]] {
 object History {
 
   val emptyRoot: Trie               = EmptyTrie
-  private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).get.toByteVector
+  private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).getUnsafe.toByteVector
   val emptyRootHash: Blake2b256Hash = Blake2b256Hash.create(encodeEmptyRoot)
 
   // this mapping is kept explicit on purpose
@@ -69,7 +69,7 @@ sealed trait NonEmptyTrie extends Trie
 case object EmptyTrie extends Trie
 
 final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
-  lazy val encoded: BitVector = codecSkip.encode(this).get
+  lazy val encoded: BitVector = codecSkip.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
@@ -85,7 +85,7 @@ final case class PointerBlock private (toVector: Vector[TriePointer]) extends No
 
   def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
 
-  lazy val encoded: BitVector = codecPointerBlock.encode(this).get
+  lazy val encoded: BitVector = codecPointerBlock.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 

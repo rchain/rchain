@@ -38,7 +38,7 @@ object StableHashProvider {
       encodedChannels ++ encodedPatterns
         ++ List(
           serializeK.encode(continuation),
-          (ignore(7) ~> bool).encode(persist).map(_.bytes).get
+          (ignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
         )
     )
   }
@@ -52,7 +52,7 @@ object StableHashProvider {
       Seq(
         serializeC.encode(channel),
         serializeA.encode(datum),
-        (ignore(7) ~> bool).encode(persist).map(_.bytes).get
+        (ignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
       )
     )
 }

@@ -23,7 +23,7 @@ object ChannelHash {
 
   def hashJoinsChannel[C](channel: C, serializeC: Serialize[C]): Blake2b256Hash = {
     val cc = serializeC.toSizeHeadCodec
-    hashWithSuffix(cc.encode(channel).get, joinSuffixBits)
+    hashWithSuffix(cc.encode(channel).getUnsafe, joinSuffixBits)
 
     // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
     // hashWithSuffix(serializeC.encode(channel).toBitVector, joinSuffixBits)
@@ -38,13 +38,13 @@ object ChannelHash {
 
     // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
     // val chs = toOrderedByteVectors(channels)(serializeC)
-    val channelsBits = codecSeqByteVector.encode(chs).get
+    val channelsBits = codecSeqByteVector.encode(chs).getUnsafe
     hashWithSuffix(channelsBits, continuationSuffixBits)
   }
 
   def hashDataChannel[C](channel: C, serializeC: Serialize[C]): Blake2b256Hash = {
     val cc = serializeC.toSizeHeadCodec
-    hashWithSuffix(cc.encode(channel).get, dataSuffixBits)
+    hashWithSuffix(cc.encode(channel).getUnsafe, dataSuffixBits)
 
     // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
     // hashWithSuffix(serializeC.encode(channel).toBitVector, dataSuffixBits)

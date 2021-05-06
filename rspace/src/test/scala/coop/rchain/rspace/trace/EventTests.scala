@@ -22,7 +22,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
           List(
             Serialize[String].encode(channel),
             Serialize[String].encode(data),
-            (cignore(7) ~> bool).encode(persist).map(_.bytes).get
+            (cignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
           )
         )
 
@@ -47,7 +47,7 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
           encodedChannels ++ encodedPatterns
             ++ List(
               Serialize[StringsCaptor].encode(continuation),
-              (cignore(7) ~> bool).encode(persist).map(_.bytes).get
+              (cignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
             )
         )
 

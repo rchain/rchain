@@ -90,7 +90,7 @@ object ScodecSerialize {
 
     codecSeqByteVector
       .encode(joins.map(encodeSortedSeq(_, codec)).toVector.sorted(util.ordByteVector))
-      .get
+      .getUnsafe
       .toByteVector
   }
 
@@ -104,7 +104,7 @@ object ScodecSerialize {
 
     codecSeqByteVector
       .decode(bytes.bits)
-      .get
+      .getUnsafe
       .value
       .map(bv => proj(decodeSeq(bv, codec), bv))
   }
@@ -281,8 +281,8 @@ object ScodecSerialize {
 
   private def encodeSortedSeq[D](data: Seq[D], codec: Codec[D]): ByteVector =
     codecSeqByteVector
-      .encode(data.map(codec.encode(_).get.toByteVector).toVector.sorted(util.ordByteVector))
-      .get
+      .encode(data.map(codec.encode(_).getUnsafe.toByteVector).toVector.sorted(util.ordByteVector))
+      .getUnsafe
       .toByteVector
 
   private def decodeSeq[D](data: ByteVector, codec: Codec[D]): Seq[D] =
@@ -293,9 +293,9 @@ object ScodecSerialize {
   ): Seq[R] =
     codecSeqByteVector
       .decode(data.bits)
-      .get
+      .getUnsafe
       .value
-      .map(bv => proj(codec.decode(bv.bits).get.value, bv))
+      .map(bv => proj(codec.decode(bv.bits).getUnsafe.value, bv))
 
   /*
    * RSpace values with attached raw binary encoded data
@@ -335,7 +335,7 @@ object ScodecSerialize {
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   implicit class RichAttempt[T](a: Attempt[T]) {
-    def get: T =
+    def getUnsafe: T =
       a match {
         case Attempt.Successful(res) => res
         case Attempt.Failure(err) =>
