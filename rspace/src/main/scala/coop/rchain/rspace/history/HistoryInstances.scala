@@ -1,16 +1,15 @@
 package coop.rchain.rspace.history
 
-import cats.{Applicative, FlatMap, Parallel}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History._
-import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
-import Ordering.Implicits.seqDerivedOrdering
-import scala.collection.concurrent.TrieMap
 import scala.Function.tupled
+import scala.Ordering.Implicits.seqDerivedOrdering
+import scala.collection.concurrent.TrieMap
 
 object HistoryInstances {
 
@@ -52,7 +51,7 @@ object HistoryInstances {
       val existingIdx :: existingTail                = affixBytes.drop(prefixPath.size)
       val (newExistingPointer, maybeNewExistingSkip) = skip(existingTail, existingPointer)
       val (newIncomingPointer, maybeIncomingSkip)    = skip(incomingTail, incomingPointer)
-      val pointerBlock = PointerBlock.create(
+      val pointerBlock = PointerBlock(
         (toInt(incomingIdx), newIncomingPointer),
         (toInt(existingIdx), newExistingPointer)
       )
@@ -474,7 +473,7 @@ object HistoryInstances {
           case ((indexes, tries), (index, mods)) =>
             (index :: indexes, tries ++ mods)
         })
-        .map(r => (PointerBlock.create().updated(r._1): Trie, r._2))
+        .map(r => (PointerBlock.empty.updated(r._1): Trie, r._2))
 
     private def processRootLevelTrie(
         index: Index,

@@ -1,13 +1,14 @@
 package coop.rchain.rspace.history
 
-import cats.{Applicative, FlatMap}
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
+import cats.{Applicative, FlatMap}
 import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.rspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
 import coop.rchain.rspace.history.HistoryInstances.MalformedTrieError
 import scodec.bits.ByteVector
-import Ordering.Implicits.seqDerivedOrdering
+
+import scala.Ordering.Implicits.seqDerivedOrdering
 
 final case class SimplisticHistory[F[_]: Sync](
     root: Blake2b256Hash,
@@ -40,7 +41,7 @@ final case class SimplisticHistory[F[_]: Sync](
   ): (List[Trie], TriePointer) = {
     val (newExistingPointer, maybeNewExistingSkip) = skip(existingTail, existingPointer)
     val (newIncomingPointer, maybeIncomingSkip)    = skip(incomingTail, incomingPointer)
-    val pointerBlock = PointerBlock.create(
+    val pointerBlock = PointerBlock(
       (toInt(incomingIdx), newIncomingPointer),
       (toInt(existingIdx), newExistingPointer)
     )

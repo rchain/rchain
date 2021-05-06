@@ -1,13 +1,16 @@
 package coop.rchain.rspace.serializers
 
+import coop.rchain.rspace.history.PointerBlock.length
+import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.rspace.{util, Blake2b256Hash}
 import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
-import scodec.Codec
+import coop.rchain.shared.Serialize._
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, discriminated, int32, uint2, uint8}
+import scodec.codecs.{bool, discriminated, int32, provide, uint, uint2, uint8, vectorOfN}
+import scodec.{Attempt, Codec}
 
 import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
@@ -27,16 +30,16 @@ object ScodecSerialize {
    * Datum serializer
    */
 
-  def encodeData[A](datums: Seq[Datum[A]])(implicit sa: Serialize[A]): ByteVector = {
+  def encodeDatums[A](datums: Seq[Datum[A]])(implicit sa: Serialize[A]): ByteVector = {
     val codec = serializeToCodecDatumMemo(sa)
 
     encodeSortedSeq[Datum[A]](datums, codec)
   }
 
-  def decodeData[A](bytes: ByteVector)(implicit sa: Serialize[A]): Seq[Datum[A]] =
-    decodeDataProj[A, Datum[A]](bytes)((d, _) => d)
+  def decodeDatums[A](bytes: ByteVector)(implicit sa: Serialize[A]): Seq[Datum[A]] =
+    decodeDatumsProj[A, Datum[A]](bytes)((d, _) => d)
 
-  def decodeDataProj[A, R](
+  def decodeDatumsProj[A, R](
       bytes: ByteVector
   )(proj: (Datum[A], ByteVector) => R)(implicit sa: Serialize[A]): Seq[R] = {
     val codec = serializeToCodecDatumMemo(sa)
@@ -152,6 +155,66 @@ object ScodecSerialize {
   private val codecCOMM: Codec[COMM] =
     (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
       .as[COMM]
+
+  val codecSkip: Codec[Skip] = (codecByteVector :: codecTrieValuePointer).as[Skip]
+
+  val memoizingSkipCodec: Codec[Skip] =
+    Codec.apply((s: Skip) => Attempt.successful(s.encoded), codecSkip.decode)
+
+  val memoizingPointerBlockCodec: Codec[PointerBlock] =
+    Codec.apply(
+      (s: PointerBlock) => Attempt.successful(s.encoded),
+      codecPointerBlock.decode
+    )
+
+  /*
+   * scodec for History types
+   */
+
+  val codecPointerBlock: Codec[PointerBlock] =
+    vectorOfN(
+      provide(length),
+      codecTriePointer
+    ).as[PointerBlock]
+
+  val codecTrie: Codec[Trie] =
+    discriminated[Trie]
+      .by(uint2)
+      .subcaseP(0) {
+        case e: EmptyTrie.type => e
+      }(provide(EmptyTrie))
+      .subcaseP(1) {
+        case s: Skip => s
+      }(memoizingSkipCodec)
+      .subcaseP(2) {
+        case pb: PointerBlock => pb
+      }(memoizingPointerBlockCodec)
+
+  implicit def codecTriePointer: Codec[TriePointer] =
+    discriminated[TriePointer]
+      .by(uint2)
+      .subcaseP(0) {
+        case p: EmptyPointer.type => p
+      }(provide(EmptyPointer))
+      .subcaseP(1) {
+        case p: LeafPointer => p
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[LeafPointer])
+      .subcaseP(2) {
+        case p: SkipPointer => p
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[SkipPointer])
+      .subcaseP(3) {
+        case p: NodePointer => p
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
+
+  implicit def codecTrieValuePointer: Codec[ValuePointer] =
+    discriminated[ValuePointer]
+      .by(uint(1))
+      .subcaseP(0) {
+        case p: LeafPointer => p
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[LeafPointer])
+      .subcaseP(1) {
+        case p: NodePointer => p
+      }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
 
   /*
    * Converters from Serialize to scodec

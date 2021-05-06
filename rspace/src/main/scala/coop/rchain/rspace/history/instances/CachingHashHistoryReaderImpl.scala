@@ -27,7 +27,7 @@ class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
   override def getDataProj[R](key: Blake2b256Hash)(proj: (Datum[A], ByteVector) => R): F[Seq[R]] =
     fetchData(key).flatMap {
       case Some(DataLeaf(bytes)) =>
-        Sync[F].delay(decodeDataProj(bytes)(proj))
+        Sync[F].delay(decodeDatumsProj(bytes)(proj))
       case Some(p) =>
         new RuntimeException(s"Found unexpected leaf while looking for data at key $key, data: $p").raiseError
       case None => Seq[R]().pure[F]

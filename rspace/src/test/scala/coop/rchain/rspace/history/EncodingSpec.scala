@@ -16,8 +16,8 @@ class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyCh
 
   "Datum list encode" should "return same hash for different orderings of each datum" in forAll {
     (datum1: Datum[String], datum2: Datum[String]) =>
-      val bytes1 = encodeData(datum1 :: datum2 :: Nil)
-      val bytes2 = encodeData(datum2 :: datum1 :: Nil)
+      val bytes1 = encodeDatums(datum1 :: datum2 :: Nil)
+      val bytes2 = encodeDatums(datum2 :: datum1 :: Nil)
       Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes2)
   }
 

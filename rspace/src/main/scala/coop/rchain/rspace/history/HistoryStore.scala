@@ -2,6 +2,7 @@ package coop.rchain.rspace.history
 
 import cats.effect.Sync
 import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStore
 import scodec.bits.BitVector
@@ -16,7 +17,7 @@ object HistoryStoreInstances {
   type KVData = (Blake2b256Hash, BitVector)
 
   def historyStore[F[_]: Sync](store: KeyValueStore[F]): HistoryStore[F] = new HistoryStore[F] {
-    val typedStore = store.toTypedStore(Blake2b256Hash.codecPureBlake2b256Hash, Trie.codecTrie)
+    val typedStore = store.toTypedStore(Blake2b256Hash.codecPureBlake2b256Hash, codecTrie)
 
     override def get(key: Blake2b256Hash): F[Trie] = typedStore.getOrElse(key, EmptyTrie)
 

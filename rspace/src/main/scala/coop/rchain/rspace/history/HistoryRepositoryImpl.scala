@@ -62,7 +62,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     actions.par.map {
       case i: InsertData[C, A] =>
         val key  = hashDataChannel(i.channel, serializeC).bytes
-        val data = encodeData(i.data)(serializeA)
+        val data = encodeDatums(i.data)(serializeA)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[C, P, K] =>
         val key  = hashContinuationsChannels(i.channels, serializeC).bytes
@@ -102,7 +102,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
       case i: TrieInsertProduce[A] =>
-        val data     = encodeData(i.data)(serializeA)
+        val data     = encodeDatums(i.data)(serializeA)
         val dataLeaf = DataLeaf(data)
         val dataHash = Blake2b256Hash.create(data)
         (
