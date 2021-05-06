@@ -7,7 +7,6 @@ import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
 
   /** helper class to package data and serialization (encoded by scodec) */
@@ -81,6 +80,7 @@ object internal {
   implicit class RichMultisetMultiMap[K, V](private val value: MultisetMultiMap[K, V])
       extends AnyVal {
 
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
     def addBinding(k: K, v: V): MultisetMultiMap[K, V] =
       value.get(k) match {
         case Some(current) =>
@@ -93,6 +93,7 @@ object internal {
           value
       }
 
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
     def removeBinding(k: K, v: V): MultisetMultiMap[K, V] =
       value.get(k) match {
         case Some(current) =>
