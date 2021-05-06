@@ -1,41 +1,36 @@
 package coop.rchain.casper
 
-import java.nio.file.{Files, Path}
-
+import cats.Parallel
 import cats.data.EitherT
-import cats.effect.concurrent.{MVar, MVar2, Ref}
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.implicits._
-import cats.{Monad, Parallel}
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy, ProcessedSystemDeploy}
-import coop.rchain.casper.util.{EventConverter, ProtoUtil}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.ReplayFailure
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
 import coop.rchain.rholang.interpreter.SystemProcesses.{BlockData, Definition, InvalidBlocks}
-import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting}
-import coop.rchain.rholang.interpreter.storage._
+import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReportingRspace, Match => RSpaceMatch}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.{RSpace, ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny
-import coop.rchain.models.Validator.Validator
-
-import scala.concurrent.ExecutionContext
-import coop.rchain.metrics.MetricsSemaphore
-import coop.rchain.rspace.RSpace.RSpaceStore
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.ExecutionContext
 
 sealed trait ReportError
 final case class ReportBlockNotFound(hash: BlockHash)    extends ReportError

@@ -5,7 +5,6 @@ import cats.data.{EitherT, WriterT}
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{
   Bond,
@@ -18,7 +17,6 @@ import coop.rchain.casper.protocol.{
   SlashSystemDeployData,
   SystemDeployData
 }
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
   ConsumeFailed,
   GasRefundFailure,
@@ -33,40 +31,28 @@ import coop.rchain.casper.util.rholang.costacc.{
   RefundDeploy,
   SlashDeploy
 }
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
+import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models.block.StateHash.StateHash
-import coop.rchain.models.{
-  BindPattern,
-  EVar,
-  Expr,
-  GPrivate,
-  ListParWithRandom,
-  NormalizerEnv,
-  Par,
-  TaggedContinuation,
-  Var
-}
-import coop.rchain.rholang.interpreter.RhoRuntime.{
-  bootstrapRand,
-  bootstrapRegistry,
-  RuntimeMetricsSource
-}
+import coop.rchain.models._
+import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, RuntimeMetricsSource}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History.emptyRootHash
-import coop.rchain.rspace.{trace, Blake2b256Hash, ReplayException}
+import coop.rchain.rspace.{trace, ReplayException}
 import coop.rchain.shared.Log
-import coop.rchain.metrics.implicits._
 
 trait RhoRuntimeSyntax {
   implicit final def syntaxRuntime[F[_]: Sync: Span: Log](

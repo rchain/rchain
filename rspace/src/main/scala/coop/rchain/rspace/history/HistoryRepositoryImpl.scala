@@ -5,9 +5,14 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
+import coop.rchain.rspace.hashing.ChannelHash.{
+  hashContinuationsChannels,
+  hashDataChannel,
+  hashJoinsChannel
+}
 import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.CachingHashHistoryReaderImpl
 import coop.rchain.rspace.merger.StateMerger

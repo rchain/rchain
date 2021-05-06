@@ -6,6 +6,7 @@ import cats.syntax.all._
 import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.syntax.ConsumeMapping
 import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.merger.{computeChannelChange, ChannelChange, EventChain, StateMerger}
 import coop.rchain.rspace.serializers.ScodecSerialize._

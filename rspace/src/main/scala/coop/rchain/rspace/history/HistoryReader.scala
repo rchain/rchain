@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
 import scodec.bits.ByteVector

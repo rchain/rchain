@@ -11,7 +11,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
 import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
 import coop.rchain.rspace.syntax._

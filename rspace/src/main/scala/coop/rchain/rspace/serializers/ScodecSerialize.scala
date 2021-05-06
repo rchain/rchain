@@ -1,10 +1,11 @@
 package coop.rchain.rspace.serializers
 
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.PointerBlock.length
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
-import coop.rchain.rspace.{util, Blake2b256Hash}
+import coop.rchain.rspace.util
 import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.Serialize._

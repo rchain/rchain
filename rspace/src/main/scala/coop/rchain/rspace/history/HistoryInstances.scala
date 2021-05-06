@@ -3,7 +3,7 @@ package coop.rchain.rspace.history
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import cats.{Applicative, FlatMap, Parallel}
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import scodec.bits.ByteVector
 

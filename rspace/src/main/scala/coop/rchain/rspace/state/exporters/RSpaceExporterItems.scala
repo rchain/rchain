@@ -1,10 +1,9 @@
 package coop.rchain.rspace.state.exporters
 
 import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.rspace.state.RSpaceExporter._
 import coop.rchain.shared.{Log, Stopwatch}

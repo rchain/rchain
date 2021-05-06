@@ -7,6 +7,7 @@ import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}

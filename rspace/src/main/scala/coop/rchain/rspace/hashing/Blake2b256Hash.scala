@@ -1,4 +1,4 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.hashing
 
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16

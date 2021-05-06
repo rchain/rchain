@@ -1,4 +1,4 @@
-package coop.rchain.rspace
+package coop.rchain.rspace.hashing
 
 import coop.rchain.rspace.serializers.ScodecSerialize.{
   codecSeqByteVector,
@@ -11,7 +11,7 @@ import scodec.bits.{BitVector, ByteVector}
 
 import java.nio.charset.StandardCharsets
 
-object Hasher {
+object ChannelHash {
   private val joinSuffixBits         = BitVector("-joins".getBytes(StandardCharsets.UTF_8))
   private val dataSuffixBits         = BitVector("-data".getBytes(StandardCharsets.UTF_8))
   private val continuationSuffixBits = BitVector("-continuation".getBytes(StandardCharsets.UTF_8))

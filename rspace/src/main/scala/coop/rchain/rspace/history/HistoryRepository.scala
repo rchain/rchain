@@ -6,12 +6,13 @@ import cats.syntax.all._
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize.{RichDatum, RichJoin, RichKont}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.rspace.{Blake2b256Hash, HotStoreAction, HotStoreTrieAction}
+import coop.rchain.rspace.{HotStoreAction, HotStoreTrieAction}
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{KeyValueStore, LazyAdHocKeyValueCache}
 

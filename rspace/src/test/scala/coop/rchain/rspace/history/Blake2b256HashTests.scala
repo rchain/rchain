@@ -1,9 +1,8 @@
 package coop.rchain.rspace.history
 
 import java.util.Arrays
-
 import coop.rchain.crypto.hash.Blake2b256
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.rspace.test.roundTripCodec
 import org.scalacheck.Prop

@@ -12,7 +12,7 @@ import coop.rchain.models.{
   StacksafeMessage,
   TaggedContinuation
 }
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 //TODO(mateusz.gorski): Adjust the costs of operations
 final case class Cost(value: Long, operation: String) {

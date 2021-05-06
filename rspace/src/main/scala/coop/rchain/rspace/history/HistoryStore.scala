@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.effect.Sync
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStore

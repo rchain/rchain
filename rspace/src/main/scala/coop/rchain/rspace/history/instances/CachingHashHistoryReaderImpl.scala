@@ -2,11 +2,11 @@ package coop.rchain.rspace.history.instances
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.serializers.ScodecSerialize._
-import coop.rchain.rspace.{Blake2b256Hash, Hasher}
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
@@ -73,15 +73,15 @@ class CachingHashHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
 
     new HistoryReaderBase[F, C, P, A, K] {
       override def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getDataProj[R](Hasher.hashDataChannel(key, sc))
+        historyReader.getDataProj[R](ChannelHash.hashDataChannel(key, sc))
 
       override def getContinuationsProj[R](
           key: Seq[C]
       ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getContinuationsProj[R](Hasher.hashContinuationsChannels(key, sc))
+        historyReader.getContinuationsProj[R](ChannelHash.hashContinuationsChannels(key, sc))
 
       override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getJoinsProj[R](Hasher.hashJoinsChannel(key, sc))
+        historyReader.getJoinsProj[R](ChannelHash.hashJoinsChannel(key, sc))
     }
   }
 }

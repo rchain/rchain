@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{CommEvent, ConsumeEvent, Event, Peek, ProduceEvent}
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{
   COMM => RspaceComm,
   Consume => RspaceConsume,

@@ -3,11 +3,11 @@ package coop.rchain.rspace.channelStore.instances
 import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
-import coop.rchain.rspace.Hasher.{hashContinuationsChannels, hashDataChannel, hashJoinsChannel}
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore, ContinuationHash, DataJoinHash}
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.hashing.ChannelHash._
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.serializers.ScodecSerialize._
-import coop.rchain.rspace.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}

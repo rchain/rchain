@@ -1,9 +1,9 @@
 package coop.rchain.rspace.trace
 
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.StableHashProvider._
+import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
 import coop.rchain.rspace.test.ArbitraryInstances._
 import coop.rchain.shared.Serialize

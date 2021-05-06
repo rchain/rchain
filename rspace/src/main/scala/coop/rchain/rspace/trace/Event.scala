@@ -1,7 +1,7 @@
 package coop.rchain.rspace.trace
 
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.StableHashProvider._
+import coop.rchain.rspace.hashing.StableHashProvider._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.ConsumeCandidate
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.Serialize
