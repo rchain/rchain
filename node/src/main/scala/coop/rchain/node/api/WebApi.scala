@@ -19,6 +19,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
+import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
 import coop.rchain.shared.Log
 import coop.rchain.state.StateManager
 import fs2.concurrent.Queue
@@ -54,6 +55,8 @@ trait WebApi[F[_]] {
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
   def isFinalized(hash: String): F[Boolean]
+
+  def getTransaction(hash: String): F[TransactionResponse]
 }
 
 object WebApi {
@@ -61,6 +64,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
+      cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]]
   ) extends WebApi[F] {
     import WebApiSyntax._
@@ -130,6 +134,9 @@ object WebApi {
 
     def isFinalized(hash: String): F[Boolean] =
       BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+
+    def getTransaction(hash: String): F[TransactionResponse] =
+      cacheTransactionAPI.getTransaction(hash)
   }
 
   // Rholang terms interesting for translation to JSON

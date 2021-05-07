@@ -262,6 +262,7 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
+        circeParser,
         circeGenericExtras,
         pureconfig
       ),
