@@ -38,6 +38,7 @@ import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
+import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
@@ -305,11 +306,14 @@ object Setup {
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
+      transactionAPI      = Transaction[F](blockReportAPI, Par())
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
+          cacheTransactionAPI,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]]
         )
