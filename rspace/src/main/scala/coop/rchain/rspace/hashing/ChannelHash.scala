@@ -1,5 +1,6 @@
 package coop.rchain.rspace.hashing
 
+import coop.rchain.models.Par
 import coop.rchain.rspace.serializers.ScodecSerialize.{
   codecSeqByteVector,
   toOrderedByteVectors,
@@ -8,6 +9,8 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{
 import coop.rchain.shared.Serialize
 import scodec.Codec
 import scodec.bits.{BitVector, ByteVector}
+import cats.syntax.all._
+import coop.rchain.crypto.Blake2b256Hash
 
 import java.nio.charset.StandardCharsets
 
@@ -42,9 +45,37 @@ object ChannelHash {
     hashWithSuffix(channelsBits, continuationSuffixBits)
   }
 
+  // HACK to get single unforgeable name hash
+  def getUnforgHash[C](channel: C) = {
+    val par = channel.asInstanceOf[Par]
+    par match {
+      case p: Par =>
+        if (p.unforgeables.size == 1) {
+          // Single unforgeable name
+          val unforg = p.unforgeables.head
+          if (unforg.unfInstance.isDefined && unforg.unfInstance.isGPrivateBody) {
+            val bs = unforg.unfInstance.gPrivateBody.get.id
+            if (bs.size == 32) {
+              // println(s"UNFORGEABLE NAME: size: ${bs.size}")
+              Blake2b256Hash.fromByteArray(bs.toByteArray).some
+            } else none
+          } else none
+        } else none
+      case _ =>
+        println(s"ERROR: Channel is not Par !!!!")
+        none
+    }
+  }
+
   def hashDataChannel[C](channel: C, serializeC: Serialize[C]): Blake2b256Hash = {
     val cc = serializeC.toSizeHeadCodec
-    hashWithSuffix(cc.encode(channel).getUnsafe, dataSuffixBits)
+
+    // hashWithSuffix(cc.encode(channel).getUnsafe, dataSuffixBits)
+
+    val bytesOpt = getUnforgHash(channel)
+    bytesOpt.getOrElse(
+      hashWithSuffix(cc.encode(channel).getUnsafe, dataSuffixBits)
+    )
 
     // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
     // hashWithSuffix(serializeC.encode(channel).toBitVector, dataSuffixBits)
