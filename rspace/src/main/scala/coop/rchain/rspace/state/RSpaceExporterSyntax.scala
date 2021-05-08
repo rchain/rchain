@@ -2,7 +2,7 @@ package coop.rchain.rspace.state
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
 import coop.rchain.rspace.state.exporters.{RSpaceExporterDisk, RSpaceExporterItems}
 import coop.rchain.shared.{Log, Serialize}

@@ -3,7 +3,7 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Applicative, FlatMap}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
 import coop.rchain.rspace.history.HistoryInstances.MalformedTrieError
 import scodec.bits.ByteVector

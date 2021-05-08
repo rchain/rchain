@@ -7,7 +7,7 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.RPConfAsk
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 trait TransportLayerSyntax {
   implicit final def commSyntaxTransportLayer[F[_]: Monad: RPConfAsk](

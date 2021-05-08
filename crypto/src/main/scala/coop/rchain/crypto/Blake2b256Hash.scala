@@ -1,0 +1,98 @@
+package coop.rchain.crypto
+
+import com.google.protobuf.ByteString
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.crypto.hash.Blake2b256
+import scodec.bits.{BitVector, ByteVector}
+import scodec.codecs._
+import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
+
+class Blake2b256Hash private (val bytes: ByteVector) {
+
+  require(
+    bytes.length == Blake2b256Hash.length,
+    s"Expected ${Blake2b256Hash.length} but got ${bytes.length}"
+  )
+
+  override def equals(obj: scala.Any): Boolean = obj match {
+    case b: Blake2b256Hash => b.bytes === bytes
+    case _                 => false
+  }
+
+  override def hashCode(): Int =
+    bytes.hashCode
+
+  def toByteString: ByteString =
+    ByteString.copyFrom(bytes.toArray)
+
+  override def toString: String = s"Blake(${bytes.toHex})"
+}
+
+object Blake2b256Hash {
+
+  val length: Int = 32
+
+  /**
+    * Constructs a [[Blake2b256Hash]]
+    *
+    * @param bytes The bytes to hash
+    * @return The hash
+    */
+  def create(bytes: Array[Byte]): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(bytes)))
+
+  /**
+    * Constructs a [[Blake2b256Hash]]
+    *
+    * @param byteVectors sequence of byte vectors,
+    * that will be hashed as a single concatenated
+    * bytes string
+    * @return The hash
+    */
+  def create(byteVectors: Seq[ByteVector]): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVectors: _*)))
+
+  def create(byteVector: ByteVector): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVector)))
+
+  def fromHex(string: String): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(Base16.unsafeDecode(string)))
+
+  def fromByteArray(bytes: Array[Byte]): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(bytes))
+
+  def fromByteString(byteString: ByteString): Blake2b256Hash =
+    new Blake2b256Hash(ByteVector(byteString.toByteArray))
+
+  val codecPureBlake2b256Hash: Codec[Blake2b256Hash] = new Codec[Blake2b256Hash] {
+    val bitLength = (length * 8).toLong
+    override def decode(bits: BitVector): Attempt[DecodeResult[Blake2b256Hash]] =
+      if (bits.sizeGreaterThanOrEqual(bitLength)) {
+        Attempt.successful(
+          DecodeResult(Blake2b256Hash.create(bits.toByteVector), bits.drop(bitLength))
+        )
+      } else {
+        Attempt.failure(Err.insufficientBits(bitLength, bits.size))
+      }
+    override def encode(value: Blake2b256Hash): Attempt[BitVector] = {
+      val encoded = value.bytes.toBitVector
+      if (encoded.size != bitLength)
+        Attempt.failure(
+          Err(s"[$value] requires ${encoded.size} bits but field is fixed size of $bitLength bits")
+        )
+      else
+        Attempt.successful(encoded)
+    }
+    override def sizeBound: SizeBound = SizeBound.exact(bitLength)
+  }
+
+  implicit val codecWithBytesStringBlake2b256Hash: Codec[Blake2b256Hash] =
+    fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
+
+  implicit val ordering: Ordering[Blake2b256Hash] =
+    (x: Blake2b256Hash, y: Blake2b256Hash) => {
+      x.bytes.toHex.compare(y.bytes.toHex)
+      // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
+      // x.bytes.compare(y.bytes)
+    }
+}

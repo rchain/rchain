@@ -49,7 +49,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{EvaluateResult, ReplayRhoRuntime, RhoRuntime}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.trace
 import coop.rchain.rspace.util.ReplayException

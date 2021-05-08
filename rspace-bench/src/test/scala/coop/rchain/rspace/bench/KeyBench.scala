@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 import java.util.concurrent.TimeUnit
 import coop.rchain.shared.AttemptOps._

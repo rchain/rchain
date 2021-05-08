@@ -6,9 +6,7 @@ import coop.rchain.casper.PrettyPrinter
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.models.PCost
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.crypto.PublicKey
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceExporter
+import coop.rchain.crypto.{Blake2b256Hash, PublicKey}
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 
@@ -644,11 +642,12 @@ final case class StoreItemsMessage(
   override def toProto: StoreItemsMessageProto = StoreItemsMessage.toProto(this)
 
   def pretty: String = {
-    val start       = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
-    val last        = lastPath.map(RSpaceExporter.pathPretty).mkString(" ")
+//    val start       = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+//    val last        = lastPath.map(RSpaceExporter.pathPretty).mkString(" ")
     val historySize = historyItems.size
     val dataSize    = dataItems.size
-    s"StoreItems(history: $historySize, data: $dataSize, start: [$start], last: [$last])"
+//    s"StoreItems(history: $historySize, data: $dataSize, start: [$start], last: [$last])"
+    s"StoreItems(history: $historySize, data: $dataSize)"
   }
 }
 

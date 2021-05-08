@@ -5,6 +5,7 @@ import coop.rchain.rspace.util
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 import scodec.codecs._
+import coop.rchain.crypto.Blake2b256Hash
 
 object StableHashProvider {
 

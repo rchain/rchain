@@ -3,7 +3,7 @@ package coop.rchain.rspace.test
 import scala.collection.mutable.ListBuffer
 import coop.rchain.rspace._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringMatch, StringsCaptor, Wildcard}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.shared.GeneratorUtils._

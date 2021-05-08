@@ -2,7 +2,8 @@ package coop.rchain.rspace.history.instances
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
+import coop.rchain.crypto.Blake2b256Hash
+import coop.rchain.rspace.hashing.{ChannelHash}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._

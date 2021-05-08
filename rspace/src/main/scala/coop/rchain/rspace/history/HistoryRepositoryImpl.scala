@@ -12,7 +12,7 @@ import coop.rchain.rspace.hashing.ChannelHash.{
 }
 import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
 import coop.rchain.rspace.merger.StateMerger

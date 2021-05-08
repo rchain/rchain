@@ -1,6 +1,6 @@
 package coop.rchain.rspace.serializers
 
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.PointerBlock.length
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}

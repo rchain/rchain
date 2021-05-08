@@ -1,6 +1,6 @@
 package coop.rchain.rspace.channelStore
 
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 /**
   * The [[ChannelStore]] is trying to solve the problem that the dataHash, continuationHash and joinHash

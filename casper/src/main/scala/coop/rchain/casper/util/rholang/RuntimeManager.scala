@@ -17,7 +17,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.LazyKeyValueCache

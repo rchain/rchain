@@ -3,7 +3,7 @@ package coop.rchain.rspace.channelStore.syntax
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ChannelStore, ContinuationHash, DataJoinHash}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.shared.syntax._
 

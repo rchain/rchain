@@ -18,7 +18,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
 import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
 import coop.rchain.shared.scalatestcontrib.effectTest

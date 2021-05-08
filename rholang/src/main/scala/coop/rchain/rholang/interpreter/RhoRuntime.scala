@@ -24,7 +24,7 @@ import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.util.unpackOption

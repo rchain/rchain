@@ -3,7 +3,7 @@ package coop.rchain.rspace.history.syntax
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.internal

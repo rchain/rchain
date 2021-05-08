@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import cats.Applicative
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.{internal, Checkpoint, ContResult, ISpace, Match, Result, SoftCheckpoint}
 
 import scala.collection.SortedSet

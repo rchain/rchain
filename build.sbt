@@ -235,7 +235,7 @@ lazy val models = (project in file("models"))
       grpcmonix.generators.gen()                                -> (sourceManaged in Compile).value
     )
   )
-  .dependsOn(shared % "compile->compile;test->test", rspace)
+  .dependsOn(shared % "compile->compile;test->test", crypto)
 
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
@@ -491,7 +491,7 @@ lazy val rspace = (project in file("rspace"))
     licenses := Seq("Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")),
     homepage := Some(url("https://www.rchain.coop"))
   )
-  .dependsOn(shared % "compile->compile;test->test", crypto)
+  .dependsOn(shared % "compile->compile;test->test", crypto, models % "compile->compile;test->test")
 
 lazy val rspaceBench = (project in file("rspace-bench"))
   .settings(

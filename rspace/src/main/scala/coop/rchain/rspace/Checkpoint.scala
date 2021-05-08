@@ -1,6 +1,6 @@
 package coop.rchain.rspace
 
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.trace.Produce
 
 final case class SoftCheckpoint[C, P, A, K](

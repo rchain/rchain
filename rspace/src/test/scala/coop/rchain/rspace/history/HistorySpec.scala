@@ -11,7 +11,7 @@ import coop.rchain.crypto.codec.Base16
 import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random

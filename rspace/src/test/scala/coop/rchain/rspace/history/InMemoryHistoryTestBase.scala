@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 import scala.collection.concurrent.TrieMap
 import monix.eval.Task

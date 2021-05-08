@@ -3,7 +3,7 @@ package coop.rchain.rspace.state.exporters
 import cats.Monad
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.ByteVectorOps.RichByteVector

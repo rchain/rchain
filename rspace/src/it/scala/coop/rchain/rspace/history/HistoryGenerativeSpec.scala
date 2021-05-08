@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import History._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task

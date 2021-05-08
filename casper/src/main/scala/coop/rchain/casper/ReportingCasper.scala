@@ -24,7 +24,7 @@ import coop.rchain.rholang.interpreter.accounting.{_cost, CostAccounting}
 import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
 import monix.execution.atomic.AtomicAny

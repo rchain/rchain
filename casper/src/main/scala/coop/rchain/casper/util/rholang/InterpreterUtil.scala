@@ -28,7 +28,7 @@ import coop.rchain.casper.blocks.merger.{
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
 import monix.eval.Coeval
 

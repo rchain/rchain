@@ -11,7 +11,7 @@ import coop.rchain.casper.{MergingMetricsSource, PrettyPrinter}
 import coop.rchain.dag._
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.merger.EventChain
 import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
 import coop.rchain.rspace.syntax._

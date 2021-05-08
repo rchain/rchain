@@ -3,10 +3,10 @@ package coop.rchain.rspace.history
 import cats.Parallel
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}

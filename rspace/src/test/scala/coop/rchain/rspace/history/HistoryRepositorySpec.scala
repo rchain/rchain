@@ -3,10 +3,10 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace._
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}

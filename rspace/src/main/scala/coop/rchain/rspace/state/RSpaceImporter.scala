@@ -2,7 +2,7 @@ package coop.rchain.rspace.state
 
 import cats.effect._
 import cats.syntax.all._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.AttemptOps.{RichAttempt, _}

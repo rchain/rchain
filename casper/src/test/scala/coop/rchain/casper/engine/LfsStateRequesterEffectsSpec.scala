@@ -7,7 +7,7 @@ import coop.rchain.casper.engine.LfsTupleSpaceRequester.{ST, StatePartPath}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
 import coop.rchain.models.blockImplicits
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceImporter, StateValidationError}
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream

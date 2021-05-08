@@ -2,7 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.implicits._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace._
 import coop.rchain.rspace.util.ReplayException

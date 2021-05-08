@@ -2,7 +2,7 @@ package coop.rchain.rspace
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 
 package object merger {
   def computeChannelChange[F[_]: Sync, T](

@@ -25,7 +25,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.state.RNodeStateManager
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceStateManager
 import fs2.concurrent.Queue
 

@@ -15,7 +15,7 @@ import coop.rchain.comm.syntax._
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.shared._
 
 import scala.concurrent.duration._

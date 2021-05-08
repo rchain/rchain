@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Id
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.rspace.internal._
 
 final case class Result[C, A](

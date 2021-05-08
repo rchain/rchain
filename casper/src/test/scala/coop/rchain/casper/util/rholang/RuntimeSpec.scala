@@ -4,7 +4,7 @@ import coop.rchain.casper.syntax._
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntimeAt
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.crypto.Blake2b256Hash
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
