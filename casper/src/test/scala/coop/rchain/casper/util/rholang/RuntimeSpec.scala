@@ -1,9 +1,11 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.syntax._
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntimeAt
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -44,4 +46,45 @@ class RuntimeSpec extends FlatSpec with Matchers {
       emptyHash          = Blake2b256Hash.fromByteString(emptyRootHash)
     } yield emptyHashHardCoded shouldEqual emptyHash
   }
+
+  "stateHash after fixed rholang term execution " should "be hash fixed without hard fork" in effectTest {
+    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val logger: Log[Task]         = Log.log[Task]
+    val kvm                                = InMemoryStoreManager[Task]()
+
+    // fixed term , if the term changed, it is possible that the stateHash also changed.
+    val contract =
+      """
+        | new a in {
+        |   @"2"!(10)|
+        |   @2!("test")|
+        |   @"3"!!(3)|
+        |   @42!!("1")|
+        |   for (@t <- a){Nil}|
+        |   for (@num <- @"3";@num2 <- @1){10}|
+        |   for (@_ <= @"4"){"3"}|
+        |   for (@_ <= @"5"; @num3 <= @5){Nil}|
+        |   for (@3 <- @44){new g in {Nil}}|
+        |   for (@_ <- @"55"; @num3 <- @55){Nil}
+        | }
+        |""".stripMargin
+
+    // random seed should be always to the same to make sure everything is the same
+    implicit val random =
+      Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
+
+    for {
+      runtimes        <- mkRuntimeAt[Task](kvm)
+      (runtime, _, _) = runtimes
+      r               <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
+      _               = r.errors should be(Vector.empty)
+      checkpoint      <- runtime.createCheckpoint
+      stateHash       = Base16.encode(checkpoint.root.toByteString.toByteArray)
+      _ = "9ff69faea28024a50ddcee894066ec31233e5b95f0f2bbd87af06def2ad94e7c" should be(
+        stateHash
+      )
+    } yield ()
+  }
+
 }
