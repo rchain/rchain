@@ -1,7 +1,6 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.casper.syntax._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntimeAt
@@ -80,11 +79,12 @@ class RuntimeSpec extends FlatSpec with Matchers {
       r               <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
       _               = r.errors should be(Vector.empty)
       checkpoint      <- runtime.createCheckpoint
-      stateHash       = Base16.encode(checkpoint.root.toByteString.toByteArray)
-      _ = "9ff69faea28024a50ddcee894066ec31233e5b95f0f2bbd87af06def2ad94e7c" should be(
-        stateHash
+
+      expectedHash = Blake2b256Hash.fromHex(
+        "97eeb7ee6999497d6efb67bc61039872ab0d68bae04e65e9c4e788652b8e1537"
       )
-    } yield ()
+      stateHash = checkpoint.root
+    } yield expectedHash shouldEqual stateHash
   }
 
 }

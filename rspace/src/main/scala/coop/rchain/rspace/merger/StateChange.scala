@@ -4,7 +4,6 @@ import cats.Monoid
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.HistoryReaderBinary
 import coop.rchain.rspace.merger.MergingLogic.{consumesAffected, producesAffected}
