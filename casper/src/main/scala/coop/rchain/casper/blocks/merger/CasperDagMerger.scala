@@ -91,14 +91,8 @@ object CasperDagMerger {
       // reader for base state
       baseReader = historyRepo.getHistoryReader(Blake2b256Hash.fromByteString(base.postStateHash))
       // caching readers for data in base state
-      baseDataReader <- LazyKeyValueCache(
-                         (ch: Blake2b256Hash) =>
-                           baseReader.getDataFromChannelHash(ch)(historyRepo, Sync[F])
-                       )
-      baseJoinsReader <- LazyKeyValueCache(
-                          (ch: Blake2b256Hash) =>
-                            baseReader.getJoinsFromChannelHash(ch)(historyRepo, Sync[F])
-                        )
+      baseDataReader  = (ch: Blake2b256Hash) => baseReader.getData(ch)
+      baseJoinsReader = (ch: Blake2b256Hash) => baseReader.getJoins(ch)
 
       _ <- Log[F].debug(s"Calculating conflicts for branches size of (events): ${branchesIndexed
             .map(_.index.deploys.map(_.deployLog).size)

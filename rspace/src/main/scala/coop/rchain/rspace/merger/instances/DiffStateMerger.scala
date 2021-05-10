@@ -4,9 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.syntax.ConsumeMapping
-import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.merger.{computeChannelChange, ChannelChange, EventChain, StateMerger}
 import coop.rchain.rspace.serializers.ScodecSerialize._
@@ -33,13 +31,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       trieActions <- Stopwatch.time(Log[F].debug(_))(
                       s"compute historyActions: ${toMerge.flatMap(_.events).size} events, " +
                         s"merged ${toMerge.size} states"
-                    )(
-                      computeTrieActions(
-                        mainState.root,
-                        historyRepo,
-                        toMerge
-                      )
-                    )
+                    )(computeTrieActions(mainState.root, toMerge))
 
       // apply trie actions
       mergedState <- Stopwatch.time(Log[F].info(_))("process trieActions")(
@@ -49,7 +41,6 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
 
   private def computeTrieActions(
       mainState: Blake2b256Hash,
-      channelsStore: ChannelStore[F, C],
       mergings: Seq[EventChain[F]]
   ): F[Seq[HotStoreTrieAction]] = {
     val mainReader = historyRepo.getHistoryReader(mainState).readerBinary
@@ -74,20 +65,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       channelsPerConsumesRef <- Ref.of[F, Map[Blake2b256Hash, Seq[Blake2b256Hash]]](Map.empty)
 
       // hash in history containing joins for channel
-      joinLeafForChannel <- LazyKeyValueCache(
-                             (hash: Blake2b256Hash) =>
-                               historyRepo
-                                 .getChannelHash(hash)
-                                 .flatMap {
-                                   case Some(DataJoinHash(_, j)) => j.pure[F]
-                                   case _ =>
-                                     Concurrent[F].raiseError[Blake2b256Hash](
-                                       new Exception(
-                                         s"hash $hash not found in channel store when requesting join"
-                                       )
-                                     )
-                                 }
-                           )
+      joinLeafForChannel <- LazyKeyValueCache((hash: Blake2b256Hash) => hash.pure[F])
 
       // each merging can be processed in parallel
       work = fs2.Stream.emits(mergings.map(m => {
@@ -137,15 +115,18 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
         // processing of a single merging
         fs2.Stream.eval(for {
           // this step is required because hashes in event log are not the same hashes which point to content in history
-          produceMappings <- channelsStore.getProduceMappings(mergeChanges._1.toList)
-          consumeMappings <- channelsStore.getConsumeMappings(mergeChanges._2.toList)
+//          produceMappings <- channelsStore.getProduceMappings(mergeChanges._1.toList)
+//          consumeMappings <- channelsStore.getConsumeMappings(mergeChanges._2.toList)
+          _                    <- ().pure[F]
+          (produces, consumes) = mergeChanges
 
           _ <- fs2.Stream
                 .emits(
-                  consumeMappings.map(
+                  consumes.map(
                     m =>
                       fs2.Stream.eval(channelsPerConsumesRef.update { s =>
-                        s.updated(m.historyHash, m.eventLogHashes)
+                        val chHash = ChannelHash.hashContinuationsChannels(m.channelsHashes)
+                        s.updated(chHash, m.channelsHashes)
                       })
                   )
                 )
@@ -156,9 +137,9 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
           // `distinct` required here to not compute for the same hash several times
           // if channel is mentioned several times in event chain
           // hashes storing datums that can potentially be affected
-          changedProduceHashes = produceMappings.map(_.historyHash).distinct
+          changedProduceHashes = produces.map(_.channelsHash).distinct
           // hashes storing waiting continuations that can potentially be affected
-          changedConsumeHashes = consumeMappings.map(_.historyHash).distinct
+          changedConsumeHashes <- channelsPerConsumesRef.get.map(_.keys)
 
           // streams for compute data changes
           produceChangeComputes = changedProduceHashes.map(
@@ -206,9 +187,9 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
           )
           // compute cumulative joins on channel across all states that are merged
           // during accumulation joins can be duplicated
-          joinsComputes = consumeMappings
+          joinsComputes = consumes
             .flatMap {
-              case ConsumeMapping(_, channelsInvolved) => channelsInvolved
+              case Consume(channelsInvolved, _, _) => channelsInvolved
             }
             .map {
               channelHash =>

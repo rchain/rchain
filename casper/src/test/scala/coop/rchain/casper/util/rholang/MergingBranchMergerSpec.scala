@@ -6,12 +6,11 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.blocks.merger.{BlockIndex, CasperDagMerger, Indexer, MergingVertex}
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.dag.{DagReader, InMemDAG}
+import coop.rchain.dag.InMemDAG
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
@@ -25,7 +24,6 @@ import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.LazyKeyValueCache
 import fs2.Stream
-import kamon.trace.Span.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -172,7 +170,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
   }
 
   "conflict detection for branches having blocks from the same/different validators" should "be correct" in effectTest {
-    import coop.rchain.rspace.syntax._
     runtimeManagerResource.use { runtimeManager =>
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
@@ -212,20 +209,8 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             )
           }
 
-          baseDataReader <- LazyKeyValueCache(
-                             (ch: Blake2b256Hash) => {
-                               implicit val c = runtimeManager.getHistoryRepo
-                               baseStateReader
-                                 .getDataFromChannelHash(ch)
-                             }
-                           )
-          baseJoinsReader <- LazyKeyValueCache(
-                              (ch: Blake2b256Hash) => {
-                                implicit val c = runtimeManager.getHistoryRepo
-                                baseStateReader
-                                  .getJoinsFromChannelHash(ch)
-                              }
-                            )
+          baseDataReader  = (ch: Blake2b256Hash) => baseStateReader.getData(ch)
+          baseJoinsReader = (ch: Blake2b256Hash) => baseStateReader.getJoins(ch)
 
           // branches having the same validator blocks should be confliting
           c <- EventsIndexConflictDetectors.findConflicts(

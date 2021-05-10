@@ -25,7 +25,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
   override def root: Blake2b256Hash = targetHistory.root
 
   override def getDataProj[R](key: Blake2b256Hash)(proj: (Datum[A], ByteVector) => R): F[Seq[R]] =
-    fetchData(key).flatMap {
+    fetchData(HistoryRepositoryInstances.PREFIX_DATUM, key).flatMap {
       case Some(DataLeaf(bytes)) =>
         Sync[F].delay(decodeDatumsProj(bytes)(proj))
       case Some(p) =>
@@ -36,7 +36,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
   override def getContinuationsProj[R](key: Blake2b256Hash)(
       proj: (WaitingContinuation[P, K], ByteVector) => R
   ): F[Seq[R]] =
-    fetchData(key).flatMap {
+    fetchData(HistoryRepositoryInstances.PREFIX_KONT, key).flatMap {
       case Some(ContinuationsLeaf(bytes)) =>
         Sync[F].delay(decodeContinuationsProj[P, K, R](bytes)(proj))
       case Some(p) =>
@@ -47,7 +47,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
     }
 
   override def getJoinsProj[R](key: Blake2b256Hash)(proj: (Seq[C], ByteVector) => R): F[Seq[R]] =
-    fetchData(key).flatMap {
+    fetchData(HistoryRepositoryInstances.PREFIX_JOINS, key).flatMap {
       case Some(JoinsLeaf(bytes)) =>
         Sync[F].delay(decodeJoinsProj[C, R](bytes)(proj))
       case Some(p) =>
@@ -57,9 +57,10 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
 
   /** Fetch data on a hash pointer */
   def fetchData(
+      prefix: Byte,
       key: Blake2b256Hash
   ): F[Option[PersistedData]] =
-    targetHistory.find(key.bytes.toSeq.toList).flatMap {
+    targetHistory.find(prefix +: key.bytes.toSeq.toList).flatMap {
       case (trie, _) =>
         trie match {
           case LeafPointer(dataHash) => leafStore.get(dataHash)

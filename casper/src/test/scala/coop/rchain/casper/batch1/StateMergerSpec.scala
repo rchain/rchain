@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch1
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.blocks.merger.{BlockIndex, Indexer, MergingVertex}
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
@@ -149,21 +149,8 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
 
             baseStateReader = historyRepo.getHistoryReader(baseCheckpoint.root)
             // Caching readers for data in base state
-            baseDataReader <- LazyKeyValueCache(
-                               (ch: Blake2b256Hash) => {
-                                 implicit val c = historyRepo
-                                 baseStateReader
-                                   .getDataFromChannelHash(ch)
-                               }
-                             )
-
-            baseJoinReader <- LazyKeyValueCache(
-                               (ch: Blake2b256Hash) => {
-                                 implicit val c = historyRepo
-                                 baseStateReader
-                                   .getJoinsFromChannelHash(ch)
-                               }
-                             )
+            baseDataReader = (ch: Blake2b256Hash) => baseStateReader.getData(ch)
+            baseJoinReader = (ch: Blake2b256Hash) => baseStateReader.getJoins(ch)
 
             conflicts <- EventsIndexConflictDetectors.findConflicts(
                           leftV.eventLogIndex,

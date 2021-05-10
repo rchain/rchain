@@ -274,6 +274,14 @@ object HistoryInstances {
               case EmptyPointer      => Applicative[F].pure(None.asRight) // removed path
             }
 
+          // path has empty trie, last node deleted
+          case (v, EmptyTrie) =>
+            val curr = ByteVector(currentPath)
+            val prev = ByteVector(previousPath)
+            val key  = ByteVector(v)
+            println(s"EMPTY TRIE PATH: $key, current: $curr, prev: $prev")
+            Applicative[F].pure(None.asRight)
+
           case _ => Sync[F].raiseError(MalformedTrieError)
         }
 
@@ -319,6 +327,7 @@ object HistoryInstances {
         //  sequential execution is now to prevent the bug with root hash mismatch.
         // https://rchain.atlassian.net/browse/RCHAIN-3940
         trieRoot <- historyStore.get(this.root)
+        _        = println(s"")
         roots <- fs2.Stream
                   .emits(
                     partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
@@ -350,12 +359,16 @@ object HistoryInstances {
                          (currentRoot, previousModificationOpt),
                          InsertAction(remainingPath, value)
                          ) =>
+                       val key = ByteVector(remainingPath)
+                       println(s"$index INSERT $key")
                        insert(currentRoot, previousModificationOpt, remainingPath, value)
 
                      case (
                          (currentRoot, previousModificationOpt),
                          DeleteAction(remainingPath)
                          ) =>
+                       val key = ByteVector(remainingPath)
+                       println(s"$index DELETE $key")
                        delete(currentRoot, previousModificationOpt, remainingPath)
                    }
         (root, _) = result
@@ -505,8 +518,11 @@ object HistoryInstances {
       ((toInt(b), ptr), List[Trie](skip)).pure[F]
     }
 
-    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = findPath(key).map {
-      case (trie, path) => (trie, path.nodes)
+    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = {
+      if (key.size != 33) println(s"--------------------- KEY GET SIZE ${key.size}")
+      findPath(key).map {
+        case (trie, path) => (trie, path.nodes)
+      }
     }
 
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
