@@ -240,4 +240,73 @@ class EstimatorTest
         result = forkchoice.tips(1) should be(b7.blockHash)
       } yield result
   }
+
+  /**
+    * 5    4  3
+    * |    | /
+    * |    7
+    * |   /
+    * LCA
+    * Main parent should be tip with weight 4
+    * */
+  "Estimator" should "return valid main parent" in withStorage {
+    implicit blockStore => implicit blockDagStorage =>
+      val v1     = generateValidator("Validator One")
+      val v2     = generateValidator("Validator Two")
+      val v3     = generateValidator("Validator Three")
+      val v1Bond = Bond(v1, 5)
+      val v2Bond = Bond(v2, 4)
+      val v3Bond = Bond(v3, 3)
+      val bonds  = Seq(v1Bond, v2Bond, v3Bond)
+      for {
+        genesis <- createGenesis[Task](bonds = bonds)
+        r7 <- createBlock[Task](
+               parentsHashList = Seq(genesis.blockHash),
+               genesis = genesis,
+               creator = v2,
+               bonds = bonds,
+               justifications =
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+        r4 <- createBlock[Task](
+               parentsHashList = Seq(r7.blockHash),
+               genesis = genesis,
+               creator = v2,
+               bonds = bonds,
+               justifications =
+                 HashMap(v1 -> genesis.blockHash, v2 -> r7.blockHash, v3 -> genesis.blockHash)
+             )
+        r3 <- createBlock[Task](
+               parentsHashList = Seq(r7.blockHash),
+               genesis = genesis,
+               creator = v3,
+               bonds = bonds,
+               justifications =
+                 HashMap(v1 -> genesis.blockHash, v2 -> r7.blockHash, v3 -> genesis.blockHash)
+             )
+        r5 <- createBlock[Task](
+               parentsHashList = Seq(genesis.blockHash),
+               genesis = genesis,
+               creator = v1,
+               bonds = bonds,
+               justifications =
+                 HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
+             )
+
+        dag <- blockDagStorage.getRepresentation
+        latestBlocks = HashMap[Validator, BlockHash](
+          v1 -> r5.blockHash,
+          v2 -> r4.blockHash,
+          v3 -> r3.blockHash
+        )
+        forkchoice <- Estimator[Task].tips(
+                       dag,
+                       genesis,
+                       latestBlocks
+                     )
+        _ = forkchoice.lca should be(genesis.blockHash)
+        _ = forkchoice.tips.head should be(r4.blockHash)
+        _ = forkchoice.tips.size should be(latestBlocks.size)
+      } yield ()
+  }
 }

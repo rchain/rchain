@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -59,10 +59,11 @@ class BlockQueryResponseAPITest
       setValidator = sender.some,
       setDeploys = randomDeploys.some,
       setJustifications = List(Justification(bondsValidator.validator, genesisBlock.blockHash)).some,
+      setParentsHashList = List(genesisBlock.blockHash).some,
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = 1f
+  val faultTolerance = -1f
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
@@ -286,7 +287,7 @@ class BlockQueryResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
       } yield (logEff, engineCell, cliqueOracleEffect)
     }
 
@@ -307,7 +308,7 @@ class BlockQueryResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metricsEff, spanEff)
+          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
       } yield (logEff, engineCell, cliqueOracleEffect)
     }
 }

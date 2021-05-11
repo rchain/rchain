@@ -31,12 +31,12 @@ final class CasperMergingDagReader[F[_]: Concurrent: BlockStore](
           )
     }
 
-  override def parents(vertex: MergingVertex): F[Option[Set[MergingVertex]]] =
+  override def parents(vertex: MergingVertex): F[Option[Seq[MergingVertex]]] =
     hashDAGReader.parents(vertex.blockHash).flatMap {
-      case None => none[Set[MergingVertex]].pure[F]
+      case None => none[Seq[MergingVertex]].pure[F]
       case Some(children) =>
         BlockStore[F]
-          .getUnsafe(children.toSeq)
+          .getUnsafe(children)
           .compile
           .toList
           .map(
@@ -48,7 +48,7 @@ final class CasperMergingDagReader[F[_]: Concurrent: BlockStore](
                   b.body.state.preStateHash,
                   b.body.deploys.toSet
                 )
-            ).toSet.some
+            ).some
           )
     }
 }

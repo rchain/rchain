@@ -1,23 +1,22 @@
 package coop.rchain.casper
 
-import scala.collection.immutable.{Map, Set}
-import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockMetadata
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.dag.DagOps
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
+
+import scala.collection.immutable.{Map, Set}
 
 // Tips of the DAG, ranked against LCA
 final case class ForkChoice(tips: IndexedSeq[BlockHash], lca: BlockHash)
@@ -65,13 +64,19 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
               BlockMetadata.fromBlock(genesis, false),
               filteredLatestMessagesHashes
             )
-      _                          <- Span[F].mark("lca")
-      scoresMap                  <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
-      _                          <- Span[F].mark("score-map")
-      rankedLatestMessagesHashes <- rankForkchoices(List(lca), dag, scoresMap)
-      _                          <- Span[F].mark("ranked-latest-messages-hashes")
-      rankedShallowHashes        <- filterDeepParents(rankedLatestMessagesHashes, dag)
-      _                          <- Span[F].mark("filtered-deep-parents")
+      _         <- Span[F].mark("lca")
+      scoresMap <- buildScoresMap(dag, filteredLatestMessagesHashes, lca)
+      _         <- Span[F].mark("score-map")
+      rankedLatestMessagesHashes <- rankForkChoices(List(lca), dag, scoresMap)
+                                     .map(
+                                       mp =>
+                                         mp ++ filteredLatestMessagesHashes.values.filterNot(
+                                           _ == mp.head
+                                         )
+                                     )
+      _                   <- Span[F].mark("ranked-latest-messages-hashes")
+      rankedShallowHashes <- filterDeepParents(rankedLatestMessagesHashes, dag)
+      _                   <- Span[F].mark("filtered-deep-parents")
     } yield ForkChoice(rankedShallowHashes.take(maxNumberOfParents), lca)
   }
 
@@ -169,7 +174,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
     }
   }
 
-  private def rankForkchoices(
+  private def rankForkChoices(
       blocks: List[BlockHash],
       blockDag: BlockDagRepresentation[F],
       scores: Map[BlockHash, Long]
@@ -184,7 +189,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       result <- if (stillSame(blocks, newBlocks)) {
                  blocks.toVector.pure[F]
                } else {
-                 rankForkchoices(newBlocks, blockDag, scores)
+                 rankForkChoices(List(newBlocks.head), blockDag, scores)
                }
     } yield result
 

@@ -3,6 +3,8 @@ package coop.rchain.blockstorage.dag
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.protocol.Justification
+import coop.rchain.dag.Casper
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
@@ -14,6 +16,7 @@ trait BlockDagRepresentationSyntax {
 }
 
 final case class BlockDagInconsistencyError(message: String) extends Exception(message)
+final case class NoLatestMessage(message: String)            extends Exception(message)
 
 final class BlockDagRepresentationOps[F[_]: Sync](
     // BlockDagRepresentation extensions / syntax
@@ -46,6 +49,16 @@ final class BlockDagRepresentationOps[F[_]: Sync](
   ): F[List[BlockMetadata]] = {
     val streams = hashes.map(h => fs2.Stream.eval(lookupUnsafe(h)))
     fs2.Stream.emits(streams).parJoinUnbounded.compile.toList
+  }
+
+  def latestMessageHashUnsafe(v: Validator)(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing
+  ): F[BlockHash] = {
+    def source = s"${file.value}:${line.value} ${enclosing.value}"
+    def errMsg = s"No latest message for validator ${PrettyPrinter.buildString(v)}\n  $source"
+    dag.latestMessageHash(v) >>= (_.liftTo(NoLatestMessage(errMsg)))
   }
 
   def childrensMetas(hashes: Seq[BlockHash])(
@@ -100,4 +113,19 @@ final class BlockDagRepresentationOps[F[_]: Sync](
       ib <- dag.invalidBlocks
       r  = ib.map(block => (block.blockHash, block.sender)).toMap
     } yield r
+
+  def getCasperJustificationsUnsafe(
+      blockHash: BlockHash
+  ): F[Set[Casper.Justification[BlockHash, Validator]]] =
+    lookupUnsafe(blockHash).map(
+      _.justifications.map {
+        case Justification(validator, latestBlockHash) =>
+          Casper.Justification(latestBlockHash, validator)
+      }.toSet
+    )
+
+  def toCasperJustificationUnsafe(
+      blockHash: BlockHash
+  ): F[Casper.Justification[BlockHash, Validator]] =
+    lookupUnsafe(blockHash).map(m => Casper.Justification(m.blockHash, m.sender))
 }

@@ -2,9 +2,8 @@ package coop.rchain.blockstorage
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 
 trait BlockStoreSyntax {
