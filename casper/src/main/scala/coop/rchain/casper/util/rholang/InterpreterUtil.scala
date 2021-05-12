@@ -28,6 +28,7 @@ import coop.rchain.casper.blocks.merger.{
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
 import monix.eval.Coeval
@@ -191,6 +192,18 @@ object InterpreterUtil {
             .as(none[StateHash].asRight[BlockError])
         }
     }
+
+  /**
+    * Temporary solution to print user deploy errors to Log so we can have
+    * at least some way to debug user errors.
+    */
+  def printDeployErrors[F[_]: Sync: Log](
+      deploySig: ByteString,
+      errors: Seq[InterpreterError]
+  ): F[Unit] = Sync[F].defer {
+    val deployInfo = PrettyPrinter.buildStringSig(deploySig)
+    Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
+  }
 
   def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
