@@ -1,81 +1,83 @@
 package coop.rchain.rspace.history
 
-import cats.effect.Sync
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.Serialize
-import scodec.Codec
+import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
+import scodec.bits.ByteVector
 
 /**
   * Reader for particular history (state verified on blockchain)
   *
   * @tparam F effect type
+  * @tparam Key type for hash of a channel
   * @tparam C type for Channel => this is Par
   * @tparam P type for Pattern => this is BindPattern
   * @tparam A type for Abstraction => this is ListParWithRandom
   * @tparam K type for Continuation => this is TaggedContinuation
   */
-trait HistoryReader[F[_], C, P, A, K, DK, JK, CK] {
+trait HistoryReader[F[_], Key, C, P, A, K] {
 
-  // get content at a chanel
-  def getData(key: DK): F[Seq[Datum[A]]]
+  // Get current root which reader reads from
+  def root: Key
 
-  def getJoins(key: JK): F[Seq[Seq[C]]]
+  def getDataProj[R](key: Key)(proj: (Datum[A], ByteVector) => R): F[Seq[R]]
 
-  def getContinuations(key: CK): F[Seq[WaitingContinuation[P, K]]]
+  def getContinuationsProj[R](key: Key)(
+      proj: (WaitingContinuation[P, K], ByteVector) => R
+  ): F[Seq[R]]
 
-  // get flavor for rich content (with raw ByteVector representation for each item)
-  def getRichDatums(key: DK): F[Seq[RichDatum[A]]]
-
-  def getRichJoins(key: JK): F[Seq[RichJoin[C]]]
-
-  def getRichContinuations(key: CK): F[Seq[RichKont[P, K]]]
-
-  // get current root which reader reads from
-  def root: Blake2b256Hash
-
-}
-
-/**
-  * Reader for history with addressing by Blake256Hash key
-  */
-trait HashHistoryReader[F[_], C, P, A, K]
-    extends HistoryReader[F, C, P, A, K, Blake2b256Hash, Blake2b256Hash, Blake2b256Hash] {
+  def getJoinsProj[R](key: Key)(proj: (Seq[C], ByteVector) => R): F[Seq[R]]
 
   /**
-    * transform reader into [[RhoHistoryReader]]
-    *
-    * @param codecC codec for serializing channel
-    * @return
+    * Defaults
     */
-  def toRho(
-      implicit codecC: Codec[C],
-      sync: Sync[F]
-  ): RhoHistoryReader[F, C, P, A, K] = {
-    import coop.rchain.rspace.syntax._
-    val hashReader          = this
-    implicit val serializeC = Serialize.fromCodec(codecC)
-    new RhoHistoryReader[F, C, P, A, K] {
-      override def getData(key: C): F[Seq[Datum[A]]] = hashReader.getData(key)
+  def getData(key: Key): F[Seq[Datum[A]]] =
+    getDataProj(key)((d, _) => d)
 
-      override def getJoins(key: C): F[Seq[Seq[C]]] = hashReader.getJoins(key)
+  def getContinuations(key: Key): F[Seq[WaitingContinuation[P, K]]] =
+    getContinuationsProj(key)((d, _) => d)
 
-      override def getContinuations(key: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
-        hashReader.getContinuations(key)
+  def getJoins(key: Key): F[Seq[Seq[C]]] =
+    getJoinsProj(key)((d, _) => d)
 
-      override def getRichDatums(key: C): F[Seq[RichDatum[A]]] = hashReader.getRichData(key)
-
-      override def getRichJoins(key: C): F[Seq[RichJoin[C]]] = hashReader.getRichJoins(key)
-
-      override def getRichContinuations(key: Seq[C]): F[Seq[RichKont[P, K]]] =
-        this.getRichContinuations(key)
-
-      override def root: Blake2b256Hash = hashReader.root
-    }
-  }
+  /**
+    * Get reader which accepts non-serialized and hashed keys
+    */
+  def base: HistoryReaderBase[F, C, P, A, K]
 }
 
 /**
-  * Reader for history with addressing by Rholang channels.
+  * History reader base, version of a reader which accepts non-serialized and hashed keys
   */
-trait RhoHistoryReader[F[_], C, P, A, K] extends HistoryReader[F, C, P, A, K, C, C, Seq[C]]
+trait HistoryReaderBase[F[_], C, P, A, K] {
+  def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]]
+
+  def getContinuationsProj[R](
+      key: Seq[C]
+  ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]]
+
+  def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]]
+
+  /**
+    * Defaults
+    */
+  def getData(key: C): F[Seq[Datum[A]]] =
+    getDataProj(key)((d, _) => d)
+
+  def getContinuations(key: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+    getContinuationsProj(key)((d, _) => d)
+
+  def getJoins(key: C): F[Seq[Seq[C]]] =
+    getJoinsProj(key)((d, _) => d)
+}
+
+/**
+  * History reader with binary data included in result
+  */
+trait HistoryReaderBinary[F[_], C, P, A, K] {
+  def getData(key: Blake2b256Hash): F[Seq[DatumB[A]]]
+
+  def getContinuations(key: Blake2b256Hash): F[Seq[WaitingContinuationB[P, K]]]
+
+  def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]]
+}

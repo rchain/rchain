@@ -18,8 +18,10 @@ private[rspace] trait SpaceMatcher[F[_], C, P, A, K] extends ISpace[F, C, P, A, 
 
   protected[this] def MetricsSource: Source
 
-  implicit val syncF: Sync[F]
-  implicit val spanF: Span[F]
+  def syncF: Sync[F]
+  def spanF: Span[F]
+
+  implicit val _syncF = syncF
 
   /* Consume */
 

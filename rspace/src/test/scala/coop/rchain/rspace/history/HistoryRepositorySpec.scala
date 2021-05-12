@@ -1,45 +1,32 @@
 package coop.rchain.rspace.history
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
+import cats.syntax.all._
+import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace._
+import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
+import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.trace.{Consume, Produce}
-import coop.rchain.rspace.{
-  util,
-  Blake2b256Hash,
-  DeleteContinuations,
-  DeleteData,
-  DeleteJoins,
-  HotStoreAction,
-  InsertContinuations,
-  InsertData,
-  InsertJoins
-}
+import coop.rchain.rspace.util.stringSerialize
 import coop.rchain.shared.Log
+import coop.rchain.shared.Log.NOPLog
+import coop.rchain.shared.syntax._
+import coop.rchain.state.TrieNode
+import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 import scodec.bits.ByteVector
 
+import java.nio.ByteBuffer
+import scala.collection.SortedSet
 import scala.concurrent.duration._
 import scala.util.Random
-import coop.rchain.rspace.util.stringSerialize
-import cats.implicits._
-import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
-import coop.rchain.rspace.examples.StringExamples
-import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
-import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
-import coop.rchain.shared.Log.NOPLog
-import coop.rchain.state.TrieNode
-import coop.rchain.store.InMemoryKeyValueStore
-import coop.rchain.shared.syntax._
-import scodec.Codec
-
-import scala.collection.SortedSet
 
 class HistoryRepositorySpec
     extends FlatSpec
@@ -54,12 +41,9 @@ class HistoryRepositorySpec
     val data      = InsertData[String, String](testChannelDataPrefix, testDatum :: Nil)
     for {
       nextRepo <- repo.checkpoint(data :: Nil)
-      data <- {
-        implicit val cc = StringExamples.implicits.stringSerialize.toSizeHeadCodec
-        nextRepo.getHistoryReader(nextRepo.root).toRho.getData(testChannelDataPrefix)
-      }
-      fetched = data.head
-      _       = fetched shouldBe testDatum
+      data     <- nextRepo.getHistoryReader(nextRepo.root).base.getData(testChannelDataPrefix)
+      fetched  = data.head
+      _        = fetched shouldBe testDatum
     } yield ()
   }
 
@@ -77,21 +61,20 @@ class HistoryRepositorySpec
       val testContinuation = continuation(1)
       val continuations =
         InsertContinuations[String, String, String](channel :: Nil, testContinuation :: Nil)
-      implicit val cc = StringExamples.implicits.stringSerialize.toSizeHeadCodec
+
       for {
-        nextRepo    <- repo.checkpoint(data :: joins :: continuations :: Nil)
-        fetchedData <- nextRepo.getHistoryReader(nextRepo.root).toRho.getData(channel)
-        fetchedContinuation <- nextRepo
-                                .getHistoryReader(nextRepo.root)
-                                .toRho
-                                .getContinuations(channel :: Nil)
-        fetchedJoins <- nextRepo.getHistoryReader(nextRepo.root).toRho.getJoins(channel)
-        _            = fetchedData should have size 1
-        _            = fetchedData.head shouldBe testDatum
-        _            = fetchedContinuation should have size 1
-        _            = fetchedContinuation.head shouldBe testContinuation
-        _            = fetchedJoins should have size 2
-        _            = fetchedJoins.toSet.flatten.flatten should contain theSameElementsAs joins.joins.toSet.flatten.flatten
+        nextRepo            <- repo.checkpoint(data :: joins :: continuations :: Nil)
+        reader              = nextRepo.getHistoryReader(nextRepo.root).base
+        fetchedData         <- reader.getData(channel)
+        fetchedContinuation <- reader.getContinuations(channel :: Nil)
+        fetchedJoins        <- reader.getJoins(channel)
+
+        _ = fetchedData should have size 1
+        _ = fetchedData.head shouldBe testDatum
+        _ = fetchedContinuation should have size 1
+        _ = fetchedContinuation.head shouldBe testContinuation
+        _ = fetchedJoins should have size 2
+        _ = fetchedJoins.toSet.flatten.flatten should contain theSameElementsAs joins.joins.toSet.flatten.flatten
       } yield ()
   }
 
@@ -108,35 +91,41 @@ class HistoryRepositorySpec
     val contsDelete                            = conts.map(c => DeleteContinuations[String](c.channels))
     val deleteElements: Vector[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
 
-    implicit val cc = StringExamples.implicits.stringSerialize.toSizeHeadCodec
     for {
-      nextRepo             <- repo.checkpoint(elems.toList)
-      nextReader           = nextRepo.getHistoryReader(nextRepo.root).toRho
-      fetchedData          <- data.traverse(d => nextReader.getData(d.channel))
-      _                    = fetchedData shouldBe data.map(_.data)
+      nextRepo    <- repo.checkpoint(elems.toList)
+      nextReader  = nextRepo.getHistoryReader(nextRepo.root).base
+      fetchedData <- data.traverse(d => nextReader.getData(d.channel))
+      _           = fetchedData shouldBe data.map(_.data)
+
       fetchedContinuations <- conts.traverse(d => nextReader.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
-      fetchedJoins         <- joins.traverse(d => nextReader.getJoins(d.channel))
-      allJoins             = fetchedJoins.toSet.flatten.flatten
-      expectedJoins        = joins.toSet.flatMap((j: InsertJoins[String]) => j.joins).flatten
-      _                    = allJoins should contain theSameElementsAs expectedJoins
-      deletedRepo          <- nextRepo.checkpoint(deleteElements.toList)
-      deletedReader        = deletedRepo.getHistoryReader(deletedRepo.root).toRho
 
-      fetchedData          <- data.traverse(d => nextReader.getData(d.channel))
-      _                    = fetchedData shouldBe data.map(_.data)
+      fetchedJoins  <- joins.traverse(d => nextReader.getJoins(d.channel))
+      allJoins      = fetchedJoins.toSet.flatten.flatten
+      expectedJoins = joins.toSet.flatMap((j: InsertJoins[String]) => j.joins).flatten
+      _             = allJoins should contain theSameElementsAs expectedJoins
+
+      deletedRepo   <- nextRepo.checkpoint(deleteElements.toList)
+      deletedReader = deletedRepo.getHistoryReader(deletedRepo.root).base
+
+      fetchedData <- data.traverse(d => nextReader.getData(d.channel))
+      _           = fetchedData shouldBe data.map(_.data)
+
       fetchedContinuations <- conts.traverse(d => nextReader.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
-      fetchedJoins         <- joins.traverse(d => nextReader.getJoins(d.channel))
-      allJoins             = fetchedJoins.toSet.flatten.flatten
-      _                    = allJoins should contain theSameElementsAs expectedJoins
 
-      fetchedData          <- data.traverse(d => deletedReader.getData(d.channel))
-      _                    = fetchedData.flatten shouldBe empty
+      fetchedJoins <- joins.traverse(d => nextReader.getJoins(d.channel))
+      allJoins     = fetchedJoins.toSet.flatten.flatten
+      _            = allJoins should contain theSameElementsAs expectedJoins
+
+      fetchedData <- data.traverse(d => deletedReader.getData(d.channel))
+      _           = fetchedData.flatten shouldBe empty
+
       fetchedContinuations <- conts.traverse(d => deletedReader.getContinuations(d.channels))
       _                    = fetchedContinuations.flatten shouldBe empty
-      fetchedJoins         <- joins.traverse(d => deletedReader.getJoins(d.channel))
-      _                    = fetchedJoins.flatten shouldBe empty
+
+      fetchedJoins <- joins.traverse(d => deletedReader.getJoins(d.channel))
+      _            = fetchedJoins.flatten shouldBe empty
     } yield ()
   }
 
@@ -182,11 +171,10 @@ class HistoryRepositorySpec
     Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
-    implicit val codecString: Codec[String] = util.stringCodec
-    val emptyHistory                        = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
-    val pastRoots                           = rootRepository
-    implicit val log: Log[Task]             = new NOPLog()
-    implicit val span: Span[Task]           = new NoopSpan[Task]()
+    val emptyHistory              = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+    val pastRoots                 = rootRepository
+    implicit val log: Log[Task]   = new NOPLog()
+    implicit val span: Span[Task] = new NoopSpan[Task]()
 
     (for {
       _ <- pastRoots.commit(History.emptyRootHash)
@@ -197,6 +185,9 @@ class HistoryRepositorySpec
         emptyExporter,
         emptyImporter,
         noOpChannelStore,
+        stringSerialize,
+        stringSerialize,
+        stringSerialize,
         stringSerialize
       )
       _ <- f(repo)

@@ -1,25 +1,25 @@
 package coop.rchain.rspace
 
-import java.nio.file.Path
-
-import scala.collection.JavaConverters._
-import scala.collection.SortedSet
-import scala.concurrent.ExecutionContext
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
+import com.google.common.collect.Multiset
+import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.SyncVarOps._
-import com.google.common.collect.Multiset
-import com.typesafe.scalalogging.Logger
+import coop.rchain.shared.{Log, Serialize}
 import monix.execution.atomic.AtomicAny
-import coop.rchain.metrics.implicits._
 
-class ReplayRSpace[F[_]: Sync, C, P, A, K](
+import scala.collection.JavaConverters._
+import scala.collection.SortedSet
+import scala.concurrent.ExecutionContext
+
+class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -29,14 +29,11 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A],
-    val concurrent: Concurrent[F],
-    protected val logF: Log[F],
-    contextShift: ContextShift[F],
-    scheduler: ExecutionContext,
-    metricsF: Metrics[F],
-    val spanF: Span[F]
+    scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with IReplaySpace[F, C, P, A, K] {
+
+  protected override def logF: Log[F] = Log[F]
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -253,10 +250,8 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       changes     <- storeAtom.get().changes()
       nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
       _           = historyRepositoryAtom.set(nextHistory)
-      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
-            serializeK.toSizeHeadCodec
-          )
-      _ <- restoreInstalls()
+      _           <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
+      _           <- restoreInstalls()
     } yield (Checkpoint(nextHistory.history.root, Seq.empty))
   }
 
@@ -269,7 +264,7 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
       comm: COMM,
       label: String
   ): F[COMM] =
-    metricsF.incrementCounter(label).map(_ => comm)
+    Metrics[F].incrementCounter(label).map(_ => comm)
 
   protected override def logConsume(
       consumeRef: Consume,
@@ -320,11 +315,10 @@ class ReplayRSpace[F[_]: Sync, C, P, A, K](
   }
 
   def spawn: F[IReplaySpace[F, C, P, A, K]] = {
-    val historyRep  = historyRepositoryAtom.get()
-    implicit val ck = serializeK.toSizeHeadCodec
+    val historyRep = historyRepositoryAtom.get()
     for {
       newHR <- historyRep.reset(historyRep.history.root)
-      newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).toRho)
+      newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).base)
       r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS))
       _     <- r.restoreInstalls()
     } yield r

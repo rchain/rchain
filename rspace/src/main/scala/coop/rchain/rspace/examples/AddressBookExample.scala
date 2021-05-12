@@ -3,7 +3,6 @@ package coop.rchain.rspace.examples
 import cats.effect.{Concurrent, ContextShift}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.util._
@@ -316,7 +315,7 @@ object AddressBookExample {
   }
 
   private[this] def withSpace(
-      f: IdISpace[Channel, Pattern, Entry, Printer] => Unit
+      f: ISpace[Id, Channel, Pattern, Entry, Printer] => Unit
   ) = {
 
     implicit val log: Log[Id]          = Log.log

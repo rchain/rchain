@@ -6,21 +6,22 @@ import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{ConsumeCandidate, Datum, ProduceCandidate, WaitingContinuation}
 import coop.rchain.rspace.trace._
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
+import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
-import java.lang
-import coop.rchain.metrics.implicits._
 
+import java.lang
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
-class RSpace[F[_], C, P, A, K](
+class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -30,12 +31,7 @@ class RSpace[F[_], C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A],
-    val concurrent: Concurrent[F],
-    logF: Log[F],
-    contextShift: ContextShift[F],
-    scheduler: ExecutionContext,
-    metricsF: Metrics[F],
-    val spanF: Span[F]
+    scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with ISpace[F, C, P, A, K] {
 
@@ -55,7 +51,7 @@ class RSpace[F[_], C, P, A, K](
   ): F[MaybeActionResult] =
     Span[F].traceI("locked-consume") {
       for {
-        _ <- logF.debug(
+        _ <- Log[F].debug(
               s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
             )
         _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
@@ -82,7 +78,7 @@ class RSpace[F[_], C, P, A, K](
                              consumeCommLabel
                            )
                        _ <- storePersistentData(dataCandidates, peeks)
-                       _ <- logF.debug(
+                       _ <- Log[F].debug(
                              s"consume: data found for <patterns: $patterns> at <channels: $channels>"
                            )
                      } yield wrapResult(channels, wk, consumeRef, dataCandidates)
@@ -115,7 +111,7 @@ class RSpace[F[_], C, P, A, K](
       for {
         //TODO fix double join fetch
         groupedChannels <- store.getJoins(channel)
-        _ <- logF.debug(
+        _ <- Log[F].debug(
               s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
             )
         _ <- logProduce(produceRef, channel, data, persist)
@@ -182,7 +178,7 @@ class RSpace[F[_], C, P, A, K](
           )
       _ <- store.removeContinuation(channels, continuationIndex).unlessA(persistK)
       _ <- removeMatchedDatumAndJoin(channels, dataCandidates)
-      _ <- logF.debug(s"produce: matching continuation found at <channels: $channels>")
+      _ <- Log[F].debug(s"produce: matching continuation found at <channels: $channels>")
     } yield wrapResult(channels, wk, consumeRef, dataCandidates)
   }
 
@@ -193,7 +189,7 @@ class RSpace[F[_], C, P, A, K](
       comm: COMM,
       label: String
   ): F[COMM] =
-    metricsF.incrementCounter(label).map { _ =>
+    Metrics[F].incrementCounter(label).map { _ =>
       eventLog.update(comm +: _)
       comm
     }
@@ -228,10 +224,8 @@ class RSpace[F[_], C, P, A, K](
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }
-      _ = historyRepositoryAtom.set(nextHistory)
-      _ <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))(
-            serializeK.toSizeHeadCodec
-          )
+      _   = historyRepositoryAtom.set(nextHistory)
+      _   <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
       log = eventLog.take()
       _   = eventLog.put(Seq.empty)
       _   = produceCounter.take()
@@ -241,11 +235,10 @@ class RSpace[F[_], C, P, A, K](
   }
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
-    val historyRep  = historyRepositoryAtom.get()
-    implicit val ck = serializeK.toSizeHeadCodec
+    val historyRep = historyRepositoryAtom.get()
     for {
       nextHistory <- historyRep.reset(historyRep.history.root)
-      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).toRho)
+      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).base)
       r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore))
       _           <- r.restoreInstalls()
     } yield r
@@ -276,7 +269,7 @@ object RSpace {
   ): F[ISpace[F, C, P, A, K]] =
     Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
 
-  def createReplay[F[_], C, P, A, K](
+  def createReplay[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -286,12 +279,7 @@ object RSpace {
       sa: Serialize[A],
       sk: Serialize[K],
       m: Match[F, P, A],
-      concurrent: Concurrent[F],
-      logF: Log[F],
-      contextShift: ContextShift[F],
-      scheduler: ExecutionContext,
-      metricsF: Metrics[F],
-      spanF: Span[F]
+      scheduler: ExecutionContext
   ): F[IReplaySpace[F, C, P, A, K]] = {
     val space: IReplaySpace[F, C, P, A, K] =
       new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
@@ -308,22 +296,19 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A],
       scheduler: ExecutionContext
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] = {
-    implicit val cc = sc.toSizeHeadCodec
+  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
     for {
       setup                  <- setUp[F, C, P, A, K](store)
       (historyReader, store) = setup
       space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-      replayStore <- HotStore.empty(historyReader.getHistoryReader(historyReader.root).toRho)(
-                      sk.toSizeHeadCodec,
-                      Concurrent[F]
+      replayStore <- HotStore.empty(
+                      historyReader.getHistoryReader(historyReader.root).base
                     )
       replay = new ReplayRSpace[F, C, P, A, K](
         historyReader,
         AtomicAny(replayStore)
       )
     } yield (space, replay, historyReader)
-  }
 
   def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
@@ -354,11 +339,6 @@ object RSpace {
   ): F[(HistoryRepository[F, C, P, A, K], HotStore[F, C, P, A, K])] = {
     import coop.rchain.rspace.history._
 
-    implicit val cc = sc.toSizeHeadCodec
-    implicit val cp = sp.toSizeHeadCodec
-    implicit val ca = sa.toSizeHeadCodec
-    implicit val ck = sk.toSizeHeadCodec
-
     for {
       historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
                       store.history,
@@ -366,7 +346,7 @@ object RSpace {
                       store.cold,
                       store.channels
                     )
-      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).toRho)
+      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).base)
     } yield (historyRepo, store)
   }
 }

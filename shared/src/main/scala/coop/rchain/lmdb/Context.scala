@@ -1,11 +1,17 @@
-package coop.rchain.rspace
+package coop.rchain.lmdb
+
+import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
+import org.lmdbjava.{Env, EnvFlags}
 
 import java.nio.ByteBuffer
 import java.nio.file.Path
 
-import org.lmdbjava.{Env, EnvFlags, Txn}
-import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
-
+/**
+  * TODO: This is temporary place for LMDB related things.
+  *
+  * This file is moved from RSpace which is now free from direct reference to LMDB
+  * and here is already old implementation [[LMDBStore]].
+  */
 object Context {
 
   def env(

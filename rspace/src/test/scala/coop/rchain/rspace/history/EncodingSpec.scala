@@ -1,37 +1,23 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
-import coop.rchain.rspace.internal.Datum
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.internal.{Datum, _}
+import coop.rchain.rspace.serializers.ScodecSerialize._
+import coop.rchain.rspace.test.ArbitraryInstances._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.rspace.util.stringCodec
-import scodec.Codec
-import coop.rchain.rspace.examples.StringExamples._
-import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.test.ArbitraryInstances._
 
 class EncodingSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   type Continuation = WaitingContinuation[Pattern, StringsCaptor]
   type Join         = Seq[String]
 
-  implicit val codecChannel: Codec[String] = stringCodec
-
-  implicit val codecDatumString: Codec[Datum[String]] = codecDatum(stringCodec)
-
-  implicit val codecContinuation: Codec[WaitingContinuation[Pattern, StringsCaptor]] =
-    codecWaitingContinuation(
-      implicits.patternSerialize.toSizeHeadCodec,
-      implicits.stringClosureSerialize.toSizeHeadCodec
-    )
-
   "Datum list encode" should "return same hash for different orderings of each datum" in forAll {
     (datum1: Datum[String], datum2: Datum[String]) =>
-      val bytes1 = encodeData(datum1 :: datum2 :: Nil)
-      val bytes2 = encodeData(datum2 :: datum1 :: Nil)
+      val bytes1 = encodeDatums(datum1 :: datum2 :: Nil)
+      val bytes2 = encodeDatums(datum2 :: datum1 :: Nil)
       Blake2b256Hash.create(bytes1) shouldBe Blake2b256Hash.create(bytes2)
   }
 

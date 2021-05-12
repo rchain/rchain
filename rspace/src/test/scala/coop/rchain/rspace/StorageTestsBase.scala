@@ -1,23 +1,21 @@
 package coop.rchain.rspace
 
-import cats.{Parallel, _}
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
+import cats.{Parallel, _}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.RSpace.RSpaceStore
-import coop.rchain.rspace.examples.StringExamples
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.{HistoryRepository, HistoryRepositoryInstances}
-import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval._
 import monix.execution.atomic.AtomicAny
 import org.scalatest._
-import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -55,11 +53,11 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
       createISpace: (HR, ST) => F[(ST, AtST, T)],
       f: (ST, AtST, T) => F[S]
   )(
-      implicit codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K],
-      serializedC: Serialize[C]
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K]
   ): S = {
 
     val kvm = InMemoryStoreManager[F]
@@ -76,9 +74,8 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
                             )
       cache <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
       testStore = {
-        val hr =
-          historyRepository.getHistoryReader(historyRepository.root).toRho
-        HotStore.inMem[F, C, P, A, K](Concurrent[F], cache, hr, codecK)
+        val hr = historyRepository.getHistoryReader(historyRepository.root).base
+        HotStore.inMem[F, C, P, A, K](cache, hr)
       }
       spaceAndStore        <- createISpace(historyRepository, testStore)
       (store, atom, space) = spaceAndStore
@@ -123,12 +120,6 @@ trait TaskTests[C, P, A, R, K] extends StorageTestsBase[Task, C, P, R, K] {
 abstract class InMemoryHotStoreTestsBase[F[_]]
     extends StorageTestsBase[F, String, Pattern, String, StringsCaptor]
     with BeforeAndAfterAll {
-
-  implicit val patternCodec: Codec[Pattern] =
-    StringExamples.implicits.patternSerialize.toSizeHeadCodec
-  implicit val stringCodec: Codec[String] = StringExamples.implicits.stringSerialize.toSizeHeadCodec
-  implicit val stringCaptorCodec: Codec[StringsCaptor] =
-    StringExamples.implicits.stringClosureSerialize.toSizeHeadCodec
 
   override def fixture[S](f: (ST, AtST, T) => F[S]): S = {
     val creator: (HR, ST) => F[(ST, AtST, T)] =

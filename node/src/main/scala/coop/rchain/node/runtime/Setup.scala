@@ -28,6 +28,7 @@ import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.lmdb.Context
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -43,7 +44,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.rspace.{Context, Match, RSpace}
+import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared._
 import coop.rchain.store.LmdbDirStoreManager
 import fs2.concurrent.Queue

@@ -1,18 +1,17 @@
 package coop.rchain.rspace
 
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.history.History._
+import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test._
 import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.util._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.history.History._
 import coop.rchain.shared.Serialize
-import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
-import scodec.Codec
 import monix.eval.Task
+import org.scalatest.prop.{Checkers, GeneratorDrivenPropertyChecks}
 
 import scala.collection.SortedSet
 
@@ -25,10 +24,6 @@ trait StorageActionsTests[F[_]]
     PropertyCheckConfiguration(minSuccessful = 5, sizeRange = 30)
 
   implicit val serializeString: Serialize[String] = coop.rchain.rspace.util.stringSerialize
-
-  implicit val codecString: Codec[String]   = coop.rchain.rspace.util.stringCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
 
   "produce" should
     "persist a piece of data in the store" in fixture { (store, _, space) =>
@@ -1098,7 +1093,7 @@ trait StorageActionsTests[F[_]]
       s1 <- space.createSoftCheckpoint()
       // the log contains the above operation
       _ = s1.log should contain only
-        Consume.create[String, Pattern, StringsCaptor](
+        Consume[String, Pattern, StringsCaptor](
           channels,
           patterns,
           continuation,

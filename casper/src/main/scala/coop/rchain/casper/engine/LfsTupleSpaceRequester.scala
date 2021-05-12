@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceImporter
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.shared.syntax._

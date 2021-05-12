@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.EventConverter
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.EventLogIndex
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.store.{

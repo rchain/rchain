@@ -19,11 +19,10 @@ import coop.rchain.casper.protocol.{
   BlockMessage,
   BlockMessageProto
 }
-import coop.rchain.lmdb.LMDBStore
+import coop.rchain.lmdb.{Context, LMDBStore}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.Context
 import coop.rchain.shared.ByteStringOps._
 import coop.rchain.shared.{AtomicMonadState, Log}
 import monix.execution.atomic.AtomicAny

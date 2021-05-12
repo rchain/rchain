@@ -1,31 +1,27 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Parallel
-import cats.effect.concurrent.{MVar, MVar2}
-import cats.effect.{Sync, _}
+import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.CasperMetricsSource
 import coop.rchain.casper.blocks.merger.{BlockIndex, Indexer, MergingVertex}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.casper.syntax._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
-import coop.rchain.rspace.{Blake2b256Hash, RSpace, ReplayRSpace}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.LazyKeyValueCache
-import monix.execution.Scheduler
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
-import fs2.Stream
 import retry._
 
 import scala.concurrent.duration.FiniteDuration
@@ -216,10 +212,9 @@ object RuntimeManager {
     * the time. For some situations, we can just use the value directly for better performance.
     */
   val emptyStateHashFixed: StateHash =
-    ByteString
-      .copyFrom(
-        Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
-      )
+    ByteString.copyFrom(
+      Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
+    )
 
   def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](
       runtime: RhoRuntime[F],

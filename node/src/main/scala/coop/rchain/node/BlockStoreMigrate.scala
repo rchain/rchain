@@ -2,8 +2,8 @@ package coop.rchain.node
 
 import coop.rchain.blockstorage.{FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import coop.rchain.lmdb.Context
 import coop.rchain.metrics.Metrics
-import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import monix.eval.Task

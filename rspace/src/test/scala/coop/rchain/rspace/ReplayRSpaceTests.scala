@@ -1,17 +1,18 @@
 package coop.rchain.rspace
 
 import cats.Functor
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
+import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
-import cats.effect.concurrent.Ref
-import cats.implicits._
-import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.history.HistoryRepositoryInstances
-import coop.rchain.rspace.trace.Consume
 import coop.rchain.rspace.test._
+import coop.rchain.rspace.trace.Consume
+import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -21,10 +22,9 @@ import org.scalacheck._
 import org.scalatest._
 import org.scalatest.prop._
 
+import scala.collection.SortedSet
 import scala.util.Random
 import scala.util.Random.shuffle
-
-import scala.collection.SortedSet
 
 object SchedulerPools {
   implicit val global = Scheduler.fixedPool("GlobalPool", 20)
@@ -33,8 +33,8 @@ object SchedulerPools {
 
 //noinspection ZeroIndexToHead,NameBooleanParameters
 trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, String] {
-  import cats.syntax.parallel._
   import SchedulerPools.global
+  import cats.syntax.parallel._
 
   implicit val log: Log[Task]      = new Log.NOPLog[Task]
   val arbitraryRangeSize: Gen[Int] = Gen.chooseNum[Int](1, 10)
@@ -986,7 +986,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
       for {
         emptyPoint <- space.createCheckpoint()
 
-        cr = Consume.create(channels, patterns, k, persistent = false)
+        cr = Consume(channels, patterns, k, persistent = false)
 
         _ <- consumeMany(
               space,
@@ -1273,12 +1273,8 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val log: Log[Task]          = Log.log[Task]
     implicit val metricsF: Metrics[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
+    implicit val kvm                     = InMemoryStoreManager[Task]
 
-    implicit val cc  = sc.toSizeHeadCodec
-    implicit val cp  = sp.toSizeHeadCodec
-    implicit val ca  = sa.toSizeHeadCodec
-    implicit val ck  = sk.toSizeHeadCodec
-    implicit val kvm = InMemoryStoreManager[Task]
     (for {
       roots    <- kvm.store("roots")
       cold     <- kvm.store("cold")
@@ -1290,27 +1286,19 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                             history,
                             channels
                           )
-      cache <- Ref.of[Task, Cache[C, P, A, K]](
-                Cache[C, P, A, K]()
-              )
+      cache <- Ref.of[Task, Cache[C, P, A, K]](Cache[C, P, A, K]())
       store = {
-        implicit val hr =
-          historyRepository.getHistoryReader(historyRepository.root).toRho
-        implicit val c = cache
-        AtomicAny(HotStore.inMem[Task, C, P, A, K])
+        val hr = historyRepository.getHistoryReader(historyRepository.root).base
+        AtomicAny(HotStore.inMem[Task, C, P, A, K](cache, hr))
       }
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
         store
       )
-      historyCache <- Ref.of[Task, Cache[C, P, A, K]](
-                       Cache[C, P, A, K]()
-                     )
+      historyCache <- Ref.of[Task, Cache[C, P, A, K]](Cache[C, P, A, K]())
       replayStore = {
-        implicit val hr =
-          historyRepository.getHistoryReader(historyRepository.root).toRho
-        implicit val c = historyCache
-        AtomicAny(HotStore.inMem[Task, C, P, A, K])
+        val hr = historyRepository.getHistoryReader(historyRepository.root).base
+        AtomicAny(HotStore.inMem[Task, C, P, A, K](historyCache, hr))
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,

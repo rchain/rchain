@@ -1,32 +1,27 @@
 package coop.rchain.rspace
 
-import cats._
-import cats.data._
-import cats.implicits._
-import cats.effect._
-import cats.effect.concurrent.{MVar, Ref}
-import cats.effect.implicits._
-import cats.mtl._
+import cats.Parallel
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.history.{HashHistoryReader, HistoryReader, RhoHistoryReader}
+import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
-import coop.rchain.shared.Cell
-import coop.rchain.shared.Language._
 import coop.rchain.shared.GeneratorUtils._
-import org.scalacheck.Gen
-import org.scalacheck.Arbitrary
+import coop.rchain.shared.Language._
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest._
 import org.scalatest.prop._
+import scodec.bits.ByteVector
 
+import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
-import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
-
-import scala.collection.SortedSet
 
 trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
@@ -1257,22 +1252,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
 }
 
 class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
-    extends RhoHistoryReader[F, C, P, A, K] {
-  def getJoins(channel: C): F[Seq[Seq[C]]] =
+    extends HistoryReaderBase[F, C, P, A, K] {
+  override def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.get.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.modify { prev =>
     ignore(prev.joins.put(channel, joins))
     (prev, ())
   }
 
-  def getData(channel: C): F[Seq[Datum[A]]] =
+  override def getData(channel: C): F[Seq[Datum[A]]] =
     R.get.map(_.data.get(channel).toSeq.flatten)
   def putData(channel: C, data: Seq[Datum[A]]): F[Unit] = R.modify { prev =>
     ignore(prev.data.put(channel, data))
     (prev, ())
   }
 
-  def getContinuations(
+  override def getContinuations(
       channels: Seq[C]
   ): F[Seq[WaitingContinuation[P, K]]] =
     R.get.map(_.continuations.get(channels).toSeq.flatten)
@@ -1284,10 +1279,12 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, Cache[C, P, A, K]])
     (prev, ())
   }
 
-  override def getRichDatums(key: C): F[Seq[RichDatum[A]]]               = ???
-  override def getRichJoins(key: C): F[Seq[RichJoin[C]]]                 = ???
-  override def getRichContinuations(key: Seq[C]): F[Seq[RichKont[P, K]]] = ???
-  override def root: Blake2b256Hash                                      = ???
+  // Not used in testing (instead defaults are implemented: getData, getContinuations, getJoins)
+  override def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]] = ???
+  override def getContinuationsProj[R](
+      key: Seq[C]
+  ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]]                 = ???
+  override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] = ???
 }
 
 trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
@@ -1314,20 +1311,13 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
       }
-      cache <- C()
-      hotStore = {
-        implicit val hr = history
-        implicit val c  = cache
-        implicit val ck = stringClosureSerialize.toSizeHeadCodec
-        HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
-      }
-      res <- f(cache, history, hotStore)
+      cache    <- C()
+      hotStore = HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      res      <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
   override def fixture(cache: Cache[String, Pattern, String, StringsCaptor])(
-      f: (
-          HotStore[F, String, Pattern, String, StringsCaptor]
-      ) => F[Unit]
+      f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
   ) =
     (for {
       historyState <- Ref.of[F, Cache[String, Pattern, String, StringsCaptor]](
@@ -1337,14 +1327,9 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
       }
-      cache <- C(cache)
-      hotStore = {
-        implicit val hr = history
-        implicit val c  = cache
-        implicit val ck = stringClosureSerialize.toSizeHeadCodec
-        HotStore.inMem[Task, String, Pattern, String, StringsCaptor]
-      }
-      res <- f(hotStore)
+      cache    <- C(cache)
+      hotStore = HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      res      <- f(hotStore)
     } yield res).runSyncUnsafe(1.second)
 
 }

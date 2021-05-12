@@ -1,6 +1,7 @@
 package coop.rchain.rspace
 
 import cats.Id
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 
 final case class Result[C, A](
@@ -62,9 +63,4 @@ trait ISpace[F[_], C, P, A, K] extends Tuplespace[F, C, P, A, K] {
     Reverts the ISpace to the state checkpointed using {@link #createSoftCheckpoint()}
     */
   def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit]
-}
-
-//TODO lookinto to removing  ISpace object.
-object ISpace {
-  type IdISpace[C, P, A, K] = ISpace[Id, C, P, A, K]
 }

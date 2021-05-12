@@ -465,12 +465,10 @@ lazy val rspace = (project in file("rspace"))
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
-      lmdbjava,
       catsCore,
       fs2Core,
       scodecCore,
-      scodecBits,
-      guava
+      scodecBits
     ),
     /* Tutorial */
     /* Publishing Settings */
