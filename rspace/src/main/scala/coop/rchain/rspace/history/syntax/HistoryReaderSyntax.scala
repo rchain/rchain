@@ -9,15 +9,15 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingCo
 import coop.rchain.rspace.internal
 
 trait HistoryReaderSyntax {
-  implicit final def rspaceSyntaxHistoryReader[F[_]: Sync, C, P, A, K](
+  implicit final def rspaceSyntaxHistoryReader[F[_], C, P, A, K](
       historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
   ): HistoryReaderOps[F, C, P, A, K] =
     new HistoryReaderOps[F, C, P, A, K](historyReader)
 }
 
-final class HistoryReaderOps[F[_]: Sync, C, P, A, K](
+final class HistoryReaderOps[F[_], C, P, A, K](
     private val historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
-) {
+) extends AnyVal {
 
   /**
     * Reader with binary data included in result
@@ -43,7 +43,7 @@ final class HistoryReaderOps[F[_]: Sync, C, P, A, K](
     */
   def getDataFromChannelHash(
       channelHash: Blake2b256Hash
-  )(implicit channelStore: ChannelStore[F, C]): F[Seq[internal.Datum[A]]] =
+  )(implicit channelStore: ChannelStore[F, C], sync: Sync[F]): F[Seq[internal.Datum[A]]] =
     for {
       maybeDataHash <- channelStore.getChannelHash(channelHash)
       dataHash <- maybeDataHash match {
@@ -58,7 +58,7 @@ final class HistoryReaderOps[F[_]: Sync, C, P, A, K](
 
   def getJoinsFromChannelHash(
       channelHash: Blake2b256Hash
-  )(implicit channelStore: ChannelStore[F, C]): F[Seq[Seq[C]]] =
+  )(implicit channelStore: ChannelStore[F, C], sync: Sync[F]): F[Seq[Seq[C]]] =
     for {
       maybeJoinHash <- channelStore.getChannelHash(channelHash)
       joinHash <- maybeJoinHash match {

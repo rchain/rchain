@@ -1,6 +1,6 @@
 package coop.rchain.casper.blocks.merger
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedDeploy
@@ -92,11 +92,12 @@ object CasperDagMerger {
       baseReader = historyRepo.getHistoryReader(Blake2b256Hash.fromByteString(base.postStateHash))
       // caching readers for data in base state
       baseDataReader <- LazyKeyValueCache(
-                         (ch: Blake2b256Hash) => baseReader.getDataFromChannelHash(ch)(historyRepo)
+                         (ch: Blake2b256Hash) =>
+                           baseReader.getDataFromChannelHash(ch)(historyRepo, Sync[F])
                        )
       baseJoinsReader <- LazyKeyValueCache(
                           (ch: Blake2b256Hash) =>
-                            baseReader.getJoinsFromChannelHash(ch)(historyRepo)
+                            baseReader.getJoinsFromChannelHash(ch)(historyRepo, Sync[F])
                         )
 
       _ <- Log[F].debug(s"Calculating conflicts for branches size of (events): ${branchesIndexed
