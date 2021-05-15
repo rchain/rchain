@@ -97,64 +97,6 @@ jobs:
           name: rchain-worktree
           path: ../rchain-worktree.tar.gz
 
-
-  # Get compiled RChain and run unit tests.
-  run_unit_tests:
-    name: Unit Tests
-    needs: build_base
-    runs-on: ubuntu-latest
-    container: rchain/buildenv
-    strategy:
-      fail-fast: false
-      matrix:
-        # This runs unit tests in parallel.
-        #
-        # For each entry a runner node is spawned with entry value in
-        # matrix.tests workflow variable, which is also put into TESTS
-        # environment variable (see below) and used by last step, execution of
-        # .github/run-unit-test-selection, which splits it according to shell
-        # rules (except for REMAINDER) and passes it as arguments to sbt.
-        #
-        # To learn about REMAINDER, see .github/run-unit-test-selection.
-        tests:
-          - "'casper/test:testOnly coop.rchain.casper.addblock.*'"
-          - "'casper/test:testOnly coop.rchain.casper.api.*'"
-          - "'casper/test:testOnly coop.rchain.casper.batch1.*'"
-          - "'casper/test:testOnly coop.rchain.casper.batch2.*'"
-          - "'casper/test:testOnly coop.rchain.casper.engine.*'"
-          - "'casper/test:testOnly coop.rchain.casper.genesis.*'"
-          - "'casper/test:testOnly coop.rchain.casper.util.*'"
-          - REMAINDER # Do not modify/remove!
-    env:
-      TESTS: ${{ matrix.tests }}
-    steps:
-      - name: Clone Repository
-        uses: actions/checkout@v1
-
-      - name: Load Working Tree
-        uses: actions/download-artifact@v1
-        with:
-          name: rchain-worktree
-
-      - name: Restore Working Tree
-        run: tar -H posix -xzf rchain-worktree/rchain-worktree.tar.gz
-
-      - name: Initialize Environment
-        run: ./.github/init-environment
-
-      - name: Restore Cache
-        uses: actions/cache@v1
-        with:
-          path: ${{ env.CACHE_ROOT }}
-          key: ${{ env.CACHE_KEY_PREFIX_SCALA }}${{ env.CACHE_KEY_HASH_SCALA }}
-          restore-keys: ${{ env.CACHE_KEY_PREFIX_SCALA }}
-
-      - name: Run Unit Tests
-        run: |
-          export SBT_OPTS="$SBT_OPTS"
-          ./.github/run-unit-test-selection
-
-
   # Get compiled RChain, build Docker image, and save it for next jobs.
   build_docker_image:
     name: Build Docker Image
@@ -246,117 +188,6 @@ jobs:
           path: ../artifacts/
 
 
-  # Get RNode Docker image and run integration tests.
-  #
-  # These steps are run directly on runner's host (note there's no container key
-  # in the job configuration). That is because bind mounting in container runner
-  # is broken[1] and we need to mount host's /tmp onto container's /tmp (see
-  # "Running from Docker" in integration-tests/README.md). The host doesn't have
-  # everything we need (pipenv, pyenv), so we're going to run integration tests
-  # in rchain/buildenv container started manually as the last step.
-  #
-  # The problem is that host's runner runs everything under a non-privileged
-  # account, whereas the rchain/buildenv container runs as root by default. The
-  # container image does not have an account corresponding to the host's
-  # unprivileged account UID, so we're going to run it as root and do some
-  # workarounds (see below).
-  #
-  # [1] https://github.community/t5/GitHub-Actions/Container-volumes-key-not-mounting-volume/m-p/34798
-  run_integration_tests:
-    name: Integration Tests
-    needs: build_docker_image
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # This runs integration tests in parallel.
-        #
-        # For each entry a runner node is spawned with entry value in
-        # matrix.tests workflow variable, which is also put into TESTS
-        # environment variable (see below) and used by last step, execution of
-        # .github/run-integration-test-selection, which passes it verbatim
-        # (except for REMAINDER) to Pytest's -k parameter.
-        #
-        # To learn about REMAINDER, see github/print-integration-test-selection.
-        tests:
-          - test_backward_compatible
-          - test_dag_correctness
-          - test_finalization
-          - test_genesis_ceremony
-          - test_propose
-          - test_slash_invalid_block_hash
-          - test_slash_invalid_block_number
-          - test_slash_invalid_block_seq
-          - test_slash_justification_not_correct
-          - test_slash_GHOST_disobeyed
-          - test_storage
-          - test_synchrony_constraint
-          - test_wallets
-          - REMAINDER # Do not modify/remove!
-    env:
-      TESTS: ${{ matrix.tests }}
-      # We don't use $CACHE_ROOT in host because it may not be (it is not)
-      # writeable by host runner unprivileged account. See note above.
-      HOST_CACHE_ROOT: /tmp/rchain-build-cache
-      # In integration tests multiple RNode instances are created so memory
-      # limit in lower to prevent sporadic crashes.
-      _JAVA_OPTIONS: -XX:MaxRAMPercentage=35.0
-    steps:
-      - name: Clone Repository
-        uses: actions/checkout@v1
-
-      - name: Initialize Environment
-        # Only initialize cache keys for "Restore Cache". We're running in the
-        # host now so we don't want to prepare filesystem here.
-        run: _READ_ONLY=1 ./.github/init-environment
-
-      - name: Restore Cache
-        uses: actions/cache@v1
-        with:
-          path: ${{ env.HOST_CACHE_ROOT }}
-          key: ${{ env.CACHE_KEY_PREFIX_PYTHON }}${{ env.CACHE_KEY_HASH_PYTHON }}
-          restore-keys: ${{ env.CACHE_KEY_PREFIX_PYTHON }}
-
-      - name: Load Docker Image
-        uses: actions/download-artifact@v1
-        with:
-          name: artifacts-docker
-
-      - name: Import Docker Image
-        run: zcat artifacts-docker/rnode-docker.tar.gz | docker image load
-
-      # The cached files are owned by host runner unprivileged user. See comment
-      # in "Fix Cache Permissions (Post)" step for details. Some programs
-      # running in rchain/buildenv container as root may be unhappy about that
-      # (pip issues a warning). Change ownership to root to avoid possible
-      # problems. There are not that many cached files for integration tests so
-      # performance impact is likely minimal.
-      - name: Fix Cache Permissions (Pre)
-        run: |
-          mkdir -p ${{ env.HOST_CACHE_ROOT }}
-          sudo chown -R 0:0 ${{ env.HOST_CACHE_ROOT }}
-
-      - name: Run Integration Test
-        run: |
-          docker run --network=host \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v /tmp:/tmp \
-              -v $PWD:/work \
-              -v ${{ env.HOST_CACHE_ROOT }}:$CACHE_ROOT \
-              -e TESTS="$TESTS" \
-              -e _JAVA_OPTIONS="$_JAVA_OPTIONS" \
-              -w /work \
-              rchain/buildenv ./.github/run-integration-test-selection
-
-      # Files created in rchain/buildenv container are owned by root, so we need
-      # to change ownership to host runner unprivileged account here, because
-      # right after this step, the runner is going to save cache preserving file
-      # attributes, and it would fail to restore them in "Restore Cache" above
-      # in future workflow runs. See note above.
-      - name: Fix Cache Permissions (Post)
-        run: sudo chown -R $(id -u):$(id -g) ${{ env.HOST_CACHE_ROOT }}
-
-
   # release_* jobs make built artifacts available to public and run only on new
   # tags or pushes to "staging" or "trying" branches used by Bors (bors r+ and bors try).
   # These jobs require secrets! See "env" variables and "Secrets" page in GitHub repository
@@ -370,8 +201,8 @@ jobs:
   release_docker_image:
     name: Release Docker Image
     needs:
-      - run_unit_tests
-      - run_integration_tests
+#      - run_unit_tests
+#      - run_integration_tests
       - build_docker_image
       - build_base
     if: "github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/trying' || github.ref == 'refs/heads/staging')"
@@ -441,8 +272,8 @@ jobs:
   release_packages:
     name: Release Packages
     needs:
-      - run_unit_tests
-      - run_integration_tests
+#      - run_unit_tests
+#      - run_integration_tests
       - build_packages
     if: "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')"
     runs-on: ubuntu-latest
