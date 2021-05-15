@@ -20,24 +20,23 @@ import scala.collection.SortedSet
 import scala.concurrent.{ExecutionContext, SyncVar}
 import scala.util.Random
 
-abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
-    historyRepository: HistoryRepository[F, C, P, A, K],
-    val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, P, A, K](
+    historyRepository: HistoryRepository[F, Channel, P, A, K],
+    val storeAtom: AtomicAny[HotStore[F, Channel, P, A, K]]
 )(
     implicit
-    serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     scheduler: ExecutionContext
-) extends SpaceMatcher[F, C, P, A, K] {
+) extends SpaceMatcher[F, Channel, P, A, K] {
 
   override def syncF: Sync[F] = Sync[F]
   override def spanF: Span[F] = Span[F]
 
-  type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
-  type MaybeActionResult     = Option[(ContResult[C, P, K], Seq[Result[C, A]])]
-  type CandidateChannels     = Seq[C]
+  type MaybeProduceCandidate = Option[ProduceCandidate[P, A, K]]
+  type MaybeActionResult     = Option[(ContResult[P, K], Seq[Result[A]])]
+  type CandidateChannels     = Seq[Channel]
 
   implicit class MapOps(underlying: Map[Produce, Int]) {
     def putAndIncrementCounter(elem: Produce): Map[Produce, Int] =
@@ -79,58 +78,53 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   protected[this] val produceTimeCommLabel = "comm.produce-time"
 
   //TODO close in some F state abstraction
-  protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, C, P, A, K]] = AtomicAny(
-    historyRepository
-  )
+  protected val historyRepositoryAtom: AtomicAny[HistoryRepository[F, Channel, P, A, K]] =
+    AtomicAny(historyRepository)
 
   protected[this] val logger: Logger
 
-  private[this] val installs: SyncVar[Installs[F, C, P, A, K]] = {
-    val installs = new SyncVar[Installs[F, C, P, A, K]]()
+  private[this] val installs: SyncVar[Installs[F, Channel, P, A, K]] = {
+    val installs = new SyncVar[Installs[F, Channel, P, A, K]]()
     installs.put(Map.empty)
     installs
   }
 
-  def store: HotStore[F, C, P, A, K]
+  def store: HotStore[F, Channel, P, A, K]
 
-  def getData(channel: C): F[Seq[Datum[A]]] =
+  def getData(channel: Channel): F[Seq[Datum[A]]] =
     store.getData(channel)
 
-  def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+  def getWaitingContinuations(channels: Seq[Channel]): F[Seq[WaitingContinuation[P, K]]] =
     store.getContinuations(channels)
 
-  def getJoins(channel: C): F[Seq[Seq[C]]] =
+  def getJoins(channel: Channel): F[Seq[Seq[Channel]]] =
     store.getJoins(channel)
 
   protected[this] def consumeLockF(
-      channels: Seq[C]
+      channels: Seq[Channel]
   )(
       thunk: => F[MaybeActionResult]
   ): F[MaybeActionResult] = {
-    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    val hashes = channels.map(_.hash)
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
 
-  protected[this] def produceLockF(
-      channel: C
-  )(
+  protected[this] def produceLockF(channel: Channel)(
       thunk: => F[MaybeActionResult]
   ): F[MaybeActionResult] =
-    lockF.acquire(Seq(StableHashProvider.hash(channel)))(
-      () => store.getJoins(channel).map(_.flatten.map(StableHashProvider.hash(_)))
+    lockF.acquire(Seq(channel.hash))(
+      () => store.getJoins(channel).map(_.flatten.map(_.hash))
     )(thunk)
 
-  protected[this] def installLockF(
-      channels: Seq[C]
-  )(
+  protected[this] def installLockF(channels: Seq[Channel])(
       thunk: => F[Option[(K, Seq[A])]]
   ): F[Option[(K, Seq[A])]] = {
-    val hashes = channels.map(ch => StableHashProvider.hash(ch))
+    val hashes = channels.map(_.hash)
     lockF.acquire(hashes)(() => hashes.pure[F])(thunk)
   }
 
   protected[this] def storeWaitingContinuation(
-      channels: Seq[C],
+      channels: Seq[Channel],
       wc: WaitingContinuation[P, K]
   ): F[MaybeActionResult] =
     for {
@@ -142,7 +136,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     } yield None
 
   protected[this] def storeData(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean,
       produceRef: Produce
@@ -154,7 +148,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     } yield None
 
   protected[this] def storePersistentData(
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
+      dataCandidates: Seq[ConsumeCandidate[A]],
       peeks: SortedSet[Int]
   ): F[List[Unit]] =
     dataCandidates.toList
@@ -179,7 +173,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       .as(())
 
   override def consume(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -211,7 +205,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     }
 
   protected[this] def lockedConsume(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -220,7 +214,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   ): F[MaybeActionResult]
 
   override def produce(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
@@ -234,14 +228,14 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     }
 
   protected[this] def lockedProduce(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean,
       produceRef: Produce
   ): F[MaybeActionResult]
 
   override def install(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K
   ): F[Option[(K, Seq[A])]] =
@@ -254,7 +248,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   // TODO stop throwing exceptions
   private[this] def lockedInstall(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K
   ): F[Option[(K, Seq[A])]] =
@@ -314,7 +308,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       } yield result
     }
 
-  def toMap: F[Map[Seq[C], Row[P, A, K]]] = storeAtom.get().toMap
+  def toMap: F[Map[Seq[Channel], Row[P, A, K]]] = storeAtom.get().toMap
 
   override def reset(root: Blake2b256Hash): F[Unit] = spanF.trace(resetSpanLabel) {
     for {
@@ -336,14 +330,14 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   override def clear(): F[Unit] = reset(History.emptyRootHash)
 
   protected def createNewHotStore(
-      historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
+      historyReader: HistoryReader[F, Blake2b256Hash, P, A, K]
   ): F[Unit] =
     for {
       nextHotStore <- HotStore.empty(historyReader.base)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
-  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+  override def createSoftCheckpoint(): F[SoftCheckpoint[Channel, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
       cache    <- storeAtom.get().snapshot()
@@ -351,9 +345,9 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       _        = eventLog.put(Seq.empty)
       pCounter = produceCounter.take()
       _        = produceCounter.put(Map.empty.withDefaultValue(0))
-    } yield SoftCheckpoint[C, P, A, K](cache, log, pCounter)
+    } yield SoftCheckpoint[Channel, P, A, K](cache, log, pCounter)
 
-  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
+  override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[Channel, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {
       val history = historyRepositoryAtom.get()
       for {
@@ -371,10 +365,10 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     }
 
   def wrapResult(
-      channels: Seq[C],
+      channels: Seq[Channel],
       wk: WaitingContinuation[P, K],
       consumeRef: Consume,
-      dataCandidates: Seq[ConsumeCandidate[C, A]]
+      dataCandidates: Seq[ConsumeCandidate[A]]
   ): MaybeActionResult =
     Some(
       (
@@ -391,8 +385,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     )
 
   def removeMatchedDatumAndJoin(
-      channels: Seq[C],
-      dataCandidates: Seq[ConsumeCandidate[C, A]]
+      channels: Seq[Channel],
+      dataCandidates: Seq[ConsumeCandidate[A]]
   ): F[Seq[Unit]] =
     dataCandidates
       .sortBy(_.datumIndex)(Ordering[Int].reverse)
@@ -408,18 +402,18 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   protected[this] def runMatcherForChannels(
       groupedChannels: Seq[CandidateChannels],
       fetchMatchingContinuations: (CandidateChannels) => F[Seq[(WaitingContinuation[P, K], Int)]],
-      fetchMatchingData: C => F[(C, Seq[(Datum[A], Int)])]
+      fetchMatchingData: Channel => F[(Channel, Seq[(Datum[A], Int)])]
   ): F[MaybeProduceCandidate] = {
     def go(
         acc: Seq[CandidateChannels]
     ): F[Either[Seq[CandidateChannels], MaybeProduceCandidate]] =
       acc match {
         case Nil =>
-          none[ProduceCandidate[C, P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
+          none[ProduceCandidate[P, A, K]].asRight[Seq[CandidateChannels]].pure[F]
         case channels :: remaining =>
           for {
             matchCandidates <- fetchMatchingContinuations(channels)
-            channelToIndexedDataList <- channels.traverse { c: C =>
+            channelToIndexedDataList <- channels.traverse { c: Channel =>
                                          fetchMatchingData(c)
                                        }
             firstMatch <- extractFirstMatch(
@@ -436,8 +430,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   }
 
   protected def logComm(
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
-      channels: Seq[C],
+      dataCandidates: Seq[ConsumeCandidate[A]],
+      channels: Seq[Channel],
       wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
@@ -445,7 +439,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   protected def logConsume(
       consumeRef: Consume,
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -454,7 +448,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   protected def logProduce(
       produceRef: Produce,
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean
   ): F[Produce]

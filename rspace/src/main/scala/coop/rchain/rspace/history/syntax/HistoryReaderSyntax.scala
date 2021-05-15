@@ -6,13 +6,13 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingCo
 
 trait HistoryReaderSyntax {
   implicit final def rspaceSyntaxHistoryReader[F[_], C, P, A, K](
-      historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
+      historyReader: HistoryReader[F, Blake2b256Hash, P, A, K]
   ): HistoryReaderOps[F, C, P, A, K] =
     new HistoryReaderOps[F, C, P, A, K](historyReader)
 }
 
 final class HistoryReaderOps[F[_], C, P, A, K](
-    private val historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
+    private val historyReader: HistoryReader[F, Blake2b256Hash, P, A, K]
 ) extends AnyVal {
 
   /**
@@ -22,15 +22,15 @@ final class HistoryReaderOps[F[_], C, P, A, K](
     * Making diff for two [[WaitingContinuation]] is 5-10 times slower then in [[ByteVector]] form,
     * so the binary value is used as equality comparison for class instance.
     */
-  def readerBinary: HistoryReaderBinary[F, C, P, A, K] =
-    new HistoryReaderBinary[F, C, P, A, K] {
+  def readerBinary: HistoryReaderBinary[F, P, A, K] =
+    new HistoryReaderBinary[F, P, A, K] {
       override def getData(key: Blake2b256Hash): F[Seq[DatumB[A]]] =
         historyReader.getDataProj(key)(DatumB(_, _))
 
       override def getContinuations(key: Blake2b256Hash): F[Seq[WaitingContinuationB[P, K]]] =
         historyReader.getContinuationsProj(key)(WaitingContinuationB(_, _))
 
-      override def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]] =
+      override def getJoins(key: Blake2b256Hash): F[Seq[JoinsB]] =
         historyReader.getJoinsProj(key)(JoinsB(_, _))
     }
 }

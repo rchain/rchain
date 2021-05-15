@@ -1,7 +1,7 @@
 package coop.rchain.rspace.hashing
 
 import coop.rchain.rspace.serializers.ScodecSerialize.RichAttempt
-import coop.rchain.rspace.util
+import coop.rchain.rspace.{util, Channel}
 import coop.rchain.shared.Serialize
 import scodec.bits.ByteVector
 import scodec.codecs._
@@ -43,14 +43,13 @@ object StableHashProvider {
     )
   }
 
-  def hash[C, A](channel: C, datum: A, persist: Boolean)(
+  def hash[A](channel: Channel, datum: A, persist: Boolean)(
       implicit
-      serializeC: Serialize[C],
       serializeA: Serialize[A]
   ) =
     Blake2b256Hash.create(
       Seq(
-        serializeC.encode(channel),
+        channel.hash.bytes,
         serializeA.encode(datum),
         (ignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
       )

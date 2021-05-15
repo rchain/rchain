@@ -38,7 +38,7 @@ class ContractCall[F[_]: Concurrent: Span](
   )(values: Seq[Par], ch: Par): F[Unit] =
     for {
       produceResult <- space.produce(
-                        ch,
+                        storage.parToChannel(ch),
                         ListParWithRandom(values, rand),
                         persist = false
                       )

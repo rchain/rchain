@@ -359,16 +359,16 @@ object HistoryInstances {
                          (currentRoot, previousModificationOpt),
                          InsertAction(remainingPath, value)
                          ) =>
-                       val key = ByteVector(remainingPath)
-                       println(s"$index INSERT $key")
+//                       val key = ByteVector(remainingPath)
+//                       println(s"$index INSERT $key")
                        insert(currentRoot, previousModificationOpt, remainingPath, value)
 
                      case (
                          (currentRoot, previousModificationOpt),
                          DeleteAction(remainingPath)
                          ) =>
-                       val key = ByteVector(remainingPath)
-                       println(s"$index DELETE $key")
+//                       val key = ByteVector(remainingPath)
+//                       println(s"$index DELETE $key")
                        delete(currentRoot, previousModificationOpt, remainingPath)
                    }
         (root, _) = result
@@ -518,12 +518,10 @@ object HistoryInstances {
       ((toInt(b), ptr), List[Trie](skip)).pure[F]
     }
 
-    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = {
-      if (key.size != 33) println(s"--------------------- KEY GET SIZE ${key.size}")
+    def find(key: KeyPath): F[(TriePointer, Vector[Trie])] =
       findPath(key).map {
         case (trie, path) => (trie, path.nodes)
       }
-    }
 
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
       historyStore.get(root) >>= (findPath(key, _))

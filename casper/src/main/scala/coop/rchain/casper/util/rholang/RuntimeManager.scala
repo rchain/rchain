@@ -80,7 +80,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
     for {
       newSpace <- space
                    .asInstanceOf[
-                     RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+                     RSpace[F, BindPattern, ListParWithRandom, TaggedContinuation]
                    ]
                    .spawn
       runtime <- RhoRuntime.createRhoRuntime(newSpace)
@@ -92,7 +92,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
       newReplaySpace <- replaySpace
                          .asInstanceOf[ReplayRSpace[
                            F,
-                           Par,
                            BindPattern,
                            ListParWithRandom,
                            TaggedContinuation

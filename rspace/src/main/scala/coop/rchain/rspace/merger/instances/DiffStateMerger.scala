@@ -20,9 +20,8 @@ import coop.rchain.store.LazyKeyValueCache
   * @param historyRepo repository for histories
   * @param serializeC serizlized for channel (required for joins computations)
   */
-final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
-    historyRepo: HistoryRepository[F, C, P, A, K],
-    serializeC: Serialize[C]
+final case class DiffStateMerger[F[_]: Concurrent: Log, P, A, K](
+    historyRepo: HistoryRepository[F, Channel, P, A, K]
 ) extends StateMerger[F] {
 
   override def merge(mainState: History[F], toMerge: Seq[EventChain[F]]): F[History[F]] =
@@ -51,7 +50,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
       pDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[DatumB[A]]]](Map.empty)
       cDiffRef <- Ref
                    .of[F, Map[Blake2b256Hash, ChannelChange[WaitingContinuationB[P, K]]]](Map.empty)
-      jAccRef <- Ref.of[F, Map[Blake2b256Hash, Seq[JoinsB[C]]]](Map.empty)
+      jAccRef <- Ref.of[F, Map[Blake2b256Hash, Seq[JoinsB]]](Map.empty)
 
       // main state data readers, used in computation for all mergings => so this is lazy cache
       readProduces = (hash: Blake2b256Hash) => mainReader.getData(hash)
@@ -277,8 +276,9 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, C, P, A, K](
               val idxToDel = acc
                 .find { j =>
                   val chansOfRemovedConsume = channelsPerConsume(hashToDel)
-                  val join = toOrderedByteVectors(j.decoded)(serializeC)
-                    .map(Blake2b256Hash.create)
+//                  val join = toOrderedByteVectors(j.decoded)(serializeC)
+//                    .map(Blake2b256Hash.create)
+                  val join = j.decoded.map(_.hash)
                   join == chansOfRemovedConsume
                 }
                 .map(acc.indexOf)

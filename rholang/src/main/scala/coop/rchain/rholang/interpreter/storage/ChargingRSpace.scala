@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.storage
 
 import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -12,7 +11,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace.consumeId
-import coop.rchain.rspace.{ContResult, Result, Match => StorageMatch}
+import coop.rchain.rspace.{Channel, ContResult, Result, Match => StorageMatch}
 
 import scala.collection.SortedSet
 
@@ -48,14 +47,14 @@ object ChargingRSpace {
       implicit override val m: StorageMatch[F, BindPattern, ListParWithRandom] = space.m
 
       override def consume(
-          channels: Seq[Par],
+          channels: Seq[Channel],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation,
           persist: Boolean,
           peeks: SortedSet[Int] = SortedSet.empty[Int]
       ): F[
         Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+          (ContResult[BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
         ]
       ] =
         for {
@@ -76,19 +75,19 @@ object ChargingRSpace {
         } yield consRes
 
       override def install(
-          channels: Seq[Par],
+          channels: Seq[Channel],
           patterns: Seq[BindPattern],
           continuation: TaggedContinuation
       ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
         space.install(channels, patterns, continuation)
 
       override def produce(
-          channel: Par,
+          channel: Channel,
           data: ListParWithRandom,
           persist: Boolean
       ): F[
         Option[
-          (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+          (ContResult[BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
         ]
       ] =
         for {
@@ -99,7 +98,7 @@ object ChargingRSpace {
 
       private def handleResult(
           result: Option[
-            (ContResult[Par, BindPattern, TaggedContinuation], Seq[Result[Par, ListParWithRandom]])
+            (ContResult[BindPattern, TaggedContinuation], Seq[Result[ListParWithRandom]])
           ],
           triggeredBy: TriggeredBy
       ): F[Unit] =
@@ -129,8 +128,8 @@ object ChargingRSpace {
         }
 
       private def refundForRemovingProduces(
-          dataList: Seq[Result[Par, ListParWithRandom]],
-          cont: ContResult[Par, BindPattern, TaggedContinuation],
+          dataList: Seq[Result[ListParWithRandom]],
+          cont: ContResult[BindPattern, TaggedContinuation],
           triggeredBy: TriggeredBy
       ): Cost = {
         val removedData = dataList

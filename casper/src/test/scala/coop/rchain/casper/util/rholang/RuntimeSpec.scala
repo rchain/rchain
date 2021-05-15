@@ -87,4 +87,25 @@ class RuntimeSpec extends FlatSpec with Matchers {
     } yield ()
   }
 
+  it should "pass" in effectTest {
+    implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
+    implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
+    implicit val logger: Log[Task]         = Log.log[Task]
+    val kvm                                = InMemoryStoreManager[Task]()
+
+    // fixed term , if the term changed, it is possible that the stateHash also changed.
+    val contract = "for(_ <- @0) { Nil }"
+    // random seed should be always to the same to make sure everything is the same
+    implicit val random =
+      Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
+
+    for {
+      runtimes        <- mkRuntimeAt[Task](kvm)
+      (runtime, _, _) = runtimes
+      r               <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
+
+      checkpoint <- runtime.createCheckpoint
+    } yield ()
+  }
+
 }

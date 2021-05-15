@@ -72,10 +72,10 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     * @return
     */
   def createSoftCheckpoint
-      : F[SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]]
+      : F[SoftCheckpoint[Channel, BindPattern, ListParWithRandom, TaggedContinuation]]
 
   def revertToSoftCheckpoint(
-      softCheckpoint: SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]
+      softCheckpoint: SoftCheckpoint[Channel, BindPattern, ListParWithRandom, TaggedContinuation]
   ): F[Unit]
 
   /**
@@ -112,7 +112,7 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     */
   def getData(channel: Par): F[Seq[Datum[ListParWithRandom]]]
 
-  def getJoins(channel: Par): F[Seq[Seq[Par]]]
+  def getJoins(channel: Par): F[Seq[Seq[Channel]]]
 
   /**
     * get data directly from history repository
@@ -137,7 +137,7 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     * Get the hot changes after some executions for the runtime.
     * Currently this is only for debug info mostly.
     */
-  def getHotChanges: F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]]
+  def getHotChanges: F[Map[Seq[Channel], Row[BindPattern, ListParWithRandom, TaggedContinuation]]]
 
   def getRSpace: RhoTuplespace[F]
 }
@@ -158,7 +158,7 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
   private val emptyContinuation = TaggedContinuation()
 
   override def getHotChanges
-      : F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap
+      : F[Map[Seq[Channel], Row[BindPattern, ListParWithRandom, TaggedContinuation]]] = space.toMap
 
   override def inj(par: Par, env: Env[Par] = Env[Par]())(implicit rand: Blake2b512Random): F[Unit] =
     reducer.inj(par)
@@ -167,7 +167,9 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
       channel: Seq[Par],
       pattern: Seq[BindPattern]
   ): F[Option[(TaggedContinuation, Seq[ListParWithRandom])]] =
-    space.consume(channel, pattern, emptyContinuation, persist = false).map(unpackOption)
+    space
+      .consume(channel.map(storage.parToChannel), pattern, emptyContinuation, persist = false)
+      .map(unpackOption)
 
   override def evaluate(term: String, initialPhlo: Cost, normalizerEnv: Map[String, Name])(
       implicit rand: Blake2b512Random
@@ -189,23 +191,25 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
   }
 
   override def createSoftCheckpoint
-      : F[SoftCheckpoint[Par, BindPattern, ListParWithRandom, TaggedContinuation]] =
+      : F[SoftCheckpoint[Channel, BindPattern, ListParWithRandom, TaggedContinuation]] =
     Span[F].withMarks("create-soft-heckpoint") {
       space.createSoftCheckpoint()
     }
 
   override def revertToSoftCheckpoint(
-      softCheckpoint: SoftCheckpoint[Name, BindPattern, ListParWithRandom, TaggedContinuation]
+      softCheckpoint: SoftCheckpoint[Channel, BindPattern, ListParWithRandom, TaggedContinuation]
   ): F[Unit] = space.revertToSoftCheckpoint(softCheckpoint)
 
-  override def getData(channel: Par): F[Seq[Datum[ListParWithRandom]]] = space.getData(channel)
+  override def getData(channel: Par): F[Seq[Datum[ListParWithRandom]]] =
+    space.getData(storage.parToChannel(channel))
 
   override def getContinuation(
       channels: Seq[Name]
   ): F[Seq[WaitingContinuation[BindPattern, TaggedContinuation]]] =
-    space.getWaitingContinuations(channels)
+    space.getWaitingContinuations(channels.map(storage.parToChannel))
 
-  override def getJoins(channel: Name): F[Seq[Seq[Name]]] = space.getJoins(channel)
+  override def getJoins(channel: Name): F[Seq[Seq[Channel]]] =
+    space.getJoins(storage.parToChannel(channel))
 
   override def setBlockData(blockData: BlockData): F[Unit] = blockDataRef.set(blockData)
 
@@ -277,7 +281,7 @@ object RhoRuntime {
   type ISpaceAndReplay[F[_]] = (RhoISpace[F], RhoReplayISpace[F])
 
   type RhoHistoryRepository[F[_]] =
-    HistoryRepository[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+    HistoryRepository[F, Channel, BindPattern, ListParWithRandom, TaggedContinuation]
 
   type CPAK[M[_], F[_[_], _, _, _, _]] =
     F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
@@ -285,7 +289,7 @@ object RhoRuntime {
   type TCPAK[M[_], F[_[_], _, _, _, _]] =
     F[
       M,
-      Par,
+      Channel,
       BindPattern,
       ListParWithRandom,
       TaggedContinuation
@@ -306,7 +310,7 @@ object RhoRuntime {
           )
         )
         val continuation = TaggedContinuation(ScalaBodyRef(ref))
-        spaces.map(_.install(channels, patterns, continuation))
+        spaces.map(_.install(channels.map(storage.parToChannel), patterns, continuation))
     }.sequence
 
   def stdSystemProcesses[F[_]]: Seq[Definition[F]] = Seq(
@@ -601,7 +605,7 @@ object RhoRuntime {
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       hrstores <- RSpace
-                   .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                   .createWithReplay[F, BindPattern, ListParWithRandom, TaggedContinuation](
                      stores
                    )
       (space, replay, hr)      = hrstores
@@ -624,7 +628,7 @@ object RhoRuntime {
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       hrstores <- RSpace
-                   .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                   .createWithReplay[F, BindPattern, ListParWithRandom, TaggedContinuation](
                      stores
                    )
       (space, replay, hr) = hrstores

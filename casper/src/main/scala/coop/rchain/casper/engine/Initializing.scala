@@ -165,13 +165,11 @@ class Initializing[F[_]
 
       // Request tuple space state for Last Finalized State
       stateValidator = {
-        implicit val codecPar  = storage.serializePar
         implicit val codecBind = storage.serializeBindPattern
         implicit val codecPars = storage.serializePars
         implicit val codecCont = storage.serializeTaggedContinuation
         RSpaceImporter.validateStateItems[
           F,
-          Par,
           BindPattern,
           ListParWithRandom,
           TaggedContinuation

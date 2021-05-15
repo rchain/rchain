@@ -52,7 +52,7 @@ object ReportingCasper {
   }
 
   type RhoReportingRspace[F[_]] =
-    ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+    ReportingRspace[F, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
       memStore: ReportMemStore[F],
@@ -207,11 +207,10 @@ object ReportingRuntime {
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
     for {
-      history                          <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      history                          <- RSpace.setUp[F, BindPattern, ListParWithRandom, TaggedContinuation](store)
       (historyRepository, replayStore) = history
       reportingRspace = new ReportingRspace[
         F,
-        Par,
         BindPattern,
         ListParWithRandom,
         TaggedContinuation

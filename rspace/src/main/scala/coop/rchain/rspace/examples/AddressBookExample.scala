@@ -2,7 +2,9 @@ package coop.rchain.rspace.examples
 
 import cats.effect.{Concurrent, ContextShift}
 import cats.{Applicative, Id}
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.util._
@@ -19,14 +21,14 @@ import scala.concurrent.ExecutionContext.Implicits.global
 @SuppressWarnings(Array("org.wartremover.warts.EitherProjectionPartial"))
 object AddressBookExample {
 
-  /* Here we define a type for channels */
-
-  final case class Channel(name: String)
-
-  /* Ordering for Channel */
-
-  implicit val channelOrdering: Ordering[Channel] =
-    (x: Channel, y: Channel) => x.name.compare(y.name)
+//  /* Here we define a type for channels */
+//
+//  final case class Channel(name: String)
+//
+//  /* Ordering for Channel */
+//
+//  implicit val channelOrdering: Ordering[Channel] =
+//    (x: Channel, y: Channel) => x.name.compare(y.name)
 
   /* Here we define a type for data */
 
@@ -77,6 +79,11 @@ object AddressBookExample {
       case ec: EntriesCaptor => ec.res == res
       case _                 => false
     }
+  }
+
+  def mkChannel(name: String) = {
+    val bytes = ByteVector.encodeUtf8(name).right.get
+    Channel(Blake2b256Hash.create(bytes))
   }
 
   object implicits {
@@ -203,14 +210,14 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample One: Let's consume and then produce...\n")
 
     val cres =
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(mkChannel("friends")),
           Seq(CityMatch(city = "Crystal Lake")),
           new Printer,
           persist = true
@@ -218,9 +225,9 @@ object AddressBookExample {
 
     assert(cres.isEmpty)
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false)
-    val pres2 = space.produce(Channel("friends"), bob, persist = false)
-    val pres3 = space.produce(Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(mkChannel("friends"), alice, persist = false)
+    val pres2 = space.produce(mkChannel("friends"), bob, persist = false)
+    val pres3 = space.produce(mkChannel("friends"), carol, persist = false)
 
     assert(pres1.nonEmpty)
     assert(pres2.nonEmpty)
@@ -238,13 +245,13 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Pattern, Entry, Printer](store)
 
     Console.printf("\nExample Two: Let's produce and then consume...\n")
 
-    val pres1 = space.produce(Channel("friends"), alice, persist = false)
-    val pres2 = space.produce(Channel("friends"), bob, persist = false)
-    val pres3 = space.produce(Channel("friends"), carol, persist = false)
+    val pres1 = space.produce(mkChannel("friends"), alice, persist = false)
+    val pres2 = space.produce(mkChannel("friends"), bob, persist = false)
+    val pres3 = space.produce(mkChannel("friends"), carol, persist = false)
 
     assert(pres1.isEmpty)
     assert(pres2.isEmpty)
@@ -253,7 +260,7 @@ object AddressBookExample {
     val consumer = () =>
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(mkChannel("friends")),
           Seq(NameMatch(last = "Lahblah")),
           new Printer,
           persist = false
@@ -278,7 +285,7 @@ object AddressBookExample {
     val cres =
       space
         .consume(
-          Seq(Channel("friends")),
+          Seq(mkChannel("friends")),
           Seq(CityMatch(city = "Crystal Lake")),
           new Printer,
           persist = false
@@ -290,7 +297,7 @@ object AddressBookExample {
     val checkpointHash = space.createCheckpoint().root
 
     def produceAlice(): Option[(Printer, Seq[Entry])] =
-      unpackOption(space.produce(Channel("friends"), alice, persist = false))
+      unpackOption(space.produce(mkChannel("friends"), alice, persist = false))
 
     println("Rollback example: First produce result should return some data")
     assert(produceAlice.isDefined)
@@ -325,7 +332,7 @@ object AddressBookExample {
 
     // Let's define our store
     val store = keyValueStoreManager.rSpaceStores
-    val space = RSpace.create[Id, Channel, Pattern, Entry, Printer](store)
+    val space = RSpace.create[Id, Pattern, Entry, Printer](store)
     try {
       f(space)
     } finally {

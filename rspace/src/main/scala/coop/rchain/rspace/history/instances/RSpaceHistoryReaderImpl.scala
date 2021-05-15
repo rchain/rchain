@@ -2,6 +2,7 @@ package coop.rchain.rspace.history.instances
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
@@ -11,16 +12,15 @@ import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
-class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
+class RSpaceHistoryReaderImpl[F[_]: Concurrent, P, A, K](
     targetHistory: History[F],
     leafStore: ColdKeyValueStore[F]
 )(
     implicit
-    sc: Serialize[C],
     sp: Serialize[P],
     sa: Serialize[A],
     sk: Serialize[K]
-) extends HistoryReader[F, Blake2b256Hash, C, P, A, K] {
+) extends HistoryReader[F, Blake2b256Hash, P, A, K] {
 
   override def root: Blake2b256Hash = targetHistory.root
 
@@ -46,10 +46,12 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
       case None => Seq[R]().pure[F]
     }
 
-  override def getJoinsProj[R](key: Blake2b256Hash)(proj: (Seq[C], ByteVector) => R): F[Seq[R]] =
+  override def getJoinsProj[R](
+      key: Blake2b256Hash
+  )(proj: (Seq[Channel], ByteVector) => R): F[Seq[R]] =
     fetchData(HistoryRepositoryInstances.PREFIX_JOINS, key).flatMap {
       case Some(JoinsLeaf(bytes)) =>
-        Sync[F].delay(decodeJoinsProj[C, R](bytes)(proj))
+        Sync[F].delay(decodeJoinsProj[R](bytes)(proj))
       case Some(p) =>
         new RuntimeException(s"Found unexpected leaf while looking for join at key $key, data: $p").raiseError
       case None => Seq[R]().pure[F]
@@ -69,20 +71,22 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
         }
     }
 
-  override def base: HistoryReaderBase[F, C, P, A, K] = {
+  override def base: HistoryReaderBase[F, Channel, P, A, K] = {
     val historyReader = this
 
-    new HistoryReaderBase[F, C, P, A, K] {
-      override def getDataProj[R](key: C): ((Datum[A], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getDataProj[R](ChannelHash.hashDataChannel(key, sc))
+    new HistoryReaderBase[F, Channel, P, A, K] {
+      override def getDataProj[R](key: Channel): ((Datum[A], ByteVector) => R) => F[Seq[R]] =
+        historyReader.getDataProj[R](key.hash)
 
       override def getContinuationsProj[R](
-          key: Seq[C]
+          key: Seq[Channel]
       ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getContinuationsProj[R](ChannelHash.hashContinuationsChannels(key, sc))
+        historyReader.getContinuationsProj[R](
+          ChannelHash.hashContinuationsChannels(key.map(_.hash))
+        )
 
-      override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] =
-        historyReader.getJoinsProj[R](ChannelHash.hashJoinsChannel(key, sc))
+      override def getJoinsProj[R](key: Channel): ((Seq[Channel], ByteVector) => R) => F[Seq[R]] =
+        historyReader.getJoinsProj[R](key.hash)
     }
   }
 }

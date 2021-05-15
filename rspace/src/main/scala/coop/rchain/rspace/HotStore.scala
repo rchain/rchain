@@ -53,21 +53,23 @@ final case class Cache[C, P, A, K](
     )
 }
 
-private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
-    cacheRef: Ref[F, Cache[C, P, A, K]],
-    historyReader: HistoryReaderBase[F, C, P, A, K]
-) extends HotStore[F, C, P, A, K] {
+private class InMemHotStore[F[_]: Concurrent, P, A, K](
+    cacheRef: Ref[F, Cache[Channel, P, A, K]],
+    historyReader: HistoryReaderBase[F, Channel, P, A, K]
+) extends HotStore[F, Channel, P, A, K] {
 
-  def snapshot(): F[Snapshot[C, P, A, K]] = cacheRef.get.map(_.snapshot())
+  def snapshot(): F[Snapshot[Channel, P, A, K]] = cacheRef.get.map(_.snapshot())
 
-  def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+  def getContinuations(channels: Seq[Channel]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       cached <- internalGetContinuations(channels)
       state  <- cacheRef.get
       result = state.installedContinuations.get(channels) ++: cached
     } yield result
 
-  private[this] def internalGetContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
+  private[this] def internalGetContinuations(
+      channels: Seq[Channel]
+  ): F[Seq[WaitingContinuation[P, K]]] =
     for {
       state <- cacheRef.get
       res <- state.continuations.get(channels) match {
@@ -83,7 +85,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             }
     } yield (res)
 
-  def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
+  def putContinuation(channels: Seq[Channel], wc: WaitingContinuation[P, K]): F[Unit] =
     for {
       continuations <- internalGetContinuations(channels)
       _ <- cacheRef.update { cache =>
@@ -92,13 +94,13 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
           }
     } yield ()
 
-  def installContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
+  def installContinuation(channels: Seq[Channel], wc: WaitingContinuation[P, K]): F[Unit] =
     cacheRef.update { cache =>
       ignore(cache.installedContinuations.put(channels, wc))
       cache
     }
 
-  def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
+  def removeContinuation(channels: Seq[Channel], index: Int): F[Unit] =
     for {
       continuations <- getContinuations(channels)
       cache         <- cacheRef.get
@@ -119,7 +121,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             }
     } yield ()
 
-  def getData(channel: C): F[Seq[Datum[A]]] =
+  def getData(channel: Channel): F[Seq[Datum[A]]] =
     for {
       state <- cacheRef.get
       res <- state.data.get(channel) match {
@@ -135,7 +137,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             }
     } yield (res)
 
-  def putDatum(channel: C, datum: Datum[A]): F[Unit] =
+  def putDatum(channel: Channel, datum: Datum[A]): F[Unit] =
     for {
       data <- getData(channel)
       _ <- cacheRef.update { cache =>
@@ -144,7 +146,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
           }
     } yield ()
 
-  def removeDatum(channel: C, index: Int): F[Unit] =
+  def removeDatum(channel: Channel, index: Int): F[Unit] =
     for {
       data <- getData(channel)
       s    <- cacheRef.get
@@ -157,13 +159,13 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
           }
     } yield ()
 
-  def getJoins(channel: C): F[Seq[Seq[C]]] =
+  def getJoins(channel: Channel): F[Seq[Seq[Channel]]] =
     for {
       cached <- internalGetJoins(channel)
       state  <- cacheRef.get
     } yield state.installedJoins.getOrElse(channel, Seq.empty) ++: cached
 
-  private[this] def internalGetJoins(channel: C): F[Seq[Seq[C]]] =
+  private[this] def internalGetJoins(channel: Channel): F[Seq[Seq[Channel]]] =
     for {
       state <- cacheRef.get
       res <- state.joins.get(channel) match {
@@ -179,7 +181,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             }
     } yield res
 
-  def putJoin(channel: C, join: Seq[C]): F[Unit] =
+  def putJoin(channel: Channel, join: Seq[Channel]): F[Unit] =
     for {
       joins <- getJoins(channel)
       _ <- cacheRef
@@ -190,7 +192,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             .whenA(!joins.contains(join))
     } yield ()
 
-  def installJoin(channel: C, join: Seq[C]): F[Unit] = cacheRef.update { cache =>
+  def installJoin(channel: Channel, join: Seq[Channel]): F[Unit] = cacheRef.update { cache =>
     ignore {
       val installed = cache.installedJoins.getOrElse(channel, Seq.empty)
 
@@ -201,7 +203,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     cache
   }
 
-  def removeJoin(channel: C, join: Seq[C]): F[Unit] =
+  def removeJoin(channel: Channel, join: Seq[Channel]): F[Unit] =
     for {
       joins         <- internalGetJoins(channel)
       continuations <- getContinuations(join)
@@ -258,7 +260,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       s"Tried to remove index ${index} from a Vector of size ${col.size}"
     ).raiseError.unlessA(col.isDefinedAt(index))
 
-  def toMap: F[Map[Seq[C], Row[P, A, K]]] =
+  def toMap: F[Map[Seq[Channel], Row[P, A, K]]] =
     for {
       cache         <- cacheRef.get
       data          = cache.data.readOnlySnapshot().map(_.leftMap(Seq(_))).toMap
@@ -270,23 +272,42 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
 object HotStore {
 
-  def inMem[F[_]: Concurrent, C, P, A, K](
-      cache: Ref[F, Cache[C, P, A, K]],
-      historyReader: HistoryReaderBase[F, C, P, A, K]
-  ): HotStore[F, C, P, A, K] =
-    new InMemHotStore[F, C, P, A, K](cache, historyReader)
+//  def inMem[F[_]: Concurrent, C, P, A, K](
+//      cache: Ref[F, Cache[C, P, A, K]],
+//      historyReader: HistoryReaderBase[F, C, P, A, K]
+//  ): HotStore[F, C, P, A, K] =
+//    new InMemHotStore[F, P, A, K](cache, historyReader)
+//
+//  def from[F[_]: Concurrent, C, P, A, K](
+//      cache: Cache[C, P, A, K],
+//      historyReader: HistoryReaderBase[F, C, P, A, K]
+//  ): F[HotStore[F, C, P, A, K]] =
+//    for {
+//      cache <- Ref.of[F, Cache[C, P, A, K]](cache)
+//      store = HotStore.inMem(cache, historyReader)
+//    } yield store
+//
+//  def empty[F[_]: Concurrent, C, P, A, K](
+//      historyReader: HistoryReaderBase[F, C, P, A, K]
+//  ): F[HotStore[F, C, P, A, K]] = from(Cache(), historyReader)
 
-  def from[F[_]: Concurrent, C, P, A, K](
-      cache: Cache[C, P, A, K],
-      historyReader: HistoryReaderBase[F, C, P, A, K]
-  ): F[HotStore[F, C, P, A, K]] =
+  def inMem[F[_]: Concurrent, P, A, K](
+      cache: Ref[F, Cache[Channel, P, A, K]],
+      historyReader: HistoryReaderBase[F, Channel, P, A, K]
+  ): HotStore[F, Channel, P, A, K] =
+    new InMemHotStore[F, P, A, K](cache, historyReader)
+
+  def from[F[_]: Concurrent, P, A, K](
+      cache: Cache[Channel, P, A, K],
+      historyReader: HistoryReaderBase[F, Channel, P, A, K]
+  ): F[HotStore[F, Channel, P, A, K]] =
     for {
-      cache <- Ref.of[F, Cache[C, P, A, K]](cache)
+      cache <- Ref.of[F, Cache[Channel, P, A, K]](cache)
       store = HotStore.inMem(cache, historyReader)
     } yield store
 
-  def empty[F[_]: Concurrent, C, P, A, K](
-      historyReader: HistoryReaderBase[F, C, P, A, K]
-  ): F[HotStore[F, C, P, A, K]] = from(Cache(), historyReader)
+  def empty[F[_]: Concurrent, P, A, K](
+      historyReader: HistoryReaderBase[F, Channel, P, A, K]
+  ): F[HotStore[F, Channel, P, A, K]] = from(Cache(), historyReader)
 
 }

@@ -26,14 +26,14 @@ final case class StateValidationError(message: String) extends Exception(message
 }
 
 object RSpaceImporter {
-  def validateStateItems[F[_]: Concurrent, C, P, A, K](
+  def validateStateItems[F[_]: Concurrent, P, A, K](
       historyItems: Seq[(Blake2b256Hash, ByteVector)],
       dataItems: Seq[(Blake2b256Hash, ByteVector)],
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       chunkSize: Int,
       skip: Int,
       getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
-  )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
+  )(implicit sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
     import cats.instances.list._
 
     val receivedHistorySize = historyItems.size
@@ -101,7 +101,7 @@ object RSpaceImporter {
                     Sync[F]
                       .delay {
                         persistedData match {
-                          case JoinsLeaf(bytes)         => decodeJoins[C](bytes)
+                          case JoinsLeaf(bytes)         => decodeJoins(bytes)
                           case DataLeaf(bytes)          => decodeDatums[A](bytes)
                           case ContinuationsLeaf(bytes) => decodeContinuations[P, K](bytes)
                         }

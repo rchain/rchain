@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
@@ -15,7 +16,7 @@ import scodec.bits.ByteVector
   * @tparam A type for Abstraction => this is ListParWithRandom
   * @tparam K type for Continuation => this is TaggedContinuation
   */
-trait HistoryReader[F[_], Key, C, P, A, K] {
+trait HistoryReader[F[_], Key, P, A, K] {
 
   // Get current root which reader reads from
   def root: Key
@@ -26,7 +27,7 @@ trait HistoryReader[F[_], Key, C, P, A, K] {
       proj: (WaitingContinuation[P, K], ByteVector) => R
   ): F[Seq[R]]
 
-  def getJoinsProj[R](key: Key)(proj: (Seq[C], ByteVector) => R): F[Seq[R]]
+  def getJoinsProj[R](key: Key)(proj: (Seq[Channel], ByteVector) => R): F[Seq[R]]
 
   /**
     * Defaults
@@ -37,13 +38,13 @@ trait HistoryReader[F[_], Key, C, P, A, K] {
   def getContinuations(key: Key): F[Seq[WaitingContinuation[P, K]]] =
     getContinuationsProj(key)((d, _) => d)
 
-  def getJoins(key: Key): F[Seq[Seq[C]]] =
+  def getJoins(key: Key): F[Seq[Seq[Channel]]] =
     getJoinsProj(key)((d, _) => d)
 
   /**
     * Get reader which accepts non-serialized and hashed keys
     */
-  def base: HistoryReaderBase[F, C, P, A, K]
+  def base: HistoryReaderBase[F, Channel, P, A, K]
 }
 
 /**
@@ -74,10 +75,10 @@ trait HistoryReaderBase[F[_], C, P, A, K] {
 /**
   * History reader with binary data included in result
   */
-trait HistoryReaderBinary[F[_], C, P, A, K] {
+trait HistoryReaderBinary[F[_], P, A, K] {
   def getData(key: Blake2b256Hash): F[Seq[DatumB[A]]]
 
   def getContinuations(key: Blake2b256Hash): F[Seq[WaitingContinuationB[P, K]]]
 
-  def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]]
+  def getJoins(key: Blake2b256Hash): F[Seq[JoinsB]]
 }

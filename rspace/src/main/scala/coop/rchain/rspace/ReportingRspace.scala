@@ -48,18 +48,17 @@ object ReportingRspace {
   ) extends ReportingEvent
 }
 
-class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
-    historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, P, A, K](
+    historyRepository: HistoryRepository[F, Channel, P, A, K],
+    storeAtom: AtomicAny[HotStore[F, Channel, P, A, K]]
 )(
     implicit
-    serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     m: Match[F, P, A],
     scheduler: ExecutionContext
-) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
+) extends ReplayRSpace[F, P, A, K](historyRepository, storeAtom) {
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -93,8 +92,8 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
   private def getSoftReport: F[Seq[ReportingEvent]] = Sync[F].delay(softReport.get)
 
   protected override def logComm(
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
-      channels: Seq[C],
+      dataCandidates: Seq[ConsumeCandidate[A]],
+      channels: Seq[Channel],
       wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
@@ -110,7 +109,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
 
   protected override def logConsume(
       consumeRef: Consume,
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -131,7 +130,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
 
   protected override def logProduce(
       produceRef: Produce,
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean
   ): F[Produce] =
@@ -153,7 +152,7 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
     } yield Checkpoint(historyRepository.history.root, Seq.empty)
   }
 
-  override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
+  override def createSoftCheckpoint(): F[SoftCheckpoint[Channel, P, A, K]] =
     for {
       _          <- collectReport
       checkpoint <- super.createSoftCheckpoint()
