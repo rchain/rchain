@@ -295,7 +295,7 @@ object RhoRuntime {
       TaggedContinuation
     ]
 
-  def introduceSystemProcesses[F[_]: Sync: _cost: Span](
+  def introduceSystemProcesses[F[_]: Sync](
       spaces: List[RhoTuplespace[F]],
       processes: List[(Name, Arity, Remainder, BodyRef)]
   ): F[List[Option[(TaggedContinuation, Seq[ListParWithRandom])]]] =

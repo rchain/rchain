@@ -3,7 +3,7 @@ package coop.rchain.rspace.history.instances
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.Channel
-import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal._
@@ -82,7 +82,7 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, P, A, K](
           key: Seq[Channel]
       ): ((WaitingContinuation[P, K], ByteVector) => R) => F[Seq[R]] =
         historyReader.getContinuationsProj[R](
-          ChannelHash.hashContinuationsChannels(key.map(_.hash))
+          StableHashProvider.hashChannelHashes(key.map(_.hash))
         )
 
       override def getJoinsProj[R](key: Channel): ((Seq[Channel], ByteVector) => R) => F[Seq[R]] =

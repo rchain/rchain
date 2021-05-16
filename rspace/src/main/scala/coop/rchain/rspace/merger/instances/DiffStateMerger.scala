@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace._
-import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.merger.{computeChannelChange, ChannelChange, EventChain, StateMerger}
 import coop.rchain.rspace.serializers.ScodecSerialize._
@@ -12,7 +12,7 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.{COMM, Consume, Produce}
 import coop.rchain.shared.Language._
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Log, Serialize, Stopwatch}
+import coop.rchain.shared.{Log, Stopwatch}
 import coop.rchain.store.LazyKeyValueCache
 
 /**
@@ -124,7 +124,7 @@ final case class DiffStateMerger[F[_]: Concurrent: Log, P, A, K](
                   consumes.map(
                     m =>
                       fs2.Stream.eval(channelsPerConsumesRef.update { s =>
-                        val chHash = ChannelHash.hashContinuationsChannels(m.channelsHashes)
+                        val chHash = StableHashProvider.hashChannelHashes(m.channelsHashes)
                         s.updated(chHash, m.channelsHashes)
                       })
                   )

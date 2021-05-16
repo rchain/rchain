@@ -66,25 +66,24 @@ object StoragePrinter {
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
       deploy: Signed[DeployData],
       runtime: RhoRuntime[F]
-  ): F[String] = ???
-//  {
-//    def unmatchedSends: F[List[Par]] = runtime.getHotChanges.map(getUnmatchedSends)
-//    for {
-//      checkpoint <- runtime.createCheckpoint
-//      beforeEval <- unmatchedSends
-//      _ <- {
-//        runtime.evaluate(deploy.data.term, NormalizerEnv(deploy).toEnv)
-//      }
-//      afterEval <- unmatchedSends
-//      diff      = afterEval.diff(beforeEval)
-//      _         <- runtime.reset(checkpoint.root)
-//    } yield {
-//      if (diff.isEmpty)
-//        noUnmatchedSends
-//      else
-//        PrettyPrinter().buildString(diff.reduce(_ ++ _))
-//    }
-//  }
+  ): F[String] = {
+    def unmatchedSends: F[List[Par]] = runtime.getHotChanges.map(getUnmatchedSends)
+    for {
+      checkpoint <- runtime.createCheckpoint
+      beforeEval <- unmatchedSends
+      _ <- {
+        runtime.evaluate(deploy.data.term, NormalizerEnv(deploy).toEnv)
+      }
+      afterEval <- unmatchedSends
+      diff      = afterEval.diff(beforeEval)
+      _         <- runtime.reset(checkpoint.root)
+    } yield {
+      if (diff.isEmpty)
+        noUnmatchedSends
+      else
+        PrettyPrinter().buildString(diff.reduce(_ ++ _))
+    }
+  }
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
       deploys: Seq[Signed[DeployData]],
@@ -107,19 +106,19 @@ object StoragePrinter {
             .mkString("\n\n")
       )
 
-//  private def getUnmatchedSends(
-//      mapped: Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
-//  ): List[Par] =
-//    mapped.map {
-//      case (
-//          channels: Seq[Par],
-//          row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
-//          ) =>
-//        row match {
-//          case Row(data: Seq[Datum[ListParWithRandom]], _) =>
-//            toSends(data)(channels.map(parToChannel))
-//        }
-//    }.toList
+  private def getUnmatchedSends(
+      mapped: Map[Seq[Channel], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+  ): List[Par] =
+    mapped.map {
+      case (
+          channels: Seq[Channel],
+          row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
+          ) =>
+        row match {
+          case Row(data: Seq[Datum[ListParWithRandom]], _) =>
+            toSends(data)(channels)
+        }
+    }.toList
 
   private[this] def toSends(data: Seq[Datum[ListParWithRandom]])(channels: Seq[Channel]): Par = ???
 //  {

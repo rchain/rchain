@@ -113,8 +113,8 @@ object Consume {
   ): Consume = {
     val channelsHashes = channels.map(_.hash)
     new Consume(
-      channels.map(_.hash),
-      hash(channelsHashes.map(_.bytes), patterns, continuation, persistent),
+      channelsHashes,
+      hash(channels, patterns, continuation, persistent),
       persistent
     )
   }

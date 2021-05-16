@@ -6,12 +6,7 @@ import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
-import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash}
-import coop.rchain.rspace.hashing.ChannelHash.{
-  hashContinuationsChannels,
-  hashDataChannel,
-  hashJoinsChannel
-}
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
 import coop.rchain.rspace.merger.StateMerger
@@ -57,7 +52,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, P,
         val data = encodeDatums(i.data)(serializeA)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[P, K] =>
-        val key  = ChannelHash.hashContinuationsChannels(i.channels.map(_.hash)).bytes
+        val key  = StableHashProvider.hashChannelHashes(i.channels.map(_.hash)).bytes
         val data = encodeContinuations(i.continuations)(serializeP, serializeK)
         s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
       case i: InsertJoins =>
@@ -68,7 +63,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, P,
         val key = d.channel.hash.bytes
         s"${key.toHex};delete-data;0"
       case d: DeleteContinuations =>
-        val key = ChannelHash.hashContinuationsChannels(d.channels.map(_.hash)).bytes
+        val key = StableHashProvider.hashChannelHashes(d.channels.map(_.hash)).bytes
         s"${key.toHex};delete-continuation;0"
       case d: DeleteJoins =>
         val key = d.channel.hash.bytes
@@ -118,7 +113,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, P,
         val key = i.channel.hash
         TrieInsertProduce(key, i.data)
       case i: InsertContinuations[P, K] =>
-        val key = ChannelHash.hashContinuationsChannels(i.channels.map(_.hash))
+        val key = StableHashProvider.hashChannelHashes(i.channels.map(_.hash))
         TrieInsertConsume(key, i.continuations)
       case i: InsertJoins =>
         val key = i.channel.hash
@@ -127,7 +122,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, P,
         val key = d.channel.hash
         TrieDeleteProduce(key)
       case d: DeleteContinuations =>
-        val key = ChannelHash.hashContinuationsChannels(d.channels.map(_.hash))
+        val key = StableHashProvider.hashChannelHashes(d.channels.map(_.hash))
         TrieDeleteConsume(key)
       case d: DeleteJoins =>
         val key = d.channel.hash
