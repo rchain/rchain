@@ -7,7 +7,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 
 object RegistryBootstrap {
   val AST: Par = Par(
-    news = Seq(
+    news = Vector(
       bootstrap(FixedChannels.REG_LOOKUP),
       bootstrap(FixedChannels.REG_INSERT_RANDOM),
       bootstrap(FixedChannels.REG_INSERT_SIGNED)
@@ -24,23 +24,23 @@ object RegistryBootstrap {
     New(
       bindCount = 1,
       p = Par(
-        receives = Seq(
+        receives = Vector(
           // for (x <- channel) { x!(channel) }
           Receive(
-            binds = Seq(
+            binds = Vector(
               // for (x <- channel)
               ReceiveBind(
-                patterns = Seq(EVar(FreeVar(0))),
+                patterns = Vector(EVar(FreeVar(0))),
                 source = channel,
                 freeCount = 1
               )
             ),
             body = Par(
               // x!(channel)
-              sends = Seq(
+              sends = Vector(
                 Send(
                   chan = EVar(BoundVar(0)),
-                  data = Seq(channel)
+                  data = Vector(channel)
                 )
               )
             ),

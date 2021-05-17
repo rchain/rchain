@@ -88,6 +88,15 @@ object HashM extends HashMDerivation {
 
   }
 
+  implicit def vectorHash[A: HashM]: HashM[Vector[A]] = new HashM[Vector[A]] {
+
+    override def hash[F[_]: Sync](value: Vector[A]): F[Int] =
+      for {
+        hashes <- value.traverse(HashM[A].hash[F])
+      } yield hashes.hashCode()
+
+  }
+
   implicit def arrayHash[A: HashM]: HashM[Array[A]] = new HashM[Array[A]] {
 
     override def hash[F[_]: Sync](value: Array[A]): F[Int] =

@@ -11,14 +11,14 @@ private[sorter] object ConnectiveSortMatcher extends Sortable[Connective] {
     c.connectiveInstance match {
       case ConnAndBody(cb) =>
         for {
-          pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          pars <- cb.ps.traverse(Sortable[Par].sortMatch[F])
         } yield ScoredTerm(
           Connective(ConnAndBody(cb.withPs(pars.map(_.term)))),
           Node(Score.CONNECTIVE_AND, pars.map(_.score): _*)
         )
       case ConnOrBody(cb) =>
         for {
-          pars <- cb.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          pars <- cb.ps.traverse(Sortable[Par].sortMatch[F])
         } yield ScoredTerm(
           Connective(ConnOrBody(cb.withPs(pars.map(_.term)))),
           Node(Score.CONNECTIVE_OR, pars.map(_.score): _*)

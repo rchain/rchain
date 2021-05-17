@@ -9,7 +9,7 @@ private[matcher] object ParSpatialMatcherUtils {
   def noFrees(par: Par): Par =
     par.withExprs(noFrees(par.exprs))
 
-  def noFrees(exprs: Seq[Expr]): Seq[Expr] =
+  def noFrees(exprs: Vector[Expr]): Vector[Expr] =
     exprs.filter({ (expr) =>
       expr.exprInstance match {
         case EVarBody(EVar(v)) =>
@@ -76,11 +76,15 @@ private[matcher] object ParSpatialMatcherUtils {
     )
   }
 
-  def minMaxSubsets[A](as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A])] = {
+  def minMaxSubsets[A](
+      as: Vector[A],
+      minSize: Int,
+      maxSize: Int
+  ): Stream[(Vector[A], Vector[A])] = {
 
-    def countedMaxSubsets(as: Seq[A], maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+    def countedMaxSubsets(as: Vector[A], maxSize: Int): Stream[(Vector[A], Vector[A], Int)] =
       as match {
-        case Nil => Stream((as, as, 0))
+        case Vector() => Stream((as, as, 0))
         case head +: rem =>
           (as.slice(0, 0), as, 0) #::
             (for {
@@ -97,7 +101,7 @@ private[matcher] object ParSpatialMatcherUtils {
             } yield result)
       }
 
-    def worker(as: Seq[A], minSize: Int, maxSize: Int): Stream[(Seq[A], Seq[A], Int)] =
+    def worker(as: Vector[A], minSize: Int, maxSize: Int): Stream[(Vector[A], Vector[A], Int)] =
       if (maxSize < 0)
         Stream.empty
       else if (minSize > maxSize)
@@ -110,7 +114,7 @@ private[matcher] object ParSpatialMatcherUtils {
       else
         //TODO the below is duplicated in countedMaxSubsets. Deduplicate.
         as match {
-          case Nil => Stream.empty
+          case Vector() => Stream.empty
           case head +: rem =>
             val decr = minSize - 1
             for {

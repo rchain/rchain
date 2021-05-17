@@ -80,6 +80,16 @@ object EqualM extends EqualMDerivation {
 
   }
 
+  implicit def vectorEqual[A: EqualM]: EqualM[Vector[A]] = new EqualM[Vector[A]] {
+
+    override def equal[F[_]: Sync](self: Vector[A], other: Vector[A]): F[Boolean] = {
+      val pairs = self.toStream.zip(other)
+      Sync[F].delay(self.length == other.length) &&^
+        pairs.forallM(tupled(EqualM[A].equal[F]))
+    }
+
+  }
+
   implicit def arrayEqual[A: EqualM]: EqualM[Array[A]] = new EqualM[Array[A]] {
 
     override def equal[F[_]: Sync](self: Array[A], other: Array[A]): F[Boolean] = {

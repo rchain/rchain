@@ -323,7 +323,7 @@ object WebApi {
   // Data request/response protobuf wrappers
 
   private def toPar(req: DataRequest): Par =
-    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+    Par(unforgeables = Vector(GUnforgeable(unforgToUnforgProto(req.name))))
 
   private def toDataResponse(req: (Seq[DataWithBlockInfo], Int)): DataResponse = {
     val (dbs, length) = req

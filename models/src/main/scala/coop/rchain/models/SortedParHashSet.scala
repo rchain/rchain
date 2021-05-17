@@ -12,7 +12,7 @@ import scala.collection.immutable.HashSet
 // - ordering comes from sorting the elements prior to serializing.
 final class SortedParHashSet(ps: HashSet[Par]) extends Iterable[Par] {
 
-  lazy val sortedPars: List[Par]          = ps.toList.sort
+  lazy val sortedPars: Vector[Par]        = ps.toVector.sort
   private lazy val sortedPs: HashSet[Par] = HashSet(sortedPars: _*)
 
   def +(elem: Par): SortedParHashSet = SortedParHashSet(ps + sort(elem))

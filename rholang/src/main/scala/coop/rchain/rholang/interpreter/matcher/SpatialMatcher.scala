@@ -70,45 +70,45 @@ object SpatialMatcher extends SpatialMatcherInstances {
 
   // This helper function is useful in several productions
   def foldMatch[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short, T, P](
-      tlist: Seq[T],
-      plist: Seq[P],
+      tlist: Vector[T],
+      plist: Vector[P],
       remainder: Option[Var] = None
   )(
       implicit lft: HasLocallyFree[T],
       sm: SpatialMatcher[F, T, P]
-  ): F[Seq[T]] =
+  ): F[Vector[T]] =
     (tlist, plist) match {
-      case (Nil, Nil) => Seq.empty[T].pure[F]
-      case (Nil, _) =>
-        MonoidK[F].empty[Seq[T]]
-      case (trem, Nil) =>
+      case (Vector(), Vector()) => Vector.empty[T].pure[F]
+      case (Vector(), _) =>
+        MonoidK[F].empty[Vector[T]]
+      case (trem, Vector()) =>
         remainder match {
           case None =>
-            MonoidK[F].empty[Seq[T]]
+            MonoidK[F].empty[Vector[T]]
           case Some(Var(FreeVar(level))) => {
-            def freeCheck(trem: Seq[T], level: Int, acc: Seq[T]): F[Seq[T]] =
+            def freeCheck(trem: Vector[T], level: Int, acc: Vector[T]): F[Vector[T]] =
               trem match {
-                case Nil => acc.pure[F]
+                case Vector() => acc.pure[F]
                 case item +: rem =>
                   if (lft.locallyFree(item, 0).isEmpty)
                     freeCheck(rem, level, acc :+ item)
                   else
-                    MonoidK[F].empty[Seq[T]]
+                    MonoidK[F].empty[Vector[T]]
               }
             freeCheck(trem, level, Vector.empty[T])
           }
-          case Some(Var(Wildcard(_))) => Seq.empty[T].pure[F]
-          case _                      => MonoidK[F].empty[Seq[T]]
+          case Some(Var(Wildcard(_))) => Vector.empty[T].pure[F]
+          case _                      => MonoidK[F].empty[Vector[T]]
         }
       case (t +: trem, p +: prem) =>
         spatialMatch(t, p).flatMap(_ => foldMatch(trem, prem, remainder))
     }
 
   def listMatchSingle[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short, T](
-      tlist: Seq[T],
-      plist: Seq[T]
+      tlist: Vector[T],
+      plist: Vector[T]
   )(implicit lf: HasLocallyFree[T], sm: SpatialMatcher[F, T, T]): F[Unit] =
-    listMatchSingle_(tlist, plist, (p: Par, _: Seq[T]) => p, None, false)
+    listMatchSingle_(tlist, plist, (p: Par, _: Vector[T]) => p, None, false)
 
   /** This function finds a single matching from a list of patterns and a list of targets.
     * Any remaining terms are either grouped with the free variable varLevel or thrown away with the wildcard.
@@ -127,9 +127,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
     * @return
     */
   def listMatchSingle_[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short, T](
-      tlist: Seq[T],
-      plist: Seq[T],
-      merger: (Par, Seq[T]) => Par,
+      tlist: Vector[T],
+      plist: Vector[T],
+      merger: (Par, Vector[T]) => Par,
       remainder: Option[Int],
       wildcard: Boolean
   )(implicit lf: HasLocallyFree[T], sm: SpatialMatcher[F, T, T]): F[Unit] = {
@@ -156,9 +156,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
   }
 
   def listMatch[F[_]: Splittable: Alternative: Monad: _error: _freeMap: _short, T](
-      targets: Seq[T],
-      patterns: Seq[T],
-      merger: (Par, Seq[T]) => Par,
+      targets: Vector[T],
+      patterns: Vector[T],
+      merger: (Par, Vector[T]) => Par,
       remainder: Option[Int],
       wildcard: Boolean
   )(implicit lf: HasLocallyFree[T], sm: SpatialMatcher[F, T, T]): F[Unit] = {
@@ -167,10 +167,10 @@ object SpatialMatcher extends SpatialMatcherInstances {
     final case class Term(term: T)         extends Pattern
     final case class Remainder(level: Int) extends Pattern
 
-    val remainderPatterns: Seq[Pattern] = remainder.fold(
-      Seq.empty[Pattern]
+    val remainderPatterns: Vector[Pattern] = remainder.fold(
+      Vector.empty[Pattern]
     )(
-      level => Seq.fill(targets.size - patterns.size)(Remainder(level))
+      level => Vector.fill(targets.size - patterns.size)(Remainder(level))
     )
     val allPatterns = remainderPatterns ++ patterns.map(Term)
 
@@ -253,9 +253,9 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield updatedFreeMap
 
   private def handleRemainder[G[_]: Monad, T](
-      remainderTargets: Seq[T],
+      remainderTargets: Vector[T],
       level: Int,
-      merger: (Par, Seq[T]) => Par
+      merger: (Par, Vector[T]) => Par
   )(
       implicit freeMap: _freeMap[G]
   ): G[Unit] =
@@ -493,14 +493,14 @@ trait SpatialMatcherInstances {
       case (ESetBody(ParSet(tlist, _, _, _)), ESetBody(ParSet(plist, _, _, rem))) =>
         val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
         val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
-        val merger          = (p: Par, r: Seq[Par]) => p.withExprs(Seq(ParSet(r)))
-        listMatchSingle_(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+        val merger          = (p: Par, r: Vector[Par]) => p.withExprs(Vector(ParSet(r)))
+        listMatchSingle_(tlist.toVector, plist.toVector, merger, remainderVarOpt, isWildcard)
 
       case (EMapBody(ParMap(tlist, _, _, _)), EMapBody(ParMap(plist, _, _, rem))) =>
         val isWildcard      = rem.collect { case Var(Wildcard(_)) => true }.isDefined
         val remainderVarOpt = rem.collect { case Var(FreeVar(level)) => level }
-        val merger          = (p: Par, r: Seq[(Par, Par)]) => p.withExprs(Seq(ParMap(r)))
-        listMatchSingle_(tlist.toSeq, plist.toSeq, merger, remainderVarOpt, isWildcard)
+        val merger          = (p: Par, r: Vector[(Par, Par)]) => p.withExprs(Vector(ParMap(r)))
+        listMatchSingle_(tlist.toVector, plist.toVector, merger, remainderVarOpt, isWildcard)
 
       case (EVarBody(EVar(vp)), EVarBody(EVar(vt))) => Alternative_[F].guard(vp == vt)
       case (ENotBody(ENot(t)), ENotBody(ENot(p)))   => spatialMatch(t, p)

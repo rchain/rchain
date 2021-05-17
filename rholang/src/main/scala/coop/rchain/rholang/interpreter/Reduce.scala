@@ -268,7 +268,7 @@ class DebruijnInterpreter[M[_]](
                       else value.body.pure[M]
                     case None => subChan.pure[M]
                   }
-      data      <- send.data.toList.traverse(evalExpr)
+      data      <- send.data.traverse(evalExpr)
       substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
       _ <- produce(
             storage.parToChannel(unbundled),
@@ -283,11 +283,11 @@ class DebruijnInterpreter[M[_]](
   ): M[Unit] =
     for {
       _ <- charge[M](RECEIVE_EVAL_COST)
-      binds <- receive.binds.toList.traverse(
+      binds <- receive.binds.traverse(
                 rb =>
                   for {
                     q <- unbundleReceive(rb)
-                    substPatterns <- rb.patterns.toList
+                    substPatterns <- rb.patterns
                                       .traverse(substituteAndCharge[Par, M](_, 1, env))
                   } yield (BindPattern(substPatterns, rb.remainder, rb.freeCount), q)
               )
@@ -774,13 +774,13 @@ class DebruijnInterpreter[M[_]](
 
         case EListBody(el) =>
           for {
-            evaledPs  <- el.ps.toList.traverse(evalExpr)
+            evaledPs  <- el.ps.traverse(evalExpr)
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(EList(updatedPs, el.locallyFree, el.connectiveUsed))
 
         case ETupleBody(el) =>
           for {
-            evaledPs  <- el.ps.toList.traverse(evalExpr)
+            evaledPs  <- el.ps.traverse(evalExpr)
             updatedPs = evaledPs.map(updateLocallyFree)
           } yield updateLocallyFree(ETuple(updatedPs, el.locallyFree, el.connectiveUsed))
 
@@ -1324,18 +1324,18 @@ class DebruijnInterpreter[M[_]](
           (e: Par).pure[M]
         case ESetBody(ParSet(ps, _, _, _)) =>
           charge[M](toListCost(ps.size)) >>
-            (EList(ps.toList): Par).pure[M]
+            (EList(ps.toVector): Par).pure[M]
         case EMapBody(ParMap(ps, _, _, _)) =>
           charge[M](toListCost(ps.size)) >>
             (EList(
-              ps.toSeq.map {
+              ps.toVector.map {
                 case (k, v) =>
-                  Par().withExprs(Seq(Expr(ETupleBody(ETuple(Seq(k, v))))))
+                  Par().withExprs(Vector(Expr(ETupleBody(ETuple(Vector(k, v))))))
               }
             ): Par).pure[M]
         case ETupleBody(ETuple(ps, _, _)) =>
           charge[M](toListCost(ps.size)) >>
-            (EList(ps.toList): Par).pure[M]
+            (EList(ps): Par).pure[M]
         case other =>
           MethodNotDefined("toList", other.typ).raiseError[M, Par]
       }
@@ -1358,7 +1358,7 @@ class DebruijnInterpreter[M[_]](
         case EMapBody(ParMap(basePs, connectiveUsed, locallyFree, remainder)) =>
           (ESetBody(
             ParSet(
-              basePs.toSeq.map(t => ETupleBody(ETuple(Seq(t._1, t._2))): Par),
+              basePs.toVector.map(t => ETupleBody(ETuple(Vector(t._1, t._2))): Par),
               connectiveUsed,
               locallyFree,
               remainder
@@ -1460,8 +1460,8 @@ class DebruijnInterpreter[M[_]](
         .raiseError[M, Expr]
     else
       p.exprs match {
-        case (e: Expr) +: Nil => evalExprToExpr(e)
-        case _                => ReduceError("Error: Multiple expressions given.").raiseError[M, Expr]
+        case (e: Expr) +: Vector() => evalExprToExpr(e)
+        case _                     => ReduceError("Error: Multiple expressions given.").raiseError[M, Expr]
       }
 
   private def evalToLong(
@@ -1472,14 +1472,14 @@ class DebruijnInterpreter[M[_]](
         .raiseError[M, Long]
     else
       p.exprs match {
-        case Expr(GInt(v)) +: Nil =>
+        case Expr(GInt(v)) +: Vector() =>
           (v: Long).pure[M]
-        case Expr(EVarBody(EVar(v))) +: Nil =>
+        case Expr(EVarBody(EVar(v))) +: Vector() =>
           for {
             p      <- eval(v)
             intVal <- evalToLong(p)
           } yield intVal
-        case (e: Expr) +: Nil =>
+        case (e: Expr) +: Vector() =>
           for {
             evaled <- evalExprToExpr(e)
             result <- evaled.exprInstance match {
@@ -1502,14 +1502,14 @@ class DebruijnInterpreter[M[_]](
         .raiseError[M, Boolean]
     else
       p.exprs match {
-        case Expr(GBool(b)) +: Nil =>
+        case Expr(GBool(b)) +: Vector() =>
           (b: Boolean).pure[M]
-        case Expr(EVarBody(EVar(v))) +: Nil =>
+        case Expr(EVarBody(EVar(v))) +: Vector() =>
           for {
             p       <- eval(v)
             boolVal <- evalToBool(p)
           } yield boolVal
-        case (e: Expr) +: Nil =>
+        case (e: Expr) +: Vector() =>
           for {
             evaled <- evalExprToExpr(e)
             result <- evaled.exprInstance match {

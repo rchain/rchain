@@ -75,7 +75,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
 
   private val systemDeployConsumeAllPattern = {
     import coop.rchain.models.rholang.{implicits => toPar}
-    BindPattern(List(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
+    BindPattern(Vector(toPar(Expr(EVarBody(EVar(Var(FreeVar(0))))))), freeCount = 1)
   }
 
   /**

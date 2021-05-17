@@ -10,7 +10,7 @@ import scala.collection.immutable.HashMap
 final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
 
   // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available
-  lazy val sortedList: List[(Par, Par)]         = ps.sort
+  lazy val sortedList: Vector[(Par, Par)]       = ps.sort
   private lazy val sortedMap: HashMap[Par, Par] = HashMap(sortedList: _*)
 
   def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)

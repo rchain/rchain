@@ -24,6 +24,20 @@ object ordering {
     }
   }
 
+  implicit class VectorSortOps(ps: Vector[Par]) {
+    implicit val sync = implicitly[Sync[Coeval]]
+
+    def sort: Vector[Par] = {
+      val psSorted: Vector[Coeval[ScoredTerm[Par]]] =
+        ps.map(par => Sortable[Par].sortMatch[Coeval](par))
+      val coeval: Coeval[Vector[Par]] = for {
+        parsSorted <- psSorted.sequence
+      } yield parsSorted.sorted.map(_.term)
+
+      coeval.value
+    }
+  }
+
   implicit class MapSortOps(ps: Map[Par, Par]) {
     implicit val sync = implicitly[Sync[Coeval]]
 
@@ -33,9 +47,9 @@ object ordering {
         sortedValue <- Sortable.sortMatch(value)
       } yield ScoredTerm((sortedKey.term, sortedValue.term), sortedKey.score)
 
-    def sort: List[(Par, Par)] = {
-      val pairsSorted = ps.toList.map(kv => sortKeyValuePair(kv._1, kv._2))
-      val coeval: Coeval[List[(Par, Par)]] = for {
+    def sort: Vector[(Par, Par)] = {
+      val pairsSorted = ps.toVector.map(kv => sortKeyValuePair(kv._1, kv._2))
+      val coeval: Coeval[Vector[(Par, Par)]] = for {
         sequenced <- pairsSorted.sequence
       } yield sequenced.sorted.map(_.term)
       coeval.value

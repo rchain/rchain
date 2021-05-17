@@ -195,7 +195,7 @@ object RegistrySigGen {
     val lastNonce = maxLong
 
     // Now we can sign the value that goes in the registry.
-    val toSign: Par = ETuple(Seq(GInt(lastNonce), access))
+    val toSign: Par = ETuple(Vector(GInt(lastNonce), access))
     val sig         = Secp256k1.sign(Blake2b256.hash(toSign.toByteArray), secKey)
 
     val keyHash = Blake2b256.hash(pubKey.bytes)

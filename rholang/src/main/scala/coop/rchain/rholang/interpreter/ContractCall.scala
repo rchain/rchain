@@ -39,7 +39,7 @@ class ContractCall[F[_]: Concurrent: Span](
     for {
       produceResult <- space.produce(
                         storage.parToChannel(ch),
-                        ListParWithRandom(values, rand),
+                        ListParWithRandom(values.toVector, rand),
                         persist = false
                       )
       _ <- produceResult.fold(Sync[F].unit) {

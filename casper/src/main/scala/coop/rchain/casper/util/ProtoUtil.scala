@@ -337,12 +337,12 @@ object ProtoUtil {
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
     val hash: Array[Byte] = Blake2b256.hash(bytes)
-    Par(exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
+    Par(exprs = Vector(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(hash)))))
   }
 
   def getRholangDeployParams(dd: Signed[DeployData]): DeployParameters = {
     val userId: Par = Par(
-      exprs = Seq(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(dd.pk.bytes))))
+      exprs = Vector(Expr(Expr.ExprInstance.GByteArray(ByteString.copyFrom(dd.pk.bytes))))
     )
     DeployParameters(userId)
   }

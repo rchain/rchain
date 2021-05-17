@@ -21,13 +21,13 @@ package object storage {
 
   /* Match instance */
 
-  private def toSeq(fm: FreeMap, max: Int): Seq[Par] =
+  private def toSeq(fm: FreeMap, max: Int): Vector[Par] =
     (0 until max).map { (i: Int) =>
       fm.get(i) match {
         case Some(par) => par
         case None      => Par.defaultInstance
       }
-    }
+    }.toVector
 
   def matchListPar[F[_]: Sync: Span]: StorageMatch[F, BindPattern, ListParWithRandom] =
     new StorageMatch[F, BindPattern, ListParWithRandom] {
@@ -38,7 +38,7 @@ package object storage {
         type R[A] = MatcherMonadT[F, A]
         implicit val matcherMonadError = implicitly[Sync[R]]
         for {
-          matchResult <- runFirst[F, Seq[Par]](
+          matchResult <- runFirst[F, Vector[Par]](
                           SpatialMatcher
                             .foldMatch[R, Par, Par](
                               data.pars,
@@ -51,7 +51,7 @@ package object storage {
             case (freeMap, caughtRem) =>
               val remainderMap = pattern.remainder match {
                 case Some(Var(FreeVar(level))) =>
-                  freeMap + (level -> VectorPar().addExprs(EList(caughtRem.toVector)))
+                  freeMap + (level -> VectorPar().addExprs(EList(caughtRem)))
                 case _ => freeMap
               }
               ListParWithRandom(

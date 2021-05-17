@@ -29,14 +29,14 @@ option (scalapb.options) = {
  * The Nil process is a `Par` with no sends, receives, etc.
  */
 message Par {
-    repeated Send sends = 1;
-    repeated Receive receives = 2;
-    repeated New news = 4;
-    repeated Expr exprs = 5;
-    repeated Match matches = 6;
-    repeated GUnforgeable unforgeables = 7;  // unforgeable names
-    repeated Bundle bundles = 11;
-    repeated Connective connectives = 8;
+    repeated Send sends = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated Receive receives = 2 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated New news = 4 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated Expr exprs = 5 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated Match matches = 6 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated GUnforgeable unforgeables = 7 [(scalapb.field).collection_type="collection.immutable.Vector"];  // unforgeable names
+    repeated Bundle bundles = 11 [(scalapb.field).collection_type="collection.immutable.Vector"];
+    repeated Connective connectives = 8 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 9 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 10;
 }
@@ -68,7 +68,7 @@ message PCost {
 }
 
 message ListParWithRandom {
-    repeated Par pars = 1;
+    repeated Par pars = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes randomState = 2 [(scalapb.field).type = "coop.rchain.crypto.hash.Blake2b512Random"];
 }
 
@@ -104,27 +104,27 @@ message Bundle {
  */
 message Send {
     Par chan = 1 [(scalapb.field).no_box = true];
-    repeated Par data = 2;
+    repeated Par data = 2 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bool persistent = 3;
     bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 6;
 }
 
 message ReceiveBind {
-    repeated Par patterns = 1;
+    repeated Par patterns = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     Par source = 2 [(scalapb.field).no_box = true];
     Var remainder = 3;
     int32 freeCount = 4;
 }
 
 message BindPattern {
-    repeated Par patterns = 1;
+    repeated Par patterns = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     Var remainder = 2;
     int32 freeCount = 3;
 }
 
 message ListBindPatterns {
-    repeated BindPattern patterns = 1;
+    repeated BindPattern patterns = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
 }
 
 /**
@@ -135,7 +135,7 @@ message ListBindPatterns {
  * It's an error for free Variable to occur more than once in a pattern.
  */
 message Receive {
-    repeated ReceiveBind binds = 1;
+    repeated ReceiveBind binds = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     Par body = 2 [(scalapb.field).no_box = true];
     bool persistent = 3;
     bool peek = 4;
@@ -153,7 +153,7 @@ message New {
     sint32 bindCount = 1;
     Par p = 2 [(scalapb.field).no_box = true];
     // For normalization, uri-referenced variables come at the end, and in lexicographical order.
-    repeated string uri = 3;
+    repeated string uri = 3 [(scalapb.field).collection_type="collection.immutable.Vector"];
     map<string, Par> injections = 4;
     bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
 }
@@ -166,7 +166,7 @@ message MatchCase {
 
 message Match {
     Par target = 1 [(scalapb.field).no_box = true];
-    repeated MatchCase cases = 2;
+    repeated MatchCase cases = 2 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 4 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 5;
 }
@@ -213,27 +213,27 @@ message Expr {
 }
 
 message EList {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
     Var remainder = 5;
 }
 
 message ETuple {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
 }
 
 message ESet {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
     Var remainder = 5;
 }
 
 message EMap {
-    repeated KeyValuePair kvs = 1;
+    repeated KeyValuePair kvs = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 3 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 4;
     Var remainder = 5;
@@ -245,7 +245,7 @@ message EMap {
 message EMethod {
     string methodName = 1;
     Par target = 2 [(scalapb.field).no_box = true];
-    repeated Par arguments = 3;
+    repeated Par arguments = 3 [(scalapb.field).collection_type="collection.immutable.Vector"];
     bytes locallyFree = 5 [(scalapb.field).type = "coop.rchain.models.AlwaysEqual[scala.collection.immutable.BitSet]"];
     bool connective_used = 6;
 }
@@ -383,7 +383,7 @@ message VarRef {
 }
 
 message ConnectiveBody {
-    repeated Par ps = 1;
+    repeated Par ps = 1 [(scalapb.field).collection_type="collection.immutable.Vector"];
 }
 
 message DeployId {

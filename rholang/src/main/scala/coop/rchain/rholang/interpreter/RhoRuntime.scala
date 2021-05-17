@@ -216,7 +216,7 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
   override def setInvalidBlocks(invalidBlocks: Map[BlockHash, Validator]): F[Unit] = {
     val invalidBlocksPar: Par =
       Par(
-        exprs = Seq(
+        exprs = Vector(
           Expr(
             Expr.ExprInstance.EMapBody(
               ParMap(SortedParMap(invalidBlocks.map {
@@ -304,7 +304,7 @@ object RhoRuntime {
         val channels = List(name)
         val patterns = List(
           BindPattern(
-            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))),
+            (0 until arity).map[Par, Seq[Par]](i => EVar(FreeVar(i))).toVector,
             remainder,
             freeCount = arity
           )

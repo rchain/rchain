@@ -57,6 +57,7 @@ trait PrettyInstances extends PrettyDerivation {
   implicit def prettyArray[A: Pretty]: Pretty[Array[A]] = "Array" + parenthesised(_, _)
 
   implicit def prettySeq[A: Pretty]     = fromIterable[Seq[A], A]("Seq")
+  implicit def prettyVector[A: Pretty]  = fromIterable[Vector[A], A]("Vector")
   implicit def prettySet[A: Pretty]     = fromIterable[Set[A], A]("Set")
   implicit def prettyHashSet[A: Pretty] = fromIterable[HashSet[A], A]("HashSet")
   implicit def prettySortedParHashSet   = fromIterable[SortedParHashSet, Par]("SortedParHashSet(Seq")

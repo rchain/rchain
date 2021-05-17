@@ -10,12 +10,12 @@ import coop.rchain.models.rholang.implicits._
 object ReceiveBindsSortMatcher {
   // Used during normalize to presort the binds.
   def preSortBinds[F[_]: Sync, T](
-      binds: Seq[(Seq[Par], Par, Option[Var], DeBruijnLevelMap[T])]
-  ): F[Seq[(ReceiveBind, DeBruijnLevelMap[T])]] = {
-    val bindSortings = binds.toList
+      binds: Vector[(Vector[Par], Par, Option[Var], DeBruijnLevelMap[T])]
+  ): F[Vector[(ReceiveBind, DeBruijnLevelMap[T])]] = {
+    val bindSortings = binds
       .map {
         case (
-            patterns: Seq[Par],
+            patterns: Vector[Par],
             channel: Par,
             remainder: Option[Var],
             knownFree: DeBruijnLevelMap[T]

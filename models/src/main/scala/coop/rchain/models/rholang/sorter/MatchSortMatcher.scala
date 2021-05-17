@@ -17,7 +17,7 @@ private[sorter] object MatchSortMatcher extends Sortable[Match] {
       )
     for {
       sortedValue         <- Sortable.sortMatch(m.target)
-      scoredCases         <- m.cases.toList.traverse(sortCase)
+      scoredCases         <- m.cases.traverse(sortCase)
       connectiveUsedScore = if (m.connectiveUsed) 1L else 0L
     } yield ScoredTerm(
       Match(sortedValue.term, scoredCases.map(_.term), m.locallyFree, m.connectiveUsed),

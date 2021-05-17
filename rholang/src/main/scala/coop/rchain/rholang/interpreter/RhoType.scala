@@ -60,7 +60,7 @@ object RhoType {
 
   type RhoTuple2 = Tuple2.type
   object Tuple2 {
-    def apply(tuple: (Par, Par)): Par = Expr(ETupleBody(ETuple(Seq(tuple._1, tuple._2))))
+    def apply(tuple: (Par, Par)): Par = Expr(ETupleBody(ETuple(Vector(tuple._1, tuple._2))))
 
     def unapply(p: Par): Option[(Par, Par)] =
       p.singleExpr().collect {

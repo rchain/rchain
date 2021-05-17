@@ -113,8 +113,8 @@ object CollectionNormalizeMatcher {
   ): M[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DeBruijnLevelMap[VarSort],
-        listproc: List[Proc],
-        constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => T
+        listproc: Vector[Proc],
+        constructor: (Vector[Par], AlwaysEqual[BitSet], Boolean) => T
     )(implicit toExpr: T => Expr): M[CollectVisitOutputs] = {
       val init = (Vector[Par](), knownFree, BitSet(), false)
       listproc
@@ -190,7 +190,7 @@ object CollectionNormalizeMatcher {
           .normalizeMatchProc[M](cl.procremainder_, input.knownFree)
           .flatMap {
             case (optionalRemainder, knownFree) =>
-              val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => EList =
+              val constructor: Option[Var] => (Vector[Par], AlwaysEqual[BitSet], Boolean) => EList =
                 optionalRemainder =>
                   (ps, lf, cu) => {
                     val tmpEList = EList(ps, lf, cu, optionalRemainder)
@@ -199,7 +199,7 @@ object CollectionNormalizeMatcher {
                     )
                   }
 
-              foldMatch(knownFree, cl.listproc_.toList, constructor(optionalRemainder))
+              foldMatch(knownFree, cl.listproc_.toVector, constructor(optionalRemainder))
           }
 
       case ct: CollectTuple =>
@@ -207,7 +207,7 @@ object CollectionNormalizeMatcher {
           case ts: TupleSingle   => Seq(ts.proc_)
           case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
-        foldMatch(input.knownFree, ps.toList, ETuple.apply)
+        foldMatch(input.knownFree, ps.toVector, ETuple.apply)
 
       case cs: CollectSet =>
         RemainderNormalizeMatcher
@@ -224,7 +224,7 @@ object CollectionNormalizeMatcher {
                     )
                   }
 
-              foldMatch(knownFree, cs.listproc_.toList, constructor(optionalRemainder))
+              foldMatch(knownFree, cs.listproc_.toVector, constructor(optionalRemainder))
           }
 
       case cm: CollectMap =>
@@ -609,16 +609,16 @@ object ProcNormalizeMatcher {
           targetResult <- normalizeMatch[M](p.proc_, input.copy(par = Par()))
           target       = targetResult.par
           initAcc = (
-            List[Par](),
+            Vector[Par](),
             ProcVisitInputs(Par(), input.env, targetResult.knownFree),
             BitSet(),
             false
           )
-          argResults <- p.listproc_.toList.reverse.foldM(initAcc)((acc, e) => {
+          argResults <- p.listproc_.toVector.reverse.foldM(initAcc)((acc, e) => {
                          normalizeMatch[M](e, acc._2).map(
                            procMatchResult =>
                              (
-                               procMatchResult.par :: acc._1,
+                               procMatchResult.par +: acc._1,
                                ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
                                acc._3 | procMatchResult.par.locallyFree,
                                acc._4 || procMatchResult.par.connectiveUsed
@@ -783,7 +783,7 @@ object ProcNormalizeMatcher {
         } yield ProcVisitOutputs(
           input.par.prepend(
             Receive(
-              binds = List(
+              binds = Vector(
                 ReceiveBind(
                   formalsResults._1.reverse,
                   nameMatchResult.chan,
@@ -947,7 +947,7 @@ object ProcNormalizeMatcher {
                               }
                           )
           bindCount  = mergedFrees.countNoWildcards
-          binds      = receipts.map(receipt => receipt._1)
+          binds      = receipts.toVector.map(receipt => receipt._1)
           updatedEnv = input.env.absorbFree(mergedFrees)
           bodyResult <- normalizeMatch[M](
                          p.proc_,

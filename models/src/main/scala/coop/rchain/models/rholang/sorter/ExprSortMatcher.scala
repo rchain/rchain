@@ -216,7 +216,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
         )
       case EListBody(list) =>
         for {
-          pars                <- list.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          pars                <- list.ps.traverse(Sortable[Par].sortMatch[F])
           remainderScore      <- remainderScore(list.remainder)
           connectiveUsedScore = if (list.connectiveUsed) 1L else 0L
         } yield constructExpr(
@@ -231,7 +231,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
         )
       case ETupleBody(tuple) =>
         for {
-          sortedPars          <- tuple.ps.toList.traverse(Sortable[Par].sortMatch[F])
+          sortedPars          <- tuple.ps.traverse(Sortable[Par].sortMatch[F])
           connectiveUsedScore = if (tuple.connectiveUsed) 1L else 0L
         } yield ScoredTerm(
           ETupleBody(tuple.withPs(sortedPars.map(_.term))),
@@ -241,7 +241,7 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
         )
       case EMethodBody(em) =>
         for {
-          args                <- em.arguments.toList.traverse(Sortable[Par].sortMatch[F])
+          args                <- em.arguments.traverse(Sortable[Par].sortMatch[F])
           sortedTarget        <- Sortable.sortMatch(em.target)
           connectiveUsedScore = if (em.connectiveUsed) 1L else 0L
         } yield constructExpr(

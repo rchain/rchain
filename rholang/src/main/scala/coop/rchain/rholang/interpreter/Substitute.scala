@@ -164,22 +164,22 @@ object Substitute {
         for {
           exprs       <- subExp(term.exprs)
           connectives <- subConn(term.connectives)
-          sends       <- term.sends.toVector.traverse(substituteSend[M].substituteNoSort(_))
-          bundles     <- term.bundles.toVector.traverse(substituteBundle[M].substituteNoSort(_))
-          receives    <- term.receives.toVector.traverse(substituteReceive[M].substituteNoSort(_))
-          news        <- term.news.toVector.traverse(substituteNew[M].substituteNoSort(_))
-          matches     <- term.matches.toVector.traverse(substituteMatch[M].substituteNoSort(_))
+          sends       <- term.sends.traverse(substituteSend[M].substituteNoSort(_))
+          bundles     <- term.bundles.traverse(substituteBundle[M].substituteNoSort(_))
+          receives    <- term.receives.traverse(substituteReceive[M].substituteNoSort(_))
+          news        <- term.news.traverse(substituteNew[M].substituteNoSort(_))
+          matches     <- term.matches.traverse(substituteMatch[M].substituteNoSort(_))
           par = exprs ++
             connectives ++
             Par(
-              exprs = Nil,
+              exprs = Vector(),
               sends = sends,
               bundles = bundles,
               receives = receives,
               news = news,
               matches = matches,
               unforgeables = term.unforgeables,
-              connectives = Nil,
+              connectives = Vector(),
               locallyFree = term.locallyFree.until(env.shift),
               connectiveUsed = term.connectiveUsed
             )
@@ -193,7 +193,7 @@ object Substitute {
       override def substituteNoSort(term: Send)(implicit depth: Int, env: Env[Par]): M[Send] =
         for {
           channelsSub <- substitutePar[M].substituteNoSort(term.chan)
-          parsSub     <- term.data.toVector.traverse(substitutePar[M].substituteNoSort(_))
+          parsSub     <- term.data.traverse(substitutePar[M].substituteNoSort(_))
           send = Send(
             chan = channelsSub,
             data = parsSub,
@@ -326,15 +326,13 @@ object Substitute {
             s2(target, pattern)(EMatches(_, _))
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
             for {
-              pss <- ps.toVector
-                      .traverse(p => s1(p))
+              pss            <- ps.traverse(p => s1(p))
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = EListBody(EList(pss, newLocallyFree, connectiveUsed, rem)))
 
           case ETupleBody(ETuple(ps, locallyFree, connectiveUsed)) =>
             for {
-              pss <- ps.toVector
-                      .traverse(p => s1(p))
+              pss            <- ps.traverse(p => s1(p))
               newLocallyFree = locallyFree.until(env.shift)
             } yield Expr(exprInstance = ETupleBody(ETuple(pss, newLocallyFree, connectiveUsed)))
 
@@ -345,7 +343,7 @@ object Substitute {
             } yield Expr(
               exprInstance = ESetBody(
                 ParSet(
-                  SortedParHashSet(pss.toSeq),
+                  SortedParHashSet(pss),
                   connectiveUsed,
                   locallyFree.map(_.until(env.shift)),
                   remainder
