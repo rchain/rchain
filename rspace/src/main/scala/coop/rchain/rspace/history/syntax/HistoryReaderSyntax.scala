@@ -7,6 +7,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.internal
+import scodec.bits.ByteVector
 
 trait HistoryReaderSyntax {
   implicit final def rspaceSyntaxHistoryReader[F[_], C, P, A, K](
@@ -36,6 +37,18 @@ final class HistoryReaderOps[F[_], C, P, A, K](
 
       override def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]] =
         historyReader.getJoinsProj(key)(JoinsB(_, _))
+    }
+
+  def readerRaw: HistoryReaderRaw[F] =
+    new HistoryReaderRaw[F] {
+      override def getData(key: Blake2b256Hash): F[Seq[ByteVector]] =
+        historyReader.getDataProj(key)((_, v) => v)
+
+      override def getContinuations(key: Blake2b256Hash): F[Seq[ByteVector]] =
+        historyReader.getContinuationsProj(key)((_, v) => v)
+
+      override def getJoins(key: Blake2b256Hash): F[Seq[ByteVector]] =
+        historyReader.getJoinsProj(key)((_, v) => v)
     }
 
   /**

@@ -4,14 +4,13 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.blocks.merger.{BlockIndex, CasperDagMerger, Indexer, MergingVertex}
+import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.dag.{DagReader, InMemDAG}
+import coop.rchain.dag.InMemDAG
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.NoopSpan
 import coop.rchain.models.BlockHash.BlockHash
@@ -19,13 +18,10 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.EventChain
-import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.LazyKeyValueCache
 import fs2.Stream
-import kamon.trace.Span.Metrics
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -33,7 +29,7 @@ import org.scalatest.{FlatSpec, Matchers}
 import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
-
+  /*
   val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 10)
   val genesis                    = genesisContext.genesisBlock
   implicit val logEff            = Log.log[Task]
@@ -390,4 +386,5 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
       }
     }
   }
+ */
 }

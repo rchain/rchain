@@ -76,4 +76,30 @@ class ChannelStoreOps[F[_], C](
       .parJoinProcBounded
       .compile
       .toVector
+
+  def getJoinMapping(
+      channels: Seq[Blake2b256Hash]
+  )(implicit c: Concurrent[F]): F[Vector[Blake2b256Hash]] =
+    fs2.Stream
+      .emits(
+        channels.map(
+          channel =>
+            fs2.Stream.eval(
+              channelStore
+                .getChannelHash(channel)
+                .flatMap {
+                  case Some(DataJoinHash(_, j)) => j.pure[F]
+                  case _ =>
+                    Concurrent[F].raiseError[Blake2b256Hash](
+                      new Exception(
+                        s"hash $channel not found in channel store when requesting join"
+                      )
+                    )
+                }
+            )
+        )
+      )
+      .parJoinProcBounded
+      .compile
+      .toVector
 }

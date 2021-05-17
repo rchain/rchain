@@ -39,8 +39,8 @@ object GenesisBuilder {
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
       validatorsNum: Int = 4
   ): GenesisParameters = buildGenesisParameters(
-    defaultValidatorKeyPairs,
-    bondsFunction(defaultValidatorPks)
+    defaultValidatorKeyPairs.take(validatorsNum),
+    bondsFunction(defaultValidatorPks.take(validatorsNum))
   )
 
   def buildGenesisParametersWithRandom(

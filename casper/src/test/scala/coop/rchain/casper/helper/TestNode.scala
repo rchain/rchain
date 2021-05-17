@@ -520,6 +520,7 @@ object TestNode {
       runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
       lastFinalizedBlockDb              <- Resource.liftF(kvm.store("last-finalized-block"))
       lastFinalizedStorage              = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+      _                                 <- Resource.liftF(blockDagStorage.addFinalizedBlockHash(genesis.blockHash))
 
       node <- Resource.liftF({
                implicit val bs                           = blockStore

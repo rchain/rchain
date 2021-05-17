@@ -81,3 +81,12 @@ trait HistoryReaderBinary[F[_], C, P, A, K] {
 
   def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]]
 }
+
+/** History reader with only binary data */
+trait HistoryReaderRaw[F[_]] {
+  def getData(key: Blake2b256Hash): F[Seq[ByteVector]]
+
+  def getContinuations(key: Blake2b256Hash): F[Seq[ByteVector]]
+
+  def getJoins(key: Blake2b256Hash): F[Seq[ByteVector]]
+}
