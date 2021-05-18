@@ -1,11 +1,7 @@
 package coop.rchain.comm.transport
 
-import java.io.ByteArrayInputStream
-import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicReference
-
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, ExitCode, Resource, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -20,6 +16,9 @@ import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl._
 import monix.execution.{Cancelable, Scheduler}
 
+import java.io.ByteArrayInputStream
+import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicReference
 import scala.collection.concurrent.TrieMap
 import scala.io.Source
 import scala.util.{Left, Right}

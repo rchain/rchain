@@ -37,7 +37,7 @@ import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
 import coop.rchain.store.LmdbDirStoreManager.gb
-import fs2.concurrent.Queue
+import fs2.concurrent.{Queue, SignallingRef}
 import kamon._
 import monix.execution.Scheduler
 
@@ -192,7 +192,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         blockProcessor,
         blockProcessorState,
         blockProcessorQueue,
-        triggerProposeF
+        triggerProposeF,
+        shutdownHook
       ) = result
 
       // 4. launch casper
@@ -225,7 +226,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           proposerStateRefOpt,
           blockProcessor,
           blockProcessorState,
-          blockProcessorQueue
+          blockProcessorQueue,
+          shutdownHook
         )
       }
       _ <- handleUnrecoverableErrors(program)
@@ -260,7 +262,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
+      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)],
+      shutdownHook: F[Unit]
   )(
       implicit
       time: Time[F],
@@ -341,7 +344,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
                   kamonConf,
                   grpcScheduler
                 )
-      //_ <- addShutdownHook(servers, runtimeCleanup, blockStore)
 
       _ <- EventLog[F].publish(Event.NodeStarted(address))
 
@@ -385,6 +387,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           servers.internalApiServer,
           servers.httpServer,
           servers.adminHttpServer,
+          servers.kamonReporter,
           blockProcessorStream,
           proposerStream,
           engineInitStream,
@@ -401,31 +404,10 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         )
         .parJoinUnbounded
 
-      _ <- node.compile.drain
+      killSwitch <- SignallingRef[F, Boolean](false)
+      _          = sys.addShutdownHook((killSwitch.set(true) >> shutdownHook).toTask.runAsyncAndForget)
+      _          <- node.interruptWhen(killSwitch.discrete).compile.drain
     } yield ()
-  }
-
-  def addShutdownHook(
-      servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
-  ): F[Unit] =
-    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore))).void
-
-  def clearResources(
-      servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
-  ): Unit = {
-    val shutdown = for {
-      _ <- Sync[F].delay(Kamon.stopAllReporters())
-      _ <- runtimeCleanup.close()
-      _ <- Log[F].info("Bringing BlockStore down ...")
-      _ <- blockStore.close()
-      _ <- Log[F].info("Goodbye.")
-    } yield ()
-
-    shutdown.toTask.unsafeRunSync(scheduler)
   }
 
   private def exit0: F[Unit] = Sync[F].delay(System.exit(0))
@@ -530,22 +512,4 @@ object NodeRuntime {
       _ <- runtime.main.run(NodeCallCtx.init)
     } yield ()
   }
-
-  trait Cleanup[F[_]] {
-    def close(): F[Unit]
-  }
-
-  def cleanup[F[_]: Sync: Log](
-      deployStorageCleanup: F[Unit],
-      casperStoreManager: KeyValueStoreManager[F]
-  ): Cleanup[F] =
-    new Cleanup[F] {
-      override def close(): F[Unit] =
-        for {
-          _ <- Log[F].info("Shutting down Casper store manager ...")
-          _ <- casperStoreManager.shutdown
-          _ <- Log[F].info("Shutting down deploy storage ...")
-          _ <- deployStorageCleanup
-        } yield ()
-    }
 }

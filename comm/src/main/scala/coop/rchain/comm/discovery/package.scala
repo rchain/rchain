@@ -1,6 +1,6 @@
 package coop.rchain.comm
 
-import cats.effect.Sync
+import cats.effect.Concurrent
 import com.google.protobuf.ByteString
 import coop.rchain.grpc.{GrpcServer, Server}
 import coop.rchain.metrics.Metrics
@@ -12,12 +12,12 @@ package object discovery {
   val DiscoveryMetricsSource: Metrics.Source =
     Metrics.Source(CommMetricsSource, "discovery.kademlia")
 
-  def acquireKademliaRPCServer[F[_]: Monixable: Sync](
+  def acquireKademliaRPCServer[F[_]: Monixable: Concurrent](
       networkId: String,
       port: Int,
       pingHandler: PeerNode => F[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => F[Seq[PeerNode]]
-  )(implicit scheduler: Scheduler): F[Server[F]] =
+  )(implicit scheduler: Scheduler): Server[F] =
     GrpcServer[F](
       NettyServerBuilder
         .forPort(port)

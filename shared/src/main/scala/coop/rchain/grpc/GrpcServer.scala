@@ -1,11 +1,13 @@
 package coop.rchain.grpc
 
+import cats.effect.concurrent.Ref
+
 import java.util.concurrent.TimeUnit
-
-import cats.effect.Sync
+import cats.effect.{Concurrent, ExitCode, Resource, Sync}
 import cats.syntax.all._
-
+import fs2.Stream
 import coop.rchain.catscontrib.ski.kp
+import fs2.concurrent.{Signal, SignallingRef}
 
 trait Server[F[_]] {
   def start: F[Unit]
@@ -13,7 +15,7 @@ trait Server[F[_]] {
   def port: Int
 }
 
-class GrpcServer[F[_]: Sync](server: io.grpc.Server) extends Server[F] {
+class GrpcServer[F[_]: Concurrent](server: io.grpc.Server) extends Server[F] {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def start: F[Unit] = Sync[F].delay(server.start())
 
@@ -34,6 +36,6 @@ class GrpcServer[F[_]: Sync](server: io.grpc.Server) extends Server[F] {
 }
 
 object GrpcServer {
-  def apply[F[_]: Sync](server: io.grpc.Server): F[Server[F]] =
-    Sync[F].delay(new GrpcServer[F](server))
+  def apply[F[_]: Concurrent](server: io.grpc.Server): Server[F] =
+    new GrpcServer[F](server)
 }

@@ -1,10 +1,11 @@
 package coop.rchain.fs2
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, ExitCode}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.shared.Time
 import fs2.Stream
+import fs2.concurrent.SignallingRef
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}

@@ -47,7 +47,10 @@ import coop.rchain.rspace.{Context, Match, RSpace}
 import coop.rchain.shared._
 import coop.rchain.store.LmdbDirStoreManager
 import fs2.concurrent.Queue
+import kamon.Kamon
 import monix.execution.Scheduler
+import coop.rchain.shared.syntax._
+import fs2.Stream
 
 import java.nio.file.{Files, Path}
 
@@ -80,9 +83,10 @@ object Setup {
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
         Queue[F, (Casper[F], BlockMessage)],
-        Option[ProposeFunction[F]]
+        Option[ProposeFunction[F]],
+        F[Unit]
     )
-  ] =
+  ] = {
     for {
       // In memory state for last approved block
       lab <- LastApprovedBlock.of[F]
@@ -380,10 +384,6 @@ object Setup {
         } yield ()
       }
       engineInit = engineCell.read >>= (_.init)
-      runtimeCleanup = NodeRuntime.cleanup(
-        deployStorageCleanup,
-        rnodeStoreManager
-      )
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span
@@ -406,6 +406,19 @@ object Setup {
           proposerStateRefOpt
         )
       }
+      // Add node shutdown hook
+      shutdownHook = {
+        val kvmShutdown         = Log[F].info("Shutting down RNode store manager ...") *> rnodeStoreManager.shutdown
+        val deployStoreShutdown = Log[F].info("Shutting down deploy storage ...") *> deployStorageCleanup
+        val blockStoreShutdown = Log[F].info("Shutting down block storage ...") *> blockStore
+          .close()
+        // Shutdown all resources in parallel
+        Stream(kvmShutdown, deployStoreShutdown, blockStoreShutdown)
+          .map(fs2.Stream.eval)
+          .parJoinProcBounded
+          .compile
+          .drain >> Log[F].info("Goodbye.")
+      }
     } yield (
       packetHandler,
       apiServers,
@@ -422,6 +435,8 @@ object Setup {
       blockProcessor,
       blockProcessorStateRef,
       blockProcessorQueue,
-      triggerProposeFOpt
+      triggerProposeFOpt,
+      shutdownHook
     )
+  }
 }

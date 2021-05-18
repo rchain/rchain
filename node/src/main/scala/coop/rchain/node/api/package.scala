@@ -2,7 +2,7 @@ package coop.rchain.node
 
 import java.net.InetSocketAddress
 
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.grpc.{GrpcServer, Server}
@@ -16,7 +16,7 @@ import scala.concurrent.duration.FiniteDuration
 
 package object api {
 
-  def acquireInternalServer[F[_]: Sync](
+  def acquireInternalServer[F[_]: Concurrent](
       host: String,
       port: Int,
       grpcExecutor: Scheduler,
@@ -30,7 +30,7 @@ package object api {
       maxConnectionIdle: FiniteDuration,
       maxConnectionAge: FiniteDuration,
       maxConnectionAgeGrace: FiniteDuration
-  ): F[Server[F]] =
+  ): Server[F] =
     GrpcServer[F](
       NettyServerBuilder
         .forAddress(new InetSocketAddress(host, port))
@@ -70,7 +70,7 @@ package object api {
       maxConnectionIdle: FiniteDuration,
       maxConnectionAge: FiniteDuration,
       maxConnectionAgeGrace: FiniteDuration
-  ): F[Server[F]] =
+  ): Server[F] =
     GrpcServer[F](
       NettyServerBuilder
         .forAddress(new InetSocketAddress(host, port))

@@ -13,6 +13,7 @@ import coop.rchain.shared.Log
 
 import monix.eval.Task
 import monix.execution.Scheduler
+import cats.syntax.all._
 
 class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
 
@@ -47,7 +48,8 @@ class GrpcKademliaRPCSpec extends KademliaRPCSpec[Task, GrpcEnvironment] {
       env: GrpcEnvironment,
       pingHandler: PeerNode => Task[Unit],
       lookupHandler: (PeerNode, Array[Byte]) => Task[Seq[PeerNode]]
-  ): Task[Server[Task]] = acquireKademliaRPCServer(networkId, env.port, pingHandler, lookupHandler)
+  ): Task[Server[Task]] =
+    acquireKademliaRPCServer(networkId, env.port, pingHandler, lookupHandler).pure[Task]
 }
 
 case class GrpcEnvironment(
