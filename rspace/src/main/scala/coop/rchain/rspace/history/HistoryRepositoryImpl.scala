@@ -5,18 +5,16 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace._
+import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.ChannelHash.{
   hashContinuationsChannels,
   hashDataChannel,
   hashJoinsChannel
 }
-import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
-import coop.rchain.rspace.merger.StateMerger
-import coop.rchain.rspace.merger.instances.DiffStateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.syntax._
@@ -130,6 +128,30 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
           (joinsHash, Some(joinsLeaf)),
           InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
         )
+      case i: TrieInsertBinaryProduce =>
+        val data     = encodeDatumsBinary(i.data)
+        val dataLeaf = DataLeaf(data)
+        val dataHash = Blake2b256Hash.create(data)
+        (
+          (dataHash, Some(dataLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, dataHash)
+        )
+      case i: TrieInsertBinaryConsume =>
+        val data              = encodeContinuationsBinary(i.continuations)
+        val continuationsLeaf = ContinuationsLeaf(data)
+        val continuationsHash = Blake2b256Hash.create(data)
+        (
+          (continuationsHash, Some(continuationsLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, continuationsHash)
+        )
+      case i: TrieInsertBinaryJoins =>
+        val data      = encodeJoinsBinary(i.joins)
+        val joinsLeaf = JoinsLeaf(data)
+        val joinsHash = Blake2b256Hash.create(data)
+        (
+          (joinsHash, Some(joinsLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
+        )
       case d: TrieDeleteProduce =>
         ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
       case d: TrieDeleteConsume =>
@@ -220,12 +242,11 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 
-  override def stateMerger: StateMerger[F] =
-    DiffStateMerger[F, C, P, A, K](historyRepo = this, serializeC)
-
   override def history: History[F] = currentHistory
 
   override def root: Blake2b256Hash = currentHistory.root
+
+  override def getSerializeC: Serialize[C] = serializeC
 
   override def getHistoryReader(
       stateHash: Blake2b256Hash

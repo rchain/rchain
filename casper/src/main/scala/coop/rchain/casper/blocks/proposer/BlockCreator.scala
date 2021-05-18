@@ -178,7 +178,7 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: Seq[ProcessedDeploy],
+      rejectedDeploys: Seq[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
@@ -189,7 +189,7 @@ object BlockCreator {
       Body(
         state,
         deploys.toList,
-        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig)).toList,
+        rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)
