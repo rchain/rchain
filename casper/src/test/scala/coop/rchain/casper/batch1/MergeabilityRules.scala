@@ -777,6 +777,10 @@ trait MergeabilityRules {
     "(P!!) (C!!)" -> CoveredBy("(P!!) (C!!)")
   )
 
+  val touchingJoinShouldBeAlwaysConflicting = List(
+    "J S N" -> ConflictingCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)(J_.rstate ++ S1.rstate)
+  )
+
   val joinMergeabilityCases = List(
     "J S S"   -> ConflictingCase(S0)(S1)(J_)(J_.rstate ++ S0.rstate)(J_.rstate ++ S1.rstate),
     "J S N"   -> MergeableCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate),

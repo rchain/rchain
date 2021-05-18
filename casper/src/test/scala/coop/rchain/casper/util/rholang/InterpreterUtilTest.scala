@@ -83,7 +83,7 @@ class InterpreterUtilTest
   ): F[
     Either[
       Throwable,
-      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
     ]
   ] =
     Time[F].currentMillis >>= (
