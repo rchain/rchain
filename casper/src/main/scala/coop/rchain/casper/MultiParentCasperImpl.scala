@@ -20,7 +20,15 @@ import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
+import coop.rchain.models.{
+  BindPattern,
+  BlockMetadata,
+  EquivocationRecord,
+  ListParWithRandom,
+  NormalizerEnv,
+  Par,
+  TaggedContinuation
+}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -28,6 +36,7 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
@@ -286,18 +295,16 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    // if merging is enabled - populate block index cache while validating block
-    val populateBlockIndexCache =
-      if (casperShardConf.maxNumberOfParents > 1)
-        runtimeManager.getBlockIndexCache.get(
-          MergingVertex(
-            b.blockHash,
-            ProtoUtil.postStateHash(b),
-            ProtoUtil.preStateHash(b),
-            ProtoUtil.deploys(b).toSet
-          )
-        )
-      else ().pure[F]
+    val indexBlock = for {
+      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                b.blockHash,
+                b.body.deploys,
+                b.body.state.preStateHash,
+                b.body.state.postStateHash,
+                runtimeManager.getHistoryRepo
+              )
+      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+    } yield ()
 
     val validationProcessDiag = for {
       // Create block and measure duration
@@ -306,13 +313,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       _ <- valResult
             .map { status =>
               val blockInfo = PrettyPrinter.buildString(b, short = true)
-              Log[F].info(s"Block replayed: $blockInfo ($status) [$elapsed]")
+              Log[F].info(s"Block replayed: $blockInfo ($status) [$elapsed]") <* indexBlock
             }
             .getOrElse(().pure[F])
     } yield valResult
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *>
-      populateBlockIndexCache *> validationProcessDiag
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
