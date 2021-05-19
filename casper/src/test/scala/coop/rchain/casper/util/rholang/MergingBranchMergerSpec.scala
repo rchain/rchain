@@ -32,7 +32,7 @@ import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 10)
+  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 50)
   val genesis                    = genesisContext.genesisBlock
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]
@@ -353,7 +353,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               preStateHash = startPreStateHash,
               processedDeploys = b._2.toSet
             )
-            _ = println(s"building on ${PrettyPrinter.buildString(startPreStateHash)}")
 
             // create children an all other
             baseChildren <- mkTailStates(base.postStateHash, n * 2 + 2, (n * 2 + 2).toLong)
@@ -364,6 +363,9 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                   preStateHash = startPreStateHash,
                   processedDeploys = c._2.toSet
                 )
+            )
+            _ = println(
+              s"merging ${mergingTips.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
             )
             dag <- mergingTips.foldLeftM(emptyDag)((acc, tip) => acc.addEdge(tip, base))
 
