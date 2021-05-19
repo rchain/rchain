@@ -1,23 +1,22 @@
 package coop.rchain.casper
 
-import scala.collection.immutable.{Map, Set}
-import cats.Monad
 import cats.effect.Sync
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.casper.util.DagOperations
 import coop.rchain.casper.util.ProtoUtil.weightFromValidatorByDag
 import coop.rchain.catscontrib.ListContrib
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockMetadata
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.dag.DagOps
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
+import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
+
+import scala.collection.immutable.{Map, Set}
 
 // Tips of the DAG, ranked against LCA
 final case class ForkChoice(tips: IndexedSeq[BlockHash], lca: BlockHash)

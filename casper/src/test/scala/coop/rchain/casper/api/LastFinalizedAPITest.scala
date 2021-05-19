@@ -102,14 +102,15 @@ class LastFinalizedAPITest
    * DAG Looks like this:
    *
    *           b5
-   *           |
-   *           b4
-   *           |
-   *       b7  b3 <- last finalized block
-   *       |   |
-   *       b6  b2
-   *         \ |
+   *             \
+   *              b4
+   *             /
+   *        b7 b3 <- last finalized block
+   *        |    \
+   *        b6    b2
+   *          \  /
    *           b1
+   *       [n3 n1 n2]
    *           |
    *         genesis
    */

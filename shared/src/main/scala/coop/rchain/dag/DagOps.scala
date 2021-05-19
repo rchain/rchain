@@ -11,7 +11,12 @@ import scala.collection.immutable.{HashSet, Queue}
 
 trait DagReader[F[_], A] {
   def children(vertex: A): F[Option[Set[A]]]
-  def parents(vertex: A): F[Option[Set[A]]]
+  // parents should be ordered as we need a notion if main parent
+  def parents(vertex: A): F[Option[Seq[A]]]
+}
+
+object DagReader {
+  final case class VertexDoesNotExist(str: String) extends Exception
 }
 
 trait DagUpdater[F[_], A] {
@@ -21,16 +26,16 @@ trait DagUpdater[F[_], A] {
 
 final case class InMemDAG[F[_]: Applicative, A](
     childrenMap: Map[A, Set[A]],
-    parentsMap: Map[A, Set[A]]
+    parentsMap: Map[A, Seq[A]]
 ) extends DagReader[F, A]
     with DagUpdater[F, A] {
   override def children(vertex: A): F[Option[Set[A]]] =
     childrenMap.get(vertex).pure[F]
-  override def parents(vertex: A): F[Option[Set[A]]] = parentsMap.get(vertex).pure[F]
+  override def parents(vertex: A): F[Option[Seq[A]]] = parentsMap.get(vertex).pure[F]
   override def addEdge(child: A, parent: A): F[InMemDAG[F, A]] =
     new InMemDAG[F, A](
       this.childrenMap.updated(parent, childrenMap.getOrElse(parent, Set.empty[A]) + child),
-      this.parentsMap.updated(child, parentsMap.getOrElse(child, Set.empty[A]) + parent)
+      this.parentsMap.updated(child, parentsMap.getOrElse(child, Seq.empty[A]) :+ parent)
     ).pure[F]
 
   override def remove(vertex: A): F[Unit] = ???

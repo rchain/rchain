@@ -146,7 +146,7 @@ object Resources {
 
       override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
 
-      override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
+      override def parents(vertex: BlockHash): F[Option[Seq[BlockHash]]] = ???
     }
     CasperSnapshot[F](
       dummyRepresentation,

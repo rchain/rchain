@@ -1,6 +1,7 @@
 package coop.rchain.casper.batch1
 
 import cats.implicits._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol.BlockMessage

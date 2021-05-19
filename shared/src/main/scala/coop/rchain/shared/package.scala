@@ -1,6 +1,8 @@
 package coop.rchain
 
+import coop.rchain.dag.DagReaderSyntax
 import coop.rchain.fs2.Fs2StreamSyntax
+import coop.rchain.metrics.MetricsSyntax
 import coop.rchain.monix.MonixableSyntax
 import coop.rchain.store.{KeyValueStoreManagerSyntax, KeyValueStoreSyntax, KeyValueTypedStoreSyntax}
 
@@ -18,3 +20,5 @@ trait AllSyntaxShared
     with KeyValueStoreManagerSyntax
     with MonixableSyntax
     with Fs2StreamSyntax
+    with catscontrib.ToBooleanF
+    with DagReaderSyntax
