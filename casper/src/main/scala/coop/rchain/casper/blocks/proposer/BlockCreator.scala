@@ -164,8 +164,9 @@ object BlockCreator {
         (blockStatus, elapsed) = r
         _ <- blockStatus match {
               case Created(block) =>
-                val blockInfo = PrettyPrinter.buildString(block, short = true)
-                Log[F].info(s"Block created: $blockInfo [$elapsed]")
+                val blockInfo   = PrettyPrinter.buildString(block, short = true)
+                val deployCount = block.body.deploys.size
+                Log[F].info(s"Block created: $blockInfo (${deployCount}d) [$elapsed]")
               case _ => ().pure[F]
             }
       } yield blockStatus

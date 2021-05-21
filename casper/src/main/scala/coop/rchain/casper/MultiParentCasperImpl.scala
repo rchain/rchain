@@ -305,8 +305,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       (valResult, elapsed) = r
       _ <- valResult
             .map { status =>
-              val blockInfo = PrettyPrinter.buildString(b, short = true)
-              Log[F].info(s"Block replayed: $blockInfo ($status) [$elapsed]")
+              val blockInfo   = PrettyPrinter.buildString(b, short = true)
+              val deployCount = b.body.deploys.size
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]")
             }
             .getOrElse(().pure[F])
     } yield valResult
