@@ -28,16 +28,10 @@ object MergingLogic {
       * Consume is considered destroyed in COMM when it is not persistent.
       */
     val racesForSameIOEvent = {
-      def equal[A](as: Set[A], bs: Set[A]): Iterator[A] =
-        as.iterator
-          .flatMap(a => bs.iterator.map(b => (a, b)))
-          .filter(tupled((l, r) => l == r))
-          .map(_._1)
-
       val consumeRaces =
-        equal[Consume](a.consumesProduced, b.consumesProduced).filterNot(_.persistent)
+        (a.consumesProduced intersect b.consumesProduced).toIterator.filterNot(_.persistent)
       val produceRaces =
-        equal[Produce](a.producesConsumed, b.producesConsumed).filterNot(_.persistent)
+        (a.producesConsumed intersect b.producesConsumed).toIterator.filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }
