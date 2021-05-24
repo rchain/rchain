@@ -11,13 +11,14 @@ import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.{MergingLogic, StateChange, StateChangeMerger}
 import coop.rchain.rspace.syntax._
+import coop.rchain.shared.Log
 
 object DagMerger {
 
   /** Type for minimal rejection unit - set of dependent deploys executed inside one block */
   type R = DeployChainIndex
 
-  def merge[F[_]: Concurrent, V](
+  def merge[F[_]: Concurrent: Log, V](
       tips: List[V],
       lfb: V,
       dag: DagReader[F, V],
@@ -76,8 +77,8 @@ object DagMerger {
 
       r <- ConflictSetMerger.merge[F, R](
             baseState = lfbPostState,
-            actualSet = actualSet,
-            lateSet = lateSet,
+            actualSet = actualSet.toSet,
+            lateSet = lateSet.toSet,
             depends =
               (target, source) => MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
             conflicts = branchesAreConflicting,
@@ -89,6 +90,6 @@ object DagMerger {
 
       (newState, rejected) = r
       rejectedDeploys      = rejected.flatMap(_.deploysWithCost.map(_.id))
-    } yield (ByteString.copyFrom(newState.bytes.toArray), rejectedDeploys)
+    } yield (ByteString.copyFrom(newState.bytes.toArray), rejectedDeploys.toList)
   }
 }

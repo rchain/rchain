@@ -53,7 +53,7 @@ object BlockIndex {
         * so all conflicts are resolved according to order of sequential execution.
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
       deployChains = computeRelatedSets[DeployIndex](
-        deployIndices,
+        deployIndices.toSet,
         (t, s) => MergingLogic.depends(t.eventLogIndex, s.eventLogIndex)
       )
       index <- deployChains.toVector

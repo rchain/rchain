@@ -5,21 +5,20 @@ import scala.annotation.tailrec
 package object merger {
 
   /** arrange list[v] into map v -> Iterator[v] for items that match predicate */
-  def computeRelationMap[A](items: List[A], relation: (A, A) => Boolean): Map[A, List[A]] = {
-    val init = items.map(_ -> List.empty[A]).toMap
-    items
+  def computeRelationMap[A](items: Set[A], relation: (A, A) => Boolean): Map[A, Set[A]] = {
+    val init = items.map(_ -> Set.empty[A]).toMap
+    items.toList
       .combinations(2)
       .filter {
         case List(l, r) => relation(l, r)
       }
       .foldLeft(init) {
-        case (acc, List(l, r)) => acc.updated(l, r +: acc(l)).updated(r, l +: acc(r))
-
+        case (acc, List(l, r)) => acc.updated(l, acc(l) + r).updated(r, acc(r) + l)
       }
   }
 
   /** given relation map, return iterators of related items */
-  def gatherRelatedSets[A](relationMap: Map[A, List[A]]): Set[Set[A]] = {
+  def gatherRelatedSets[A](relationMap: Map[A, Set[A]]): Set[Set[A]] = {
     @tailrec
     def addRelations(toAdd: Set[A], acc: Set[A]): Set[A] = {
       // stop if all new dependencies are already in set
@@ -32,10 +31,10 @@ package object merger {
         addRelations(next, next)
       }
     }
-    relationMap.keySet.map(k => addRelations(relationMap(k).toSet, Set(k)))
+    relationMap.keySet.map(k => addRelations(relationMap(k), Set(k)))
   }
 
-  def computeRejectionOptions[A](conflictMap: Map[A, List[A]]): Set[Set[A]] = {
+  def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
     @tailrec
     def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
       // stop if all new dependencies are already in set
@@ -48,11 +47,10 @@ package object merger {
         process(next, next, !reject)
       }
     }
-
     // each rejection option is defined by decision not to reject a key in rejection map
-    conflictMap.keySet.map(k => process(conflictMap(k).toSet, Set.empty, reject = true))
+    conflictMap.keySet.map(k => process(conflictMap(k), Set.empty, reject = true))
   }
 
-  def computeRelatedSets[A](items: List[A], relation: (A, A) => Boolean): Set[Set[A]] =
+  def computeRelatedSets[A](items: Set[A], relation: (A, A) => Boolean): Set[Set[A]] =
     gatherRelatedSets(computeRelationMap(items, relation))
 }

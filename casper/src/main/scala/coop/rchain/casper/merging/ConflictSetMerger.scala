@@ -6,24 +6,24 @@ import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.StateChange._
 import coop.rchain.rspace.merger._
+import coop.rchain.shared.{Log, Stopwatch}
 
 object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
-  def merge[F[_]: Concurrent, R](
+  def merge[F[_]: Concurrent: Log, R](
       baseState: Blake2b256Hash,
-      actualSet: List[R],
-      lateSet: List[R],
+      actualSet: Set[R],
+      lateSet: Set[R],
       depends: (R, R) => Boolean,
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
       stateChanges: R => F[StateChange],
       computeTrieActions: (Blake2b256Hash, StateChange) => F[List[HotStoreTrieAction]],
       applyTrieActions: (Blake2b256Hash, Seq[HotStoreTrieAction]) => F[Blake2b256Hash]
-  ): F[(Blake2b256Hash, List[R])] = {
+  ): F[(Blake2b256Hash, Set[R])] = {
 
-    type Branch    = Set[R]
-    type Rejection = Set[Branch]
+    type Branch = Set[R]
 
     /** compute optimal rejection configuration */
     def getOptimalRejection(
@@ -36,13 +36,17 @@ object ConflictSetMerger {
       actualSet.partition(t => lateSet.exists(depends(t, _)))
 
     /** split merging set into branches without cross dependencies */
-    val branches = computeRelatedSets[R](mergeSet, (l, r) => depends(l, r))
+    val (branches, branchesTime) =
+      Stopwatch.profile(computeRelatedSets[R](mergeSet, (l, r) => depends(l, r)))
 
     /** map of conflicting branches */
-    val conflictMap = computeRelationMap[Set[R]](branches.toList, conflicts)
+    val (conflictMap, conflictsMapTime) =
+      Stopwatch.profile(computeRelationMap[Set[R]](branches, conflicts))
 
+    // TODO reject only units that are conflicting + dependent, its not necessary to reject the whole branch
     /** rejection options that leave only non conflicting branches */
-    val rejectionOptions: Set[Rejection] = computeRejectionOptions(conflictMap)
+    val (rejectionOptions, rejectionOptionsTime) =
+      Stopwatch.profile(computeRejectionOptions(conflictMap))
 
     /** target function for rejection is minimising cost of deploys rejected */
     val rejectionTargetF = (dc: Branch) => dc.map(cost).sum
@@ -51,9 +55,21 @@ object ConflictSetMerger {
     val rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
 
     for {
-      allChanges  <- toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll)
-      trieActions <- computeTrieActions(baseState, allChanges)
-      newState    <- applyTrieActions(baseState, trieActions)
+      r                                 <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
+      (allChanges, combineAllChanges)   = r
+      r                                 <- Stopwatch.duration(computeTrieActions(baseState, allChanges))
+      (trieActions, computeActionsTime) = r
+      r                                 <- Stopwatch.duration(applyTrieActions(baseState, trieActions))
+      (newState, applyActionsTime)      = r
+      overallChanges                    = s"${allChanges.datumChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.joinsIndex.size} J"
+      logStr = s"Merging done: " +
+        s"computed branches in ${branchesTime}; " +
+        s"conflicts map in ${conflictsMapTime}; " +
+        s"rejection options in ${rejectionOptionsTime}; " +
+        s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
+        s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
+        s"actions applied in ${applyActionsTime}"
+      _ <- Log[F].debug(logStr)
     } yield (newState, rejected)
   }
 }
