@@ -114,7 +114,7 @@ Converts string to UTF-8 byte array. Returns an error when called with arguments
 #### Ordered data structure methods
 - `length()`: the number of elements in a byte array, list, or string
 - `slice(m,n)`: slice of a byte array, list, or string
-- `toSet()`: generates a Set of list elements eliminating guplicates
+- `toSet()`: generates a Set from List or Map elements
 
 ##### `nth(Int)`
 Retrieves the nth process from a byte array, list, or tuple; returns error if the given index is out of range.
