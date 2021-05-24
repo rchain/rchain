@@ -48,8 +48,8 @@ object StateChange {
       startValueReader: Blake2b256Hash => F[Seq[T]],
       endValueReader: Blake2b256Hash => F[Seq[T]],
       accumulator: Ref[F, Map[Blake2b256Hash, ChannelChange[T]]]
-  ): Stream[F, Unit] =
-    fs2.Stream.eval(for {
+  ): F[Unit] =
+    for {
       r <- computeValueChangeOnChannel[F, T](
             valuePointer,
             h => startValueReader(h),
@@ -63,7 +63,7 @@ object StateChange {
             )
             s.updated(valuePointer, newVal)
           })
-    } yield ())
+    } yield ()
 
   def apply[F[_]: Concurrent, C, P, A, K](
       preStateReader: HistoryReaderBinary[F, C, P, A, K],
@@ -95,11 +95,13 @@ object StateChange {
 
       datumsChangesComputes = affectedDatumsValuePointers.map(
         datumsPointer =>
-          recordValueChange(
-            datumsPointer,
-            pointer => preStateReader.getData(pointer).map(_.map(_.raw)),
-            pointer => postStateReader.getData(pointer).map(_.map(_.raw)),
-            producesDiffRef
+          Stream.eval(
+            recordValueChange(
+              datumsPointer,
+              pointer => preStateReader.getData(pointer).map(_.map(_.raw)),
+              pointer => postStateReader.getData(pointer).map(_.map(_.raw)),
+              producesDiffRef
+            )
           )
       )
       kontsChangesComputes = {
@@ -107,11 +109,13 @@ object StateChange {
           ConsumeChange(k.raw, k.decoded.source.channelsHashes)
         affectedKontsValuePointers.map(
           kontsPointer =>
-            recordValueChange(
-              kontsPointer,
-              v => preStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
-              v => postStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
-              consumesDiffRef
+            Stream.eval(
+              recordValueChange(
+                kontsPointer,
+                v => preStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
+                v => postStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
+                consumesDiffRef
+              )
             )
         )
       }

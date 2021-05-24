@@ -9,9 +9,9 @@ import coop.rchain.rspace.util
 import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.Serialize._
-import scodec.bits.{BitVector, ByteVector}
-import scodec.codecs.{bits, bool, discriminated, int32, provide, uint, uint2, uint8, vectorOfN}
-import scodec.{Attempt, Codec, DecodeResult, SizeBound}
+import scodec.bits.ByteVector
+import scodec.codecs.{bool, bytes, discriminated, int32, provide, uint, uint2, uint8, vectorOfN}
+import scodec.{Attempt, Codec}
 
 import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
@@ -38,7 +38,7 @@ object ScodecSerialize {
   }
 
   def encodeDatumsBinary[A](datums: Seq[ByteVector]): ByteVector =
-    encodeSortedSeq[BitVector](datums.map(_.toBitVector), bits)
+    encodeSortedSeq(datums, bytes)
 
   def decodeDatums[A](bytes: ByteVector)(implicit sa: Serialize[A]): Seq[Datum[A]] =
     decodeDatumsProj[A, Datum[A]](bytes)((d, _) => d)
@@ -66,7 +66,7 @@ object ScodecSerialize {
   }
 
   def encodeContinuationsBinary(konts: Seq[ByteVector]): ByteVector =
-    encodeSortedSeq(konts.map(_.toBitVector), bits)
+    encodeSortedSeq(konts, bytes)
 
   def decodeContinuations[P, K](bytes: ByteVector)(
       implicit
@@ -101,7 +101,7 @@ object ScodecSerialize {
   }
 
   def encodeJoinsBinary(joins: Seq[ByteVector]): ByteVector =
-    encodeSortedSeq(joins.map(_.toBitVector), bits)
+    encodeSortedSeq(joins, bytes)
 
   def decodeJoins[C](bytes: ByteVector)(implicit sc: Serialize[C]): Seq[Seq[C]] =
     decodeJoinsProj[C, Seq[C]](bytes)((d, _) => d)

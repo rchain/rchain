@@ -161,47 +161,48 @@ class InterpreterUtilTest
     }
   }
 
-//  it should "merge histories in case of multiple parents" in effectTest {
-//
-//    val b1Deploys = Vector(
-//      "@5!(5)",
-//      "@2!(2)",
-//      "for(@a <- @2){ @456!(5 * a) }"
-//    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2))
-//
-//    val b2Deploys = Vector(
-//      "@1!(1)",
-//      "for(@a <- @1){ @123!(5 * a) }"
-//    ).map(ConstructDeploy.sourceDeployNow(_))
-//
-//    val b3Deploys = Vector(
-//      "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-//    ).map(ConstructDeploy.sourceDeployNow(_))
-//
-//    /*
-//     * DAG Looks like this:
-//     *
-//     *        b3
-//     *        |   \
-//     *        b1    b2
-//     *         \    /
-//     *         genesis
-//     */
-//
-//    TestNode.networkEff(genesisContext, networkSize = 2).use {
-//      case node1 +: node2 +: _ =>
-//        implicit val runtimeManager = node1.runtimeManager
-//        for {
-//          b1 <- node1.addBlock(b1Deploys: _*)
-//          b2 <- node2.propagateBlock(b2Deploys: _*)(node1)
-//          b3 <- node1.addBlock(b3Deploys: _*)
-//
-//          _ = b3.header.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)
-//          _ <- getDataAtPublicChannel[Task](b3, 5) shouldBeF Seq("5")
-//          _ <- getDataAtPublicChannel[Task](b3, 1) shouldBeF Seq("15")
-//        } yield ()
-//    }
-//  }
+  //TODO reenable when merging of REV balances is done
+  it should "merge histories in case of multiple parents" ignore effectTest {
+
+    val b1Deploys = Vector(
+      "@5!(5)",
+      "@2!(2)",
+      "for(@a <- @2){ @456!(5 * a) }"
+    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2))
+
+    val b2Deploys = Vector(
+      "@1!(1)",
+      "for(@a <- @1){ @123!(5 * a) }"
+    ).map(ConstructDeploy.sourceDeployNow(_))
+
+    val b3Deploys = Vector(
+      "for(@a <- @123; @b <- @456){ @1!(a + b) }"
+    ).map(ConstructDeploy.sourceDeployNow(_))
+
+    /*
+     * DAG Looks like this:
+     *
+     *        b3
+     *        |   \
+     *        b1    b2
+     *         \    /
+     *         genesis
+     */
+
+    TestNode.networkEff(genesisContext, networkSize = 2).use {
+      case node1 +: node2 +: _ =>
+        implicit val runtimeManager = node1.runtimeManager
+        for {
+          b1 <- node1.addBlock(b1Deploys: _*)
+          b2 <- node2.propagateBlock(b2Deploys: _*)(node1)
+          b3 <- node1.addBlock(b3Deploys: _*)
+
+          _ = b3.header.parentsHashList.toSet shouldBe Set(b1, b2).map(_.blockHash)
+          _ <- getDataAtPublicChannel[Task](b3, 5) shouldBeF Seq("5")
+          _ <- getDataAtPublicChannel[Task](b3, 1) shouldBeF Seq("15")
+        } yield ()
+    }
+  }
 
   val registry =
     """

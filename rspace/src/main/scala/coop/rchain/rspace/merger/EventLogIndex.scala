@@ -116,41 +116,45 @@ object EventLogIndex {
     )
 
   implicit val monoid: Monoid[EventLogIndex] = new Monoid[EventLogIndex] {
-    override def empty: EventLogIndex =
-      EventLogIndex(
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty,
-        Set.empty
-      )
+    override def empty: EventLogIndex = EventLogIndex.empty
 
     override def combine(x: EventLogIndex, y: EventLogIndex): EventLogIndex =
       EventLogIndex.combine(x, y)
   }
 
+  def empty: EventLogIndex =
+    EventLogIndex(
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Set.empty
+    )
+
   def combine(x: EventLogIndex, y: EventLogIndex): EventLogIndex = {
 
-    val newProducesCreated = (x, y).map(producesCreated).fold
+    val newProducesCreated = Seq(x, y).map(producesCreated).reduce(_ ++ _)
 
     /** if produce is copied by peek in one index and originated in another - it is considered as created in aggregate*/
-    val newProducesCopiedByPeek = (x, y).map(_.producesCopiedByPeek).fold diff newProducesCreated
+    val newProducesCopiedByPeek = Seq(x, y)
+      .map(_.producesCopiedByPeek)
+      .reduce(_ ++ _) diff newProducesCreated
 
     EventLogIndex(
-      (x, y).map(_.producesLinear).fold,
-      (x, y).map(_.producesPersistent).fold,
-      (x, y).map(_.producesConsumed).fold,
-      (x, y).map(_.producesPeeked).fold,
+      Seq(x, y).map(_.producesLinear).reduce(_ ++ _),
+      Seq(x, y).map(_.producesPersistent).reduce(_ ++ _),
+      Seq(x, y).map(_.producesConsumed).reduce(_ ++ _),
+      Seq(x, y).map(_.producesPeeked).reduce(_ ++ _),
       newProducesCopiedByPeek,
       //TODO this joins combination is very restrictive. Join might be originated inside aggregated event log
-      (x, y).map(_.producesTouchingBaseJoins).fold,
-      (x, y).map(_.consumesLinearAndPeeks).fold,
-      (x, y).map(_.consumesPersistent).fold,
-      (x, y).map(_.consumesProduced).fold
+      Seq(x, y).map(_.producesTouchingBaseJoins).reduce(_ ++ _),
+      Seq(x, y).map(_.consumesLinearAndPeeks).reduce(_ ++ _),
+      Seq(x, y).map(_.consumesPersistent).reduce(_ ++ _),
+      Seq(x, y).map(_.consumesProduced).reduce(_ ++ _)
     )
   }
 }
