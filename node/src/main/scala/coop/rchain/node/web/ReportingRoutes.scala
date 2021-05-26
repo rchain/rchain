@@ -1,20 +1,12 @@
 package coop.rchain.node.web
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
-import coop.rchain.blockstorage.BlockStore
+import cats.syntax.all._
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.api.BlockReportAPI
-import coop.rchain.casper.{ReportStore, ReportingCasper, SafetyOracle}
-import coop.rchain.models.BlockHash._
-import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.BlockEventInfo
-import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import org.http4s.HttpRoutes
-import coop.rchain.shared.Log
 import org.http4s.circe.jsonEncoderOf
-
-import scala.collection.concurrent.TrieMap
 
 object ReportingRoutes {
 
@@ -55,7 +47,7 @@ object ReportingRoutes {
 
     HttpRoutes.of[F] {
       case GET -> Root / "trace" :? BlockHashQueryParamMatcher(hash) =>
-        Ok { transforResult(hash, blockReportAPI.blockReport(hash, false)) }
+        Ok { transforResult(hash, blockReportAPI.blockReport(hash, forceReplay = false)) }
     }
   }
 }
