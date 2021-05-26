@@ -43,56 +43,40 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
 ) {
   implicit val source                                       = Metrics.Source(CasperMetricsSource, "report-replay")
   val blockLockMap: TrieMap[BlockHash, MetricsSemaphore[F]] = TrieMap.empty
-  private def replayBlock(
-      b: BlockMessage
-  )(implicit casper: MultiParentCasper[F]) =
+
+  private def replayBlock(b: BlockMessage)(implicit casper: MultiParentCasper[F]) =
     for {
       reportResult <- reportingCasper.trace(b)
       lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
       deploys      = createDeployReport(reportResult.deployReportResult)
       sysDeploys   = createSystemDeployReport(reportResult.systemDeployReportResult)
       blockEvent   = BlockEventInfo(Some(lightBlock), deploys, sysDeploys, reportResult.postStateHash)
-    } yield blockEvent.asRight[Error]
+    } yield blockEvent
 
-  private def blockReportWithinLock(
-      forceReplay: Boolean,
-      b: BlockMessage
-  )(implicit casper: MultiParentCasper[F]) =
+  private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage)(
+      implicit casper: MultiParentCasper[F]
+  ) =
     for {
       semaphore <- MetricsSemaphore.single
-      lock = blockLockMap
-        .getOrElseUpdate(b.blockHash, semaphore)
+      lock      = blockLockMap.getOrElseUpdate(b.blockHash, semaphore)
       result <- lock.withPermit(
                  for {
                    cached <- reportStore.get(b.blockHash)
                    res <- if (cached.isEmpty || forceReplay)
-                           for {
-                             blockEvent <- replayBlock(b)
-                             _ <- blockEvent.fold(
-                                   _ => ().pure[F],
-                                   data => reportStore.put(b.blockHash, data)
-                                 )
-                           } yield blockEvent
+                           replayBlock(b)
                          else
-                           cached.get
-                             .asRight[Error]
-                             .pure[F]
+                           cached.get.pure[F]
                  } yield res
                )
     } yield result
 
-  def blockReport(
-      hash: String,
-      forceReplay: Boolean
-  ): F[ApiErr[BlockEventInfo]] = {
+  def blockReport(hash: String, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
     def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
       implicit val c = casper
       for {
         maybeBlock <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
-        report <- maybeBlock
-                   .traverse(blockReportWithinLock(forceReplay, _))
-                   .map(_.getOrElse(s"Block $hash not found".asLeft[BlockEventInfo]))
-      } yield report
+        report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
+      } yield report.toRight(s"Block $hash not found")
     }
 
     def validateReadOnlyNode(casper: MultiParentCasper[F]): F[Either[Error, MultiParentCasper[F]]] =
@@ -112,7 +96,6 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
         .as("Error: Could not get event data.".asLeft[BlockEventInfo])
 
     EngineCell[F].read.flatMap(_.withCasper(processReport, casperNotInitialized))
-
   }
 
   private def createSystemDeployReport(
