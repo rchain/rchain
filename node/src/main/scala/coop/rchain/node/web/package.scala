@@ -12,7 +12,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.diagnostics.NewPrometheusReporter
 import coop.rchain.node.effects.EventConsumer
-import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.shared.Log
 import monix.execution.Scheduler
 import org.http4s.HttpRoutes
@@ -34,7 +34,7 @@ package object web {
       prometheusReporter: NewPrometheusReporter,
       webApiRoutes: WebApi[F],
       connectionIdleTimeout: FiniteDuration,
-      reportingRoutes: ReportingHTTPRoutes[F]
+      reportingRoutes: ReportingHttpRoutes[F]
   )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]

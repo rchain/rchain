@@ -32,7 +32,7 @@ import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
 import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
-import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -252,7 +252,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       casperLoop: CasperLoop[F],
       updateForkChoiceLoop: CasperLoop[F],
       engineInit: EngineInit[F],
-      reportingRoutes: ReportingHTTPRoutes[F],
+      reportingRoutes: ReportingHttpRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       proposer: Option[Proposer[F]],

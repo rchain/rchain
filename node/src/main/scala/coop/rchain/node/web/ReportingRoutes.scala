@@ -24,7 +24,7 @@ object ReportingRoutes {
   ) extends ReportResponse
   final case class BlockReportError(hash: String, errorMessage: String) extends ReportResponse
 
-  type ReportingHTTPRoutes[F[_]] = HttpRoutes[F]
+  type ReportingHttpRoutes[F[_]] = HttpRoutes[F]
 
   def transforResult[F[_]: Sync](
       hash: String,
@@ -37,7 +37,7 @@ object ReportingRoutes {
 
   def service[F[_]: Concurrent](
       blockReportAPI: BlockReportAPI[F]
-  ): ReportingHTTPRoutes[F] = {
+  ): ReportingHttpRoutes[F] = {
     val dsl = org.http4s.dsl.Http4sDsl[F]
     import dsl._
     import io.circe.generic.extras.Configuration

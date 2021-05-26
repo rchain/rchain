@@ -40,7 +40,7 @@ import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.diagnostics
 import coop.rchain.node.web.ReportingRoutes
-import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
@@ -72,7 +72,7 @@ object Setup {
         CasperLoop[F],
         EngineInit[F],
         CasperLaunch[F],
-        ReportingHTTPRoutes[F],
+        ReportingHttpRoutes[F],
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],

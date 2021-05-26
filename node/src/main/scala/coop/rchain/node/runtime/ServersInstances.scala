@@ -18,7 +18,7 @@ import coop.rchain.node.diagnostics.{
   UdpInfluxDBReporter
 }
 import coop.rchain.node.effects.EventConsumer
-import coop.rchain.node.web.ReportingRoutes.ReportingHTTPRoutes
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{api, web}
 import coop.rchain.shared.Log
 import kamon.Kamon
@@ -45,17 +45,17 @@ object ServersInstances {
   /* P2P */         : NodeDiscovery: KademliaStore: ConnectionsCell: RPConfAsk
   /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: off
   (
-      apiServers: APIServers,
-      reportingRoutes: ReportingHTTPRoutes[F],
-      webApi: WebApi[F],
-      adminWebApi: AdminWebApi[F],
-      grpcPacketHandler: Protocol => F[CommunicationResponse],
-      grpcStreamHandler: Blob => F[Unit],
-      host: String,
-      address: String,
-      nodeConf: NodeConf,
-      kamonConf: Config,
-      grpcScheduler: Scheduler
+    apiServers: APIServers,
+    reportingRoutes: ReportingHttpRoutes[F],
+    webApi: WebApi[F],
+    adminWebApi: AdminWebApi[F],
+    grpcPacketHandler: Protocol => F[CommunicationResponse],
+    grpcStreamHandler: Blob => F[Unit],
+    host: String,
+    address: String,
+    nodeConf: NodeConf,
+    kamonConf: Config,
+    grpcScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[ServersInstances[F]] = {
 
     val transportServerStream = fs2
