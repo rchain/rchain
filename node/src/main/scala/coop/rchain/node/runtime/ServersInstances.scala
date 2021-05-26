@@ -149,8 +149,7 @@ object ServersInstances {
                            nodeConf.apiServer.portHttp,
                            prometheusReporter,
                            webApi,
-                           nodeConf.apiServer.maxConnectionIdle,
-                           reportingRoutes
+                           nodeConf.apiServer.maxConnectionIdle
                          )
       // Note - here http servers are not really stated, only worker streams are created.
       _ <- Log[F].info(
@@ -160,8 +159,9 @@ object ServersInstances {
                                 nodeConf.apiServer.host,
                                 nodeConf.apiServer.portAdminHttp,
                                 adminWebApi,
-                                nodeConf.apiServer.maxConnectionIdle
-                              )
+                                nodeConf.apiServer.maxConnectionIdle,
+                                reportingRoutes
+      )
 
       _ <- Log[F].info(
             s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"

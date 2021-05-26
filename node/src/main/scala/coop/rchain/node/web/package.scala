@@ -33,8 +33,7 @@ package object web {
       httpPort: Int,
       prometheusReporter: NewPrometheusReporter,
       webApiRoutes: WebApi[F],
-      connectionIdleTimeout: FiniteDuration,
-      reportingRoutes: ReportingHttpRoutes[F]
+      connectionIdleTimeout: FiniteDuration
   )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]
@@ -48,13 +47,7 @@ package object web {
           WebApiRoutes.service[F, F](webApiRoutes)
         })
       )
-      extraRoutes = if (reporting)
-        Map(
-          "/reporting" -> CORS(reportingRoutes)
-        )
-      else
-        Map.empty
-      allRoutes = baseRoutes ++ extraRoutes
+      allRoutes = baseRoutes
     } yield BlazeServerBuilder[F](scheduler)
       .bindHttp(httpPort, host)
       .withHttpApp(Router(allRoutes.toList: _*).orNotFound)
@@ -66,7 +59,8 @@ package object web {
       host: String = "0.0.0.0",
       httpPort: Int,
       adminWebApiRoutes: AdminWebApi[F],
-      connectionIdleTimeout: FiniteDuration
+      connectionIdleTimeout: FiniteDuration,
+      reportingRoutes: ReportingHttpRoutes[F]
   )(implicit scheduler: Scheduler): F[fs2.Stream[F, ExitCode]] =
     for {
       event <- EventsInfo.service[F]
@@ -74,7 +68,8 @@ package object web {
         "/api" -> CORS({
           implicit val n = natId[F]
           AdminWebApiRoutes.service[F, F](adminWebApiRoutes)
-        })
+        }),
+        "/api/reporting" -> CORS(reportingRoutes)
       )
     } yield BlazeServerBuilder[F](scheduler)
       .bindHttp(httpPort, host)
