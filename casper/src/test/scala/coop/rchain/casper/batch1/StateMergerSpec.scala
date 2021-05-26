@@ -130,22 +130,22 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
             leftIndex <- BlockIndex(
                           ByteString.copyFromUtf8("l"),
                           List(leftDeploy),
-                          ByteString.copyFrom(baseCheckpoint.root.bytes.toArray),
-                          ByteString.copyFrom(leftCheckpoint.root.bytes.toArray),
+                          baseCheckpoint.root,
+                          leftCheckpoint.root,
                           historyRepo
                         )
             rightIndex <- BlockIndex(
                            ByteString.copyFromUtf8("r"),
                            List(rightDeploy),
-                           ByteString.copyFrom(baseCheckpoint.root.bytes.toArray),
-                           ByteString.copyFrom(rightCheckpoint.root.bytes.toArray),
+                           baseCheckpoint.root,
+                           rightCheckpoint.root,
                            historyRepo
                          )
             baseIndex <- BlockIndex(
                           ByteString.EMPTY,
                           List.empty,
-                          ByteString.EMPTY,
-                          ByteString.EMPTY,
+                          baseCheckpoint.root, // this does not matter
+                          baseCheckpoint.root,
                           historyRepo
                         )
             leftNode  = MergingNode(leftIndex, isFinalized = false, leftCheckpoint.root)
@@ -162,21 +162,21 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
                             dag,
                             _.isFinalized.pure[Task],
                             _.index.deployChains.pure[Task],
-                            v => ByteString.copyFrom(v.postState.bytes.toArray),
+                            v => v.postState,
                             historyRepo
                           )
             mergedRoot        = Blake2b256Hash.fromByteString(mergedState._1)
             rejectedDeployOpt = mergedState._2.headOption
-            referenceState = rejectedDeployOpt match {
-              case Some(v) =>
+            referenceState = rejectedDeployOpt
+              .map { v =>
                 List((leftDeploy, b1State), (rightDeploy, b2State))
                   .filter {
                     case (deploy, _) => deploy.deploy.sig != v
                   }
                   .map { case (_, refState) => refState }
                   .head
-              case None => b1State
-            }
+              }
+              .getOrElse(b1State)
 
             dataContinuationAtBaseState <- getDataContinuationOnChannel0(
                                             runtime,

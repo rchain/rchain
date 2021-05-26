@@ -373,8 +373,8 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               BlockIndex[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                 v.blockHash,
                 v.processedDeploys.toList,
-                v.preStateHash,
-                v.postStateHash,
+                Blake2b256Hash.fromByteString(v.preStateHash),
+                Blake2b256Hash.fromByteString(v.postStateHash),
                 runtimeManager.getHistoryRepo
               ).map(_.deployChains)
             // merge children to get next preStateHash
@@ -384,7 +384,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                   dag,
                   v => (if (v == base) true else false).pure,
                   v => deployChainIndex(v),
-                  v => v.postStateHash,
+                  v => Blake2b256Hash.fromByteString(v.postStateHash),
                   runtimeManager.getHistoryRepo
                 )
             (nextPreStateHash, rejectedDeploys) = v

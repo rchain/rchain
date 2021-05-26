@@ -21,6 +21,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
 
@@ -277,8 +278,8 @@ object InterpreterUtil {
                     index <- BlockIndex(
                               b.blockHash,
                               b.body.deploys,
-                              b.body.state.preStateHash,
-                              b.body.state.postStateHash,
+                              Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                              Blake2b256Hash.fromByteString(b.body.state.postStateHash),
                               runtimeManager.getHistoryRepo
                             )
                   } yield index
@@ -290,7 +291,7 @@ object InterpreterUtil {
                   new CasperMergingDagReader(s.dag),
                   v => s.dag.isFinalized(v.blockHash),
                   v => blockIndex(v).map(_.deployChains),
-                  v => v.postStateHash,
+                  v => Blake2b256Hash.fromByteString(v.postStateHash),
                   runtimeManager.getHistoryRepo
                 )
           } yield r

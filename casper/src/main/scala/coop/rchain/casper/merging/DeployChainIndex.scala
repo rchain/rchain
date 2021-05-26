@@ -3,7 +3,6 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.{StateChange, _}
@@ -23,18 +22,16 @@ final case class DeployChainIndex(
 object DeployChainIndex {
   def apply[F[_]: Concurrent, C, P, A, K](
       deploys: Set[DeployIndex],
-      preStateHash: StateHash,
-      postStateHash: StateHash,
+      preStateHash: Blake2b256Hash,
+      postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K]
   ): F[DeployChainIndex] = {
 
     val deploysWithCost = deploys.map(v => DeployIdWithCost(v.deployId, v.cost))
-    val preStatHash     = Blake2b256Hash.fromByteString(preStateHash)
-    val postStatHash    = Blake2b256Hash.fromByteString(postStateHash)
     val eventLogIndex   = deploys.map(_.eventLogIndex).toList.combineAll
 
-    val preStateReader  = historyRepository.getHistoryReader(preStatHash).readerBinary
-    val postStateReader = historyRepository.getHistoryReader(postStatHash).readerBinary
+    val preStateReader  = historyRepository.getHistoryReader(preStateHash).readerBinary
+    val postStateReader = historyRepository.getHistoryReader(postStateHash).readerBinary
     for {
       stateChanges <- StateChange[F, C, P, A, K](
                        preStateReader = preStateReader,
@@ -46,8 +43,8 @@ object DeployChainIndex {
 
     } yield DeployChainIndex(
       deploysWithCost,
-      preStatHash,
-      postStatHash,
+      preStateHash,
+      postStateHash,
       eventLogIndex,
       stateChanges
     )

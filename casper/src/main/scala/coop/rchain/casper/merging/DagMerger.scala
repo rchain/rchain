@@ -16,7 +16,7 @@ import coop.rchain.shared.Log
 object DagMerger {
 
   /** Type for minimal rejection unit - set of dependent deploys executed inside one block */
-  type R = DeployChainIndex
+  private type R = DeployChainIndex
 
   def merge[F[_]: Concurrent: Log, V](
       tips: List[V],
@@ -24,7 +24,7 @@ object DagMerger {
       dag: DagReader[F, V],
       isFinalised: V => F[Boolean],
       index: V => F[Vector[R]],
-      postState: V => StateHash,
+      postState: V => Blake2b256Hash,
       historyRepository: RhoHistoryRepository[F]
   ): F[(StateHash, Seq[ByteString])] = {
 
@@ -73,7 +73,7 @@ object DagMerger {
         historyRepository.reset(baseState).flatMap(_.doCheckpoint(actions).map(_.root))
 
       // set that should be merged into LFB
-      lfbPostState = Blake2b256Hash.fromByteString(postState(lfb))
+      lfbPostState = postState(lfb)
 
       r <- ConflictSetMerger.merge[F, R](
             baseState = lfbPostState,

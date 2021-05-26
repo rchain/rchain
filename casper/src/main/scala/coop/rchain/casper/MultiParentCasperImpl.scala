@@ -40,6 +40,7 @@ import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: LastFinalizedBlockCalculator: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
     validatorId: Option[ValidatorIdentity],
@@ -299,8 +300,8 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Las
       index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                 b.blockHash,
                 b.body.deploys,
-                b.body.state.preStateHash,
-                b.body.state.postStateHash,
+                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
                 runtimeManager.getHistoryRepo
               )
       _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)

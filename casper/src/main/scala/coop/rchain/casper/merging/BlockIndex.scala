@@ -5,7 +5,6 @@ import cats.syntax.all._
 import coop.rchain.casper.protocol.ProcessedDeploy
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger._
@@ -24,15 +23,15 @@ object BlockIndex {
   def apply[F[_]: Concurrent, C, P, A, K](
       blockHash: BlockHash,
       processedDeploys: List[ProcessedDeploy],
-      preStateHash: StateHash,
-      postStateHash: StateHash,
+      preStateHash: Blake2b256Hash,
+      postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K]
   ): F[BlockIndex] = {
     implicit val channelStore: HistoryRepository[F, C, P, A, K] = historyRepository
 
     val createEventLogIndex = (d: ProcessedDeploy) => {
       val preStateReader =
-        historyRepository.getHistoryReader(Blake2b256Hash.fromByteString(preStateHash))
+        historyRepository.getHistoryReader(preStateHash)
       val produceExistsInPreState = (p: Produce) =>
         preStateReader.getDataFromChannelHash(p.channelsHash).map(_.exists(_.source == p))
       val produceTouchesPreStateJoin = (p: Produce) =>
