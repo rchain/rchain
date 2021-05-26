@@ -8,7 +8,6 @@ import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.merger.EventLogIndex
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.store.LazyKeyValueCache
 
 import scala.collection.Seq
 import scala.collection.immutable.Set
@@ -35,8 +34,8 @@ object EventsIndexConflictDetectors {
       main: EventLogIndex,
       merge: EventLogIndex,
       // TODO remove baseDataReader, required only for peek workaround
-      baseDataReader: LazyKeyValueCache[F, Blake2b256Hash, Seq[Datum[A]]],
-      baseJoinReader: LazyKeyValueCache[F, Blake2b256Hash, Seq[Seq[C]]]
+      baseDataReader: Blake2b256Hash => F[Seq[Datum[A]]],
+      baseJoinReader: Blake2b256Hash => F[Seq[Seq[C]]]
   ): F[Set[Blake2b256Hash]] = {
 
     // Check #1
@@ -73,12 +72,12 @@ object EventsIndexConflictDetectors {
                 // We can do some tricks to check whether produce is created by a peek, but this logic is not clear yet.
                 // So its safer to just read from base for now.
                 val produceFromBase =
-                  baseDataReader.get(p.channelsHash).map(_.exists(_.source == p))
+                  baseDataReader(p.channelsHash).map(_.exists(_.source == p))
 
                 val commBetweenBranches = matchingConsume.nonEmpty.pure[F] &&^ produceFromBase.not
 
                 // In addition, it has to be checked if active produces match some join that is inherited from base state
-                val touchingBaseJoin = baseJoinReader.get(p.channelsHash).map(_.exists(_.size > 1))
+                val touchingBaseJoin = baseJoinReader(p.channelsHash).map(_.exists(_.size > 1))
 
                 for {
                   conflict <- commBetweenBranches ||^ touchingBaseJoin

@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.util._
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
@@ -53,7 +54,7 @@ class DebruijnInterpreter[M[_]](
 
   type Application =
     Option[
-      (TaggedContinuation, Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)], Boolean)
+      (TaggedContinuation, Seq[(Channel, ListParWithRandom, ListParWithRandom, Boolean)], Boolean)
     ]
 
   /**
@@ -65,15 +66,18 @@ class DebruijnInterpreter[M[_]](
     * @return  An optional continuation resulting from a match in the tuplespace.
     */
   private def produce(
-      chan: Par,
+      chan: Channel,
       data: ListParWithRandom,
       persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent) >>= (continue(
-      _,
-      produce(chan, data, persistent),
-      persistent
-    ))
+    space.produce(chan, data, persist = persistent) >>= (
+        v =>
+          continue(
+            v,
+            produce(chan, data, persistent),
+            persistent
+          )
+      )
 
   /**
     * Materialize a send in the store, optionally returning the matched continuation.
@@ -92,12 +96,12 @@ class DebruijnInterpreter[M[_]](
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
     space.consume(
-      sources.toList,
+      sources.map(storage.parToChannel).toList,
       patterns.toList,
       TaggedContinuation(ParBody(body)),
       persist = persistent,
       if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= (continue(_, consume(binds, body, persistent, peek), persistent))
+    ) >>= (v => continue(v, consume(binds, body, persistent, peek), persistent))
   }
 
   private[this] def continue(res: Application, repeatOp: M[Unit], persistent: Boolean) =
@@ -117,21 +121,21 @@ class DebruijnInterpreter[M[_]](
 
   private[this] def dispatchAndRun(
       continuation: TaggedContinuation,
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
+      dataList: Seq[(Channel, ListParWithRandom, ListParWithRandom, Boolean)]
   )(ops: M[Unit]*) =
     // Collect errors from all parallel execution paths (pars)
     parTraverseSafe(dispatch(continuation, dataList) +: ops.toVector)(identity)
 
   private[this] def dispatch(
       continuation: TaggedContinuation,
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
+      dataList: Seq[(Channel, ListParWithRandom, ListParWithRandom, Boolean)]
   ) = dispatcher.dispatch(
     continuation,
     dataList.map(_._2)
   )
 
   private[this] def producePeeks(
-      dataList: Seq[(Par, ListParWithRandom, ListParWithRandom, Boolean)]
+      dataList: Seq[(Channel, ListParWithRandom, ListParWithRandom, Boolean)]
   ) =
     dataList
       .withFilter {
@@ -266,7 +270,11 @@ class DebruijnInterpreter[M[_]](
                   }
       data      <- send.data.toList.traverse(evalExpr)
       substData <- data.traverse(substituteAndCharge[Par, M](_, 0, env))
-      _         <- produce(unbundled, ListParWithRandom(substData, rand), send.persistent)
+      _ <- produce(
+            storage.parToChannel(unbundled),
+            ListParWithRandom(substData, rand),
+            send.persistent
+          )
     } yield ()
 
   private def eval(receive: Receive)(

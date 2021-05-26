@@ -80,7 +80,7 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
     for {
       newSpace <- space
                    .asInstanceOf[
-                     RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
+                     RSpace[F, BindPattern, ListParWithRandom, TaggedContinuation]
                    ]
                    .spawn
       runtime <- RhoRuntime.createRhoRuntime(newSpace)
@@ -92,7 +92,6 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
       newReplaySpace <- replaySpace
                          .asInstanceOf[ReplayRSpace[
                            F,
-                           Par,
                            BindPattern,
                            ListParWithRandom,
                            TaggedContinuation
@@ -213,7 +212,7 @@ object RuntimeManager {
     */
   val emptyStateHashFixed: StateHash =
     ByteString.copyFrom(
-      Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
+      Base16.unsafeDecode("35e25e6e778ffc4f394a74e784be1fcebe513613ac5f95b9424619146e5d9675")
     )
 
   def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](

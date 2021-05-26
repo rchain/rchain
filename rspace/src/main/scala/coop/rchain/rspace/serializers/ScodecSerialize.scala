@@ -5,7 +5,7 @@ import coop.rchain.rspace.history.PointerBlock.length
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
-import coop.rchain.rspace.util
+import coop.rchain.rspace.{util, Channel}
 import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.Serialize._
@@ -85,29 +85,32 @@ object ScodecSerialize {
    * Joins serializer
    */
 
-  def encodeJoins[C](joins: Seq[Seq[C]])(implicit sc: Serialize[C]): ByteVector = {
-    val codec = serializeToCodecMemo(sc)
+  def encodeJoins(joins: Seq[Seq[Channel]]): ByteVector = {
+    val joinsEncoded =
+      joins.map(cs => codecSeqByteVector.encode(cs.map(_.hash.bytes)).getUnsafe.toByteVector)
 
-    codecSeqByteVector
-      .encode(joins.map(encodeSortedSeq(_, codec)).toVector.sorted(util.ordByteVector))
-      .getUnsafe
-      .toByteVector
+    codecSeqByteVector.encode(joinsEncoded).getUnsafe.toByteVector
   }
 
-  def decodeJoins[C](bytes: ByteVector)(implicit sc: Serialize[C]): Seq[Seq[C]] =
-    decodeJoinsProj[C, Seq[C]](bytes)((d, _) => d)
+  def decodeJoins(bytes: ByteVector): Seq[Seq[Channel]] =
+    decodeJoinsProj[Seq[Channel]](bytes)((d, _) => d)
 
-  def decodeJoinsProj[C, R](
+  def decodeJoinsProj[R](
       bytes: ByteVector
-  )(proj: (Seq[C], ByteVector) => R)(implicit sc: Serialize[C]): Seq[R] = {
-    val codec = serializeToCodecMemo(sc)
-
+  )(proj: (Seq[Channel], ByteVector) => R): Seq[R] =
     codecSeqByteVector
       .decode(bytes.bits)
       .getUnsafe
       .value
-      .map(bv => proj(decodeSeq(bv, codec), bv))
-  }
+      .map { bv =>
+        val joins = codecSeqByteVector
+          .decode(bv.bits)
+          .getUnsafe
+          .value
+          .map(bv => Blake2b256Hash.fromByteArray(bv.toArray))
+          .map(Channel)
+        proj(joins, bv)
+      }
 
   def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
     elements
@@ -127,6 +130,9 @@ object ScodecSerialize {
   ): Codec[WaitingContinuation[P, K]] =
     (codecSeq(codecP) :: codecK :: bool :: sortedSet(uint8) :: codecConsume)
       .as[WaitingContinuation[P, K]]
+
+//  private def codecChannel: Codec[Channel] =
+//    (codecByteVector).as[Channel]
 
   /*
    * Serializers for RSpace event log
@@ -221,8 +227,8 @@ object ScodecSerialize {
    * Converters from Serialize to scodec
    */
 
-  private def serializeToCodec[A](sa: Serialize[A]): Codec[A] =
-    sa.toSizeHeadCodec
+//  private def serializeToCodec[A](sa: Serialize[A]): Codec[A] =
+//    sa.toSizeHeadCodec
 
   private def serializeToCodecDatum[A](sa: Serialize[A]): Codec[Datum[A]] = {
     val codecA = sa.toSizeHeadCodec
@@ -248,8 +254,8 @@ object ScodecSerialize {
     memoSt.getOrElseUpdate((prefix, key), f(key)).asInstanceOf[B]
   }
 
-  private def serializeToCodecMemo[A]: Serialize[A] => Codec[A] =
-    memoize("Codec", serializeToCodec)
+//  private def serializeToCodecMemo[A]: Serialize[A] => Codec[A] =
+//    memoize("Codec", serializeToCodec)
 
   private def serializeToCodecDatumMemo[A]: Serialize[A] => Codec[Datum[A]] =
     memoize("Datum", serializeToCodecDatum)
@@ -285,8 +291,8 @@ object ScodecSerialize {
       .getUnsafe
       .toByteVector
 
-  private def decodeSeq[D](data: ByteVector, codec: Codec[D]): Seq[D] =
-    decodeSeqProj(data, codec)((d, _) => d)
+//  private def decodeSeq[D](data: ByteVector, codec: Codec[D]): Seq[D] =
+//    decodeSeqProj(data, codec)((d, _) => d)
 
   private def decodeSeqProj[D, R](data: ByteVector, codec: Codec[D])(
       proj: (D, ByteVector) => R
@@ -310,7 +316,8 @@ object ScodecSerialize {
       extends WrapWithBinary[WaitingContinuation[P, K]](raw)
 
   /** Joins with ByteVector representation */
-  final case class JoinsB[C](decoded: Seq[C], raw: ByteVector) extends WrapWithBinary[Seq[C]](raw)
+  final case class JoinsB(decoded: Seq[Channel], raw: ByteVector)
+      extends WrapWithBinary[Seq[Channel]](raw)
 
   /**
     * Equality for Datum, WaitingContinuation and Joins defined with binary equality.

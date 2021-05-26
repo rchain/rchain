@@ -177,7 +177,7 @@ object Setup {
         for {
           store <- rnodeStoreManager.rSpaceStores(useChannelsMap)
           spaces <- RSpace
-                     .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                     .createWithReplay[F, BindPattern, ListParWithRandom, TaggedContinuation](
                        store
                      )
         } yield spaces

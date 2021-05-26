@@ -1,5 +1,6 @@
 package coop.rchain.rspace.trace
 
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.ConsumeCandidate
@@ -25,8 +26,8 @@ final case class COMM(
 ) extends Event
 
 object COMM {
-  def apply[C, A](
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
+  def apply[A](
+      dataCandidates: Seq[ConsumeCandidate[A]],
       consumeRef: Consume,
       peeks: SortedSet[Int],
       produceCounters: (Seq[Produce]) => Map[Produce, Int]
@@ -60,13 +61,12 @@ final case class Produce private (
 
 object Produce {
 
-  def apply[C, A](channel: C, datum: A, persistent: Boolean)(
+  def apply[A](channel: Channel, datum: A, persistent: Boolean)(
       implicit
-      serializeC: Serialize[C],
       serializeA: Serialize[A]
   ): Produce =
     new Produce(
-      hash(channel)(serializeC),
+      channel.hash,
       hash(channel, datum, persistent),
       persistent
     )
@@ -101,21 +101,20 @@ object Consume {
   def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
     Some((arg.channelsHashes, arg.hash, 0))
 
-  def apply[C, P, K](
-      channels: Seq[C],
+  def apply[P, K](
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persistent: Boolean
   )(
       implicit
-      serializeC: Serialize[C],
       serializeP: Serialize[P],
       serializeK: Serialize[K]
   ): Consume = {
-    val channelsByteVectors: Seq[ByteVector] = toOrderedByteVectors(channels)
+    val channelsHashes = channels.map(_.hash)
     new Consume(
-      channelsByteVectors.map(Blake2b256Hash.create),
-      hash(channelsByteVectors, patterns, continuation, persistent),
+      channelsHashes,
+      hash(channels, patterns, continuation, persistent),
       persistent
     )
   }

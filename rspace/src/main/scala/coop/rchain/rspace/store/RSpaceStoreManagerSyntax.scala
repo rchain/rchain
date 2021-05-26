@@ -42,8 +42,5 @@ final class RSpaceStoreManagerOps[F[_]](
       history <- kvm.store(s"$dbPrefix-history")
       roots   <- kvm.store(s"$dbPrefix-roots")
       cold    <- kvm.store(s"$dbPrefix-cold")
-      // Use dummy KV-store if channels map is not used
-      channels <- if (useChannelsMap) kvm.store(s"$dbPrefix-channels")
-                 else NoOpKeyValueStore().pure[F]
-    } yield RSpaceStore[F](history, roots, cold, channels)
+    } yield RSpaceStore[F](history, roots, cold)
 }

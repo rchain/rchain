@@ -13,6 +13,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
 
@@ -26,7 +27,7 @@ object StoragePrinter {
       mapped <- runtime.getHotChanges
       pars = mapped.map {
         case (
-            channels: Seq[Par],
+            channels: Seq[Channel],
             row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
             ) => {
           row match {
@@ -54,13 +55,13 @@ object StoragePrinter {
         PrettyPrinter().buildString(pars.reduce(_ ++ _))
     }
 
-  def prettyPrintUnmatchedSends[F[_]: FlatMap](runtime: RhoRuntime[F]): F[String] =
-    runtime.getHotChanges.map(getUnmatchedSends).map { unmatchedSends =>
-      if (unmatchedSends.isEmpty)
-        noUnmatchedSends
-      else
-        PrettyPrinter().buildString(unmatchedSends.reduce(_ ++ _))
-    }
+  def prettyPrintUnmatchedSends[F[_]: FlatMap](runtime: RhoRuntime[F]): F[String] = ???
+//    runtime.getHotChanges.map(getUnmatchedSends).map { unmatchedSends =>
+//      if (unmatchedSends.isEmpty)
+//        noUnmatchedSends
+//      else
+//        PrettyPrinter().buildString(unmatchedSends.reduce(_ ++ _))
+//    }
 
   def prettyPrintUnmatchedSends[F[_]: Concurrent](
       deploy: Signed[DeployData],
@@ -106,11 +107,11 @@ object StoragePrinter {
       )
 
   private def getUnmatchedSends(
-      mapped: Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
+      mapped: Map[Seq[Channel], Row[BindPattern, ListParWithRandom, TaggedContinuation]]
   ): List[Par] =
     mapped.map {
       case (
-          channels: Seq[Par],
+          channels: Seq[Channel],
           row: Row[BindPattern, ListParWithRandom, TaggedContinuation]
           ) =>
         row match {
@@ -119,52 +120,54 @@ object StoragePrinter {
         }
     }.toList
 
-  private[this] def toSends(data: Seq[Datum[ListParWithRandom]])(channels: Seq[Par]): Par = {
-    val sends: Seq[Send] = data.flatMap {
-      case Datum(as: ListParWithRandom, persist: Boolean, _: Produce) =>
-        channels.map { channel =>
-          Send(channel, as.pars, persist)
-        }
-    }
-    sends.foldLeft(Par()) { (acc: Par, send: Send) =>
-      acc.prepend(send)
-    }
-  }
+  private[this] def toSends(data: Seq[Datum[ListParWithRandom]])(channels: Seq[Channel]): Par = ???
+//  {
+//    val sends: Seq[Send] = data.flatMap {
+//      case Datum(as: ListParWithRandom, persist: Boolean, _: Produce) =>
+//        channels.map { channel =>
+//          Send(channel, as.pars, persist)
+//        }
+//    }
+//    sends.foldLeft(Par()) { (acc: Par, send: Send) =>
+//      acc.prepend(send)
+//    }
+//  }
 
   private[this] def toReceive(
       wks: Seq[WaitingContinuation[BindPattern, TaggedContinuation]]
-  )(channels: Seq[Par]): Par = {
-    val receives: Seq[Receive] = wks.map {
-      case WaitingContinuation(
-          patterns: Seq[BindPattern],
-          continuation: TaggedContinuation,
-          persist: Boolean,
-          peeks: SortedSet[Int],
-          _: Consume
-          ) =>
-        val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
-          case (channel, pattern) =>
-            ReceiveBind(
-              pattern.patterns,
-              channel,
-              pattern.remainder,
-              pattern.freeCount
-            )
-        }
-        continuation.taggedCont match {
-          case ParBody(p) =>
-            Receive(
-              receiveBinds,
-              p.body,
-              persist,
-              peeks.nonEmpty,
-              patterns.map(_.freeCount).sum
-            )
-          case _ => Receive(receiveBinds, Par.defaultInstance, persist)
-        }
-    }
-    receives.foldLeft(Par()) { (acc: Par, receive: Receive) =>
-      acc.prepend(receive)
-    }
-  }
+  )(channels: Seq[Channel]): Par = ???
+//  {
+//    val receives: Seq[Receive] = wks.map {
+//      case WaitingContinuation(
+//          patterns: Seq[BindPattern],
+//          continuation: TaggedContinuation,
+//          persist: Boolean,
+//          peeks: SortedSet[Int],
+//          _: Consume
+//          ) =>
+//        val receiveBinds: Seq[ReceiveBind] = (channels zip patterns).map {
+//          case (channel, pattern) =>
+//            ReceiveBind(
+//              pattern.patterns,
+//              channel,
+//              pattern.remainder,
+//              pattern.freeCount
+//            )
+//        }
+//        continuation.taggedCont match {
+//          case ParBody(p) =>
+//            Receive(
+//              receiveBinds,
+//              p.body,
+//              persist,
+//              peeks.nonEmpty,
+//              patterns.map(_.freeCount).sum
+//            )
+//          case _ => Receive(receiveBinds, Par.defaultInstance, persist)
+//        }
+//    }
+//    receives.foldLeft(Par()) { (acc: Par, receive: Receive) =>
+//      acc.prepend(receive)
+//    }
+//  }
 }

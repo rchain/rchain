@@ -17,7 +17,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.registry.Registry
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.rspace.{ContResult, Result}
+import coop.rchain.rspace.{Channel, ContResult, Result}
 
 import scala.util.Try
 
@@ -159,9 +159,9 @@ object SystemProcesses {
   )(implicit F: Concurrent[F], spanF: Span[F]): SystemProcesses[F] =
     new SystemProcesses[F] {
 
-      type ContWithMetaData = ContResult[Par, BindPattern, TaggedContinuation]
+      type ContWithMetaData = ContResult[BindPattern, TaggedContinuation]
 
-      type Channels = Seq[Result[Par, ListParWithRandom]]
+      type Channels = Seq[Result[ListParWithRandom]]
 
       private val prettyPrinter = PrettyPrinter()
 

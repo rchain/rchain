@@ -1,6 +1,10 @@
 package coop.rchain.rspace
 
+import coop.rchain.rspace.hashing.Blake2b256Hash
+
 import scala.collection.SortedSet
+
+final case class Channel(hash: Blake2b256Hash)
 
 trait Tuplespace[F[_], C, P, A, K] {
 
@@ -35,7 +39,7 @@ trait Tuplespace[F[_], C, P, A, K] {
       continuation: K,
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
-  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
+  ): F[Option[(ContResult[P, K], Seq[Result[A]])]]
 
   /** Searches the store for a continuation that has patterns that match the given data at the
     * given channel.
@@ -64,7 +68,7 @@ trait Tuplespace[F[_], C, P, A, K] {
       channel: C,
       data: A,
       persist: Boolean
-  ): F[Option[(ContResult[C, P, K], Seq[Result[C, A]])]]
+  ): F[Option[(ContResult[P, K], Seq[Result[A]])]]
 
   def install(channels: Seq[C], patterns: Seq[P], continuation: K): F[Option[(K, Seq[A])]]
 }

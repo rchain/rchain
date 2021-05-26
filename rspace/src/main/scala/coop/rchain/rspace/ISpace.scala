@@ -4,16 +4,16 @@ import cats.Id
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal._
 
-final case class Result[C, A](
-    channel: C,
+final case class Result[A](
+    channel: Channel,
     matchedDatum: A,
     removedDatum: A,
     persistent: Boolean
 )
-final case class ContResult[C, P, K](
+final case class ContResult[P, K](
     continuation: K,
     persistent: Boolean,
-    channels: Seq[C],
+    channels: Seq[Channel],
     patterns: Seq[P],
     peek: Boolean = false
 )

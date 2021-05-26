@@ -12,7 +12,8 @@ import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.matcher._
-import coop.rchain.rspace.{Match => StorageMatch}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.{Channel, Match => StorageMatch}
 import coop.rchain.shared.Serialize
 
 //noinspection ConvertExpressionToSAM
@@ -75,4 +76,10 @@ package object storage {
 
   implicit val serializeTaggedContinuation: Serialize[TaggedContinuation] =
     mkProtobufInstance(TaggedContinuation)
+
+  def parToChannel(par: Par): Channel = {
+    val bytes = storage.serializePar.encode(par)
+    val hash  = Blake2b256Hash.create(bytes.toArray)
+    Channel(hash)
+  }
 }

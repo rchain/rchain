@@ -53,7 +53,6 @@ final class RSpaceExporterOps[F[_]](
 
   def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
       implicit m: Concurrent[F],
-      sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],

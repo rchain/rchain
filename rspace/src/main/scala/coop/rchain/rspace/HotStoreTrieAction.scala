@@ -10,7 +10,7 @@ sealed trait TrieInsertAction extends HotStoreTrieAction
 final case class TrieInsertProduce[A](hash: Blake2b256Hash, data: Seq[Datum[A]])
     extends TrieInsertAction
 
-final case class TrieInsertJoins[C](hash: Blake2b256Hash, joins: Seq[Seq[C]])
+final case class TrieInsertJoins(hash: Blake2b256Hash, joins: Seq[Seq[Channel]])
     extends TrieInsertAction
 
 final case class TrieInsertConsume[P, K](

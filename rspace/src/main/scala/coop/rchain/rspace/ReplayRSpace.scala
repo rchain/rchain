@@ -19,19 +19,18 @@ import scala.collection.JavaConverters._
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
-class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
-    historyRepository: HistoryRepository[F, C, P, A, K],
-    storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
+class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, P, A, K](
+    historyRepository: HistoryRepository[F, Channel, P, A, K],
+    storeAtom: AtomicAny[HotStore[F, Channel, P, A, K]]
 )(
     implicit
-    serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     val m: Match[F, P, A],
     scheduler: ExecutionContext
-) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
-    with IReplaySpace[F, C, P, A, K] {
+) extends RSpaceOps[F, P, A, K](historyRepository, storeAtom)
+    with IReplaySpace[F, Channel, P, A, K] {
 
   protected override def logF: Log[F] = Log[F]
 
@@ -40,10 +39,10 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
   implicit protected[this] lazy val MetricsSource: Metrics.Source =
     Metrics.Source(RSpaceMetricsSource, "replay")
 
-  def store: HotStore[F, C, P, A, K] = storeAtom.get()
+  def store: HotStore[F, Channel, P, A, K] = storeAtom.get()
 
   protected[this] override def lockedConsume(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -95,19 +94,19 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
     }
 
   def getCommAndConsumeCandidates(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       comms: Seq[COMM]
-  ): F[Option[(COMM, Seq[ConsumeCandidate[C, A]])]] =
+  ): F[Option[(COMM, Seq[ConsumeCandidate[A]])]] =
     getCommOrCandidate(comms, comm => runMatcherConsume(channels, patterns, comm))
 
   def runMatcherConsume(
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       comm: COMM
-  ): F[Option[Seq[ConsumeCandidate[C, A]]]] =
+  ): F[Option[Seq[ConsumeCandidate[A]]]] =
     for {
-      channelToIndexedDataList <- channels.traverse { c: C =>
+      channelToIndexedDataList <- channels.traverse { c: Channel =>
                                    store
                                      .getData(c)
                                      .map(_.iterator.zipWithIndex.filter(matches(comm)).toSeq)
@@ -118,7 +117,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
     } yield result
 
   protected[this] override def lockedProduce(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean,
       produceRef: Produce
@@ -151,25 +150,25 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
     }
 
   private[this] def getCommOrProduceCandidate(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean,
       comms: Seq[COMM],
       produceRef: Produce,
-      groupedChannels: Seq[Seq[C]]
-  ): F[Option[(COMM, ProduceCandidate[C, P, A, K])]] =
+      groupedChannels: Seq[Seq[Channel]]
+  ): F[Option[(COMM, ProduceCandidate[P, A, K])]] =
     getCommOrCandidate(
       comms,
       runMatcherProduce(channel, data, persist, _, produceRef, groupedChannels)
     )
 
   private[this] def runMatcherProduce(
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean,
       comm: COMM,
       produceRef: Produce,
-      groupedChannels: Seq[Seq[C]]
+      groupedChannels: Seq[Seq[Channel]]
   ): F[MaybeProduceCandidate] =
     runMatcherForChannels(
       groupedChannels,
@@ -207,7 +206,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
   }
 
   private[this] def handleMatch(
-      pc: ProduceCandidate[C, P, A, K],
+      pc: ProduceCandidate[P, A, K],
       comms: Multiset[COMM]
   ): F[MaybeActionResult] = {
     val ProduceCandidate(
@@ -258,8 +257,8 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
   override def clear(): F[Unit] = syncF.delay { replayData.clear() } >> super.clear()
 
   protected override def logComm(
-      dataCandidates: Seq[ConsumeCandidate[C, A]],
-      channels: Seq[C],
+      dataCandidates: Seq[ConsumeCandidate[A]],
+      channels: Seq[Channel],
       wk: WaitingContinuation[P, K],
       comm: COMM,
       label: String
@@ -268,7 +267,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
 
   protected override def logConsume(
       consumeRef: Consume,
-      channels: Seq[C],
+      channels: Seq[Channel],
       patterns: Seq[P],
       continuation: K,
       persist: Boolean,
@@ -277,7 +276,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
 
   protected override def logProduce(
       produceRef: Produce,
-      channel: C,
+      channel: Channel,
       data: A,
       persist: Boolean
   ): F[Produce] = syncF.delay {
@@ -314,12 +313,12 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
     comms.tailRecM(go).map(_.toOption)
   }
 
-  def spawn: F[IReplaySpace[F, C, P, A, K]] = {
+  def spawn: F[IReplaySpace[F, Channel, P, A, K]] = {
     val historyRep = historyRepositoryAtom.get()
     for {
       newHR <- historyRep.reset(historyRep.history.root)
       newHS <- HotStore.empty(newHR.getHistoryReader(newHR.root).base)
-      r     = new ReplayRSpace[F, C, P, A, K](newHR, AtomicAny(newHS))
+      r     = new ReplayRSpace[F, P, A, K](newHR, AtomicAny(newHS))
       _     <- r.restoreInstalls()
     } yield r
   }
@@ -327,12 +326,11 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
 
 object ReplayRSpace {
 
-  def create[F[_], C, P, A, K](
-      historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K]
+  def create[F[_], P, A, K](
+      historyRepository: HistoryRepository[F, Channel, P, A, K],
+      store: HotStore[F, Channel, P, A, K]
   )(
       implicit
-      sc: Serialize[C],
       sp: Serialize[P],
       sa: Serialize[A],
       sk: Serialize[K],
@@ -343,10 +341,10 @@ object ReplayRSpace {
       scheduler: ExecutionContext,
       metricsF: Metrics[F],
       spanF: Span[F]
-  ): F[ReplayRSpace[F, C, P, A, K]] = {
+  ): F[ReplayRSpace[F, P, A, K]] = {
 
-    val space: ReplayRSpace[F, C, P, A, K] =
-      new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
+    val space: ReplayRSpace[F, P, A, K] =
+      new ReplayRSpace[F, P, A, K](historyRepository, AtomicAny(store))
 
     space.pure[F]
   }

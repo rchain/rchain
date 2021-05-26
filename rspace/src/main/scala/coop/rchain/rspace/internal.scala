@@ -15,9 +15,8 @@ object internal {
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
   object Datum {
-    def create[C, A](channel: C, a: A, persist: Boolean)(
+    def create[A](channel: Channel, a: A, persist: Boolean)(
         implicit
-        serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
       Datum(a, persist, Produce(channel, a, persist))
@@ -32,15 +31,14 @@ object internal {
   )
 
   object WaitingContinuation {
-    def create[C, P, K](
-        channels: Seq[C],
+    def create[P, K](
+        channels: Seq[Channel],
         patterns: Seq[P],
         continuation: K,
         persist: Boolean,
         peek: SortedSet[Int]
     )(
         implicit
-        serializeC: Serialize[C],
         serializeP: Serialize[P],
         serializeK: Serialize[K]
     ): WaitingContinuation[P, K] =
@@ -53,18 +51,18 @@ object internal {
       )
   }
 
-  final case class ConsumeCandidate[C, A](
-      channel: C,
+  final case class ConsumeCandidate[A](
+      channel: Channel,
       datum: Datum[A],
       removedDatum: A,
       datumIndex: Int
   )
 
-  final case class ProduceCandidate[C, P, A, K](
-      channels: Seq[C],
+  final case class ProduceCandidate[P, A, K](
+      channels: Seq[Channel],
       continuation: WaitingContinuation[P, K],
       continuationIndex: Int,
-      dataCandidates: Seq[ConsumeCandidate[C, A]]
+      dataCandidates: Seq[ConsumeCandidate[A]]
   )
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])

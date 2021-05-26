@@ -255,6 +255,7 @@ object BlockAPI {
       sortedListeningName: Par,
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
+    // TODO: For Produce it doesn't make sense to have multiple names
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
@@ -297,7 +298,8 @@ object BlockAPI {
       serializedLog.map(EventConverter.toRspaceEvent)
     log.exists {
       case Produce(channelHash, _, _) =>
-        channelHash == StableHashProvider.hash(sortedListeningName)
+        assert(sortedListeningName.size == 1, "Produce can have only one channel")
+        channelHash == StableHashProvider.hash(sortedListeningName(0))
       case Consume(channelsHashes, _, _) =>
         channelsHashes.toList.sorted == sortedListeningName
           .map(StableHashProvider.hash(_))

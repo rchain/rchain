@@ -9,31 +9,31 @@ import scala.util.Try
 package object util {
 
   implicit def unpackSeq[C, P, K, R](
-      v: Seq[Option[(ContResult[C, P, K], Seq[Result[C, R]])]]
+      v: Seq[Option[(ContResult[P, K], Seq[Result[R]])]]
   ): Seq[Option[(K, Seq[R])]] =
     v.map(unpackOption)
 
   implicit def unpackOption[C, P, K, R](
-      v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
+      v: Option[(ContResult[P, K], Seq[Result[R]])]
   ): Option[(K, Seq[R])] =
     v.map(unpackTuple)
 
   implicit def unpackTuple[C, P, K, R](
-      v: (ContResult[C, P, K], Seq[Result[C, R]])
+      v: (ContResult[P, K], Seq[Result[R]])
   ): (K, Seq[R]) =
     v match {
       case (ContResult(continuation, _, _, _, _), data) =>
         (continuation, data.map(_.matchedDatum))
     }
 
-  implicit def unpackOptionWithPeek[C, P, K, R](
-      v: Option[(ContResult[C, P, K], Seq[Result[C, R]])]
-  ): Option[(K, Seq[(C, R, R, Boolean)], Boolean)] =
+  implicit def unpackOptionWithPeek[P, K, R](
+      v: Option[(ContResult[P, K], Seq[Result[R]])]
+  ): Option[(K, Seq[(Channel, R, R, Boolean)], Boolean)] =
     v.map(unpackTupleWithPeek)
 
-  implicit def unpackTupleWithPeek[C, P, K, R](
-      v: (ContResult[C, P, K], Seq[Result[C, R]])
-  ): (K, Seq[(C, R, R, Boolean)], Boolean) =
+  implicit def unpackTupleWithPeek[P, K, R](
+      v: (ContResult[P, K], Seq[Result[R]])
+  ): (K, Seq[(Channel, R, R, Boolean)], Boolean) =
     v match {
       case (ContResult(continuation, _, _, _, peek), data) =>
         (
@@ -43,7 +43,7 @@ package object util {
         )
     }
 
-  implicit def unpackCont[C, P, T](v: ContResult[C, P, T]): T = v.continuation
+  implicit def unpackCont[C, P, T](v: ContResult[P, T]): T = v.continuation
 
   /**
     * Extracts a continuation from a produce result

@@ -12,6 +12,7 @@ import coop.rchain.models.{
   StacksafeMessage,
   TaggedContinuation
 }
+import coop.rchain.rspace.Channel
 import coop.rchain.rspace.hashing.Blake2b256Hash
 
 //TODO(mateusz.gorski): Adjust the costs of operations
@@ -127,21 +128,24 @@ trait Costs {
   final val MATCH_EVAL_COST = Cost(12, "match eval")
 
   def storageCostConsume(
-      channels: Seq[Par],
+      channels: Seq[Channel],
       patterns: Seq[BindPattern],
       continuation: TaggedContinuation
   ): Cost = {
     val bodyCost = Some(continuation).collect {
       case TaggedContinuation(ParBody(ParWithRandom(body, _))) => storageCost(body)
     }
-    storageCost(channels: _*) + storageCost(patterns: _*) + bodyCost.getOrElse(Cost(0))
+    storageCostChannel(channels: _*) + storageCost(patterns: _*) + bodyCost.getOrElse(Cost(0))
   }
 
-  def storageCostProduce(channel: Par, data: ListParWithRandom): Cost =
-    storageCost(channel) + storageCost(data.pars: _*)
+  def storageCostProduce(channel: Channel, data: ListParWithRandom): Cost =
+    storageCostChannel(channel) + storageCost(data.pars: _*)
 
   private def storageCost[A <: StacksafeMessage[_]](as: A*): Cost =
     Cost(as.map(a => ProtoM.serializedSize(a).value).sum, "storage cost")
+
+  private def storageCostChannel(as: Channel*): Cost =
+    Cost(as.map(a => a.hash.bytes.size).sum, "storage cost")
 
   def commEventStorageCost(channelsInvolved: Int): Cost = {
     val consumeCost  = eventStorageCost(channelsInvolved)
