@@ -19,13 +19,9 @@ final class DagReaderOps[F[_], A](
 
   def parentsUnsafe(item: A)(
       implicit sync: Sync[F],
-      line: sourcecode.Line,
-      file: sourcecode.File,
-      enclosing: sourcecode.Enclosing,
       show: Show[A]
   ): F[Seq[A]] = {
-    def source = s"${file.value}:${line.value} ${enclosing.value}"
-    def errMsg = s"Parents lookup failed: DAG is missing ${item.show}\n at $source"
+    def errMsg = s"Parents lookup failed: DAG is missing ${item.show}"
     dag.parents(item) >>= (_.liftTo(DagReader.VertexDoesNotExist(errMsg)))
   }
 
@@ -37,13 +33,9 @@ final class DagReaderOps[F[_], A](
 
   def mainParentUnsafe(item: A)(
       implicit sync: Sync[F],
-      line: sourcecode.Line,
-      file: sourcecode.File,
-      enclosing: sourcecode.Enclosing,
       show: Show[A]
   ): F[A] = {
-    def source = s"${file.value}:${line.value} ${enclosing.value}"
-    def errMsg = s"Unsafe call for parents for block with no parents: ${item.show}\n at $source"
+    def errMsg = s"Unsafe call for parents for block with no parents: ${item.show}"
     mainParent(item) >>= (_.liftTo(DagReader.VertexDoesNotExist(errMsg)))
   }
 

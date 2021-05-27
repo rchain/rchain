@@ -153,7 +153,7 @@ class StateMergerSpec extends FlatSpec with Matchers with Inspectors with Mergea
             lfbNode   = MergingNode(baseIndex, isFinalized = true, baseCheckpoint.root)
 
             childMap   = ListMap(lfbNode -> Set(rightNode, leftNode))
-            parentsMap = ListMap(rightNode -> Set(lfbNode), leftNode -> Set(lfbNode))
+            parentsMap = ListMap(rightNode -> Seq(lfbNode), leftNode -> Seq(lfbNode))
             dag        = new InMemDAG[Task, MergingNode](childMap, parentsMap)
 
             mergedState <- DagMerger.merge[Task, MergingNode](

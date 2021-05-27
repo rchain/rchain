@@ -20,6 +20,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.{Log, StreamT}
+import coop.rchain.casper.syntax._
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.

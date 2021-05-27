@@ -5,29 +5,30 @@ import cats.data.OptionT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.util.{Clique, ProtoUtil}
-import coop.rchain.dag.{Casper, DagOps, DagReader}
+import coop.rchain.dag.{DagOps, DagReader}
 import coop.rchain.metrics.Metrics.Source
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import coop.rchain.metrics.implicits._
 import fs2.Stream
 
-import scala.reflect.ClassTag
-
 object CliqueOracle {
+
+  final case class Justification[M, V](message: M, creator: V)
+
   // map of validator id to stake bonded
   type WeightMap[V] = Map[V, Long]
 
   implicit val baseMetricsSource: Source = coop.rchain.casper.CasperMetricsSource
 
-  private def computeMaxCliqueWeight[F[_]: Concurrent: Span, M, V: ClassTag](
+  private def computeMaxCliqueWeight[F[_]: Concurrent: Span, M, V](
       target: M,
       dag: DagReader[F, M],
       agreeingWeightMap: WeightMap[V],
       agreeingLatestMessages: Map[V, M],
-      toJustificationF: M => F[Casper.Justification[M, V]],
-      justificationsF: M => F[Set[Casper.Justification[M, V]]],
+      toJustificationF: M => F[Justification[M, V]],
+      justificationsF: M => F[Set[Justification[M, V]]],
       heightF: M => F[Long]
   )(implicit show: Show[M]): F[Long] = Span[F].traceI("compute-max-clique-weight") {
 
@@ -87,64 +88,97 @@ object CliqueOracle {
     }
 
     /** across combination of validators compute pairs that do not have disagreement */
-    def computeAgreeingValidatorPairs: F[List[(V, V)]] = {
-      val pairs = agreeingWeightMap.keys.toArray.combinations(2).map { case Array(a, b) => (a, b) }
-
+    def computeAgreeingValidatorPairs: Stream[F, (V, V)] = {
+      val validatorCombinations = agreeingWeightMap.keys.toSeq.combinations(2)
       Stream
-        .fromIterator(pairs)
+        .fromIterator(validatorCombinations)
         .evalFilterAsyncProcBounded {
-          case (a, b) =>
+          case Seq(a, b) =>
             neverEventuallySeeDisagreement(a, b) &&^ neverEventuallySeeDisagreement(b, a)
         }
-        .compile
-        .toList
+        .map { case Seq(a, b) => (a, b) }
     }
 
-    computeAgreeingValidatorPairs.map { edges =>
+    computeAgreeingValidatorPairs.compile.toList.map { edges =>
       Clique.findMaximumCliqueByWeight[V](edges, agreeingWeightMap)
     }
   }
 
-  def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span, M, V: ClassTag](
+  def computeOutput[F[_]: Concurrent: Span, M, V](
       target: M,
       dag: DagReader[F, M],
-      getWeightMapF: M => F[WeightMap[V]],
+      totalStake: Long,
+      agreeingWeightMap: WeightMap[V],
+      agreeingLatestMessages: Map[V, M],
+      toJustificationF: M => F[Justification[M, V]],
+      justificationsF: M => F[Set[Justification[M, V]]],
+      heightF: M => F[Long]
+  )(implicit show: Show[M]): F[Float] =
+    // if less then 1/2+ of stake agrees on message - it can be orphaned
+    if (agreeingWeightMap.values.sum <= totalStake.toFloat / 2) (-1f).pure[F]
+    else {
+      computeMaxCliqueWeight[F, M, V](
+        target,
+        dag,
+        agreeingWeightMap,
+        agreeingLatestMessages,
+        toJustificationF,
+        justificationsF,
+        heightF
+      ).map(
+        mqw => (mqw * 2 - totalStake).toFloat / totalStake
+      )
+    }
+
+  /** weight map of main parent (fallbacks to message itself if no parents)
+     TODO - why not use local weight map but seek for parent?
+    P.S. This is directly related to the fact that we create latest message for newly bonded validator
+    equal to message where bonding deploy has been submitted. So stake from validator that did not create anything is
+    put behind this message. So here is one more place where this logic makes things more complex.*/
+  def getCorrespondingWeightMap[F[_]: Sync, M, V](
+      target: M,
+      dag: DagReader[F, M],
+      getWeightMapF: M => F[WeightMap[V]]
+  ): F[WeightMap[V]] =
+    dag
+      .mainParent(target)
+      .map {
+        case Some(mainParent) => mainParent
+        case None             => target
+      }
+      .flatMap(getWeightMapF)
+
+  def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span, M, V](
+      target: M,
+      dag: DagReader[F, M],
+      weightMapF: M => F[WeightMap[V]],
       heightF: M => F[Long],
       latestMessageF: V => F[M],
-      toJustificationF: M => F[Casper.Justification[M, V]],
-      getJustificationsF: M => F[Set[Casper.Justification[M, V]]]
+      toJustificationF: M => F[Justification[M, V]],
+      getJustificationsF: M => F[Set[Justification[M, V]]]
   )(implicit show: Show[M]): F[Float] = {
     val nonExistingMessage =
       Log[F].error(s"Fault tolerance for non existing message ${target.show} requested.").as(-1f)
 
+    val messageWeightMapF = (m: M) => CliqueOracle.getCorrespondingWeightMap(m, dag, weightMapF)
+
+    /** if validator agree on message by main chain */
+    def agree(validator: V, message: M): F[Boolean] =
+      latestMessageF(validator).flatMap(dag.isInMainChain(_, message, heightF))
+
+    def agreeingWeightMapF(weightMap: WeightMap[V]): F[WeightMap[V]] =
+      fs2.Stream
+        .fromIterator(weightMap.toIterator)
+        .evalFilterAsyncProcBounded {
+          case (validator, _) => agree(validator, target)
+        }
+        .compile
+        .to(Map)
+
     val compute = for {
-      // weight map of main parent (fallbacks to message itself if no parents)
-      fullWeightMap <- {
-        dag
-          .mainParent(target)
-          .map {
-            case Some(mainParent) => mainParent
-            case None             => target
-          }
-      }.flatMap(getWeightMapF)
+      fullWeightMap <- messageWeightMapF(target)
       // stake that agrees on a target message
-      agreeingWeightMap <- fs2.Stream
-                            .emits(fullWeightMap.toList)
-                            .evalFilterAsyncProcBounded {
-                              case (validator, _) =>
-                                for {
-                                  lm <- latestMessageF(validator)
-                                  r <- dag.isInMainChain(
-                                        lm,
-                                        target,
-                                        heightF
-                                      )
-                                } yield r
-                            }
-                            .compile
-                            .toList
-                            .map(_.toMap)
-      agreeingStake = agreeingWeightMap.values.sum
+      agreeingWeightMap <- agreeingWeightMapF(fullWeightMap)
       // total stake
       totalStake = fullWeightMap.values.sum
       _ <- new ArithmeticException("Long overflow when computing total stake").raiseError

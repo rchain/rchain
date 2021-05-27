@@ -1,7 +1,6 @@
 package coop.rchain.casper.util
 
 import java.nio.charset.StandardCharsets
-
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
@@ -12,10 +11,11 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
+import coop.rchain.casper.safety.CliqueOracle
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.dag.{Casper, DagOps}
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
@@ -90,25 +90,22 @@ object ProtoUtil {
     val getJ = (h: BlockHash) =>
       blockDag
         .lookupUnsafe(h)
-        .map(_.justifications.map { case Justification(m, v) => Casper.Justification(m, v) })
+        .map(_.justifications.map { case Justification(m, v) => CliqueOracle.Justification(m, v) })
         .map(_.toSet)
     val toJ = (h: BlockHash) =>
       blockDag
         .lookupUnsafe(h)
-        .map(m => Casper.Justification(m.blockHash, m.sender))
+        .map(m => CliqueOracle.Justification(m.blockHash, m.sender))
 
-    for {
-      r <- getCreatorJustification[F, BlockHash, Validator](blockHash, goalFunc, toJ, getJ)
-            .map(_.map(List(_)).getOrElse(List.empty))
-    } yield r
-
+    getCreatorJustification[F, BlockHash, Validator](blockHash, goalFunc, toJ, getJ)
+      .map(_.map(List(_)).getOrElse(List.empty))
   }
 
   def getCreatorJustification[F[_]: Sync, A, V](
       message: A,
       stopF: A => Boolean,
-      toJustification: A => F[Casper.Justification[A, V]],
-      getJustifications: A => F[Set[Casper.Justification[A, V]]]
+      toJustification: A => F[CliqueOracle.Justification[A, V]],
+      getJustifications: A => F[Set[CliqueOracle.Justification[A, V]]]
   ): F[Option[A]] =
     for {
       j <- toJustification(message)

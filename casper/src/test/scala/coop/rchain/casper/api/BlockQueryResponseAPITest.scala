@@ -11,6 +11,7 @@ import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.safety.CliqueOracle
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
@@ -63,7 +64,7 @@ class BlockQueryResponseAPITest
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = -1f
+  val faultTolerance = SafetyOracle.MIN_FAULT_TOLERANCE
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 

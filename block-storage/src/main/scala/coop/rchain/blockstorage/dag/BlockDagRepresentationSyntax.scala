@@ -3,8 +3,6 @@ package coop.rchain.blockstorage.dag
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.Justification
-import coop.rchain.dag.Casper
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
@@ -113,19 +111,4 @@ final class BlockDagRepresentationOps[F[_]: Sync](
       ib <- dag.invalidBlocks
       r  = ib.map(block => (block.blockHash, block.sender)).toMap
     } yield r
-
-  def getCasperJustificationsUnsafe(
-      blockHash: BlockHash
-  ): F[Set[Casper.Justification[BlockHash, Validator]]] =
-    lookupUnsafe(blockHash).map(
-      _.justifications.map {
-        case Justification(validator, latestBlockHash) =>
-          Casper.Justification(latestBlockHash, validator)
-      }.toSet
-    )
-
-  def toCasperJustificationUnsafe(
-      blockHash: BlockHash
-  ): F[Casper.Justification[BlockHash, Validator]] =
-    lookupUnsafe(blockHash).map(m => Casper.Justification(m.blockHash, m.sender))
 }
