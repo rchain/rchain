@@ -1,17 +1,12 @@
 package coop.rchain.node.balance
 
 import cats.Parallel
-import cats.effect.concurrent.Semaphore
 import cats.implicits._
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.{BlockStore, KeyValueBlockStore}
-import coop.rchain.blockstorage.dag.{
-  BlockDagKeyValueStorage,
-  BlockDagRepresentation,
-  BlockDagStorage
-}
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -32,7 +27,7 @@ import coop.rchain.casper.util.rholang.RhoTrieTraverser
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.node.balance.SpecialCases.{getSpecialCases, SpecialCase}
+import coop.rchain.node.balance.SpecialCases.getSpecialTransfer
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2._
@@ -43,7 +38,7 @@ import scala.concurrent.ExecutionContext
 
 object TransactionBalances {
 
-  final case class Transfer(amount: Long, address: String, blockNumber: Long, in: Boolean)
+  final case class Transfer(amount: Long, fromAddr: String, toAddr: String, blockNumber: Long)
 
   val initialPosStakingVault: RevAccount = RevAccount(
     RevAddress
@@ -54,6 +49,7 @@ object TransactionBalances {
     0,
     PosStakingVault
   )
+  val CoopVaultAddr = "11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF"
 
   sealed trait AccountType
   object NormalVault          extends AccountType
@@ -150,19 +146,26 @@ object TransactionBalances {
   def updateGenesisFromTransfer(genesisVault: GlobalVaultsInfo, transfers: List[Transfer]) = {
     val resultMap = transfers.foldLeft(genesisVault.vaultMaps) {
       case (m, transfer) => {
-        val targetVault = m.getOrElse(
-          transfer.address,
+        val fromVault = m.getOrElse(
+          transfer.fromAddr,
           RevAccount(
-            address = RevAddress.parse(transfer.address).right.get,
+            address = RevAddress.parse(transfer.fromAddr).right.get,
             amount = 0L,
             accountType = NormalVault
           )
         )
 
-        val resultVault =
-          if (transfer.in) targetVault.receiveRev(transfer.amount)
-          else targetVault.sendRev(transfer.amount)
-        m.updated(transfer.address, resultVault)
+        val toVault = m.getOrElse(
+          transfer.toAddr,
+          RevAccount(
+            address = RevAddress.parse(transfer.toAddr).right.get,
+            amount = 0L,
+            accountType = NormalVault
+          )
+        )
+
+        m.updated(transfer.fromAddr, fromVault.sendRev(transfer.amount))
+          .updated(transfer.toAddr, toVault.receiveRev(transfer.amount))
       }
     }
     genesisVault.copy(vaultMaps = resultMap)
@@ -175,10 +178,8 @@ object TransactionBalances {
       block: BlockMessage
   ): F[GlobalVaultsInfo] =
     for {
-      vaultMap <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
-      coopVault <- getCoopVault(runtime, block).map(
-                    addr => RevAccount(RevAddress.parse(addr).right.get, 0, CoopPosMultiSigVault)
-                  )
+      vaultMap  <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
+      coopVault = RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
       perValidatorVaults <- getPerValidatorVault(runtime, block).map(
                              addrs =>
                                addrs.map(
@@ -207,8 +208,7 @@ object TransactionBalances {
       blockNumber: Long,
       transactionStore: Transaction.TransactionStore[F],
       blockStore: BlockStore[F],
-      dag: BlockDagRepresentation[F],
-      perValidatorVaultAddr: String
+      dag: BlockDagRepresentation[F]
   ) =
     for {
       blocks <- dag.topoSort(blockNumber, Some(blockNumber))
@@ -228,21 +228,15 @@ object TransactionBalances {
                                             case (transfers, pd) => {
                                               val deployerRevAddr =
                                                 RevAddress.fromPublicKey(pd.deploy.pk).get.toBase58
-
-                                              transfers ++ Vector(
-                                                Transfer(
-                                                  pd.cost.cost,
-                                                  deployerRevAddr,
-                                                  block.body.state.blockNumber,
-                                                  false
-                                                ),
-                                                Transfer(
-                                                  pd.cost.cost,
-                                                  perValidatorVaultAddr,
-                                                  block.body.state.blockNumber,
-                                                  true
-                                                )
+                                              val blockPerValidator =
+                                                ValidatorPerValidatorMap.senderPerValidator(block)
+                                              transfers :+ Transfer(
+                                                pd.cost.cost,
+                                                deployerRevAddr,
+                                                blockPerValidator,
+                                                block.body.state.blockNumber
                                               )
+
                                             }
                                           }
                                         transactions <- transactionStore.get(
@@ -252,20 +246,13 @@ object TransactionBalances {
                                           .foldLeft(Vector.empty[Transfer]) {
                                             case (th, transaction) => {
                                               if (transaction.success) {
-                                                th ++ Vector(
-                                                  Transfer(
-                                                    transaction.amount,
-                                                    transaction.toAddr,
-                                                    block.body.state.blockNumber,
-                                                    true
-                                                  ),
-                                                  Transfer(
-                                                    transaction.amount,
-                                                    transaction.fromAddr,
-                                                    block.body.state.blockNumber,
-                                                    false
-                                                  )
+                                                th :+ Transfer(
+                                                  transaction.amount,
+                                                  transaction.fromAddr,
+                                                  transaction.toAddr,
+                                                  block.body.state.blockNumber
                                                 )
+
                                               } else th
                                             }
                                           }
@@ -279,8 +266,7 @@ object TransactionBalances {
       targetBlock: BlockMessage,
       transactionStore: Transaction.TransactionStore[F],
       blockStore: BlockStore[F],
-      dag: BlockDagRepresentation[F],
-      perValidatorVaultAddr: String
+      dag: BlockDagRepresentation[F]
   ) =
     Stream
       .range(1, targetBlock.body.state.blockNumber.toInt)
@@ -290,8 +276,7 @@ object TransactionBalances {
             i.toLong,
             transactionStore,
             blockStore,
-            dag,
-            perValidatorVaultAddr
+            dag
           )
       )
 
@@ -343,27 +328,14 @@ object TransactionBalances {
         targetBlock,
         transactionStore,
         blockStore,
-        dagRepresantation,
-        genesisVaultMap.perValidatorVaults.head
+        dagRepresantation
       )
-      allTransfers <- tasks.compile.toList
-      allTransfer  = allTransfers.flatten
+      transfers   <- tasks.compile.toList
+      allTransfer = transfers.flatten ++ getSpecialTransfer
       _ <- log.info(
             s"After getting transfer history total ${allTransfer.length} account make transfer."
           )
       afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allTransfer)
-      epoch250000      <- getBlockHashByHeight(250000, dagRepresantation, blockStore)
-      epoch500000      <- getBlockHashByHeight(500000, dagRepresantation, blockStore)
-      specialCases <- getSpecialCases(
-                       rhoRuntime,
-                       afterTransferMap.posVaultAddress,
-                       epoch250000,
-                       epoch500000,
-                       afterTransferMap.perValidatorVaults.head
-                     )
-      resultMap = specialCases.foldLeft(afterTransferMap) {
-        case (v, (_, special)) => special.handle(v)
-      }
-    } yield resultMap
+    } yield afterTransferMap
   }
 }
