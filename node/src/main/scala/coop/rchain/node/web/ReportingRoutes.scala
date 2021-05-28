@@ -18,6 +18,7 @@ import org.http4s.{HttpRoutes, QueryParamDecoder}
 import coop.rchain.rspace.ReportingTransformer
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RhoPrinter}
 import org.http4s.circe.jsonEncoderOf
+import coop.rchain.models.syntax._
 
 object ReportingRoutes {
 

@@ -19,6 +19,7 @@ import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.syntax._
 
@@ -35,7 +36,6 @@ object ProtoUtil {
       candidateMetadata: BlockMetadata,
       targetBlockHash: BlockHash
   ): F[Boolean] = {
-    import BlockHash._
     val heightF: BlockHash => F[Long] = h => dag.lookupUnsafe(h).map(_.blockNum)
     dag.isInMainChain(targetBlockHash, candidateMetadata.blockHash, heightF)
   }

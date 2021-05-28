@@ -1,26 +1,14 @@
 package coop.rchain.casper
 
-import cats.Monad
+import cats.effect.Concurrent
 import cats.syntax.all._
-import cats.instances.list._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import cats.data.OptionT
-import cats.effect.{Concurrent, Sync}
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.safety.CliqueOracle
-import coop.rchain.casper.safety.CliqueOracle.normalizedFaultTolerance
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.{Clique, ProtoUtil}
-import coop.rchain.dag.DagOps
-import coop.rchain.models.BlockMetadata
+import coop.rchain.casper.syntax._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{Log, StreamT}
-import coop.rchain.casper.syntax._
+import coop.rchain.shared.Log
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.
@@ -70,7 +58,7 @@ sealed abstract class SafetyOracleInstances {
         candidateBlockHash: BlockHash
     ): F[Float] = {
       import coop.rchain.blockstorage.syntax._
-      import coop.rchain.models.BlockHash._
+      import coop.rchain.models.syntax._
 
       CliqueOracle.normalizedFaultTolerance(
         candidateBlockHash,
