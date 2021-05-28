@@ -335,7 +335,16 @@ object TransactionBalances {
       _ <- log.info(
             s"After getting transfer history total ${allTransfer.length} account make transfer."
           )
+      sortedAllTransfer = allTransfer.sortBy(t => t.blockNumber)
+      toAddrTransfers   = sortedAllTransfer.groupBy(t => t.toAddr)
+      fromAddrTransfers = sortedAllTransfer.groupBy(t => t.fromAddr)
+      mappedTransfer = toAddrTransfers.toList.foldLeft(Map.empty[String, List[Transfer]]) {
+        case (m, (addr, transfers)) => {
+          val fromTransfers = fromAddrTransfers.getOrElse(addr, List.empty)
+          m.updated(addr, transfers ++ fromTransfers)
+        }
+      }
       afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allTransfer)
-    } yield afterTransferMap
+    } yield (afterTransferMap, mappedTransfer)
   }
 }
