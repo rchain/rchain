@@ -20,6 +20,8 @@ import coop.rchain.casper.util.rholang.ReplayFailure
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, createRhoEnv}
@@ -102,17 +104,26 @@ object ReportingCasper {
           invalidBlocks = invalidBlocksSet
             .map(block => (block.blockHash, block.sender))
             .toMap
-          preStateHash = ProtoUtil.preStateHash(block)
-          blockdata    = BlockData.fromBlock(block)
-          _            <- reportingRuntime.setBlockData(blockdata)
-          _            <- reportingRuntime.setInvalidBlocks(invalidBlocks)
+          preStateHash     = ProtoUtil.preStateHash(block)
+          blockdata        = BlockData.fromBlock(block)
+          _                <- reportingRuntime.setBlockData(blockdata)
+          _                <- reportingRuntime.setInvalidBlocks(invalidBlocks)
+          invalidBlocksSet <- dag.invalidBlocks
+          unseenBlocksSet  <- ProtoUtil.unseenBlockHashes(dag, block)
+          seenInvalidBlocksSet = invalidBlocksSet.filterNot(
+            block => unseenBlocksSet.contains(block.blockHash)
+          )
+          invalidBlocks = seenInvalidBlocksSet
+            .map(block => (block.blockHash, block.sender))
+            .toMap
           res <- replayDeploys(
                   reportingRuntime,
                   preStateHash,
                   block.body.deploys,
                   block.body.systemDeploys,
                   !isGenesis,
-                  blockdata
+                  blockdata,
+                  invalidBlocks
                 )
         } yield res
 
@@ -122,12 +133,18 @@ object ReportingCasper {
           terms: Seq[ProcessedDeploy],
           systemDeploys: Seq[ProcessedSystemDeploy],
           withCostAccounting: Boolean,
-          blockData: BlockData
+          blockData: BlockData,
+          invalidBlocks: Map[BlockHash, Validator]
       ): F[ReplayResult] =
         for {
           _ <- runtime.reset(Blake2b256Hash.fromByteString(startHash))
+          _ <- runtime.setBlockData(blockData)
+          _ <- runtime.setInvalidBlocks(invalidBlocks)
           res <- terms.toList.traverse { term =>
                   for {
+                    _ <- Log[F].info(
+                          s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}"
+                        )
                     rd <- runtime
                            .replayDeployE(withCostAccounting)(term)
                            .map(_.semiflatMap(_ => runtime.getReport))
@@ -140,6 +157,7 @@ object ReportingCasper {
                 }
           sysRes <- systemDeploys.toList.traverse { term =>
                      for {
+                       _ <- Log[F].info(s"Replay system deploy ${term.systemDeploy}")
                        rd <- runtime
                               .replaySystemDeployE(blockData)(term)
                               .semiflatMap(_ => runtime.getReport)
