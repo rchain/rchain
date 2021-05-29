@@ -57,13 +57,15 @@ object Running {
       _ <- engine.withCasper(
             casper => {
               for {
-                tipHash      <- MultiParentCasper.forkChoiceTip[F](casper)
-                tip          <- BlockStore[F].getUnsafe(tipHash)
-                tipTimestamp = tip.header.timestamp
-                now          <- Time[F].currentMillis
-                expired      = (now - tipTimestamp) > delayThreshold.toMillis
+                latestMessages <- casper.blockDag.flatMap(
+                                   _.latestMessageHashes.map(_.values.toList)
+                                 )
+                tips            <- latestMessages.traverse(BlockStore[F].getUnsafe)
+                newestTimestamp = tips.map(_.header.timestamp).max
+                now             <- Time[F].currentMillis
+                expired         = (now - newestTimestamp) > delayThreshold.toMillis
                 requestWithLog = Log[F].info(
-                  "Updating fork choice tips as current FCT " +
+                  "Requesting tips update as newest latest message " +
                     s"is more then ${delayThreshold.toString} old. " +
                     s"Might be network is faulty."
                 ) >> CommUtil[F].sendForkChoiceTipRequest
