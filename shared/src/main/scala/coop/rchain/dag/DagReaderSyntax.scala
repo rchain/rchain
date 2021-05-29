@@ -1,11 +1,9 @@
 package coop.rchain.dag
 
-import cats.Show
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.dag.DagOps.bfTraverseF
+import cats.{Monad, Show}
 import coop.rchain.shared.syntax._
-import fs2.Stream
 
 trait DagReaderSyntax {
   implicit final def syntaxDagReader[F[_], A](
@@ -25,10 +23,10 @@ final class DagReaderOps[F[_], A](
     dag.parents(item) >>= (_.liftTo(DagReader.VertexDoesNotExist(errMsg)))
   }
 
-  def contains(item: A)(implicit sync: Sync[F]): F[Boolean] =
+  def contains(item: A)(implicit monad: Monad[F]): F[Boolean] =
     dag.parents(item).map(_.isDefined) ||^ dag.children(item).map(_.isDefined)
 
-  def mainParent(item: A)(implicit sync: Sync[F]): F[Option[A]] =
+  def mainParent(item: A)(implicit monad: Monad[F]): F[Option[A]] =
     dag.parents(item).map(_.flatMap(_.headOption))
 
   def mainParentUnsafe(item: A)(

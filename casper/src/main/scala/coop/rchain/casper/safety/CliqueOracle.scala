@@ -22,7 +22,7 @@ object CliqueOracle {
 
   implicit val baseMetricsSource: Source = coop.rchain.casper.CasperMetricsSource
 
-  private def computeMaxCliqueWeight[F[_]: Concurrent: Span, M, V](
+  private def computeMaxCliqueWeight[F[_]: Concurrent: Span, M: Show, V](
       target: M,
       dag: DagReader[F, M],
       agreeingWeightMap: WeightMap[V],
@@ -30,7 +30,7 @@ object CliqueOracle {
       toJustificationF: M => F[Justification[M, V]],
       justificationsF: M => F[Set[Justification[M, V]]],
       heightF: M => F[Long]
-  )(implicit show: Show[M]): F[Long] = Span[F].traceI("compute-max-clique-weight") {
+  ): F[Long] = Span[F].traceI("compute-max-clique-weight") {
 
     /**
       * Prerequisite for this is that latest messages from a and b both are in main chain with target message
@@ -142,10 +142,7 @@ object CliqueOracle {
   ): F[WeightMap[V]] =
     dag
       .mainParent(target)
-      .map {
-        case Some(mainParent) => mainParent
-        case None             => target
-      }
+      .map(_.getOrElse(target))
       .flatMap(getWeightMapF)
 
   def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span, M, V](
