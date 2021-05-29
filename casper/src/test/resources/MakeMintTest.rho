@@ -6,7 +6,7 @@ new
   stdlog(`rho:io:stdlog`),
   setup,
   test_create_purse, test_cross_currency_deposit, test_deposit, test_split,
-  test_log_set, test_overflow_deposit,
+  test_overflow_deposit,
   roguePurse1,
   split, getBalance, deposit
 in {
@@ -20,7 +20,6 @@ in {
           ("Fake purses should not be able to forge payment.", *roguePurse1),
           ("Deposit should work as expected", *test_deposit),
           ("Split should work as expected", *test_split),
-          ("be able to set a log channel and receive notifications", *test_log_set),
           ("In case of overflow, no tranfer occurs", *test_overflow_deposit)
         ])
     }
@@ -129,38 +128,6 @@ in {
             ],
             *ackCh
           )
-        }
-      }
-    }
-  } |
-  
-  contract test_log_set(rhoSpec, @(mintA, _), ackCh) = {
-    new aliceAPurse, aliceAPurseBalance,
-        bobAPurse, bobAPurseBalance,
-        aliceLog, bobLog,
-        depositSuccess in {
-      @mintA!("makePurse", 0, *aliceAPurse) |
-      @mintA!("makePurse", 50, *bobAPurse) |
-      for(aliceAPurse <- aliceAPurse;
-          bobAPurse <- bobAPurse) {
-        new aliceAck, bobAck in {
-          aliceAPurse!("setLog", *aliceLog, *aliceAck) |
-          bobAPurse!("setLog", *bobLog, *bobAck) |
-          for (_ <- aliceAck; _ <- bobAck) {
-            aliceAPurse!("deposit", 10, *bobAPurse, *depositSuccess) |
-            for (@depositResult <- depositSuccess) {
-              for(@["deposit", amountA, src, depOk, blockNumberA, timestampA, senderA] <- aliceLog;
-                  @["*decr", amountB, subOk, blockNumberB, timestampB, senderB] <- bobLog) {
-                rhoSpec!("assertMany",
-                  [
-                    (depositResult, "logging should succeed"),
-                    (([10, true] == [amountA, depOk]), "log deposit"),
-                    (([10, true] == [amountB, subOk]), "log decrement"),
-                  ],
-                  *ackCh)
-              }
-            }
-          }
         }
       }
     }
