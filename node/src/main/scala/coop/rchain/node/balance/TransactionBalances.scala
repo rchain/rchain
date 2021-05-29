@@ -154,8 +154,8 @@ object TransactionBalances {
             accountType = NormalVault
           )
         )
-
-        val toVault = m.getOrElse(
+        val newVaultMap = m.updated(transfer.fromAddr, fromVault.sendRev(transfer.amount))
+        val toVault = newVaultMap.getOrElse(
           transfer.toAddr,
           RevAccount(
             address = RevAddress.parse(transfer.toAddr).right.get,
@@ -163,9 +163,7 @@ object TransactionBalances {
             accountType = NormalVault
           )
         )
-
-        m.updated(transfer.fromAddr, fromVault.sendRev(transfer.amount))
-          .updated(transfer.toAddr, toVault.receiveRev(transfer.amount))
+        newVaultMap.updated(transfer.toAddr, toVault.receiveRev(transfer.amount))
       }
     }
     genesisVault.copy(vaultMaps = resultMap)
