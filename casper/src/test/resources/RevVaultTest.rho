@@ -1,4 +1,4 @@
-// Match a list of known valid publicKey -> RevAddress pairs to bind them to veriables
+// Match a list of known valid publicKey -> RevAddress pairs to bind them to variables
 match (
     "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4".hexToBytes(),
     "11112VYAt8rUGNRRZX3eJdgagaAhtWTK8Js7F7X5iqddMVqyDTtYau",
@@ -18,7 +18,6 @@ match (
 
     new
       rl(`rho:registry:lookup`),
-      stdlog(`rho:io:stdlog`),
       RhoSpecCh,
       ListOpsCh,
       getDeployerId(`rho:test:deployerId:make`),
@@ -55,7 +54,7 @@ match (
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
             ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
-            ("Logging works", *testLogging)
+            ("Transfer log entries are recorded in both vault logs", *testLogging)
           ])
       } |
 
@@ -195,19 +194,37 @@ match (
       } |
 
       contract testLogging(rhoSpec, RevVault, ackCh) = {
-        new genesisVaultCh, aliceVaultCh, ret, transferSuccessful  in {
-          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
-          RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
-          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @(true, aliceVault) <- aliceVaultCh) {
-            new ack, logCh, assertCh1, assertCh2 in {
-              genesisVault!("setLog", *logCh, genesisVaultKey, *ack) |
-              for (_ <- ack) {
-                genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
-                for (@["transfer", revAddress, amount, result, blockNumber, timestamp, sender] <- logCh) {
-                  rhoSpec!("assert", 
-                    ([aliceRevAddress, 1000, (true, Nil)] == [revAddress, amount, result]), 
-                    "transfer successfully logged", 
-                    *ackCh)
+        new
+          RevAddress(`rho:rev:address`),
+          a, aRevAddrCh, aVaultCh, aEntryCh, aVaultKeyCh,
+          b, bRevAddrCh, bVaultCh, bEntryCh, transferCh
+        in {
+          RevAddress!("fromUnforgeable", *a, *aRevAddrCh) |
+          RevAddress!("fromUnforgeable", *b, *bRevAddrCh) |
+          for (@aRevAddr <- aRevAddrCh;
+               @bRevAddr <- bRevAddrCh) {
+            RevVault!("findOrCreate", aRevAddr, *aVaultCh) |
+            RevVault!("findOrCreate", bRevAddr, *bVaultCh) |
+            for (@(true, *aVault) <- aVaultCh;
+                 @(true, *bVault) <- bVaultCh) {
+              RevVault!("unforgeableAuthKey", *a, *aVaultKeyCh) |
+              for (@aVaultKey <- aVaultKeyCh) {
+                // This is the only transfer in a's log and in b's log
+                aVault!("transfer", bRevAddr, 0, aVaultKey, *transferCh) |
+                for (@(true, _) <- transferCh) {
+                  aVault!("readLogEntry", *aEntryCh) |
+                  bVault!("readLogEntry", *bEntryCh) |
+                  for (@aEntry <- aEntryCh;
+                       @bEntry <- bEntryCh) {
+                    rhoSpec!("assert",
+                      (aEntry == bEntry)
+                        and (aEntry.get("to")     == bRevAddr)
+                        and (aEntry.get("from")   == aRevAddr)
+                        and (aEntry.get("amount") == 0),
+                      "transfer successfully logged",
+                      *ackCh
+                    )
+                  }
                 }
               }
             }
@@ -218,7 +235,6 @@ match (
       new RevVaultCh in {
         rl!(`rho:rchain:revVault`, *RevVaultCh) |
         for (@(_, RevVault) <- RevVaultCh) {
-
           contract withVaultAndIdentityOf(@pubKey, ret) = {
             new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, deployerIdCh, authKeyCh in {
               getDeployerId!("deployerId", pubKey, *deployerIdCh) |
@@ -234,7 +250,6 @@ match (
               }
             }
           }
-
         }
       } |
 

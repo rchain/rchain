@@ -81,10 +81,6 @@ in {
                 }
               }
             } |
-            // Set to Nil to disable logging
-            contract thisPurse(@"setLog", logCh, ack) = {
-              for (_ <- logStore) { logStore!(*logCh) | ack!(Nil) }
-            } |
             contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
             contract thisPurse(@"split", @amount, return) = {
@@ -122,14 +118,7 @@ in {
                             for (@decrSuccess <- result) {
                               if (decrSuccess) {
                                 // Proper authority to subtract amount from src, amount subtracted from src.
-                                success!(true) |
-                                // log
-                                if (Nil != *logCh) {
-                                  bd!(*bdCh) |
-                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                    logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
-                                  }
-                                }
+                                success!(true)
                               } else {
                                 // Insufficient funds in src purse.
                                 // The amount must now be subtracted from this purse.
@@ -138,35 +127,17 @@ in {
                                   for (_ <- subCh) {
                                     success!(false)
                                   }
-                                } |
-                                if (Nil != *logCh) {
-                                  bd!(*bdCh) |
-                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                    logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                                  }
                                 }
                               }
                             }
                           } else {
                             // Failed to add funds to this purse due to overflow or negative amount.
-                            success!(false) |
-                            if (Nil != *logCh) {
-                              bd!(*bdCh) |
-                              for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                              }
-                            }
+                            success!(false)
                           }
                         }
                       } else {
                         // Mint mismatch. No transfer occurs.
-                        success!(false) |
-                        if (Nil != *logCh) {
-                          bd!(*bdCh) |
-                          for (@blockNumber, @timestamp, @sender <- bdCh) {
-                            logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                          }
-                        }
+                        success!(false)
                       }
                     }
                   }

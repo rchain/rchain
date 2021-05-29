@@ -14,52 +14,70 @@
  9.  | 4,         | registry           | uri = rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
+new
+  NonNegativeNumber,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut
+in {
   contract NonNegativeNumber(@init, return) = {
-    new this, valueStore in {
+    new
+      this,
+      valueStore
+    in {
+      // Adds `x` to the value if no overflow occurs, returns success message on success
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore){
+          for (@v <- valueStore){
             if (v + x >= v) {
-              valueStore!(v + x) | success!(true)
+              // Happy path
+              valueStore!(v + x) |
+              success!(true)
             } else {
-              //overflow
-              valueStore!(v) | success!(false)
+              // Overflow
+              valueStore!(v) |
+              success!(false)
             }
           }
         } else {
+          // We do not add negative amounts
           success!(false)
         }
       } |
+      // Subtracts `x` from the value if smaller than value, returns success message on success
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore) {
+          for (@v <- valueStore) {
             if (x <= v) {
-              valueStore!(v - x) | success!(true)
+              valueStore!(v - x) |
+              success!(true)
             } else {
-              valueStore!(v) | success!(false)
+              valueStore!(v) |
+              success!(false)
             }
           }
         } else {
           success!(false)
         }
       } |
-      contract this(@"value", return) = {
-        for(@v <- valueStore) {
-          valueStore!(v) | return!(v)
+      // Returns the value on ret
+      contract this(@"value", ret) = {
+        for (@v <- valueStore) {
+          valueStore!(v) |
+          ret!(v)
         }
       } |
+      // Provides `this` as a write-only channel on return
       return!(bundle+{*this}) |
-      match init { //Initial balance is zero if given is negative on non-integer
+      match init { // Initial balance is 0 if given negative number or non-integer
         Int => {
-          if (init >= 0) { valueStore!(init)  }
-          else           { valueStore!(0) }
+          if (init > 0) { valueStore!(init) }
+          else          { valueStore!(0) }
         }
          _ => { valueStore!(0) }
       }
     }
   } |
-  
+  // Inserts signed write-only NonNegativeNumber contract into the registry
   rs!(
     "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),
     (9223372036854775807, bundle+{*NonNegativeNumber}),
