@@ -329,7 +329,7 @@ object TransactionBalances {
         dagRepresantation
       )
       transfers   <- tasks.compile.toList
-      allTransfer = transfers.flatten ++ getSpecialTransfer
+      allTransfer = transfers.flatten ++ getSpecialTransfer(targetBlock.body.state.blockNumber)
       _ <- log.info(
             s"After getting transfer history total ${allTransfer.length} account make transfer."
           )
@@ -342,7 +342,7 @@ object TransactionBalances {
           m.updated(addr, transfers ++ fromTransfers)
         }
       }
-      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allTransfer)
+      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, sortedAllTransfer)
     } yield (afterTransferMap, mappedTransfer)
   }
 }

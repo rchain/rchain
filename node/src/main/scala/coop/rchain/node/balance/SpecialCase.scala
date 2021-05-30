@@ -9,9 +9,30 @@ import coop.rchain.shared.Log
 import coop.rchain.casper.syntax._
 import coop.rchain.metrics.Span
 
+/**
+  * Hard-coding the special cases in RChain Mainnet. Currently what the transaction server is missing is the
+  * transfers in CloseBlock system deploy and these transfers only happened in slashing block and epoch block which
+  * are all we need for special cases.
+  */
 object SpecialCases {
-  def getSpecialTransfer =
-    slashAt166708 ++ epochAt250000 ++ slashAt463304 ++ epochAt500000 ++ epochAt750000
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def getSpecialTransfer(blockNumber: Long) =
+    if (blockNumber > 0 && blockNumber < 166708L) {
+      Vector.empty[Transfer]
+    } else if (blockNumber < 250000L && blockNumber >= 166708L) {
+      slashAt166708
+    } else if (blockNumber >= 250000L && blockNumber < 464403L) {
+      slashAt166708 ++ epochAt250000
+    } else if (blockNumber >= 464403L && blockNumber < 500000L) {
+      slashAt166708 ++ epochAt250000 ++ slashAt463304
+    } else if (blockNumber >= 500000L && blockNumber < 750000L) {
+      slashAt166708 ++ epochAt250000 ++ slashAt463304 ++ epochAt500000
+    } else if (blockNumber >= 750000L) {
+      slashAt166708 ++ epochAt250000 ++ slashAt463304 ++ epochAt500000 ++ epochAt750000
+    } else {
+      throw new Exception(s"Impossible target blockNumber ${blockNumber}.")
+    }
+
   val slashAt166708 = Vector(
     // Rewards Transfer
     Transfer(
@@ -74,7 +95,6 @@ object SpecialCases {
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       166708L
     ),
-    // Slashing Transfer
     Transfer(
       81703406075708L,
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
@@ -84,7 +104,6 @@ object SpecialCases {
   )
 
   val epochAt250000 = Vector(
-    // Rewards Transfer
     Transfer(
       161505260L,
       "11112cX59qJxUURdFgQepSuNC2CpV5AZ6FsrtMZpTbXUNFjhQiNRZc",
@@ -93,6 +112,12 @@ object SpecialCases {
     ),
     Transfer(
       7473548L,
+      "11112Rb5XSQJeuVeTuP8ieSQqucS7rUUxio2SrGyCa7Bj6qaiEbnB7",
+      "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
+      250000L
+    ),
+    Transfer(
+      10507324L,
       "11112SM2Fi38J9fdgCvujzg4DZaYrQYSHSt9cZPwsMQiB6jp2fU7Cd",
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       250000L
@@ -130,12 +155,6 @@ object SpecialCases {
     Transfer(
       17190789L,
       "1111LowRZnbRzU3uGZ5GVMAcZigLSWsxqaRydyujkK8drU2iggUbf",
-      "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
-      250000L
-    ),
-    Transfer(
-      10507324L,
-      "11112SM2Fi38J9fdgCvujzg4DZaYrQYSHSt9cZPwsMQiB6jp2fU7Cd",
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       250000L
     )
@@ -263,13 +282,8 @@ object SpecialCases {
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       463304L
     )
-    // Slashing Transfer failed
-    // Transfer(150000003509482L,
-    // "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
-    // "11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF",
-    // 463304L)
+//  Transfer(150000003509482L,"1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5","11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF",463304L)
   )
-
   val epochAt500000 = Vector(
     Transfer(
       3095764L,
@@ -462,12 +476,6 @@ object SpecialCases {
     ),
     Transfer(
       635954279L,
-      "1111e5UJH7AwRQRDxBhi5nRmjg6nRzhN99WTBKaRerW5h6s8X3mqN",
-      "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
-      750000L
-    ),
-    Transfer(
-      1376417L,
       "11112MW6m6rbew1imHqcLLRsbEg8M1tRZBXcF8vGJABjjbYo3iPcC5",
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       750000L
