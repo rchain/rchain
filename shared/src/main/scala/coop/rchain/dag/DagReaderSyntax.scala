@@ -42,16 +42,18 @@ final class DagReaderOps[F[_], A](
       ancestor: A,
       height: A => F[Long]
   )(implicit sync: Sync[F], show: Show[A]): F[Boolean] =
-    descendant.tailRecM { d =>
-      if (d == ancestor) true.asRight[A].pure[F]
-      else
-        for {
-          dHeight <- height(d)
-          aHeight <- height(ancestor)
-          r <- if (dHeight <= aHeight)
-                false.asRight[A].pure[F]
-              else
-                mainParentUnsafe(d).map(_.asLeft[Boolean])
-        } yield r
-    }
+    for {
+      aHeight <- height(ancestor)
+      r <- descendant.tailRecM { d =>
+            if (d == ancestor) true.asRight[A].pure[F]
+            else
+              for {
+                dHeight <- height(d)
+                next <- if (dHeight <= aHeight)
+                         false.asRight[A].pure[F]
+                       else
+                         mainParentUnsafe(d).map(_.asLeft[Boolean])
+              } yield next
+          }
+    } yield r
 }
