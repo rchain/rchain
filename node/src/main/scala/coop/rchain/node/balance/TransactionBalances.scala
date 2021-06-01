@@ -228,13 +228,35 @@ object TransactionBalances {
                                                 RevAddress.fromPublicKey(pd.deploy.pk).get.toBase58
                                               val blockPerValidator =
                                                 ValidatorPerValidatorMap.senderPerValidator(block)
-                                              transfers :+ Transfer(
-                                                pd.cost.cost,
-                                                deployerRevAddr,
-                                                blockPerValidator,
-                                                block.body.state.blockNumber
-                                              )
-
+                                              val addedTransfers = {
+                                                // there were bug on closeBlock deploy which would be deployed
+                                                // once there is a slashing validator.
+                                                if (blockNumber > 166708L && blockNumber <= 184203L)
+                                                  Vector(
+                                                    Transfer(
+                                                      pd.cost.cost,
+                                                      deployerRevAddr,
+                                                      blockPerValidator,
+                                                      block.body.state.blockNumber
+                                                    ),
+                                                    Transfer(
+                                                      pd.cost.cost,
+                                                      blockPerValidator,
+                                                      initialPosStakingVault.address.toBase58,
+                                                      block.body.state.blockNumber
+                                                    )
+                                                  )
+                                                else
+                                                  Vector(
+                                                    Transfer(
+                                                      pd.cost.cost,
+                                                      deployerRevAddr,
+                                                      blockPerValidator,
+                                                      block.body.state.blockNumber
+                                                    )
+                                                  )
+                                              }
+                                              transfers ++ addedTransfers
                                             }
                                           }
                                         transactions <- transactionStore.get(
