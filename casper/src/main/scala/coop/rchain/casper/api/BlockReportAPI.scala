@@ -63,7 +63,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
                  for {
                    cached <- reportStore.get(b.blockHash)
                    res <- if (cached.isEmpty || forceReplay)
-                           replayBlock(b)
+                           replayBlock(b).flatTap(reportStore.put(b.blockHash, _))
                          else
                            cached.get.pure[F]
                  } yield res
