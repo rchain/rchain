@@ -267,7 +267,7 @@ object TransactionBalances {
       dag: BlockDagRepresentation[F]
   ) =
     Stream
-      .range(1, targetBlock.body.state.blockNumber.toInt)
+      .range(1, targetBlock.body.state.blockNumber.toInt + 1)
       .parEvalMapUnorderedProcBounded(
         i =>
           putTransfer(
