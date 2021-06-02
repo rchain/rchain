@@ -15,13 +15,13 @@ import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.BooleanF._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.metrics.implicits._
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax._
 import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.deploy.DeployStorage

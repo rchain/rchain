@@ -24,7 +24,8 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.{BlockMetadata, Par}
