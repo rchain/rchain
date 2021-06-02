@@ -16,7 +16,7 @@ import coop.rchain.crypto.codec.Base16
   * The relationship between these perValidators vaults and validator would only be changed in epoch block
   * and stay the same during one epoch period.
   */
-object ValidatorPerValidatorMap {
+object PerValidatorVaults {
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def senderPerValidator(block: BlockMessage): String = {
     val sender = Base16.encode(block.sender.toByteArray)

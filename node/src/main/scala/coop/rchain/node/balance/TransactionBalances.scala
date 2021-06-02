@@ -17,23 +17,20 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.rspace.syntax._
 import coop.rchain.casper.syntax._
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.rholang.RhoTrieTraverser
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.node.balance.SpecialCases.getSpecialTransfer
+import coop.rchain.node.balance.SpecialCase.getSpecialTransfer
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2._
 
 import java.nio.file.{Files, Path}
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.ExecutionContext
 
 object TransactionBalances {
@@ -48,7 +45,7 @@ object TransactionBalances {
       .get,
     0,
     PosStakingVault
-  )
+  ) // 1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5
   val CoopVaultAddr = "11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF"
 
   sealed trait AccountType
@@ -71,17 +68,23 @@ object TransactionBalances {
     }
   }
 
+  type RevAddr = String
+
+  /**
+    * @param vaultMaps contains all the revVault account including posVaultAddress
+    * `posVaultAddress`, `coopPosMultiSigVault`, `perValidatorVaults` are just a marker for special addresses.
+    */
   final case class GlobalVaultsInfo(
-      vaultMaps: Map[String, RevAccount],
-      posVaultAddress: String,
-      coopPosMultiSigVault: String,
-      perValidatorVaults: Seq[String]
+      vaultMaps: Map[RevAddr, RevAccount],
+      posVaultAddress: RevAddr,
+      coopPosMultiSigVault: RevAddr,
+      perValidatorVaults: Seq[RevAddr]
   )
 
-  def getPerValidatorVault[F[_]: Sync: Span: Log](
+  def getPerValidatorVaults[F[_]: Sync: Span: Log](
       runtime: RhoRuntime[F],
       block: BlockMessage
-  ): F[Seq[String]] = {
+  ): F[Seq[RevAddr]] = {
     val contract = """new return, rl(`rho:registry:lookup`),
                     |  poSCh
                     |in {
@@ -100,27 +103,6 @@ object TransactionBalances {
     } yield perValidatorVaultAddr
   }
 
-  def getCoopVault[F[_]: Sync: Span: Log](
-      runtime: RhoRuntime[F],
-      block: BlockMessage
-  ): F[String] = {
-    val contract = """new return, rl(`rho:registry:lookup`),
-                     |  poSCh
-                     |in {
-                     |  rl!(`rho:rchain:pos`, *poSCh) |
-                     |  for(@(_, PoS) <- poSCh) {
-                     |    @PoS!("getCoopVault", *return)
-                     |  }
-                     |}""".stripMargin
-    for {
-      coopVault <- runtime.playExploratoryDeploy(
-                    contract,
-                    block.body.state.postStateHash
-                  )
-      coopVaultAddr = coopVault.head.exprs.head.getETupleBody.ps(1).exprs.head.getGString
-    } yield coopVaultAddr
-  }
-
   def generateRevAccountFromWalletAndBond[F[_]: Sync: Log](
       walletPath: Path,
       bondsPath: Path
@@ -133,19 +115,21 @@ object TransactionBalances {
         .map(v => (v.revAddress.toBase58, RevAccount(v.revAddress, v.initialBalance, NormalVault)))
         .toMap
       revAccountMap = bondsMap.foldLeft(accountMap) {
-        case (vaultMap, (_, bondAmount)) => {
+        case (vaultMap, (_, bondAmount)) =>
           val posVault =
             vaultMap.getOrElse(initialPosStakingVault.address.toBase58, initialPosStakingVault)
           val newPosVault = posVault.receiveRev(bondAmount)
           vaultMap.updated(initialPosStakingVault.address.toBase58, newPosVault)
-        }
       }
     } yield revAccountMap
   }
 
-  def updateGenesisFromTransfer(genesisVault: GlobalVaultsInfo, transfers: List[Transfer]) = {
+  def updateGenesisFromTransfer(
+      genesisVault: GlobalVaultsInfo,
+      transfers: List[Transfer]
+  ): GlobalVaultsInfo = {
     val resultMap = transfers.foldLeft(genesisVault.vaultMaps) {
-      case (m, transfer) => {
+      case (m, transfer) =>
         val fromVault = m.getOrElse(
           transfer.fromAddr,
           RevAccount(
@@ -164,7 +148,6 @@ object TransactionBalances {
           )
         )
         newVaultMap.updated(transfer.toAddr, toVault.receiveRev(transfer.amount))
-      }
     }
     genesisVault.copy(vaultMaps = resultMap)
   }
@@ -178,7 +161,7 @@ object TransactionBalances {
     for {
       vaultMap  <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
       coopVault = RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
-      perValidatorVaults <- getPerValidatorVault(runtime, block).map(
+      perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
                                addrs.map(
                                  addr =>
@@ -190,9 +173,7 @@ object TransactionBalances {
                                )
                            )
       genesisAccountMap = (coopVault +: perValidatorVaults).foldLeft(vaultMap) {
-        case (accountMap, account) => {
-          accountMap.updated(account.address.toBase58, account)
-        }
+        case (accountMap, account) => accountMap.updated(account.address.toBase58, account)
       }
       globalVaults = GlobalVaultsInfo(
         genesisAccountMap,
@@ -207,7 +188,7 @@ object TransactionBalances {
       transactionStore: Transaction.TransactionStore[F],
       blockStore: BlockStore[F],
       dag: BlockDagRepresentation[F]
-  ) =
+  ): F[Vector[Transfer]] =
     for {
       blocks <- dag.topoSort(blockNumber, Some(blockNumber))
       blocksTransfer <- blocks.flatten.foldLeftM(Vector.empty[Transfer]) {
@@ -223,14 +204,17 @@ object TransactionBalances {
                                             )
                                         deployCost = block.body.deploys
                                           .foldLeft(Vector.empty[Transfer]) {
-                                            case (transfers, pd) => {
+                                            case (transfers, pd) =>
                                               val deployerRevAddr =
                                                 RevAddress.fromPublicKey(pd.deploy.pk).get.toBase58
                                               val blockPerValidator =
-                                                ValidatorPerValidatorMap.senderPerValidator(block)
+                                                PerValidatorVaults.senderPerValidator(block)
                                               val addedTransfers = {
-                                                // there were bug on closeBlock deploy which would be deployed
-                                                // once there is a slashing validator.
+                                                // between 166708 and 184203 blocks , there were a bug in the mainnet
+                                                // that after a new validator is slashed, this validator would be slashed
+                                                // in every block which means that there were a
+                                                // slashing deploy in every block and all the fund in the per validator
+                                                // vault would go to pos vault immediately.
                                                 if (blockNumber > 166708L && blockNumber <= 184203L)
                                                   Vector(
                                                     Transfer(
@@ -257,14 +241,13 @@ object TransactionBalances {
                                                   )
                                               }
                                               transfers ++ addedTransfers
-                                            }
                                           }
                                         transactions <- transactionStore.get(
                                                          Base16.encode(blockHash.toByteArray)
                                                        )
                                         res = transactions.get.flatten
                                           .foldLeft(Vector.empty[Transfer]) {
-                                            case (th, transaction) => {
+                                            case (th, transaction) =>
                                               if (transaction.success) {
                                                 th :+ Transfer(
                                                   transaction.amount,
@@ -274,7 +257,6 @@ object TransactionBalances {
                                                 )
 
                                               } else th
-                                            }
                                           }
                                       } yield res ++ deployCost
                                       else Vector.empty[Transfer].pure[F]
@@ -287,7 +269,7 @@ object TransactionBalances {
       transactionStore: Transaction.TransactionStore[F],
       blockStore: BlockStore[F],
       dag: BlockDagRepresentation[F]
-  ) =
+  ): Stream[F, Vector[Transfer]] =
     Stream
       .range(1, targetBlock.body.state.blockNumber.toInt + 1)
       .parEvalMapUnorderedProcBounded(
@@ -304,7 +286,7 @@ object TransactionBalances {
       blockNumber: Long,
       dag: BlockDagRepresentation[F],
       blockStore: BlockStore[F]
-  ) =
+  ): F[BlockMessage] =
     for {
       blocks    <- dag.topoSort(blockNumber.toLong, Some(blockNumber.toLong))
       blockHash = blocks.flatten.head
@@ -318,7 +300,7 @@ object TransactionBalances {
       bondPath: Path,
       transactionDir: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext) = {
+  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, Map[String, List[Transfer]])] = {
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
@@ -337,13 +319,14 @@ object TransactionBalances {
                    store
                  )
       (rSpacePlay, rSpaceReplay, _) = spaces
-      runtimes                      <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty)
-      (rhoRuntime, _)               = runtimes
-      targetBlockOpt                <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(targetBlockHash)))
-      targetBlock                   = targetBlockOpt.get
-      _                             <- log.info(s"Getting balance from ${targetBlock}")
-      genesisVaultMap               <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
-      transactionStore              <- Transaction.store(transactionDir)
+      runtimes <- RhoRuntime
+                   .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
+      (rhoRuntime, _)  = runtimes
+      targetBlockOpt   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(targetBlockHash)))
+      targetBlock      = targetBlockOpt.get
+      _                <- log.info(s"Getting balance from $targetBlock")
+      genesisVaultMap  <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
+      transactionStore <- Transaction.store(transactionDir)
       tasks = getAllTransfer(
         targetBlock,
         transactionStore,
@@ -359,10 +342,9 @@ object TransactionBalances {
       toAddrTransfers   = sortedAllTransfer.groupBy(t => t.toAddr)
       fromAddrTransfers = sortedAllTransfer.groupBy(t => t.fromAddr)
       mappedTransfer = toAddrTransfers.toList.foldLeft(Map.empty[String, List[Transfer]]) {
-        case (m, (addr, transfers)) => {
+        case (m, (addr, transfers)) =>
           val fromTransfers = fromAddrTransfers.getOrElse(addr, List.empty)
           m.updated(addr, transfers ++ fromTransfers)
-        }
       }
       afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, sortedAllTransfer)
     } yield (afterTransferMap, mappedTransfer)

@@ -17,6 +17,10 @@ import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
+/**
+  * This is used for decoding the json data stored in the transaction server database.
+  * Directly reading from transaction store would be much faster than requesting the transaction server.
+  */
 object Transaction {
 
   type TransactionStore[F[_]] = KeyValueTypedStore[F, String, List[List[TransactionInfo]]]

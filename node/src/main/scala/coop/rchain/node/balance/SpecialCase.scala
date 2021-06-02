@@ -13,8 +13,10 @@ import coop.rchain.metrics.Span
   * Hard-coding the special cases in RChain Mainnet. Currently what the transaction server is missing is the
   * transfers in CloseBlock system deploy and these transfers only happened in slashing block and epoch block which
   * are all we need for special cases.
+  *
+  * 1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5 is the POS vault address.
   */
-object SpecialCases {
+object SpecialCase {
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def getSpecialTransfer(blockNumber: Long) =
     if (blockNumber > 0 && blockNumber < 166708L) {
@@ -95,6 +97,7 @@ object SpecialCases {
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       166708L
     ),
+    // slash transfer
     Transfer(
       81703406075708L,
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
@@ -282,8 +285,11 @@ object SpecialCases {
       "1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5",
       463304L
     )
+    // slash transfer. This slash transfer failed because we move all the pos vault money out as bug and not enough
+    // fund insider.
 //  Transfer(150000003509482L,"1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5","11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF",463304L)
   )
+
   val epochAt500000 = Vector(
     Transfer(
       3095764L,
