@@ -74,9 +74,6 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
         .map(_.toMap)
     def invalidBlocks: F[Set[BlockMetadata]] =
       invalidBlocksSet.pure[F]
-
-    override def parents(vertex: BlockHash): F[Option[Set[BlockHash]]] =
-      lookup(vertex).map(_.map(_.parents.toSet))
   }
 
   object InMemEquivocationsTracker extends EquivocationsTracker[F] {
