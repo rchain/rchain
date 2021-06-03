@@ -21,6 +21,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
@@ -184,6 +185,18 @@ object InterpreterUtil {
             .as(none[StateHash].asRight[BlockError])
         }
     }
+
+  /**
+    * Temporary solution to print user deploy errors to Log so we can have
+    * at least some way to debug user errors.
+    */
+  def printDeployErrors[F[_]: Sync: Log](
+      deploySig: ByteString,
+      errors: Seq[InterpreterError]
+  ): F[Unit] = Sync[F].defer {
+    val deployInfo = PrettyPrinter.buildStringSig(deploySig)
+    Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
+  }
 
   def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
