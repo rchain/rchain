@@ -27,32 +27,6 @@ import scala.collection.immutable
 import scala.collection.immutable.Map
 
 object ProtoUtil {
-
-  /*
-   * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
-   */
-  def isInMainChain[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
-      candidateMetadata: BlockMetadata,
-      targetBlockHash: BlockHash
-  ): F[Boolean] = {
-    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
-    import cats.instances.option._
-
-    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^
-      dag.lookup(targetBlockHash).flatMap {
-        case Some(targetBlock) =>
-          if (targetBlock.blockNum <= candidateMetadata.blockNum) {
-            false.pure[F]
-          } else {
-            val mainParentOpt = targetBlock.parents.headOption
-            mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _)).map(_.getOrElse(false))
-          }
-        case None =>
-          false.pure[F]
-      }
-  }
-
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
