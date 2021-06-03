@@ -8,7 +8,6 @@ final case class RPConf(
     local: PeerNode,
     networkId: String,
     bootstrap: Option[PeerNode],
-    defaultTimeout: FiniteDuration,
     maxNumOfConnections: Int,
     clearConnections: ClearConnectionsConf
 )

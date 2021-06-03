@@ -34,6 +34,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
   val maxMessageSize: Int        = 256 * 1024
   val maxStreamMessageSize: Long = 1024 * 1024 * 200
 
+  import scala.concurrent.duration._
   def createTransportLayer(
       env: TcpTlsEnvironment
   ): Task[TransportLayer[Task]] =
@@ -45,6 +46,7 @@ class TcpTransportLayerSpec extends TransportLayerSpec[Task, TcpTlsEnvironment] 
         maxMessageSize,
         maxMessageSize,
         100,
+        5.seconds,
         Ref.unsafe[Task, Map[PeerNode, Deferred[Task, BufferedGrpcStreamChannel[Task]]]](Map.empty),
         scheduler
       )

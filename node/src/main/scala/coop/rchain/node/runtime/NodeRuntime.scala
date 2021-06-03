@@ -99,6 +99,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
             nodeConf.tls.keyPath,
             nodeConf.protocolClient.grpcMaxRecvMessageSize.toInt,
             nodeConf.protocolClient.grpcStreamChunkSize.toInt,
+            nodeConf.protocolClient.networkTimeout,
             grpcScheduler
           )
       }
@@ -237,7 +238,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       local,
       nodeConf.protocolClient.networkId,
       bootstrapNode,
-      nodeConf.protocolClient.networkTimeout,
       nodeConf.protocolClient.batchMaxConnections,
       ClearConnectionsConf(nodeConf.peersDiscovery.heartbeatBatchSize)
     )
