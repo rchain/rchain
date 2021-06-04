@@ -57,13 +57,15 @@ object Running {
       _ <- engine.withCasper(
             casper => {
               for {
-                tipHash      <- MultiParentCasper.forkChoiceTip[F](casper)
-                tip          <- BlockStore[F].getUnsafe(tipHash)
-                tipTimestamp = tip.header.timestamp
-                now          <- Time[F].currentMillis
-                expired      = (now - tipTimestamp) > delayThreshold.toMillis
+                latestMessages <- casper.blockDag.flatMap(
+                                   _.latestMessageHashes.map(_.values.toList)
+                                 )
+                tips            <- latestMessages.traverse(BlockStore[F].getUnsafe)
+                newestTimestamp = tips.map(_.header.timestamp).max
+                now             <- Time[F].currentMillis
+                expired         = (now - newestTimestamp) > delayThreshold.toMillis
                 requestWithLog = Log[F].info(
-                  "Updating fork choice tips as current FCT " +
+                  "Requesting tips update as newest latest message " +
                     s"is more then ${delayThreshold.toString} old. " +
                     s"Might be network is faulty."
                 ) >> CommUtil[F].sendForkChoiceTipRequest
@@ -168,19 +170,22 @@ object Running {
   /**
     * Peer asks for fork-choice tip
     */
+  // TODO name for this message is misleading, as its a request for all tips, not just fork choice.
   def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode
   )(casper: MultiParentCasper[F]): F[Unit] = {
     val logRequest = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
-    def logResponse(blockHash: BlockHash) =
+    def logResponse(tips: Seq[BlockHash]): F[Unit] =
       Log[F].info(
-        s"Sending hash ${PrettyPrinter.buildString(blockHash)} to ${peer.endpoint.host}"
+        s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTip = MultiParentCasper.forkChoiceTip(casper)
-    def respondToPeer(tip: BlockHash) =
-      logResponse(tip) >> TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
+    val getTips = casper.blockDag.flatMap(_.latestMessageHashes.map(_.values.toList))
+    // TODO respond with all tips in a single message
+    def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 
-    logRequest >> getTip >>= respondToPeer
+    logRequest >> getTips >>= { t =>
+      t.traverse(respondToPeer) >> logResponse(t)
+    }
   }
 
   /**

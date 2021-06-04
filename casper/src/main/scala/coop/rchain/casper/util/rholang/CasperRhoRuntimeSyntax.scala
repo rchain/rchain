@@ -1,6 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Applicative
 import cats.data.{EitherT, WriterT}
 import cats.effect.Sync
 import cats.syntax.all._
@@ -17,6 +16,7 @@ import coop.rchain.casper.protocol.{
   SlashSystemDeployData,
   SystemDeployData
 }
+import coop.rchain.casper.util.rholang.InterpreterUtil.printDeployErrors
 import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.{
   ConsumeFailed,
   GasRefundFailure,
@@ -42,8 +42,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Expr.ExprInstance.EVarBody
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.Var.VarInstance.FreeVar
-import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models._
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.rholang.interpreter.RhoRuntime.{bootstrapRegistry, RuntimeMetricsSource}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -317,8 +317,8 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
         checkpoint.log.map(EventConverter.toCasperEvent).toList,
         errors.nonEmpty
       )
-      _ <- if (errors.nonEmpty) runtime.revertToSoftCheckpoint(fallback)
-          else Applicative[F].unit
+      _ <- (runtime.revertToSoftCheckpoint(fallback) <* printDeployErrors(deploy.sig, errors))
+            .whenA(errors.nonEmpty)
     } yield deployResult
   }
 
@@ -576,12 +576,13 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
     val deployEvaluator = EitherT
       .liftF {
         for {
-          fallback <- runtime.createSoftCheckpoint
-          result   <- rhoRuntimeOps.evaluate(deploy)
+          fallback  <- runtime.createSoftCheckpoint
+          result    <- rhoRuntimeOps.evaluate(deploy)
+          logErrors = printDeployErrors(processedDeploy.deploy.sig, result.errors)
           /* Since the state of `replaySpace` is reset on each invocation of `replayComputeState`,
             and `ReplayFailure`s mean that block processing is cancelled upstream, we only need to
             reset state if the replay effects of valid deploys need to be discarded. */
-          _ <- runtime.revertToSoftCheckpoint(fallback).whenA(result.failed)
+          _ <- (runtime.revertToSoftCheckpoint(fallback) <* logErrors).whenA(result.failed)
         } yield result
       }
       .ensureOr(
