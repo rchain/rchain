@@ -3,18 +3,15 @@ package coop.rchain.casper.util.rholang
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.InMemBlockDagStorage
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.blocks.merger.{CasperMergingDagReader, MergingVertex}
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter, GenesisBuilder}
+import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.dag.InMemDAG
-import coop.rchain.metrics.Metrics.MetricsNOP
-import coop.rchain.metrics.NoopSpan
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -22,7 +19,6 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
-import coop.rchain.store.LazyKeyValueCache
 import fs2.Stream
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -339,64 +335,77 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
         implicit val concurrent               = Concurrent[Task]
-        val emptyDag                          = InMemDAG[Task, MergingVertex](Map.empty, Map.empty)
+        implicit val metrics                  = new Metrics.MetricsNOP
         val genesisPostStateHash              = genesis.body.state.postStateHash
+        import coop.rchain.models.blockImplicits._
 
         // simulates 0.99 sync threshold - first validator create state, then all other create on top of that/
         // merge state of resulting blocks returned
-        def mkLayer(startPreStateHash: StateHash, n: Int): Task[StateHash] =
+        def mkLayer(
+            startPreStateHash: StateHash,
+            n: Int,
+            inMemBlockDagStorage: InMemBlockDagStorage[Task]
+        ): Task[StateHash] =
           for {
             // create state on first validator
             b <- mkHeadState(startPreStateHash, n * 2 + 1, (n * 2 + 1).toLong)
-            base = MergingVertex(
-              postStateHash = b._1,
-              preStateHash = startPreStateHash,
-              processedDeploys = b._2.toSet
+            base = getRandomBlock(
+              setPostStateHash = b._1.some,
+              setPreStateHash = startPreStateHash.some,
+              setParentsHashList = List().some,
+              setDeploys = b._2.some
             )
+            _ <- inMemBlockDagStorage.insert(base, false)
 
             // create children an all other
-            baseChildren <- mkTailStates(base.postStateHash, n * 2 + 2, (n * 2 + 2).toLong)
-            mergingTips = baseChildren.map(
-              c =>
-                MergingVertex(
-                  postStateHash = c._1,
-                  preStateHash = startPreStateHash,
-                  processedDeploys = c._2.toSet
+            baseChildren <- mkTailStates(b._1, n * 2 + 2, (n * 2 + 2).toLong)
+            mergingBlocks = baseChildren.map(
+              s =>
+                getRandomBlock(
+                  setPostStateHash = s._1.some,
+                  setPreStateHash = b._1.some,
+                  setParentsHashList = List(base.blockHash).some,
+                  setDeploys = s._2.some
                 )
             )
-            _ = println(
-              s"merging ${mergingTips.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
-            )
-            dag <- mergingTips.foldLeftM(emptyDag)((acc, tip) => acc.addEdge(tip, base))
+            _ <- mergingBlocks.traverse(inMemBlockDagStorage.insert(_, false))
 
-            deployChainIndex = (v: MergingVertex) =>
-              BlockIndex[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                v.blockHash,
-                v.processedDeploys.toList,
-                Blake2b256Hash.fromByteString(v.preStateHash),
-                Blake2b256Hash.fromByteString(v.postStateHash),
-                runtimeManager.getHistoryRepo
-              ).map(_.deployChains)
+            s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
+            _ = println(s)
+
+            indices <- (base +: mergingBlocks)
+                        .traverse(
+                          b =>
+                            BlockIndex(
+                              b.blockHash,
+                              b.body.deploys,
+                              Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                              Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                              runtimeManager.getHistoryRepo
+                            ).map((b.blockHash -> _))
+                        )
+                        .map(_.toMap)
+
+            _   <- inMemBlockDagStorage.addFinalizedBlockHash(base.blockHash)
+            dag <- inMemBlockDagStorage.getRepresentation
             // merge children to get next preStateHash
-            v <- DagMerger.merge[Task, MergingVertex](
-                  mergingTips,
-                  base,
+            v <- DagMerger.merge[Task](
                   dag,
-                  v => (if (v == base) true else false).pure,
-                  v => deployChainIndex(v),
-                  v => Blake2b256Hash.fromByteString(v.postStateHash),
+                  base.blockHash,
+                  Blake2b256Hash.fromByteString(base.body.state.postStateHash),
+                  indices(_).deployChains.pure,
                   runtimeManager.getHistoryRepo
                 )
-            (nextPreStateHash, rejectedDeploys) = v
-            _                                   = assert(rejectedDeploys.size == 0)
-            _                                   = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
+            (postState, rejectedDeploys) = v
+            nextPreStateHash             = ByteString.copyFrom(postState.bytes.toArray)
+            _                            = assert(rejectedDeploys.size == 0)
+            _                            = assert(nextPreStateHash != base.body.state.postStateHash)
+            _                            = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
           } yield nextPreStateHash
 
         for {
-          // create base state - child of genesis
-          _ <- List.range(0, 4).foldLeftM(genesisPostStateHash) { (baseHash, i) =>
-                mkLayer(baseHash, i)
-              }
+          dagStore <- InMemBlockDagStorage.create[Task]
+          _        <- mkLayer(genesisPostStateHash, 0, dagStore)
         } yield ()
       }
     }
