@@ -270,12 +270,21 @@ object InterpreterUtil {
                 } yield index
             }
           }
-          DagMerger.merge[F](
-            s.dag,
-            s.lastFinalizedBlock,
-            blockIndexF(_).map(_.deployChains),
-            runtimeManager.getHistoryRepo
-          )
+          for {
+            lfbState <- BlockStore[F]
+                         .getUnsafe(s.lastFinalizedBlock)
+                         .map(_.body.state.postStateHash)
+                         .map(Blake2b256Hash.fromByteString)
+            r <- DagMerger.merge[F](
+                  s.dag,
+                  s.lastFinalizedBlock,
+                  lfbState,
+                  blockIndexF(_).map(_.deployChains),
+                  runtimeManager.getHistoryRepo
+                )
+            (state, rejected) = r
+          } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
+
         }
       }
     }

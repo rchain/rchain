@@ -5,9 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -16,7 +14,7 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 
 object DagMerger {
-  private type V = Validator
+  private type V = BlockHash
 
   /** Type for minimal rejection unit - set of dependent deploys executed inside one block */
   private type R = DeployChainIndex
@@ -24,9 +22,10 @@ object DagMerger {
   def merge[F[_]: Concurrent: Log](
       dag: BlockDagRepresentation[F],
       lfb: V,
+      lfbPostState: Blake2b256Hash,
       index: V => F[Vector[R]],
       historyRepository: RhoHistoryRepository[F]
-  ): F[(StateHash, Seq[ByteString])] =
+  ): F[(Blake2b256Hash, Seq[ByteString])] =
     for {
       // all not finalized blocks (conflict set)
       nonFinalisedBlocks <- dag.nonFinalizedBlocks
@@ -55,9 +54,6 @@ object DagMerger {
       applyTrieActions = (baseState: Blake2b256Hash, actions: Seq[HotStoreTrieAction]) =>
         historyRepository.reset(baseState).flatMap(_.doCheckpoint(actions).map(_.root))
 
-      // set that should be merged into LFB
-      lfbPostState <- index(lfb).map(_.head.postStateHash)
-
       r <- ConflictSetMerger.merge[F, R](
             baseState = lfbPostState,
             actualSet = actualSet,
@@ -73,5 +69,5 @@ object DagMerger {
 
       (newState, rejected) = r
       rejectedDeploys      = rejected.flatMap(_.deploysWithCost.map(_.id))
-    } yield (ByteString.copyFrom(newState.bytes.toArray), rejectedDeploys.toList)
+    } yield (newState, rejectedDeploys.toList)
 }
