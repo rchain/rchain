@@ -1,4 +1,4 @@
-package coop.rchain.node.balance
+package coop.rchain.node.revVaultExport.mainNet1.reporting
 
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.codec.Base16

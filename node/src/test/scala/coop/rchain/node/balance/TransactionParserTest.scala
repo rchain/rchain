@@ -1,6 +1,11 @@
 package coop.rchain.node.balance
+import coop.rchain.node.revVaultExport.reporting.Transaction
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.node.balance.Transaction.{deployInfoJ, transactionValueCodec, TransactionInfo}
+import coop.rchain.node.revVaultExport.reporting.Transaction.{
+  deployInfoJ,
+  transactionValueCodec,
+  TransactionInfo
+}
 import scodec.bits.BitVector
 import io.circe.generic.auto._
 import io.circe.syntax._

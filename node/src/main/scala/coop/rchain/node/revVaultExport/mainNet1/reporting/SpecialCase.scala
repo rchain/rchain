@@ -1,13 +1,6 @@
-package coop.rchain.node.balance
+package coop.rchain.node.revVaultExport.mainNet1.reporting
 
-import cats.effect.Sync
-import cats.implicits._
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.node.balance.TransactionBalances.{GlobalVaultsInfo, RevAccount, Transfer}
-import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.shared.Log
-import coop.rchain.casper.syntax._
-import coop.rchain.metrics.Span
+import coop.rchain.node.revVaultExport.reporting.TransactionBalances.Transfer
 
 /**
   * Hard-coding the special cases in RChain Mainnet. Currently what the transaction server is missing is the

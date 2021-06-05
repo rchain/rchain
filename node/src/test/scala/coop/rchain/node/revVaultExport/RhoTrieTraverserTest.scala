@@ -1,9 +1,8 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.node.revVaultExport
 
 import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.helper.TestNode.Effect
-import org.scalatest.FlatSpec
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
@@ -12,6 +11,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.FlatSpec
 
 import scala.util.Random
 

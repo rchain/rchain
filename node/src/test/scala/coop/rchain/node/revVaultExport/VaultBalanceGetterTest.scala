@@ -1,17 +1,12 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.node.revVaultExport
 
-import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
-import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
-import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import org.scalatest.FlatSpec
-import monix.execution.Scheduler.Implicits.global
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.FlatSpec
 
 class VaultBalanceGetterTest extends FlatSpec {
   val genesis               = buildGenesis()

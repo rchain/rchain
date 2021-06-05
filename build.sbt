@@ -380,7 +380,7 @@ lazy val node = (project in file("node"))
       "openssl"
     )
   )
-  .dependsOn(casper, comm, crypto, rholang)
+  .dependsOn(casper % "compile->compile;test->test", comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
