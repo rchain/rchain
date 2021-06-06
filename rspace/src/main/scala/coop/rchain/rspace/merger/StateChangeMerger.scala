@@ -132,8 +132,7 @@ object StateChangeMerger {
                       for {
                         joinsPointer <- joinsPointerForChannel(channel)
                         joins        <- baseReader.getJoins(joinsPointer).map(_.map(_.raw))
-
-                      } yield (channel, joins)
+                      } yield (joinsPointer, joins)
                     }
                     .map(_.toMap)
       newJoins <- joinActions
