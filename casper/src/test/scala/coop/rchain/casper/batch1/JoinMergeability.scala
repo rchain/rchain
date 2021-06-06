@@ -50,18 +50,18 @@ class JoinMergeability extends FlatSpec with Matchers with Inspectors with Merge
   it should "S J S" in ConflictingCase(S0)(J_)(S0)(S0.rstate ++ S0.rstate)(
     J_.rstate ++ S0.rstate
   )
-  it should "S J 4" in ConflictingCase(F0)(J_)(S0)(emptyState)(J_.rstate ++ S0.rstate)
+  it should "S J 4" ignore MergeableCase(F0)(J_)(S0)(J_.rstate)
   it should "S J 4 2" ignore MergeableCase(F1)(J_)(S0)(J_.rstate ++ F1.rstate ++ S0.rstate)
-  it should "S J C" in ConflictingCase(C0)(J_)(S0)(C0.rstate)(J_.rstate ++ S0.rstate)
+  it should "S J C" ignore MergeableCase(C0)(J_)(S0)(C0.rstate ++ J_.rstate)
   it should "S J C 2" ignore MergeableCase(C1)(J_)(S0)(J_.rstate ++ C1.rstate ++ S0.rstate)
   it should "S J R" in ConflictingCase(R0)(J_)(S0)(R0.rstate ++ S0.rstate)(
     S0.rstate ++ J_.rstate
   )
-  it should "S J P" in ConflictingCase(P_)(J_)(S0)(S0.rstate)(J_.rstate ++ S0.rstate)
+  it should "S J P" ignore MergeableCase(P_)(J_)(S0)(J_.rstate ++ S0.rstate)
   it should "S J P 2" ignore MergeableCase(P1)(J_)(S0)(J_.rstate ++ S0.rstate ++ P1.rstate)
   it should "S J N" ignore MergeableCase(Nil)(J_)(S0)(J_.rstate ++ S0.rstate)
   it should "4 J J" ignore MergeableCase(J_)(J_)(F_)(J_.rstate ++ J_.rstate ++ F_.rstate)
-  it should "4 J S" in ConflictingCase(J_)(S1)(F_)(J_.rstate ++ F_.rstate)(emptyState)
+  it should "4 J S" ignore MergeableCase(J_)(S1)(F_)(J_.rstate)
   it should "4 J 4" ignore MergeableCase(J_)(F1)(F_)(J_.rstate ++ F_.rstate ++ F1.rstate)
   it should "4 J C" ignore MergeableCase(C0)(J_)(F_)(J_.rstate ++ C0.rstate ++ F_.rstate)
   it should "4 J R" in ConflictingCase(R0)(J_)(F_)(R0.rstate)(F_.rstate ++ J_.rstate)
@@ -91,7 +91,7 @@ class JoinMergeability extends FlatSpec with Matchers with Inspectors with Merge
   it should "R J R" in ConflictingCase(R0)(J_)(R0)(R0.rstate ++ R0.rstate)(
     R0.rstate ++ J_.rstate
   ) //???
-  it should "R J P" in ConflictingCase(P_)(J_)(R0)(R0.rstate)(R0.rstate ++ J_.rstate)
+  it should "R J P" ignore MergeableCase(P_)(J_)(R0)(J_.rstate ++ R0.rstate)
   it should "R J P 2" ignore MergeableCase(P1)(J_)(R0)(R0.rstate ++ P1.rstate ++ J_.rstate)
   it should "R J N" ignore MergeableCase(Nil)(J_)(R0)(J_.rstate ++ R0.rstate)
   it should "P J J" ignore MergeableCase(J_)(J_)(P_)(J_.rstate ++ J_.rstate ++ P_.rstate)
