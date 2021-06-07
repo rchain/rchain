@@ -117,16 +117,14 @@ final class BlockDagRepresentationOps[F[_]](
   def isInMainChain(ancestor: BlockHash, descendant: BlockHash)(
       implicit sync: Sync[F]
   ): F[Boolean] = {
-    val result = for {
-      aHeight <- OptionT(dag.lookup(ancestor).map(_.map(_.blockNum)))
-      is = mainParentChain(descendant, aHeight)
+    val result = OptionT(dag.lookup(ancestor).map(_.map(_.blockNum))).semiflatMap { aHeight =>
+      mainParentChain(descendant, aHeight)
         .filter(_ == ancestor)
         .head
         .compile
         .last
         .map(_.isDefined)
-      r <- OptionT.liftF(is)
-    } yield r
+    }
     (descendant == ancestor).pure ||^ result.getOrElse(false)
   }
 

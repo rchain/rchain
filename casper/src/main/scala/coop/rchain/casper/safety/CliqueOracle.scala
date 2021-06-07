@@ -20,7 +20,7 @@ import fs2.Stream
 object CliqueOracle {
 
   private type M         = BlockHash    // type for message
-  private type V         = Validator    // type for message creator
+  private type V         = Validator    // type for message creator/validator
   private type WeightMap = Map[V, Long] // stakes per message creator
 
   implicit val baseMetricsSource: Source = coop.rchain.casper.CasperMetricsSource
@@ -31,10 +31,10 @@ object CliqueOracle {
     equal to message where bonding deploy has been submitted. So stake from validator that did not create anything is
     put behind this message. So here is one more place where this logic makes things more complex.*/
   private def getCorrespondingWeightMap[F[_]: Sync](
-      target: M,
+      targetMsg: M,
       dag: BlockDagRepresentation[F]
   ): F[WeightMap] =
-    dag.lookupUnsafe(target).flatMap { meta =>
+    dag.lookupUnsafe(targetMsg).flatMap { meta =>
       meta.parents.headOption match {
         case Some(mainParent) => dag.lookupUnsafe(mainParent).map(_.weightMap)
         case None             => meta.weightMap.pure
@@ -64,9 +64,9 @@ object CliqueOracle {
       validatorA: V,
       validatorB: V,
       dag: BlockDagRepresentation[F],
-      targetMessage: M
+      targetMsg: M
   ): F[Boolean] = {
-    def mightEventuallyDisagree(lmB: BlockHash, lmAjB: BlockHash): F[Boolean] =
+    def mightEventuallyDisagree(lmB: M, lmAjB: M): F[Boolean] =
       for {
         // self justification of lmAjB or lmAjB itself. Used as a stopper for traversal
         // TODO not completely clear why try to use self justification and not just message itself
@@ -77,28 +77,25 @@ object CliqueOracle {
           .takeWhile(_.latestBlockHash != stopper)
         // if message is not in main chain with target - this is disagreement
         disagreements = lmBSelfJustifications.evalFilterNot { j =>
-          dag.isInMainChain(targetMessage, j.latestBlockHash)
+          dag.isInMainChain(targetMsg, j.latestBlockHash)
         }
         // its enough only one disagreement found to declare output false
         r <- disagreements.head.compile.last
       } yield r.isDefined
 
-    val noDisagreement = for {
-      lmA <- OptionT(dag.latestMessageHash(validatorA))
-      lmB <- OptionT(dag.latestMessageHash(validatorB))
-      // justification from `validatorB` as per latest message of `validatorA`
-      lmAjBF = dag.lookupUnsafe(lmA).map {
-        _.justifications.find(j => j.validator == validatorB).map(_.latestBlockHash)
-      }
-      lmAjB <- OptionT(lmAjBF)
-      r     <- OptionT.liftF(mightEventuallyDisagree(lmB, lmAjB).not)
-    } yield r
-
-    noDisagreement.getOrElse(false)
+    // justification from `validatorB` as per latest message of `validatorA`
+    val lmAjB = OptionT(dag.latestMessageHash(validatorA)).flatMapF(
+      dag
+        .lookupUnsafe(_)
+        .map(_.justifications.find(_.validator == validatorB).map(_.latestBlockHash))
+    )
+    val lmB = OptionT(dag.latestMessageHash(validatorB))
+    // Check for disagreement, if messages are not found return false
+    (lmB, lmAjB).tupled.semiflatMap((mightEventuallyDisagree _).tupled.map(_.not)).getOrElse(false)
   }
 
   private def computeMaxCliqueWeight[F[_]: Concurrent: Span](
-      target: M,
+      targetMsg: M,
       agreeingWeightMap: WeightMap,
       dag: BlockDagRepresentation[F]
   ): F[Long] = Span[F].traceI("compute-max-clique-weight") {
@@ -109,8 +106,8 @@ object CliqueOracle {
         .fromIterator(agreeingWeightMap.keys.toSeq.combinations(2))
         .evalFilter {
           case Seq(a, b) =>
-            neverEventuallySeeDisagreement(a, b, dag, target) &&^
-              neverEventuallySeeDisagreement(b, a, dag, target)
+            neverEventuallySeeDisagreement(a, b, dag, targetMsg) &&^
+              neverEventuallySeeDisagreement(b, a, dag, targetMsg)
         }
         .map { case Seq(a, b) => (a, b) }
 
@@ -120,7 +117,7 @@ object CliqueOracle {
   }
 
   def computeOutput[F[_]: Concurrent: Span](
-      target: M,
+      targetMsg: M,
       messageWeightMap: WeightMap,
       agreeingWeightMap: WeightMap,
       dag: BlockDagRepresentation[F]
@@ -130,13 +127,13 @@ object CliqueOracle {
     // if less then 1/2+ of stake agrees on message - it can be orphaned
     if (agreeingWeightMap.values.sum <= totalStake / 2) SafetyOracle.MIN_FAULT_TOLERANCE.pure
     else
-      computeMaxCliqueWeight[F](target, agreeingWeightMap, dag).map { mqw =>
+      computeMaxCliqueWeight[F](targetMsg, agreeingWeightMap, dag).map { mqw =>
         (mqw * 2 - totalStake) / totalStake
       }
   }
 
   def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span](
-      target: M,
+      targetMsg: M,
       dag: BlockDagRepresentation[F]
   ): F[Float] = {
 
@@ -148,31 +145,31 @@ object CliqueOracle {
           .flatMap(_.traverse(dag.isInMainChain(message, _)))
           .map(_.getOrElse(false))
 
-      fs2.Stream
+      Stream
         .fromIterator(weightMap.toIterator)
         .evalFilterAsyncProcBounded {
-          case (validator, _) => agree(validator, target)
+          case (validator, _) => agree(validator, targetMsg)
         }
         .compile
         .to(Map)
     }
 
-    val targetNotInDag = {
-      val msg = s"Fault tolerance for non existing message ${target.show} requested."
-      Log[F].error(msg).as(SafetyOracle.MIN_FAULT_TOLERANCE)
+    val targetMsgNotInDag = {
+      val errStr = s"Fault tolerance for non existing message ${targetMsg.show} requested."
+      Log[F].error(errStr).as(SafetyOracle.MIN_FAULT_TOLERANCE)
     }
 
     val doCompute = {
       val compute = for {
-        fullWeightMap     <- getCorrespondingWeightMap(target, dag)
+        fullWeightMap     <- getCorrespondingWeightMap(targetMsg, dag)
         agreeingWeightMap <- agreeingWeightMapF(fullWeightMap)
-        r                 <- computeOutput[F](target, fullWeightMap, agreeingWeightMap, dag)
+        r                 <- computeOutput[F](targetMsg, fullWeightMap, agreeingWeightMap, dag)
       } yield r
 
-      Log[F].debug(s"Calculating fault tolerance for ${target.show}.") *>
+      Log[F].debug(s"Calculating fault tolerance for ${targetMsg.show}.") *>
         Span[F].traceI("normalized-fault-tolerance")(compute)
     }
 
-    dag.contains(target).ifM(doCompute, targetNotInDag)
+    dag.contains(targetMsg).ifM(doCompute, targetMsgNotInDag)
   }
 }

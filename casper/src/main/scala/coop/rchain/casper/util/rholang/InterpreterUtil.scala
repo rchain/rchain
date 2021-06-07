@@ -254,20 +254,17 @@ object InterpreterUtil {
         // such system deploys are not mergeable, so take them from one of the parents.
         case _ => {
           val blockIndexF = (v: BlockHash) => {
-            val cached = BlockIndex.cache.get(v)
-            cached match {
-              case Some(value) => value.pure[F]
-              case None =>
-                for {
-                  b <- BlockStore[F].getUnsafe(v)
-                  index <- BlockIndex(
-                            b.blockHash,
-                            b.body.deploys,
-                            Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                            Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                            runtimeManager.getHistoryRepo
-                          )
-                } yield index
+            val cached = BlockIndex.cache.get(v).map(_.pure)
+            cached.getOrElse {
+              BlockStore[F].getUnsafe(v).flatMap { b =>
+                BlockIndex(
+                  b.blockHash,
+                  b.body.deploys,
+                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                  runtimeManager.getHistoryRepo
+                )
+              }
             }
           }
           for {
