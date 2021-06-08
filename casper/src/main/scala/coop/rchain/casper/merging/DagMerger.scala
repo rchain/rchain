@@ -14,16 +14,12 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 
 object DagMerger {
-  private type V = BlockHash
-
-  /** Type for minimal rejection unit - set of dependent deploys executed inside one block */
-  private type R = DeployChainIndex
 
   def merge[F[_]: Concurrent: Log](
       dag: BlockDagRepresentation[F],
-      lfb: V,
+      lfb: BlockHash,
       lfbPostState: Blake2b256Hash,
-      index: V => F[Vector[R]],
+      index: BlockHash => F[Vector[DeployChainIndex]],
       historyRepository: RhoHistoryRepository[F]
   ): F[(Blake2b256Hash, Seq[ByteString])] =
     for {
@@ -38,7 +34,7 @@ object DagMerger {
       // TODO reject only late units conflicting with finalised body
       lateSet <- lateBlocks.toList.traverse(index).map(_.flatten.toSet)
 
-      branchesAreConflicting = (as: Set[R], bs: Set[R]) =>
+      branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
         MergingLogic.areConflicting(
           as.map(_.eventLogIndex).toList.combineAll,
           bs.map(_.eventLogIndex).toList.combineAll
@@ -54,7 +50,7 @@ object DagMerger {
       applyTrieActions = (baseState: Blake2b256Hash, actions: Seq[HotStoreTrieAction]) =>
         historyRepository.reset(baseState).flatMap(_.doCheckpoint(actions).map(_.root))
 
-      r <- ConflictSetMerger.merge[F, R](
+      r <- ConflictSetMerger.merge[F, DeployChainIndex](
             baseState = lfbPostState,
             actualSet = actualSet,
             lateSet = lateSet,
