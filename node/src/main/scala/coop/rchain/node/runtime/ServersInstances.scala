@@ -21,6 +21,8 @@ import coop.rchain.node.diagnostics.{
 import coop.rchain.node.effects.EventConsumer
 import coop.rchain.node.{api, web}
 import coop.rchain.shared.Log
+import fs2.Stream
+import fs2.concurrent.SignallingRef
 import kamon.Kamon
 import kamon.system.SystemMetrics
 import kamon.zipkin.ZipkinReporter
@@ -30,20 +32,21 @@ import monix.execution.Scheduler
   * Container for all servers Node provides
   */
 final case class ServersInstances[F[_]](
-    kademliaServer: fs2.Stream[F, Unit],
-    transportServer: fs2.Stream[F, Unit],
-    externalApiServer: fs2.Stream[F, Unit],
-    internalApiServer: fs2.Stream[F, Unit],
+    kademliaServer: fs2.Stream[F, ExitCode],
+    transportServer: fs2.Stream[F, ExitCode],
+    externalApiServer: fs2.Stream[F, ExitCode],
+    internalApiServer: fs2.Stream[F, ExitCode],
     httpServer: fs2.Stream[F, ExitCode],
-    adminHttpServer: fs2.Stream[F, ExitCode]
+    adminHttpServer: fs2.Stream[F, ExitCode],
+    kamonReporter: fs2.Stream[F, ExitCode]
 )
 
 object ServersInstances {
   // format: off
   def build[F[_]
-  /* Execution */   : Concurrent: Monixable: ConcurrentEffect
-  /* P2P */         : NodeDiscovery: KademliaStore: ConnectionsCell: RPConfAsk
-  /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: off
+  /* Execution */ : Concurrent : Monixable : ConcurrentEffect
+  /* P2P */ : NodeDiscovery : KademliaStore : ConnectionsCell : RPConfAsk
+  /* Diagnostics */ : Metrics : Log : EventConsumer : Timer] // format: on
   (
       apiServers: APIServers,
       reportingCasper: ReportingCasper[F],
@@ -58,89 +61,90 @@ object ServersInstances {
       grpcScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[ServersInstances[F]] = {
 
-    val transportServerStream = fs2
-      .Stream(
-        GrpcTransportServer
-          .acquireServer[F](
-            nodeConf.protocolServer.networkId,
-            nodeConf.protocolServer.port,
-            nodeConf.tls.certificatePath,
-            nodeConf.tls.keyPath,
-            nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
-            nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
-            nodeConf.protocolServer.maxMessageConsumers
-          )
-      )
-      .evalMap(
-        _.start(
-          grpcPacketHandler,
-          grpcStreamHandler
-        ) >> Log[F].info(s"Listening for traffic on $address.")
-      )
-
-    val kademliaServerStream = fs2.Stream
-      .eval(
-        discovery
-          .acquireKademliaRPCServer(
-            nodeConf.protocolServer.networkId,
-            nodeConf.peersDiscovery.port,
-            KademliaHandleRPC.handlePing[F],
-            KademliaHandleRPC.handleLookup[F]
-          )
-      )
-      .evalMap(
-        server =>
-          server.start >> Log[F]
-            .info(s"Kademlia RPC server started at $host:${server.port}")
-      )
-
-    val externalApiServerStream = fs2.Stream
-      .eval(
-        api.acquireExternalServer[F](
-          nodeConf.apiServer.host,
-          nodeConf.apiServer.portGrpcExternal,
-          grpcScheduler,
-          apiServers.deploy,
-          nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-          nodeConf.apiServer.keepAliveTime,
-          nodeConf.apiServer.keepAliveTimeout,
-          nodeConf.apiServer.permitKeepAliveTime,
-          nodeConf.apiServer.maxConnectionIdle,
-          nodeConf.apiServer.maxConnectionAge,
-          nodeConf.apiServer.maxConnectionAgeGrace
-        )
-      )
-      .evalMap(
-        server =>
-          server.start >> Log[F]
-            .info(s"External API server started at ${nodeConf.apiServer.host}:${server.port}")
-      )
-
-    val internalApiServerStream = fs2.Stream
-      .eval(
-        api.acquireInternalServer[F](
-          nodeConf.apiServer.host,
-          nodeConf.apiServer.portGrpcInternal,
-          grpcScheduler,
-          apiServers.repl,
-          apiServers.deploy,
-          apiServers.propose,
-          nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
-          nodeConf.apiServer.keepAliveTime,
-          nodeConf.apiServer.keepAliveTimeout,
-          nodeConf.apiServer.permitKeepAliveTime,
-          nodeConf.apiServer.maxConnectionIdle,
-          nodeConf.apiServer.maxConnectionAge,
-          nodeConf.apiServer.maxConnectionAgeGrace
-        )
-      )
-      .evalMap(
-        server =>
-          server.start >> Log[F]
-            .info(s"Internal API server started at $host:${server.port}")
-      )
+    val kademliaStartupMsg = s"Kademlia RPC server started at $host:${nodeConf.peersDiscovery.port}"
+    val extenalRPCStartupMsg =
+      s"External RPC server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portGrpcExternal}"
+    val internalRPCStartupMsg =
+      s"Internal RPC server started at $host:${nodeConf.apiServer.portGrpcInternal}"
+    val extenalHTTPStartupMsg =
+      s"External HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
+    val internalHTTPStartupMsg =
+      s"Internal HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
+    val kamonReporterStartupMsg    = s"Starting Kamon reporters."
+    val transportServerStartupMsg  = s"Listening for traffic on $address."
+    val kademliaShutdownMsg        = s"Shutting down Kademlia RPC server."
+    val extenalRPCShutdownMsg      = s"Shutting down external RPC server."
+    val internalRPCShutdownMsg     = s"Shutting down internal RPC server."
+    val extenalHTTPShutdownMsg     = s"Shutting down external HTTP API server."
+    val internalHTTPShutdownMsg    = s"Shutting down internal HTTP API server."
+    val kamonReporterShutdownMsg   = s"Shutting down Kamon reporters."
+    val transportServerShutdownMsg = s"Shutting down transport server."
 
     val prometheusReporter = new NewPrometheusReporter()
+
+    val transportServer =
+      GrpcTransportServer
+        .acquireServer[F](
+          nodeConf.protocolServer.networkId,
+          nodeConf.protocolServer.port,
+          nodeConf.tls.certificatePath,
+          nodeConf.tls.keyPath,
+          nodeConf.protocolServer.grpcMaxRecvMessageSize.toInt,
+          nodeConf.protocolServer.grpcMaxRecvStreamMessageSize,
+          nodeConf.protocolServer.maxMessageConsumers
+        )
+
+    val kademliaServer =
+      discovery
+        .acquireKademliaRPCServer(
+          nodeConf.protocolServer.networkId,
+          nodeConf.peersDiscovery.port,
+          KademliaHandleRPC.handlePing[F],
+          KademliaHandleRPC.handleLookup[F]
+        )
+
+    val externalApiServer =
+      api.acquireExternalServer[F](
+        nodeConf.apiServer.host,
+        nodeConf.apiServer.portGrpcExternal,
+        grpcScheduler,
+        apiServers.deploy,
+        nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+        nodeConf.apiServer.keepAliveTime,
+        nodeConf.apiServer.keepAliveTimeout,
+        nodeConf.apiServer.permitKeepAliveTime,
+        nodeConf.apiServer.maxConnectionIdle,
+        nodeConf.apiServer.maxConnectionAge,
+        nodeConf.apiServer.maxConnectionAgeGrace
+      )
+
+    val internalApiServer =
+      api.acquireInternalServer[F](
+        nodeConf.apiServer.host,
+        nodeConf.apiServer.portGrpcInternal,
+        grpcScheduler,
+        apiServers.repl,
+        apiServers.deploy,
+        apiServers.propose,
+        nodeConf.apiServer.grpcMaxRecvMessageSize.toInt,
+        nodeConf.apiServer.keepAliveTime,
+        nodeConf.apiServer.keepAliveTimeout,
+        nodeConf.apiServer.permitKeepAliveTime,
+        nodeConf.apiServer.maxConnectionIdle,
+        nodeConf.apiServer.maxConnectionAge,
+        nodeConf.apiServer.maxConnectionAgeGrace
+      )
+
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
+    val reconfigureKamon =
+      Concurrent[F].delay({
+        Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
+        if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
+        if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
+        if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
+        if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
+        if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
+      })
 
     for {
       httpServerStream <- web.aquireHttpServer[F](
@@ -152,10 +156,6 @@ object ServersInstances {
                            webApi,
                            nodeConf.apiServer.maxConnectionIdle
                          )
-      // Note - here http servers are not really stated, only worker streams are created.
-      _ <- Log[F].info(
-            s"HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portHttp}"
-          )
       adminHttpServerStream <- web.aquireAdminHttpServer[F](
                                 nodeConf.apiServer.host,
                                 nodeConf.apiServer.portAdminHttp,
@@ -163,24 +163,55 @@ object ServersInstances {
                                 nodeConf.apiServer.maxConnectionIdle
                               )
 
-      _ <- Log[F].info(
-            s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
-          )
+      // single value discrete stream that won't ever emit true
+      discreteFalseStream <- SignallingRef[F, Boolean](false).map(_.discrete)
+      runForever = (stream: Stream[F, Unit]) =>
+        stream *> (discreteFalseStream.takeWhile(_ === false).drain ++ Stream(ExitCode.Success))
 
-      _ = Kamon.reconfigure(kamonConf.withFallback(Kamon.config()))
-      _ = if (nodeConf.metrics.influxdb) Kamon.addReporter(new BatchInfluxDBReporter())
-      _ = if (nodeConf.metrics.influxdbUdp) Kamon.addReporter(new UdpInfluxDBReporter())
-      _ = if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
-      _ = if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
-      _ = if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
-          
+      kamonReporterStream = runForever(
+        Stream.bracket(Log[F].info(kamonReporterStartupMsg) >> reconfigureKamon)(
+          _ =>
+            Concurrent[F].delay(Kamon.stopAllReporters()) *> Log[F].info(kamonReporterShutdownMsg)
+        )
+      )
+
+      transportServerStream = runForever(
+        Stream.bracket(
+          transportServer.start(grpcPacketHandler, grpcStreamHandler) >> Log[F]
+            .info(transportServerStartupMsg)
+        )(_ => transportServer.stop() *> Log[F].info(transportServerShutdownMsg))
+      )
+
+      kademliaServerStream = runForever(
+        Stream.bracket(
+          kademliaServer.start >> Log[F].info(kademliaStartupMsg)
+        )(_ => kademliaServer.stop *> Log[F].info(kademliaShutdownMsg))
+      )
+
+      externalApiServerStream = runForever(
+        Stream.bracket(
+          externalApiServer.start >> Log[F].info(extenalRPCStartupMsg)
+        )(_ => externalApiServer.stop *> Log[F].info(extenalRPCShutdownMsg))
+      )
+
+      internalApiServerStream = runForever(
+        Stream.bracket(
+          internalApiServer.start >> Log[F].info(internalRPCStartupMsg)
+        )(_ => internalApiServer.stop *> Log[F].info(internalRPCShutdownMsg))
+      )
+
     } yield ServersInstances(
       kademliaServerStream,
       transportServerStream,
       externalApiServerStream,
       internalApiServerStream,
-      httpServerStream,
+      httpServerStream
+        .evalTap(_ => Log[F].info(extenalHTTPStartupMsg))
+        .onFinalize(Log[F].info(extenalHTTPShutdownMsg)),
       adminHttpServerStream
+        .evalTap(_ => Log[F].info(internalHTTPStartupMsg))
+        .onFinalize(Log[F].info(internalHTTPShutdownMsg)),
+      kamonReporterStream
     )
   }
 }
