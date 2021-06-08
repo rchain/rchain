@@ -43,19 +43,19 @@ object ServersInstances {
   def build[F[_]
   /* Execution */   : Concurrent: Monixable: ConcurrentEffect
   /* P2P */         : NodeDiscovery: KademliaStore: ConnectionsCell: RPConfAsk
-  /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: off
+  /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: on
   (
-    apiServers: APIServers,
-    reportingRoutes: ReportingHttpRoutes[F],
-    webApi: WebApi[F],
-    adminWebApi: AdminWebApi[F],
-    grpcPacketHandler: Protocol => F[CommunicationResponse],
-    grpcStreamHandler: Blob => F[Unit],
-    host: String,
-    address: String,
-    nodeConf: NodeConf,
-    kamonConf: Config,
-    grpcScheduler: Scheduler
+      apiServers: APIServers,
+      reportingRoutes: ReportingHttpRoutes[F],
+      webApi: WebApi[F],
+      adminWebApi: AdminWebApi[F],
+      grpcPacketHandler: Protocol => F[CommunicationResponse],
+      grpcStreamHandler: Blob => F[Unit],
+      host: String,
+      address: String,
+      nodeConf: NodeConf,
+      kamonConf: Config,
+      grpcScheduler: Scheduler
   )(implicit scheduler: Scheduler): F[ServersInstances[F]] = {
 
     val transportServerStream = fs2
@@ -148,8 +148,9 @@ object ServersInstances {
                            nodeConf.apiServer.host,
                            nodeConf.apiServer.portHttp,
                            prometheusReporter,
+                           nodeConf.apiServer.maxConnectionIdle,
                            webApi,
-                           nodeConf.apiServer.maxConnectionIdle
+                           reportingRoutes
                          )
       // Note - here http servers are not really stated, only worker streams are created.
       _ <- Log[F].info(
@@ -158,10 +159,10 @@ object ServersInstances {
       adminHttpServerStream <- web.aquireAdminHttpServer[F](
                                 nodeConf.apiServer.host,
                                 nodeConf.apiServer.portAdminHttp,
-                                adminWebApi,
                                 nodeConf.apiServer.maxConnectionIdle,
+                                adminWebApi,
                                 reportingRoutes
-      )
+                              )
 
       _ <- Log[F].info(
             s"Admin HTTP API server started at ${nodeConf.apiServer.host}:${nodeConf.apiServer.portAdminHttp}"
@@ -173,7 +174,7 @@ object ServersInstances {
       _ = if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
       _ = if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
       _ = if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
-          
+
     } yield ServersInstances(
       kademliaServerStream,
       transportServerStream,
