@@ -22,10 +22,7 @@ object ReportingRoutes {
       hash: String,
       state: F[ApiErr[BlockEventInfo]]
   ): F[ReportResponse] =
-    state.map {
-      case Left(error) => BlockReportError(hash, error)
-      case Right(b)    => BlockTracesReport(b)
-    }
+    state.map(_.fold(BlockReportError(hash, _), BlockTracesReport))
 
   def service[F[_]: Concurrent](
       blockReportAPI: BlockReportAPI[F]
