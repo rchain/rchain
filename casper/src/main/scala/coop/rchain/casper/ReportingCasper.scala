@@ -1,9 +1,9 @@
 package coop.rchain.casper
 
+import cats.Parallel
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.implicits._
-import cats.Parallel
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
@@ -16,7 +16,6 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.rholang.ReplayFailure
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -140,40 +139,29 @@ object ReportingCasper {
           _ <- runtime.reset(Blake2b256Hash.fromByteString(startHash))
           _ <- runtime.setBlockData(blockData)
           _ <- runtime.setInvalidBlocks(invalidBlocks)
+
           res <- terms.toList.traverse { term =>
-                  for {
-                    _ <- Log[F].info(
-                          s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}"
-                        )
-                    rd <- runtime
-                           .replayDeployE(withCostAccounting)(term)
-                           .map(_.semiflatMap(_ => runtime.getReport))
-                    res <- rd.value
-                    r = res match {
-                      case Left(_)  => Seq.empty[Seq[ReportingEvent]]
-                      case Right(s) => s
-                    }
-                  } yield DeployReportResult(term, r)
+                  Log[F].info(s"Replay user deploy ${PrettyPrinter.buildString(term.deploy.sig)}") *>
+                    runtime
+                      .replayDeployE(withCostAccounting)(term)
+                      .semiflatMap(_ => runtime.getReport)
+                      .getOrElse(Seq.empty)
+                      .map(DeployReportResult(term, _))
                 }
+
           sysRes <- systemDeploys.toList.traverse { term =>
-                     for {
-                       _ <- Log[F].info(s"Replay system deploy ${term.systemDeploy}")
-                       rd <- runtime
-                              .replaySystemDeployE(blockData)(term)
-                              .semiflatMap(_ => runtime.getReport)
-                              .value
-                       r = rd match {
-                         case Left(_)  => Seq.empty[Seq[ReportingEvent]]
-                         case Right(s) => s
-                       }
-                     } yield SystemDeployReportResult(term.systemDeploy, r)
+                     Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
+                       runtime
+                         .replaySystemDeployE(blockData)(term)
+                         .semiflatMap(_ => runtime.getReport)
+                         .getOrElse(Seq.empty)
+                         .map(SystemDeployReportResult(term.systemDeploy, _))
                    }
 
           checkPoint <- runtime.createCheckpoint
-          result     = ReplayResult(res, sysRes, checkPoint.root.toByteString)
-        } yield result
-    }
 
+        } yield ReplayResult(res, sysRes, checkPoint.root.toByteString)
+    }
 }
 
 class ReportingRuntime[F[_]: Sync: Span](
