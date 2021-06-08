@@ -757,11 +757,9 @@ In both cases we want to check reply data and see if everything is in order */
   def replaySystemDeploy(
       blockData: BlockData
   )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] =
-    Span[F]
-      .withMarks("replay-system-deploy")(
-        replaySystemDeployE(blockData)(processedSystemDeploy).swap.value
-      )
-      .map(_.toOption)
+    Span[F].withMarks("replay-system-deploy")(
+      replaySystemDeployE(blockData)(processedSystemDeploy).swap.toOption.value
+    )
 
   def replaySystemDeployE(
       blockData: BlockData
