@@ -114,7 +114,7 @@ The most up-to-date code is found in the `dev` branch. This brilliant, cutting-e
 
 #### Whole-project Build
 
-Befor building the project for the first time you need to generate the `rholang` parser code:
+Before building the project for the first time you need to generate the `rholang` parser code:
 ```
 > sbt clean bnfc:clean bnfc:generate
 ```
@@ -155,7 +155,46 @@ To deploy a tarball run:
 The tarball can be found in directory `node/target/universal/`
 
 #### Running
-To run rnode locally from within sbt use the revolver plugin. It will start the app in a forked JVM.
+To run RNode locally, first execute:
+```
+~/rchain$ sbt stage
+```
+This will build an executable on the path `./node/target/universal/stage/bin/rnode` relative to the repository.
+
+Next, make a directory where you would like to store the logs, keys, and other information related to your rnode testing:\
+e.x.
+```
+~$ mkdir testing
+```
+
+Inside this directory, create a new directory named `genesis` and add to `genesis` the files `bonds.txt` and `wallets.txt`:
+```
+~/testing$ mkdir genesis
+~/testing$ cd genesis
+~/testing/genesis$ touch wallets.txt
+~/testing/genesis$ touch bonds.txt
+```
+
+Populate `bonds.txt` with the following information: 
+```
+04688b8920885b3d41d517a5a5d3088ae4b801938855e5cb215cfc9bb4e857bde1f5c559d57a8332be1308a282b69e542184ee8231e75f8287a3aa8fe91d5293c4 320000000
+040ee2bbd611a0d630d04574ba9d4b11b05e84d834b0e918d1445ae0d4e6152cfe1b4ea8daeadd8e212d66ad4bb312d4e236b9b0a187326ea40d17a7d137934f62 750000000
+042be28cef3700a6f5d95ec670af061ec69002efee4d553e398b032ea1f5cb9550c262ef06a46f9cdec65660a66d05dd27cbb84e8e714d84822523395ee7cc3790 480000000
+```
+
+Populate `wallets.txt` with rev wallet[s] with which you would like to perform testing. These can be generated using the RNode client testing page located at https://tgrospic.github.io/rnode-client-js/. When adding wallets to `wallets.txt`, use the format `public_ethereum_key,rev_balance,0`:\
+e.x.
+```
+~/testing/genesis$ echo "96c44b4cea933e6ebab8cc481a407bc1af99a4ac,10000000000,0" >> wallets.txt
+```
+
+Finally, run a standalone RNode using the command: 
+```
+~$ rchain/node/target/universal/stage/bin/rnode run -s --data-dir testing
+```
+Add additional flags to this command as necessary. To see a list of flags, run `~$ rchain/node/target/universal/stage/bin/rnode`
+
+To run rnode locally from the sbt shell, run: 
 ```
 > sh> sbt
 > sbt:rchain> project node
