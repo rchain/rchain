@@ -24,9 +24,6 @@ import org.http4s.server.middleware.CORS
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 package object web {
-  // TODO: Temp until web API is refactored with one effect type.
-  def natId[F[_]]: F ~> F = λ[F ~> F](x => x)
-
   def aquireHttpServer[F[_]: ConcurrentEffect: Timer: RPConfAsk: NodeDiscovery: ConnectionsCell: EventConsumer: Log](
       reporting: Boolean,
       host: String = "0.0.0.0",

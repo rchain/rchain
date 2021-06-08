@@ -190,13 +190,12 @@ class WebApiRoutesTest extends FlatSpec with Matchers {
   implicit val decodePrepareResponse: Decoder[PrepareResponse]   = deriveDecoder[PrepareResponse]
   implicit val encodePrepareRequest: Encoder[PrepareRequest]     = deriveEncoder[PrepareRequest]
   implicit val log                                               = new Log.NOPLog[Task]
-  implicit val taskId                                            = natId[Task]
 
   val api   = genWebApi
-  val route = WebApiRoutes.service[Task, Task](api)
+  val route = WebApiRoutes.service[Task](api)
 
   val adminApi   = genAdminWebApi
-  val adminRoute = AdminWebApiRoutes.service[Task, Task](adminApi)
+  val adminRoute = AdminWebApiRoutes.service[Task](adminApi)
 
   "GET getBlock" should "detailed block info" in {
     val resp     = route.run(Request[Task](method = Method.GET, uri = Uri(path = "block/" + blockHash)))
