@@ -783,9 +783,7 @@ In both cases we want to check reply data and see if everything is in order */
         )
         replaySystemDeployInternalE(closeBlockDeploy, processedSystemDeploy)
       case Empty =>
-        EitherT(
-          ReplayFailure.internalError(new Exception("Expected system deploy")).asLeft[Unit].pure
-        )
+        EitherT.leftT(ReplayFailure.internalError(new Exception("Expected system deploy")))
     }
   }
 }
