@@ -42,12 +42,15 @@ object ReportingRoutes {
         .withKebabCaseConstructorNames
         .withKebabCaseMemberNames
 
-    object BlockHashQueryParamMatcher extends QueryParamDecoderMatcher[String]("blockHash")
+    object BlockHashQueryParamMatcher   extends QueryParamDecoderMatcher[String]("blockHash")
+    object ForceReplayQueryParamMatcher extends QueryParamDecoderMatcher[Boolean]("forceReplay")
     implicit val encodeReportResponse = jsonEncoderOf[F, ReportResponse]
 
     HttpRoutes.of[F] {
-      case GET -> Root / "trace" :? BlockHashQueryParamMatcher(hash) =>
-        Ok { transforResult(hash, blockReportAPI.blockReport(hash, forceReplay = false)) }
+      case GET -> Root / "trace" :? BlockHashQueryParamMatcher(hash) +& ForceReplayQueryParamMatcher(
+            forceReplay
+          ) =>
+        Ok { transforResult(hash, blockReportAPI.blockReport(hash, forceReplay = forceReplay)) }
     }
   }
 }
