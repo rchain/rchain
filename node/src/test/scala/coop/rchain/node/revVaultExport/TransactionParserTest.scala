@@ -1,14 +1,15 @@
-package coop.rchain.node.balance
+package coop.rchain.node.revVaultExport
+
 import coop.rchain.node.revVaultExport.reporting.Transaction
-import org.scalatest.{FlatSpec, Matchers}
 import coop.rchain.node.revVaultExport.reporting.Transaction.{
   deployInfoJ,
   transactionValueCodec,
   TransactionInfo
 }
-import scodec.bits.BitVector
 import io.circe.generic.auto._
 import io.circe.syntax._
+import org.scalatest.{FlatSpec, Matchers}
+import scodec.bits.BitVector
 
 /**
   * This is just some tests to be ensure scala code json encoder and decoder are fully compatible with Python version.
