@@ -1,7 +1,9 @@
 package coop.rchain.node.revVaultExport.mainNet1
 
 import cats.effect._
+import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revVaultExport.StateBalances
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -49,6 +51,18 @@ final case class StateOptions(arguments: Seq[String]) extends ScallopConf(argume
 
 }
 object StateBalanceMain {
+  import coop.rchain.models.rholang.implicits._
+
+  // hard-coded value in RevVault.rho
+  val genesisVaultMapDepth = 2
+  // The way to get this Unforgeable name needs reporting casper to get all the concrete comm events.
+  // Anyway, as long as RevVault.rho and genesis doesn't change, this value would be fixed.
+  val genesisVaultMapPar: Par = GPrivate(
+    ByteString.copyFrom(
+      Base16.unsafeDecode("2dea7213bab34c96d4d3271f9b9dcb0b50a242de7de2177da615d9de23106afd")
+    )
+  )
+
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
     val options   = StateOptions(args)
@@ -63,7 +77,12 @@ object StateBalanceMain {
     implicit val tc       = Concurrent[Task]
 
     val task: Task[Unit] = for {
-      stateBalances <- StateBalances.main(blockHash, dataDir)
+      stateBalances <- StateBalances.read(
+                        blockHash,
+                        genesisVaultMapDepth,
+                        genesisVaultMapPar,
+                        dataDir
+                      )
       _ = {
         val file = stateBalancesFile.toFile
         val bw   = new PrintWriter(file)

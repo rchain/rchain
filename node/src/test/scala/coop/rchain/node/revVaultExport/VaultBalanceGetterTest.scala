@@ -3,6 +3,7 @@ package coop.rchain.node.revVaultExport
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
+import coop.rchain.node.revVaultExport.mainNet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import monix.execution.Scheduler.Implicits.global
@@ -53,8 +54,14 @@ class VaultBalanceGetterTest extends FlatSpec {
         balances <- node.runtimeManager.withRuntime(
                      runtime =>
                        for {
-                         _      <- runtime.reset(genesisPostStateHash)
-                         result <- VaultBalanceGetter.getAllVaultBalance(runtime)
+                         _                     <- runtime.reset(genesisPostStateHash)
+                         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
+                         vaultChannel          = StateBalanceMain.genesisVaultMapPar
+                         result <- VaultBalanceGetter.getAllVaultBalance(
+                                    vaultTreeHashMapDepth,
+                                    vaultChannel,
+                                    runtime
+                                  )
                          // 9000000 is hard coded in genesis block generation
                        } yield result
                    )

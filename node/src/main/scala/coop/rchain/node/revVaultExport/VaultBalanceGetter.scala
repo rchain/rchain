@@ -1,9 +1,8 @@
 package coop.rchain.node.revVaultExport
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString}
 import coop.rchain.models.rholang.implicits._
@@ -14,16 +13,6 @@ import coop.rchain.rholang.interpreter.accounting.Cost
 import scala.util.Random
 
 object VaultBalanceGetter {
-
-  // hard-coded value in RevVault.rho
-  private val genesisVaultMapDepth = 2
-  // The way to get this Unforgeable name needs reporting casper to get all the concrete comm events.
-  // Anyway, as long as RevVault.rho and genesis doesn't change, this value would be fixed.
-  private val genesisVaultMapPar = GPrivate(
-    ByteString.copyFrom(
-      Base16.unsafeDecode("2dea7213bab34c96d4d3271f9b9dcb0b50a242de7de2177da615d9de23106afd")
-    )
-  )
 
   private def newReturnName: Par =
     GPrivate(ByteString.copyFromUtf8(Random.alphanumeric.take(10).foldLeft("")(_ + _)))
@@ -64,9 +53,13 @@ object VaultBalanceGetter {
       )
     } yield result
 
-  def getAllVaultBalance[F[_]: Sync](runtime: RhoRuntime[F]): F[List[(ByteString, Long)]] =
+  def getAllVaultBalance[F[_]: Sync](
+      vaultTreeHashMapDepth: Int,
+      vaultChannel: Par,
+      runtime: RhoRuntime[F]
+  ): F[List[(ByteString, Long)]] =
     for {
-      vaultMap <- RhoTrieTraverser.traverseTrie(genesisVaultMapDepth, genesisVaultMapPar, runtime)
+      vaultMap <- RhoTrieTraverser.traverseTrie(vaultTreeHashMapDepth, vaultChannel, runtime)
       extracted = RhoTrieTraverser.vecParMapToMap(
         vaultMap,
         p => p.exprs.head.getGByteArray,

@@ -2,7 +2,7 @@ package coop.rchain.node.revVaultExport
 
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -21,8 +21,10 @@ import scala.concurrent.ExecutionContext
 
 object StateBalances {
 
-  def main[F[_]: Concurrent: Parallel: ContextShift](
+  def read[F[_]: Concurrent: Parallel: ContextShift](
       blockHash: String,
+      vaultTreeHashMapDepth: Int,
+      vaultChannel: Par,
       dataDir: Path
   )(implicit scheduler: ExecutionContext): F[List[(ByteString, Long)]] = {
     val oldRSpacePath = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
@@ -48,7 +50,11 @@ object StateBalances {
       _ <- rhoRuntime.reset(
             Blake2b256Hash.fromByteString(block.body.state.postStateHash)
           )
-      balances <- VaultBalanceGetter.getAllVaultBalance(rhoRuntime)
+      balances <- VaultBalanceGetter.getAllVaultBalance(
+                   vaultTreeHashMapDepth,
+                   vaultChannel,
+                   rhoRuntime
+                 )
     } yield balances
   }
 }
