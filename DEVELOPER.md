@@ -19,7 +19,7 @@ brew install sbt
 brew install jflex
 curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
 cabal update
-cabal install bnfc
+cabal install BNFC
 ```
 
 Download and run the installer of the [Haskell Platform](https://www.haskell.org/platform/mac.html#osx)
@@ -34,7 +34,7 @@ sudo apt-get install sbt
 sudo apt-get install jflex
 sudo apt-get install haskell-platform
 cabal update
-cabal install bnfc
+cabal install BNFC
 ```
 
 #### Development environment on Fedora
@@ -44,7 +44,7 @@ sudo dnf --enablerepo=bintray--sbt-rpm install sbt
 sudo dnf install jflex
 sudo dnf install haskell-platform
 cabal update
-cabal install bnfc
+cabal install BNFC
 ```
 
 #### Development environment on ArchLinux
@@ -54,7 +54,7 @@ sudo pacman -S stack ghc # for building BNFC
 sudo pacman -S jdk8-openjdk sbt
 trizen -S jflex
 cabal update
-cabal install bnfc
+cabal install BNFC
 ```
 
 ### Compile all projects and generate executable
