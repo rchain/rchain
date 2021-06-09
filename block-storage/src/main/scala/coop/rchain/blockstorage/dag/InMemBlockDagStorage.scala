@@ -3,6 +3,7 @@ package coop.rchain.blockstorage.dag
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, deployData, parentHashes}
@@ -14,7 +15,7 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
+import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord}
 import coop.rchain.shared.Log
 
 import scala.collection.immutable.HashSet
@@ -141,7 +142,7 @@ final class InMemBlockDagStorage[F[_]: Concurrent: Sync: Log](
                                                     s"Block ${Base16.encode(block.blockHash.toByteArray)} sender is empty"
                                                   ) >> newValidatorsLatestMessages.pure[F]
                                                 } else if (block.sender
-                                                             .size() == Validator.Length) {
+                                                             .size() == BlockHash.Length) {
                                                   (newValidatorsLatestMessages + (
                                                     (
                                                       block.sender,

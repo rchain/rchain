@@ -4,7 +4,7 @@ import cats.Monoid
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.InMemBlockDagStorage
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, InMemBlockDagStorage}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
@@ -22,7 +22,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
-import coop.rchain.store.LazyKeyValueCache
+import coop.rchain.store.{InMemoryStoreManager, LazyKeyValueCache}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
@@ -393,7 +393,8 @@ trait MergeabilityRules {
                           baseCheckpoint.root,
                           historyRepo
                         )
-            dagStore <- InMemBlockDagStorage.create[Task]
+            kvm      = new InMemoryStoreManager
+            dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
             bBlock = getRandomBlock(
               setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
               setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,

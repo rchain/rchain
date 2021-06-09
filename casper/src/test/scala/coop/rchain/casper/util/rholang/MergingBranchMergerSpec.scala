@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.InMemBlockDagStorage
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
+import coop.rchain.store.InMemoryStoreManager
 import fs2.Stream
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -344,7 +345,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         def mkLayer(
             startPreStateHash: StateHash,
             n: Int,
-            inMemBlockDagStorage: InMemBlockDagStorage[Task]
+            dagStore: BlockDagStorage[Task]
         ): Task[StateHash] =
           for {
             // create state on first validator
@@ -355,7 +356,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               setParentsHashList = List().some,
               setDeploys = b._2.some
             )
-            _ <- inMemBlockDagStorage.insert(base, false)
+            _ <- dagStore.insert(base, false)
 
             // create children an all other
             baseChildren <- mkTailStates(b._1, n * 2 + 2, (n * 2 + 2).toLong)
@@ -368,7 +369,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                   setDeploys = s._2.some
                 )
             )
-            _ <- mergingBlocks.traverse(inMemBlockDagStorage.insert(_, false))
+            _ <- mergingBlocks.traverse(dagStore.insert(_, false))
 
             s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
             _ = println(s)
@@ -386,8 +387,8 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                         )
                         .map(_.toMap)
 
-            _   <- inMemBlockDagStorage.addFinalizedBlockHash(base.blockHash)
-            dag <- inMemBlockDagStorage.getRepresentation
+            _   <- dagStore.addFinalizedBlockHash(base.blockHash)
+            dag <- dagStore.getRepresentation
             // merge children to get next preStateHash
             v <- DagMerger.merge[Task](
                   dag,
@@ -403,8 +404,9 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             _                            = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
           } yield nextPreStateHash
 
+        val kvm = new InMemoryStoreManager
         for {
-          dagStore <- InMemBlockDagStorage.create[Task]
+          dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
           _        <- mkLayer(genesisPostStateHash, 0, dagStore)
         } yield ()
       }
