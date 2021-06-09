@@ -69,7 +69,7 @@ sbt:rchain> compile
 sbt:rchain> test:compile
 
 # Create executable
-# path: rchain/node/target/universal/stage/bin/rnode
+# path: ./node/target/universal/stage/bin/rnode
 sbt:rchain> stage
 
 # Delete all files created in build process

@@ -104,7 +104,7 @@ compile
 test:compile
 
 # Compile and create local executable
-# path: rchain/node/target/universal/stage/bin/rnode
+# path: ./node/target/universal/stage/bin/rnode
 stage
 
 # Compile Docker image

@@ -190,7 +190,7 @@ $ sbt clean rholang/bnfc:clean rholang/bnfc:generate compile node/docker:publish
 Run the resulting binary with:
 
 ```bash
-$ ./node/target/docker/stage/opt/docker/bin/rnode
+$ ./node/target/universal/stage/bin/rnode
 ```
 
 For more detailed instructions, see the [developer guide](DEVELOPER.md).
