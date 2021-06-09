@@ -57,24 +57,31 @@ cabal update
 cabal install bnfc
 ```
 
-#### Building and running
-Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
+### Compile all projects and generate executable
 
-Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
+Building some of the subprojects is just a matter of `sbt compile`.
 
-Example
-```scala
-sbt:rchain> node/assembly
-[info] Including: JLex.jar
-[info] Including: log4s_2.12-1.4.0.jar
-[info] Including: java-cup-11b-runtime.jar
+```sh
+# Compile all projects
+sbt:rchain> compile
 
-(...)
+# Compile all projects with tests
+sbt:rchain> test:compile
 
-[info] SHA-1: bd4471642bb340c8b1fc0571fc614902c5bafbb2
-[info] Packaging /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar ...
-[info] Done packaging.
-[success] Total time: 25 s, completed Mar 26, 2018 3:36:09 PM
+# Create executable
+# path: rchain/node/target/universal/stage/bin/rnode
+sbt:rchain> stage
+
+# Delete all files created in build process
+sbt:rchain> clean
+```
+
+Default memory limits may not be sufficient so additional options for _sbt_ can be specified. They can be added to `.bashrc` file.
+
+Increase heap memory and thread stack size. Disable _supershell_ if empty lines are printed in _sbt_ output.
+
+```sh
+export SBT_OPTS="-Xmx4g -Xss2m -Dsbt.supershell=false"
 ```
 
 ## Information for developers
@@ -112,16 +119,13 @@ The build is organized into several, mostly autonomous projects. These projects 
 
 The most up-to-date code is found in the `dev` branch. This brilliant, cutting-edge source is periodically merged into `master`, which branch should represent a more stable, tested version.
 
-#### Whole-project Build
+#### Compile only Rholang with parser generator
 
-Befor building the project for the first time you need to generate the `rholang` parser code:
+Inside `rholang`  project is BNFC grammar specification as a source for parser generator. It will run as part of build compile step but it can be run separately, for example to clean and generate parser:  
 ```
-> sbt clean bnfc:clean bnfc:generate
-```
-Please check the prerequistes on your machine if the code generation fails.
-Then build the whole project with all submodules:
-```
-> sbt compile
+> sbt rholang/clean bnfc:generate
+
+> sbt rholang/clean rchain/compile
 ```
 
 #### Packaging
@@ -183,6 +187,8 @@ You will need a virtual machine running the appropriate version of Linux.
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
 
 ## Description of subprojects
+
+More info about subprojects can be found in the [Wiki](https://github.com/rchain/rchain/wiki/The-philosophy-of-RChain-node-architecture).
 
 ### Communication
 
