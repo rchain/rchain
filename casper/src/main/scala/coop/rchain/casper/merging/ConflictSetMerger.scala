@@ -63,9 +63,13 @@ object ConflictSetMerger {
       (newState, applyActionsTime)      = r
       overallChanges                    = s"${allChanges.datumChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.joinsIndex.size} J"
       logStr = s"Merging done: " +
-        s"computed branches in ${branchesTime}; " +
+        s"late set size ${lateSet.size}; " +
+        s"actual set size ${actualSet.size}; " +
+        s"computed branches (${branches.size}) in ${branchesTime}; " +
         s"conflicts map in ${conflictsMapTime}; " +
-        s"rejection options in ${rejectionOptionsTime}; " +
+        s"rejection options (${rejectionOptions.size}) in ${rejectionOptionsTime}; " +
+        s"optimal rejection set size ${optimalRejection.size}; " +
+        s"rejected as late dependency ${rejectedAsDependents.size}; " +
         s"changes combined (${overallChanges}) in ${combineAllChanges}; " +
         s"trie actions (${trieActions.size}) in ${computeActionsTime}; " +
         s"actions applied in ${applyActionsTime}"

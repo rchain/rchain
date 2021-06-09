@@ -7,7 +7,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
-import coop.rchain.casper.blocks.merger.{CasperMergingDagReader, MergingVertex}
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
@@ -253,61 +252,36 @@ object InterpreterUtil {
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
         // such system deploys are not mergeable, so take them from one of the parents.
-        case parents => {
-          val tipsHashes = parents.map(_.blockHash)
-          val lfbHash    = s.lastFinalizedBlock
-          for {
-            tips <- BlockStore[F]
-                     .getUnsafe(tipsHashes)
-                     .map(
-                       b =>
-                         MergingVertex(
-                           b.blockHash,
-                           b.body.state.postStateHash,
-                           b.body.state.preStateHash,
-                           b.body.deploys.toSet
-                         )
-                     )
-                     .compile
-                     .toList
-            base <- BlockStore[F]
-                     .getUnsafe(lfbHash)
-                     .map(
-                       b =>
-                         MergingVertex(
-                           b.blockHash,
-                           b.body.state.postStateHash,
-                           b.body.state.preStateHash,
-                           b.body.deploys.toSet
-                         )
-                     )
-            blockIndex = (v: MergingVertex) => {
-              val cached = BlockIndex.cache.get(v.blockHash)
-              cached match {
-                case Some(value) => value.pure[F]
-                case None =>
-                  for {
-                    b <- BlockStore[F].getUnsafe(v.blockHash)
-                    index <- BlockIndex(
-                              b.blockHash,
-                              b.body.deploys,
-                              Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                              Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                              runtimeManager.getHistoryRepo
-                            )
-                  } yield index
-              }
-            }
-            r <- DagMerger.merge[F, MergingVertex](
-                  tips,
-                  base,
-                  new CasperMergingDagReader(s.dag),
-                  v => s.dag.isFinalized(v.blockHash),
-                  v => blockIndex(v).map(_.deployChains),
-                  v => Blake2b256Hash.fromByteString(v.postStateHash),
+        case _ => {
+          val blockIndexF = (v: BlockHash) => {
+            val cached = BlockIndex.cache.get(v).map(_.pure)
+            cached.getOrElse {
+              BlockStore[F].getUnsafe(v).flatMap { b =>
+                BlockIndex(
+                  b.blockHash,
+                  b.body.deploys,
+                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
                   runtimeManager.getHistoryRepo
                 )
-          } yield r
+              }
+            }
+          }
+          for {
+            lfbState <- BlockStore[F]
+                         .getUnsafe(s.lastFinalizedBlock)
+                         .map(_.body.state.postStateHash)
+                         .map(Blake2b256Hash.fromByteString)
+            r <- DagMerger.merge[F](
+                  s.dag,
+                  s.lastFinalizedBlock,
+                  lfbState,
+                  blockIndexF(_).map(_.deployChains),
+                  runtimeManager.getHistoryRepo
+                )
+            (state, rejected) = r
+          } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
+
         }
       }
     }

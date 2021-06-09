@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import scala.collection.immutable.HashMap
-import cats.effect.{Resource, Sync}
+import cats.effect.{Concurrent, Resource, Sync}
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
 import EngineCell._
@@ -113,7 +113,7 @@ class BlocksResponseAPITest
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
+            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.showMainChain[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
@@ -141,7 +141,7 @@ class BlocksResponseAPITest
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           logEff     = new LogStub[Task]
           cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
+            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
@@ -168,7 +168,7 @@ class BlocksResponseAPITest
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
+          .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
         blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
                            engineCell,
@@ -196,7 +196,7 @@ class BlocksResponseAPITest
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Sync[Task], logEff, metrics, span)
+            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
                              Sync[Task],
                              engineCell,

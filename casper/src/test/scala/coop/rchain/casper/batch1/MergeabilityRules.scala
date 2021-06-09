@@ -4,15 +4,17 @@ import cats.Monoid
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, InMemBlockDagStorage}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.syntax._
-import coop.rchain.dag.InMemDAG
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.models.{BindPattern, Expr, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
@@ -20,7 +22,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
-import coop.rchain.store.LazyKeyValueCache
+import coop.rchain.store.{InMemoryStoreManager, LazyKeyValueCache}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
@@ -391,24 +393,41 @@ trait MergeabilityRules {
                           baseCheckpoint.root,
                           historyRepo
                         )
-            leftNode  = MergingNode(leftIndex, isFinalized = false, leftCheckpoint.root)
-            rightNode = MergingNode(rightIndex, isFinalized = false, rightCheckpoint.root)
-            lfbNode   = MergingNode(baseIndex, isFinalized = true, baseCheckpoint.root)
+            kvm      = new InMemoryStoreManager
+            dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
+            bBlock = getRandomBlock(
+              setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
+              setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List.empty.some
+            )
+            rBlock = getRandomBlock(
+              setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setPostStateHash = ByteString.copyFrom(rightCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List(bBlock.blockHash).some
+            )
+            lBlock = getRandomBlock(
+              setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List(bBlock.blockHash).some
+            )
+            _   <- dagStore.insert(bBlock, false)
+            _   <- dagStore.insert(lBlock, false)
+            _   <- dagStore.insert(rBlock, false)
+            dag <- dagStore.getRepresentation
 
-            childMap   = ListMap(lfbNode -> Set(rightNode, leftNode))
-            parentsMap = ListMap(rightNode -> Set(lfbNode), leftNode -> Set(lfbNode))
-            dag        = new InMemDAG[Task, MergingNode](childMap, parentsMap)
-
-            mergedState <- DagMerger.merge[Task, MergingNode](
-                            List(leftNode, rightNode),
-                            lfbNode,
+            indices = Map(
+              bBlock.blockHash -> baseIndex,
+              rBlock.blockHash -> rightIndex,
+              lBlock.blockHash -> leftIndex
+            )
+            mergedState <- DagMerger.merge[Task](
                             dag,
-                            _.isFinalized.pure[Task],
-                            _.index.deployChains.pure[Task],
-                            v => v.postState,
+                            bBlock.blockHash,
+                            baseCheckpoint.root,
+                            indices(_).deployChains.pure[Task],
                             historyRepo
                           )
-            mergedRoot        = Blake2b256Hash.fromByteString(mergedState._1)
+            mergedRoot        = mergedState._1
             rejectedDeployOpt = mergedState._2.headOption
             referenceState = rejectedDeployOpt
               .map { v =>

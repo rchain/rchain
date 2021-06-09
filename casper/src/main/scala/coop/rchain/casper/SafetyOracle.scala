@@ -1,23 +1,14 @@
 package coop.rchain.casper
 
-import cats.Monad
+import cats.effect.Concurrent
 import cats.syntax.all._
-import cats.instances.list._
-import coop.rchain.catscontrib._
-import Catscontrib._
-import cats.data.OptionT
-import cats.effect.Sync
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.protocol.Justification
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.{Clique, ProtoUtil}
-import coop.rchain.dag.DagOps
-import coop.rchain.models.BlockMetadata
+import coop.rchain.casper.safety.CliqueOracle
+import coop.rchain.casper.syntax._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{Log, StreamT}
+import coop.rchain.shared.Log
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.
@@ -55,177 +46,24 @@ trait SafetyOracle[F[_]] {
 }
 
 object SafetyOracle extends SafetyOracleInstances {
+  val MIN_FAULT_TOLERANCE: Float                                 = -1f
+  val MAX_FAULT_TOLERANCE: Float                                 = 1f
   def apply[F[_]](implicit ev: SafetyOracle[F]): SafetyOracle[F] = ev
 }
 
 sealed abstract class SafetyOracleInstances {
-  def cliqueOracle[F[_]: Sync: Log: Metrics: Span]: SafetyOracle[F] =
-    new SafetyOracle[F] {
-      private val SafetyOracleMetricsSource: Metrics.Source =
-        Metrics.Source(CasperMetricsSource, "safety-oracle")
+  def cliqueOracle[F[_]: Concurrent: Log: Metrics: Span]: SafetyOracle[F] = new SafetyOracle[F] {
+    override def normalizedFaultTolerance(
+        blockDag: BlockDagRepresentation[F],
+        candidateBlockHash: BlockHash
+    ): F[Float] = {
+      import coop.rchain.blockstorage.syntax._
+      import coop.rchain.models.syntax._
 
-      /**
-        * To have a maximum clique of half the total weight,
-        * you need at least twice the weight of the agreeingValidatorToWeight to be greater than the total weight.
-        * If that is false, we don't need to compute agreementGraphMaxCliqueWeight
-        * as we know the value is going to be below 0 and thus useless for finalization.
-        */
-      def normalizedFaultTolerance(
-          blockDag: BlockDagRepresentation[F],
-          candidateBlockHash: BlockHash
-      ): F[Float] = Span[F].trace(SafetyOracleMetricsSource) {
-        for {
-          _ <- Log[F].debug(
-                s"Calculating faultTolearance of block ${PrettyPrinter.buildString(candidateBlockHash)} "
-              )
-          maybeCandidateMetadata <- blockDag.lookup(candidateBlockHash)
-          faultTolerance <- maybeCandidateMetadata match {
-                             case Some(candidateMetadata) =>
-                               for {
-                                 totalWeight <- computeTotalWeight(blockDag, candidateMetadata)
-                                 _           <- Span[F].mark("total-weight")
-                                 agreeingValidatorToWeight <- computeAgreeingValidatorToWeight(
-                                                               blockDag,
-                                                               candidateMetadata
-                                                             )
-                                 _ <- Span[F].mark("agreeing-validator-to-weight")
-                                 maxCliqueWeight <- if (2L * agreeingValidatorToWeight.values.sum < totalWeight) {
-                                                     0L.pure[F]
-                                                   } else {
-                                                     agreementGraphMaxCliqueWeight(
-                                                       blockDag,
-                                                       candidateMetadata,
-                                                       agreeingValidatorToWeight
-                                                     )
-                                                   }
-                                 _ <- Span[F].mark("max-clique-weight")
-
-                                 faultTolerance = 2 * maxCliqueWeight - totalWeight
-                               } yield faultTolerance.toFloat / totalWeight
-                             // if the node can to find the block, it would return -1 and regard that block as orphaned
-                             case None =>
-                               Log[F].info(
-                                 s"calculate faultTolerance blockHash ${PrettyPrinter.buildString(candidateBlockHash)} failed because it can not be found in store."
-                               ) >> (-1L).toFloat
-                                 .pure[F]
-                           }
-        } yield faultTolerance
-      }
-
-      private def computeTotalWeight(
-          blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata
-      ): F[Long] =
-        computeMainParentWeightMap(blockDag, candidateMetadata).map(weightMapTotal)
-
-      private def computeAgreeingValidatorToWeight(
-          blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata
-      ): F[Map[Validator, Long]] =
-        for {
-          weights <- computeMainParentWeightMap(blockDag, candidateMetadata)
-          agreeingWeights <- weights.toList.traverse {
-                              case (validator, stake) =>
-                                blockDag.latestMessageHash(validator).flatMap {
-                                  case Some(latestMessageHash) =>
-                                    computeCompatibility(
-                                      blockDag,
-                                      candidateMetadata,
-                                      latestMessageHash
-                                    ).map { isCompatible =>
-                                      if (isCompatible) {
-                                        Some((validator, stake))
-                                      } else {
-                                        none[(Validator, Long)]
-                                      }
-                                    }
-                                  case None =>
-                                    none[(Validator, Long)].pure[F]
-                                }
-                            }
-        } yield agreeingWeights.flatten.toMap
-
-      private def computeMainParentWeightMap(
-          blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata
-      ): F[Map[BlockHash, Long]] =
-        candidateMetadata.parents.headOption match {
-          case Some(parent) =>
-            blockDag.lookup(parent).map(_.fold(candidateMetadata.weightMap)(_.weightMap))
-          case None => candidateMetadata.weightMap.pure[F]
-        }
-
-      private def agreementGraphMaxCliqueWeight(
-          blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata,
-          agreeingValidatorToWeight: Map[Validator, Long]
-      ): F[Long] = {
-        def filterChildren(block: BlockMetadata, validator: Validator): F[StreamT[F, BlockHash]] =
-          blockDag.latestMessageHash(validator).flatMap {
-            case Some(latestByValidatorHash) =>
-              val creatorJustificationOrGenesis = block.justifications
-                .find(_.validator == block.sender)
-                .fold(block.blockHash)(_.latestBlockHash)
-              DagOps
-                .bfTraverseF[F, BlockHash](List(latestByValidatorHash)) { blockHash =>
-                  ProtoUtil.getCreatorJustificationAsListUntilGoalInMemory(
-                    blockDag,
-                    blockHash,
-                    b => b == creatorJustificationOrGenesis
-                  )
-                }
-                .pure[F]
-            case None => StreamT.empty[F, BlockHash].pure[F]
-          }
-
-        def neverEventuallySeeDisagreement(
-            first: Validator,
-            second: Validator
-        ): F[Boolean] =
-          (for {
-            firstLatestBlock <- OptionT(blockDag.latestMessage(first))
-            secondLatestOfFirstLatestHash <- OptionT.fromOption[F](
-                                              firstLatestBlock.justifications
-                                                .find {
-                                                  case Justification(validator, _) =>
-                                                    validator == second
-                                                }
-                                                .map(_.latestBlockHash)
-                                            )
-            secondLatestOfFirstLatest <- OptionT(blockDag.lookup(secondLatestOfFirstLatestHash))
-            potentialDisagreements <- OptionT.liftF(
-                                       filterChildren(secondLatestOfFirstLatest, second)
-                                     )
-            // TODO: Implement forallM on StreamT
-            result <- OptionT.liftF(potentialDisagreements.toList.flatMap(_.forallM {
-                       potentialDisagreement =>
-                         computeCompatibility(blockDag, candidateMetadata, potentialDisagreement)
-                     }))
-          } yield result).fold(false)(identity)
-
-        def computeAgreementGraphEdges: F[List[(Validator, Validator)]] =
-          (for {
-            x <- agreeingValidatorToWeight.keys
-            y <- agreeingValidatorToWeight.keys
-            if x.toString > y.toString // TODO: Order ByteString
-          } yield (x, y)).toList.filterA {
-            case (first: Validator, second: Validator) =>
-              neverEventuallySeeDisagreement(first, second) &&^ neverEventuallySeeDisagreement(
-                second,
-                first
-              )
-          }
-
-        computeAgreementGraphEdges.map { edges =>
-          Clique.findMaximumCliqueByWeight[Validator](edges, agreeingValidatorToWeight)
-        }
-      }
-
-      private def computeCompatibility(
-          blockDag: BlockDagRepresentation[F],
-          candidateMetadata: BlockMetadata,
-          targetBlockHash: BlockHash
-      ): F[Boolean] =
-        isInMainChain(blockDag, candidateMetadata, targetBlockHash)
+      CliqueOracle.normalizedFaultTolerance(
+        candidateBlockHash,
+        blockDag
+      )
     }
+  }
 }

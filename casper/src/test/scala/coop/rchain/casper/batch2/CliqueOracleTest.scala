@@ -46,6 +46,18 @@ class CliqueOracleTest
     )
 
   // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
+  /**
+    *       *     b8
+    *       |
+    *   *   *     b6 b7
+    *   | /
+    *   *   *     b4 b5
+    *   | /
+    *   *   *     b2 b3
+    *    \ /
+    *     *
+    *   c2 c1
+    */
   it should "detect finality as appropriate" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       val v1     = generateValidator("Validator One")
