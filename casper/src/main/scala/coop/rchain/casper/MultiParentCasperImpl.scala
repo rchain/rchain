@@ -128,16 +128,17 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
 
   def lastFinalizedBlock: F[BlockMessage] = {
 
-    def finalisationEffect(finalizedChildHash: BlockHash): F[Unit] =
+    def finalisationEffect(blockHash: BlockHash): F[Unit] =
       for {
-        block          <- BlockStore[F].getUnsafe(finalizedChildHash)
+        block          <- BlockStore[F].getUnsafe(blockHash)
         deploys        = block.body.deploys.map(_.deploy)
         deploysRemoved <- DeployStorage[F].remove(deploys)
         _ <- Log[F].info(
               s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                .buildString(finalizedChildHash)}."
+                .buildString(blockHash)}."
             )
-        _ <- BlockDagStorage[F].addFinalizedBlockHash(finalizedChildHash)
+        _ <- BlockDagStorage[F].addFinalizedBlockHash(blockHash)
+        _ = BlockIndex.cache.remove(block.blockHash)
       } yield ()
 
     def newLfbEffect(newLFB: BlockHash): F[Unit] =
