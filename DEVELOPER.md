@@ -84,6 +84,16 @@ Increase heap memory and thread stack size. Disable _supershell_ if empty lines 
 export SBT_OPTS="-Xmx4g -Xss2m -Dsbt.supershell=false"
 ```
 
+### IDE support
+
+For working with the project in **IntelliJ Idea IDE** it's enough to compile the project in terminal and open it in IDE which will start sbt import.
+
+If multiple versions of the JVM are installed on the system, manual selection of the default SDK may be required.
+
+![image](https://user-images.githubusercontent.com/5306205/121373119-1b1dea00-c93f-11eb-83a7-54dcb9fc6c4e.png)
+
+With _Scala (Metals)_ extension and `bloop` compiler, **VSCode editor** can also be used to work on the project.
+
 ## Information for developers
 Assure prerequisites shown above are met.
 
