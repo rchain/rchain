@@ -13,47 +13,54 @@ Setup using _nix_ can be found in the [nix](./nix) directory.
 
 #### Development environment on macOS
 
-```
+```sh
 brew install git
 brew install sbt
-brew install jflex
-curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
-cabal update
-cabal install BNFC
-```
 
-Download and run the installer of the [Haskell Platform](https://www.haskell.org/platform/mac.html#osx)
+brew install jflex
+brew install bnfc
+```
 
 #### Development environment on Ubuntu and Debian
-```
-echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+```sh
+# https://www.scala-sbt.org/1.x/docs/Installing-sbt-on-Linux.html#Ubuntu+and+other+Debian-based+distributions
+echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
+echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list
+curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo apt-key add
 sudo apt-get update
 sudo apt-get install sbt
 
 sudo apt-get install jflex
-sudo apt-get install haskell-platform
+sudo apt-get install cabal-install
 cabal update
+cabal install alex happy
 cabal install BNFC
 ```
 
 #### Development environment on Fedora
-```
-sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be necessary)
-sudo dnf --enablerepo=bintray--sbt-rpm install sbt
+```sh
+# Fedora (31 and above)
+sudo rm -f /etc/yum.repos.d/bintray-rpm.repo # remove old Bintray repo file
+curl -L https://www.scala-sbt.org/sbt-rpm.repo > sbt-rpm.repo
+sudo mv sbt-rpm.repo /etc/yum.repos.d/
+sudo dnf install sbt
+sudo dnf install java-11-openjdk
+
 sudo dnf install jflex
-sudo dnf install haskell-platform
+sudo dnf install cabal-install
 cabal update
 cabal install BNFC
 ```
 
 #### Development environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
-```
-sudo pacman -S stack ghc # for building BNFC
-sudo pacman -S jdk8-openjdk sbt
+```sh
+sudo pacman -S jdk11-openjdk sbt
+
 trizen -S jflex
+sudo pacman -S cabal-install ghc # for building BNFC
 cabal update
+cabal install alex happy
 cabal install BNFC
 ```
 
@@ -100,7 +107,7 @@ Assure prerequisites shown above are met.
 ### Developer Quick-Start
 
 When working in a single project, scope all `sbt` commands to that project. The most effective way is to maintain a running `sbt` instance, invoked from the project root:
-```
+```sh
 $ sbt
 [info] Loading settings from plugins.sbt ...
 [info] Loading global plugins from /home/kirkwood/.sbt/1.0/plugins
@@ -115,11 +122,11 @@ sbt:rspace> compile
 [... compiling rspace ...]
 ```
 but single-line commands work, too:
-```
+```sh
 $ sbt "project rspace" clean compile test
 ```
 or
-```
+```sh
 $ sbt rspace/clean rspace/compile rspace/test
 ```
 
@@ -132,16 +139,16 @@ The most up-to-date code is found in the `dev` branch. This brilliant, cutting-e
 #### Compile only Rholang with parser generator
 
 Inside `rholang`  project is BNFC grammar specification as a source for parser generator. It will run as part of build compile step but it can be run separately, for example to clean and generate parser:  
-```
-> sbt rholang/clean bnfc:generate
-
-> sbt rholang/clean rchain/compile
+```sh
+$ sbt rholang/clean bnfc:generate
+# or
+$ sbt rholang/clean rchain/compile
 ```
 
 #### Packaging
 To publish a docker image to your local repo run:
-```
-> sbt node/docker:publishLocal
+```sh
+$ sbt node/docker:publishLocal
 [... output snipped ...]
 [info] Step 8/8 : ENTRYPOINT ["\/bin\/main.sh"]
 [info]  ---> Running in 2ac7f835192d
@@ -153,8 +160,8 @@ To publish a docker image to your local repo run:
 ```
 
 Check the local docker repo:
-```
-> docker images
+```sh
+$ docker images
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
 coop.rchain/rnode   latest              5e79e6d92528        7 minutes ago       143MB
 <none>              <none>              e9b49f497dd7        47 hours ago        143MB
@@ -162,18 +169,18 @@ openjdk             8u151-jre-alpine    b1bd879ca9b3        4 months ago        
 ```
 
 To deploy a tarball run:
-```
-> sbt node/universal:packageZipTarball
+```sh
+$ sbt node/universal:packageZipTarball
 ```
 
 The tarball can be found in directory `node/target/universal/`
 
 #### Running
 To run rnode locally from within sbt use the revolver plugin. It will start the app in a forked JVM.
-```
-> sh> sbt
-> sbt:rchain> project node
-> sbt:node> reStart run -s
+```sh
+$ sbt
+sbt:rchain> project node
+sbt:node> reStart run -s
 ```
 Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
 
