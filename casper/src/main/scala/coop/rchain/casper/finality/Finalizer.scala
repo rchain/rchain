@@ -180,10 +180,10 @@ object Finalizer {
         // execute all effects
         .evalMap {
           case (lfb, _) =>
-            newLfbEffect(lfb.blockHash).as(lfb.blockHash) <*
-              dag
-                .withAncestors(lfb.blockHash, dag.isFinalized(_).not)
-                .flatMap(_.toList.traverse(finalisationEffect))
+            dag
+              .withAncestors(lfb.blockHash, dag.isFinalized(_).not)
+              .flatMap(_.toList.reverse.traverse(finalisationEffect)) >>
+              newLfbEffect(lfb.blockHash).as(lfb.blockHash)
         }
         .compile
         .last
