@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.compiler
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
@@ -13,8 +13,10 @@ case object ProcSort extends VarSort
 case object NameSort extends VarSort
 
 object ProcNormalizeMatcher {
-  // FIXME before adding any more implicits, or fields to the `*VisitInputs` classes, make the normalizer use
-  // ApplicativeAsk / MonadState instead
+
+  /**
+    * Rholang normalizer entry point
+    */
   def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
       implicit sync: Sync[M],
       env: Map[String, Par]
