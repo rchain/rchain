@@ -13,69 +13,93 @@ Setup using _nix_ can be found in the [nix](./nix) directory.
 
 #### Development environment on macOS
 
-```
+```sh
 brew install git
 brew install sbt
-brew install jflex
-curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | sh
-cabal update
-cabal install bnfc
-```
 
-Download and run the installer of the [Haskell Platform](https://www.haskell.org/platform/mac.html#osx)
+brew install jflex
+brew install bnfc
+```
 
 #### Development environment on Ubuntu and Debian
-```
-echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 2EE0EA64E40A89B84B2DF73499E82A75642AC823
+```sh
+# https://www.scala-sbt.org/1.x/docs/Installing-sbt-on-Linux.html#Ubuntu+and+other+Debian-based+distributions
+echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list
+echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list
+curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo apt-key add
 sudo apt-get update
 sudo apt-get install sbt
 
 sudo apt-get install jflex
-sudo apt-get install haskell-platform
+sudo apt-get install cabal-install
 cabal update
-cabal install bnfc
+cabal install alex happy
+cabal install BNFC
 ```
 
 #### Development environment on Fedora
-```
-sudo dnf remove sbt # uninstalling sbt if sbt 0.13 was installed (may not be necessary)
-sudo dnf --enablerepo=bintray--sbt-rpm install sbt
+```sh
+# Fedora (31 and above)
+sudo rm -f /etc/yum.repos.d/bintray-rpm.repo # remove old Bintray repo file
+curl -L https://www.scala-sbt.org/sbt-rpm.repo > sbt-rpm.repo
+sudo mv sbt-rpm.repo /etc/yum.repos.d/
+sudo dnf install sbt
+sudo dnf install java-11-openjdk
+
 sudo dnf install jflex
-sudo dnf install haskell-platform
+sudo dnf install cabal-install
 cabal update
-cabal install bnfc
+cabal install BNFC
 ```
 
 #### Development environment on ArchLinux
 You can use `pacaur` or other AUR installer instead of [`trizen`](https://github.com/trizen/trizen).
-```
-sudo pacman -S stack ghc # for building BNFC
-sudo pacman -S jdk8-openjdk sbt
+```sh
+sudo pacman -S jdk11-openjdk sbt
+
 trizen -S jflex
+sudo pacman -S cabal-install ghc # for building BNFC
 cabal update
-cabal install bnfc
+cabal install alex happy
+cabal install BNFC
 ```
 
-#### Building and running
-Building some of the subprojects is just a matter of `sbt compile`, however some (like `rholang` or `crypto`) require extra steps to build. See README.md of each subproject for details.
+### Compile all projects and generate executable
 
-Once you can build each subproject individually, run `sbt node/assembly` to build an executable. The assembled jar will be available under `./node/target/scala-2.12/rnode-assembly-x.y.z.jar`
+Building some of the subprojects is just a matter of `sbt compile`.
 
-Example
-```scala
-sbt:rchain> node/assembly
-[info] Including: JLex.jar
-[info] Including: log4s_2.12-1.4.0.jar
-[info] Including: java-cup-11b-runtime.jar
+```sh
+# Compile all projects
+sbt:rchain> compile
 
-(...)
+# Compile all projects with tests
+sbt:rchain> test:compile
 
-[info] SHA-1: bd4471642bb340c8b1fc0571fc614902c5bafbb2
-[info] Packaging /Users/rabbit/projects/rchain/node/target/scala-2.12/rnode-assembly-0.1.3.jar ...
-[info] Done packaging.
-[success] Total time: 25 s, completed Mar 26, 2018 3:36:09 PM
+# Create executable
+# path: ./node/target/universal/stage/bin/rnode
+sbt:rchain> stage
+
+# Delete all files created in build process
+sbt:rchain> clean
 ```
+
+Default memory limits may not be sufficient so additional options for _sbt_ can be specified. They can be added to `.bashrc` file.
+
+Increase heap memory and thread stack size. Disable _supershell_ if empty lines are printed in _sbt_ output.
+
+```sh
+export SBT_OPTS="-Xmx4g -Xss2m -Dsbt.supershell=false"
+```
+
+### IDE support
+
+For working with the project in **IntelliJ Idea IDE** it's enough to compile the project in terminal and open it in IDE which will start sbt import.
+
+If multiple versions of the JVM are installed on the system, manual selection of the default SDK may be required.
+
+![image](https://user-images.githubusercontent.com/5306205/121373119-1b1dea00-c93f-11eb-83a7-54dcb9fc6c4e.png)
+
+With _Scala (Metals)_ extension and `bloop` compiler, **VSCode editor** can also be used to work on the project.
 
 ## Information for developers
 Assure prerequisites shown above are met.
@@ -83,7 +107,7 @@ Assure prerequisites shown above are met.
 ### Developer Quick-Start
 
 When working in a single project, scope all `sbt` commands to that project. The most effective way is to maintain a running `sbt` instance, invoked from the project root:
-```
+```sh
 $ sbt
 [info] Loading settings from plugins.sbt ...
 [info] Loading global plugins from /home/kirkwood/.sbt/1.0/plugins
@@ -98,11 +122,11 @@ sbt:rspace> compile
 [... compiling rspace ...]
 ```
 but single-line commands work, too:
-```
+```sh
 $ sbt "project rspace" clean compile test
 ```
 or
-```
+```sh
 $ sbt rspace/clean rspace/compile rspace/test
 ```
 
@@ -112,22 +136,19 @@ The build is organized into several, mostly autonomous projects. These projects 
 
 The most up-to-date code is found in the `dev` branch. This brilliant, cutting-edge source is periodically merged into `master`, which branch should represent a more stable, tested version.
 
-#### Whole-project Build
+#### Compile only Rholang with parser generator
 
-Befor building the project for the first time you need to generate the `rholang` parser code:
-```
-> sbt clean bnfc:clean bnfc:generate
-```
-Please check the prerequistes on your machine if the code generation fails.
-Then build the whole project with all submodules:
-```
-> sbt compile
+Inside `rholang`  project is BNFC grammar specification as a source for parser generator. It will run as part of build compile step but it can be run separately, for example to clean and generate parser:  
+```sh
+$ sbt rholang/clean bnfc:generate
+# or
+$ sbt rholang/clean rchain/compile
 ```
 
 #### Packaging
 To publish a docker image to your local repo run:
-```
-> sbt node/docker:publishLocal
+```sh
+$ sbt node/docker:publishLocal
 [... output snipped ...]
 [info] Step 8/8 : ENTRYPOINT ["\/bin\/main.sh"]
 [info]  ---> Running in 2ac7f835192d
@@ -139,8 +160,8 @@ To publish a docker image to your local repo run:
 ```
 
 Check the local docker repo:
-```
-> docker images
+```sh
+$ docker images
 REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
 coop.rchain/rnode   latest              5e79e6d92528        7 minutes ago       143MB
 <none>              <none>              e9b49f497dd7        47 hours ago        143MB
@@ -148,18 +169,18 @@ openjdk             8u151-jre-alpine    b1bd879ca9b3        4 months ago        
 ```
 
 To deploy a tarball run:
-```
-> sbt node/universal:packageZipTarball
+```sh
+$ sbt node/universal:packageZipTarball
 ```
 
 The tarball can be found in directory `node/target/universal/`
 
 #### Running
 To run rnode locally from within sbt use the revolver plugin. It will start the app in a forked JVM.
-```
-> sh> sbt
-> sbt:rchain> project node
-> sbt:node> reStart run -s
+```sh
+$ sbt
+sbt:rchain> project node
+sbt:node> reStart run -s
 ```
 Now after you've done some local changes and want to test them, simply run the last command `reStart run -s` again. It will kill the running app and start a new instance containing latest changes in a completely new forked JVM.
 
@@ -183,6 +204,8 @@ You will need a virtual machine running the appropriate version of Linux.
 For a more convenient experience, you can share a folder on your Mac with the virtual machine. To do this you will need to install the VirtualBox Guest Additions. Unfortunately there are some gotchas with this. You may need to utilize one of these [solutions](https://askubuntu.com/questions/573596/unable-to-install-guest-additions-cd-image-on-virtual-box).
 
 ## Description of subprojects
+
+More info about subprojects can be found in the [Wiki](https://github.com/rchain/rchain/wiki/The-philosophy-of-RChain-node-architecture).
 
 ### Communication
 
