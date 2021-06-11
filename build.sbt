@@ -52,7 +52,7 @@ lazy val projectSettings = Seq(
     Wart.StringPlusAny,
     Wart.AnyVal
   ),
-  scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
+  scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
   scapegoatVersion in ThisBuild := "1.4.6",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
@@ -380,7 +380,7 @@ lazy val node = (project in file("node"))
       "openssl"
     )
   )
-  .dependsOn(casper, comm, crypto, rholang)
+  .dependsOn(casper % "compile->compile;test->test", comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -411,7 +411,8 @@ lazy val rholang = (project in file("rholang"))
       catsLawsTestkitTest,
       catsMtlLawsTest
     ),
-    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    // TODO: investigate if still needed?
+    // mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
       (bnfcGrammarDir in BNFCConfig).value,

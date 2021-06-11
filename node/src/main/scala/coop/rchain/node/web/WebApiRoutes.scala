@@ -14,9 +14,7 @@ import org.http4s.{HttpRoutes, Response}
 
 object WebApiRoutes {
 
-  def service[F[_]: Sync: Log, M[_]: Sync](
-      webApi: WebApi[M]
-  )(implicit mf: M ~> F): HttpRoutes[F] = {
+  def service[F[_]: Sync: Log](webApi: WebApi[F]): HttpRoutes[F] = {
     import coop.rchain.casper.protocol.{BlockInfo, LightBlockInfo}
     import io.circe._
     import io.circe.generic.auto._
@@ -45,7 +43,7 @@ object WebApiRoutes {
           }
     }
 
-    def handleRequest[A, B](req: Request[F], f: A => M[B])(
+    def handleRequest[A, B](req: Request[F], f: A => F[B])(
         implicit decoder: EntityDecoder[F, A],
         encoder: EntityEncoder[F, B]
     ): F[Response[F]] =
@@ -53,18 +51,16 @@ object WebApiRoutes {
         .attemptAs[A]
         .value
         .flatMap(_.liftTo[F])
-        .flatMap(a => mf(f(a)))
+        .flatMap(f)
         .flatMap(Ok(_))
         .handleResponseError
 
-    implicit class MEx[A](val ma: M[A]) {
+    implicit class MEx[A](val ma: F[A]) {
       // Handle GET requests
       //   case GET -> Root / "last-finalized-block" =>
       //     webApi.lastFinalizedBlock.handle
       def handle(implicit encoder: EntityEncoder[F, A]): F[Response[F]] =
-        mf(ma)
-          .flatMap(Ok(_))
-          .handleResponseError
+        ma.flatMap(Ok(_)).handleResponseError
     }
 
     implicit class RequestEx(val req: Request[F]) {
@@ -72,16 +68,14 @@ object WebApiRoutes {
       //   case req @ POST -> Root / "deploy" =>
       //     req.handle[DeployRequest, String](webApi.deploy)
       def handle[A, B](
-          f: A => M[B]
+          f: A => F[B]
       )(implicit decoder: EntityDecoder[F, A], encoder: EntityEncoder[F, B]): F[Response[F]] =
         handleRequest[A, B](req, f)
 
       // Handle POST requests without input parameters
       //   case req @ POST -> Root / "last-finalized-block" =>
       //     req.handle_(webApi.lastFinalizedBlock)
-      def handle_[B](
-          f: M[B]
-      )(implicit encoder: EntityEncoder[F, B]): F[Response[F]] =
+      def handle_[B](f: F[B])(implicit encoder: EntityEncoder[F, B]): F[Response[F]] =
         handleRequest[Unit, B](req, _ => f)
     }
 

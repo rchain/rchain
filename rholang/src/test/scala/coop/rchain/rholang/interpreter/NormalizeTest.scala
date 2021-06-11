@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import java.io.StringReader
 
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,

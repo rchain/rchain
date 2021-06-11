@@ -18,12 +18,13 @@
 
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${rnode.data.dir}/rnode.log</file>
-        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-            <!-- daily rollover -->
-            <fileNamePattern>rnodeLog.%d{yyyy-MM-dd}.log</fileNamePattern>
-            <!-- keep 30 days' worth of history capped at 3GB total size -->
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>3GB</totalSizeCap>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- rollover daily -->
+            <fileNamePattern>rnode-%d{yyyy-MM-dd}.%i.txt</fileNamePattern>
+            <!-- each file should be at most 100MB, keep 60 days worth of history, but at most 20GB -->
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>60</maxHistory>
+            <totalSizeCap>20GB</totalSizeCap>
         </rollingPolicy>
 
         <!-- Strongly DO NOT recommend changing the encoder-->
@@ -33,7 +34,7 @@
     </appender>
 
     <logger name="coop.rchain.shared.EventLogger" level="OFF" />
-    <logger name="coop.rchain.rspace" level="warn" />
+    <logger name="coop.rchain.rspace" level="info" />
     <logger name="org.http4s" level="warn" />
     <logger name="io.netty" level="warn" />
     <logger name="io.grpc" level="warn" />

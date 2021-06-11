@@ -144,13 +144,11 @@ class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, 
     *
     */
   override def createCheckpoint(): F[Checkpoint] = syncF.defer {
-    val historyRepository = historyRepositoryAtom.get()
     for {
-      _ <- createNewHotStore(historyRepository.getHistoryReader(historyRepository.root))
-      _ <- restoreInstalls()
-      _ = softReport.update(_ => Seq.empty[ReportingEvent])
-      _ = report.update(_ => Seq.empty[Seq[ReportingEvent]])
-    } yield Checkpoint(historyRepository.history.root, Seq.empty)
+      checkpoint <- super.createCheckpoint()
+      _          = softReport.update(_ => Seq.empty[ReportingEvent])
+      _          = report.update(_ => Seq.empty[Seq[ReportingEvent]])
+    } yield checkpoint
   }
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =

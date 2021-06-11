@@ -2,22 +2,22 @@ package coop.rchain.casper.batch1
 
 import cats.Monoid
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, InMemBlockDagStorage}
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.rholang.interpreter.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
+import coop.rchain.models._
 import coop.rchain.models.blockImplicits.getRandomBlock
-import coop.rchain.models.{BindPattern, Expr, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.syntax._
@@ -261,7 +261,6 @@ trait MergeabilityRules {
     }
   }
   object Nil extends Rho("Nil")
-  import coop.rchain.models.rholang.{implicits => toPar}
 
   // Sends (linear sends)
   val S0 = Rho("@0!(0)")

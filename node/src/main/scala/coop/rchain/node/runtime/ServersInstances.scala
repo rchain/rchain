@@ -3,13 +3,12 @@ package coop.rchain.node.runtime
 import cats.effect.{Concurrent, ConcurrentEffect, ExitCode, Timer}
 import cats.syntax.all._
 import com.typesafe.config.Config
-import coop.rchain.casper.ReportingCasper
 import coop.rchain.comm.discovery
 import coop.rchain.comm.discovery.{KademliaHandleRPC, KademliaStore, NodeDiscovery}
 import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, CommunicationResponse, GrpcTransportServer}
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
@@ -19,6 +18,7 @@ import coop.rchain.node.diagnostics.{
   UdpInfluxDBReporter
 }
 import coop.rchain.node.effects.EventConsumer
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{api, web}
 import coop.rchain.shared.Log
 import kamon.Kamon
@@ -43,10 +43,10 @@ object ServersInstances {
   def build[F[_]
   /* Execution */   : Concurrent: Monixable: ConcurrentEffect
   /* P2P */         : NodeDiscovery: KademliaStore: ConnectionsCell: RPConfAsk
-  /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: off
+  /* Diagnostics */ : Metrics :Log:EventConsumer: Timer] // format: on
   (
       apiServers: APIServers,
-      reportingCasper: ReportingCasper[F],
+      reportingRoutes: ReportingHttpRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
       grpcPacketHandler: Protocol => F[CommunicationResponse],
@@ -148,9 +148,9 @@ object ServersInstances {
                            nodeConf.apiServer.host,
                            nodeConf.apiServer.portHttp,
                            prometheusReporter,
-                           reportingCasper,
+                           nodeConf.apiServer.maxConnectionIdle,
                            webApi,
-                           nodeConf.apiServer.maxConnectionIdle
+                           reportingRoutes
                          )
       // Note - here http servers are not really stated, only worker streams are created.
       _ <- Log[F].info(
@@ -159,8 +159,9 @@ object ServersInstances {
       adminHttpServerStream <- web.aquireAdminHttpServer[F](
                                 nodeConf.apiServer.host,
                                 nodeConf.apiServer.portAdminHttp,
+                                nodeConf.apiServer.maxConnectionIdle,
                                 adminWebApi,
-                                nodeConf.apiServer.maxConnectionIdle
+                                reportingRoutes
                               )
 
       _ <- Log[F].info(
@@ -173,7 +174,7 @@ object ServersInstances {
       _ = if (nodeConf.metrics.prometheus) Kamon.addReporter(prometheusReporter)
       _ = if (nodeConf.metrics.zipkin) Kamon.addReporter(new ZipkinReporter())
       _ = if (nodeConf.metrics.sigar) SystemMetrics.startCollecting()
-          
+
     } yield ServersInstances(
       kademliaServerStream,
       transportServerStream,

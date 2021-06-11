@@ -62,10 +62,6 @@ sudo apt-get install libgmp3-dev
 ## RNode build
 
 ```sh
-# Regenerate parser from bnfc (./rholang/src/main/java)
-# - Java code not part of _target_ folder
-sbt bnfc:generate
-
 # Compile
 sbt compile
 
@@ -81,10 +77,16 @@ sbt docker:publishLocal
 
 # Clean project (except bnfc generated Java code)
 sbt clean
-
-# Clean bnfc generated Java code
-sbt bnfc:clean
 ```
+
+Default memory limits may not be sufficient so additional options for _sbt_ can be specified. They can be added to `.bashrc` file.
+
+Increase heap memory and thread stack size. Disable _supershell_ if empty lines are printed in _sbt_ output.
+
+```sh
+export SBT_OPTS="-Xmx4g -Xss2m -Dsbt.supershell=false"
+```
+
 
 ### `sbt`  interactive mode
 
@@ -92,12 +94,8 @@ sbt bnfc:clean
 # Enter sbt interactive mode
 sbt
 
-# sbt interactive commands
+# sbt entering interactive mode
 # sbt:rchain>
-
-# Regenerate parser from bnfc (./rholang/src/main/java)
-# - Java code not part of _target_ folder
-bnfc:generate
 
 # Compile
 compile
@@ -106,7 +104,7 @@ compile
 test:compile
 
 # Compile and create local executable
-# path: rchain/node/target/universal/stage/bin/rnode
+# path: ./node/target/universal/stage/bin/rnode
 stage
 
 # Compile Docker image
@@ -114,9 +112,6 @@ docker:publishLocal
 
 # Clean project (except bnfc generated Java code)
 clean
-
-# Clean bnfc generated Java code
-bnfc:clean
 ```
 
 ### Reset Git repository to a clean state
