@@ -30,7 +30,7 @@ object CliqueOracle {
     P.S. This is related to the fact that we create latest message for newly bonded validator
     equal to message where bonding deploy has been submitted. So stake from validator that did not create anything is
     put behind this message. So here is one more place where this logic makes things more complex.*/
-  private def getCorrespondingWeightMap[F[_]: Sync](
+  def getCorrespondingWeightMap[F[_]: Sync](
       targetMsg: M,
       dag: BlockDagRepresentation[F]
   ): F[WeightMap] =

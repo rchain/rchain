@@ -133,7 +133,6 @@ object Setup {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
-    implicit val lastFinalizedBlockCalculator   = LastFinalizedBlockCalculator[Task](0f)
     implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
