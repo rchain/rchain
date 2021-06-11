@@ -124,6 +124,7 @@ jobs:
           - "'casper/test:testOnly coop.rchain.casper.engine.*'"
           - "'casper/test:testOnly coop.rchain.casper.genesis.*'"
           - "'casper/test:testOnly coop.rchain.casper.util.*'"
+          - "'node/test:testOnly coop.rchain.node.mergeability.*'"
           - REMAINDER # Do not modify/remove!
     env:
       TESTS: ${{ matrix.tests }}
