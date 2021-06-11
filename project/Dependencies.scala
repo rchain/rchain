@@ -129,7 +129,7 @@ object Dependencies {
   private val logging = Seq(slf4j, julToSlf4j, scalaLogging, logbackClassic, logstashLogback)
 
   private val circeDependencies: Seq[ModuleID] =
-    Seq(circeGeneric)
+    Seq(circeGeneric, circeParser)
 
   private val http4sDependencies: Seq[ModuleID] =
     Seq(http4sDSL, http4sBlazeServer, http4sCirce)
