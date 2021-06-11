@@ -8,6 +8,7 @@ import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper._
+import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.{DeployGrpcServiceV1, ProposeGrpcServiceV1, ReplGrpcService}
@@ -29,7 +30,8 @@ object APIServers {
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       apiMaxBlocksLimit: Int,
       devMode: Boolean,
-      proposeFOpt: Option[ProposeFunction[F]]
+      proposeFOpt: Option[ProposeFunction[F]],
+      blockReportAPI: BlockReportAPI[F]
   )(
       implicit
       blockStore: BlockStore[F],
@@ -41,14 +43,13 @@ object APIServers {
       logF: Log[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
       lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
-      reportingCasper: ReportingCasper[F],
       mainScheduler: Scheduler
   ): APIServers = {
     val repl = ReplGrpcService(runtime, mainScheduler)
     val deploy =
       DeployGrpcServiceV1(
         apiMaxBlocksLimit,
-        reportingCasper,
+        blockReportAPI,
         proposeFOpt,
         devMode
       )

@@ -59,7 +59,7 @@ service DeployService {
   // get blocks by block height
   rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse){}
   // temporary api for testing
-  rpc getEventByHash(BlockQuery) returns (EventInfoResponse){}
+  rpc getEventByHash(ReportQuery) returns (EventInfoResponse){}
 }
 
 message EventInfoResponse{

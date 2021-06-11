@@ -5,7 +5,6 @@ import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
@@ -13,6 +12,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.blockstorage.{BlockStore, FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper._
+import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
@@ -22,7 +22,6 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
@@ -40,6 +39,8 @@ import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.diagnostics
+import coop.rchain.node.web.ReportingRoutes
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
@@ -71,7 +72,7 @@ object Setup {
         CasperLoop[F],
         EngineInit[F],
         CasperLaunch[F],
-        ReportingCasper[F],
+        ReportingHttpRoutes[F],
         WebApi[F],
         AdminWebApi[F],
         Option[Proposer[F]],
@@ -200,18 +201,7 @@ object Setup {
                        for {
                          // In reporting replay channels map is not needed
                          store <- rnodeStoreManager.rSpaceStores(useChannelsMap = false)
-                         reportingCache <- ReportMemStore
-                                            .store[
-                                              F,
-                                              Par,
-                                              BindPattern,
-                                              ListParWithRandom,
-                                              TaggedContinuation
-                                            ](rnodeStoreManager)
-                       } yield ReportingCasper.rhoReporter(
-                         reportingCache,
-                         store
-                       )
+                       } yield ReportingCasper.rhoReporter(store)
                      } else
                        ReportingCasper.noop.pure[F]
         } yield (rhoRuntime, replayRhoRuntime, reporter)
@@ -340,6 +330,13 @@ object Setup {
           conf.roundRobinDispatcher.dropPeerAfterRetries
         )
       }*/
+      reportingStore <- ReportStore.store[F](rnodeStoreManager)
+      blockReportAPI = {
+        implicit val ec = engineCell
+        implicit val bs = blockStore
+        implicit val or = oracle
+        BlockReportAPI[F](reportingRuntime, reportingStore)
+      }
       apiServers = {
         implicit val bs = blockStore
         implicit val ec = engineCell
@@ -347,7 +344,6 @@ object Setup {
         implicit val sp = span
         implicit val sc = synchronyConstraintChecker
         implicit val lh = lastFinalizedHeightConstraintChecker
-        implicit val rc = reportingRuntime
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -355,8 +351,12 @@ object Setup {
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]]
+          else none[ProposeFunction[F]],
+          blockReportAPI
         )
+      }
+      reportingRoutes = {
+        ReportingRoutes.service[F](blockReportAPI)
       }
       casperLoop = {
         implicit val br = blockRetriever
@@ -414,7 +414,7 @@ object Setup {
       updateForkChoiceLoop,
       engineInit,
       casperLaunch,
-      reportingRuntime,
+      reportingRoutes,
       webApi,
       adminWebApi,
       proposer,
