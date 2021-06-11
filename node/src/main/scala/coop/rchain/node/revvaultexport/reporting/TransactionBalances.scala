@@ -1,4 +1,4 @@
-package coop.rchain.node.revVaultExport.reporting
+package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
@@ -20,9 +20,9 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.node.revVaultExport.mainNet1.reporting.SpecialCase.getSpecialTransfer
-import coop.rchain.node.revVaultExport.RhoTrieTraverser
-import coop.rchain.node.revVaultExport.mainNet1.reporting.PerValidatorVaults
+import coop.rchain.node.revvaultexport.mainnet1.reporting.SpecialCase.getSpecialTransfer
+import coop.rchain.node.revvaultexport.RhoTrieTraverser
+import coop.rchain.node.revvaultexport.mainnet1.reporting.PerValidatorVaults
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._

@@ -1,4 +1,4 @@
-package coop.rchain.node.revVaultExport
+package coop.rchain.node.revvaultexport
 
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}

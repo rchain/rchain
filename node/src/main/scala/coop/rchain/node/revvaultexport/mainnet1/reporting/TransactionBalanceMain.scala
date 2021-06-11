@@ -1,7 +1,7 @@
-package coop.rchain.node.revVaultExport.mainNet1.reporting
+package coop.rchain.node.revvaultexport.mainnet1.reporting
 
 import cats.effect._
-import coop.rchain.node.revVaultExport.reporting.TransactionBalances
+import coop.rchain.node.revvaultexport.reporting.TransactionBalances
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf

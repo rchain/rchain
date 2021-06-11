@@ -1,4 +1,4 @@
-package coop.rchain.node.revVaultExport.reporting
+package coop.rchain.node.revvaultexport.reporting
 
 import cats.effect.Concurrent
 import cats.implicits._

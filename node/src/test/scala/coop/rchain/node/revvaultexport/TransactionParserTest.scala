@@ -1,7 +1,7 @@
-package coop.rchain.node.revVaultExport
+package coop.rchain.node.revvaultexport
 
-import coop.rchain.node.revVaultExport.reporting.Transaction
-import coop.rchain.node.revVaultExport.reporting.Transaction.{
+import coop.rchain.node.revvaultexport.reporting.Transaction
+import coop.rchain.node.revvaultexport.reporting.Transaction.{
   deployInfoJ,
   transactionValueCodec,
   TransactionInfo

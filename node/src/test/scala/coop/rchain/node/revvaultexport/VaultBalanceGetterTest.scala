@@ -1,9 +1,9 @@
-package coop.rchain.node.revVaultExport
+package coop.rchain.node.revvaultexport
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
-import coop.rchain.node.revVaultExport.mainNet1.StateBalanceMain
+import coop.rchain.node.revvaultexport.mainnet1.StateBalanceMain
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import monix.execution.Scheduler.Implicits.global
