@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
@@ -7,9 +7,10 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.Send
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{NameVisitInputs, ProcVisitInputs, ProcVisitOutputs}
-import scala.collection.convert.ImplicitConversionsToScala._
 
+import scala.collection.convert.ImplicitConversionsToScala._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PSend, SendMultiple, SendSingle}
+import coop.rchain.rholang.interpreter.compiler.normalizer.NameNormalizeMatcher
 
 import scala.collection.immutable.{BitSet, Vector}
 

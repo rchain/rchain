@@ -1,9 +1,9 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models.{EVar, Par, Var}
+import coop.rchain.models.{EVar, Var}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
   IndexContext,

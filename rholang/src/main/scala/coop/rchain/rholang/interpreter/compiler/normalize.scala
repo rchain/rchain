@@ -6,7 +6,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.interpreter.compiler.normalizer._
+import coop.rchain.rholang.interpreter.compiler.normalizer.processes._
 
 sealed trait VarSort
 case object ProcSort extends VarSort

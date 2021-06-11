@@ -1,6 +1,6 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn._
+import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import org.scalatest._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._

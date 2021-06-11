@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance.{ConnNotBody, ConnOrBody}

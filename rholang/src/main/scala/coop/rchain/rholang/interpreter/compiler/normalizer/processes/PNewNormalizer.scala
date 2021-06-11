@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
@@ -13,6 +13,8 @@ import coop.rchain.rholang.interpreter.compiler.{
 }
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{NameDeclSimpl, NameDeclUrn, PNew}
+import coop.rchain.rholang.interpreter.compiler.normalizer.GroundNormalizeMatcher
+
 import scala.collection.convert.ImplicitConversionsToScala._
 
 object PNewNormalizer {

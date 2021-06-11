@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
@@ -14,8 +14,12 @@ import coop.rchain.rholang.interpreter.compiler.{
   VarSort
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, PContr}
-import scala.collection.convert.ImplicitConversionsToScala._
+import coop.rchain.rholang.interpreter.compiler.normalizer.{
+  NameNormalizeMatcher,
+  RemainderNormalizeMatcher
+}
 
+import scala.collection.convert.ImplicitConversionsToScala._
 import scala.collection.immutable.{BitSet, Vector}
 
 object PContrNormalizer {

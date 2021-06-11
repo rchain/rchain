@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.Applicative
 import cats.syntax.all._

@@ -1,9 +1,9 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
 import coop.rchain.models.Connective.ConnectiveInstance.VarRefBody
-import coop.rchain.models.{Connective, Par, VarRef}
+import coop.rchain.models.{Connective, VarRef}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
   IndexContext,

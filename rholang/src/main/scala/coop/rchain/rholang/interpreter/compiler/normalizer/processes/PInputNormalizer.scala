@@ -1,8 +1,7 @@
-package coop.rchain.rholang.interpreter.compiler.normalizer
+package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
 import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.Connective.ConnectiveInstance.{ConnNotBody, ConnOrBody}
 import coop.rchain.models.{Par, Receive, Var}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
@@ -36,6 +35,10 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   ReceiptRepeated,
   RepeatedBindImpl,
   RepeatedSimple
+}
+import coop.rchain.rholang.interpreter.compiler.normalizer.{
+  NameNormalizeMatcher,
+  RemainderNormalizeMatcher
 }
 
 import scala.collection.convert.ImplicitConversionsToScala._
