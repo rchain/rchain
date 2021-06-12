@@ -5,7 +5,7 @@ import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.CommEvent
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.Resources
-import coop.rchain.casper.{ReportMemStore, ReportingCasper}
+import coop.rchain.casper.{ReportStore, ReportingCasper}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rspace.ReportingRspace.ReportingComm
@@ -29,42 +29,27 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       import coop.rchain.rholang.interpreter.storage._
-      implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
       for {
-        kvm <- Resources.mkTestRNodeStoreManager[Effect](node.dataPath.storageDir)
-        reportingStore <- ReportMemStore
-                           .store[Effect, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                             kvm
-                           )
-        rspaceStore <- kvm.rSpaceStores
-        reportingCasper = ReportingCasper
-          .rhoReporter(reportingStore, rspaceStore)
-        deploy      <- ConstructDeploy.sourceDeployNowF(correctRholang)
-        signedBlock <- node.addBlock(deploy)
-        _           = logEff.warns.isEmpty should be(true)
-        dag         <- node.casperEff.blockDag
-        estimate    <- node.casperEff.estimator(dag)
-        _           = estimate shouldBe IndexedSeq(signedBlock.blockHash)
-        trace       <- reportingCasper.trace(signedBlock.blockHash)
+        kvm             <- Resources.mkTestRNodeStoreManager[Effect](node.dataPath.storageDir)
+        rspaceStore     <- kvm.rSpaceStores
+        reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore)
+        deploy          = ConstructDeploy.sourceDeployNow(correctRholang)
+        signedBlock     <- node.addBlock(deploy)
+        _               = logEff.warns.isEmpty should be(true)
+        trace           <- reportingCasper.trace(signedBlock)
         // only the comm events should be equal
         // it is possible that there are additional produce or consume in persistent mode
-        reportingCommEventsNum = trace match {
-          case Right(value) =>
-            value.head._2.foldLeft(0)(
-              (sum, e) =>
-                sum + e.count {
-                  case ReportingComm(_, _) => true
-                  case _                   => false
-                }
-            )
-          case Left(_) => 0
-        }
+        reportingCommEventsNum = trace.deployReportResult.head.processedDeploy.deployLog.collect {
+          case CommEvent(_, _, _) => 1
+        }.sum
         deployCommEventsNum = signedBlock.body.deploys.head.deployLog.count {
           case CommEvent(_, _, _) => true
           case _                  => false
         }
-        _ = deployCommEventsNum shouldBe reportingCommEventsNum
+        reportingReplayPostStateHash = trace.postStateHash
+        _                            = reportingReplayPostStateHash shouldBe signedBlock.body.state.postStateHash
+        _                            = deployCommEventsNum shouldBe reportingCommEventsNum
       } yield ()
     }
   }

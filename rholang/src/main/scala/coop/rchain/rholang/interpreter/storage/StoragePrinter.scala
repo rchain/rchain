@@ -11,7 +11,7 @@ import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.syntax._
+import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}

@@ -19,7 +19,7 @@ object BondsParser {
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
-  private def parse[F[_]: Sync: RaiseIOError: Log](
+  def parse[F[_]: Sync: RaiseIOError: Log](
       bondsPath: Path
   ): F[Map[PublicKey, Long]] =
     SourceIO

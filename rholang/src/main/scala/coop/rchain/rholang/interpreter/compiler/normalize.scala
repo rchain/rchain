@@ -1,21 +1,21 @@
 package coop.rchain.rholang.interpreter.compiler
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Applicative, MonadError}
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.{
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   Bundle => AbsynBundle,
   Ground => AbsynGround,
   KeyValuePair => AbsynKeyValuePair,
   Send => AbsynSend,
   _
 }
+import coop.rchain.rholang.interpreter.errors._
 import monix.eval.Coeval
 
 import scala.collection.convert.ImplicitConversionsToScala._

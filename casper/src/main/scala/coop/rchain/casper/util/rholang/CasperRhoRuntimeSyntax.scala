@@ -567,11 +567,11 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
   def replayDeploy(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
   ): F[Option[ReplayFailure]] =
-    replayDeployE(withCostAccounting)(processedDeploy).flatMap(_.swap.value.map(_.toOption))
+    replayDeployE(withCostAccounting)(processedDeploy).swap.toOption.value
 
   def replayDeployE(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
-  ): F[EitherT[F, ReplayFailure, Unit]] = {
+  ): EitherT[F, ReplayFailure, Unit] = {
     import processedDeploy._
     val deployEvaluator = EitherT
       .liftF {
@@ -635,26 +635,26 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
       } else deployEvaluator.map(_.succeeded)
 
     for {
-      _ <- runtime.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent))
-      failureOption = evaluatorT
-        .flatMap { succeeded =>
-          /* This deployment represents either correct program `Some(result)`,
+      _ <- EitherT.liftF(runtime.rig(processedDeploy.deployLog.map(EventConverter.toRspaceEvent)))
+      failureOption <- evaluatorT
+                        .flatMap { succeeded =>
+                          /* This deployment represents either correct program `Some(result)`,
 or we have a failed pre-charge (`None`) but we agree on that it failed.
 In both cases we want to check reply data and see if everything is in order */
-          runtime.checkReplayData.attemptT
-            .leftMap {
-              case replayException: ReplayException =>
-                ReplayFailure.unusedCOMMEvent(replayException)
-              case throwable => ReplayFailure.internalError(throwable)
-            }
-            .leftFlatMap {
-              case UnusedCOMMEvent(_) if !succeeded =>
-                // TODO: temp fix for replay error mismatch
-                // https://rchain.atlassian.net/browse/RCHAIN-3505
-                EitherT.rightT[F, ReplayFailure](())
-              case ex: ReplayFailure => EitherT.leftT[F, Unit](ex)
-            }
-        }
+                          runtime.checkReplayData.attemptT
+                            .leftMap {
+                              case replayException: ReplayException =>
+                                ReplayFailure.unusedCOMMEvent(replayException)
+                              case throwable => ReplayFailure.internalError(throwable)
+                            }
+                            .leftFlatMap {
+                              case UnusedCOMMEvent(_) if !succeeded =>
+                                // TODO: temp fix for replay error mismatch
+                                // https://rchain.atlassian.net/browse/RCHAIN-3505
+                                EitherT.rightT[F, ReplayFailure](())
+                              case ex: ReplayFailure => EitherT.leftT[F, Unit](ex)
+                            }
+                        }
     } yield failureOption
   }
 
@@ -713,21 +713,16 @@ In both cases we want to check reply data and see if everything is in order */
       } yield result
     }
 
-  def replaySystemDeployInternal(
-      systemDeploy: SystemDeploy,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Option[ReplayFailure]] =
-    replaySystemDeployInternalE(systemDeploy, processedSystemDeploy).flatMap(
-      _.swap.value.map(_.toOption)
-    )
-
   def replaySystemDeployInternalE(
       systemDeploy: SystemDeploy,
       processedSystemDeploy: ProcessedSystemDeploy
-  ): F[EitherT[F, ReplayFailure, Unit]] = {
+  ): EitherT[F, ReplayFailure, Unit] = {
     val deployEvaluator = EitherT
       .liftF {
         for {
+          _ <- runtime.rig(
+                processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
+              )
           fallback <- runtime.createSoftCheckpoint
           result   <- rhoRuntimeOps.evaluateSystemSource(systemDeploy)
           _        <- rhoRuntimeOps.consumeSystemResult(systemDeploy)
@@ -742,33 +737,33 @@ In both cases we want to check reply data and see if everything is in order */
         result => ReplayFailure.replayStatusMismatch(processedSystemDeploy.failed, result.failed)
       )(result => processedSystemDeploy.failed == result.failed)
 
-    Span[F].withMarks("replay-system-deploy") {
-      for {
-        _ <- runtime.rig(
-              processedSystemDeploy.eventList.map(EventConverter.toRspaceEvent)
-            )
-        failureOption = deployEvaluator
-          .semiflatMap { evalResult =>
-            runtime.createSoftCheckpoint
-              .whenA(evalResult.succeeded)
-          }
-          .flatMap { _ =>
-            /* This deployment represents either correct program `Some(result)`,
+    deployEvaluator
+      .semiflatMap { evalResult =>
+        runtime.createSoftCheckpoint
+          .whenA(evalResult.succeeded)
+      }
+      .flatMap { _ =>
+        /* This deployment represents either correct program `Some(result)`,
               or we have a failed pre-charge (`None`) but we agree on that it failed.
               In both cases we want to check reply data and see if everything is in order */
-            runtime.checkReplayData.attemptT.leftMap {
-              case replayException: ReplayException =>
-                ReplayFailure.unusedCOMMEvent(replayException)
-              case throwable => ReplayFailure.internalError(throwable)
-            }
-          }
-      } yield failureOption
-    }
+        runtime.checkReplayData.attemptT.leftMap {
+          case replayException: ReplayException =>
+            ReplayFailure.unusedCOMMEvent(replayException)
+          case throwable => ReplayFailure.internalError(throwable)
+        }
+      }
   }
 
   def replaySystemDeploy(
       blockData: BlockData
-  )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] = {
+  )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] =
+    Span[F].withMarks("replay-system-deploy")(
+      replaySystemDeployE(blockData)(processedSystemDeploy).swap.toOption.value
+    )
+
+  def replaySystemDeployE(
+      blockData: BlockData
+  )(processedSystemDeploy: ProcessedSystemDeploy): EitherT[F, ReplayFailure, Unit] = {
     import processedSystemDeploy._
     val sender = ByteString.copyFrom(blockData.sender.bytes)
     systemDeploy match {
@@ -779,13 +774,14 @@ In both cases we want to check reply data and see if everything is in order */
             issuerPublicKey,
             SystemDeployUtil.generateSlashDeployRandomSeed(sender, blockData.seqNum)
           )
-        replaySystemDeployInternal(slashDeploy, processedSystemDeploy)
+        replaySystemDeployInternalE(slashDeploy, processedSystemDeploy)
       case CloseBlockSystemDeployData =>
         val closeBlockDeploy = CloseBlockDeploy(
           SystemDeployUtil.generateCloseDeployRandomSeed(sender, blockData.seqNum)
         )
-        replaySystemDeployInternal(closeBlockDeploy, processedSystemDeploy)
-      case Empty => ReplayFailure.internalError(new Exception("Expected system deploy")).some.pure
+        replaySystemDeployInternalE(closeBlockDeploy, processedSystemDeploy)
+      case Empty =>
+        EitherT.leftT(ReplayFailure.internalError(new Exception("Expected system deploy")))
     }
   }
 }
