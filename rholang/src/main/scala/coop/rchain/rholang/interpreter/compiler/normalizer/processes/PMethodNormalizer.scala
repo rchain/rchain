@@ -1,14 +1,14 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer.processes
 
-import cats.syntax.all._
 import cats.effect.Sync
-import coop.rchain.models.{EMethod, Par}
+import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.models.{EMethod, Par}
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMethod
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMethod
-import scala.collection.convert.ImplicitConversionsToScala._
 
+import scala.collection.convert.ImplicitConversionsToScala._
 import scala.collection.immutable.BitSet
 
 object PMethodNormalizer {
@@ -28,7 +28,7 @@ object PMethodNormalizer {
                      normalizeMatch[F](e, acc._2).map(
                        procMatchResult =>
                          (
-                           procMatchResult.par :: acc._1,
+                           procMatchResult.par +: acc._1,
                            ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
                            acc._3 | procMatchResult.par.locallyFree,
                            acc._4 || procMatchResult.par.connectiveUsed
