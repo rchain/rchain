@@ -4,14 +4,6 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Var
 import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  LevelContext,
-  ProcSort,
-  SourcePosition,
-  VarSort
-}
-import coop.rchain.rholang.interpreter.errors.UnexpectedReuseOfProcContextFree
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   NameRemainder,
   NameRemainderEmpty,
@@ -23,10 +15,19 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   ProcVarVar,
   ProcVarWildcard
 }
+import coop.rchain.rholang.interpreter.compiler.{
+  DeBruijnLevelMap,
+  LevelContext,
+  ProcSort,
+  SourcePosition,
+  VarSort
+}
+import coop.rchain.rholang.interpreter.errors.UnexpectedReuseOfProcContextFree
 
 object RemainderNormalizeMatcher {
-  def handleProcVar[F[_]](pv: ProcVar, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit sync: Sync[F]
+  def handleProcVar[F[_]: Sync](
+      pv: ProcVar,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
@@ -41,14 +42,15 @@ object RemainderNormalizeMatcher {
             val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
             (Option(Var(FreeVar(knownFree.nextLevel))), newBindingsPair).pure[F]
           case Some(LevelContext(_, _, firstSourcePosition)) =>
-            sync.raiseError(
+            Sync[F].raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
             )
         }
     }
 
-  def normalizeMatchProc[F[_]](r: ProcRemainder, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit err: Sync[F]
+  def normalizeMatchProc[F[_]: Sync](
+      r: ProcRemainder,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
     r match {
       case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[F]
@@ -56,8 +58,9 @@ object RemainderNormalizeMatcher {
         handleProcVar[F](pr.procvar_, knownFree)
     }
 
-  def normalizeMatchName[F[_]](nr: NameRemainder, knownFree: DeBruijnLevelMap[VarSort])(
-      implicit err: Sync[F]
+  def normalizeMatchName[F[_]: Sync](
+      nr: NameRemainder,
+      knownFree: DeBruijnLevelMap[VarSort]
   ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
     nr match {
       case _: NameRemainderEmpty => (None: Option[Var], knownFree).pure[F]

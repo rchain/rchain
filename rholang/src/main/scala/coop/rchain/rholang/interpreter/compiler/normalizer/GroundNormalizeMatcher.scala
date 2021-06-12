@@ -1,17 +1,18 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
-import cats.syntax.all._
 import cats.MonadError
+import cats.syntax.all._
 import coop.rchain.models.Expr
 import coop.rchain.models.Expr.ExprInstance.{GInt, GString, GUri}
-import coop.rchain.rholang.interpreter.errors.NormalizerError
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   GroundBool,
   GroundInt,
   GroundString,
-  GroundUri
+  GroundUri,
+  Ground => AbsynGround
 }
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Ground => AbsynGround}
+import coop.rchain.rholang.interpreter.errors.NormalizerError
+
 import scala.util.Try
 
 object GroundNormalizeMatcher {

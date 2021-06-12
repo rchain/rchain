@@ -2,10 +2,10 @@ package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.models.{EVar, Par, Var}
-import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
-import coop.rchain.models.rholang.implicits.VectorPar
+import coop.rchain.models.rholang.implicits.{VectorPar, _}
+import coop.rchain.models.{EVar, Par, Var}
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, NameQuote, NameVar, NameWildcard}
 import coop.rchain.rholang.interpreter.compiler.{
   IndexContext,
   LevelContext,
@@ -21,12 +21,10 @@ import coop.rchain.rholang.interpreter.errors.{
   UnexpectedNameContext,
   UnexpectedReuseOfNameContextFree
 }
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, NameQuote, NameVar, NameWildcard}
 
 object NameNormalizeMatcher {
-  def normalizeMatch[F[_]](n: Name, input: NameVisitInputs)(
-      implicit err: Sync[F],
-      env: Map[String, Par]
+  def normalizeMatch[F[_]: Sync](n: Name, input: NameVisitInputs)(
+      implicit env: Map[String, Par]
   ): F[NameVisitOutputs] =
     n match {
       case wc: NameWildcard =>
@@ -39,7 +37,7 @@ object NameNormalizeMatcher {
             NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[F]
           }
           case Some(IndexContext(_, ProcSort, sourcePosition)) => {
-            err.raiseError(
+            Sync[F].raiseError(
               UnexpectedNameContext(n.var_, sourcePosition, SourcePosition(n.line_num, n.col_num))
             )
           }
@@ -50,7 +48,7 @@ object NameNormalizeMatcher {
                   input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
                 NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)), newBindingsPair).pure[F]
               case Some(LevelContext(_, _, sourcePosition)) =>
-                err.raiseError(
+                Sync[F].raiseError(
                   UnexpectedReuseOfNameContextFree(
                     n.var_,
                     sourcePosition,
