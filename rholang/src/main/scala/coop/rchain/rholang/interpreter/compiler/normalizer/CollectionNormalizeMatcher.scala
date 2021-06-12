@@ -14,29 +14,16 @@ import coop.rchain.models.{
   ParSet,
   Var
 }
-import coop.rchain.models.rholang.implicits.VectorPar
-import coop.rchain.rholang.interpreter.compiler.{
-  CollectVisitInputs,
-  CollectVisitOutputs,
-  DeBruijnLevelMap,
-  ProcNormalizeMatcher,
-  ProcVisitInputs,
-  VarSort
-}
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.{KeyValuePair => AbsynKeyValuePair, _}
+import coop.rchain.rholang.interpreter.compiler._
 import monix.eval.Coeval
-import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
-  Ground => AbsynGround,
-  KeyValuePair => AbsynKeyValuePair,
-  _
-}
-import scala.collection.convert.ImplicitConversionsToScala._
 
+import scala.collection.convert.ImplicitConversionsToScala._
 import scala.collection.immutable.{BitSet, Vector}
 
 object CollectionNormalizeMatcher {
-  def normalizeMatch[F[_]](c: Collection, input: CollectVisitInputs)(
-      implicit sync: Sync[F],
-      env: Map[String, Par]
+  def normalizeMatch[F[_]: Sync](c: Collection, input: CollectVisitInputs)(
+      implicit env: Map[String, Par]
   ): F[CollectVisitOutputs] = {
     def foldMatch[T](
         knownFree: DeBruijnLevelMap[VarSort],
@@ -70,7 +57,7 @@ object CollectionNormalizeMatcher {
         knownFree: DeBruijnLevelMap[VarSort],
         remainder: Option[Var],
         listProc: List[AbsynKeyValuePair]
-    ) = {
+    ): F[CollectVisitOutputs] = {
       val init = (Vector[(Par, Par)](), knownFree, BitSet(), false)
       listProc
         .foldM(init) { (acc, e) =>
@@ -97,7 +84,7 @@ object CollectionNormalizeMatcher {
           val resultKnownFree         = folded._2
           val remainderConnectiveUsed = remainder.exists(HasLocallyFree[Var].connectiveUsed(_))
           val remainderLocallyFree =
-            remainder.map(HasLocallyFree[Var].locallyFree(_, 0)).getOrElse(BitSet())
+            remainder.map(HasLocallyFree[Var].locallyFree(_, depth = 0)).getOrElse(BitSet())
 
           CollectVisitOutputs(
             ParMap(

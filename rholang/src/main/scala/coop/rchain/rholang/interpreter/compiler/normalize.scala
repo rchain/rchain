@@ -17,14 +17,13 @@ object ProcNormalizeMatcher {
   /**
     * Rholang normalizer entry point
     */
-  def normalizeMatch[M[_]](p: Proc, input: ProcVisitInputs)(
-      implicit sync: Sync[M],
-      env: Map[String, Par]
-  ): M[ProcVisitOutputs] = Sync[M].defer {
+  def normalizeMatch[F[_]: Sync](p: Proc, input: ProcVisitInputs)(
+      implicit env: Map[String, Par]
+  ): F[ProcVisitOutputs] = Sync[F].defer {
     def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
         implicit toExprInstance: T => Expr
-    ): M[ProcVisitOutputs] =
-      normalizeMatch[M](subProc, input.copy(par = VectorPar()))
+    ): F[ProcVisitOutputs] =
+      normalizeMatch[F](subProc, input.copy(par = VectorPar()))
         .map(
           subResult =>
             ProcVisitOutputs(
@@ -38,10 +37,10 @@ object ProcNormalizeMatcher {
         subProcRight: Proc,
         input: ProcVisitInputs,
         constructor: (Par, Par) => T
-    )(implicit toExprInstance: T => Expr): M[ProcVisitOutputs] =
+    )(implicit toExprInstance: T => Expr): F[ProcVisitOutputs] =
       for {
-        leftResult <- normalizeMatch[M](subProcLeft, input.copy(par = VectorPar()))
-        rightResult <- normalizeMatch[M](
+        leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = VectorPar()))
+        rightResult <- normalizeMatch[F](
                         subProcRight,
                         input.copy(par = VectorPar(), knownFree = leftResult.knownFree)
                       )
@@ -75,7 +74,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         PVarRefNormalizer.normalize(p, input)
 
-      case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[M]
+      case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[F]
 
       case p: PEval =>
         PEvalNormalizer.normalize(p, input)
@@ -109,7 +108,7 @@ object ProcNormalizeMatcher {
         PMatchesNormalizer.normalize(p, input)
 
       case p: PExprs =>
-        normalizeMatch[M](p.proc_, input)
+        normalizeMatch[F](p.proc_, input)
 
       case p: PSend =>
         PSendNormalizer.normalize(p, input)
@@ -142,7 +141,7 @@ object ProcNormalizeMatcher {
           .map(n => n.copy(par = n.par ++ input.par))
 
       case _ =>
-        sync.raiseError(
+        Sync[F].raiseError(
           UnrecognizedNormalizerError("Compilation of construct not yet supported.")
         )
     }
@@ -150,7 +149,8 @@ object ProcNormalizeMatcher {
 
 }
 
-/** Input data to the normalizer
+/**
+  * Input data to the normalizer
   *
   * @param par collection of things that might be run in parallel
   * @param env
