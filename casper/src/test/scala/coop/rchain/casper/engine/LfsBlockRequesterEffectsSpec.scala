@@ -90,7 +90,7 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
       requestTimeout: FiniteDuration
   )(test: Mock[F] => F[Unit]): F[Unit] = {
 
-    // Approved block has initial root hash of the state
+    // Approved block has initial latest messages
     val approvedBlock = createApprovedBlock(startBlock)
 
     // Approved block is already saved in block storage
@@ -274,7 +274,6 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
       _ <- receiveBlock(b8)
 
       // Only valid block should be saved
-      //      _ = eff.puts shouldBe asMap(b7)
       puts <- savedBlocks.take(1).compile.to(Map)
       _    = puts shouldBe asMap(b8)
 
@@ -306,11 +305,11 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "request and save all blocks" in dagFromBlock(b9) { mock =>
     import mock._
     for {
-      // Staring block with dependencies should be requested
+      // Staring block dependencies should be requested
       reqs <- sentRequests.take(1).compile.to(List)
       _    = reqs.sorted shouldBe List(hash8)
 
-      // Receive starting block and its dependencies (latest blocks)
+      // Receive starting block dependencies (latest blocks)
       _ <- receiveBlock(b8)
 
       // Dependencies of b8 should be in requests also
@@ -340,7 +339,7 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
       puts <- savedBlocks.take(2).compile.to(Map)
       _    = puts shouldBe asMap(b6, b3)
 
-      // Receive block b3
+      // Receive blocks b4 and b1
       _ <- receiveBlock(b4, b1)
 
       // All blocks should be requested
