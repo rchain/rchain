@@ -54,7 +54,7 @@ match (
             ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
             ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
             ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
-            ("Logging works", *testLogging)
+            ("Transfer log entries show up in both vault logs", *testLogging)
           ])
       } |
 
@@ -194,19 +194,34 @@ match (
       } |
 
       contract testLogging(rhoSpec, RevVault, ackCh) = {
-        new RevAddress(`rho:rev:address`), genesisVaultCh, aliceVaultCh, ret in {
+        new
+          RevAddress(`rho:rev:address`),
+          genesisVaultCh,
+          aliceVaultCh,
+          doneCh
+        in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
           for (genesisVault, @genesisVaultKey <- genesisVaultCh;
-               @(true, *aliceVault) <- aliceVaultCh) {
-            new logCh in {
-              genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
-              for (_ <- ret) {
-                aliceVault!("readN", 1, *logCh) |
-                for (@[hd] <- logCh) {
+               @(true, *aliceVault)           <- aliceVaultCh) {
+            new
+              aliceEntryCh,
+              genesisEntryCh,
+              expCh
+            in {
+              genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *doneCh) |
+              for (_ <- doneCh) {
+                aliceVault!("readLogEntry", *aliceEntryCh) |
+                genesisVault!("readLogEntry", *genesisEntryCh) |
+                expCh!([genesisRevAddress, aliceRevAddress, 1000]) |
+                for (@expected     <- expCh;
+                     @aliceEntry   <- aliceEntryCh;
+                     @genesisEntry <- genesisEntryCh) {
                   rhoSpec!("assert",
-                    ([genesisRevAddress, aliceRevAddress, 1000, (true, Nil)] ==
-                      [hd.get("from"), hd.get("to"), hd.get("amount"), hd.get("result")]),
+                    (expected == [genesisEntry.get("from"), genesisEntry.get("to"), genesisEntry.get("amount")])
+                      and (expected == [aliceEntry.get("from"), aliceEntry.get("to"), aliceEntry.get("amount")])
+                      and (aliceEntry.get("id") == genesisEntry.get("id"))
+                      and (aliceEntry.get("block") == genesisEntry.get("block")),
                     "transfer successfully logged",
                     *ackCh
                   )
@@ -220,7 +235,6 @@ match (
       new RevVaultCh in {
         rl!(`rho:rchain:revVault`, *RevVaultCh) |
         for (@(_, RevVault) <- RevVaultCh) {
-
           contract withVaultAndIdentityOf(@pubKey, ret) = {
             new RevAddress(`rho:rev:address`), revAddrCh, vaultCh, deployerIdCh, authKeyCh in {
               getDeployerId!("deployerId", pubKey, *deployerIdCh) |

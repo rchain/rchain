@@ -126,20 +126,23 @@ in {
                       getVaultCh
                     in {
                       TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
-                      for (@vault <- getVaultCh) {
-                        if (vault != Nil) {
-                          // If vault is in the store, return (true, vault).
-                          retCh!((true, vault))
-                        } else {
-                          // If vault was not found in store, create it and put it in the store.
-                          _create!(revAddress, *createVault, *vaultCh) |
-                          for (vaultRetCh <- createVault) {
-                            // Creates Rev vault and returns on vaultRetCh, consumed within _create contract.
-                            _makeVault!(revAddress, 0, *vaultRetCh) |
-                            // Blocks until both the vault is created and set in the store.
-                            for (@eitherVault <- vaultCh) {
-                              retCh!(eitherVault)
+                      for (@res <- getVaultCh) {
+                        match res {
+                          Nil => {
+                            // If vault was not found in store, create it and put it in the store.
+                            _create!(revAddress, *createVault, *vaultCh) |
+                            for (vaultRetCh <- createVault) {
+                              // Creates Rev vault and returns on vaultRetCh, consumed within _create contract.
+                              _makeVault!(revAddress, 0, *vaultRetCh) |
+                              // Blocks until both the vault is created and set in the store.
+                              for (@eitherVault <- vaultCh) {
+                                retCh!(eitherVault)
+                              }
                             }
+                          }
+                          (_, vault, _) => {
+                            // If vault is in the store, return (true, vault).
+                            retCh!((true, vault))
                           }
                         }
                       }
@@ -165,19 +168,21 @@ in {
               }
             }
           } |
-          // Retrieves vault corresponding to revAddress if one exists, creates a vault otherwise.
+          // Retrieves (revAddress, vault, logCh) corresponding to revAddress if one exists, creates a vault otherwise.
           // Returns either (true, vault) or (false, _) on retCh.
           contract _create(@revAddress, constructor, retCh) = {
             // The vault was not found, create a new one and set it in the vaultMap.
             new
               resCh,
-              ackCh
+              ackCh,
+              logCh
             in {
               constructor!(*resCh) |
               for (@eitherVault <- resCh) {
                 match eitherVault {
                   (true, vault) => {
-                    TreeHashMap!("set", vaultMap, revAddress, vault, *ackCh) |
+                    // map `revAddress` to `(revAddress, vault, *logCh)`
+                    TreeHashMap!("set", vaultMap, revAddress, (revAddress, vault, *logCh), *ackCh) |
                     for (_ <- ackCh) {
                       retCh!(eitherVault)
                     }
@@ -189,7 +194,9 @@ in {
               }
             }
           } |
-          // Creates a Rev vault for `ownerRevAddress` containing `initialAmount` and returns Either on `ret`
+          // Creates a Rev vault for `ownerRevAddress` containing a purse with `initialAmount`
+          // and creates an associated transfer logging channel which is stored in `logChMap`
+          // Returns vault Either on `ret`
           contract _makeVault(@ownerRevAddress, @initialAmount, ret) = {
             new
               revAddrCh,
@@ -212,127 +219,82 @@ in {
               )
             }
           } |
-          // Supplies balance, transfer, and setLog methods on `revVault`.
-          // Logging is automatically enabled.
+          // Supplies balance, transfer, and readEntry methods on `revVault`.
           contract _newVault(revVault, @fromRevAddress, purse) = {
-            new
-              logCh, // logCh stores the current head channel
-              empty
-            in {
-              empty!(Nil, Nil) |
-              logCh!(*empty) |
-              // Returns `revVault` balance on ret
-              contract revVault(@"balance", ret) = {
-                purse!("getBalance", *ret)
-              } |
-              // Transfers `amount` from `revVault` (validated with `authKey`) to the vault at `toRevAddress`
-              // Returns either (true, Nil) or (false, "BUG FOUND: purse deposit failed") on `ret`
-              contract revVault(@"transfer", @toRevAddress, @amount, authKey, ret) = {
-                new ret2 in {
-                  _transferTemplate!(fromRevAddress, *purse, toRevAddress, amount, *authKey, *ret2) |
-                  for (@result <- ret2) {
-                    if (result.nth(0)) {
-                      new
-                        bd(`rho:block:data`),
-                        bdCh
-                      in {
-                        bd!(*bdCh) |
-                        for (@blockNumber, @timestamp, @sender <- bdCh) {
-                          // Rev vault logs are linked lists
-                          // Log the transfer with a unique id on a new head channel
-                          new
-                            id,
-                            head
-                          in {
-                            for (@old_head <- logCh) {
-                              // Record new log entry on `head` and link it to previous head entry `old_head`
-                              head!(("transfer",
-                                { "id"     : *id,
-                                  "from"   : fromRevAddress,
-                                  "to"     : toRevAddress,
-                                  "amount" : amount,
-                                  "block"  : { "number" : blockNumber, "timestamp" : timestamp, "sender" : sender }
+            // Returns `revVault` balance on ret
+            contract revVault(@"balance", ret) = {
+              purse!("getBalance", *ret)
+            } |
+            // Transfers `amount` from `revVault` (validated with `authKey`) to the vault at `toRevAddress`
+            // Returns either (true, Nil) or (false, "BUG FOUND: purse deposit failed") on `ret`
+            // Logs successful transfers on a read-ony channel made available through "getLog" method
+            contract revVault(@"transfer", @toRevAddress, @amount, authKey, ret) = {
+              new ret2 in {
+                _transferTemplate!(fromRevAddress, *purse, toRevAddress, amount, *authKey, *ret2) |
+                for (@result <- ret2) {
+                  if (result.nth(0)) {
+                    new
+                      bd(`rho:block:data`),
+                      bdCh
+                    in {
+                      bd!(*bdCh) |
+                      for (@blockNumber, @timestamp, @sender <- bdCh) {
+                        // Log the transfer in both vault logs with the same unique id
+                        new id in {
+                          // Record new log entry in both vault logs
+                          match ("transfer",
+                            { "id"     : *id,
+                              "from"   : fromRevAddress,
+                              "to"     : toRevAddress,
+                              "amount" : amount,
+                              "block"  : { "number" : blockNumber, "timestamp" : timestamp, "sender" : sender }
+                            }
+                          ) {
+                            entryTuple => {
+                              new
+                                fromLogRet,
+                                toLogRet
+                              in {
+                                // Lookup vault associated with `toRevAddress`
+                                TreeHashMap!("get", vaultMap, toRevAddress, *toLogRet) |
+                                // Lookup log channel associated with `fromRevAddress`
+                                TreeHashMap!("get", vaultMap, fromRevAddress, *fromLogRet) |
+                                for (@(_, _, *fromLogCh) <- fromLogRet;
+                                     @(_, _, *toLogCh)   <- toLogRet) {
+                                  // Put the entry in both logs and return `result` on `ret`
+                                  fromLogCh!(entryTuple) |
+                                  toLogCh!(entryTuple) |
+                                  ret!(result)
                                 }
-                              ), old_head) |
-                              // Update the head of the log
-                              logCh!(*head) |
-                              ret!(result)
+                              }
                             }
                           }
                         }
                       }
-                    } else {
-                      ret!(result)
                     }
+                  } else {
+                    // Unsuccessful transfers are not logged
+                    ret!(result)
                   }
                 }
-              } |
-              // Method for reading the entire Rev vault log
-              contract revVault(@"readLog", ret) = {
-                new
-                  read,
-                  acc
-                in {
-                  for (@head <<- logCh) {
-                    acc!([]) |
-                    // Start reading from the head
-                    read!(head, *ret) |
-                    // Get value from `curr` and read the next element recursively
-                    // until we arrive at the `empty` channel
-                    contract read(curr, ret) = {
-                      if (*curr != *empty) {
-                        for (@currVal, @nextElemPtr <<- curr) {
-                          for (@accVal <- acc) {
-                            acc!(accVal ++ [currVal])
-                          } |
-                          read!(nextElemPtr, *ret)
-                        }
-                      } else {
-                        for (@log <- acc) {
-                          ret!(log)
-                        }
-                      }
-                    }
-                  }
-                }
-              } |
-              // Method for reading the first `n` entries in the Rev vault log
-              contract revVault(@"readN", @n, ret) = {
-                if (n >= 1) {
-                  new
-                    readN,
-                    acc
-                  in {
-                    for (@head <<- logCh) {
-                      acc!([]) |
-                      // Start reading at the `head`
-                      readN!(head, 1, *ret)
-                    } |
-                    // We read elements until we have all `n` or we run out
-                    contract readN(curr, @currN, ret) = {
-                      if (*curr != *empty and currN <= n) {
-                        for (@currVal, @nextElem <<- curr) {
-                          for (@accVal <- acc) {
-                            acc!(accVal ++ [currVal])
-                          } |
-                          readN!(nextElem, currN + 1, *ret)
-                        }
-                      } else {
-                        for (@log <- acc) {
-                          ret!(log)
-                        }
-                      }
-                    }
-                  }
-                } else {
-                  // Return the empty list for invalid `n`
-                  ret!([])
-                }
-              } |
-              // Internal RevVault method for making a deposit from purse in _revVault
-              contract @{fromRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
-                _depositTemplate!(*purse, *depositPurse, *retCh)
               }
+            } |
+            // Returns an entry of the vault's log
+            contract revVault(@"readLogEntry", ret) = {
+              new thmRet in {
+                // Lookup the log channel associated with `fromRevAddress`
+                TreeHashMap!("get", vaultMap, fromRevAddress, *thmRet) |
+                for (@(_, _, *logCh) <- thmRet) {
+                  // Read a transfer entry and return it on `ret`
+                  for (@("transfer", entry) <<- logCh) {
+                    ret!(entry)
+                  }
+                }
+              }
+            } |
+            // Internal RevVault method for making a deposit from purse in `_revVault`
+            contract @{fromRevAddress | bundle0{*_revVault}}(@"_deposit", depositPurse, retCh) = {
+              _depositTemplate!(*purse, *depositPurse, *retCh)
             }
           } |
           // Checks all necessary validation and authentication prerequisites. If everything checks out,
