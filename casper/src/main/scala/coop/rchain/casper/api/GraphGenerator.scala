@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.{Monad, _}
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.syntax._
@@ -32,10 +32,7 @@ object GraphzGenerator {
     def empty[G[_]]: DagInfo[G] = DagInfo[G]()
   }
 
-  def dagAsCluster[
-      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer
-  ](
+  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Monad: GraphSerializer](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
       config: GraphConfig
@@ -93,10 +90,7 @@ object GraphzGenerator {
 
     }
 
-  private def accumulateDagInfo[
-      F[_]: Monad: Sync: Log: SafetyOracle: BlockStore,
-      G[_]
-  ](
+  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore, G[_]](
       acc: DagInfo[G],
       blockHashes: Vector[BlockHash]
   ): F[DagInfo[G]] =
