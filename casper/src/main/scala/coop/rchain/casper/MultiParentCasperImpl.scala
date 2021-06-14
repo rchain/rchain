@@ -162,9 +162,7 @@ class MultiParentCasperImpl[F[_]
   override def getSnapshot: F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
-    def getOnChainState(
-        b: BlockMessage
-    )(implicit runtimeManager: RuntimeManager[F]): F[OnChainCasperState] =
+    def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
         av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
