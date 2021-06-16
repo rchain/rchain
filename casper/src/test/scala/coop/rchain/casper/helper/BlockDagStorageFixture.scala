@@ -1,6 +1,6 @@
 package coop.rchain.casper.helper
 
-import cats.effect.Concurrent
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.syntax.all._
 import coop.rchain.blockstorage.{KeyValueBlockStore, _}
 import coop.rchain.blockstorage.dag.{
@@ -18,8 +18,8 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}
-import java.nio.file.{Files, Path}
 
+import java.nio.file.{Files, Path}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
@@ -56,29 +56,33 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     BlockDagStorageTestFixture.withStorageF[Task, R](f).unsafeRunSync
   }
 }
+
 object BlockDagStorageTestFixture {
+  val ioScheduler = Scheduler.io()
+  val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
   def blockDagStorageDir: Path = Files.createTempDirectory("casper-block-dag-storage-test-")
   def blockStorageDir: Path    = Files.createTempDirectory("casper-block-storage-test-")
 
   val mapSize: Long = 1024L * 1024L * 1024L
-  def createBlockStorage[F[_]: Concurrent: Log](
+  def createBlockStorage[F[_]: Concurrent: ContextShift: Log](
       blockStorageDir: Path
   ): F[BlockStore[F]] =
     for {
-      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
+      storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir, blocker = blocker)
       blockStore   <- KeyValueBlockStore[F](storeManager)
     } yield blockStore
 
-  def createBlockDagStorage[F[_]: Concurrent](blockDagStorageDir: Path)(
+  def createBlockDagStorage[F[_]: Concurrent: ContextShift](blockDagStorageDir: Path)(
       implicit log: Log[F],
       metrics: Metrics[F]
   ): F[BlockDagStorage[F]] =
     for {
-      storeManager    <- RNodeKeyValueStoreManager[F](blockDagStorageDir)
+      storeManager    <- RNodeKeyValueStoreManager[F](blockDagStorageDir, blocker = blocker)
       blockDagStorage <- BlockDagKeyValueStorage.create[F](storeManager)
     } yield blockDagStorage
 
-  def withStorageF[F[_]: Concurrent: Metrics: Log, R](
+  def withStorageF[F[_]: Concurrent: ContextShift: Metrics: Log, R](
       f: BlockStore[F] => IndexedBlockDagStorage[F] => F[R]
   ): F[R] = {
     def create(dir: Path) =

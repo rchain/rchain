@@ -1,5 +1,6 @@
 package coop.rchain.rspace.bench
 
+import cats.effect.Blocker
 import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, RhoRuntime, RholangCLI}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
@@ -12,8 +13,8 @@ import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
-import java.nio.file.{Files, Path}
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -31,7 +32,11 @@ abstract class RhoBenchBaseState {
   }
 
   implicit val scheduler: Scheduler = Scheduler.fixedPool(name = "rho-1", poolSize = 100)
-  lazy val dbDir: Path              = Files.createTempDirectory(BenchStorageDirPrefix)
+
+  val ioScheduler = Scheduler.io()
+  val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
+  lazy val dbDir: Path = Files.createTempDirectory(BenchStorageDirPrefix)
 
   var runtime: RhoRuntime[Task]             = null
   var replayRuntime: ReplayRhoRuntime[Task] = null
@@ -50,7 +55,7 @@ abstract class RhoBenchBaseState {
 
   def createRuntime =
     for {
-      kvm                         <- RholangCLI.mkRSpaceStoreManager[Task](dbDir)
+      kvm                         <- RholangCLI.mkRSpaceStoreManager[Task](dbDir, blocker = blocker)
       store                       <- kvm.rSpaceStores
       spaces                      <- RhoRuntime.createRuntimes[Task](store)
       (runtime, replayRuntime, _) = spaces

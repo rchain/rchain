@@ -2,7 +2,7 @@ package coop.rchain.node.runtime
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -64,7 +64,8 @@ object Setup {
       blockstorePath: Path,
       lastFinalizedPath: Path,
       eventPublisher: EventPublisher[F],
-      deployStorageConfig: LMDBDeployStorage.Config
+      deployStorageConfig: LMDBDeployStorage.Config,
+      blocker: Blocker
   )(implicit mainScheduler: Scheduler): F[
     (
         PacketHandler[F],
@@ -98,7 +99,11 @@ object Setup {
       // RNode key-value store manager / manages LMDB databases
       oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
       legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
-      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager(
+                            conf.storage.dataDir,
+                            legacyRSpaceDirSupport,
+                            blocker
+                          )
 
       // Block storage
       blockStore <- {

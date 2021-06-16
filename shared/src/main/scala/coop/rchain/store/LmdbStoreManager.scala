@@ -2,9 +2,8 @@ package coop.rchain.store
 
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
-
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.{Log, LogSource}
 import enumeratum.{Enum, EnumEntry}
@@ -12,8 +11,12 @@ import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
 import org.lmdbjava.{DbiFlags, Env, EnvFlags}
 
 object LmdbStoreManager {
-  def apply[F[_]: Concurrent: Log](dirPath: Path, maxEnvSize: Long): F[KeyValueStoreManager[F]] =
-    Deferred[F, Env[ByteBuffer]] map (LmdbStoreManagerImpl(dirPath, maxEnvSize, _))
+  def apply[F[_]: Concurrent: ContextShift: Log](
+      dirPath: Path,
+      maxEnvSize: Long,
+      blocker: Blocker
+  ): F[LmdbStoreManagerImpl[F]] =
+    Deferred[F, Env[ByteBuffer]] map (LmdbStoreManagerImpl(dirPath, maxEnvSize, _, blocker))
 }
 
 /**
@@ -24,10 +27,11 @@ object LmdbStoreManager {
   * @param envDefer deferred object for LMDB environment in use.
   * @return LMDB store manager.
   */
-private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
+final case class LmdbStoreManagerImpl[F[_]: Concurrent: ContextShift: Log](
     dirPath: Path,
     maxEnvSize: Long,
-    envDefer: Deferred[F, Env[ByteBuffer]]
+    envDefer: Deferred[F, Env[ByteBuffer]],
+    blocker: Blocker
 ) extends KeyValueStoreManager[F] {
 
   sealed trait EnvRefStatus extends EnumEntry
@@ -54,7 +58,7 @@ private final case class LmdbStoreManagerImpl[F[_]: Concurrent: Log](
   private val varState = Ref.unsafe(DbState(EnvClosed, 0, envDefer))
 
   override def store(dbName: String): F[KeyValueStore[F]] =
-    Sync[F].delay(new LmdbKeyValueStore[F](getCurrentEnv(dbName)))
+    Sync[F].delay(new LmdbKeyValueStore[F](getCurrentEnv(dbName), blocker))
 
   private def getCurrentEnv(dbName: String): F[DbEnv[F]] =
     for {

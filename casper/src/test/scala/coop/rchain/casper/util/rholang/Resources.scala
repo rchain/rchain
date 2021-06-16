@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang
 
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
@@ -31,10 +31,12 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
 
 object Resources {
+  val ioScheduler = Scheduler.io()
+  val blocker     = Blocker.liftExecutionContext(ioScheduler)
 
-  def mkTestRNodeStoreManager[F[_]: Concurrent: Log](
+  def mkTestRNodeStoreManager[F[_]: Concurrent: ContextShift: Log](
       dirPath: Path
-  ): F[KeyValueStoreManager[F]] = {
+  ): F[LmdbDirStoreManager[F]] = {
     // Limit maximum environment (file) size for LMDB in tests
     val limitSize = 100 * mb
     val dbMappings = Sync[F].delay {
@@ -46,7 +48,7 @@ object Resources {
           (db, newConf)
       }
     }
-    dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap))
+    dbMappings >>= (xs => LmdbDirStoreManager[F](dirPath, xs.toMap, blocker = blocker))
   }
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
@@ -83,11 +85,12 @@ object Resources {
     } yield (runtimeManager, history)
   }
 
-  def mkBlockDagStorageAt[F[_]: Concurrent: Sync: Log: Metrics](
-      path: Path
+  def mkBlockDagStorageAt[F[_]: Concurrent: ContextShift: Sync: Log: Metrics](
+      path: Path,
+      blocker: Blocker
   ): Resource[F, BlockDagStorage[F]] =
     Resource.liftF(for {
-      storeManager    <- RNodeKeyValueStoreManager[F](path)
+      storeManager    <- RNodeKeyValueStoreManager[F](path, blocker = blocker)
       blockDagStorage <- BlockDagKeyValueStorage.create[F](storeManager)
     } yield blockDagStorage)
 

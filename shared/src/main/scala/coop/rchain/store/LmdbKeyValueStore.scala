@@ -1,8 +1,7 @@
 package coop.rchain.store
 
 import java.nio.ByteBuffer
-
-import cats.effect.Sync
+import cats.effect.{Blocker, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.Resources.withResource
 import org.lmdbjava._
@@ -11,8 +10,9 @@ import scala.util.control.NonFatal
 
 final case class DbEnv[F[_]](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer], done: F[Unit])
 
-final case class LmdbKeyValueStore[F[_]: Sync](
-    getEnvDbi: F[DbEnv[F]]
+final case class LmdbKeyValueStore[F[_]: Sync: ContextShift](
+    getEnvDbi: F[DbEnv[F]],
+    blocker: Blocker
 ) extends KeyValueStore[F] {
 
   // Ensures transaction is used only on one thread.
@@ -51,16 +51,16 @@ final case class LmdbKeyValueStore[F[_]: Sync](
     } yield result
 
   def withReadTxn[T](f: (Txn[ByteBuffer], Dbi[ByteBuffer]) => T): F[T] =
-    withTxnSingleThread(isWrite = false)(f)
+    blocker.blockOn(withTxnSingleThread(isWrite = false)(f))
 
   def withWriteTxn[T](f: (Txn[ByteBuffer], Dbi[ByteBuffer]) => T): F[T] =
-    withTxnSingleThread(isWrite = true)(f)
+    blocker.blockOn(withTxnSingleThread(isWrite = true)(f))
 
   // GET
   override def get[T](keys: Seq[ByteBuffer], fromBuffer: ByteBuffer => T): F[Seq[Option[T]]] =
-    withTxnSingleThread(isWrite = false) { (txn, dbi) =>
+    blocker.blockOn(withTxnSingleThread(isWrite = false) { (txn, dbi) =>
       keys.map(x => Option(dbi.get(txn, x)).map(fromBuffer))
-    }
+    })
 
   // PUT
   override def put[T](kvPairs: Seq[(ByteBuffer, T)], toBuffer: T => ByteBuffer): F[Unit] = {

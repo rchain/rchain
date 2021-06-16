@@ -1,6 +1,7 @@
 package coop.rchain.rspace.bench
 
 import cats.Id
+import cats.effect.Blocker
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RholangCLI
@@ -10,6 +11,7 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
+import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
@@ -55,6 +57,9 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     var space: ISpace[Id, Channel, Pattern, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, EntriesCaptor] =
       null
@@ -76,7 +81,7 @@ object ReplayRSpaceBench {
     @Setup
     def setup() = {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
-      val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir)
+      val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir, blocker = blocker)
       val store = kvm.rSpaceStores
       val (space, replaySpace, _) =
         RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store)

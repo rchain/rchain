@@ -1,6 +1,6 @@
 package coop.rchain.node.revvaultexport.reporting
 
-import cats.effect.Concurrent
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.implicits._
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
@@ -100,10 +100,11 @@ object Transaction {
     decodeTransactionInfo(cursor)
   }
 
-  def store[F[_]: Concurrent: Log](
-      dirPath: Path
+  def store[F[_]: Concurrent: ContextShift: Log](
+      dirPath: Path,
+      blocker: Blocker
   ): F[TransactionStore[F]] =
-    LmdbStoreManager(dirPath, 1024L * 1024L * 1024L) >>= { manager =>
+    LmdbStoreManager(dirPath, 1024L * 1024L * 1024L, blocker) >>= { manager =>
       manager
         .store("transactions")
         .map(_.toTypedStore(transactionKeyCodec, transactionValueCodec))

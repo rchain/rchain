@@ -1,12 +1,12 @@
 package coop.rchain.casper.batch2
 
 import java.nio.file.Files
-
-import cats.effect.Concurrent
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.{KeyValueStoreSut, LmdbStoreManager}
 import monix.eval.Task
+import monix.execution.Scheduler
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
@@ -20,6 +20,8 @@ class LmdbKeyValueStoreSpec
     with GeneratorDrivenPropertyChecks
     with BeforeAndAfterAll {
   implicit val scheduler = monix.execution.Scheduler.global
+  val ioScheduler        = Scheduler.io()
+  val blocker            = Blocker.liftExecutionContext(ioScheduler)
 
   val tempPath = Files.createTempDirectory(s"lmdb-test-")
   val tempDir  = Directory(Path(tempPath.toFile))
@@ -28,9 +30,13 @@ class LmdbKeyValueStoreSpec
 
   override def afterAll: Unit = tempDir.deleteRecursively
 
-  def withSut[F[_]: Concurrent: Log](f: KeyValueStoreSut[F] => F[Unit]) =
+  def withSut[F[_]: Concurrent: ContextShift: Log](f: KeyValueStoreSut[F] => F[Unit]) =
     for {
-      kvm <- LmdbStoreManager[F](tempPath.resolve(Random.nextString(32)), 1024 * 1024 * 1024)
+      kvm <- LmdbStoreManager[F](
+              tempPath.resolve(Random.nextString(32)),
+              1024 * 1024 * 1024,
+              blocker
+            )
       sut = {
         implicit val kvm_ = kvm
         new KeyValueStoreSut[F]

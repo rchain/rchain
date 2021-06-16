@@ -1,5 +1,6 @@
 package coop.rchain.node
 
+import cats.effect.Blocker
 import coop.rchain.blockstorage.{FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.lmdb.Context
@@ -7,6 +8,7 @@ import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import monix.eval.Task
+import monix.execution.Scheduler
 import org.rogach.scallop.ScallopConf
 import monix.execution.Scheduler.Implicits.global
 
@@ -32,6 +34,9 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 }
 object BlockStoreMigrate {
   def main(args: Array[String]): Unit = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     val options            = Options(args)
     val originalBlockStore = options.originalBlockStore()
     val targetDataDir      = options.targetDataDir()
@@ -39,7 +44,7 @@ object BlockStoreMigrate {
     implicit val metrics   = new Metrics.MetricsNOP[Task]
 
     val t = for {
-      casperStoreManager <- RNodeKeyValueStoreManager[Task](targetDataDir)
+      casperStoreManager <- RNodeKeyValueStoreManager[Task](targetDataDir, blocker = blocker)
       blockKVStore       <- KeyValueBlockStore[Task](casperStoreManager)
 
       blockFileStorage <- FileLMDBIndexBlockStore.create[Task](originalBlockStore)

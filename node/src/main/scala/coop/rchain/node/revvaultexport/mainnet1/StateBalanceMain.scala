@@ -6,6 +6,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
 import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
 
@@ -65,6 +66,9 @@ object StateBalanceMain {
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     val options   = StateOptions(args)
     val dataDir   = options.dataDir()
     val blockHash = options.blockHash()
@@ -81,7 +85,8 @@ object StateBalanceMain {
                         blockHash,
                         genesisVaultMapDepth,
                         genesisVaultMapPar,
-                        dataDir
+                        dataDir,
+                        blocker
                       )
       _ = {
         val file = stateBalancesFile.toFile
