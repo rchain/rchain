@@ -1,6 +1,7 @@
 package coop.rchain.rspace.bench
 
 import cats.Id
+import cats.effect.Blocker
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RholangCLI
@@ -89,13 +90,15 @@ trait RSpaceBenchBase {
 @Fork(value = 2)
 @Measurement(iterations = 10)
 class RSpaceBench extends RSpaceBenchBase {
+  val ioScheduler = Scheduler.io()
+  val blocker     = Blocker.liftExecutionContext(ioScheduler)
 
   implicit val logF: Log[Id]            = new Log.NOPLog[Id]
   implicit val noopMetrics: Metrics[Id] = new metrics.Metrics.MetricsNOP[Id]
   implicit val noopSpan: Span[Id]       = NoopSpan[Id]()
 
   val dbDir        = Files.createTempDirectory("rchain-rspace-bench-")
-  val kvm          = RholangCLI.mkRSpaceStoreManager(dbDir)
+  val kvm          = RholangCLI.mkRSpaceStoreManager(dbDir, blocker = blocker)
   val rspaceStores = kvm.rSpaceStores
 
   @Setup

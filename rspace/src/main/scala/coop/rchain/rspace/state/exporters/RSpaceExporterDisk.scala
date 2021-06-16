@@ -1,7 +1,7 @@
 package coop.rchain.rspace.state.exporters
 
 import cats.Monad
-import cats.effect.Concurrent
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -16,11 +16,12 @@ import java.nio.file.Path
 
 object RSpaceExporterDisk {
 
-  def writeToDisk[F[_]: Concurrent: Log, C, P, A, K](
+  def writeToDisk[F[_]: Concurrent: ContextShift: Log, C, P, A, K](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
-      chunkSize: Int
+      chunkSize: Int,
+      blocker: Blocker
   )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
     def writeChunkRec(historyStore: KeyValueStore[F], dataStore: KeyValueStore[F])(
@@ -74,10 +75,18 @@ object RSpaceExporterDisk {
 
     for {
       // Lmdb restore history
-      lmdbHistoryManager <- LmdbStoreManager(dirPath.resolve("history"), 10L * 1024 * 1024 * 1024)
-      lmdbHistoryStore   <- lmdbHistoryManager.store("db")
-      lmdbDataManager    <- LmdbStoreManager(dirPath.resolve("cold"), 10L * 1024 * 1024 * 1024)
-      lmdbDataStore      <- lmdbDataManager.store("db")
+      lmdbHistoryManager <- LmdbStoreManager(
+                             dirPath.resolve("history"),
+                             10L * 1024 * 1024 * 1024,
+                             blocker
+                           )
+      lmdbHistoryStore <- lmdbHistoryManager.store("db")
+      lmdbDataManager <- LmdbStoreManager(
+                          dirPath.resolve("cold"),
+                          10L * 1024 * 1024 * 1024,
+                          blocker
+                        )
+      lmdbDataStore <- lmdbDataManager.store("db")
       _ <- Stopwatch.time(Log[F].info(_))("Restore complete")(
             Monad[F]
               .tailRecM((Seq((root, none[Byte])), 0))(

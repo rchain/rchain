@@ -74,7 +74,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
     * 3. run the node program.
     */
   // TODO: Resolve scheduler chaos in Runtime, RuntimeManager and CasperPacketHandler
-  def main: F[Unit] = {
+  def main(blocker: Blocker): F[Unit] = {
     for {
       // 1. fetch local peer node
       local <- WhoAmI
@@ -174,7 +174,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           blockstorePath,
           lastFinalizedStoragePath,
           eventBus,
-          deployStorageConfig
+          deployStorageConfig,
+          blocker
         )
       }
       (
@@ -450,7 +451,8 @@ object NodeRuntime {
 
   def start[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: Log: EventLog](
       nodeConf: NodeConf,
-      kamonConf: Config
+      kamonConf: Config,
+      blocker: Blocker
   )(implicit scheduler: Scheduler): F[Unit] = {
 
     /**
@@ -528,7 +530,7 @@ object NodeRuntime {
       runtime = new NodeRuntime[TaskEnv](nodeConf, kamonConf, id, scheduler)
 
       // Run reader layer with initial state
-      _ <- runtime.main.run(NodeCallCtx.init)
+      _ <- runtime.main(blocker).run(NodeCallCtx.init)
     } yield ()
   }
 

@@ -1,6 +1,6 @@
 package coop.rchain.node.revvaultexport.mainnet1.reporting
 
-import cats.effect.Sync
+import cats.effect.{Blocker, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
@@ -15,6 +15,7 @@ import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
 
@@ -147,6 +148,9 @@ object MergeBalanceMain {
     } yield balance
 
   def main(args: Array[String]): Unit = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     val options                = MergeBalanceOptions(args)
     val stateBalanceFile       = options.stateBalanceFile()
     val transactionBalanceFile = options.transactionBalanceFile()
@@ -165,7 +169,7 @@ object MergeBalanceMain {
 
     val task: Task[Vector[Account]] = for {
       accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[Task]
-      rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir, legacyRSpaceDirSupport, blocker)
       blockStore        <- KeyValueBlockStore[Task](rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace

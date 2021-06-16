@@ -49,6 +49,10 @@ object Main {
       "node-runner",
       reporter = UncaughtExceptionLogger
     )
+    // Dedicated unbounded pool for blocking operations (e.g. LMDB read/write)
+    val ioScheduler = Scheduler.io(name = "blocker", reporter = UncaughtExceptionLogger)
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     implicit val console: ConsoleIO[Task] = consoleIO
     implicit val log: Log[Task]           = effects.log
     implicit val eventLog: EventLog[Task] = EventLog.eventLogger
@@ -62,7 +66,8 @@ object Main {
     val options = commandline.Options(args)
     if (options.subcommand.contains(options.run))
       // Start the node
-      startNode[Task](options).unsafeRunSync
+      startNode[Task](options, blocker).unsafeRunSync
+//      blockerRes.use(startNode[Task](options, _)).unsafeRunSync
     //or
     else
       // Execute CLI command
@@ -74,7 +79,8 @@ object Main {
     * @param options command line options
     */
   private def startNode[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log: EventLog](
-      options: commandline.Options
+      options: commandline.Options,
+      blocker: Blocker
   )(implicit s: Scheduler): F[Unit] = Sync[F].defer {
     // Create merged configuration from CLI options and config file
     val (nodeConf, profile, configFile, kamonConf) = Configuration.build(options)
@@ -94,7 +100,7 @@ object Main {
       _               <- logConfiguration[F](confWithDecrypt, profile, configFile, options)
 
       // Create node runtime
-      _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
+      _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf, blocker)
     } yield ()
   }
 

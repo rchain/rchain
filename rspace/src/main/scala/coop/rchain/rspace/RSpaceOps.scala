@@ -32,6 +32,8 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     scheduler: ExecutionContext
 ) extends SpaceMatcher[F, C, P, A, K] {
 
+  val _ = scheduler
+
   override def syncF: Sync[F] = Sync[F]
   override def spanF: Span[F] = Span[F]
 
@@ -185,30 +187,29 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
-      if (channels.isEmpty) {
-        val msg = "channels can't be empty"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else if (channels.length =!= patterns.length) {
-        val msg = "channels.length must equal patterns.length"
-        Log[F].error(msg) >> Sync[F]
-          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
-      } else
-        (for {
-          consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
-          result <- consumeLockF(channels) {
-                     lockedConsume(
-                       channels,
-                       patterns,
-                       continuation,
-                       persist,
-                       peeks,
-                       consumeRef
-                     )
-                   }
-        } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+//    ContextShift[F].evalOn(scheduler)
+    if (channels.isEmpty) {
+      val msg = "channels can't be empty"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else if (channels.length =!= patterns.length) {
+      val msg = "channels.length must equal patterns.length"
+      Log[F].error(msg) >> Sync[F]
+        .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
+    } else
+      (for {
+        consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
+        result <- consumeLockF(channels) {
+                   lockedConsume(
+                     channels,
+                     patterns,
+                     continuation,
+                     persist,
+                     peeks,
+                     consumeRef
+                   )
+                 }
+      } yield result).timer(consumeTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedConsume(
       channels: Seq[C],
@@ -224,14 +225,13 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
-    ContextShift[F].evalOn(scheduler) {
-      (for {
-        produceRef <- Sync[F].delay(Produce(channel, data, persist))
-        result <- produceLockF(channel)(
-                   lockedProduce(channel, data, persist, produceRef)
-                 )
-      } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
-    }
+//    ContextShift[F].evalOn(scheduler)
+    (for {
+      produceRef <- Sync[F].delay(Produce(channel, data, persist))
+      result <- produceLockF(channel)(
+                 lockedProduce(channel, data, persist, produceRef)
+               )
+    } yield result).timer(produceTimeCommLabel)(Metrics[F], MetricsSource)
 
   protected[this] def lockedProduce(
       channel: C,

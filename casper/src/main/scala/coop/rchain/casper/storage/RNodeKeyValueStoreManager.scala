@@ -1,19 +1,20 @@
 package coop.rchain.casper.storage
 
-import cats.effect.Concurrent
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.syntax.all._
 import coop.rchain.shared.Log
+import coop.rchain.store.LmdbDirStoreManager
 import coop.rchain.store.LmdbDirStoreManager.{gb, tb, Db, LmdbEnvConfig}
-import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
 
 import java.nio.file.Path
 
 object RNodeKeyValueStoreManager {
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Concurrent: ContextShift: Log](
       dirPath: Path,
-      legacyRSpacePaths: Boolean = false
-  ): F[KeyValueStoreManager[F]] =
-    LmdbDirStoreManager[F](dirPath, rnodeDbMapping(legacyRSpacePaths).toMap)
+      legacyRSpacePaths: Boolean = false,
+      blocker: Blocker
+  ): F[LmdbDirStoreManager[F]] =
+    LmdbDirStoreManager[F](dirPath, rnodeDbMapping(legacyRSpacePaths).toMap, blocker)
 
   // Config name is used as a sub-folder for LMDB files
 
@@ -21,7 +22,8 @@ object RNodeKeyValueStoreManager {
   private val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "rspace/history", maxEnvSize = 1 * tb)
   private val rspaceColdEnvConfig    = LmdbEnvConfig(name = "rspace/cold", maxEnvSize = 1 * tb)
   // Temporary channel store, remove in hard fork
-  private val rspaceChannelsMapEnvConfig = LmdbEnvConfig(name = "rspace/channels")
+  private val rspaceChannelsMapEnvConfig =
+    LmdbEnvConfig(name = "rspace/channels", maxEnvSize = 1 * tb)
   // RSpace evaluator
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)

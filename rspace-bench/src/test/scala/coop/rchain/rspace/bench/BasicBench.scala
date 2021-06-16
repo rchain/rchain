@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import cats.effect.{ContextShift, Sync}
+import cats.effect.{Blocker, ContextShift, Sync}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -15,6 +15,7 @@ import coop.rchain.rspace.{Match, RSpace, _}
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps.RichPath
 import monix.eval.Task
+import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.openjdk.jmh.annotations.{State => _, _}
 import org.openjdk.jmh.infra.Blackhole
@@ -104,6 +105,9 @@ object BasicBench {
   class BenchState {
     val debug: Boolean = false
 
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     import coop.rchain.rholang.interpreter.storage._
     implicit val syncF: Sync[Task]                              = Task.catsEffect
     implicit val logF: Log[Task]                                = new Log.NOPLog[Task]
@@ -113,8 +117,9 @@ object BasicBench {
     implicit val contextShiftF: ContextShift[Task]              = Task.contextShift
     implicit val ms: Metrics.Source                             = Metrics.BaseSource
     private val dbDir: Path                                     = Files.createTempDirectory("rchain-storage-test-")
-    implicit val kvm                                            = RholangCLI.mkRSpaceStoreManager[Task](dbDir).runSyncUnsafe()
-    val rSpaceStore                                             = kvm.rSpaceStores.runSyncUnsafe()
+    implicit val kvm =
+      RholangCLI.mkRSpaceStoreManager[Task](dbDir, blocker = blocker).runSyncUnsafe()
+    val rSpaceStore = kvm.rSpaceStores.runSyncUnsafe()
 
     val testSpace: ISpace[
       Task,

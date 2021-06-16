@@ -1,7 +1,8 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
+import cats.effect.Blocker
 
+import java.nio.file.Files
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.catscontrib.TaskContrib._
@@ -86,12 +87,16 @@ class Interactive private (runtime: RhoRuntime[Task])(implicit scheduler: Schedu
 }
 object Interactive {
   def apply(): Interactive = {
-    implicit val scheduler                 = Scheduler.io("rholang-interpreter")
+    implicit val scheduler = Scheduler.io("rholang-interpreter")
+
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     val p                                  = Files.createTempDirectory("interactive-")
-    val kvm                                = RNodeKeyValueStoreManager[Task](p).unsafeRunSync
+    val kvm                                = RNodeKeyValueStoreManager[Task](p, blocker = blocker).unsafeRunSync
     val rspaceStore                        = kvm.rSpaceStores.runSyncUnsafe()
     val (runtime, _, _)                    = RhoRuntime.createRuntimes[Task](rspaceStore).unsafeRunSync
     new Interactive(runtime)

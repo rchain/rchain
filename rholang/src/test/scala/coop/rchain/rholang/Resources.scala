@@ -2,7 +2,7 @@ package coop.rchain.rholang
 
 import cats.Parallel
 import cats.effect.ExitCase.Error
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
@@ -16,9 +16,9 @@ import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.store.KeyValueStoreManager
 import monix.execution.Scheduler
+
 import java.io.File
 import java.nio.file.{Files, Path}
-
 import scala.reflect.io.Directory
 
 object Resources {
@@ -59,20 +59,26 @@ object Resources {
 
   def mkRuntime[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String
-  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
+  )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
     mkTempDir(prefix)
-      .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
+      .evalMap(RholangCLI.mkRSpaceStoreManager[F](_, blocker = blocker))
       .evalMap(mkRuntimeAt(_))
       .map(_._1)
+  }
 
   def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       prefix: String
   )(
       implicit scheduler: Scheduler
-  ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
+  ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
     mkTempDir(prefix)
-      .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
+      .evalMap(RholangCLI.mkRSpaceStoreManager[F](_, blocker = blocker))
       .evalMap(mkRuntimeAt(_))
+  }
 
   def mkRuntimeAt[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       kvm: KeyValueStoreManager[F],

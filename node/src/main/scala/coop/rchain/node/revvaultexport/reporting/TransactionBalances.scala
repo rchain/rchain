@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.google.protobuf.ByteString
@@ -30,6 +30,7 @@ import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import fs2._
+import monix.execution.Scheduler
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.ExecutionContext
@@ -302,6 +303,9 @@ object TransactionBalances {
       transactionDir: Path,
       targetBlockHash: String
   )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, Map[String, List[Transfer]])] = {
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
+
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
@@ -310,7 +314,7 @@ object TransactionBalances {
     implicit val log: Log[F]                                 = Log.log
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
-      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport, blocker)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
       blockDagStorage   <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
       dagRepresantation <- blockDagStorage.getRepresentation
@@ -327,7 +331,7 @@ object TransactionBalances {
       targetBlock      = targetBlockOpt.get
       _                <- log.info(s"Getting balance from $targetBlock")
       genesisVaultMap  <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
-      transactionStore <- Transaction.store(transactionDir)
+      transactionStore <- Transaction.store(transactionDir, blocker)
       tasks = getAllTransfer(
         targetBlock,
         transactionStore,

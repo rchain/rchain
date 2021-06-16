@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport
 
 import cats.Parallel
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.{Blocker, Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
@@ -25,7 +25,8 @@ object StateBalances {
       blockHash: String,
       vaultTreeHashMapDepth: Int,
       vaultChannel: Par,
-      dataDir: Path
+      dataDir: Path,
+      blocker: Blocker
   )(implicit scheduler: ExecutionContext): F[List[(ByteString, Long)]] = {
     val oldRSpacePath = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     import coop.rchain.rholang.interpreter.storage._
@@ -35,7 +36,7 @@ object StateBalances {
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     val legacyRSpaceDirSupport                               = Files.exists(oldRSpacePath)
     for {
-      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport, blocker)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
       blockOpt          <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
       block             = blockOpt.get

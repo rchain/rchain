@@ -1,7 +1,7 @@
 package coop.rchain.store
 
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.{Db, LmdbEnvConfig}
@@ -12,11 +12,12 @@ object LmdbDirStoreManager {
   // TODO: Return instance as Resource with the call to _shutdown_.
   //  Shutdown can also be removed from the interface and be only
   //  implemented as instance method if applicable.
-  def apply[F[_]: Concurrent: Log](
+  def apply[F[_]: Concurrent: ContextShift: Log](
       dirPath: Path,
-      dbInstanceMapping: Map[Db, LmdbEnvConfig]
-  ): F[KeyValueStoreManager[F]] =
-    Sync[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping))
+      dbInstanceMapping: Map[Db, LmdbEnvConfig],
+      blocker: Blocker
+  ): F[LmdbDirStoreManager[F]] =
+    Sync[F].delay(new LmdbDirStoreManager(dirPath, dbInstanceMapping, blocker))
 
   /**
     * Specification for LMDB database: unique identifier and database name
@@ -40,9 +41,10 @@ object LmdbDirStoreManager {
 
 // The idea for this class is to manage multiple of key-value lmdb databases.
 // For LMDB this allows control which databases are part of the same environment (file).
-private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
+final case class LmdbDirStoreManager[F[_]: Concurrent: ContextShift: Log](
     dirPath: Path,
-    dbMapping: Map[Db, LmdbEnvConfig]
+    dbMapping: Map[Db, LmdbEnvConfig],
+    blocker: Blocker
 ) extends KeyValueStoreManager[F] {
 
   private case class StoreState(
@@ -73,7 +75,7 @@ private final case class LmdbDirStoreManager[F[_]: Concurrent: Log](
 
   private def createLmdbManger(config: LmdbEnvConfig, defer: Deferred[F, KeyValueStoreManager[F]]) =
     for {
-      manager <- LmdbStoreManager(dirPath.resolve(config.name), config.maxEnvSize)
+      manager <- LmdbStoreManager(dirPath.resolve(config.name), config.maxEnvSize, blocker)
       _       <- defer.complete(manager)
     } yield ()
 

@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats._
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Blocker, Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -59,6 +59,8 @@ object RholangCLI {
 
   def main(args: Array[String]): Unit = {
     import monix.execution.Scheduler.Implicits.global
+    val ioScheduler = Scheduler.io()
+    val blocker     = Blocker.liftExecutionContext(ioScheduler)
 
     val conf = new Conf(args)
 
@@ -67,7 +69,7 @@ object RholangCLI {
     implicit val spanF: Span[Task]       = NoopSpan[Task]()
     implicit val parF: Parallel[Task]    = Task.catsParallel
 
-    val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize()).runSyncUnsafe()
+    val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize(), blocker).runSyncUnsafe()
 
     val runtime = (for {
       store           <- kvm.rSpaceStores
@@ -111,10 +113,11 @@ object RholangCLI {
     }
   }
 
-  def mkRSpaceStoreManager[F[_]: Concurrent: Log](
+  def mkRSpaceStoreManager[F[_]: Concurrent: ContextShift: Log](
       dirPath: Path,
-      mapSize: Long = 100 * mb
-  ): F[KeyValueStoreManager[F]] = {
+      mapSize: Long = 100 * mb,
+      blocker: Blocker
+  ): F[LmdbDirStoreManager[F]] = {
     // Specify database mapping
     val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "history", mapSize)
     val rspaceColdEnvConfig    = LmdbEnvConfig(name = "cold", mapSize)
@@ -125,7 +128,7 @@ object RholangCLI {
       (Db("rspace-cold"), rspaceColdEnvConfig),
       (Db("rspace-channels"), channelEnvConfig)
     )
-    LmdbDirStoreManager[F](dirPath, dbMapping)
+    LmdbDirStoreManager[F](dirPath, dbMapping, blocker)
   }
 
   def errorOrBug(th: Throwable): Either[Throwable, Throwable] = th match {
