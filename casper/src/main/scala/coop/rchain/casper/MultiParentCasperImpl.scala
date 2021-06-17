@@ -1,6 +1,5 @@
 package coop.rchain.casper
 
-import cats.{Applicative, Show}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
@@ -10,8 +9,9 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.finality.Finalizer
+import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
@@ -21,28 +21,14 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
-import coop.rchain.models.{
-  BindPattern,
-  BlockMetadata,
-  EquivocationRecord,
-  ListParWithRandom,
-  NormalizerEnv,
-  Par,
-  TaggedContinuation
-}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
-import coop.rchain.shared._
-import coop.rchain.casper.finality.Finalizer
-import coop.rchain.casper.safety.CliqueOracle
-import coop.rchain.casper.merging.BlockIndex
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.dag
+import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.models.syntax._
+import coop.rchain.shared._
 
 // format: off
 class MultiParentCasperImpl[F[_]
