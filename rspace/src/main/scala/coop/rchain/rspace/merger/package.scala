@@ -48,7 +48,11 @@ package object merger {
       }
     }
     // each rejection option is defined by decision not to reject a key in rejection map
-    conflictMap.keySet.map(k => process(conflictMap(k), Set.empty, reject = true))
+    conflictMap
+    // only keys that have conflicts associated should be examined
+      .filter { case (_, conflicts) => conflicts.nonEmpty }
+      .keySet
+      .map(k => process(conflictMap(k), Set.empty, reject = true))
   }
 
   def computeRelatedSets[A](items: Set[A], relation: (A, A) => Boolean): Set[Set[A]] =
