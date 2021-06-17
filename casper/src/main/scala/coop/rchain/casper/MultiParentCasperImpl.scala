@@ -1,66 +1,52 @@
 package coop.rchain.casper
 
-import cats.{Applicative, Show}
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.syntax._
-import coop.rchain.casper.util._
-import coop.rchain.casper.util.ProtoUtil._
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.catscontrib.Catscontrib.ToBooleanF
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.metrics.implicits._
-import coop.rchain.models.BlockHash._
-import coop.rchain.models.{
-  BindPattern,
-  BlockMetadata,
-  EquivocationRecord,
-  ListParWithRandom,
-  NormalizerEnv,
-  Par,
-  TaggedContinuation
-}
-import coop.rchain.models.Validator.Validator
-import coop.rchain.models.syntax._
-import coop.rchain.shared._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.finality.Finalizer
-import coop.rchain.casper.safety.CliqueOracle
 import coop.rchain.casper.merging.BlockIndex
-import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil._
+import coop.rchain.casper.util._
+import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang._
+import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.dag
 import coop.rchain.dag.DagOps
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.metrics.implicits._
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash._
+import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared._
 
-class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: LastFinalizedStorage: CommUtil: EventPublisher: Estimator: DeployStorage: BlockRetriever](
+// format: off
+class MultiParentCasperImpl[F[_]
+  /* Execution */   : Concurrent: Time
+  /* Transport */   : CommUtil: BlockRetriever: EventPublisher
+  /* Rholang */     : RuntimeManager
+  /* Casper */      : Estimator: SafetyOracle
+  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage
+  /* Diagnostics */ : Log: Metrics: Span] // format: on
+(
     validatorId: Option[ValidatorIdentity],
     // todo this should be read from chain, for now read from startup options
     casperShardConf: CasperShardConf,
     approvedBlock: BlockMessage
-)(
-    implicit casperBuffer: CasperBufferStorage[F],
-    metricsF: Metrics[F],
-    spanF: Span[F],
-    runtimeManager: RuntimeManager[F]
 ) extends MultiParentCasper[F] {
   import MultiParentCasperImpl._
 
   implicit private val logSource: LogSource = LogSource(this.getClass)
-  private[this] val syncF                   = Sync[F]
 
   // TODO: Extract hardcoded version from shard config
   private val version = 1L
@@ -101,12 +87,11 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
 
   def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
 
-  def bufferContains(hash: BlockHash): F[Boolean] = casperBuffer.contains(hash)
+  def bufferContains(hash: BlockHash): F[Boolean] = CasperBufferStorage[F].contains(hash)
 
   def contains(hash: BlockHash): F[Boolean] = bufferContains(hash) ||^ dagContains(hash)
 
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
-    import cats.instances.either._
     import coop.rchain.models.rholang.implicits._
 
     InterpreterUtil
@@ -180,12 +165,12 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
       }
     }
 
-  def getRuntimeManager: F[RuntimeManager[F]] = syncF.pure(runtimeManager)
+  def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
 
   def fetchDependencies: F[Unit] = {
     import cats.instances.list._
     for {
-      pendants       <- casperBuffer.getPendants
+      pendants       <- CasperBufferStorage[F].getPendants
       pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
       _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
             pendantsUnseen.toList.traverse_(
@@ -205,11 +190,9 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
   override def getSnapshot: F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
-    def getOnChainState(
-        b: BlockMessage
-    )(implicit runtimeManager: RuntimeManager[F]): F[OnChainCasperState] =
+    def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
-        av <- runtimeManager.getActiveValidators(b.body.state.postStateHash)
+        av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
         bm          = b.body.state.bonds
         shardConfig = casperShardConf
@@ -304,7 +287,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
-                .validateBlockCheckpoint(b, s, runtimeManager)
+                .validateBlockCheckpoint(b, s, RuntimeManager[F])
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
@@ -312,7 +295,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
                 }
             )
         _ <- EitherT.liftF(Span[F].mark("transactions-validated"))
-        _ <- EitherT(Validate.bondsCache(b, runtimeManager))
+        _ <- EitherT(Validate.bondsCache(b, RuntimeManager[F]))
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
         _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
@@ -320,7 +303,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
               EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
         _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
-        depDag <- EitherT.liftF(casperBuffer.toDoublyLinkedDag)
+        depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
@@ -331,7 +314,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
                 b.body.deploys,
                 Blake2b256Hash.fromByteString(b.body.state.preStateHash),
                 Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                runtimeManager.getHistoryRepo
+                RuntimeManager[F].getHistoryRepo
               )
       _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
     } yield ()
@@ -355,7 +338,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
     for {
       updatedDag <- BlockDagStorage[F].insert(block, invalid = false)
-      _          <- casperBuffer.remove(block.blockHash)
+      _          <- CasperBufferStorage[F].remove(block.blockHash)
       _          <- updateLastFinalizedBlock(block)
     } yield updatedDag
 
@@ -385,7 +368,7 @@ class MultiParentCasperImpl[F[_]: Sync: Concurrent: Log: Time: SafetyOracle: Blo
           _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
                 for {
                   equivocations <- tracker.equivocationRecords
-                  _ <- syncF.unlessA(equivocations.exists {
+                  _ <- Sync[F].unlessA(equivocations.exists {
                         case EquivocationRecord(validator, seqNum, _) =>
                           block.sender == validator && baseEquivocationBlockSeqNum == seqNum
                         // More than 2 equivocating children from base equivocation block and base block has already been recorded

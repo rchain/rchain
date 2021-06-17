@@ -1,4 +1,4 @@
-package coop.rchain.rholang.interpreter
+package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import java.io.StringReader
 
@@ -10,7 +10,6 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   _
 }
 import org.scalatest._
-import coop.rchain.models.rholang.sorter.ordering._
 
 import scala.collection.immutable.BitSet
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -18,17 +17,13 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
 import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
-import coop.rchain.models.rholang.implicits
-import errors._
+import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.ParBuilderUtil
 import coop.rchain.rholang.interpreter.compiler.{
-  BoolNormalizeMatcher,
   DeBruijnLevelMap,
-  GroundNormalizeMatcher,
   IndexMapChain,
-  NameNormalizeMatcher,
   NameSort,
-  NameVisitInputs,
   ProcNormalizeMatcher,
   ProcSort,
   ProcVisitInputs,
@@ -36,207 +31,6 @@ import coop.rchain.rholang.interpreter.compiler.{
   VarSort
 }
 import monix.eval.Coeval
-
-class BoolMatcherSpec extends FlatSpec with Matchers {
-  "BoolTrue" should "Compile as GBool(true)" in {
-    val btrue = new BoolTrue()
-
-    BoolNormalizeMatcher.normalizeMatch(btrue) should be(GBool(true))
-  }
-  "BoolFalse" should "Compile as GBool(false)" in {
-    val bfalse = new BoolFalse()
-
-    BoolNormalizeMatcher.normalizeMatch(bfalse) should be(GBool(false))
-  }
-}
-
-class GroundMatcherSpec extends FlatSpec with Matchers {
-  "GroundInt" should "Compile as GInt" in {
-    val gi                   = new GroundInt("7")
-    val expectedResult: Expr = GInt(7)
-    GroundNormalizeMatcher.normalizeMatch[Coeval](gi).value should be(expectedResult)
-  }
-  "GroundString" should "Compile as GString" in {
-    val gs                   = new GroundString("\"String\"")
-    val expectedResult: Expr = GString("String")
-    GroundNormalizeMatcher.normalizeMatch[Coeval](gs).value should be(expectedResult)
-  }
-  "GroundUri" should "Compile as GUri" in {
-    val gu                   = new GroundUri("`rho:uri`")
-    val expectedResult: Expr = GUri("rho:uri")
-    GroundNormalizeMatcher.normalizeMatch[Coeval](gu).value should be(expectedResult)
-  }
-}
-
-class CollectMatcherSpec extends FlatSpec with Matchers {
-  val inputs = ProcVisitInputs(
-    Par(),
-    IndexMapChain
-      .empty[VarSort]
-      .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
-    DeBruijnLevelMap.empty[VarSort]
-  )
-  implicit val normalizerEnv: Map[String, Par] = Map.empty
-  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
-  def assertEqualNormalized(rho1: String, rho2: String): Assertion =
-    assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
-
-  "List" should "delegate" in {
-    val listData = new ListProc()
-    listData.add(new PVar(new ProcVarVar("P")))
-    listData.add(new PEval(new NameVar("x")))
-    listData.add(new PGround(new GroundInt("7")))
-    val list = new PCollect(new CollectList(listData, new ProcRemainderEmpty()))
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        EList(
-          List[Par](EVar(BoundVar(1)), EVar(BoundVar(0)), GInt(7)),
-          locallyFree = BitSet(0, 1)
-        ),
-        0
-      )
-    )
-    result.knownFree should be(inputs.knownFree)
-  }
-  "List" should "sort the insides of their elements" in {
-    assertEqualNormalized("@0!([{1 | 2}])", "@0!([{2 | 1}])")
-  }
-  "List" should "sort the insides of a send encoded as a byte array" in {
-    val rho1 =
-      """new x in {
-        |  x!(
-        |    [
-        |      @"a"!(
-        |        @"x"!("abc") |
-        |        @"y"!(1)
-        |      )
-        |    ].toByteArray()
-        |  )}""".stripMargin
-    val rho2 =
-      """new x in {
-        |  x!(
-        |    [
-        |      @"a"!(
-        |        @"y"!(1) |
-        |        @"x"!("abc")
-        |      )
-        |    ].toByteArray()
-        |  )}""".stripMargin
-    assertEqualNormalized(rho1, rho2)
-  }
-  "Tuple" should "delegate" in {
-    val tupleData = new ListProc()
-    tupleData.add(new PEval(new NameVar("y")))
-    val tuple =
-      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        ETuple(
-          List[Par](
-            EVar(FreeVar(0)),
-            EVar(FreeVar(1))
-          ),
-          locallyFree = BitSet(),
-          connectiveUsed = true
-        ),
-        0
-      )
-    )
-    result.knownFree should be(
-      inputs.knownFree.put(
-        List(("Q", ProcSort, SourcePosition(0, 0)), ("y", NameSort, SourcePosition(0, 0)))
-      )
-    )
-  }
-  "Tuple" should "propagate free variables" in {
-    val tupleData = new ListProc()
-    tupleData.add(new PGround(new GroundInt("7")))
-    tupleData.add(new PPar(new PGround(new GroundInt("7")), new PVar(new ProcVarVar("Q"))))
-    val tuple =
-      new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
-
-    an[UnexpectedReuseOfProcContextFree] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
-    }
-  }
-  "Tuple" should "sort the insides of their elements" in {
-    assertEqualNormalized("@0!(({1 | 2}))", "@0!(({2 | 1}))")
-  }
-  "Set" should "delegate" in {
-    val setData = new ListProc()
-    setData.add(new PAdd(new PVar(new ProcVarVar("P")), new PVar(new ProcVarVar("R"))))
-    setData.add(new PGround(new GroundInt("7")))
-    setData.add(new PPar(new PGround(new GroundInt("8")), new PVar(new ProcVarVar("Q"))))
-    val set = new PCollect(new CollectSet(setData, new ProcRemainderVar(new ProcVarVar("Z"))))
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
-
-    result.par should be(
-      inputs.par.prepend(
-        ParSet(
-          Seq[Par](
-            EPlus(EVar(BoundVar(1)), EVar(FreeVar(1))),
-            GInt(7),
-            GInt(8).prepend(EVar(FreeVar(2)), 0)
-          ),
-          remainder = Some(FreeVar(0))
-        ),
-        depth = 0
-      )
-    )
-    val newBindings = List(
-      ("Z", ProcSort, SourcePosition(0, 0)),
-      ("R", ProcSort, SourcePosition(0, 0)),
-      ("Q", ProcSort, SourcePosition(0, 0))
-    )
-    result.knownFree should be(inputs.knownFree.put(newBindings))
-  }
-  "Set" should "sort the insides of their elements" in {
-    assertEqualNormalized("@0!(Set({1 | 2}))", "@0!(Set({2 | 1}))")
-  }
-  "Map" should "delegate" in {
-    val mapData = new ListKeyValuePair()
-    mapData.add(
-      new KeyValuePairImpl(
-        new PGround(new GroundInt("7")),
-        new PGround(new GroundString("\"Seven\""))
-      )
-    )
-    mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
-    val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
-
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
-    result.par should be(
-      inputs.par.prepend(
-        ParMap(
-          List[(Par, Par)](
-            (GInt(7), GString("Seven")),
-            (EVar(BoundVar(1)), EVar(FreeVar(1)))
-          ),
-          locallyFree = BitSet(1),
-          connectiveUsed = true,
-          remainder = Some(Var(FreeVar(0)))
-        ),
-        depth = 0
-      )
-    )
-    val newBindings = List(
-      ("Z", ProcSort, SourcePosition(0, 0)),
-      ("Q", NameSort, SourcePosition(0, 0))
-    )
-    result.knownFree should be(inputs.knownFree.put(newBindings))
-  }
-  "Map" should "sort the insides of their keys" in {
-    assertEqualNormalized("@0!({{1 | 2} : 0})", "@0!({{2 | 1} : 0})")
-  }
-  "Map" should "sort the insides of their values" in {
-    assertEqualNormalized("@0!({0 : {1 | 2}})", "@0!({0 : {2 | 1}})")
-  }
-}
 
 class ProcMatcherSpec extends FlatSpec with Matchers {
   val inputs                                   = ProcVisitInputs(Par(), IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
@@ -1634,95 +1428,4 @@ class ProcMatcherSpec extends FlatSpec with Matchers {
     check("logical NOT", "channel of the consume", "{for(@1 <- @{~Nil}) { Nil }} ")
     check("wildcard", "channel of the consume", "{for(@1 <- _) { Nil }} ")
   }
-}
-
-class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
-  implicit val normalizerEnv: Map[String, Par] = Map.empty
-
-  "NameWildcard" should "add a wildcard count to knownFree" in {
-    val nw                  = new NameWildcard()
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nw, inputs).value
-    val expectedResult: Par = EVar(Wildcard(Var.WildcardMsg()))
-    result.chan should be(expectedResult)
-    result.knownFree.count shouldEqual 1
-  }
-
-  val nvar = new NameVar("x")
-
-  "NameVar" should "Compile as BoundVar if it's in env" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
-
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value
-    val expectedResult: Par = EVar(BoundVar(0))
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-  "NameVar" should "Compile as FreeVar if it's not in env" in {
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nvar, inputs).value
-    val expectedResult: Par = EVar(FreeVar(0))
-    result.chan should be(expectedResult)
-    result.knownFree shouldEqual
-      (inputs.knownFree.put(("x", NameSort, SourcePosition(0, 0))))
-  }
-  "NameVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
-
-    an[UnexpectedNameContext] should be thrownBy {
-      NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value
-    }
-  }
-  "NameVar" should "Not compile if it's used free somewhere else" in {
-    val boundInputs =
-      inputs.copy(knownFree = inputs.knownFree.put(("x", NameSort, SourcePosition(0, 0))))
-
-    an[UnexpectedReuseOfNameContextFree] should be thrownBy {
-      NameNormalizeMatcher.normalizeMatch[Coeval](nvar, boundInputs).value
-    }
-  }
-
-  val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
-
-  "NameQuote" should "compile to a var if the var is bound" in {
-    val boundInputs         = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
-    val nqvar               = new NameQuote(new PVar(new ProcVarVar("x")))
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nqvar, boundInputs).value
-    val expectedResult: Par = EVar(BoundVar(0))
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-
-  "NameQuote" should "return a free use if the quoted proc has a free var" in {
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nqvar, inputs).value
-    val expectedResult: Par = EVar(FreeVar(0))
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree.put(("x", ProcSort, SourcePosition(0, 0))))
-  }
-
-  "NameQuote" should "compile to a ground" in {
-    val nqground            = new NameQuote(new PGround(new GroundInt("7")))
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nqground, inputs).value
-    val expectedResult: Par = GInt(7)
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-
-  "NameQuote" should "collapse an eval" in {
-    val nqeval              = new NameQuote(new PEval(new NameVar("x")))
-    val boundInputs         = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value
-    val expectedResult: Par = EVar(BoundVar(0))
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-
-  "NameQuote" should "not collapse an eval | eval" in {
-    val nqeval              = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs         = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
-    val result              = NameNormalizeMatcher.normalizeMatch[Coeval](nqeval, boundInputs).value
-    val expectedResult: Par = EVar(BoundVar(0)).prepend(EVar(BoundVar(0)), 0)
-    result.chan should be(expectedResult)
-    result.knownFree should be(inputs.knownFree)
-  }
-
 }

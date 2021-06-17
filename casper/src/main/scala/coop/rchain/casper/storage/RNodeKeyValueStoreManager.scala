@@ -21,7 +21,8 @@ object RNodeKeyValueStoreManager {
   private val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "rspace/history", maxEnvSize = 1 * tb)
   private val rspaceColdEnvConfig    = LmdbEnvConfig(name = "rspace/cold", maxEnvSize = 1 * tb)
   // Temporary channel store, remove in hard fork
-  private val rspaceChannelsMapEnvConfig = LmdbEnvConfig(name = "rspace/channels")
+  private val rspaceChannelsMapEnvConfig =
+    LmdbEnvConfig(name = "rspace/channels", maxEnvSize = 1 * tb)
   // RSpace evaluator
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)
