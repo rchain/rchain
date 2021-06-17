@@ -33,6 +33,7 @@ object RNodeKeyValueStoreManager {
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val transactionEnvConfig  = LmdbEnvConfig(name = "transaction")
 
   // Legacy RSpace paths
   val legacyRSpacePathPrefix = "rspace/casper/v2"
@@ -62,7 +63,9 @@ object RNodeKeyValueStoreManager {
       // Rholang evaluator store
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),
-      (Db("eval-cold"), evalColdEnvConfig)
+      (Db("eval-cold"), evalColdEnvConfig),
+      // transaction store
+      (Db("transaction"), transactionEnvConfig)
     ) ++ (
       // RSpace
       if (!legacyRSpacePaths) {
