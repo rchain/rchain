@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.LfsTupleSpaceRequester.{ST, StatePartPath}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.TestTime
+import coop.rchain.casper.util.scalatest.Fs2StreamMatchers
 import coop.rchain.models.blockImplicits
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceImporter, StateValidationError}
@@ -17,10 +18,9 @@ import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
-import java.util.concurrent.TimeoutException
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
+class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2StreamMatchers {
 
   def createApprovedBlock(block: BlockMessage): ApprovedBlock = {
     val candidate = ApprovedBlockCandidate(block, requiredSigs = 0)
@@ -52,7 +52,7 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
 
   def exceptionInvalidState = StateValidationError("Fake invalid state received.")
 
-  trait SUT[F[_]] {
+  trait Mock[F[_]] {
     // Fill response queue - simulate receiving StoreItems from external source
     def receive(item: StoreItemsMessage*): F[Unit]
 
@@ -72,8 +72,8 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
     *
     * @param test test definition
     */
-  def createSut[F[_]: Concurrent: Time: Log](requestTimeout: FiniteDuration)(
-      test: SUT[F] => F[Unit]
+  def createMock[F[_]: Concurrent: Time: Log](requestTimeout: FiniteDuration)(
+      test: Mock[F] => F[Unit]
   ): F[Unit] = {
 
     def mockValidateStateChunk(
@@ -142,16 +142,16 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
                            mockValidateStateChunk
                          )
 
-      sut = new SUT[F] {
+      mock = new Mock[F] {
         override def receive(msgs: StoreItemsMessage*): F[Unit] =
           responseQueue.enqueue(Stream.emits(msgs)).compile.drain
 
         override val sentRequests: Stream[F, (StatePartPath, Int)] =
-          requestQueue.dequeue
+          Stream.eval(requestQueue.dequeue1).repeat
         override val savedHistory: Stream[F, SavedStoreItems] =
-          savedHistoryQueue.dequeue
+          Stream.eval(savedHistoryQueue.dequeue1).repeat
         override val savedData: Stream[F, SavedStoreItems] =
-          savedDataQueue.dequeue
+          Stream.eval(savedDataQueue.dequeue1).repeat
 
         override val stream: Stream[F, ST[StatePartPath]] = processingStream
       }
@@ -160,7 +160,7 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
       _ <- processingStream.take(1).compile.drain
 
       // Execute test function together with processing stream
-      _ <- test(sut)
+      _ <- test(mock)
     } yield ()
   }
 
@@ -179,17 +179,17 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
     * @param test test specification
     */
   def createBootstrapTest(runProcessingStream: Boolean, requestTimeout: FiniteDuration = 10.days)(
-      test: SUT[Task] => Task[Unit]
+      test: Mock[Task] => Task[Unit]
   ): Unit =
-    createSut[Task](requestTimeout) { sut =>
-      if (!runProcessingStream) test(sut)
-      else (Stream.eval(test(sut)) concurrently sut.stream).compile.drain
+    createMock[Task](requestTimeout) { mock =>
+      if (!runProcessingStream) test(mock)
+      else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
     }.runSyncUnsafe(timeout = 10.seconds)
 
   val bootstrapTest = createBootstrapTest(runProcessingStream = true) _
 
-  it should "send request for next state chunk" in bootstrapTest { sut =>
-    import sut._
+  it should "send request for next state chunk" in bootstrapTest { mock =>
+    import mock._
     for {
       reqs <- sentRequests.take(1).compile.toList
 
@@ -206,8 +206,8 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
     } yield ()
   }
 
-  it should "save (import) received state chunk" in bootstrapTest { sut =>
-    import sut._
+  it should "save (import) received state chunk" in bootstrapTest { mock =>
+    import mock._
     for {
       // Receives store items message
       _ <- receive(StoreItemsMessage(historyPath1, historyPath2, history1, data1))
@@ -226,8 +226,8 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
     } yield ()
   }
 
-  it should "not request next chunk if message is not requested" in bootstrapTest { sut =>
-    import sut._
+  it should "not request next chunk if message is not requested" in bootstrapTest { mock =>
+    import mock._
     for {
       reqs <- sentRequests.take(1).compile.toList
 
@@ -237,39 +237,29 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
       // Receives store items message which is not requested
       _ <- receive(StoreItemsMessage(historyPath2, historyPath3, history2, data2))
 
-      // Request should not be sent for the next chunk,
-      //  getting element from the queue should fail with timeout
-      reqs <- sentRequests.take(1).timeout(250.millis).compile.toList.attempt
-
-      // After first chunk received, next chunk should be requested (last past from previous chunk)
-      _ = reqs shouldBe a[Left[TimeoutException, _]]
+      // Request should not be sent for the next chunk
+      _ = sentRequests should notEmit
     } yield ()
   }
 
-  it should "not save (import) state chunk if not requested" in bootstrapTest { sut =>
-    import sut._
+  it should "not save (import) state chunk if not requested" in bootstrapTest { mock =>
+    import mock._
     for {
       // Receives store items message which is not requested
       _ <- receive(StoreItemsMessage(historyPath2, historyPath3, history2, data2))
 
-      // Get from saved queue should fail with timeout
-      history <- savedHistory.take(1).timeout(250.millis).compile.toList.attempt
-
       // No history items should be saved
-      _ = history shouldBe a[Left[TimeoutException, _]]
-
-      // Get from saved queue should fail with timeout
-      data <- savedData.take(1).timeout(250.millis).compile.toList.attempt
+      _ = savedHistory should notEmit
 
       // No data items should be saved
-      _ = data shouldBe a[Left[TimeoutException, _]]
+      _ = savedData should notEmit
     } yield ()
   }
 
   it should "stop if invalid state chunk received" in createBootstrapTest(
     runProcessingStream = false
-  ) { sut =>
-    import sut._
+  ) { mock =>
+    import mock._
     for {
       // Receives store items message
       _ <- receive(StoreItemsMessage(historyPath1, historyPath2, invalidHistory, data1))
@@ -282,8 +272,8 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
   }
 
   it should "finish after last chunk received" in createBootstrapTest(runProcessingStream = false) {
-    sut =>
-      import sut._
+    mock =>
+      import mock._
       for {
         // Receives store items message (start path is equal to end path)
         _ <- receive(StoreItemsMessage(historyPath1, historyPath1, history1, data1))
@@ -307,8 +297,8 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers {
   it should "re-send request after timeout" in createBootstrapTest(
     runProcessingStream = false,
     requestTimeout = 200.millis
-  ) { sut =>
-    import sut._
+  ) { mock =>
+    import mock._
     for {
       // Wait for timeout to expire
       _ <- stream.compile.drain.timeout(300.millis).onErrorHandle(_ => ())

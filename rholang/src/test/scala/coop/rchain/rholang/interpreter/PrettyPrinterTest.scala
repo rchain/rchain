@@ -6,11 +6,8 @@ import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.rholang.implicits.{GPrivateBuilder, _}
 import coop.rchain.models.{Send, _}
 import coop.rchain.rholang.interpreter.compiler.{
-  BoolNormalizeMatcher,
   DeBruijnLevelMap,
-  GroundNormalizeMatcher,
   IndexMapChain,
-  NameNormalizeMatcher,
   NameSort,
   NameVisitInputs,
   ProcNormalizeMatcher,
@@ -18,6 +15,11 @@ import coop.rchain.rholang.interpreter.compiler.{
   ProcVisitInputs,
   SourcePosition,
   VarSort
+}
+import coop.rchain.rholang.interpreter.compiler.normalizer.{
+  BoolNormalizeMatcher,
+  GroundNormalizeMatcher,
+  NameNormalizeMatcher
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
 import monix.eval.Coeval
