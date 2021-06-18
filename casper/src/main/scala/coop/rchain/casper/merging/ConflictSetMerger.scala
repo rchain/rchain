@@ -1,5 +1,6 @@
 package coop.rchain.casper.merging
 
+import cats.Show
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.rspace.HotStoreTrieAction
@@ -8,6 +9,8 @@ import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.rspace.merger.StateChange._
 import coop.rchain.rspace.merger._
 import coop.rchain.shared.{Log, Stopwatch}
+
+import scala.collection.mutable
 
 object ConflictSetMerger {
 
@@ -43,6 +46,19 @@ object ConflictSetMerger {
     /** map of conflicting branches */
     val (conflictMap, conflictsMapTime) =
       Stopwatch.profile(computeRelationMap[Set[R]](branches, conflicts))
+
+    val map = mutable.Map.empty[Set[R], Int]
+    var cur = 0
+    implicit val showR = new Show[Set[R]] {
+      override def show(t: Set[R]): String =
+        map.get(t) match {
+          case Some(i) => i.toString
+          case None =>
+            cur = cur + 1
+            map.update(t, cur)
+            cur.toString
+        }
+    }
 
     // TODO reject only units that are conflicting + dependent, its not necessary to reject the whole branch
     /** rejection options that leave only non conflicting branches */
