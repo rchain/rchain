@@ -7,6 +7,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.Produce
