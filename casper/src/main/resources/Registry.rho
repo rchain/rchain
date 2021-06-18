@@ -154,6 +154,9 @@ in {
           new valCh, restCh in {
             match (map, nybList.slice(0, n)) {
               node => {
+
+                [node, *storeToken].toChannelHex("INSERT") |
+
                 for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
                     // Acquire the lock on this node
@@ -272,6 +275,9 @@ in {
           new valCh in {
             match (map, nybList.slice(0, n)) {
               node => {
+
+                [node, *storeToken].toChannelHex("UPDATE") |
+
                 for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
                     // We're at the end of the path.

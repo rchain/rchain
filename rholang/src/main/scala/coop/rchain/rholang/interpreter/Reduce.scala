@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
+import coop.rchain.rspace.hashing.{Blake2b256Hash, ChannelHash, StableHashProvider}
 import coop.rchain.rspace.util.unpackOptionWithPeek
 import coop.rchain.shared.Serialize
 import monix.eval.Coeval
@@ -1387,29 +1388,47 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       } yield result
   }
 
+  private[this] val toChannelHex: Method = new Method() {
+
+    override def apply(p: Par, args: Seq[Par])(implicit env: Env[Par]): M[Par] =
+      for {
+        exprEvaled <- evalExpr(p)
+        exprSubst  <- substituteAndCharge[Par, M](exprEvaled, depth = 0, env)
+        _          <- charge[M](toByteArrayCost(exprSubst))
+
+        hashEvent    = StableHashProvider.hash(exprSubst)(storage.serializePar)
+        hashEventHex = Base16.encode(hashEvent.bytes.toArray)
+
+        msg = args.head.exprs.head.getGString
+        _   = println(s"$msg $hashEventHex")
+
+      } yield Expr(GString(hashEventHex))
+  }
+
   private val methodTable: Map[String, Method] =
     Map(
-      "nth"         -> nth,
-      "toByteArray" -> toByteArray,
-      "hexToBytes"  -> hexToBytes,
-      "bytesToHex"  -> bytesToHex,
-      "toUtf8Bytes" -> toUtf8Bytes,
-      "union"       -> union,
-      "diff"        -> diff,
-      "add"         -> add,
-      "delete"      -> delete,
-      "contains"    -> contains,
-      "get"         -> get,
-      "getOrElse"   -> getOrElse,
-      "set"         -> set,
-      "keys"        -> keys,
-      "size"        -> size,
-      "length"      -> length,
-      "slice"       -> slice,
-      "take"        -> take,
-      "toList"      -> toList,
-      "toSet"       -> toSet,
-      "toMap"       -> toMap
+      "toChannelHex" -> toChannelHex,
+      "nth"          -> nth,
+      "toByteArray"  -> toByteArray,
+      "hexToBytes"   -> hexToBytes,
+      "bytesToHex"   -> bytesToHex,
+      "toUtf8Bytes"  -> toUtf8Bytes,
+      "union"        -> union,
+      "diff"         -> diff,
+      "add"          -> add,
+      "delete"       -> delete,
+      "contains"     -> contains,
+      "get"          -> get,
+      "getOrElse"    -> getOrElse,
+      "set"          -> set,
+      "keys"         -> keys,
+      "size"         -> size,
+      "length"       -> length,
+      "slice"        -> slice,
+      "take"         -> take,
+      "toList"       -> toList,
+      "toSet"        -> toSet,
+      "toMap"        -> toMap
     )
 
   private def evalSingleExpr(p: Par)(implicit env: Env[Par]): M[Expr] =
