@@ -29,7 +29,7 @@ import scala.collection.Seq
 
 class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
-  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
+  val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 50)
   val genesis                    = genesisContext.genesisBlock
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]

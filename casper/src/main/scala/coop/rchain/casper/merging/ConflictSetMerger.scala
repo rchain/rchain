@@ -48,6 +48,8 @@ object ConflictSetMerger {
       Stopwatch.profile(computeRelationMap[Set[R]](branches, conflicts))
 
     val map = mutable.Map.empty[Set[R], Int]
+
+    @SuppressWarnings(Array("org.wartremover.warts.Var"))
     var cur = 0
     implicit val showR = new Show[Set[R]] {
       override def show(t: Set[R]): String =

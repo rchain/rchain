@@ -15,7 +15,7 @@
     <logger name="coop.rchain.rspace" level="error"/>
     <logger name="coop.rchain.rspace.merger" level="debug"/>
 
-    <root level="warn">
+    <root level="debug">
         <appender-ref ref="STDOUT"/>
     </root>
 
