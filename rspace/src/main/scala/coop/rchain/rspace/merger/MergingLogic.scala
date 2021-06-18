@@ -70,7 +70,7 @@ object MergingLogic {
 
   /** produce created inside event log */
   def producesCreated(e: EventLogIndex): Set[Produce] =
-    (e.producesLinear ++ e.producesPersistent) diff e.producesCopiedByPeek
+    (e.producesLinear ++ e.producesPersistent) diff e.producesExistingInPreState
 
   /** consume created inside event log */
   def consumesCreated(e: EventLogIndex): Set[Consume] =
@@ -78,7 +78,7 @@ object MergingLogic {
 
   /** produces that are created inside event log and not destroyed via COMM inside event log */
   def producesCreatedAndNotDestroyed(e: EventLogIndex): Set[Produce] =
-    ((e.producesLinear diff e.producesConsumed) ++ e.producesPersistent) diff e.producesCopiedByPeek
+    ((e.producesLinear diff e.producesConsumed) ++ e.producesPersistent) diff e.producesExistingInPreState
 
   /** consumes that are created inside event log and not destroyed via COMM inside event log */
   def consumesCreatedAndNotDestroyed(e: EventLogIndex): Set[Consume] =
@@ -103,6 +103,6 @@ object MergingLogic {
   /** if produce is copied by peek in one index and originated in another - it is considered as created in aggregate*/
   def combineProducesCopiedByPeek(x: EventLogIndex, y: EventLogIndex): Set[Produce] =
     Seq(x, y)
-      .map(_.producesCopiedByPeek)
+      .map(_.producesExistingInPreState)
       .reduce(_ ++ _) diff Seq(x, y).map(producesCreated).reduce(_ ++ _)
 }

@@ -15,7 +15,7 @@ final case class EventLogIndex(
     producesPersistent: Set[Produce],
     producesConsumed: Set[Produce],
     producesPeeked: Set[Produce],
-    producesCopiedByPeek: Set[Produce],
+    producesExistingInPreState: Set[Produce],
     producesTouchingBaseJoins: Set[Produce],
     consumesLinearAndPeeks: Set[Consume],
     consumesPersistent: Set[Consume],
@@ -40,8 +40,8 @@ object EventLogIndex {
 
       producesPeekedRef <- Ref.of[F, Set[Produce]](Set.empty)
 
-      producesTouchingJoinsRef <- Ref.of[F, Set[Produce]](Set.empty)
-      producesCopiedByPeekRef  <- Ref.of[F, Set[Produce]](Set.empty)
+      producesTouchingJoinsRef      <- Ref.of[F, Set[Produce]](Set.empty)
+      producesExistingInPreStateRef <- Ref.of[F, Set[Produce]](Set.empty)
 
       ps = eventLog.map { e =>
         fs2.Stream.eval(e match {
@@ -55,7 +55,7 @@ object EventLogIndex {
               existsInPreState <- produceExistsInPreState(p)
               // For now all produces touching join are considered as conflicting TODO do analysis to get less conflicts
               touchPreStateJoin <- produceTouchPreStateJoin(p)
-              _ <- producesCopiedByPeekRef
+              _ <- producesExistingInPreStateRef
                     .update(s => s + p)
                     .whenA(existsInPreState)
               _ <- producesTouchingJoinsRef
@@ -79,6 +79,9 @@ object EventLogIndex {
             } yield ()
           case c: COMM => {
             for {
+              producesFromBase <- c.produces.toStream.filterA(produceExistsInPreState).map(_.toSet)
+              _ <- producesExistingInPreStateRef
+                    .update(s => s ++ producesFromBase)
               _ <- producesConsumedRef
                     .update(s => s ++ c.produces)
                     .whenA(c.peeks.isEmpty)
@@ -93,22 +96,25 @@ object EventLogIndex {
       }
       _ <- fs2.Stream.emits(ps).parJoinProcBounded.compile.drain
 
-      producesLinear         <- producesLinearRef.get
-      producesPersistent     <- producesPersistentRef.get
-      producesConsumed       <- producesConsumedRef.get
-      producesPeeked         <- producesPeekedRef.get
-      consumesLinearAndPeeks <- consumesLinearAndPeeksRef.get
-      consumesPersistent     <- consumesPersistentRef.get
-      consumesCommed         <- consumesProducedRef.get
-      producesCopiedByPeek   <- producesCopiedByPeekRef.get
-      producesTouchingJoins  <- producesTouchingJoinsRef.get
+      producesLinear             <- producesLinearRef.get
+      producesPersistent         <- producesPersistentRef.get
+      producesConsumed           <- producesConsumedRef.get
+      producesPeeked             <- producesPeekedRef.get
+      consumesLinearAndPeeks     <- consumesLinearAndPeeksRef.get
+      consumesPersistent         <- consumesPersistentRef.get
+      consumesCommed             <- consumesProducedRef.get
+      producesExistingInPreState <- producesExistingInPreStateRef.get
+      producesTouchingJoins      <- producesTouchingJoinsRef.get
 
+      // NOTE: this is required due to https://github.com/rchain/rchain/issues/3349#issuecomment-863916745
+      produceConsumedAdjusted = producesConsumed diff
+        (producesExistingInPreState intersect (producesLinear ++ producesPersistent))
     } yield EventLogIndex(
       producesLinear = producesLinear,
       producesPersistent = producesPersistent,
-      producesConsumed = producesConsumed,
+      producesConsumed = produceConsumedAdjusted,
       producesPeeked = producesPeeked,
-      producesCopiedByPeek = producesCopiedByPeek,
+      producesExistingInPreState = producesExistingInPreState,
       producesTouchingBaseJoins = producesTouchingJoins,
       consumesLinearAndPeeks = consumesLinearAndPeeks,
       consumesPersistent = consumesPersistent,
