@@ -121,13 +121,13 @@ object StateChange {
       }
       joinsIndexComputes = {
         implicit val sc: Serialize[C] = serializeC
-        val getJoinsChangeWithChannels = (j: JoinsB[C]) =>
+        val getJoinMappingIndex = (j: JoinsB[C]) =>
           JoinIndex(j.raw, j.decoded.toList.map(channel => StableHashProvider.hash(channel)))
         involvedJoinsValuePointers.map(
           joinsPointer =>
             Stream.eval(for {
-              pre  <- preStateReader.getJoins(joinsPointer).map(_.map(getJoinsChangeWithChannels))
-              post <- postStateReader.getJoins(joinsPointer).map(_.map(getJoinsChangeWithChannels))
+              pre  <- preStateReader.getJoins(joinsPointer).map(_.map(getJoinMappingIndex))
+              post <- postStateReader.getJoins(joinsPointer).map(_.map(getJoinMappingIndex))
               _    <- joinsIndexRef.update(_ ++ pre ++ post)
             } yield ())
         )
@@ -140,8 +140,8 @@ object StateChange {
             .drain
       produceChanges <- producesDiffRef.get
       consumeChanges <- consumesDiffRef.get
-      joinChanges    <- joinsIndexRef.get
-    } yield StateChange(produceChanges, consumeChanges, joinChanges)
+      joinsTouched   <- joinsIndexRef.get
+    } yield StateChange(produceChanges, consumeChanges, joinsTouched)
 
   def empty: StateChange = StateChange(Map.empty, Map.empty, Set.empty)
   def combine(x: StateChange, y: StateChange): StateChange = {

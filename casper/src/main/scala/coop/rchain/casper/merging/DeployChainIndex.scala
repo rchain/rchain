@@ -40,7 +40,6 @@ object DeployChainIndex {
                        channelsStore = historyRepository,
                        historyRepository.getSerializeC
                      )
-
     } yield DeployChainIndex(
       deploysWithCost,
       preStateHash,

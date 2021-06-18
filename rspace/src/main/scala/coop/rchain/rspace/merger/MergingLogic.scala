@@ -9,8 +9,8 @@ object MergingLogic {
 
   /** if target depends on source */
   def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesActive(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesActive(source) intersect target.consumesProduced).nonEmpty
+    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
+      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
 
   /** if two event logs are conflicting */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -48,8 +48,8 @@ object MergingLogic {
 
       // Search for match
       def check(left: EventLogIndex, right: EventLogIndex): Iterator[Blake2b256Hash] = {
-        val p = producesActive(left)
-        val c = consumesActive(right)
+        val p = producesCreatedAndNotDestroyed(left)
+        val c = consumesCreatedAndNotDestroyed(right)
         p.toIterator
           .flatMap(p => c.toIterator.map((_, p)))
           .filter(tupled(matchFound))
@@ -73,14 +73,15 @@ object MergingLogic {
     (e.producesLinear ++ e.producesPersistent) diff e.producesCopiedByPeek
 
   /** consume created inside event log */
-  def consumesCreated(e: EventLogIndex): Set[Consume] = e.consumesLinearAndPeeks
+  def consumesCreated(e: EventLogIndex): Set[Consume] =
+    e.consumesLinearAndPeeks ++ e.consumesPersistent
 
   /** produces that are created inside event log and not destroyed via COMM inside event log */
-  def producesActive(e: EventLogIndex): Set[Produce] =
+  def producesCreatedAndNotDestroyed(e: EventLogIndex): Set[Produce] =
     ((e.producesLinear diff e.producesConsumed) ++ e.producesPersistent) diff e.producesCopiedByPeek
 
   /** consumes that are created inside event log and not destroyed via COMM inside event log */
-  def consumesActive(e: EventLogIndex): Set[Consume] =
+  def consumesCreatedAndNotDestroyed(e: EventLogIndex): Set[Consume] =
     e.consumesLinearAndPeeks.diff(e.consumesProduced) ++ e.consumesPersistent
 
   /** produces that are affected by event log - locally created + external destroyed */
@@ -88,7 +89,7 @@ object MergingLogic {
     def externalProducesDestroyed(e: EventLogIndex): Set[Produce] =
       e.producesConsumed diff producesCreated(e)
 
-    producesActive(e) ++ externalProducesDestroyed(e)
+    producesCreatedAndNotDestroyed(e) ++ externalProducesDestroyed(e)
   }
 
   /** consumes that are affected by event log - locally created + external destroyed */
@@ -96,6 +97,12 @@ object MergingLogic {
     def externalConsumesDestroyed(e: EventLogIndex): Set[Consume] =
       e.consumesProduced diff consumesCreated(e)
 
-    consumesActive(e) ++ externalConsumesDestroyed(e)
+    consumesCreatedAndNotDestroyed(e) ++ externalConsumesDestroyed(e)
   }
+
+  /** if produce is copied by peek in one index and originated in another - it is considered as created in aggregate*/
+  def combineProducesCopiedByPeek(x: EventLogIndex, y: EventLogIndex): Set[Produce] =
+    Seq(x, y)
+      .map(_.producesCopiedByPeek)
+      .reduce(_ ++ _) diff Seq(x, y).map(producesCreated).reduce(_ ++ _)
 }

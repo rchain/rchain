@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.kernel.Monoid
 import cats.syntax.all._
-import coop.rchain.rspace.merger.MergingLogic.producesCreated
+import coop.rchain.rspace.merger.MergingLogic.{combineProducesCopiedByPeek, producesCreated}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.shared.syntax._
 
@@ -32,8 +32,8 @@ object EventLogIndex {
       producesLinearRef     <- Ref.of[F, Set[Produce]](Set.empty)
       producesPersistentRef <- Ref.of[F, Set[Produce]](Set.empty)
 
-      consumesLinearRef     <- Ref.of[F, Set[Consume]](Set.empty)
-      consumesPersistentRef <- Ref.of[F, Set[Consume]](Set.empty)
+      consumesLinearAndPeeksRef <- Ref.of[F, Set[Consume]](Set.empty)
+      consumesPersistentRef     <- Ref.of[F, Set[Consume]](Set.empty)
 
       producesConsumedRef <- Ref.of[F, Set[Produce]](Set.empty)
       consumesProducedRef <- Ref.of[F, Set[Consume]](Set.empty)
@@ -70,7 +70,7 @@ object EventLogIndex {
             } yield ()
           case c: Consume =>
             for {
-              _ <- consumesLinearRef
+              _ <- consumesLinearAndPeeksRef
                     .update(s => s + c)
                     .unlessA(c.persistent)
               _ <- consumesPersistentRef
@@ -95,9 +95,9 @@ object EventLogIndex {
 
       producesLinear         <- producesLinearRef.get
       producesPersistent     <- producesPersistentRef.get
-      producesDestroyed      <- producesConsumedRef.get
+      producesConsumed       <- producesConsumedRef.get
       producesPeeked         <- producesPeekedRef.get
-      consumesLinearAndPeeks <- consumesLinearRef.get
+      consumesLinearAndPeeks <- consumesLinearAndPeeksRef.get
       consumesPersistent     <- consumesPersistentRef.get
       consumesCommed         <- consumesProducedRef.get
       producesCopiedByPeek   <- producesCopiedByPeekRef.get
@@ -106,7 +106,7 @@ object EventLogIndex {
     } yield EventLogIndex(
       producesLinear = producesLinear,
       producesPersistent = producesPersistent,
-      producesConsumed = producesDestroyed,
+      producesConsumed = producesConsumed,
       producesPeeked = producesPeeked,
       producesCopiedByPeek = producesCopiedByPeek,
       producesTouchingBaseJoins = producesTouchingJoins,
@@ -135,26 +135,16 @@ object EventLogIndex {
       Set.empty
     )
 
-  def combine(x: EventLogIndex, y: EventLogIndex): EventLogIndex = {
-
-    val newProducesCreated = Seq(x, y).map(producesCreated).reduce(_ ++ _)
-
-    /** if produce is copied by peek in one index and originated in another - it is considered as created in aggregate*/
-    val newProducesCopiedByPeek = Seq(x, y)
-      .map(_.producesCopiedByPeek)
-      .reduce(_ ++ _) diff newProducesCreated
-
-    EventLogIndex(
-      Seq(x, y).map(_.producesLinear).reduce(_ ++ _),
-      Seq(x, y).map(_.producesPersistent).reduce(_ ++ _),
-      Seq(x, y).map(_.producesConsumed).reduce(_ ++ _),
-      Seq(x, y).map(_.producesPeeked).reduce(_ ++ _),
-      newProducesCopiedByPeek,
-      //TODO this joins combination is very restrictive. Join might be originated inside aggregated event log
-      Seq(x, y).map(_.producesTouchingBaseJoins).reduce(_ ++ _),
-      Seq(x, y).map(_.consumesLinearAndPeeks).reduce(_ ++ _),
-      Seq(x, y).map(_.consumesPersistent).reduce(_ ++ _),
-      Seq(x, y).map(_.consumesProduced).reduce(_ ++ _)
-    )
-  }
+  def combine(x: EventLogIndex, y: EventLogIndex): EventLogIndex = EventLogIndex(
+    Seq(x, y).map(_.producesLinear).reduce(_ ++ _),
+    Seq(x, y).map(_.producesPersistent).reduce(_ ++ _),
+    Seq(x, y).map(_.producesConsumed).reduce(_ ++ _),
+    Seq(x, y).map(_.producesPeeked).reduce(_ ++ _),
+    combineProducesCopiedByPeek(x, y),
+    //TODO this joins combination is very restrictive. Join might be originated inside aggregated event log
+    Seq(x, y).map(_.producesTouchingBaseJoins).reduce(_ ++ _),
+    Seq(x, y).map(_.consumesLinearAndPeeks).reduce(_ ++ _),
+    Seq(x, y).map(_.consumesPersistent).reduce(_ ++ _),
+    Seq(x, y).map(_.consumesProduced).reduce(_ ++ _)
+  )
 }
