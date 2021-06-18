@@ -473,6 +473,9 @@ trait MergeabilityRules {
                         | """.stripMargin
             _ <- Sync[Effect]
                   .raiseError(new Exception(errMsg))
+                  .whenA(rejectedDeployOpt.isDefined != isConflict)
+            _ <- Sync[Effect]
+                  .raiseError(new Exception(errMsg))
                   .whenA(dataContinuationAtMergedState != referenceState)
           } yield true
       }
