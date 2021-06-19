@@ -6,8 +6,8 @@ import cats.syntax.all._
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.merger.StateChange
 import coop.rchain.rspace.merger.StateChange._
-import coop.rchain.rspace.merger._
 import coop.rchain.shared.{Log, Stopwatch}
 
 import scala.collection.mutable

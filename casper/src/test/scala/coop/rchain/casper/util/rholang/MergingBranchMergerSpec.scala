@@ -91,6 +91,28 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
           )
     }.toList
 
+  def mkStatesChain(preStateHash: StateHash)(
+      implicit runtimeManager: RuntimeManager[Task]
+  ) =
+    (genesisContext.validatorPks zip genesisContext.genesisVaultsSks).toList
+      .foldLeftM[Task, (StateHash, Long)]((preStateHash, 1)) {
+        case ((preState, blockNum), (validatorPk, payerSk)) =>
+          for {
+            r <- makeTxAndCommitState(
+                  runtimeManager,
+                  preState,
+                  payerSk,
+                  validatorPk,
+                  seqNum = 1,
+                  blockNum = blockNum + 1
+                ).map(r => (r._1, blockNum + 1))
+            _ = println(
+              s"${PrettyPrinter.buildString(preState)} #${blockNum}-> ${PrettyPrinter
+                .buildString(r._1)} #${r._2}"
+            )
+          } yield r
+      }
+
   def mkState(stateHash: StateHash, seqNum: Int, blockNum: Long, n: Int)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
@@ -344,12 +366,13 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         // merge state of resulting blocks returned
         def mkLayer(
             startPreStateHash: StateHash,
-            n: Int,
+            seqNum: Int,
+            blockNum: Long,
             dagStore: BlockDagStorage[Task]
         ): Task[StateHash] =
           for {
             // create state on first validator
-            b <- mkHeadState(startPreStateHash, n * 2 + 1, (n * 2 + 1).toLong)
+            b <- mkHeadState(startPreStateHash, seqNum, blockNum + 1)
             base = getRandomBlock(
               setPostStateHash = b._1.some,
               setPreStateHash = startPreStateHash.some,
@@ -357,9 +380,13 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               setDeploys = b._2.some
             )
             _ <- dagStore.insert(base, false)
+            _ = println(
+              s"building merging base ${PrettyPrinter
+                .buildString(startPreStateHash)} -> ${PrettyPrinter.buildString(b._1)}"
+            )
 
             // create children an all other
-            baseChildren <- mkTailStates(b._1, n * 2 + 2, (n * 2 + 2).toLong)
+            baseChildren <- mkTailStates(b._1, seqNum, blockNum + 2)
             mergingBlocks = baseChildren.map(
               s =>
                 getRandomBlock(
@@ -371,7 +398,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             )
             _ <- mergingBlocks.traverse(dagStore.insert(_, false))
 
-            s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
+            s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(base.body.state.postStateHash)}"
             _ = println(s)
 
             indices <- (base +: mergingBlocks)
@@ -406,8 +433,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
         val kvm = new InMemoryStoreManager
         for {
-          dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
-          _        <- mkLayer(genesisPostStateHash, 0, dagStore)
+          dagStore                <- BlockDagKeyValueStorage.create[Task](kvm)
+          chainPostState          <- mkStatesChain(genesisPostStateHash)
+          (endState, endBlockNum) = chainPostState
+          _                       <- mkLayer(endState, 2, endBlockNum, dagStore)
         } yield ()
       }
     }

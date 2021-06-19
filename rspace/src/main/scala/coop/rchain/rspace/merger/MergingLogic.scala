@@ -1,5 +1,7 @@
 package coop.rchain.rspace.merger
 
+import cats.Show
+import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
 
@@ -170,7 +172,7 @@ object MergingLogic {
     gatherRelatedSets(computeRelationMap(items, relation))
 
   /** Given conflicts map, output possible rejection options. */
-  def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
+  def computeRejectionOptions[A: Show](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
     @tailrec
     def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
       // stop if all new dependencies are already in set
@@ -183,6 +185,20 @@ object MergingLogic {
         process(next, next, !reject)
       }
     }
+    val matrixSize = conflictMap.size
+    def row(conflictingIdsx: Set[Int]) =
+      (1 to matrixSize).map(i => if (conflictingIdsx.contains(i)) "C" else "-").mkString(" ")
+    val table = conflictMap.toList
+      .sortBy { case (i, _) => i.show.toInt }
+      .map {
+        case (_, conflicts) =>
+          row(conflicts.map(_.show.toInt))
+      }
+      .mkString("\n")
+
+    println(
+      s"CONFLICT MAP: \n$table"
+    )
     // each rejection option is defined by decision not to reject a key in rejection map
     conflictMap
     // only keys that have conflicts associated should be examined

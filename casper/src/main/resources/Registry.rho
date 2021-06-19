@@ -155,7 +155,7 @@ in {
             match (map, nybList.slice(0, n)) {
               node => {
 
-                [node, *storeToken].toChannelHex("INSERT") |
+                // [node, *storeToken].toChannelHex("INSERT") |
 
                 for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
