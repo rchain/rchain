@@ -4,19 +4,20 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
 
 import scala.Function.tupled
+import scala.annotation.tailrec
 
 object MergingLogic {
 
-  /** if target depends on source */
+  /** If target depends on source. */
   def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesActive(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesActive(source) intersect target.consumesProduced).nonEmpty
+    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
+      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
 
-  /** if two event logs are conflicting */
+  /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
     conflicts(a: EventLogIndex, b: EventLogIndex).nonEmpty
 
-  /** Channels conflicting between a pair of event logs */
+  /** Channels conflicting between a pair of event logs. */
   def conflicts(a: EventLogIndex, b: EventLogIndex): Iterator[Blake2b256Hash] = {
 
     /**
@@ -48,8 +49,8 @@ object MergingLogic {
 
       // Search for match
       def check(left: EventLogIndex, right: EventLogIndex): Iterator[Blake2b256Hash] = {
-        val p = producesActive(left)
-        val c = consumesActive(right)
+        val p = producesCreatedAndNotDestroyed(left)
+        val c = consumesCreatedAndNotDestroyed(right)
         p.toIterator
           .flatMap(p => c.toIterator.map((_, p)))
           .filter(tupled(matchFound))
@@ -68,34 +69,96 @@ object MergingLogic {
     racesForSameIOEvent ++ potentialCOMMs ++ produceTouchBaseJoin
   }
 
-  /** produce created inside event log */
+  /** Produce created inside event log. */
   def producesCreated(e: EventLogIndex): Set[Produce] =
     (e.producesLinear ++ e.producesPersistent) diff e.producesCopiedByPeek
 
-  /** consume created inside event log */
-  def consumesCreated(e: EventLogIndex): Set[Consume] = e.consumesLinearAndPeeks
+  /** Consume created inside event log. */
+  def consumesCreated(e: EventLogIndex): Set[Consume] =
+    e.consumesLinearAndPeeks ++ e.consumesPersistent
 
-  /** produces that are created inside event log and not destroyed via COMM inside event log */
-  def producesActive(e: EventLogIndex): Set[Produce] =
+  /** Produces that are created inside event log and not destroyed via COMM inside event log. */
+  def producesCreatedAndNotDestroyed(e: EventLogIndex): Set[Produce] =
     ((e.producesLinear diff e.producesConsumed) ++ e.producesPersistent) diff e.producesCopiedByPeek
 
-  /** consumes that are created inside event log and not destroyed via COMM inside event log */
-  def consumesActive(e: EventLogIndex): Set[Consume] =
+  /** Consumes that are created inside event log and not destroyed via COMM inside event log. */
+  def consumesCreatedAndNotDestroyed(e: EventLogIndex): Set[Consume] =
     e.consumesLinearAndPeeks.diff(e.consumesProduced) ++ e.consumesPersistent
 
-  /** produces that are affected by event log - locally created + external destroyed */
+  /** Produces that are affected by event log - locally created + external destroyed. */
   def producesAffected(e: EventLogIndex): Set[Produce] = {
     def externalProducesDestroyed(e: EventLogIndex): Set[Produce] =
       e.producesConsumed diff producesCreated(e)
 
-    producesActive(e) ++ externalProducesDestroyed(e)
+    producesCreatedAndNotDestroyed(e) ++ externalProducesDestroyed(e)
   }
 
-  /** consumes that are affected by event log - locally created + external destroyed */
+  /** Consumes that are affected by event log - locally created + external destroyed. */
   def consumesAffected(e: EventLogIndex): Set[Consume] = {
     def externalConsumesDestroyed(e: EventLogIndex): Set[Consume] =
       e.consumesProduced diff consumesCreated(e)
 
-    consumesActive(e) ++ externalConsumesDestroyed(e)
+    consumesCreatedAndNotDestroyed(e) ++ externalConsumesDestroyed(e)
+  }
+
+  /** If produce is copied by peek in one index and originated in another - it is considered as created in aggregate. */
+  def combineProducesCopiedByPeek(x: EventLogIndex, y: EventLogIndex): Set[Produce] =
+    Seq(x, y)
+      .map(_.producesCopiedByPeek)
+      .reduce(_ ++ _) diff Seq(x, y).map(producesCreated).reduce(_ ++ _)
+
+  /** Arrange list[v] into map v -> Iterator[v] for items that match predicate. */
+  def computeRelationMap[A](items: Set[A], relation: (A, A) => Boolean): Map[A, Set[A]] = {
+    val init = items.map(_ -> Set.empty[A]).toMap
+    items.toList
+      .combinations(2)
+      .filter {
+        case List(l, r) => relation(l, r)
+      }
+      .foldLeft(init) {
+        case (acc, List(l, r)) => acc.updated(l, acc(l) + r).updated(r, acc(r) + l)
+      }
+  }
+
+  /** Given relation map, return iterators of related items. */
+  def gatherRelatedSets[A](relationMap: Map[A, Set[A]]): Set[Set[A]] = {
+    @tailrec
+    def addRelations(toAdd: Set[A], acc: Set[A]): Set[A] = {
+      // stop if all new dependencies are already in set
+      val next = (acc ++ toAdd)
+      val stop = next == acc
+      if (stop)
+        acc
+      else {
+        val next = toAdd.flatMap(v => relationMap.getOrElse(v, Set.empty))
+        addRelations(next, next)
+      }
+    }
+    relationMap.keySet.map(k => addRelations(relationMap(k), Set(k)))
+  }
+
+  def computeRelatedSets[A](items: Set[A], relation: (A, A) => Boolean): Set[Set[A]] =
+    gatherRelatedSets(computeRelationMap(items, relation))
+
+  /** Given conflicts map, output possible rejection options. */
+  def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
+    @tailrec
+    def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
+      // stop if all new dependencies are already in set
+      val next = if (reject) (acc ++ newSet) else acc
+      val stop = if (reject) next == acc else false
+      if (stop)
+        acc
+      else {
+        val next = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
+        process(next, next, !reject)
+      }
+    }
+    // each rejection option is defined by decision not to reject a key in rejection map
+    conflictMap
+    // only keys that have conflicts associated should be examined
+      .filter { case (_, conflicts) => conflicts.nonEmpty }
+      .keySet
+      .map(k => process(conflictMap(k), Set.empty, reject = true))
   }
 }
