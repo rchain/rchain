@@ -521,6 +521,18 @@ object HistoryInstances {
       case (trie, path) => (trie, path.nodes)
     }
 
+    def read(key: ByteVector): F[Option[ByteVector]] =
+      find(key.toArray).flatMap {
+        case (trie, _) =>
+          trie match {
+            case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+            case EmptyPointer          => Applicative[F].pure(None)
+            case _ =>
+              Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
+          }
+      }
+
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
       historyStore.get(root) >>= (findPath(key, _))
 

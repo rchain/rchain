@@ -60,13 +60,9 @@ class RSpaceHistoryReaderImpl[F[_]: Concurrent, C, P, A, K](
       prefix: Byte,
       key: Blake2b256Hash
   ): F[Option[PersistedData]] =
-    targetHistory.find(prefix +: key.bytes.toSeq.toList).flatMap {
-      case (trie, _) =>
-        trie match {
-          case LeafPointer(dataHash) => leafStore.get(dataHash)
-          case EmptyPointer          => none[PersistedData].pure[F]
-          case _                     => new RuntimeException(s"unexpected data at key $key, data: $trie").raiseError
-        }
+    targetHistory.read(prefix +: key.bytes).flatMap { dataHashOpt =>
+      val dataKey = dataHashOpt.map(x => Blake2b256Hash.fromByteArray(x.toArray))
+      dataKey.flatTraverse(leafStore.get(_))
     }
 
   override def base: HistoryReaderBase[F, C, P, A, K] = {
