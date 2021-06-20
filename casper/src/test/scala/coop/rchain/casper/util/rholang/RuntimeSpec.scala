@@ -45,7 +45,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
       emptyHashHardCoded = Blake2b256Hash.fromByteString(hardCodedHash)
       emptyHash          = Blake2b256Hash.fromByteString(emptyRootHash)
-    } yield emptyHashHardCoded shouldEqual emptyHash
+    } yield emptyHash shouldEqual emptyHashHardCoded
   }
 
   "stateHash after fixed rholang term execution " should "be hash fixed without hard fork" in effectTest {
@@ -82,10 +82,10 @@ class RuntimeSpec extends FlatSpec with Matchers {
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       expectedHash = Blake2b256Hash.fromHex(
-        "30cd98a5f066fb4c7441db2150198108f5b5d5fe9f751ceec7dc7cc4e1af784a"
+        "ee1813d1a20d79fca81ababd201e39711b644bccdc1173d2df4172b1cac1c531"
       )
       stateHash = checkpoint.root
-    } yield expectedHash shouldEqual stateHash
+    } yield stateHash shouldEqual expectedHash
   }
 
 }

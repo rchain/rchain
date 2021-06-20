@@ -5,12 +5,16 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.rspace.{HotStoreAction, HotStoreTrieAction}
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.{KeyValueStore, LazyAdHocKeyValueCache}
+import scodec.bits.ByteVector
+
+import scala.collection.concurrent.TrieMap
 
 /**
   * Pointer to data in history (Datums, Continuations or Joins)
@@ -50,6 +54,8 @@ trait HistoryRepository[F[_], C, P, A, K] {
 
 object HistoryRepositoryInstances {
 
+  val radixStore = TrieMap[ByteVector, ByteVector]()
+
   val PREFIX_DATUM: Byte = 0x00
   val PREFIX_KONT: Byte  = 0x01
   val PREFIX_JOINS: Byte = 0x02
@@ -72,8 +78,9 @@ object HistoryRepositoryInstances {
     for {
       currentRoot <- rootsRepository.currentRoot()
       // History store
-      historyStore = HistoryStoreInstances.historyStore[F](historyKeyValueStore)
-      history      = HistoryInstances.merging(currentRoot, historyStore)
+//      historyStore = HistoryStoreInstances.historyStore[F](historyKeyValueStore)
+//      history      = HistoryInstances.merging(currentRoot, historyStore)
+      history = RadixHistory(currentRoot, radixStore)
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
