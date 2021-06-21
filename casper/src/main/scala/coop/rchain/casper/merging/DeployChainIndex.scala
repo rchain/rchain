@@ -37,7 +37,6 @@ object DeployChainIndex {
                        preStateReader = preStateReader,
                        postStateReader = postStateReader,
                        eventLogIndex,
-                       channelsStore = historyRepository,
                        historyRepository.getSerializeC
                      )
     } yield DeployChainIndex(
