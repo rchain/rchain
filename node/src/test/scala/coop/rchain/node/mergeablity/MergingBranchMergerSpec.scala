@@ -1,4 +1,4 @@
-package coop.rchain.casper.util.rholang
+package coop.rchain.node.mergeablity
 
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
@@ -9,6 +9,7 @@ import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
+import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Metrics
