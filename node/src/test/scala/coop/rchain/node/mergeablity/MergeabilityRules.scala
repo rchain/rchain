@@ -163,7 +163,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
       left.reduce(_ | _),
       isConflict = false,
       mergedState,
-      mergedState
+      rejectRight = false // this parameter is not actually important in merge case
     ).runSyncUnsafe()
 
   def ConflictingCase(left: Rho*)(
@@ -171,14 +171,21 @@ trait BasicMergeabilityRules extends ComputeMerge {
   )(base: Rho*)(
       mergedLeftState: State = State(Seq.empty, Seq.empty, Seq.empty)
   )(mergedRightState: State = State(Seq.empty, Seq.empty, Seq.empty)): Unit =
-    checkConflictAndMergeState(
+    (checkConflictAndMergeState(
       base.reduce(_ | _),
-      right.reduce(_ | _),
       left.reduce(_ | _),
+      right.reduce(_ | _),
       isConflict = true,
       mergedRightState,
-      mergedLeftState
-    ).runSyncUnsafe()
+      rejectRight = false
+    ) >> checkConflictAndMergeState(
+      base.reduce(_ | _),
+      left.reduce(_ | _),
+      right.reduce(_ | _),
+      isConflict = true,
+      mergedLeftState,
+      rejectRight = true
+    )).runSyncUnsafe()
 
   /**
     * This is a mark for cases which happen left consume and right produce doesn't match.But because we don't run
@@ -224,11 +231,11 @@ trait BasicMergeabilityRules extends ComputeMerge {
 
   private[this] def checkConflictAndMergeState(
       base: Rho,
-      b1: Rho,
-      b2: Rho,
+      left: Rho,
+      right: Rho,
       isConflict: Boolean,
-      b1State: State,
-      b2State: State
+      mergedStateResult: State,
+      rejectRight: Boolean
   )(
       implicit file: sourcecode.File,
       line: sourcecode.Line
@@ -237,9 +244,14 @@ trait BasicMergeabilityRules extends ComputeMerge {
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
 
     val baseDeploy = ConstructDeploy.sourceDeploy(base.value, 1L, phloLimit = 500)
-    val leftDeploy = ConstructDeploy.sourceDeploy(b1.value, 2L, phloLimit = 500)
+    val leftDeploy = ConstructDeploy.sourceDeploy(left.value, 2L, phloLimit = 500)
     val rightDeploy =
-      ConstructDeploy.sourceDeploy(b2.value, 3L, phloLimit = 500, sec = ConstructDeploy.defaultSec2)
+      ConstructDeploy.sourceDeploy(
+        right.value,
+        3L,
+        phloLimit = 500,
+        sec = ConstructDeploy.defaultSec2
+      )
     implicit val concurrent                = Concurrent[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
@@ -249,32 +261,23 @@ trait BasicMergeabilityRules extends ComputeMerge {
       Seq(leftDeploy),
       Seq(rightDeploy),
       (runtime, _, mergedState) => {
-        val mergedRoot        = mergedState._1
-        val rejectedDeployOpt = mergedState._2.headOption
-        val referenceState = rejectedDeployOpt
-          .map { v =>
-            List((leftDeploy, b1State), (rightDeploy, b2State))
-              .filter {
-                case (deploy, _) => deploy.sig != v
-              }
-              .map { case (_, refState) => refState }
-              .head
-          }
-          .getOrElse(b1State)
+        val mergedRoot      = mergedState._1
+        val rejectedDeploys = mergedState._2
         for {
           dataContinuationAtMergedState <- getDataContinuationOnChannel0(
                                             runtime,
                                             mergedRoot
                                           )
           errMsg = s""" FAILED
-                  | base = ${base.value}
-                  | b1   = ${b1.value}
-                  | b2   = ${b2.value}
-                  | Conflict: ${rejectedDeployOpt.isDefined} should be ${isConflict}
+                  | base = ${baseDeploy}
+                  | left   = ${leftDeploy}
+                  | right   = ${rightDeploy}
+                  | Conflict: ${rejectedDeploys.nonEmpty} should be ${isConflict} with ${rejectedDeploys}
+                  | isRejectRight: ${rejectRight}
                   | Merged state
                   | ${dataContinuationAtMergedState}
                   | should be
-                  | ${referenceState}
+                  | ${mergedStateResult}
                   |
                   | conflicts found: ${mergedState._2.size}
                   |
@@ -282,9 +285,10 @@ trait BasicMergeabilityRules extends ComputeMerge {
                   | """.stripMargin
           _ <- Sync[Task]
                 .raiseError(new Exception(errMsg))
-                .whenA(dataContinuationAtMergedState != referenceState)
+                .whenA(dataContinuationAtMergedState != mergedStateResult)
         } yield ()
-      }
+      },
+      rejectRight
     ).adaptError {
       case e: Throwable =>
         new TestFailedException(e, failedCodeStackDepth = 5).severedAtStackDepth

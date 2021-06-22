@@ -395,7 +395,8 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                   base.blockHash,
                   Blake2b256Hash.fromByteString(base.body.state.postStateHash),
                   indices(_).deployChains.pure,
-                  runtimeManager.getHistoryRepo
+                  runtimeManager.getHistoryRepo,
+                  DagMerger.costOptimalRejectionAlg
                 )
             (postState, rejectedDeploys) = v
             nextPreStateHash             = ByteString.copyFrom(postState.bytes.toArray)

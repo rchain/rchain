@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.{BlockIndex, DagMerger}
+import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -16,6 +16,8 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.casper.syntax._
+import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 
@@ -49,9 +51,11 @@ trait ComputeMerge {
           RhoRuntime[F],
           RhoHistoryRepository[F],
           (Blake2b256Hash, Seq[ByteString])
-      ) => F[Unit]
+      ) => F[Unit],
+      rejectRight: Boolean // false reject left, true reject right
   ): F[Unit] = {
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
+
     rhoRuntimeEff[F](true)
       .use {
         case (runtime, _, historyRepo) =>
@@ -125,12 +129,27 @@ trait ComputeMerge {
               rBlock.blockHash -> rightIndex,
               lBlock.blockHash -> leftIndex
             )
+            rejectAlg = (r: DeployChainIndex) => {
+              val deployIds      = r.deploysWithCost.map(_.id)
+              val rightDeployIds = rightDeploys.map(_.deploy.sig).toSet
+              val leftDeployIds  = leftDeploys.map(_.deploy.sig).toSet
+              if (rejectRight && deployIds == rightDeployIds) 0L
+              else if (rejectRight && deployIds == leftDeployIds) 100L
+              else if (!rejectRight && deployIds == leftDeployIds) 0L
+              else if (!rejectRight && deployIds == rightDeployIds) 100L
+              else
+                throw new Exception(
+                  s"something wrong with the tests with reject options " +
+                    s"${rejectRight}, ${deployIds}, ${rightDeployIds}, ${leftDeployIds}"
+                )
+            }
             mergedState <- DagMerger.merge[F](
                             dag,
                             bBlock.blockHash,
                             baseCheckpoint.root,
                             indices(_).deployChains.pure[F],
-                            historyRepo
+                            historyRepo,
+                            rejectAlg
                           )
             result <- checkFunction(runtime, historyRepo, mergedState)
           } yield result
