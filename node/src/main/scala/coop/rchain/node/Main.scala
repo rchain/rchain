@@ -12,6 +12,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.monix.Monixable
+import coop.rchain.node.api.client.{DeployRuntime, GrpcDeployService, GrpcProposeService}
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
