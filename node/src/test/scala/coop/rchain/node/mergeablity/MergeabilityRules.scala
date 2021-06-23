@@ -1,7 +1,7 @@
 package coop.rchain.node.mergeablity
 
 import cats.Monoid
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.BlockIndex
@@ -236,9 +236,6 @@ trait BasicMergeabilityRules extends ComputeMerge {
       isConflict: Boolean,
       mergedStateResult: State,
       rejectRight: Boolean
-  )(
-      implicit file: sourcecode.File,
-      line: sourcecode.Line
   ): Task[Unit] = {
 
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
@@ -252,7 +249,6 @@ trait BasicMergeabilityRules extends ComputeMerge {
         phloLimit = 500,
         sec = ConstructDeploy.defaultSec2
       )
-    implicit val concurrent                = Concurrent[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
@@ -280,8 +276,6 @@ trait BasicMergeabilityRules extends ComputeMerge {
                   | ${mergedStateResult}
                   |
                   | conflicts found: ${mergedState._2.size}
-                  |
-                  | go see it at ${file.value}:${line.value}
                   | """.stripMargin
           _ <- Sync[Task]
                 .raiseError(new Exception(errMsg))
