@@ -22,6 +22,7 @@ import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validat
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import fs2.Stream
 
 import scala.collection.immutable.SortedMap
 
@@ -53,7 +54,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       (blockHash.size == BlockHash.Length && dagSet.contains(blockHash)).pure[F]
 
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
+      childMap.get(blockHash).map(_ intersect dagSet).pure[F]
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
@@ -61,6 +62,131 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
 
     def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
+
+    /**
+      * Truncate full DAG according to some view, defined by latest messages.
+      *
+      * Please see example below: `-` here denote message that are not seen by target view.
+      * Target latest messages are A B C D E. G - genesis
+      *
+      * Computing of excess messages can be divided into 3 parts:
+      * 1. high excess - messages that has height above highest target latest message. This is done simply by
+      * splitting height map.
+      * 2. lmRange excess, which are messages inside the range of target latest messages, but not seen yet by
+      * the view (are higher then some target latest message from the same sender).
+      * This requires reading metadata which is more costly then 1.
+      * 3. unseen senders excess (low excess) - Please note that the first column is full of `-`, which means target
+      * message sender is ignoring this validator, but this particular node adds these
+      * messages for some reason. It does not seem like a impossible scenario, and makes truncating logic a
+      * bit more complex.
+      *
+      *   - - -   -
+      *     -       _____  ^             high excess              ^
+      *     B   -          v                                      v
+      *     *   D E
+      *     * C                        lmRange excess
+      * - - *   *
+      * - A * * * * _____  ^                                      ^
+      * -   *   *          v   unseenSendersExcess (low excess)   v
+      * -   * * * *
+      * - * *   *
+      *     G
+      *
+      */
+    override def truncate(
+        targetLatestMessages: Map[Validator, BlockHash]
+    ): F[BlockDagRepresentation[F]] = {
+      final case class HeightView(
+          height: Long,
+          excess: Iterator[ByteString],
+          inView: Iterator[ByteString]
+      )
+      for {
+        lmMetas <- targetLatestMessages.values.toStream.traverse(this.lookupUnsafe)
+        (highestHeight, lowestHeight, lmPerValidatorHeight) = lmMetas.foldLeft(
+          (0L, Long.MaxValue, Map.empty[ByteString, Long])
+        ) {
+          case ((curHH, curLH, curLVH), meta) =>
+            val newHH  = Math.max(curHH, meta.blockNum)
+            val newLH  = Math.min(curLH, meta.blockNum)
+            val newLVH = curLVH.updated(meta.sender, meta.blockNum)
+            (newHH, newLH, newLVH)
+        }
+        // messages higher then highest latest message are outside the view
+        (highExcess, withoutHighExcess) = heightMap.partition { case (h, _) => h > highestHeight }
+
+        // messages inside range of latest message heights might contain new messages from validator that are not seen yet
+        lmRangeViews <- heightMap
+                         .range(lowestHeight, highestHeight + 1)
+                         .toStream
+                         .traverse {
+                           case (h, messages) =>
+                             for {
+                               lms <- messages.toStream
+                                       .traverse(this.lookupUnsafe)
+                                       .map(_.map(m => (m.blockHash, m.sender)))
+                               (excess, inView) = lms.partition {
+                                 case (_, sender) =>
+                                   // remove message if target view is not aware of validator,
+                                   // or latest message in full view is newer then target
+                                   val senderSeen = lmPerValidatorHeight.contains(sender)
+                                   senderSeen && h > lmPerValidatorHeight(sender)
+                               }
+                               r = HeightView(
+                                 h,
+                                 excess = excess.map { case (hash, _) => hash }.toIterator,
+                                 inView = inView.map { case (hash, _) => hash }.toIterator
+                               )
+                             } yield r
+                         }
+                         .map(_.toSet)
+        excessMessages = lmRangeViews.flatMap(_.excess) ++ highExcess.values.flatten
+
+        // check clause 3
+        fullLMMetas <- this.latestMessages
+        // senders that are in the full dag but not seen by view that is being created
+        unseenSenders = fullLMMetas.filter { case (_, meta) => meta.blockNum != 0 }.keySet diff targetLatestMessages.keySet
+        unseenSendersExcess <- Stream
+                              // gather all messages of unseen validators
+                                .fromIterator(unseenSenders.toIterator)
+                                .map(fullLMMetas(_).blockHash)
+                                .flatMap { h =>
+                                  Stream(h) ++ this.selfJustificationChain(h).map(_.latestBlockHash)
+                                }
+                                // if message is already removed no need to process it again
+                                .filterNot(excessMessages.contains)
+                                .evalMap(this.lookupUnsafe)
+                                // the lowest message in the DAG is always genesis - never remove genesis
+                                .filterNot(_.blockNum == heightMap.keySet.min)
+                                .map(meta => meta.blockNum -> meta.blockHash)
+                                // accumulate messages into low excess map
+                                .mapAccumulate(Map.empty[Long, Set[BlockHash]]) {
+                                  case (acc, (height, hash)) =>
+                                    val newVal = acc.getOrElse(height, Set.empty[BlockHash]) + hash
+                                    (acc.updated(height, newVal), hash)
+                                }
+                                .map { case (acc, _) => acc }
+                                .compile
+                                .last
+                                .map(_.getOrElse(Map.empty))
+        // new truncated values
+        truncatedDagSet     = this.dagSet diff excessMessages diff unseenSendersExcess.values.flatten.toSet
+        truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
+        withoutRangeExcess = lmRangeViews.foldLeft(withoutHighExcess)(
+          (acc, heightView) => acc.updated(heightView.height, heightView.inView.toSet)
+        )
+        truncatedHeightMap = unseenSendersExcess.foldLeft(withoutRangeExcess) {
+          case (acc, (height, excess)) => acc.updated(height, acc(height) -- excess)
+        }
+
+        view = this.copy(
+          dagSet = truncatedDagSet,
+          latestMessagesMap = targetLatestMessages,
+          heightMap = truncatedHeightMap,
+          invalidBlocksSet = truncatedInvalidSet
+        )
+      } yield view
+    }
 
     override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
 
@@ -256,9 +382,11 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       for {
         dag    <- representation
         errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        _ <- dag
+              .contains(directlyFinalizedHash)
+              .ifM(().pure, new Exception(errMsg).raiseError)
         // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        indirectlyFinalized <- dag.ancestors(List(directlyFinalizedHash), dag.isFinalized(_).not)
         // invoke effects
         _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
         // persist finalization
