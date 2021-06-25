@@ -327,7 +327,8 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <* indexBlock
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock.whenA(casperShardConf.maxNumberOfParents > 1)
             }
             .getOrElse(().pure[F])
     } yield valResult
