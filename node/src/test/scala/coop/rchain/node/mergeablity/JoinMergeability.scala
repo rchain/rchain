@@ -4,9 +4,7 @@ import coop.rchain.node.mergeablity.OperationOn0Ch._
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class JoinMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
-  it should "J S N 2" in ConflictingCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)(
-    J_.rstate ++ S1.rstate
-  )
+  it should "J S N 2" in MergeableCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)
 
   it should "J S S" in ConflictingCase(S0)(S1)(J_)(J_.rstate ++ S0.rstate)(
     J_.rstate ++ S1.rstate
@@ -72,7 +70,7 @@ class JoinMergeability extends FlatSpec with Matchers with Inspectors with Basic
   it should "4 J P" in MergeableCase(P_)(J_)(F_)(J_.rstate ++ F_.rstate ++ P_.rstate)
   it should "4 J N" in MergeableCase(Nil)(J_)(F_)(J_.rstate ++ F_.rstate)
   it should "C J J" in MergeableCase(J_)(J_)(C_)(J_.rstate ++ J_.rstate ++ C_.rstate)
-  it should "C J S" in ConflictingCase(J_)(S1)(C_)(J_.rstate ++ C_.rstate)(C_.rstate)
+  it should "C J S" in MergeableCase(J_)(S1)(C_)(J_.rstate ++ C_.rstate)
   it should "C J 4" in MergeableCase(J_)(F1)(C_)(J_.rstate ++ C_.rstate ++ F1.rstate)
   it should "C J C" in MergeableCase(C0)(J_)(C_)(J_.rstate ++ C0.rstate ++ C_.rstate)
   // it should   "C J R"  in InfiniteLoop(R0)(J_)(C_)(C_.rstate ++ J_.rstate)
@@ -86,7 +84,6 @@ class JoinMergeability extends FlatSpec with Matchers with Inspectors with Basic
     R0.rstate ++ S1.rstate
   )
   it should "R J 4" in MergeableCase(J_)(F1)(R0)(J_.rstate ++ R0.rstate ++ F1.rstate)
-  it should "R J 4 2" in ConflictingCase(J_)(F0)(R0)(J_.rstate ++ R0.rstate)(R0.rstate)
   it should "R J C" ignore MergeableCase(C0)(J_)(R0)(J_.rstate ++ R0.rstate)                // infinite loop
   it should "R J C 2" ignore MergeableCase(C1)(J_)(R0)(J_.rstate ++ R0.rstate ++ C1.rstate) // infinite loop
   it should "R J R" in ConflictingCase(R0)(J_)(R0)(R0.rstate ++ R0.rstate)(
