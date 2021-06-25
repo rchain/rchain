@@ -48,7 +48,7 @@ object ConstructDeploy {
       sec: PrivateKey = defaultSec,
       vabn: Long = 0
   ): Signed[DeployData] =
-    sourceDeploy(source = source, timestamp = System.currentTimeMillis(), sec = sec, vabn = vabn)
+    sourceDeploy(source = source, timestamp = System.nanoTime(), sec = sec, vabn = vabn)
 
   def sourceDeployNowF[F[_]: Time: Functor](
       source: String,
