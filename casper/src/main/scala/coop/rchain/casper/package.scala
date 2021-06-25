@@ -1,6 +1,8 @@
 package coop.rchain
 
+import com.google.protobuf.ByteString
 import coop.rchain.casper.blocks.proposer.ProposerResult
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtilSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -23,6 +25,13 @@ package object casper {
       with AllSyntaxComm
       with AllSyntaxBlockStorage
       with RhoRuntimeSyntax
+
+  /** If block message is attestation.
+    * Attestation confirms post state hashes of justifications and does not introduce any state change */
+  def isAttestationMessage(b: BlockMessage) =
+    b.body.state.preStateHash == ByteString.EMPTY &&
+      b.body.state.postStateHash == ByteString.EMPTY &&
+      b.body.deploys.isEmpty
 }
 
 // Casper syntax

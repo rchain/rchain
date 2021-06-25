@@ -107,16 +107,22 @@ object BlockCreator {
         dummyDeploys    = prepareDummyDeploy(nextBlockNum)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
         // make sure closeBlock is the last system Deploy
-        systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          SystemDeployUtil
-            .generateCloseDeployRandomSeed(selfId, nextSeqNum)
-        )
-        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+        deploys            = userDeploys -- s.deploysInScope ++ dummyDeploys
+        isEpochChangeBlock = nextBlockNum % s.onChainState.shardConf.epochLength == 0
+
+        // Issue state transition message if there are user deploys to put or its an epoch change block,
+        // so epoch change has to be performed
+        issueSTM = deploys.nonEmpty || slashingDeploys.nonEmpty || isEpochChangeBlock
+        r <- if (issueSTM) {
               for {
                 now           <- Time[F].currentMillis
                 invalidBlocks = s.invalidBlocks
                 blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                // if any slashing deploys to put - pack them in a block, pushing closeBlock into the end
+                systemDeploys = slashingDeploys :+ CloseBlockDeploy(
+                  SystemDeployUtil
+                    .generateCloseDeployRandomSeed(selfId, nextSeqNum)
+                )
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    parents,
                                    deploys.toSeq,
@@ -137,7 +143,7 @@ object BlockCreator {
                 _             <- Span[F].mark("before-packing-block")
                 shardId       = s.onChainState.shardConf.shardName
                 casperVersion = s.onChainState.shardConf.casperVersion
-                unsignedBlock = packageBlock(
+                unsignedBlock = packageSTM(
                   blockData,
                   parents.map(_.blockHash),
                   justifications.toSeq,
@@ -154,8 +160,21 @@ object BlockCreator {
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
               } yield BlockCreatorResult.created(signedBlock)
-            else
-              BlockCreatorResult.noNewDeploys.pure[F]
+              // else issue attestation message
+            } else
+              for {
+                now       <- Time[F].currentMillis
+                blockData = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                unsignedBlock = packageAM(
+                  blockData,
+                  parents.map(_.blockHash),
+                  justifications.toSeq,
+                  shardId = parents.head.shardId,
+                  version = parents.head.header.version
+                )
+                _           <- Span[F].mark("block-created")
+                signedBlock = validatorIdentity.signBlock(unsignedBlock)
+              } yield BlockCreatorResult.createdAttestation(signedBlock)
       } yield r
 
       for {
@@ -172,7 +191,7 @@ object BlockCreator {
       } yield blockStatus
     }
 
-  private def packageBlock(
+  private def packageSTM(
       blockData: BlockData,
       parents: Seq[BlockHash],
       justifications: Seq[Justification],
@@ -192,6 +211,25 @@ object BlockCreator {
         deploys.toList,
         rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig)).toList,
         systemDeploys.toList
+      )
+    val header = Header(parents.toList, blockData.timeStamp, version)
+    ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
+  }
+
+  private def packageAM(
+      blockData: BlockData,
+      parents: Seq[BlockHash],
+      justifications: Seq[Justification],
+      shardId: String,
+      version: Long
+  ): BlockMessage = {
+    val state = RChainState(ByteString.EMPTY, ByteString.EMPTY, List(), blockData.blockNumber)
+    val body =
+      Body(
+        state,
+        List(),
+        List(),
+        List()
       )
     val header = Header(parents.toList, blockData.timeStamp, version)
     ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
