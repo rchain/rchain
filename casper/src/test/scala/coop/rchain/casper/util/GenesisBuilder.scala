@@ -39,8 +39,8 @@ object GenesisBuilder {
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
       validatorsNum: Int = 4
   ): GenesisParameters = buildGenesisParameters(
-    defaultValidatorKeyPairs,
-    bondsFunction(defaultValidatorPks)
+    defaultValidatorKeyPairs.take(validatorsNum),
+    bondsFunction(defaultValidatorPks.take(validatorsNum))
   )
 
   def buildGenesisParametersWithRandom(
@@ -49,7 +49,7 @@ object GenesisBuilder {
   ): GenesisParameters = {
     // 4 default fixed validators, others are random generated
     val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
-    val (_, randomValidatorPks) = defaultValidatorKeyPairs.unzip
+    val (_, randomValidatorPks) = randomValidatorKeyPairs.unzip
     buildGenesisParameters(
       defaultValidatorKeyPairs ++ randomValidatorKeyPairs,
       bondsFunction(defaultValidatorPks ++ randomValidatorPks)
@@ -116,7 +116,7 @@ object GenesisBuilder {
   ): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
-      val parameters = buildGenesisParameters(validatorsNum = validatorsNum)
+      val parameters = buildGenesisParametersWithRandom(validatorsNum = validatorsNum)
       genesisCache.getOrElseUpdate(
         parameters,
         doBuildGenesis(parameters)

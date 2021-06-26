@@ -1,36 +1,28 @@
 package coop.rchain.casper.util.rholang
 
-import cats.Monad
 import cats.effect._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
+import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager._
-import coop.rchain.casper.util.{DagOperations, ProtoUtil}
+import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, NormalizerEnv, Par}
+import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Log, LogSource}
-import com.google.protobuf.ByteString
-import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
-import coop.rchain.casper.blocks.merger.{
-  BlockIndex,
-  CasperDagMerger,
-  CasperMergingDagReader,
-  MergingVertex
-}
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.store.{KeyValueCache, LazyAdHocKeyValueCache, NoOpKeyValueCache}
+import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
 
 import scala.collection.Seq
@@ -71,7 +63,7 @@ object InterpreterUtil {
                  case Left(ex) =>
                    BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
                  case Right((computedPreStateHash, rejectedDeploys @ _)) =>
-                   val rejectedDeployIds = rejectedDeploys.map(_.deploy.sig).toSet
+                   val rejectedDeployIds = rejectedDeploys.toSet
                    if (incomingPreStateHash != computedPreStateHash) {
                      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
                      Log[F]
@@ -216,7 +208,7 @@ object InterpreterUtil {
   )(
       implicit spanF: Span[F]
   ): F[
-    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
   ] =
     spanF.trace(ComputeDeploysCheckpointMetricsSource) {
       for {
@@ -246,56 +238,50 @@ object InterpreterUtil {
       parents: Seq[BlockMessage],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
-  )(implicit spanF: Span[F]): F[(StateHash, Seq[ProcessedDeploy])] =
+  )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
       parents match {
         // For genesis, use empty trie's root hash
         case Seq() =>
-          (RuntimeManager.emptyStateHashFixed, Seq.empty[ProcessedDeploy]).pure[F]
+          (RuntimeManager.emptyStateHashFixed, Seq.empty[ByteString]).pure[F]
 
         // For single parent, get itd post state hash
         case Seq(parent) =>
-          (ProtoUtil.postStateHash(parent), Seq.empty[ProcessedDeploy]).pure[F]
+          (ProtoUtil.postStateHash(parent), Seq.empty[ByteString]).pure[F]
 
         // we might want to take some data from the parent with the most stake,
         // e.g. bonds map, slashing deploys, bonding deploys.
         // such system deploys are not mergeable, so take them from one of the parents.
-        case parents => {
-          implicit val r = runtimeManager
-          val tipsHashes = parents.map(_.blockHash)
-          val lfbHash    = s.lastFinalizedBlock
-          for {
-            tips <- BlockStore[F]
-                     .getUnsafe(tipsHashes)
-                     .map(
-                       b =>
-                         MergingVertex(
-                           b.blockHash,
-                           b.body.state.postStateHash,
-                           b.body.state.preStateHash,
-                           b.body.deploys.toSet
-                         )
-                     )
-                     .compile
-                     .toList
-            base <- BlockStore[F]
-                     .getUnsafe(lfbHash)
-                     .map(
-                       b =>
-                         MergingVertex(
-                           b.blockHash,
-                           b.body.state.postStateHash,
-                           b.body.state.preStateHash,
-                           b.body.deploys.toSet
-                         )
-                     )
-            r <- CasperDagMerger.merge(
-                  tips,
-                  base,
-                  new CasperMergingDagReader(s.dag),
-                  runtimeManager.getBlockIndexCache
+        case _ => {
+          val blockIndexF = (v: BlockHash) => {
+            val cached = BlockIndex.cache.get(v).map(_.pure)
+            cached.getOrElse {
+              BlockStore[F].getUnsafe(v).flatMap { b =>
+                BlockIndex(
+                  b.blockHash,
+                  b.body.deploys,
+                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                  runtimeManager.getHistoryRepo
                 )
-          } yield r
+              }
+            }
+          }
+          for {
+            lfbState <- BlockStore[F]
+                         .getUnsafe(s.lastFinalizedBlock)
+                         .map(_.body.state.postStateHash)
+                         .map(Blake2b256Hash.fromByteString)
+            r <- DagMerger.merge[F](
+                  s.dag,
+                  s.lastFinalizedBlock,
+                  lfbState,
+                  blockIndexF(_).map(_.deployChains),
+                  runtimeManager.getHistoryRepo
+                )
+            (state, rejected) = r
+          } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
+
         }
       }
     }

@@ -35,7 +35,7 @@ object blockImplicits {
   val bondGen: Gen[Bond] = for {
     byteArray <- listOfN(Validator.Length, arbitrary[Byte])
     validator = ByteString.copyFrom(byteArray.toArray)
-    stake     <- arbitrary[Long]
+    stake     <- Gen.chooseNum(1L, 1024L)
   } yield Bond(validator, stake)
 
   val justificationGen: Gen[Justification] = for {

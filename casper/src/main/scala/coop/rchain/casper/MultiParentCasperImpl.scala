@@ -9,8 +9,9 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.finality.Finalizer
+import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
@@ -20,11 +21,13 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
+import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
 
 // format: off
@@ -32,7 +35,7 @@ class MultiParentCasperImpl[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator
+  /* Casper */      : Estimator: SafetyOracle
   /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
@@ -108,20 +111,45 @@ class MultiParentCasperImpl[F[_]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock).map(_.tips)
 
-  def lastFinalizedBlock: F[BlockMessage] =
-    for {
-      dag                    <- blockDag
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
-      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
-      _ <- EventPublisher[F]
-            .publish(
-              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
+  def lastFinalizedBlock: F[BlockMessage] = {
+
+    def finalisationEffect(blockHash: BlockHash): F[Unit] =
+      for {
+        block          <- BlockStore[F].getUnsafe(blockHash)
+        deploys        = block.body.deploys.map(_.deploy)
+        deploysRemoved <- DeployStorage[F].remove(deploys)
+        _ <- Log[F].info(
+              s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                .buildString(blockHash)}."
             )
-            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
-      blockMessage <- BlockStore[F].getUnsafe(updatedLastFinalizedBlockHash)
+        _ <- BlockDagStorage[F].addFinalizedBlockHash(blockHash)
+        _ = BlockIndex.cache.remove(block.blockHash)
+      } yield ()
+
+    def newLfbEffect(newLFB: BlockHash): F[Unit] =
+      LastFinalizedStorage[F].put(newLFB) >>
+        EventPublisher[F]
+          .publish(
+            RChainEvent.blockFinalised(newLFB.base16String)
+          )
+
+    implicit val ms = CasperMetricsSource
+
+    for {
+      dag                      <- blockDag
+      lastFinalizedBlockHash   <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
+      work = Finalizer.run[F](
+        dag,
+        casperShardConf.faultToleranceThreshold,
+        lastFinalizedBlockHeight,
+        newLfbEffect,
+        finalisationEffect
+      )
+      newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
+      blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
     } yield blockMessage
+  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -280,18 +308,16 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    // if merging is enabled - populate block index cache while validating block
-    val populateBlockIndexCache =
-      if (casperShardConf.maxNumberOfParents > 1)
-        RuntimeManager[F].getBlockIndexCache.get(
-          MergingVertex(
-            b.blockHash,
-            ProtoUtil.postStateHash(b),
-            ProtoUtil.preStateHash(b),
-            ProtoUtil.deploys(b).toSet
-          )
-        )
-      else ().pure[F]
+    val indexBlock = for {
+      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                b.blockHash,
+                b.body.deploys,
+                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                RuntimeManager[F].getHistoryRepo
+              )
+      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+    } yield ()
 
     val validationProcessDiag = for {
       // Create block and measure duration
@@ -301,13 +327,13 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]")
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock.whenA(casperShardConf.maxNumberOfParents > 1)
             }
             .getOrElse(().pure[F])
     } yield valResult
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *>
-      populateBlockIndexCache *> validationProcessDiag
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =

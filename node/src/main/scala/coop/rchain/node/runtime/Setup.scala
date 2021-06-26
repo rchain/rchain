@@ -17,6 +17,7 @@ import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.safety.CliqueOracle
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
@@ -32,13 +33,13 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.monix.Monixable
-import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
-import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.diagnostics
+import coop.rchain.node.runtime.NodeRuntime._
+import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.p2p.effects.PacketHandler
@@ -140,13 +141,6 @@ object Setup {
         SafetyOracle.cliqueOracle[F]
       }
 
-      lastFinalizedBlockCalculator = {
-        implicit val bs = blockStore
-        implicit val da = blockDagStorage
-        implicit val or = oracle
-        implicit val ds = deployStorage
-        LastFinalizedBlockCalculator[F](conf.casper.faultToleranceThreshold)
-      }
       estimator = {
         implicit val sp = span
         Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
@@ -292,7 +286,6 @@ object Setup {
         implicit val br     = blockRetriever
         implicit val rm     = runtimeManager
         implicit val or     = oracle
-        implicit val lc     = lastFinalizedBlockCalculator
         implicit val sp     = span
         implicit val lb     = lab
         implicit val rc     = rpConnections

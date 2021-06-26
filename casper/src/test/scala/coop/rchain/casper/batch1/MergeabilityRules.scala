@@ -3,24 +3,25 @@ package coop.rchain.casper.batch1
 import cats.Monoid
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.casper.blocks.merger.{BlockIndex, Indexer, MergingVertex}
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
+import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
+import coop.rchain.casper.util.ConstructDeploy
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.rspace.merger.EventChain
-import coop.rchain.rspace.merger.instances.EventsIndexConflictDetectors
-import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
-import coop.rchain.store.LazyKeyValueCache
+import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.exceptions.TestFailedException
@@ -301,8 +302,7 @@ trait MergeabilityRules {
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    checkConflictAndMergeState(base, b1, b2, true, b1BaseMergedState) >>
-      checkConflictAndMergeState(base, b2, b1, true, b2BaseMergedState)
+    checkConflictAndMergeState(base, b1, b2, true, b1BaseMergedState, b2BaseMergedState)
 
   def merges(
       b1: Rho,
@@ -314,8 +314,7 @@ trait MergeabilityRules {
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ) =
-    checkConflictAndMergeState(base, b1, b2, false, b1BaseMergedState) >>
-      checkConflictAndMergeState(base, b2, b1, false, b2BaseMergedState)
+    checkConflictAndMergeState(base, b1, b2, false, b1BaseMergedState, b2BaseMergedState)
 
   private def getDataContinuationOnChannel0(
       runtime: RhoRuntime[Effect],
@@ -335,11 +334,14 @@ trait MergeabilityRules {
       b1: Rho,
       b2: Rho,
       isConflict: Boolean,
-      mergedReferenceState: State
+      b1State: State,
+      b2State: State
   )(
       implicit file: sourcecode.File,
       line: sourcecode.Line
   ): Effect[Boolean] = {
+
+    case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
 
     val deploys = Vector(
       ConstructDeploy.sourceDeploy(base.value, 1L, phloLimit = 500),
@@ -366,72 +368,74 @@ trait MergeabilityRules {
             rightDeploy         <- runtime.processDeploy(deploys(2))
             rightCheckpoint @ _ <- runtime.createCheckpoint
 
-            blockIndexCache <- LazyKeyValueCache[Task, MergingVertex, BlockIndex](
-                                Indexer.createBlockIndex[Task]
-                              )
-            leftV <- {
-              implicit val ch = blockIndexCache
-              Indexer.createBranchIndex(
-                Seq(
-                  MergingVertex(
-                    postStateHash = leftCheckpoint.root.toByteString,
-                    processedDeploys = Set(leftDeploy)
-                  )
-                )
-              )
-            }
-            rightV <- {
-              implicit val ch = blockIndexCache
-              Indexer.createBranchIndex(
-                Seq(
-                  MergingVertex(
-                    postStateHash = rightCheckpoint.root.toByteString,
-                    processedDeploys = Set(rightDeploy)
-                  )
-                )
-              )
-            }
-
-            baseStateReader = historyRepo.getHistoryReader(baseCheckpoint.root)
-            // Caching readers for data in base state
-            baseDataReader <- LazyKeyValueCache(
-                               (ch: Blake2b256Hash) => {
-                                 implicit val c = historyRepo
-                                 baseStateReader
-                                   .getDataFromChannelHash(ch)
-                               }
-                             )
-
-            baseJoinReader <- LazyKeyValueCache(
-                               (ch: Blake2b256Hash) => {
-                                 implicit val c = historyRepo
-                                 baseStateReader
-                                   .getJoinsFromChannelHash(ch)
-                               }
-                             )
-
-            conflicts <- EventsIndexConflictDetectors.findConflicts(
-                          leftV.eventLogIndex,
-                          rightV.eventLogIndex,
-                          baseDataReader,
-                          baseJoinReader
+            leftIndex <- BlockIndex(
+                          ByteString.copyFromUtf8("l"),
+                          List(leftDeploy),
+                          baseCheckpoint.root,
+                          leftCheckpoint.root,
+                          historyRepo
                         )
-            _            = assert(conflicts.nonEmpty == isConflict)
-            leftHistory  <- historyRepo.reset(leftCheckpoint.root).map(_.history)
-            rightHistory <- historyRepo.reset(rightCheckpoint.root).map(_.history)
-            baseHistory  <- historyRepo.reset(baseCheckpoint.root).map(_.history)
-            mergedState <- historyRepo.stateMerger.merge(
-                            leftHistory,
-                            if (conflicts.nonEmpty) Seq.empty
-                            else
-                              Seq(
-                                EventChain(
-                                  startState = baseHistory,
-                                  endState = rightHistory,
-                                  events = rightDeploy.deployLog.map(EventConverter.toRspaceEvent)
-                                )
-                              )
+            rightIndex <- BlockIndex(
+                           ByteString.copyFromUtf8("r"),
+                           List(rightDeploy),
+                           baseCheckpoint.root,
+                           rightCheckpoint.root,
+                           historyRepo
+                         )
+            baseIndex <- BlockIndex(
+                          ByteString.EMPTY,
+                          List.empty,
+                          baseCheckpoint.root, // this does not matter
+                          baseCheckpoint.root,
+                          historyRepo
+                        )
+            kvm      = new InMemoryStoreManager
+            dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
+            bBlock = getRandomBlock(
+              setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
+              setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List.empty.some
+            )
+            rBlock = getRandomBlock(
+              setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setPostStateHash = ByteString.copyFrom(rightCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List(bBlock.blockHash).some
+            )
+            lBlock = getRandomBlock(
+              setPreStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
+              setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
+              setParentsHashList = List(bBlock.blockHash).some
+            )
+            _   <- dagStore.insert(bBlock, false)
+            _   <- dagStore.insert(lBlock, false)
+            _   <- dagStore.insert(rBlock, false)
+            dag <- dagStore.getRepresentation
+
+            indices = Map(
+              bBlock.blockHash -> baseIndex,
+              rBlock.blockHash -> rightIndex,
+              lBlock.blockHash -> leftIndex
+            )
+            mergedState <- DagMerger.merge[Task](
+                            dag,
+                            bBlock.blockHash,
+                            baseCheckpoint.root,
+                            indices(_).deployChains.pure[Task],
+                            historyRepo
                           )
+            mergedRoot        = mergedState._1
+            rejectedDeployOpt = mergedState._2.headOption
+            referenceState = rejectedDeployOpt
+              .map { v =>
+                List((leftDeploy, b1State), (rightDeploy, b2State))
+                  .filter {
+                    case (deploy, _) => deploy.deploy.sig != v
+                  }
+                  .map { case (_, refState) => refState }
+                  .head
+              }
+              .getOrElse(b1State)
+
             dataContinuationAtBaseState <- getDataContinuationOnChannel0(
                                             runtime,
                                             baseCheckpoint.root
@@ -446,32 +450,35 @@ trait MergeabilityRules {
                                              )
             dataContinuationAtMergedState <- getDataContinuationOnChannel0(
                                               runtime,
-                                              mergedState.root
+                                              mergedRoot
                                             )
+            _ = println(s"conflicts found: ${mergedState._2.size}")
             _ = println(s"base state: ${dataContinuationAtBaseState}")
             _ = println(s"main state: ${dataContinuationAtMainState}")
             _ = println(s"merging state: ${dataContinuationAtMergingState}")
             _ = println(s"merged state: ${dataContinuationAtMergedState}")
-            _ = println(s"reference state: ${mergedReferenceState}")
+            _ = println(s"reference state: ${referenceState}")
+
+            errMsg = s""" FAILED
+                        | base = ${base.value}
+                        | b1   = ${b1.value}
+                        | b2   = ${b2.value}
+                        | Conflict: ${rejectedDeployOpt.isDefined} should be ${isConflict}
+                        | Merged state
+                        | ${dataContinuationAtMergedState}
+                        | should be
+                        | ${referenceState}
+                        |
+                        | go see it at ${file.value}:${line.value}
+                        | """.stripMargin
             _ <- Sync[Effect]
-                  .raiseError(new Exception(dataContinuationAtMergedState.toString))
-                  .whenA(dataContinuationAtMergedState != mergedReferenceState)
+                  .raiseError(new Exception(errMsg))
+                  .whenA(dataContinuationAtMergedState != referenceState)
           } yield true
       }
       .adaptError {
         case e: Throwable =>
-          new TestFailedException(s"""Expected
-                                     | base = ${base.value}
-                                     | b1   = ${b1.value}
-                                     | b2   = ${b2.value}
-                                     | The conflict result should be ${isConflict} and
-                                     | the mergedState datas should be
-                                     | ${mergedReferenceState}
-                                     | and it is
-                                     | ${e}
-                                     |
-                                     | go see it at ${file.value}:${line.value}
-                                     | """.stripMargin, e, 5).severedAtStackDepth
+          new TestFailedException(e, 5).severedAtStackDepth
       }
   }
 }
