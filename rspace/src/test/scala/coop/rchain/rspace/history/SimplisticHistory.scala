@@ -306,8 +306,19 @@ final case class SimplisticHistory[F[_]: Sync](
     case (trie, path) => (trie, path.nodes)
   }
 
-  def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
+  def read(key: ByteVector): F[Option[ByteVector]] =
+    find(key.toArray).flatMap {
+      case (trie, _) =>
+        trie match {
+          case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+          case EmptyPointer          => Applicative[F].pure(None)
+          case _ =>
+            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
 
+        }
+    }
+
+  def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
 }
 
 object SimplisticHistory {

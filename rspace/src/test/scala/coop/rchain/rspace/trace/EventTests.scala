@@ -3,9 +3,10 @@ package coop.rchain.rspace.trace
 import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.examples.StringExamples.{Pattern, StringsCaptor}
-import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
 import coop.rchain.rspace.test.ArbitraryInstances._
+import coop.rchain.rspace.util
 import coop.rchain.shared.Serialize
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
@@ -17,14 +18,18 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
     forAll { (channel: String, data: String, persist: Boolean) =>
       val actual = Produce(channel, data, persist)
 
-      val expectedHash =
-        Blake2b256Hash.create(
-          List(
-            Serialize[String].encode(channel),
-            Serialize[String].encode(data),
-            (cignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
-          )
+      val channelEncoded = Serialize[String].encode(channel)
+      val channelHash    = Blake2b256Hash.create(channelEncoded)
+
+      val encodedSeq =
+        List(
+          channelHash.bytes,
+          Serialize[String].encode(data),
+          bool(8).encode(persist).map(_.bytes).getUnsafe
         )
+      val encoded = codecSeqByteVector.encode(encodedSeq).getUnsafe.toByteVector
+
+      val expectedHash = Blake2b256Hash.create(encoded)
 
       actual.channelsHash shouldBe hash(channel)
       actual.hash shouldBe expectedHash
@@ -39,19 +44,21 @@ class EventTests extends FlatSpec with Matchers with GeneratorDrivenPropertyChec
 
       val actual = Consume(channels, patterns, continuation, persist)
 
-      val encodedChannels = toOrderedByteVectors(channels)
+      val hashedChannels =
+        channels.map(StableHashProvider.hash(_)).sortBy(_.bytes)(util.ordByteVector)
+      val encodedChannels = hashedChannels.map(_.bytes)
       val encodedPatterns = toOrderedByteVectors(patterns)
 
-      val expectedHash =
-        Blake2b256Hash.create(
-          encodedChannels ++ encodedPatterns
-            ++ List(
-              Serialize[StringsCaptor].encode(continuation),
-              (cignore(7) ~> bool).encode(persist).map(_.bytes).getUnsafe
-            )
+      val encodedSeq =
+        encodedChannels ++ encodedPatterns ++ List(
+          Serialize[StringsCaptor].encode(continuation),
+          bool(8).encode(persist).map(_.bytes).getUnsafe
         )
+      val encoded = codecSeqByteVector.encode(encodedSeq).getUnsafe.toByteVector
 
-      actual.channelsHashes shouldBe encodedChannels.map(Blake2b256Hash.create)
+      val expectedHash = Blake2b256Hash.create(encoded)
+
+      actual.channelsHashes shouldBe hashedChannels
       actual.hash shouldBe expectedHash
     }
   }

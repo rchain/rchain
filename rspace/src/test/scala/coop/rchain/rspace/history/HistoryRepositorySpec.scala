@@ -3,10 +3,9 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
@@ -184,7 +183,6 @@ class HistoryRepositorySpec
         inMemColdStore,
         emptyExporter,
         emptyImporter,
-        noOpChannelStore,
         stringSerialize,
         stringSerialize,
         stringSerialize,
@@ -200,13 +198,7 @@ object RuntimeException {
 }
 
 trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
-  def noOpChannelStore = new ChannelStore[Task, String] {
-    override def getChannelHash(hash: Blake2b256Hash): Task[Option[ChannelHash]] = none.pure[Task]
 
-    override def putChannelHash(channel: String): Task[Unit] = ().pure[Task]
-
-    override def putContinuationHash(channels: Seq[String]): Task[Unit] = ().pure[Task]
-  }
   def inmemRootsStore =
     new RootsStore[Task] {
       var roots: Set[Blake2b256Hash]               = Set.empty

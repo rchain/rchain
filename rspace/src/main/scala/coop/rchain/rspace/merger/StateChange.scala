@@ -4,7 +4,6 @@ import cats.Monoid
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.HistoryReaderBinary
 import coop.rchain.rspace.merger.MergingLogic.{consumesAffected, producesAffected}
@@ -69,7 +68,6 @@ object StateChange {
       preStateReader: HistoryReaderBinary[F, C, P, A, K],
       postStateReader: HistoryReaderBinary[F, C, P, A, K],
       eventLogIndex: EventLogIndex,
-      channelsStore: ChannelStore[F, C],
       serializeC: Serialize[C]
   ): F[StateChange] =
     for {
@@ -79,19 +77,15 @@ object StateChange {
       consumesDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[ConsumeChange]]](Map.empty)
       joinsIndexRef   <- Ref.of[F, Set[JoinIndex]](Set.empty)
 
-      // TODO remove when channels map is removed
-      producePointers <- channelsStore.getProduceMappings(producesAffected(eventLogIndex).toSeq)
-      consumePointers <- channelsStore.getConsumeMappings(consumesAffected(eventLogIndex).toSeq)
-      joinsPointers <- channelsStore.getJoinMapping(
-                        (eventLogIndex.consumesLinearAndPeeks ++ eventLogIndex.consumesPersistent ++ eventLogIndex.consumesProduced).toSeq
-                          .flatMap(_.channelsHashes)
-                      )
+      producePointers = producesAffected(eventLogIndex)
+      consumePointers = consumesAffected(eventLogIndex)
+      joinsPointers   = eventLogIndex.consumesLinearAndPeeks ++ eventLogIndex.consumesPersistent ++ eventLogIndex.consumesProduced
 
-      // `distinct` required here to not compute change for the same hash several times
-      // as channel can be mentioned several times in event log
-      affectedDatumsValuePointers = producePointers.map(_.historyHash).distinct
-      affectedKontsValuePointers  = consumePointers.map(_.historyHash).distinct
-      involvedJoinsValuePointers  = joinsPointers.distinct
+      affectedDatumsValuePointers = producePointers.map(_.channelsHash)
+      affectedKontsValuePointers = consumePointers.map(
+        c => StableHashProvider.hash(c.channelsHashes)
+      )
+      involvedJoinsValuePointers = joinsPointers.flatMap(_.channelsHashes)
 
       datumsChangesComputes = affectedDatumsValuePointers.map(
         datumsPointer =>
@@ -122,7 +116,7 @@ object StateChange {
       joinsIndexComputes = {
         implicit val sc: Serialize[C] = serializeC
         val getJoinMappingIndex = (j: JoinsB[C]) =>
-          JoinIndex(j.raw, j.decoded.toList.map(channel => StableHashProvider.hash(channel)))
+          JoinIndex(j.raw, j.decoded.toList.map(StableHashProvider.hash(_)))
         involvedJoinsValuePointers.map(
           joinsPointer =>
             Stream.eval(for {
@@ -133,8 +127,9 @@ object StateChange {
         )
       }
       // compute all changes
+      allChanges = datumsChangesComputes ++ kontsChangesComputes ++ joinsIndexComputes
       _ <- fs2.Stream
-            .emits(datumsChangesComputes ++ kontsChangesComputes ++ joinsIndexComputes)
+            .fromIterator(allChanges.iterator)
             .parJoinProcBounded
             .compile
             .drain

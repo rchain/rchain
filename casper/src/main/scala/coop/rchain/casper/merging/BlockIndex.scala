@@ -28,15 +28,13 @@ object BlockIndex {
       postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K]
   ): F[BlockIndex] = {
-    implicit val channelStore: HistoryRepository[F, C, P, A, K] = historyRepository
-
     val createEventLogIndex = (d: ProcessedDeploy) => {
       val preStateReader =
         historyRepository.getHistoryReader(preStateHash)
       val produceExistsInPreState = (p: Produce) =>
-        preStateReader.getDataFromChannelHash(p.channelsHash).map(_.exists(_.source == p))
+        preStateReader.getData(p.channelsHash).map(_.exists(_.source == p))
       val produceTouchesPreStateJoin = (p: Produce) =>
-        preStateReader.getJoinsFromChannelHash(p.channelsHash).map(_.exists(_.size > 1))
+        preStateReader.getJoins(p.channelsHash).map(_.exists(_.size > 1))
       EventLogIndex.apply(
         d.deployLog.map(EventConverter.toRspaceEvent),
         produceExistsInPreState,

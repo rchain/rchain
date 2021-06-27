@@ -1276,15 +1276,13 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
     implicit val kvm                     = InMemoryStoreManager[Task]
 
     (for {
-      roots    <- kvm.store("roots")
-      cold     <- kvm.store("cold")
-      history  <- kvm.store("history")
-      channels <- kvm.store("channels")
+      roots   <- kvm.store("roots")
+      cold    <- kvm.store("cold")
+      history <- kvm.store("history")
       historyRepository <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
                             roots,
                             cold,
-                            history,
-                            channels
+                            history
                           )
       cache <- Ref.of[Task, Cache[C, P, A, K]](Cache[C, P, A, K]())
       store = {
