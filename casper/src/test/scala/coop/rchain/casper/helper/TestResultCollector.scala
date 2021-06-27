@@ -7,7 +7,7 @@ import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{ETuple, Expr, ListParWithRandom, Par}
-import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 object IsAssert {
@@ -91,7 +91,7 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
   def getResult: F[TestResult] = result.get
 
   def handleMessage(
-      ctx: SystemProcess.Context[F]
+      ctx: ProcessContext[F]
   )(message: Seq[ListParWithRandom]): F[Unit] = {
 
     val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)

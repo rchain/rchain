@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.dag
 
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
@@ -38,6 +38,33 @@ final class BlockDagRepresentationOps[F[_]: Sync](
     dag.lookup(hash) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 
+  def lookupUnsafe(hashes: Seq[BlockHash])(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing,
+      concurrent: Concurrent[F]
+  ): F[List[BlockMetadata]] = {
+    val streams = hashes.map(h => fs2.Stream.eval(lookupUnsafe(h)))
+    fs2.Stream.emits(streams).parJoinUnbounded.compile.toList
+  }
+
+  def childrensMetas(hashes: Seq[BlockHash])(
+      implicit line: sourcecode.Line,
+      file: sourcecode.File,
+      enclosing: sourcecode.Enclosing,
+      concurrent: Concurrent[F]
+  ): F[List[BlockMetadata]] = {
+
+    val childStream = fs2.Stream.emits(hashes).flatMap { h =>
+      fs2.Stream
+        .eval(dag.children(h).map(_.getOrElse(Set.empty)))
+        .flatMap(xs => fs2.Stream.fromIterator(xs.iterator))
+        .parEvalMapUnordered(100)(lookupUnsafe)
+    }
+    childStream.compile.toList
+
+  }
+
   def latestMessage(validator: Validator): F[Option[BlockMetadata]] = {
     import cats.instances.option._
     dag.latestMessageHash(validator) >>= (_.traverse(lookupUnsafe))
@@ -51,4 +78,26 @@ final class BlockDagRepresentationOps[F[_]: Sync](
         .map(_.toMap)
       )
   }
+
+  def invalidLatestMessages: F[Map[Validator, BlockHash]] = latestMessages.flatMap(
+    lm =>
+      invalidLatestMessages(lm.map {
+        case (validator, block) => (validator, block.blockHash)
+      })
+  )
+
+  def invalidLatestMessages(
+      latestMessagesHashes: Map[Validator, BlockHash]
+  ): F[Map[Validator, BlockHash]] =
+    dag.invalidBlocks.map { invalidBlocks =>
+      latestMessagesHashes.filter {
+        case (_, blockHash) => invalidBlocks.map(_.blockHash).contains(blockHash)
+      }
+    }
+
+  def invalidBlocksMap: F[Map[BlockHash, Validator]] =
+    for {
+      ib <- dag.invalidBlocks
+      r  = ib.map(block => (block.blockHash, block.sender)).toMap
+    } yield r
 }

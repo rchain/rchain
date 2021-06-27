@@ -1,15 +1,14 @@
 package coop.rchain.rspace.state
 
-import java.nio.ByteBuffer
-import java.nio.file.Path
-
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.exporters.RSpaceExporterItems.StoreItems
 import coop.rchain.rspace.state.exporters.{RSpaceExporterDisk, RSpaceExporterItems}
-import coop.rchain.shared.Log
-import scodec.Codec
+import coop.rchain.shared.{Log, Serialize}
+
+import java.nio.ByteBuffer
+import java.nio.file.Path
 
 trait RSpaceExporterSyntax {
   implicit final def rspaceSyntaxRSpaceExporter[F[_]](
@@ -54,10 +53,10 @@ final class RSpaceExporterOps[F[_]](
 
   def writeToDisk[C, P, A, K](root: Blake2b256Hash, dirPath: Path, chunkSize: Int)(
       implicit m: Concurrent[F],
-      codecC: Codec[C],
-      codecP: Codec[P],
-      codecA: Codec[A],
-      codecK: Codec[K],
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
       l: Log[F]
   ): F[Unit] =
     RSpaceExporterDisk.writeToDisk[F, C, P, A, K](exporter, root, dirPath, chunkSize)

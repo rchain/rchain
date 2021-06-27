@@ -2,6 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.Traverse
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
@@ -69,6 +70,107 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         } yield result
     }
   }
+
+  it should "successfully validate correct candidate" in effectTest {
+    createProtocol.flatMap {
+      case (approver, node) =>
+        val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
+        import node._
+
+        for {
+          r <- BlockApproverProtocol.validateCandidate[Effect](
+                candidate = unapproved.candidate,
+                requiredSigs = approver.requiredSigs,
+                timestamp = approver.deployTimestamp,
+                vaults = approver.vaults,
+                bonds = unapproved.candidate.block.body.state.bonds.map {
+                  case Bond(validator, stake) => validator -> stake
+                }.toMap,
+                minimumBond = approver.minimumBond,
+                maximumBond = approver.maximumBond,
+                epochLength = approver.epochLength,
+                quarantineLength = approver.quarantineLength,
+                numberOfActiveValidators = approver.numberOfActiveValidators
+              )
+        } yield r shouldBe Right(())
+    }
+  }
+
+  it should "reject candidate with incorrect bonds" in effectTest {
+    createProtocol.flatMap {
+      case (approver, node) =>
+        val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
+        import node._
+
+        for {
+          r <- BlockApproverProtocol.validateCandidate[Effect](
+                candidate = unapproved.candidate,
+                requiredSigs = approver.requiredSigs,
+                timestamp = approver.deployTimestamp,
+                vaults = approver.vaults,
+                bonds = Map.empty, // bonds are incorrect
+                minimumBond = approver.minimumBond,
+                maximumBond = approver.maximumBond,
+                epochLength = approver.epochLength,
+                quarantineLength = approver.quarantineLength,
+                numberOfActiveValidators = approver.numberOfActiveValidators
+              )
+        } yield r shouldBe (Left("Block bonds don't match expected."))
+    }
+  }
+
+  it should "reject candidate with incorrect vaults" in effectTest {
+    createProtocol.flatMap {
+      case (approver, node) =>
+        val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
+        import node._
+
+        for {
+          r <- BlockApproverProtocol.validateCandidate[Effect](
+                candidate = unapproved.candidate,
+                requiredSigs = approver.requiredSigs,
+                timestamp = approver.deployTimestamp,
+                vaults = Seq.empty[Vault],
+                bonds = unapproved.candidate.block.body.state.bonds.map {
+                  case Bond(validator, stake) => validator -> stake
+                }.toMap,
+                minimumBond = approver.minimumBond,
+                maximumBond = approver.maximumBond,
+                epochLength = approver.epochLength,
+                quarantineLength = approver.quarantineLength,
+                numberOfActiveValidators = approver.numberOfActiveValidators
+              )
+        } yield r shouldBe (Left(
+          "Mismatch between number of candidate deploys and expected number of deploys."
+        ))
+    }
+  }
+
+  it should "reject candidate with incorrect blessed contracts" in effectTest {
+    createProtocol.flatMap {
+      case (approver, node) =>
+        val unapproved = createUnapproved(approver.requiredSigs, node.genesis)
+        import node._
+
+        for {
+          r <- BlockApproverProtocol.validateCandidate[Effect](
+                candidate = unapproved.candidate,
+                requiredSigs = approver.requiredSigs,
+                timestamp = approver.deployTimestamp,
+                vaults = approver.vaults,
+                bonds = unapproved.candidate.block.body.state.bonds.map {
+                  case Bond(validator, stake) => validator -> stake
+                }.toMap,
+                // genesis params are incorrect
+                minimumBond = approver.minimumBond + 1,
+                maximumBond = approver.maximumBond - 1,
+                epochLength = approver.epochLength + 1,
+                quarantineLength = approver.quarantineLength + 1,
+                numberOfActiveValidators = approver.numberOfActiveValidators + 1
+              )
+        } yield r.isLeft shouldBe true
+    }
+  }
 }
 
 object BlockApproverProtocolTest {
@@ -80,8 +182,8 @@ object BlockApproverProtocolTest {
   def createProtocol: Effect[(BlockApproverProtocol, TestNode[Effect])] = {
     import monix.execution.Scheduler.Implicits.global
 
-    val params @ (_, genesisParams) = GenesisBuilder.buildGenesisParameters()
-    val context                     = GenesisBuilder.buildGenesis(params)
+    val params @ (_, _, genesisParams) = GenesisBuilder.buildGenesisParameters()
+    val context                        = GenesisBuilder.buildGenesis(params)
 
     val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1
@@ -92,12 +194,7 @@ object BlockApproverProtocolTest {
         .of[Effect](
           node.validatorId.get,
           genesisParams.timestamp,
-          Traverse[List]
-            .traverse(genesisParams.proofOfStake.validators.map(_.pk).toList)(
-              RevAddress.fromPublicKey
-            )
-            .get
-            .map(Vault(_, 0L)),
+          genesisParams.vaults,
           bonds,
           genesisParams.proofOfStake.minimumBond,
           genesisParams.proofOfStake.maximumBond,

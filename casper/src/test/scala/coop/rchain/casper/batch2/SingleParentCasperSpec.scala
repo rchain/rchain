@@ -60,8 +60,8 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
 
           validateResult <- {
             import n1._
-            n1.blockDagStorage.getRepresentation >>=
-              (dag => Validate.parents(dualParentB3, n1.genesis, dag))
+            n1.casperEff.getSnapshot >>=
+              (snap => Validate.parents(dualParentB3, n1.genesis, snap))
           }
         } yield validateResult shouldBe BlockStatus.invalidParents.asLeft[ValidBlock]
     }

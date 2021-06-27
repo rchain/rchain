@@ -1,16 +1,11 @@
 package coop.rchain.rspace.trace
 
-import cats.effect.Sync
-import coop.rchain.rspace.StableHashProvider._
-import coop.rchain.rspace.internal._
-import cats.implicits._
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.StableHashProvider._
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.internal.ConsumeCandidate
+import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.Serialize
-import coop.rchain.rspace.internal.codecSeq
-import coop.rchain.shared.Serialize
-import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs._
 
 import scala.collection.SortedSet
 
@@ -21,24 +16,6 @@ import scala.collection.SortedSet
   *   2. [[COMM]] Events, which consist of a single [[Consume]] and one or more [[Produce]]s
   */
 sealed trait Event
-
-object Event {
-
-  implicit def codecEvent: Codec[Event] =
-    discriminated[Event]
-      .by(uint2)
-      .subcaseP(0) {
-        case (comm: COMM) => comm
-      }(Codec[COMM])
-      .subcaseP(1) {
-        case produce: Produce => produce
-      }(Codec[Produce])
-      .subcaseP(2) {
-        case consume: Consume => consume
-      }(Codec[Consume])
-
-  implicit def codecLog: Codec[Seq[Event]] = codecSeq[Event](codecEvent)
-}
 
 final case class COMM(
     consume: Consume,
@@ -59,9 +36,6 @@ object COMM {
 
     COMM(consumeRef, produceRefs, peeks, produceCounters(produceRefs))
   }
-  implicit val codecInt = int32
-  implicit val codecCOMM: Codec[COMM] =
-    (Codec[Consume] :: Codec[Seq[Produce]] :: sortedSet(uint8) :: Codec[Map[Produce, Int]]).as[COMM]
 }
 
 sealed trait IOEvent extends Event
@@ -86,7 +60,7 @@ final case class Produce private (
 
 object Produce {
 
-  def create[C, A](channel: C, datum: A, persistent: Boolean)(
+  def apply[C, A](channel: C, datum: A, persistent: Boolean)(
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
@@ -97,21 +71,12 @@ object Produce {
       persistent
     )
 
-  def createF[F[_]: Sync, C, A](channel: C, datum: A, persistent: Boolean)(
-      implicit
-      serializeC: Serialize[C],
-      serializeA: Serialize[A]
-  ): F[Produce] = Sync[F].delay(create(channel, datum, persistent))
-
   def fromHash(
       channelsHash: Blake2b256Hash,
       hash: Blake2b256Hash,
       persistent: Boolean
   ): Produce =
     new Produce(channelsHash, hash, persistent)
-
-  implicit val codecProduce: Codec[Produce] =
-    (Codec[Blake2b256Hash] :: Codec[Blake2b256Hash] :: bool).as[Produce]
 }
 
 final case class Consume private (
@@ -136,7 +101,7 @@ object Consume {
   def unapply(arg: Consume): Option[(Seq[Blake2b256Hash], Blake2b256Hash, Int)] =
     Some((arg.channelsHashes, arg.hash, 0))
 
-  def create[C, P, K](
+  def apply[C, P, K](
       channels: Seq[C],
       patterns: Seq[P],
       continuation: K,
@@ -155,18 +120,6 @@ object Consume {
     )
   }
 
-  def createF[F[_]: Sync, C, P, K](
-      channels: Seq[C],
-      patterns: Seq[P],
-      continuation: K,
-      persistent: Boolean
-  )(
-      implicit
-      serializeC: Serialize[C],
-      serializeP: Serialize[P],
-      serializeK: Serialize[K]
-  ): F[Consume] = Sync[F].delay(create(channels, patterns, continuation, persistent))
-
   def fromHash(
       channelsHashes: Seq[Blake2b256Hash],
       hash: Blake2b256Hash,
@@ -174,8 +127,4 @@ object Consume {
   ): Consume =
     new Consume(channelsHashes, hash, persistent)
 
-  implicit val codecConsume: Codec[Consume] =
-    (Codec[Seq[Blake2b256Hash]] :: Codec[Blake2b256Hash] :: bool).as[Consume]
-
-  def hasJoins(consume: Consume): Boolean = consume.channelsHashes.size > 1
 }

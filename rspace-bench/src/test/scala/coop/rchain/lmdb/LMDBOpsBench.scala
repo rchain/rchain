@@ -3,9 +3,7 @@ package coop.rchain.lmdb
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeUnit
-
 import coop.rchain.lmdb.LMDBOpsBench._
-import coop.rchain.rspace.Context
 import coop.rchain.shared.PathOps._
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava._

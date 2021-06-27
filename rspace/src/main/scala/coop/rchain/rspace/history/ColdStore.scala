@@ -1,16 +1,14 @@
 package coop.rchain.rspace.history
 
-import cats.implicits._
 import cats.effect.Sync
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Serialize._
+import coop.rchain.shared.syntax._
+import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{discriminated, uint2}
-import coop.rchain.rspace.internal.codecByteVector
-import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
-import coop.rchain.shared.AttemptOpsF.RichAttempt
-import coop.rchain.shared.syntax._
 
 object ColdStoreInstances {
   type ColdKeyValueStore[F[_]] = KeyValueTypedStore[F, Blake2b256Hash, PersistedData]

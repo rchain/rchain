@@ -4,7 +4,7 @@ import cats.Monad
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -18,7 +18,15 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.{InvalidBlock, ValidBlock, Validate, ValidatorIdentity}
+import coop.rchain.casper.{
+  CasperShardConf,
+  CasperSnapshot,
+  InvalidBlock,
+  OnChainCasperState,
+  ValidBlock,
+  Validate,
+  ValidatorIdentity
+}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -26,7 +34,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
@@ -48,6 +56,25 @@ class ValidateTest
   import ValidBlock._
 
   implicit override val log: LogStub[Task] = new LogStub[Task]
+
+  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+    CasperSnapshot(
+      dag,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
 
   override def beforeEach(): Unit = {
     log.reset()
@@ -182,10 +209,9 @@ class ValidateTest
         modifiedTimestampHeader = block.header.copy(timestamp = 99999999)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
-              block.copy(header = modifiedTimestampHeader),
-              dag
+              block.copy(header = modifiedTimestampHeader)
             ) shouldBeF InvalidTimestamp.asLeft[ValidBlock]
-        _      <- Validate.timestamp[Task](block, dag) shouldBeF Valid.asRight[InvalidBlock]
+        _      <- Validate.timestamp[Task](block) shouldBeF Valid.asRight[InvalidBlock]
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
@@ -199,10 +225,9 @@ class ValidateTest
         modifiedTimestampHeader = block.header.copy(timestamp = -1)
         dag                     <- blockDagStorage.getRepresentation
         _ <- Validate.timestamp[Task](
-              block.copy(header = modifiedTimestampHeader),
-              dag
+              block.copy(header = modifiedTimestampHeader)
             ) shouldBeF Left(InvalidTimestamp)
-        _      <- Validate.timestamp[Task](block, dag) shouldBeF Right(Valid)
+        _      <- Validate.timestamp[Task](block) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("block timestamp") should be(true)
       } yield result
@@ -214,10 +239,11 @@ class ValidateTest
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(1), dag) shouldBeF Left(
+        _ <- Validate
+              .blockNumber[Task](block.withBlockNumber(1), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidBlockNumber
             )
-        _      <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
+        _      <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
         _      = log.warns.size should be(1)
         result = log.warns.head.contains("not zero, but block has no parents") should be(true)
       } yield result
@@ -229,10 +255,11 @@ class ValidateTest
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.blockNumber[Task](block.withBlockNumber(17), dag) shouldBeF Left(
+        _ <- Validate
+              .blockNumber[Task](block.withBlockNumber(17), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidBlockNumber
             )
-        _ <- Validate.blockNumber[Task](block, dag) shouldBeF Right(Valid)
+        _ <- Validate.blockNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
         _ = log.warns.size should be(1)
         result = log.warns.head.contains("is not one more than maximum parent number") should be(
           true
@@ -246,15 +273,28 @@ class ValidateTest
       for {
         _   <- createChain[Task](n)
         dag <- blockDagStorage.getRepresentation
-        a0  <- blockDagStorage.lookupByIdUnsafe(0) >>= (b => Validate.blockNumber[Task](b, dag))
-        a1  <- blockDagStorage.lookupByIdUnsafe(1) >>= (b => Validate.blockNumber[Task](b, dag))
-        a2  <- blockDagStorage.lookupByIdUnsafe(2) >>= (b => Validate.blockNumber[Task](b, dag))
-        a3  <- blockDagStorage.lookupByIdUnsafe(3) >>= (b => Validate.blockNumber[Task](b, dag))
-        a4  <- blockDagStorage.lookupByIdUnsafe(4) >>= (b => Validate.blockNumber[Task](b, dag))
-        a5  <- blockDagStorage.lookupByIdUnsafe(5) >>= (b => Validate.blockNumber[Task](b, dag))
+        a0 <- blockDagStorage.lookupByIdUnsafe(0) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
+        a1 <- blockDagStorage.lookupByIdUnsafe(1) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
+        a2 <- blockDagStorage.lookupByIdUnsafe(2) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
+        a3 <- blockDagStorage.lookupByIdUnsafe(3) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
+        a4 <- blockDagStorage.lookupByIdUnsafe(4) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
+        a5 <- blockDagStorage.lookupByIdUnsafe(5) >>= (
+                 b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+             )
         _ <- (0 until n).toList.forallM[Task] { i =>
-              (blockDagStorage.lookupByIdUnsafe(i) >>= (b => Validate.blockNumber[Task](b, dag)))
-                .map(_ == Right(Valid))
+              (blockDagStorage.lookupByIdUnsafe(i) >>= (
+                  b => Validate.blockNumber[Task](b, mkCasperSnapshot(dag))
+              )).map(_ == Right(Valid))
             } shouldBeF true
         result = log.warns should be(Nil)
       } yield result
@@ -286,9 +326,9 @@ class ValidateTest
         b2      <- createBlockWithNumber(7, genesis)
         b3      <- createBlockWithNumber(8, genesis, Seq(b1.blockHash, b2.blockHash))
         dag     <- blockDagStorage.getRepresentation
-        s1      <- Validate.blockNumber[Task](b3, dag)
+        s1      <- Validate.blockNumber[Task](b3, mkCasperSnapshot(dag))
         _       = s1 shouldBe Right(Valid)
-        s2      <- Validate.blockNumber[Task](b3.withBlockNumber(4), dag)
+        s2      <- Validate.blockNumber[Task](b3.withBlockNumber(4), mkCasperSnapshot(dag))
         _       = s2 shouldBe Left(InvalidBlockNumber)
       } yield ()
   }
@@ -366,10 +406,11 @@ class ValidateTest
         _     <- createChain[Task](1)
         block <- blockDagStorage.lookupByIdUnsafe(0)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1), dag) shouldBeF Left(
+        _ <- Validate
+              .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidSequenceNumber
             )
-        _      <- Validate.sequenceNumber[Task](block, dag) shouldBeF Right(Valid)
+        _      <- Validate.sequenceNumber[Task](block, mkCasperSnapshot(dag)) shouldBeF Right(Valid)
         result = log.warns.size should be(1)
       } yield result
   }
@@ -380,7 +421,8 @@ class ValidateTest
         _     <- createChain[Task](2)
         block <- blockDagStorage.lookupByIdUnsafe(1)
         dag   <- blockDagStorage.getRepresentation
-        _ <- Validate.sequenceNumber[Task](block.copy(seqNum = 1), dag) shouldBeF Left(
+        _ <- Validate
+              .sequenceNumber[Task](block.copy(seqNum = 1), mkCasperSnapshot(dag)) shouldBeF Left(
               InvalidSequenceNumber
             )
         result = log.warns.size should be(1)
@@ -400,7 +442,7 @@ class ValidateTest
                   dag   <- blockDagStorage.getRepresentation
                   result <- Validate.sequenceNumber[Task](
                              block,
-                             dag
+                             mkCasperSnapshot(dag)
                            )
                 } yield result == Right(Valid)
             ) shouldBeF true
@@ -415,8 +457,8 @@ class ValidateTest
         block  <- blockDagStorage.lookupByIdUnsafe(0)
         block2 <- blockDagStorage.lookupByIdUnsafe(1)
         dag    <- blockDagStorage.getRepresentation
-        _      <- Validate.repeatDeploy[Task](block, dag, 50) shouldBeF Right(Valid)
-        _      <- Validate.repeatDeploy[Task](block2, dag, 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
+        _      <- Validate.repeatDeploy[Task](block2, mkCasperSnapshot(dag), 50) shouldBeF Right(Valid)
       } yield ()
   }
 
@@ -431,7 +473,9 @@ class ValidateTest
                    deploys = Seq(deploy)
                  )
         dag <- blockDagStorage.getRepresentation
-        _   <- Validate.repeatDeploy[Task](block1, dag, 50) shouldBeF Left(InvalidRepeatDeploy)
+        _ <- Validate.repeatDeploy[Task](block1, mkCasperSnapshot(dag), 50) shouldBeF Left(
+              InvalidRepeatDeploy
+            )
       } yield ()
   }
 
@@ -445,9 +489,12 @@ class ValidateTest
         validBlock   <- blockDagStorage.lookupByIdUnsafe(1).map(_.copy(sender = validator))
         invalidBlock <- blockDagStorage.lookupByIdUnsafe(2).map(_.copy(sender = impostor))
         dag          <- blockDagStorage.getRepresentation
-        _            <- Validate.blockSenderHasWeight[Task](genesis, genesis, dag) shouldBeF true
-        _            <- Validate.blockSenderHasWeight[Task](validBlock, genesis, dag) shouldBeF true
-        result       <- Validate.blockSenderHasWeight[Task](invalidBlock, genesis, dag) shouldBeF false
+        _ <- Validate
+              .blockSenderHasWeight[Task](genesis, genesis) shouldBeF true
+        _ <- Validate
+              .blockSenderHasWeight[Task](validBlock, genesis) shouldBeF true
+        result <- Validate
+                   .blockSenderHasWeight[Task](invalidBlock, genesis) shouldBeF false
       } yield result
   }
 
@@ -509,19 +556,19 @@ class ValidateTest
       dag <- blockDagStorage.getRepresentation
 
       // Valid
-      _ <- Validate.parents[Task](b0, b0, dag)
-      _ <- Validate.parents[Task](b1, b0, dag)
-      _ <- Validate.parents[Task](b2, b0, dag)
-      _ <- Validate.parents[Task](b3, b0, dag)
-      _ <- Validate.parents[Task](b4, b0, dag)
-      _ <- Validate.parents[Task](b5, b0, dag)
-      _ <- Validate.parents[Task](b6, b0, dag)
+      _ <- Validate.parents[Task](b0, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b1, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b2, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b3, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b4, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b5, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b6, b0, mkCasperSnapshot(dag))
       _ = log.warns shouldBe empty
 
       // Not valid
-      _ <- Validate.parents[Task](b7, b0, dag)
-      _ <- Validate.parents[Task](b8, b0, dag)
-      _ <- Validate.parents[Task](b9, b0, dag)
+      _ <- Validate.parents[Task](b7, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b8, b0, mkCasperSnapshot(dag))
+      _ <- Validate.parents[Task](b9, b0, mkCasperSnapshot(dag))
 
       result = log.warns.forall(
         _.matches(
@@ -552,7 +599,7 @@ class ValidateTest
         _ <- Validate.blockSummary[Task](
               signedBlock,
               getRandomBlock(hashF = (ProtoUtil.hashUnsignedBlock _).some),
-              dag,
+              mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
             ) shouldBeF Left(InvalidBlockNumber)
@@ -625,18 +672,14 @@ class ValidateTest
                   block <- blockDagStorage.lookupByIdUnsafe(i)
                   dag   <- blockDagStorage.getRepresentation
                   result <- Validate.justificationFollows[Task](
-                             block,
-                             genesis,
-                             dag
+                             block
                            )
                 } yield result == Right(Valid)
             ) shouldBeF true
         blockId7 <- blockDagStorage.lookupByIdUnsafe(7)
         dag      <- blockDagStorage.getRepresentation
         _ <- Validate.justificationFollows[Task](
-              blockId7,
-              genesis,
-              dag
+              blockId7
             ) shouldBeF Left(InvalidFollows)
         _      = log.warns.size shouldBe 1
         result = log.warns.forall(_.contains("do not match the bonded validators")) shouldBe true
@@ -664,7 +707,7 @@ class ValidateTest
                   dag   <- blockDagStorage.getRepresentation
                   result <- Validate.justificationRegressions[Task](
                              block,
-                             dag
+                             mkCasperSnapshot(dag)
                            )
                 } yield result == Right(Valid)
             ) shouldBeF true
@@ -681,7 +724,7 @@ class ValidateTest
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
               blockWithJustificationRegression,
-              dag
+              mkCasperSnapshot(dag)
             ) shouldBeF Left(JustificationRegression)
         result = log.warns.size shouldBe 1
       } yield result
@@ -714,7 +757,7 @@ class ValidateTest
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
               blockWithInvalidJustification,
-              dag
+              mkCasperSnapshot(dag)
             ) shouldBeF Right(Valid)
       } yield ()
   }
@@ -726,19 +769,19 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
-        kvm                  <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store                <- kvm.rSpaceStores
-        spaces               <- Runtime.setupRSpace[Task](store)
-        (rspace, replay, hr) = spaces
-        runtime              <- Runtime.createWithEmptyCost((rspace, replay), Seq.empty)
-        runtimeManager       <- RuntimeManager.fromRuntime[Task](runtime)
-        dag                  <- blockDagStorage.getRepresentation
-        _                    <- InterpreterUtil.validateBlockCheckpoint[Task](genesis, dag, runtimeManager)
-        _                    <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        modifiedBonds        = Seq.empty[Bond]
-        modifiedPostState    = genesis.body.state.copy(bonds = modifiedBonds.toList)
-        modifiedBody         = genesis.body.copy(state = modifiedPostState)
-        modifiedGenesis      = genesis.copy(body = modifiedBody)
+        kvm                               <- mkTestRNodeStoreManager[Task](storageDirectory)
+        store                             <- kvm.rSpaceStores
+        runtimes                          <- RhoRuntime.createRuntimes[Task](store)
+        (runtime, replayRuntime, history) = runtimes
+        runtimeManager                    <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, history)
+        dag                               <- blockDagStorage.getRepresentation
+        _ <- InterpreterUtil
+              .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
+        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        modifiedBonds     = Seq.empty[Bond]
+        modifiedPostState = genesis.body.state.copy(bonds = modifiedBonds.toList)
+        modifiedBody      = genesis.body.copy(state = modifiedPostState)
+        modifiedGenesis   = genesis.copy(body = modifiedBody)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )

@@ -1,21 +1,18 @@
 package coop.rchain.blockstorage
 
-import cats._
+import cats.{Id, Monad}
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, BlockMessageProto}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 
 import scala.language.higherKinds
 
-class InMemBlockStore[F[_]] private ()(
-    implicit
-    monadF: Monad[F],
+class InMemBlockStore[F[_]: Monad: Metrics] private (
     refF: Ref[F, Map[BlockHash, BlockMessageProto]],
-    approvedBlockRef: Ref[F, Option[ApprovedBlock]],
-    metricsF: Metrics[F]
+    approvedBlockRef: Ref[F, Option[ApprovedBlock]]
 ) extends BlockStore[F] {
 
   implicit private val metricsSource: Metrics.Source =
@@ -23,13 +20,13 @@ class InMemBlockStore[F[_]] private ()(
 
   def get(blockHash: BlockHash): F[Option[BlockMessage]] =
     for {
-      _     <- metricsF.incrementCounter("get")
+      _     <- Metrics[F].incrementCounter("get")
       state <- refF.get
     } yield state.get(blockHash) >>= (bmp => BlockMessage.from(bmp).toOption)
 
   override def find(p: BlockHash => Boolean, n: Int): F[Seq[(BlockHash, BlockMessage)]] =
     for {
-      _     <- metricsF.incrementCounter("find")
+      _     <- Metrics[F].incrementCounter("find")
       state <- refF.get
     } yield state.filterKeys(p(_)).toSeq.map {
       case (bh, bmp) => (bh, BlockMessage.from(bmp).right.get) //TODO FIX-ME
@@ -37,7 +34,7 @@ class InMemBlockStore[F[_]] private ()(
 
   def put(f: => (BlockHash, BlockMessage)): F[Unit] =
     for {
-      _ <- metricsF.incrementCounter("put")
+      _ <- Metrics[F].incrementCounter("put")
       _ <- refF.update { state =>
             val (hash, message) = f
             state.updated(hash, BlockMessage.toProto(message))
@@ -58,26 +55,23 @@ class InMemBlockStore[F[_]] private ()(
       _ <- refF.update { _.empty }
     } yield ()
 
-  override def close(): F[Unit] = monadF.pure(())
+  override def close(): F[Unit] = ().pure[F]
 }
 
 object InMemBlockStore {
-  def create[F[_]](
-      implicit
-      monadF: Monad[F],
+  def create[F[_]: Monad: Metrics](
       refF: Ref[F, Map[BlockHash, BlockMessageProto]],
-      approvedBlockRef: Ref[F, Option[ApprovedBlock]],
-      metricsF: Metrics[F]
+      approvedBlockRef: Ref[F, Option[ApprovedBlock]]
   ): BlockStore[F] =
-    new InMemBlockStore()
+    new InMemBlockStore[F](refF, approvedBlockRef)
 
   def createWithId: BlockStore[Id] = {
     import coop.rchain.catscontrib.effect.implicits._
     import coop.rchain.metrics.Metrics.MetricsNOP
-    val refId                         = emptyMapRef[Id](syncId)
-    val approvedBlockRef              = Ref[Id].of(none[ApprovedBlock])
-    implicit val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
-    InMemBlockStore.create(syncId, refId, approvedBlockRef, metrics)
+    val refId                = emptyMapRef[Id](syncId)
+    val approvedBlockRef     = Ref[Id].of(none[ApprovedBlock])
+    val metrics: Metrics[Id] = new MetricsNOP[Id]()(syncId)
+    InMemBlockStore.create(refId, approvedBlockRef)(syncId, metrics)
   }
 
   def emptyMapRef[F[_]](implicit syncEv: Sync[F]): F[Ref[F, Map[BlockHash, BlockMessageProto]]] =

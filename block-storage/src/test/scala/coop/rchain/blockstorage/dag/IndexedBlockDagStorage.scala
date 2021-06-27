@@ -65,10 +65,6 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       underlying.accessEquivocationsTracker(f)
     )
 
-  def checkpoint(): F[Unit] = underlying.checkpoint()
-
-  def close(): F[Unit] = underlying.close()
-
   def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
     finalizedBlockHashRef.update(_ + blockHash)
 

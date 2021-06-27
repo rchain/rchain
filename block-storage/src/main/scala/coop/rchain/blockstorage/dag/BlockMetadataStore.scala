@@ -5,10 +5,11 @@ import cats.effect.Sync
 import cats.mtl.MonadState
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{AtomicMonadState, DagOps, Log}
+import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.store.KeyValueTypedStore
 import monix.execution.atomic.AtomicAny
 

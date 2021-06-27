@@ -1,34 +1,36 @@
 package coop.rchain.casper.api
 
 import cats.Monad
-import cats.effect.concurrent.Semaphore
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
-import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
+import coop.rchain.casper.blocks.proposer.ProposeResult._
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
-import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
 import coop.rchain.models.{BlockMetadata, Par}
-import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
-import coop.rchain.rspace.StableHashProvider
+import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.shared.Log
 
@@ -48,19 +50,24 @@ object BlockAPI {
   //  of errors and to overcome nesting when validating data.
   final case class BlockRetrievalError(message: String) extends Exception
 
-  def deploy[F[_]: Sync: EngineCell: Log: Span](
-      d: Signed[DeployData]
+  def deploy[F[_]: Concurrent: EngineCell: Log: Span](
+      d: Signed[DeployData],
+      triggerPropose: Option[ProposeFunction[F]]
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
-      casper
-        .deploy(d)
-        .map(
-          _.bimap(
-            err => err.show,
-            res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
-          )
-        )
+      for {
+        r <- casper
+              .deploy(d)
+              .map(
+                _.bimap(
+                  err => err.show,
+                  res => s"Success!\nDeployId is: ${PrettyPrinter.buildStringNoLimit(res)}"
+                )
+              )
+        // call a propose if proposer defined
+        _ <- triggerPropose.traverse(_(casper, true))
+      } yield r
 
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
@@ -88,84 +95,74 @@ object BlockAPI {
     ))
   }
 
-  def createBlock[F[_]: Sync: Concurrent: EngineCell: Log: Metrics: Span: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker](
-      blockApiLock: Semaphore[F],
-      printUnmatchedSends: Boolean = false
+  def createBlock[F[_]: Concurrent: EngineCell: Log](
+      triggerProposeF: ProposeFunction[F],
+      isAsync: Boolean = false
   ): F[ApiErr[String]] = {
-    def logWarning(err: String) = Log[F].warn(s"Error: $err") >> err.asLeft[String].pure[F]
+    def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
+    def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
+    def logWarn(msg: String)   = Log[F].warn(msg) >> msg.asLeft[String].pure[F]
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[String]](
-        casper => {
-          Sync[F].bracket(blockApiLock.tryAcquire) {
-            case true => {
-              implicit val ms     = BlockAPIMetricsSource
-              val syncCheckFailed = logWarning("Must wait for more blocks from other validators")
-              val lfhcCheckFailed = logWarning("Too far ahead of the last finalized block")
-              val validatorCheckFailed = new IllegalStateException(
-                "Read only node cannot create a block"
-              ).raiseError[F, PublicKey]
-              for {
-                maybeValidator  <- casper.getValidator
-                validatorPubKey <- maybeValidator.fold(validatorCheckFailed)(_.pure[F])
-                validator       = ByteString.copyFrom(validatorPubKey.bytes)
-                genesis         <- casper.getApprovedBlock
-                dag             <- casper.blockDag
-                runtimeManager  <- casper.getRuntimeManager
-                checkSynchronyConstraint = SynchronyConstraintChecker[F]
-                  .check(
-                    dag,
-                    runtimeManager,
-                    genesis,
-                    validator
-                  )
-                checkLastFinalizedHeightConstraint = LastFinalizedHeightConstraintChecker[F]
-                  .check(dag, genesis, validator)
-                createBlock = (for {
-                  _          <- Metrics[F].incrementCounter("propose")
-                  maybeBlock <- casper.createBlock
-                  result <- maybeBlock match {
-                             case err: NoBlock =>
-                               s"Error while creating block: $err".asLeft[String].pure[F]
-                             case Created(block) =>
-                               Log[F]
-                                 .info(s"Proposing ${PrettyPrinter.buildString(block)}") *>
-                                 casper.addBlock(block) >>= (addResponse(
-                                 _,
-                                 block,
-                                 casper,
-                                 printUnmatchedSends
-                               ))
-                           }
-                } yield result)
-                  .timer("propose-total-time")
-                  .attempt
-                  .map(
-                    _.leftMap(e => s"Error while creating block: ${e.getMessage}").joinRight
-                  )
-                  .flatMap {
-                    case Left(error) =>
-                      logWarning(error) <* Metrics[F].incrementCounter("propose-failed")
-                    case result => result.pure[F]
-                  }
-                result <- checkSynchronyConstraint.ifM(
-                           checkLastFinalizedHeightConstraint.ifM(createBlock, lfhcCheckFailed),
-                           syncCheckFailed
-                         )
-              } yield result
-            }
-            case false =>
-              "Error: There is another propose in progress.".asLeft[String].pure[F]
-          } {
-            case true =>
-              blockApiLock.release
-            case false =>
-              ().pure[F]
-          }
-        },
-        default = logWarning("Could not create block, casper instance was not available yet.")
+        casper =>
+          for {
+            // Trigger propose
+            proposerResult <- triggerProposeF(casper, isAsync)
+            r <- proposerResult match {
+                  case ProposerEmpty =>
+                    logDebug(s"Failure: another propose is in progress")
+                  case ProposerFailure(status, seqNumber) =>
+                    logDebug(s"Failure: $status (seqNum $seqNumber)")
+                  case ProposerStarted(seqNumber) =>
+                    logSucess(s"Propose started (seqNum $seqNumber)")
+                  case ProposerSuccess(_, block) =>
+                    // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
+                    //  Fix to use structured result with transport errors/codes.
+                    // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
+                    val blockHashHex = block.blockHash.base16String
+                    logSucess(s"Success! Block $blockHashHex created and added.")
+                }
+          } yield r,
+        default = logWarn("Failure: casper instance is not available.")
       )
     )
   }
+
+  // Get result of the propose
+  def getProposeResult[F[_]: Concurrent: Log](
+      proposerState: Ref[F, ProposerState[F]]
+  ): F[ApiErr[String]] =
+    for {
+      pr <- proposerState.get.map(_.currProposeResult)
+      r <- pr match {
+            // return latest propose result
+            case None =>
+              for {
+                result <- proposerState.get.map(
+                           _.latestProposeResult.getOrElse(ProposeResult.notEnoughBlocks, None)
+                         )
+                msg = result._2 match {
+                  case Some(block) =>
+                    s"Success! Block ${block.blockHash.base16String} created and added."
+                      .asRight[Error]
+                  case None => s"${result._1.proposeStatus.show}".asLeft[String]
+                }
+              } yield msg
+            // wait for current propose to finish and return result
+            case Some(resultDef) =>
+              for {
+                // this will hang API call until propose is complete, and then return result
+                // TODO cancel this get when connection drops
+                result <- resultDef.get
+                msg = result._2 match {
+                  case Some(block) =>
+                    s"Success! Block ${block.blockHash.base16String} created and added."
+                      .asRight[Error]
+                  case None => s"${result._1.proposeStatus.show}".asLeft[String]
+                }
+              } yield msg
+          }
+    } yield r
 
   def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
@@ -497,64 +494,6 @@ object BlockAPI {
           .as(s"Error: errorMessage".asLeft)
       )
     )
-  def blockReport[F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore: Span](
-      hash: String
-  )(reportingCasper: ReportingCasper[F]): F[ApiErr[BlockEventInfo]] = {
-    val errorMessage =
-      "Could not get event data."
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): F[ApiErr[BlockEventInfo]] =
-      for {
-        isReadOnly <- casper.getValidator
-        result <- isReadOnly match {
-                   case None =>
-                     for {
-                       reportResult <- reportingCasper.trace(
-                                        ByteString.copyFrom(Base16.unsafeDecode(hash))
-                                      )
-                       mayberesult = createBlockReportResponse(reportResult)
-                       block       <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
-                       lightBlock  <- block.traverse(getLightBlockInfo[F](_))
-
-                       res = mayberesult.map(BlockEventInfo(lightBlock, _))
-                     } yield res
-                   case Some(_) =>
-                     "Block report can only be executed on read-only RNode."
-                       .asLeft[BlockEventInfo]
-                       .pure[F]
-                 }
-      } yield result
-    EngineCell[F].read >>= (_.withCasper[ApiErr[BlockEventInfo]](
-      casperResponse(_),
-      Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-    ))
-  }
-  private def createBlockReportResponse(
-      maybeResult: Either[ReportError, List[(ProcessedDeploy, Seq[Seq[ReportingEvent]])]]
-  ): ApiErr[List[DeployInfoWithEventData]] =
-    maybeResult match {
-      case Left(ReportBlockNotFound(hash)) => Left(s"Block ${hash} not found")
-      case Left(ReportReplayError(r))      => Left(s"Block replayed error ${r}")
-      case Right(result) =>
-        result
-          .map(
-            p =>
-              DeployInfoWithEventData(
-                deployInfo = p._1.toDeployInfo.some,
-                report = p._2
-                  .map(
-                    a =>
-                      SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                        case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                        case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                        case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                      }))
-                  )
-              )
-          )
-          .asRight[Error]
-    }
 
   def getBlock[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore: Span](
       hash: String
@@ -619,7 +558,7 @@ object BlockAPI {
       constructor: (
           BlockMessage,
           Float
-      ) => F[A]
+      ) => A
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
       dag <- casper.blockDag
@@ -636,34 +575,34 @@ object BlockAPI {
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
 
-      blockInfo <- constructor(block, faultTolerance)
+      blockInfo = constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
-    getBlockInfo[BlockInfo, F](block, constructBlockInfo[F])
-  private def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+    getBlockInfo[BlockInfo, F](block, constructBlockInfo)
+  def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
-    getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo[F])
+    getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
 
-  private def constructBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  private def constructBlockInfo(
       block: BlockMessage,
       faultTolerance: Float
-  ): F[BlockInfo] =
-    for {
-      lightBlockInfo <- constructLightBlockInfo[F](block, faultTolerance)
-      deploys        = block.body.deploys.toSeq.map(_.toDeployInfo)
-    } yield BlockInfo(
+  ): BlockInfo = {
+    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
+    val deploys        = block.body.deploys.map(_.toDeployInfo)
+    BlockInfo(
       blockInfo = Some(lightBlockInfo),
       deploys = deploys
     )
+  }
 
-  private def constructLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  private def constructLightBlockInfo(
       block: BlockMessage,
       faultTolerance: Float
-  ): F[LightBlockInfo] =
+  ): LightBlockInfo =
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       sender = PrettyPrinter.buildStringNoLimit(block.sender),
@@ -684,8 +623,11 @@ object BlockAPI {
       blockSize = block.toProto.serializedSize.toString,
       deployCount = block.body.deploys.length,
       faultTolerance = faultTolerance,
-      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-    ).pure[F]
+      justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
+      rejectedDeploys = block.body.rejectedDeploys.map(
+        r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
+      )
+    )
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
@@ -698,48 +640,6 @@ object BlockAPI {
       case Some((_, block)) => Some(block)
       case None             => none[BlockMessage]
     }
-
-  private def addResponse[F[_]: Concurrent](
-      status: ValidBlockProcessing,
-      block: BlockMessage,
-      casper: MultiParentCasper[F],
-      printUnmatchedSends: Boolean
-  ): F[ApiErr[String]] =
-    status
-      .map { _ =>
-        val hash    = block.blockHash.base16String
-        val deploys = block.body.deploys.map(_.deploy)
-        val maybeUnmatchedSendsOutputF =
-          if (printUnmatchedSends) prettyPrintUnmatchedSends(casper, deploys).map(_.some)
-          else none[String].pure[F]
-        maybeUnmatchedSendsOutputF >>= (
-            maybeOutput =>
-              s"Success! Block $hash created and added.${maybeOutput.map("\n" + _).getOrElse("")}"
-                .asRight[Error]
-                .pure[F]
-          )
-      }
-      .leftMap {
-        case _: InvalidBlock =>
-          s"Failure! Invalid block: $status".asLeft[String].pure[F]
-        case BlockError.BlockException(ex) =>
-          s"Error during block processing: $ex".asLeft[String].pure[F]
-        case BlockError.Processed =>
-          "No action taken since other thread has already processed the block."
-            .asLeft[String]
-            .pure[F]
-        case BlockError.CasperIsBusy =>
-          s"Casper put block in the queue: $status".asLeft[String].pure[F]
-      }
-      .merge
-
-  private def prettyPrintUnmatchedSends[F[_]: Concurrent](
-      casper: MultiParentCasper[F],
-      deploys: Seq[Signed[DeployData]]
-  ): F[String] =
-    casper.getRuntimeManager >>= (
-      _.withRuntimeLock(runtime => StoragePrinter.prettyPrintUnmatchedSends(deploys, runtime))
-    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
@@ -881,7 +781,7 @@ object BlockAPI {
             validatorOpt     <- casper.getValidator
             validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
             dag              <- casper.blockDag
-            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.bytes))
+            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
             latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
           } yield latestMessage.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)

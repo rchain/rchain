@@ -1,34 +1,26 @@
 package coop.rchain.rspace.history
 
 import cats.effect.Sync
-import java.nio.file.{Files, Path}
-
-import coop.rchain.rspace.{
-  DeleteContinuations,
-  DeleteData,
-  DeleteJoins,
-  HotStoreAction,
-  InsertContinuations,
-  InsertData,
-  InsertJoins
-}
+import cats.syntax.all._
+import coop.rchain.metrics.{NoopSpan, Span}
+import coop.rchain.rspace._
+import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
-import monix.eval.Task
-import org.scalacheck.{Arbitrary, Gen, Shrink}
-import org.scalatest.{Assertion, BeforeAndAfterAll, FlatSpec, Matchers, OptionValues}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scodec.Codec
-import monix.execution.Scheduler.Implicits.global
-import cats.implicits._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
-import org.lmdbjava.EnvFlags
+import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.Serialize
-import coop.rchain.store.{InMemoryKeyValueStore, InMemoryStoreManager, KeyValueStoreManager}
+import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.InMemoryStoreManager
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalacheck.{Arbitrary, Gen, Shrink}
+import org.scalatest._
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 
 class LMDBHistoryRepositoryGenerativeSpec
@@ -39,7 +31,9 @@ class LMDBHistoryRepositoryGenerativeSpec
 
   val kvm = InMemoryStoreManager[Task]
 
-  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] =
+  override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
+    implicit val log: Log[Task]   = new Log.NOPLog[Task]
+    implicit val span: Span[Task] = new NoopSpan[Task]
     for {
       historyLmdbKVStore <- kvm.store("history")
       historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
@@ -48,6 +42,8 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootsLmdbKVStore   <- kvm.store("roots")
       rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
       rootRepository     = new RootRepository[Task](rootsStore)
+      channelKVStore     <- kvm.store("channels")
+      channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
       emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
@@ -57,9 +53,15 @@ class LMDBHistoryRepositoryGenerativeSpec
           rootRepository,
           coldStore,
           exporter,
-          importer
+          importer,
+          channelStore,
+          serializeString,
+          serializePattern,
+          serializeString,
+          serializeCont
         )
     } yield repository
+  }
 
   protected override def afterAll(): Unit =
     dbDir.recursivelyDelete()
@@ -72,15 +74,25 @@ class InmemHistoryRepositoryGenerativeSpec
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
-    val repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] =
-      HistoryRepositoryImpl.apply[Task, String, Pattern, String, StringsCaptor](
+    implicit val log: Log[Task]   = new Log.NOPLog[Task]
+    implicit val span: Span[Task] = new NoopSpan[Task]
+    val kvm                       = InMemoryStoreManager[Task]
+    for {
+      channelKVStore <- kvm.store("channels")
+      channelStore   = ChannelStoreImpl[Task, String](channelKVStore, stringSerialize)
+      r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
         inMemColdStore,
         emptyExporter,
-        emptyImporter
+        emptyImporter,
+        channelStore,
+        serializeString,
+        serializePattern,
+        serializeString,
+        serializeCont
       )
-    repository.pure[Task]
+    } yield r
   }
 
 }
@@ -91,9 +103,9 @@ abstract class HistoryRepositoryGenerativeDefinition
     with OptionValues
     with GeneratorDrivenPropertyChecks {
 
-  implicit val codecString: Codec[String]   = implicitly[Serialize[String]].toSizeHeadCodec
-  implicit val codecP: Codec[Pattern]       = implicitly[Serialize[Pattern]].toSizeHeadCodec
-  implicit val codecK: Codec[StringsCaptor] = implicitly[Serialize[StringsCaptor]].toSizeHeadCodec
+  val serializeString  = implicitly[Serialize[String]]
+  val serializePattern = implicitly[Serialize[Pattern]]
+  val serializeCont    = implicitly[Serialize[StringsCaptor]]
 
   implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
 
@@ -110,7 +122,7 @@ abstract class HistoryRepositoryGenerativeDefinition
           .foldLeftM(repository) { (repo, action) =>
             for {
               next <- repo.checkpoint(action :: Nil)
-              _    <- checkActionResult(action, next)
+              _    <- checkActionResult(action, next.getHistoryReader(next.root))
             } yield next
           }
       }
@@ -133,25 +145,27 @@ abstract class HistoryRepositoryGenerativeDefinition
 
   def checkActionResult(
       action: HotStoreAction,
-      repo: HistoryRepository[Task, String, Pattern, String, StringsCaptor]
-  ): Task[Unit] =
+      historyReader: HistoryReader[Task, Blake2b256Hash, String, Pattern, String, StringsCaptor]
+  ): Task[Unit] = {
+    val reader = historyReader.base
     action match {
       case InsertData(channel: String, data) =>
-        repo.getData(channel).map(checkData(_, data))
+        reader.getData(channel).map(checkData(_, data))
       case InsertJoins(channel: String, joins) =>
-        repo.getJoins(channel).map(checkJoins(_, joins))
+        reader.getJoins(channel).map(checkJoins(_, joins))
       case InsertContinuations(channels, conts) =>
-        repo
+        reader
           .getContinuations(channels.asInstanceOf[Seq[String]])
           .map(checkContinuations(_, conts))
       case DeleteData(channel: String) =>
-        repo.getData(channel).map(_ shouldBe empty)
+        reader.getData(channel).map(_ shouldBe empty)
       case DeleteJoins(channel: String) =>
-        repo.getJoins(channel).map(_ shouldBe empty)
+        reader.getJoins(channel).map(_ shouldBe empty)
       case DeleteContinuations(channels) =>
-        repo.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
+        reader.getContinuations(channels.asInstanceOf[Seq[String]]).map(_ shouldBe empty)
       case _ => Sync[Task].raiseError(new RuntimeException("unknown action"))
     }
+  }
 
   implicit def limitedArbitraryHotStoreActions: Arbitrary[List[HotStoreAction]] =
     Arbitrary(Gen.listOf(arbitraryHotStoreActions.arbitrary))

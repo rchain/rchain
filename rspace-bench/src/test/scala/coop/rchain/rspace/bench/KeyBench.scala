@@ -1,8 +1,8 @@
 package coop.rchain.rspace.bench
 
-import java.util.concurrent.TimeUnit
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
-import coop.rchain.rspace.Blake2b256Hash
+import java.util.concurrent.TimeUnit
 import coop.rchain.shared.AttemptOps._
 import coop.rchain.shared.ByteVectorOps._
 import org.openjdk.jmh.annotations._

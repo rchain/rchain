@@ -3,7 +3,6 @@ import BNFC._
 import Rholang._
 import NativePackagerHelper._
 import com.typesafe.sbt.packager.docker._
-
 //allow stopping sbt tasks using ctrl+c without killing sbt itself
 Global / cancelable := true
 
@@ -53,16 +52,13 @@ lazy val projectSettings = Seq(
     Wart.StringPlusAny,
     Wart.AnyVal
   ),
-  scalafmtOnCompile := sys.env.get("CI").isEmpty, // disable in CI environments
+  scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
   scapegoatVersion in ThisBuild := "1.4.6",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   dependencyOverrides ++= Seq(
     "io.kamon" %% "kamon-core" % kamonVersion
   ),
-  javacOptions ++= (sys.env.get("JAVAC_VERSION") match {
-    case None    => Seq()
-    case Some(v) => Seq("-source", v, "-target", v)
-  }),
+  javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
   Test / parallelExecution := false,
   Test / testForkedParallel := false,
@@ -199,9 +195,8 @@ lazy val comm = (project in file("comm"))
       guava
     ),
     PB.targets in Compile := Seq(
-      PB.gens.java                                      -> (sourceManaged in Compile).value,
-      scalapb.gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value,
-      grpcmonix.generators.gen()                        -> (sourceManaged in Compile).value
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value,
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value
     )
   )
   .dependsOn(shared % "compile->compile;test->test", crypto, models)
@@ -271,13 +266,12 @@ lazy val node = (project in file("node"))
         pureconfig
       ),
     PB.targets in Compile := Seq(
-      PB.gens.java -> (sourceManaged in Compile).value / "protobuf",
-      scalapb
-        .gen(javaConversions = true, grpc = false) -> (sourceManaged in Compile).value / "protobuf",
-      grpcmonix.generators.gen()                   -> (sourceManaged in Compile).value / "protobuf"
+      scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value / "protobuf",
+      grpcmonix.generators.gen() -> (sourceManaged in Compile).value / "protobuf"
     ),
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
+    mainClass in Compile := Some("coop.rchain.node.Main"),
     mainClass in assembly := Some("coop.rchain.node.Main"),
     assemblyMergeStrategy in assembly := {
       case x if x.endsWith("io.netty.versions.properties") => MergeStrategy.first
@@ -386,7 +380,7 @@ lazy val node = (project in file("node"))
       "openssl"
     )
   )
-  .dependsOn(casper, comm, crypto, rholang)
+  .dependsOn(casper % "compile->compile;test->test", comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -417,7 +411,8 @@ lazy val rholang = (project in file("rholang"))
       catsLawsTestkitTest,
       catsMtlLawsTest
     ),
-    mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
+    // TODO: investigate if still needed?
+    // mainClass in assembly := Some("coop.rchain.rho2rose.Rholang2RosetteCompiler"),
     coverageExcludedFiles := Seq(
       (javaSource in Compile).value,
       (bnfcGrammarDir in BNFCConfig).value,
@@ -461,7 +456,7 @@ lazy val blockStorage = (project in file("block-storage"))
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
-  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin, TutPlugin)
+  .enablePlugins(SiteScaladocPlugin, GhpagesPlugin)
   .settings(commonSettings: _*)
   .settings(
     scalacOptions ++= Seq(
@@ -471,21 +466,17 @@ lazy val rspace = (project in file("rspace"))
     name := "rspace",
     version := "0.2.1-SNAPSHOT",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ Seq(
-      lmdbjava,
       catsCore,
       fs2Core,
       scodecCore,
-      scodecBits,
-      guava
+      scodecBits
     ),
     /* Tutorial */
-    tutTargetDirectory := (baseDirectory in Compile).value / ".." / "docs" / "rspace",
     /* Publishing Settings */
     scmInfo := Some(
       ScmInfo(url("https://github.com/rchain/rchain"), "git@github.com:rchain/rchain.git")
     ),
     git.remoteRepo := scmInfo.value.get.connection,
-    useGpg := true,
     pomIncludeRepository := { _ =>
       false
     },

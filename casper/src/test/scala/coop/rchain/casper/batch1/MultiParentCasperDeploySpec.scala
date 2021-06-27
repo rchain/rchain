@@ -1,9 +1,10 @@
 package coop.rchain.casper.batch1
 
+import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.{MultiParentCasper, NoNewDeploys}
+import coop.rchain.casper.MultiParentCasper
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
@@ -37,9 +38,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       for {
         deploy             <- ConstructDeploy.basicDeployData[Effect](0)
         _                  <- node0.propagateBlock(deploy)(node1)
-        casper1            = node1.casperEff
-        _                  <- casper1.deploy(deploy)
-        createBlockResult2 <- casper1.createBlock
+        createBlockResult2 <- node1.createBlock(deploy)
       } yield (createBlockResult2 should be(NoNewDeploys))
     }
   }
@@ -49,8 +48,9 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
-        block      <- node.createBlock(deployData)
+        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
+        r              <- node.createBlock(deployData)
+        Created(block) = r
       } yield assert(block.body.deploys.head.isFailed)
     }
   }
@@ -60,8 +60,9 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
-        block      <- node.createBlock(deployData)
+        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
+        r              <- node.createBlock(deployData)
+        Created(block) = r
       } yield assert(!block.body.deploys.head.isFailed)
     }
   }

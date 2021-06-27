@@ -7,7 +7,8 @@ import coop.rchain.models.{Expr, Par}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
-import coop.rchain.rholang.interpreter.{EvaluateResult, Interpreter, InterpreterUtil, Runtime}
+import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime}
+import coop.rchain.rholang.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -36,12 +37,12 @@ class InterpreterSpec extends FlatSpec with Matchers {
           _                     <- success(runtime, sendRho)
           beforeError           <- storageContents(runtime)
           _                     = assert(beforeError.contains(sendRho))
-          beforeErrorCheckpoint <- runtime.space.createCheckpoint()
+          beforeErrorCheckpoint <- runtime.createCheckpoint
           _                     <- failure(runtime, "@1!(1) | @2!(3.noSuchMethod())")
-          afterErrorCheckpoint  <- runtime.space.createCheckpoint()
+          afterErrorCheckpoint  <- runtime.createCheckpoint
           _                     = assert(afterErrorCheckpoint.root == beforeErrorCheckpoint.root)
           _                     <- success(runtime, "new stdout(`rho:io:stdout`) in { stdout!(42) }")
-          afterSendCheckpoint   <- runtime.space.createCheckpoint()
+          afterSendCheckpoint   <- runtime.createCheckpoint
           _                     = assert(afterSendCheckpoint.root == beforeErrorCheckpoint.root)
           _                     <- success(runtime, "for (_ <- @0) { Nil }")
           finalContent          <- storageContents(runtime)
@@ -83,7 +84,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
             """.stripMargin
               )
 
-          tupleSpace <- runtime.space.toMap
+          tupleSpace <- runtime.getHotChanges
         } yield tupleSpace
       }
       .runSyncUnsafe(maxDuration)
@@ -134,8 +135,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
     val EvaluateResult(cost, errors) =
       mkRuntime[Task](tmpPrefix)
         .use { runtime =>
-          implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, sendRho, initialPhlo)
+          runtime.evaluate(sendRho, initialPhlo)
         }
         .runSyncUnsafe(maxDuration)
 
@@ -143,10 +143,10 @@ class InterpreterSpec extends FlatSpec with Matchers {
     cost.value shouldEqual initialPhlo.value
   }
 
-  private def storageContents(runtime: Runtime[Task]): Task[String] =
-    StoragePrinter.prettyPrint(runtime.space)
+  private def storageContents(runtime: RhoRuntime[Task]): Task[String] =
+    StoragePrinter.prettyPrint(runtime)
 
-  private def success(runtime: Runtime[Task], rho: String): Task[Unit] =
+  private def success(runtime: RhoRuntime[Task], rho: String): Task[Unit] =
     execute(runtime, rho).map(
       res =>
         assert(
@@ -157,17 +157,15 @@ class InterpreterSpec extends FlatSpec with Matchers {
         )
     )
 
-  private def failure(runtime: Runtime[Task], rho: String): Task[Unit] =
+  private def failure(runtime: RhoRuntime[Task], rho: String): Task[Unit] =
     execute(runtime, rho).map(
       res => assert(res.errors.nonEmpty, s"Expected $rho to fail - it didn't.")
     )
 
   private def execute(
-      runtime: Runtime[Task],
+      runtime: RhoRuntime[Task],
       source: String
-  ): Task[EvaluateResult] = {
-    implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source)
-  }
+  ): Task[EvaluateResult] =
+    runtime.evaluate(source)
 
 }

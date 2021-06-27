@@ -5,6 +5,16 @@ import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, Ro
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.node.configuration._
+import coop.rchain.node.configuration.{
+  ApiServer,
+  DevConf,
+  Metrics,
+  NodeConf,
+  PeersDiscovery,
+  ProtocolClient,
+  ProtocolServer,
+  Storage
+}
 import org.scalatest.{FunSuite, Matchers}
 import pureconfig.{ConfigReader, ConfigSource, ConvertHelpers}
 import pureconfig.generic.auto._
@@ -40,6 +50,7 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = false,
+      autopropose = false,
       devMode = false,
       protocolServer = ProtocolServer(
         networkId = "testnet",
@@ -124,14 +135,15 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
-          bondsFile = Some("/var/lib/rnode/genesis/bonds.txt"),
-          walletsFile = Some("/var/lib/rnode/genesis/wallets.txt"),
+          bondsFile = "/var/lib/rnode/genesis/bonds.txt",
+          walletsFile = "/var/lib/rnode/genesis/wallets.txt",
           bondMaximum = 9223372036854775807L,
           bondMinimum = 1,
           epochLength = 10000,
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
-          deployTimestamp = None
+          deployTimestamp = None,
+          genesisBlockNumber = 0
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 0,
@@ -148,7 +160,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         influxdbUdp = false,
         zipkin = false,
         sigar = false
-      )
+      ),
+      dev = DevConf(deployerPrivateKey = None)
     )
     config shouldEqual expectedConfig
   }

@@ -6,11 +6,11 @@ import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
+import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.{Log, Resources}
 import coop.rchain.store.LmdbDirStoreManager.{mb, Db, LmdbEnvConfig}
@@ -70,12 +70,10 @@ object RholangCLI {
     val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize()).runSyncUnsafe()
 
     val runtime = (for {
-      store              <- kvm.rSpaceStores
-      sarAndHR           <- Runtime.setupRSpace[Task](store)
-      (space, replay, _) = sarAndHR
-      runtime            <- Runtime.createWithEmptyCost[Task]((space, replay))
-      _                  <- Runtime.bootstrapRegistry[Task](runtime)
-    } yield runtime).unsafeRunSync
+      store           <- kvm.rSpaceStores
+      sarAndHR        <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, _, _) = sarAndHR
+    } yield (runtime)).unsafeRunSync
 
     val problems = try {
       if (conf.files.supplied) {
@@ -120,10 +118,12 @@ object RholangCLI {
     // Specify database mapping
     val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "history", mapSize)
     val rspaceColdEnvConfig    = LmdbEnvConfig(name = "cold", mapSize)
+    val channelEnvConfig       = LmdbEnvConfig(name = "channels", mapSize)
     val dbMapping = Map[Db, LmdbEnvConfig](
       (Db("rspace-history"), rspaceHistoryEnvConfig),
       (Db("rspace-roots"), rspaceHistoryEnvConfig),
-      (Db("rspace-cold"), rspaceColdEnvConfig)
+      (Db("rspace-cold"), rspaceColdEnvConfig),
+      (Db("rspace-channels"), channelEnvConfig)
     )
     LmdbDirStoreManager[F](dirPath, dbMapping)
   }
@@ -151,15 +151,15 @@ object RholangCLI {
   }
 
   private def printStorageContents[F[_]: Sync](
-      space: RhoISpace[F],
+      runtime: RhoRuntime[F],
       unmatchedSendsOnly: Boolean
   ): F[Unit] =
     Sync[F].delay {
       Console.println("\nStorage Contents:")
     } >> FlatMap[F]
       .ifM(unmatchedSendsOnly.pure[F])(
-        ifTrue = StoragePrinter.prettyPrintUnmatchedSends(space),
-        ifFalse = StoragePrinter.prettyPrint(space)
+        ifTrue = StoragePrinter.prettyPrintUnmatchedSends(runtime),
+        ifFalse = StoragePrinter.prettyPrint(runtime)
       )
       .map(Console.println)
 
@@ -176,7 +176,7 @@ object RholangCLI {
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Return"))
-  def repl(runtime: Runtime[Task])(implicit scheduler: Scheduler): Unit = {
+  def repl(runtime: RhoRuntime[Task])(implicit scheduler: Scheduler): Unit = {
     printPrompt()
     Option(scala.io.StdIn.readLine()) match {
       case Some(line) =>
@@ -190,7 +190,7 @@ object RholangCLI {
 
   def processFile(
       conf: Conf,
-      runtime: Runtime[Task],
+      runtime: RhoRuntime[Task],
       fileName: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
@@ -217,9 +217,8 @@ object RholangCLI {
 
   }
 
-  def evaluate(runtime: Runtime[Task], source: String): Task[Unit] = {
-    implicit val c = runtime.cost
-    Interpreter[Task].evaluate(runtime, source).map {
+  def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =
+    runtime.evaluate(source).map {
       case EvaluateResult(_, Vector()) =>
       case EvaluateResult(_, errors) =>
         errors.foreach {
@@ -230,7 +229,6 @@ object RholangCLI {
             th.printStackTrace(Console.err)
         }
     }
-  }
 
   @tailrec
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -273,7 +271,7 @@ object RholangCLI {
   }
 
   def evaluatePar(
-      runtime: Runtime[Task],
+      runtime: RhoRuntime[Task],
       source: String,
       quiet: Boolean,
       unmatchedSendsOnly: Boolean
@@ -285,15 +283,12 @@ object RholangCLI {
         _ <- Task.delay(if (!quiet) {
               printNormalizedTerm(par)
             })
-        result <- {
-          implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, source)
-        }
+        result <- runtime.evaluate(source)
       } yield result
 
     Try(waitForSuccess(evaluatorTask.runToFuture)).map { _ok =>
       if (!quiet) {
-        printStorageContents(runtime.space, unmatchedSendsOnly).unsafeRunSync
+        printStorageContents(runtime, unmatchedSendsOnly).unsafeRunSync
       }
     }
   }

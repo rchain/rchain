@@ -8,6 +8,8 @@ import coop.rchain.models._
 import coop.rchain.models.serialization.implicits._
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.StackSafetySpec.findMaxRecursionDepth
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, PrettyPrinter}
+import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.{Interpreter, InterpreterUtil, ParBuilderUtil, PrettyPrinter}
 import coop.rchain.shared.{Log, Serialize}
@@ -198,8 +200,7 @@ class StackSafetySpec extends FlatSpec with TableDrivenPropertyChecks with Match
       PrettyPrinter().buildString(ast)
       checkSuccess(rho) {
         mkRuntime[Task](tmpPrefix).use { runtime =>
-          implicit val c = runtime.cost
-          Interpreter[Task].evaluate(runtime, rho)
+          runtime.evaluate(rho)
         }
       }
     }

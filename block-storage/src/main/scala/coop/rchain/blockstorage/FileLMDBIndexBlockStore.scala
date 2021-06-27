@@ -2,7 +2,6 @@ package coop.rchain.blockstorage
 
 import java.nio.ByteBuffer
 import java.nio.file._
-
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
@@ -20,7 +19,7 @@ import coop.rchain.casper.protocol.{
   BlockMessage,
   BlockMessageProto
 }
-import coop.rchain.lmdb.LMDBStore
+import coop.rchain.lmdb.{Context, LMDBStore}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -29,6 +28,8 @@ import coop.rchain.shared.{AtomicMonadState, Log}
 import monix.execution.atomic.AtomicAny
 import org.lmdbjava.DbiFlags.MDB_CREATE
 import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
+import fs2._
+import monix.eval.Task
 import org.lmdbjava._
 
 import scala.util.matching.Regex
@@ -137,6 +138,26 @@ class FileLMDBIndexBlockStore[F[_]: Monad: Sync: RaiseIOError: Log] private (
                    readBlockMessage(indexEntry)
                      .map(block => List(blockHash -> BlockMessage.from(block).right.get)) // TODO FIX-ME
                })
+    } yield result
+
+  def iterateStream: F[Stream[F, BlockMessage]] =
+    for {
+      indexes <- index.iterate { iterator =>
+                  Stream.chunk(
+                    Chunk.iterable(
+                      iterator
+                        .map(kv => (ByteString.copyFrom(kv.key()), kv.`val`()))
+                        .map {
+                          case (key, value) => (key, IndexEntry.load(value))
+                        }
+                        .toIterable
+                    )
+                  )
+                }
+      result = indexes.evalMap {
+        case (_, indexEntry) =>
+          readBlockMessage(indexEntry).map(b => BlockMessage.from(b).right.get)
+      }
     } yield result
 
   // Default implementation will use `get` to load the whole block so
@@ -286,6 +307,16 @@ object FileLMDBIndexBlockStore {
       blockStoreDataDir.resolve("approved-block"),
       blockStoreDataDir.resolve("checkpoints")
     )
+
+  def create[F[_]: Concurrent: Sync: Log: Metrics](
+      blockStoreDataDir: Path
+  ): F[BlockStore[F]] = {
+    val blockstoreEnv = Context.env(blockStoreDataDir, 1024L * 1024L * 1024L)
+    for {
+      blockStore <- create(blockstoreEnv, blockStoreDataDir)
+                     .map(_.right.get)
+    } yield blockStore
+  }
 
   def create[F[_]: Monad: Concurrent: Sync: Log: Metrics](
       env: Env[ByteBuffer],

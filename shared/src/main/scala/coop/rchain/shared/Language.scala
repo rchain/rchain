@@ -11,4 +11,10 @@ object Language {
     val _: A = a
     ()
   }
+
+  def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
+    val (l1, l2) = col splitAt index
+    (l1 ++ l2.drop(1))
+  }
+
 }

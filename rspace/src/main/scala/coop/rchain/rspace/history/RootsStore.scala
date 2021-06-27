@@ -2,10 +2,9 @@ package coop.rchain.rspace.history
 
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-
 import cats.implicits._
 import cats.effect.Sync
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.AttemptOpsF.RichAttempt
 import coop.rchain.shared.ByteVectorOps._
 import coop.rchain.store.KeyValueStore

@@ -1,16 +1,16 @@
 package coop.rchain.rholang.interpreter.compiler
 
-import java.io.{Reader, StringReader}
-
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
+import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
+import coop.rchain.rholang.ast.rholang_mercury.{parser, Yylex}
 import coop.rchain.rholang.interpreter.errors._
-import coop.rchain.rholang.syntax.rholang_mercury.Absyn.Proc
-import coop.rchain.rholang.syntax.rholang_mercury.{parser, Yylex}
+
+import java.io.{Reader, StringReader}
 
 trait Compiler[F[_]] {
 
@@ -88,7 +88,7 @@ object Compiler {
                 case (name, FreeContext(_, _, sourcePosition)) => s"$name at $sourcePosition"
               }
               F.raiseError(
-                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString("", ", ", ""))
+                TopLevelFreeVariablesNotAllowedError(topLevelFreeList.mkString(", "))
               )
             } else if (normalizedTerm.freeMap.connectives.nonEmpty) {
               def connectiveInstanceToString(conn: ConnectiveInstance): String =
@@ -102,17 +102,17 @@ object Compiler {
                   case (connType, sourcePosition) =>
                     s"${connectiveInstanceToString(connType)} at $sourcePosition"
                 }
-                .mkString("", ", ", "")
+                .mkString(", ")
               F.raiseError(TopLevelLogicalConnectivesNotAllowedError(connectives))
             } else {
               val topLevelWildcardList = normalizedTerm.freeMap.wildcards.map { sourcePosition =>
                 s"_ (wildcard) at $sourcePosition"
               }
               F.raiseError(
-                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString("", ", ", ""))
+                TopLevelWildcardsNotAllowedError(topLevelWildcardList.mkString(", "))
               )
             }
-          } else normalizedTerm.pure[F].map(_.par)
+          } else normalizedTerm.par.pure[F]
         }
 
     /**
@@ -148,7 +148,7 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   import java_cup.runtime.Symbol
 
   override def unrecovered_syntax_error(cur_token: Symbol): Unit =
-    throw new SyntaxError(
+    throw SyntaxError(
       cur_token match {
         case cs: ComplexSymbol =>
           s"syntax error(${cs.getName}): ${s
@@ -174,5 +174,5 @@ class ErrorHandlingParser(s: Yylex, sf: java_cup.runtime.SymbolFactory) extends 
   override def report_error(message: String, info: Object): Unit = ()
 
   override def report_fatal_error(message: String, info: Object): Unit =
-    throw new ParserError(message + info)
+    throw ParserError(message + info)
 }

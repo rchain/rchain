@@ -178,6 +178,11 @@ message BodyProto {
   repeated ProcessedDeployProto deploys      = 2;
   repeated ProcessedSystemDeployProto systemDeploys = 3;
   bytes                    extraBytes   = 4;
+  repeated RejectedDeployProto rejectedDeploys = 5;
+}
+
+message RejectedDeployProto{
+  bytes sig = 1;
 }
 
 message JustificationProto {

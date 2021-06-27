@@ -2,15 +2,16 @@ package coop.rchain.rspace.history
 
 import monix.eval.Task
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
-import org.scalacheck.{Gen}
+import org.scalacheck.Gen
+
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import TestData._
-import coop.rchain.rspace.Blake2b256Hash
 import coop.rchain.crypto.codec.Base16
 import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random

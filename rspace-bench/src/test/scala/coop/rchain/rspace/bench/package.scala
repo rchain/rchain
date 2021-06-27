@@ -6,7 +6,7 @@ import java.nio.file.Path
 import com.google.common.io.CharStreams
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.Reduce
+import coop.rchain.rholang.interpreter.{Reduce, RhoRuntime}
 
 import scala.collection.immutable.Seq
 import coop.rchain.shared.PathOps.RichPath
@@ -74,11 +74,11 @@ package object bench {
   }
 
   def createTest(t: Option[Par])(
-      implicit reducer: Reduce[Task],
+      implicit runtime: RhoRuntime[Task],
       rand: Blake2b512Random
   ): Task[Unit] =
     t match {
-      case Some(par) => reducer.inj(par)
+      case Some(par) => runtime.inj(par)
       case None      => Task.delay(())
     }
 }

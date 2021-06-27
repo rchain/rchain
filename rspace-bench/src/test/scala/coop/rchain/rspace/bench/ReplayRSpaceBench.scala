@@ -4,7 +4,6 @@ import cats.Id
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RholangCLI
-import coop.rchain.rspace.ISpace.IdISpace
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -56,7 +55,7 @@ object ReplayRSpaceBench {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   abstract class ReplayRSpaceBenchState {
-    var space: IdISpace[Channel, Pattern, Entry, EntriesCaptor] = null
+    var space: ISpace[Id, Channel, Pattern, Entry, EntriesCaptor] = null
     var replaySpace: IReplaySpace[cats.Id, Channel, Pattern, Entry, EntriesCaptor] =
       null
     implicit val logF: Log[Id]            = new Log.NOPLog[Id]
