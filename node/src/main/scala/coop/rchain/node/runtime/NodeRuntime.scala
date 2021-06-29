@@ -62,10 +62,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   implicit private val logSource: LogSource = LogSource(this.getClass)
 
   /** Configuration */
-  private val dataDir                  = nodeConf.storage.dataDir
-  private val blockstorePath           = dataDir.resolve("blockstore")
-  private val deployStoragePath        = dataDir.resolve("deploystorage")
-  private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
+  private val dataDir           = nodeConf.storage.dataDir
+  private val blockstorePath    = dataDir.resolve("blockstore")
+  private val deployStoragePath = dataDir.resolve("deploystorage")
 
   /**
     * Main node entry. It will:
@@ -172,7 +171,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           blockRetriever,
           nodeConf,
           blockstorePath,
-          lastFinalizedStoragePath,
           eventBus,
           deployStorageConfig
         )

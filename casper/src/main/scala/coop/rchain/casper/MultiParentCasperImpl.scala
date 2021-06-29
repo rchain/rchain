@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.merging.BlockIndex
@@ -36,7 +35,7 @@ class MultiParentCasperImpl[F[_]
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
-  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     validatorId: Option[ValidatorIdentity],
@@ -126,8 +125,8 @@ class MultiParentCasperImpl[F[_]
         _ = BlockIndex.cache.remove(block.blockHash)
       } yield ()
 
-    def newLfbEffect(newLFB: BlockHash): F[Unit] =
-      LastFinalizedStorage[F].put(newLFB) >>
+    def newLfbEffect(ds: BlockDagStorage[F])(newLFB: BlockHash): F[Unit] =
+      ds.recordDirectlyFinalised(newLFB) >>
         EventPublisher[F]
           .publish(
             RChainEvent.blockFinalised(newLFB.base16String)
@@ -137,13 +136,13 @@ class MultiParentCasperImpl[F[_]
 
     for {
       dag                      <- blockDag
-      lastFinalizedBlockHash   <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lastFinalizedBlockHash   = dag.lastFinalizedBlock
       lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
       work = Finalizer.run[F](
         dag,
         casperShardConf.faultToleranceThreshold,
         lastFinalizedBlockHeight,
-        newLfbEffect,
+        newLfbEffect(BlockDagStorage[F]),
         finalisationEffect
       )
       newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
@@ -258,7 +257,7 @@ class MultiParentCasperImpl[F[_]
         } yield result
       }
       invalidBlocks <- dag.invalidBlocksMap
-      lfb           <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lfb           = dag.lastFinalizedBlock
     } yield CasperSnapshot(
       dag,
       lfb,

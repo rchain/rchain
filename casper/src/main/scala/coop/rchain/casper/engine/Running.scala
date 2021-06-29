@@ -7,7 +7,7 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
@@ -239,7 +239,7 @@ class Running[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -298,13 +298,10 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHashOpt <- LastFinalizedStorage[F].get()
+        lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
-          lfBlockHash <- lfBlockHashOpt.liftTo[F](
-                          new Exception(s"Last finalized block hash not available.")
-                        )
           lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
 
           // Each approved block should be justified by validators signatures
@@ -318,7 +315,7 @@ class Running[F[_]
           )
         } yield lastApprovedBlock
 
-        approvedBlock <- if (abr.trimState && lfBlockHashOpt.isDefined)
+        approvedBlock <- if (abr.trimState)
                           // If Last Finalized State is requested return Last Finalized block as Approved block
                           lastFinalizedBlock
                         else

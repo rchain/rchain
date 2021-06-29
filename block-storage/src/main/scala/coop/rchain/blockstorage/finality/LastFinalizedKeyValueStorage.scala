@@ -1,9 +1,9 @@
 package coop.rchain.blockstorage.finality
 
 import java.nio.file.Path
-
 import cats.syntax.all._
 import cats.effect.{Concurrent, Sync}
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.codecs.{codecBlockHash, codecSeqNum}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -21,6 +21,13 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
 
   override def get(): F[Option[BlockHash]] =
     lastFinalizedBlockDb.get(fixedKey)
+
+  val DONE = ByteString.copyFrom(Array.fill[Byte](32)(-1))
+
+  override def requireMigration: F[Boolean] =
+    get().map(_.exists(_ != DONE))
+
+  override def recordMigrationDone: F[Unit] = put(DONE)
 }
 
 object LastFinalizedKeyValueStorage {

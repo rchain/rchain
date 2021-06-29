@@ -7,7 +7,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
@@ -159,7 +158,7 @@ object Proposer {
   def apply[F[_]
     /* Execution */   : Concurrent: Time
     /* Casper */      : Estimator: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: BlockRetriever
   ] // format: on

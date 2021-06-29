@@ -16,6 +16,10 @@ class LastFinalizedMemoryStorage[F[_]: Functor](
 
   override def get(): F[Option[BlockHash]] =
     lastFinalizedBlockHashState.read
+
+  override def requireMigration: F[Boolean] = ???
+
+  override def recordMigrationDone: F[Unit] = ???
 }
 
 object LastFinalizedMemoryStorage {

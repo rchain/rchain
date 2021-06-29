@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
+import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
@@ -42,6 +42,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
       invalidBlocksSet: Set[BlockMetadata],
+      lastFinalizedBlockHash: BlockHash,
       finalizedBlocksSet: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
 
@@ -61,6 +62,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
 
     def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
+
+    override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
 
     // latestBlockNumber, topoSort and lookupByDeployId are only used in BlockAPI.
     // Do they need to be part of the DAG current state or they can be moved to DAG storage directly?
@@ -125,6 +128,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap           <- blockMetadataIndex.childMapData
       heightMap          <- blockMetadataIndex.heightMap
       invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+      lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
       finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
     } yield KeyValueDagRepresentation(
       dagSet,
@@ -132,6 +136,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap,
       heightMap,
       invalidBlocks,
+      lastFinalizedBlock,
       finalizedBlocksSet
     )
 
@@ -140,7 +145,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def insert(
       block: BlockMessage,
-      invalid: Boolean
+      invalid: Boolean,
+      approved: Boolean
   ): F[BlockDagRepresentation[F]] = {
     import cats.instances.list._
     import cats.instances.option._
@@ -223,11 +229,19 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
         // Add latest messages to DB
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)
+
+        // if block added as approved, record it as directly finalized.
+        _ <- blockMetadataIndex
+              .recordDirectlyFinalised(blockMetadata.blockHash)
+              .whenA(approved)
+
       } yield ()
     }
 
     lock.withPermit(
-      blockMetadataIndex.contains(block.blockHash).ifM(logAlreadyStored, doInsert) >> representation
+      blockMetadataIndex
+        .contains(block.blockHash)
+        .ifM(logAlreadyStored, doInsert) >> representation
     )
   }
 
@@ -236,6 +250,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
     blockMetadataIndex.addFinalizedBlock(blockHash)
+
+  def recordDirectlyFinalised(blockHash: BlockHash): F[Unit] =
+    blockMetadataIndex.recordDirectlyFinalised(blockHash) >> addFinalizedBlockHash(blockHash)
 }
 
 object BlockDagKeyValueStorage {
@@ -249,8 +266,7 @@ object BlockDagKeyValueStorage {
       equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
-      lastFinalizedBlockDb: LastFinalizedStorage[F]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -262,15 +278,7 @@ object BlockDagKeyValueStorage {
                           codecBlockHash,
                           codecBlockMetadata
                         )
-      // last finalized block
-      lastFinalizedBlockDb <- KeyValueStoreManager[F].database[Int, BlockHash](
-                               "last-finalized-block",
-                               codecSeqNum,
-                               codecBlockHash
-                             )
-      lastFinalizedStore = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-      lastFinalizedBlock <- lastFinalizedStore.get
-      blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb, lastFinalizedBlock)
+      blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
       // Equivocation tracker map
       equivocationTrackerDb <- KeyValueStoreManager[F]
                                 .database[(Validator, SequenceNumber), Set[BlockHash]](
@@ -305,8 +313,7 @@ object BlockDagKeyValueStorage {
       equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb,
-      lastFinalizedStore
+      deployIndexDb
     )
   }
 
@@ -322,4 +329,30 @@ object BlockDagKeyValueStorage {
       stores.invalidBlocks,
       stores.equivocations
     )
+
+  def migrateLfb[F[_]: Sync](
+      lastFinalizedStorage: LastFinalizedStorage[F],
+      kvm: KeyValueStoreManager[F]
+  ): F[Unit] = {
+    val errNoLfbInStorage   = "No LFB in LastFinalizedStorage when attempting migration."
+    val errNoMetadataForLfb = "No metadata found for LFB when attempting migration."
+
+    for {
+      // Block metadata map
+      blockMetadataDb <- kvm.database[BlockHash, BlockMetadata](
+                          "block-metadata",
+                          codecBlockHash,
+                          codecBlockMetadata
+                        )
+      lfb <- lastFinalizedStorage.get() >>= (_.liftTo(new Exception(errNoLfbInStorage)))
+      curV <- blockMetadataDb
+               .get(lfb)
+               .flatMap(
+                 _.liftTo[F](
+                   new Exception(errNoMetadataForLfb)
+                 )
+               )
+      _ <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true))
+    } yield ()
+  }
 }

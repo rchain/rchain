@@ -12,7 +12,8 @@ final case class BlockMetadata(
     weightMap: Map[ByteString, Long],
     blockNum: Long,
     seqNum: Int,
-    invalid: Boolean
+    invalid: Boolean,
+    directlyFinalized: Boolean
 ) {
   def toByteString = BlockMetadata.typeMapper.toBase(this).toByteString
 }
@@ -27,7 +28,8 @@ object BlockMetadata {
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
-      internal.invalid
+      internal.invalid,
+      internal.directlyFinalized
     )
   } { metadata =>
     BlockMetadataInternal(
@@ -38,7 +40,8 @@ object BlockMetadata {
       metadata.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
       metadata.blockNum,
       metadata.seqNum,
-      metadata.invalid
+      metadata.invalid,
+      metadata.directlyFinalized
     )
   }
 
@@ -61,7 +64,11 @@ object BlockMetadata {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
-  def fromBlock(b: BlockMessage, invalid: Boolean): BlockMetadata =
+  def fromBlock(
+      b: BlockMessage,
+      invalid: Boolean,
+      directlyFinalized: Boolean = false
+  ): BlockMetadata =
     BlockMetadata(
       b.blockHash,
       b.header.parentsHashList,
@@ -70,6 +77,8 @@ object BlockMetadata {
       weightMap(b.body.state),
       b.body.state.blockNumber,
       b.seqNum,
-      invalid
+      invalid,
+      // this value is not used anywhere down the call pipeline, so its safe to set it to false
+      directlyFinalized
     )
 }

@@ -119,6 +119,7 @@ message BlockMetadataInternal {
   int64 blockNum                        = 6;
   int32 seqNum                          = 7;
   bool invalid                          = 8; // whether the block was marked as invalid
+  bool directlyFinalized              = 9;
 }
 
 message HeaderProto {

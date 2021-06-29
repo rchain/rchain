@@ -62,7 +62,6 @@ object Setup {
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
       blockstorePath: Path,
-      lastFinalizedPath: Path,
       eventPublisher: EventPublisher[F],
       deployStorageConfig: LMDBDeployStorage.Config
   )(implicit mainScheduler: Scheduler): F[
@@ -125,6 +124,14 @@ object Setup {
         } yield lastFinalizedStore
       }
 
+      // Migrate LastFinalizedStorage to BlockDagStorage
+      _ <- lastFinalizedStorage.requireMigration.ifM(
+            Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") <*
+              BlockDagKeyValueStorage.migrateLfb[F](lastFinalizedStorage, rnodeStoreManager) >>
+              lastFinalizedStorage.recordMigrationDone,
+            ().pure
+          )
+
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
@@ -151,7 +158,6 @@ object Setup {
       }
       lastFinalizedHeightConstraintChecker = {
         implicit val bs = blockStore
-        implicit val lf = lastFinalizedStorage
         LastFinalizedHeightConstraintChecker[F]
       }
       // runtime for `rnode eval`
@@ -241,7 +247,6 @@ object Setup {
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val rm         = runtimeManager
         implicit val bs         = blockStore
-        implicit val lf         = lastFinalizedStorage
         implicit val bd         = blockDagStorage
         implicit val sc         = synchronyConstraintChecker
         implicit val lfhscc     = lastFinalizedHeightConstraintChecker
@@ -279,7 +284,6 @@ object Setup {
       casperLaunch = {
         implicit val bs     = blockStore
         implicit val bd     = blockDagStorage
-        implicit val lf     = lastFinalizedStorage
         implicit val ec     = engineCell
         implicit val ev     = envVars
         implicit val re     = raiseIOError
