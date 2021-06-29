@@ -9,7 +9,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.MergingLogic.{computeRelatedSets, depends}
+import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.Produce
@@ -48,7 +48,9 @@ object BlockIndex {
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K]
-  ): F[BlockIndex] =
+  ): F[BlockIndex] = {
+    implicit val channelStore: HistoryRepository[F, C, P, A, K] = historyRepository
+
     for {
       usrDeployIndices <- usrProcessedDeploys.toVector
                            .filterNot(_.isFailed)
@@ -96,4 +98,5 @@ object BlockIndex {
                   )
                 )
     } yield BlockIndex(blockHash, index)
+  }
 }
