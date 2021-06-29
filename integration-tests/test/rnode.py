@@ -390,11 +390,12 @@ class DeployThread(threading.Thread):
         self.contract = contract
         self.count = count
         self.private_key = private_key
+        self.propose_result = []
 
     def run(self) -> None:
         for _ in range(self.count):
             self.node.deploy(self.contract, self.private_key)
-            self.node.propose()
+            self.propose_result.append(self.node.propose())
 
 
 def make_container_command(container_command: str, container_command_flags: AbstractSet,
