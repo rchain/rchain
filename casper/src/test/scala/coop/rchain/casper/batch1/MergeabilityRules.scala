@@ -371,6 +371,7 @@ trait MergeabilityRules {
             leftIndex <- BlockIndex(
                           ByteString.copyFromUtf8("l"),
                           List(leftDeploy),
+                          List.empty,
                           baseCheckpoint.root,
                           leftCheckpoint.root,
                           historyRepo
@@ -378,12 +379,14 @@ trait MergeabilityRules {
             rightIndex <- BlockIndex(
                            ByteString.copyFromUtf8("r"),
                            List(rightDeploy),
+                           List.empty,
                            baseCheckpoint.root,
                            rightCheckpoint.root,
                            historyRepo
                          )
             baseIndex <- BlockIndex(
                           ByteString.EMPTY,
+                          List.empty,
                           List.empty,
                           baseCheckpoint.root, // this does not matter
                           baseCheckpoint.root,
