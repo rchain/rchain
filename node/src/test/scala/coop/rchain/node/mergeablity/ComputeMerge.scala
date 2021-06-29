@@ -82,9 +82,11 @@ trait ComputeMerge {
                   )
                   .whenA(rightDeploys.exists(_.isFailed))
             rightCheckpoint @ _ <- runtime.createCheckpoint
+
             leftIndex <- BlockIndex(
                           ByteString.copyFromUtf8("l"),
                           leftDeploys,
+                          List.empty,
                           baseCheckpoint.root,
                           leftCheckpoint.root,
                           historyRepo
@@ -92,12 +94,14 @@ trait ComputeMerge {
             rightIndex <- BlockIndex(
                            ByteString.copyFromUtf8("r"),
                            rightDeploys,
+                           List.empty,
                            baseCheckpoint.root,
                            rightCheckpoint.root,
                            historyRepo
                          )
             baseIndex <- BlockIndex(
                           ByteString.EMPTY,
+                          List.empty,
                           List.empty,
                           baseCheckpoint.root, // this does not matter
                           baseCheckpoint.root,
