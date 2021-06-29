@@ -380,6 +380,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                             BlockIndex(
                               b.blockHash,
                               b.body.deploys,
+                              b.body.systemDeploys,
                               Blake2b256Hash.fromByteString(b.body.state.preStateHash),
                               Blake2b256Hash.fromByteString(b.body.state.postStateHash),
                               runtimeManager.getHistoryRepo
