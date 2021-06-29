@@ -406,7 +406,7 @@ trait MergeabilityRules {
               setPostStateHash = ByteString.copyFrom(leftCheckpoint.root.bytes.toArray).some,
               setParentsHashList = List(bBlock.blockHash).some
             )
-            _   <- dagStore.insert(bBlock, false)
+            _   <- dagStore.insert(bBlock, false, approved = true)
             _   <- dagStore.insert(lBlock, false)
             _   <- dagStore.insert(rBlock, false)
             dag <- dagStore.getRepresentation

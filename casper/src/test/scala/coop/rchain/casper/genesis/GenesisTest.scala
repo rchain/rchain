@@ -199,6 +199,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           implicit val logEff = log
           for {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+            _       <- blockDagStorage.insert(genesis, false, approved = true)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
             maybePostGenesisStateHash <- InterpreterUtil

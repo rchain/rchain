@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.dag.{
   BlockDagStorage,
   IndexedBlockDagStorage
 }
-import coop.rchain.casper.util.GenesisBuilder.GenesisContext
+import coop.rchain.casper.util.GenesisBuilder.{createGenesis, GenesisContext}
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
@@ -18,8 +18,8 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}
-import java.nio.file.{Files, Path}
 
+import java.nio.file.{Files, Path}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>

@@ -151,7 +151,7 @@ object GenesisBuilder {
       blockStore                   <- KeyValueBlockStore[Task](kvsManager)
       _                            <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage              <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      _                            <- blockDagStorage.insert(genesis, invalid = false)
+      _                            <- blockDagStorage.insert(genesis, invalid = false, approved = true)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
   }
 

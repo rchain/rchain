@@ -275,7 +275,7 @@ class BlockQueryResponseAPITest
   ): Task[(LogStub[Task], EngineCell[Task], SafetyOracle[Task])] =
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
-        _ <- blockDagStorage.insert(genesisBlock, false)
+        _ <- blockDagStorage.insert(genesisBlock, false, approved = true)
         _ <- blockDagStorage.insert(secondBlock, false)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap[BlockHash, BlockMessage](
@@ -304,6 +304,7 @@ class BlockQueryResponseAPITest
                            (secondBlock.blockHash, secondBlock)
                          )
                        )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
+        _          <- blockDagStorage.insert(genesisBlock, invalid = false, approved = true)
         logEff     = new LogStub[Task]()
         metricsEff = new Metrics.MetricsNOP[Task]
         engine     = new EngineWithCasper[Task](casperEffect)

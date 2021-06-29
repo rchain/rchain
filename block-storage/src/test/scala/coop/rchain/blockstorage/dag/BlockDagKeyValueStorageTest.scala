@@ -24,8 +24,9 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
   }
 
   override def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R =
-    (createDagStorage >>= f).unsafeRunSync(scheduler)
-
+    (createDagStorage >>= { ds =>
+      ds.insert(genesis, false, approved = true) >> f(ds)
+    }).unsafeRunSync(scheduler)
   type LookupResult =
     (
         List[
@@ -94,8 +95,11 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
           )
         contains shouldBe true
     }
-    latestMessageHashes shouldBe realLatestMessages.mapValues(_.blockHash)
-    latestMessages shouldBe realLatestMessages
+    latestMessageHashes.filterNot { case (_, h) => h == genesis.blockHash } shouldBe realLatestMessages
+      .mapValues(
+        _.blockHash
+      )
+    latestMessages.filterNot { case (_, h) => h.blockHash == genesis.blockHash } shouldBe realLatestMessages
 
     def normalize(topoSort: Vector[Vector[BlockHash]]): Vector[Vector[BlockHash]] =
       if (topoSort.size == 1 && topoSort.head.isEmpty)
@@ -109,7 +113,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
                                                 Vector.empty,
                                                 Vector.empty
                                               )) {
-      topoSortLevel.toSet shouldBe realTopoSortLevel.toSet
+      topoSortLevel.toSet.filterNot(_ == genesis.blockHash) shouldBe realTopoSortLevel.toSet
       latestBlockNumber shouldBe topoSort.length
     }
 
