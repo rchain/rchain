@@ -14,7 +14,15 @@ final class KeyValueTypedStoreOps[F[_], K, V](
     // KeyValueTypedStore extensions / syntax
     private val store: KeyValueTypedStore[F, K, V]
 ) extends AnyVal {
+  def errKVStoreExpectValue = "Error when reading from KeyValueStore: value not found."
+
   def get(key: K)(implicit f: Functor[F]): F[Option[V]] = store.get(Seq(key)).map(_.head)
+
+  def getUnsafe(keys: Seq[K])(implicit f: Sync[F]): F[List[V]] =
+    store.get(keys).flatMap(_.toList.traverse(_.liftTo[F](new Exception(errKVStoreExpectValue))))
+
+  def getUnsafe(key: K)(implicit f: Sync[F]): F[V] =
+    get(key).flatMap(_.liftTo[F](new Exception(errKVStoreExpectValue)))
 
   def put(key: K, value: V): F[Unit] = store.put(Seq((key, value)))
 

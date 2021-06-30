@@ -21,6 +21,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.dag.DagOps
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -248,11 +249,11 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
 
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
-    blockMetadataIndex.addFinalizedBlock(blockHash)
+  def addFinalizedBlockHashes(hashes: List[BlockHash]): F[Unit] =
+    blockMetadataIndex.recordFinalized(hashes)
 
   def recordDirectlyFinalised(blockHash: BlockHash): F[Unit] =
-    blockMetadataIndex.recordDirectlyFinalised(blockHash) >> addFinalizedBlockHash(blockHash)
+    blockMetadataIndex.recordDirectlyFinalised(blockHash)
 }
 
 object BlockDagKeyValueStorage {
@@ -330,29 +331,46 @@ object BlockDagKeyValueStorage {
       stores.equivocations
     )
 
-  def migrateLfb[F[_]: Sync](
+  def migrateLfb[F[_]: Sync: Log](
       lastFinalizedStorage: LastFinalizedStorage[F],
       kvm: KeyValueStoreManager[F]
   ): F[Unit] = {
     val errNoLfbInStorage   = "No LFB in LastFinalizedStorage when attempting migration."
     val errNoMetadataForLfb = "No metadata found for LFB when attempting migration."
+    val errNoMetadataForFb  = "No metadata found for finalized block when attempting migration."
 
     for {
-      // Block metadata map
       blockMetadataDb <- kvm.database[BlockHash, BlockMetadata](
                           "block-metadata",
                           codecBlockHash,
                           codecBlockMetadata
                         )
-      lfb <- lastFinalizedStorage.get() >>= (_.liftTo(new Exception(errNoLfbInStorage)))
-      curV <- blockMetadataDb
-               .get(lfb)
-               .flatMap(
-                 _.liftTo[F](
-                   new Exception(errNoMetadataForLfb)
-                 )
-               )
-      _ <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true))
+      // record LFB
+      lfb  <- lastFinalizedStorage.get() >>= (_.liftTo(new Exception(errNoLfbInStorage)))
+      curV <- blockMetadataDb.get(lfb).flatMap(_.liftTo[F](new Exception(errNoMetadataForLfb)))
+      _    <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true, finalized = true))
+      blocksInfoMap <- blockMetadataDb
+                        .collect {
+                          case (hash, metaData) =>
+                            (hash, BlockMetadataStore.blockMetadataToInfo(metaData()))
+                        }
+                        .map(_.toMap)
+      _ <- Log[F].info("Migration of LFB done.")
+
+      // record finalized blocks
+      finalizedBlockSet = DagOps
+        .bfTraverse(List(lfb)) { bh =>
+          blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
+        }
+        .toList
+      curVs <- finalizedBlockSet.traverse { h =>
+                blockMetadataDb.get(h).flatMap(_.liftTo[F](new Exception(errNoMetadataForFb)))
+              }
+      // WARNING: migration should be done before block merge, as it assumes all blocks are directly finalized.
+      newVs = curVs.map(_.copy(directlyFinalized = true, finalized = true))
+      _     <- blockMetadataDb.put(newVs.map(v => (v.blockHash, v)))
+      _     <- Log[F].info(s"Finalized blocks recorded: ${newVs.size}.")
+
     } yield ()
   }
 }

@@ -49,13 +49,14 @@ object BlockMetadataStore {
       finalizedBlockSet: Set[BlockHash]
   )
 
-  private def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
+  def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
     BlockInfo(
       blockMeta.blockHash,
       blockMeta.parents.toSet,
       blockMeta.blockNum,
       blockMeta.invalid,
-      blockMeta.directlyFinalized
+      blockMeta.directlyFinalized,
+      blockMeta.finalized
     )
 
   class BlockMetadataStore[F[_]: Monad](
@@ -75,12 +76,19 @@ object BlockMetadataStore {
         _ <- store.put(block.blockHash, block)
       } yield ()
 
-    def addFinalizedBlock(finalizedBlockHash: BlockHash): F[Unit] =
-      dagState.modify(st => st.copy(finalizedBlockSet = st.finalizedBlockSet + finalizedBlockHash))
+    def recordFinalized(hashes: List[BlockHash])(implicit sync: Sync[F]): F[Unit] =
+      for {
+        _ <- dagState.modify { st =>
+              st.copy(finalizedBlockSet = st.finalizedBlockSet ++ hashes)
+            }
+        curVs <- store.getUnsafe(hashes)
+        newVs = curVs.map(_.copy(finalized = true))
+        _     <- store.put(newVs.map(v => (v.blockHash, v)))
+      } yield ()
 
     def recordDirectlyFinalised(hash: BlockHash)(implicit sync: Sync[F]): F[Unit] =
       for {
-        curMeta <- getUnsafe(hash)
+        curMeta <- store.getUnsafe(hash)
         _       <- store.put(hash, curMeta.copy(directlyFinalized = true)) // update persistent meta
         _ <- dagState.modify(
               st =>
@@ -146,7 +154,22 @@ object BlockMetadataStore {
       state.heightMap.updated(block.blockNum, currSet + block.hash)
     } else state.heightMap
 
-    state.copy(dagSet = newDagSet, childMap = newChildMap, heightMap = newHeightMap)
+    val newLastFinalizedBlock =
+      if (block.isDirectlyFinalized &&
+          !state.lastFinalizedBlock.exists { case (_, height) => height > block.blockNum })
+        (block.hash, block.blockNum).some
+      else state.lastFinalizedBlock
+
+    val newFinalisedBlockSet =
+      if (block.isFinalized) state.finalizedBlockSet + block.hash else state.finalizedBlockSet
+
+    state.copy(
+      dagSet = newDagSet,
+      childMap = newChildMap,
+      heightMap = newHeightMap,
+      lastFinalizedBlock = newLastFinalizedBlock,
+      finalizedBlockSet = newFinalisedBlockSet
+    )
   }
 
   private def validateDagState(state: DagState): DagState = {
@@ -158,12 +181,13 @@ object BlockMetadataStore {
   }
 
   // Used to project part of the block metadata for in-memory initialization
-  private final case class BlockInfo(
+  final case class BlockInfo(
       hash: BlockHash,
       parents: Set[BlockHash],
       blockNum: Long,
       isInvalid: Boolean,
-      isDirectlyFinalised: Boolean
+      isDirectlyFinalized: Boolean,
+      isFinalized: Boolean
   )
 
   private def recreateInMemoryState(
@@ -183,30 +207,6 @@ object BlockMetadataStore {
       case (state, (_, block)) => addBlockToDagState(block)(state)
     }
 
-    // Find last finalized block (if any). Traverse from latest height down, return first directly finalized.
-    val lfbOpt = dagState.heightMap.toList.reverse.iterator
-      .map {
-        case (height, hashes) =>
-          hashes
-            .find(blocksInfoMap(_).isDirectlyFinalised)
-            .map((_, height))
-      }
-      .collectFirst { case Some(v) => v }
-
-    // Calculate set of finalized blocks
-    val finalizedBlockSet = lfbOpt.fold(Set.empty[BlockHash])(
-      lfb =>
-        DagOps
-          .bfTraverse(List(lfb._1))(
-            bh => blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
-          )
-          .toSet
-    )
-
-    // Update DAG state with finalized blocks
-    val newDagState =
-      dagState.copy(lastFinalizedBlock = lfbOpt, finalizedBlockSet = finalizedBlockSet)
-
-    validateDagState(newDagState)
+    validateDagState(dagState)
   }
 }

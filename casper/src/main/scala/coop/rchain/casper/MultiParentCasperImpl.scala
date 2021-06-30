@@ -112,18 +112,24 @@ class MultiParentCasperImpl[F[_]
 
   def lastFinalizedBlock: F[BlockMessage] = {
 
-    def finalisationEffect(blockHash: BlockHash): F[Unit] =
-      for {
-        block          <- BlockStore[F].getUnsafe(blockHash)
-        deploys        = block.body.deploys.map(_.deploy)
-        deploysRemoved <- DeployStorage[F].remove(deploys)
-        _ <- Log[F].info(
-              s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                .buildString(blockHash)}."
-            )
-        _ <- BlockDagStorage[F].addFinalizedBlockHash(blockHash)
-        _ = BlockIndex.cache.remove(block.blockHash)
-      } yield ()
+    def finalisationEffect(hashes: Set[BlockHash]): F[Unit] = {
+      def removeDeploys(hash: BlockHash): F[Unit] =
+        for {
+          block          <- BlockStore[F].getUnsafe(hash)
+          deploys        = block.body.deploys.map(_.deploy)
+          deploysRemoved <- DeployStorage[F].remove(deploys)
+          _ <- Log[F].info(
+                s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                  .buildString(hash)}."
+              )
+        } yield ()
+
+      val hs = hashes.toList
+      hs.traverse { h =>
+        removeDeploys(h) <* BlockIndex.cache.remove(h).pure
+      } >>
+        BlockDagStorage[F].addFinalizedBlockHashes(hs)
+    }
 
     def newLfbEffect(ds: BlockDagStorage[F])(newLFB: BlockHash): F[Unit] =
       ds.recordDirectlyFinalised(newLFB) >>

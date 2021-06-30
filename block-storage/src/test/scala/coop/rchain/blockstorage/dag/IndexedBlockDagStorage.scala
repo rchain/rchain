@@ -72,8 +72,8 @@ final class IndexedBlockDagStorage[F[_]: Sync](
   def recordDirectlyFinalised(blockHash: BlockHash): F[Unit] =
     lastFinalizedBlockRef.update(_ => blockHash)
 
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
-    finalizedBlockHashRef.update(_ + blockHash)
+  def addFinalizedBlockHashes(hashes: List[BlockHash]): F[Unit] =
+    finalizedBlockHashRef.update(_ ++ hashes)
 
   def lookupById(id: Int): F[Option[BlockMessage]] =
     idToBlocksRef.get.map(_.get(id.toLong))

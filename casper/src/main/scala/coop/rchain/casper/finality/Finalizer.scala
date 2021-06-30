@@ -93,7 +93,7 @@ object Finalizer {
       faultToleranceThreshold: Float,
       currLFBHeight: Long,
       newLfbEffect: BlockHash => F[Unit],
-      finalisationEffect: BlockHash => F[Unit]
+      finalisationEffect: Set[BlockHash] => F[Unit]
   ): F[Option[BlockHash]] = {
 
     /**
@@ -182,7 +182,7 @@ object Finalizer {
           case (lfb, _) =>
             dag
               .withAncestors(lfb.blockHash, dag.isFinalized(_).not)
-              .flatMap(_.toList.reverse.traverse(finalisationEffect)) >>
+              .flatMap(finalisationEffect) >>
               newLfbEffect(lfb.blockHash).as(lfb.blockHash)
         }
         .compile

@@ -91,7 +91,7 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
                 faultToleranceThreshold = -1,
                 currLFBHeight = 0L,
                 m => (lfbStore = m).pure[Task],
-                m => finalisedStore.update(v => v + m)
+                m => finalisedStore.update(v => v ++ m)
               )
         // check output
         _ = lfb.get shouldBe b1.blockHash
@@ -139,7 +139,7 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
                 faultToleranceThreshold = -1,
                 currLFBHeight = 0L,
                 m => (lfbStore = m).pure[Task],
-                m => finalisedStore.update(v => v + m)
+                m => finalisedStore.update(v => v ++ m)
               )
         // check output
         _ = lfb shouldBe Some(b7.blockHash)
