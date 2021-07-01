@@ -92,8 +92,7 @@ object Finalizer {
       dag: BlockDagRepresentation[F],
       faultToleranceThreshold: Float,
       currLFBHeight: Long,
-      newLfbEffect: BlockHash => F[Unit],
-      finalisationEffect: Set[BlockHash] => F[Unit]
+      newLfbFoundEffect: BlockHash => F[Unit]
   ): F[Option[BlockHash]] = {
 
     /**
@@ -177,14 +176,9 @@ object Finalizer {
         // first candidate that meets finalization criteria is new LFB
         .filter { case (_, faultTolerance) => faultTolerance > faultToleranceThreshold }
         .head
-        // execute all effects
-        .evalMap {
-          case (lfb, _) =>
-            dag
-              .withAncestors(lfb.blockHash, dag.isFinalized(_).not)
-              .flatMap(finalisationEffect) >>
-              newLfbEffect(lfb.blockHash).as(lfb.blockHash)
-        }
+        .map { case (lfb, _) => lfb.blockHash }
+        // execute finalization effect
+        .evalTap(newLfbFoundEffect)
         .compile
         .last
     }

@@ -55,9 +55,8 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       val bonds               = validators.map(Bond(_, 3))
       implicit val concurrent = Concurrent[Task]
 
-      var lfbStore                  = ByteString.EMPTY
-      var lfbEffectInvoked          = false
-      var finalizationEffectInvoked = false
+      var lfbStore         = ByteString.EMPTY
+      var lfbEffectInvoked = false
 
       for {
         genesis  <- createGenesis[Task](bonds = bonds)
@@ -90,16 +89,12 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
                 dag,
                 faultToleranceThreshold = -1,
                 currLFBHeight = 0L,
-                m => (lfbStore = m).pure[Task],
-                m => finalisedStore.update(v => v ++ m)
+                m => (lfbStore = m).pure[Task]
               )
         // check output
         _ = lfb.get shouldBe b1.blockHash
         // check if new LFB effect is invoked
         _ = lfbStore shouldBe b1.blockHash
-        // check if finalisation effect is invoked
-        finalized <- finalisedStore.get
-        _         = finalized == Set(b1, genesis).map(_.blockHash) shouldBe true
 
         finalizedHeight <- dag.lookupUnsafe(lfb.get).map(_.blockNum)
 
@@ -118,15 +113,12 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
                 dag,
                 faultToleranceThreshold = -1,
                 currLFBHeight = finalizedHeight,
-                m => (lfbEffectInvoked = true).pure[Task],
-                m => (finalizationEffectInvoked = true).pure[Task]
+                m => (lfbEffectInvoked = true).pure[Task]
               )
         // check output
         _ = lfb shouldBe None
         // check if new LFB effect is invoked
         _ = lfbEffectInvoked shouldBe false
-        // check if finalisation effect is invoked
-        _ = finalizationEffectInvoked shouldBe false
 
         /** add more 3 children - finalization should advance*/
         _ <- creator3(Seq(b7), HashMap(v1 -> b7, v2 -> b3, v3 -> b4, v4 -> b5, v5 -> b6))
@@ -138,16 +130,12 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
                 dag,
                 faultToleranceThreshold = -1,
                 currLFBHeight = 0L,
-                m => (lfbStore = m).pure[Task],
-                m => finalisedStore.update(v => v ++ m)
+                m => (lfbStore = m).pure[Task] <* finalisedStore.update(v => v + m)
               )
         // check output
         _ = lfb shouldBe Some(b7.blockHash)
         // check if new LFB effect is invoked
         _ = lfbStore shouldBe b7.blockHash
-        // check if finalisation effect is invoked
-        finalized <- finalisedStore.get
-        _         = finalized == Set(b1, b2, b3, b4, b5, b6, b7, genesis).map(_.blockHash) shouldBe true
       } yield ()
   }
 

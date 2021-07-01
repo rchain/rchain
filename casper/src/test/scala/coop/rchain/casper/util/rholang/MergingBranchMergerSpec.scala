@@ -387,7 +387,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                         )
                         .map(_.toMap)
 
-            _   <- dagStore.addFinalizedBlockHashes(List(base.blockHash))
+            _   <- dagStore.recordDirectlyFinalized(base.blockHash, _ => ().pure[Task])
             dag <- dagStore.getRepresentation
             // merge children to get next preStateHash
             v <- DagMerger.merge[Task](

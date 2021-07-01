@@ -15,11 +15,10 @@ trait BlockDagStorage[F[_]] {
       approved: Boolean = false
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def recordDirectlyFinalised(blockHash: BlockHash): F[Unit]
-
-  /** As finalization advances in discrete chunks, batch of blocks are recorded as finalized at once,
-    * therefore List used here. */
-  def addFinalizedBlockHashes(hashes: List[BlockHash]): F[Unit]
+  def recordDirectlyFinalized(
+      direct: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit]
 }
 
 object BlockDagStorage {

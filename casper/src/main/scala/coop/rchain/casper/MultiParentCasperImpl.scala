@@ -112,31 +112,23 @@ class MultiParentCasperImpl[F[_]
 
   def lastFinalizedBlock: F[BlockMessage] = {
 
-    def finalisationEffect(hashes: Set[BlockHash]): F[Unit] = {
-      def removeDeploys(hash: BlockHash): F[Unit] =
+    def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
+      finalizedSet.toList.traverse { h =>
         for {
-          block          <- BlockStore[F].getUnsafe(hash)
+          block          <- BlockStore[F].getUnsafe(h)
           deploys        = block.body.deploys.map(_.deploy)
           deploysRemoved <- DeployStorage[F].remove(deploys)
           _ <- Log[F].info(
                 s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                  .buildString(hash)}."
+                  .buildString(finalizedSet)}."
               )
+          _ <- BlockIndex.cache.remove(h).pure
         } yield ()
+      }.void
 
-      val hs = hashes.toList
-      hs.traverse { h =>
-        removeDeploys(h) <* BlockIndex.cache.remove(h).pure
-      } >>
-        BlockDagStorage[F].addFinalizedBlockHashes(hs)
-    }
-
-    def newLfbEffect(ds: BlockDagStorage[F])(newLFB: BlockHash): F[Unit] =
-      ds.recordDirectlyFinalised(newLFB) >>
-        EventPublisher[F]
-          .publish(
-            RChainEvent.blockFinalised(newLFB.base16String)
-          )
+    def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
+      BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.base16String))
 
     implicit val ms = CasperMetricsSource
 
@@ -144,13 +136,13 @@ class MultiParentCasperImpl[F[_]
       dag                      <- blockDag
       lastFinalizedBlockHash   = dag.lastFinalizedBlock
       lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
-      work = Finalizer.run[F](
-        dag,
-        casperShardConf.faultToleranceThreshold,
-        lastFinalizedBlockHeight,
-        newLfbEffect(BlockDagStorage[F]),
-        finalisationEffect
-      )
+      work = Finalizer
+        .run[F](
+          dag,
+          casperShardConf.faultToleranceThreshold,
+          lastFinalizedBlockHeight,
+          newLfbFoundEffect
+        )
       newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
       blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
     } yield blockMessage

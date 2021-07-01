@@ -1,12 +1,10 @@
 package coop.rchain.blockstorage.dag
 
-import cats.Monad
+import cats.{Monad, Show}
 import cats.effect.Sync
 import cats.mtl.MonadState
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.syntax._
@@ -76,28 +74,38 @@ object BlockMetadataStore {
         _ <- store.put(block.blockHash, block)
       } yield ()
 
-    def recordFinalized(hashes: List[BlockHash])(implicit sync: Sync[F]): F[Unit] =
-      for {
-        _ <- dagState.modify { st =>
-              st.copy(finalizedBlockSet = st.finalizedBlockSet ++ hashes)
-            }
-        curVs <- store.getUnsafe(hashes)
-        newVs = curVs.map(_.copy(finalized = true))
-        _     <- store.put(newVs.map(v => (v.blockHash, v)))
-      } yield ()
+    /** Record new last finalized lock. Directly finalized is the output of finalizer,
+      * indirectly finalized are new LFB ancestors. */
+    def recordFinalized(directly: BlockHash, indirectly: Set[BlockHash])(
+        implicit sync: Sync[F]
+    ): F[Unit] = {
+      implicit val s = new Show[BlockHash] {
+        override def show(t: BlockHash): String = PrettyPrinter.buildString(t)
+      }
 
-    def recordDirectlyFinalised(hash: BlockHash)(implicit sync: Sync[F]): F[Unit] =
       for {
-        curMeta <- store.getUnsafe(hash)
-        _       <- store.put(hash, curMeta.copy(directlyFinalized = true)) // update persistent meta
+        // read current values
+        curMetaForDF  <- store.getUnsafe(directly)
+        curMetasForIF <- store.getUnsafeBatch(indirectly.toList)
+        // new values to persist
+        newMetaForDF  = (directly, curMetaForDF.copy(finalized = true, directlyFinalized = true))
+        newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
+        // update in memory state
         _ <- dagState.modify(
               st =>
-                if (st.lastFinalizedBlock.exists { case (_, height) => height > curMeta.blockNum })
-                  st
-                else // update inmem state if new LFB higher then existing
-                  st.copy(lastFinalizedBlock = (hash, curMeta.blockNum).some)
+                // update lastFinalizedBlock only when current one is lower
+                if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
+                  st.copy(finalizedBlockSet = st.finalizedBlockSet ++ indirectly)
+                else
+                  st.copy(
+                    finalizedBlockSet = st.finalizedBlockSet ++ indirectly,
+                    lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
+                  )
             )
+        // persist new values all at once
+        _ <- store.put(newMetaForDF +: newMetasForIF)
       } yield ()
+    }
 
     def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get(hash)
 

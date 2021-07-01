@@ -1,5 +1,6 @@
 package coop.rchain.blockstorage.dag
 
+import cats.Show
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
@@ -232,9 +233,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)
 
         // if block added as approved, record it as directly finalized.
-        _ <- blockMetadataIndex
-              .recordDirectlyFinalised(blockMetadata.blockHash)
-              .whenA(approved)
+        _ <- blockMetadataIndex.recordFinalized(blockMetadata.blockHash, Set.empty).whenA(approved)
 
       } yield ()
     }
@@ -249,11 +248,22 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
 
-  def addFinalizedBlockHashes(hashes: List[BlockHash]): F[Unit] =
-    blockMetadataIndex.recordFinalized(hashes)
-
-  def recordDirectlyFinalised(blockHash: BlockHash): F[Unit] =
-    blockMetadataIndex.recordDirectlyFinalised(blockHash)
+  /** Record that some hash is directly finalized (detected by finalizer and becomes LFB). */
+  def recordDirectlyFinalized(
+      directlyFinalizedHash: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit] =
+    for {
+      dag    <- representation
+      errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
+      _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+      // all non finalized ancestors should be finalized as well (indirectly)
+      indirectlyFinalized <- dag.withAncestors(directlyFinalizedHash, dag.isFinalized(_).not)
+      // invoke effects
+      _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
+      // persist finalization
+      _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
+    } yield ()
 }
 
 object BlockDagKeyValueStorage {
@@ -337,7 +347,6 @@ object BlockDagKeyValueStorage {
   ): F[Unit] = {
     val errNoLfbInStorage   = "No LFB in LastFinalizedStorage when attempting migration."
     val errNoMetadataForLfb = "No metadata found for LFB when attempting migration."
-    val errNoMetadataForFb  = "No metadata found for finalized block when attempting migration."
 
     for {
       blockMetadataDb <- kvm.database[BlockHash, BlockMetadata](
@@ -363,13 +372,33 @@ object BlockDagKeyValueStorage {
           blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
         }
         .toList
-      curVs <- finalizedBlockSet.traverse { h =>
-                blockMetadataDb.get(h).flatMap(_.liftTo[F](new Exception(errNoMetadataForFb)))
+
+      processChunk = (chunk: List[BlockHash]) => {
+        implicit val s = new Show[BlockHash] {
+          override def show(t: BlockHash): String = PrettyPrinter.buildString(t)
+        }
+
+        for {
+          curVs <- blockMetadataDb.getUnsafeBatch(chunk)
+          // WARNING: migration should be done before block merge, as it assumes all blocks are directly finalized.
+          newVs = curVs.map(_.copy(directlyFinalized = true, finalized = true))
+          _     <- blockMetadataDb.put(newVs.map(v => (v.blockHash, v)))
+        } yield ()
+      }
+
+      chunkSize = 10000L
+      _ <- fs2.Stream
+            .fromIterator(finalizedBlockSet.grouped(chunkSize.toInt))
+            .evalMapAccumulate(0L)(
+              (processed, chunk) => {
+                val processSoFar = processed + chunk.size.toLong
+                processChunk(chunk) >> Log[F]
+                  .info(s"Finalized blocks recorded: ${processSoFar} of ${finalizedBlockSet.size}.")
+                  .as((processSoFar, ()))
               }
-      // WARNING: migration should be done before block merge, as it assumes all blocks are directly finalized.
-      newVs = curVs.map(_.copy(directlyFinalized = true, finalized = true))
-      _     <- blockMetadataDb.put(newVs.map(v => (v.blockHash, v)))
-      _     <- Log[F].info(s"Finalized blocks recorded: ${newVs.size}.")
+            )
+            .compile
+            .drain
 
     } yield ()
   }

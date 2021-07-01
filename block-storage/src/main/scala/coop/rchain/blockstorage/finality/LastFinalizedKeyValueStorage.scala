@@ -24,10 +24,10 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
 
   val DONE = ByteString.copyFrom(Array.fill[Byte](32)(-1))
 
-  override def requireMigration: F[Boolean] =
+  def requireMigration: F[Boolean] =
     get().map(_.exists(_ != DONE))
 
-  override def recordMigrationDone: F[Unit] = put(DONE)
+  def recordMigrationDone: F[Unit] = put(DONE)
 }
 
 object LastFinalizedKeyValueStorage {
