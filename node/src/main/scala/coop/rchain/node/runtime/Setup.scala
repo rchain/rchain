@@ -28,6 +28,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Par
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -36,7 +37,6 @@ import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
-import coop.rchain.node.web.ReportingRoutes
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.p2p.effects.PacketHandler
@@ -306,7 +306,10 @@ object Setup {
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
-      transactionAPI      = Transaction[F](blockReportAPI, Par())
+      transactionAPI = Transaction[F](
+        blockReportAPI,
+        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+      )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)

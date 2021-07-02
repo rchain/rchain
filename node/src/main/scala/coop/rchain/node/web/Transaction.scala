@@ -3,16 +3,13 @@ package coop.rchain.node.web
 import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockReportAPI
-import coop.rchain.casper.protocol.{
-  CloseBlockSystemDeployDataProto,
-  DeployInfoWithEventData,
-  ReportCommProto,
-  ReportProduceProto,
-  SingleReport,
-  SlashSystemDeployDataProto
-}
-import coop.rchain.models.Par
+import coop.rchain.casper.genesis.contracts.StandardDeploys
+import coop.rchain.casper.protocol.{CloseBlockSystemDeployDataProto, DeployInfoWithEventData, ReportCommProto, ReportProduceProto, SingleReport, SlashSystemDeployDataProto}
+import coop.rchain.casper.util.rholang.Tools
+import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
+import coop.rchain.models.{GPrivate, GUnforgeable, Par}
 import coop.rchain.node.encode.JsonEncoder.convertCcodecToScodec
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
@@ -213,6 +210,29 @@ object Transaction {
 
   def transactionResponseCodec: Codec[TransactionResponse] =
     convertCcodecToScodec(Encode.encodeTransactionResponse, Encode.decodeTransactionResponse)
+
+  // This is the hard-coded unforgeable name for
+  // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
+  // This hard-coded value is only useful with current(above link version) `RevVault.rho` implementation but it is
+  // useful for all the networks(testnet, custom network and mainnet) starting with this `RevVault.rho`.
+  //
+  // This hard-coded value needs to be changed when
+  // 1. `RevVault.rho` is changed
+  // 2. [[coop.rchain.casper.genesis.contracts.StandardDeploys.revVault]] is changed
+  // 3. The random seed algorithm for unforgeable name of the deploy is changed
+  //
+  // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
+  val transferUnforgeable = {
+    val seedForRevVault = Tools.unforgeableNameRng(
+      StandardDeploys.revVault.pk,
+      StandardDeploys.revVault.data.timestamp
+    )
+    // the 11th unforgeable name
+    val unfogeableBytes = (1 to 11).foldLeft(Array.empty[Byte]) {
+      case (_, _) => seedForRevVault.next()
+    }
+    GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
+  }
 
   def apply[F[_]: Sync: Concurrent](
       blockReportAPI: BlockReportAPI[F],
