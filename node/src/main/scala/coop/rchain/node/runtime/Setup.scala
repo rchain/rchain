@@ -17,7 +17,6 @@ import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.safety.CliqueOracle
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
@@ -125,12 +124,11 @@ object Setup {
       }
 
       // Migrate LastFinalizedStorage to BlockDagStorage
-      _ <- lastFinalizedStorage.requireMigration.ifM(
-            Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") <*
-              BlockDagKeyValueStorage.migrateLfb[F](lastFinalizedStorage, rnodeStoreManager) >>
-              lastFinalizedStorage.recordMigrationDone,
-            ().pure
-          )
+      lfbMigration = Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") *>
+        lastFinalizedStorage.migrateLfb(rnodeStoreManager)
+      // Check if LFB is already migrated
+      lfbRequireMigration <- lastFinalizedStorage.requireMigration
+      _                   <- lfbMigration.whenA(lfbRequireMigration)
 
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)

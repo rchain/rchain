@@ -1,21 +1,24 @@
 package coop.rchain.blockstorage.finality
 
-import java.nio.file.Path
+import cats.Show
+import cats.effect.Sync
 import cats.syntax.all._
-import cats.effect.{Concurrent, Sync}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.codecs.{codecBlockHash, codecSeqNum}
-import coop.rchain.metrics.Metrics
+import coop.rchain.blockstorage.dag.BlockMetadataStore
+import coop.rchain.blockstorage.dag.codecs.{codecBlockHash, codecBlockMetadata, codecSeqNum}
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.Log
-import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
-import coop.rchain.blockstorage.syntax._
+import coop.rchain.store.{KeyValueStore, KeyValueStoreManager, KeyValueTypedStore}
 
 class LastFinalizedKeyValueStorage[F[_]: Sync] private (
     lastFinalizedBlockDb: KeyValueTypedStore[F, Int, BlockHash]
 ) extends LastFinalizedStorage[F] {
   val fixedKey = 1
+
   override def put(blockHash: BlockHash): F[Unit] =
     lastFinalizedBlockDb.put(Seq((fixedKey, blockHash)))
 
@@ -24,10 +27,68 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
 
   val DONE = ByteString.copyFrom(Array.fill[Byte](32)(-1))
 
-  def requireMigration: F[Boolean] =
-    get().map(_.exists(_ != DONE))
+  def requireMigration: F[Boolean] = get().map(_.exists(_ != DONE))
 
-  def recordMigrationDone: F[Unit] = put(DONE)
+  def migrateLfb(kvm: KeyValueStoreManager[F])(implicit log: Log[F]): F[Unit] = {
+    val errNoLfbInStorage   = "No LFB in LastFinalizedStorage when attempting migration."
+    val errNoMetadataForLfb = "No metadata found for LFB when attempting migration."
+
+    for {
+      blockMetadataDb <- kvm.database[BlockHash, BlockMetadata](
+                          "block-metadata",
+                          codecBlockHash,
+                          codecBlockMetadata
+                        )
+      // record LFB
+      lfb  <- get() >>= (_.liftTo(new Exception(errNoLfbInStorage)))
+      curV <- blockMetadataDb.get(lfb).flatMap(_.liftTo[F](new Exception(errNoMetadataForLfb)))
+      _    <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true, finalized = true))
+      blocksInfoMap <- blockMetadataDb
+                        .collect {
+                          case (hash, metaData) =>
+                            (hash, BlockMetadataStore.blockMetadataToInfo(metaData()))
+                        }
+                        .map(_.toMap)
+      _ <- Log[F].info("Migration of LFB done.")
+
+      // record finalized blocks
+      finalizedBlockSet = DagOps
+        .bfTraverse(List(lfb)) { bh =>
+          blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
+        }
+        .toList
+
+      processChunk = (chunk: List[BlockHash]) => {
+        implicit val s = new Show[BlockHash] {
+          override def show(t: BlockHash): String = PrettyPrinter.buildString(t)
+        }
+
+        for {
+          curVs <- blockMetadataDb.getUnsafeBatch(chunk)
+          // WARNING: migration should be done before block merge, as it assumes all blocks are directly finalized.
+          newVs = curVs.map(_.copy(directlyFinalized = true, finalized = true))
+          _     <- blockMetadataDb.put(newVs.map(v => (v.blockHash, v)))
+        } yield ()
+      }
+
+      chunkSize = 10000L
+      _ <- fs2.Stream
+            .fromIterator(finalizedBlockSet.grouped(chunkSize.toInt))
+            .evalMapAccumulate(0L)(
+              (processed, chunk) => {
+                val processSoFar = processed + chunk.size.toLong
+                processChunk(chunk) >> Log[F]
+                  .info(s"Finalized blocks recorded: ${processSoFar} of ${finalizedBlockSet.size}.")
+                  .as((processSoFar, ()))
+              }
+            )
+            .compile
+            .drain
+
+      // Mark migration as done
+      _ <- put(DONE)
+    } yield ()
+  }
 }
 
 object LastFinalizedKeyValueStorage {

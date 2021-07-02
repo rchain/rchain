@@ -1,10 +1,9 @@
 package coop.rchain.blockstorage.finality
 
 import cats.Functor
+import cats.effect.Concurrent
 import cats.syntax.functor._
 import cats.syntax.option._
-import cats.effect.Concurrent
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Cell
 

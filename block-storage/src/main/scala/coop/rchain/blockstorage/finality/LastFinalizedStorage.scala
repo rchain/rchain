@@ -1,6 +1,5 @@
 package coop.rchain.blockstorage.finality
 
-import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 
 trait LastFinalizedStorage[F[_]] {
