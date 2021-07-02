@@ -92,15 +92,18 @@ object BlockMetadataStore {
         newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
         // update in memory state
         _ <- dagState.modify(
-              st =>
+              st => {
+                val newFinalizedSet = st.finalizedBlockSet ++ indirectly + directly
+
                 // update lastFinalizedBlock only when current one is lower
                 if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
-                  st.copy(finalizedBlockSet = st.finalizedBlockSet ++ indirectly)
+                  st.copy(finalizedBlockSet = newFinalizedSet)
                 else
                   st.copy(
-                    finalizedBlockSet = st.finalizedBlockSet ++ indirectly,
+                    finalizedBlockSet = newFinalizedSet,
                     lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
                   )
+              }
             )
         // persist new values all at once
         _ <- store.put(newMetaForDF +: newMetasForIF)

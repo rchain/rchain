@@ -22,7 +22,11 @@ trait BlockDagStorageTest
 
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
-  val genesis = getRandomBlock(setBonds = Some(List.empty))
+  val genesis = getRandomBlock(
+    setBonds = Some(List.empty),
+    setParentsHashList = List.empty.some,
+    setBlockNumber = 0L.some
+  )
 
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
