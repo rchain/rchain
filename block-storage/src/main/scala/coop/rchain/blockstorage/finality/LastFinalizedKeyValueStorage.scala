@@ -4,6 +4,7 @@ import cats.Show
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockMetadataStore
 import coop.rchain.blockstorage.dag.codecs.{codecBlockHash, codecBlockMetadata, codecSeqNum}
 import coop.rchain.casper.PrettyPrinter
@@ -29,8 +30,11 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
 
   def requireMigration: F[Boolean] = get().map(_.exists(_ != DONE))
 
-  def migrateLfb(kvm: KeyValueStoreManager[F])(implicit log: Log[F]): F[Unit] = {
-    val errNoLfbInStorage   = "No LFB in LastFinalizedStorage when attempting migration."
+  def migrateLfb(kvm: KeyValueStoreManager[F], blockStore: BlockStore[F])(
+      implicit log: Log[F]
+  ): F[Unit] = {
+    val errNoLfbInStorage =
+      "No LFB in LastFinalizedStorage nor ApprovedBlock found when attempting migration."
     val errNoMetadataForLfb = "No metadata found for LFB when attempting migration."
 
     for {
@@ -40,7 +44,10 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
                           codecBlockMetadata
                         )
       // record LFB
-      lfb  <- get() >>= (_.liftTo(new Exception(errNoLfbInStorage)))
+      persistedLfbOpt      <- get()
+      approvedBlockHashOpt <- blockStore.getApprovedBlock.map(_.map(_.candidate.block.blockHash))
+      // record hash stored in LastFinalizedStorage, or ApprovedBlock or throw error
+      lfb  <- persistedLfbOpt.orElse(approvedBlockHashOpt).liftTo(new Exception(errNoLfbInStorage))
       curV <- blockMetadataDb.get(lfb).flatMap(_.liftTo[F](new Exception(errNoMetadataForLfb)))
       _    <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true, finalized = true))
       blocksInfoMap <- blockMetadataDb

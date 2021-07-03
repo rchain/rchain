@@ -125,7 +125,7 @@ object Setup {
 
       // Migrate LastFinalizedStorage to BlockDagStorage
       lfbMigration = Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") *>
-        lastFinalizedStorage.migrateLfb(rnodeStoreManager)
+        lastFinalizedStorage.migrateLfb(rnodeStoreManager, blockStore)
       // Check if LFB is already migrated
       lfbRequireMigration <- lastFinalizedStorage.requireMigration
       _                   <- lfbMigration.whenA(lfbRequireMigration)

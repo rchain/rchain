@@ -117,10 +117,6 @@ object Engine {
         init,
         disableStateExporter
       )
-      // this is required because before https://github.com/rchain/rchain/pull/3459 genesis as not added to
-      // last finalized storage on network init.
-      _ <- BlockDagStorage[F]
-            .recordDirectlyFinalized(approvedBlock.candidate.block.blockHash, _ => ().pure[F])
       _ <- EngineCell[F].set(running)
 
     } yield ()
