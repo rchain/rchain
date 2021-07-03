@@ -436,7 +436,7 @@ object Validate {
 
   // TODO: Double check this validation isn't shadowed by the blockSignature validation
   def blockHash[F[_]: Applicative: Log](b: BlockMessage): F[ValidBlockProcessing] = {
-    val blockHashComputed = ProtoUtil.hashSignedBlock(b)
+    val blockHashComputed = ProtoUtil.hashBlock(b)
     if (b.blockHash == blockHashComputed)
       BlockStatus.valid.asRight[BlockError].pure
     else {

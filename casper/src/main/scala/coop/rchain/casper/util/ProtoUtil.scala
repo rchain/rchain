@@ -278,12 +278,12 @@ object ProtoUtil {
       extraBytes = ByteString.EMPTY
     )
 
-    val hash = hashSignedBlock(block)
+    val hash = hashBlock(block)
 
     block.copy(blockHash = hash)
   }
 
-  def hashSignedBlock(blockMessage: BlockMessage): BlockHash =
+  def hashBlock(blockMessage: BlockMessage): BlockHash =
     ProtoUtil.hashByteArrays(
       blockMessage.header.toProto.toByteArray,
       blockMessage.body.toProto.toByteArray,

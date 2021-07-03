@@ -304,7 +304,7 @@ class ValidateTest
             setBlockNumber = n.some,
             setTimestamp = timestamp.some,
             setParentsHashList = parentHashes.some,
-            hashF = (ProtoUtil.hashSignedBlock _).some
+            hashF = (ProtoUtil.hashBlock _).some
           )
 
           _ <- blockStore.put(block.blockHash, block)
@@ -589,7 +589,7 @@ class ValidateTest
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              getRandomBlock(hashF = (ProtoUtil.hashSignedBlock _).some),
+              getRandomBlock(hashF = (ProtoUtil.hashBlock _).some),
               mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
@@ -710,7 +710,7 @@ class ValidateTest
         blockWithJustificationRegression = getRandomBlock(
           setValidator = v1.some,
           setJustifications = justificationsWithRegression.some,
-          hashF = (ProtoUtil.hashSignedBlock _).some
+          hashF = (ProtoUtil.hashBlock _).some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
