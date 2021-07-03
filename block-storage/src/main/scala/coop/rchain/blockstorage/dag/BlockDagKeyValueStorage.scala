@@ -250,17 +250,21 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       directlyFinalizedHash: BlockHash,
       finalizationEffect: Set[BlockHash] => F[Unit]
   ): F[Unit] =
-    for {
-      dag    <- representation
-      errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-      _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
-      // all non finalized ancestors should be finalized as well (indirectly)
-      indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
-      // invoke effects
-      _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
-      // persist finalization
-      _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
-    } yield ()
+    // Lock here is a safeguard for persisting changes in BlockMetadataIndex which can happen concurrently when
+    // blocks are replayed in parallel
+    lock.withPermit(
+      for {
+        dag    <- representation
+        errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
+        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        // all non finalized ancestors should be finalized as well (indirectly)
+        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        // invoke effects
+        _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
+        // persist finalization
+        _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
+      } yield ()
+    )
 }
 
 object BlockDagKeyValueStorage {
