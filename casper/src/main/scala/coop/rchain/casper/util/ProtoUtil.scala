@@ -278,16 +278,9 @@ object ProtoUtil {
       extraBytes = ByteString.EMPTY
     )
 
-    val hash = hashUnsignedBlock(block)
+    val hash = hashSignedBlock(block)
 
     block.copy(blockHash = hash)
-  }
-
-  def hashUnsignedBlock(blockMessage: BlockMessage): BlockHash = {
-    val toHash = blockMessage.header.toProto.toByteArray +: blockMessage.justifications.map(
-      _.toProto.toByteArray
-    )
-    hashByteArrays(toHash: _*)
   }
 
   def hashSignedBlock(blockMessage: BlockMessage): BlockHash =
