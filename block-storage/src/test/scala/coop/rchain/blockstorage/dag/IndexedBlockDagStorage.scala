@@ -3,6 +3,7 @@ package coop.rchain.blockstorage.dag
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStorageMetricsSource
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.BlockMessage
@@ -16,6 +17,7 @@ final class IndexedBlockDagStorage[F[_]: Sync](
     underlying: BlockDagStorage[F],
     idToBlocksRef: Ref[F, Map[Long, BlockMessage]],
     currentIdRef: Ref[F, Long],
+    lastFinalizedBlockRef: Ref[F, BlockHash],
     finalizedBlockHashRef: Ref[F, Set[BlockHash]]
 ) extends BlockDagStorage[F] {
 
@@ -26,14 +28,16 @@ final class IndexedBlockDagStorage[F[_]: Sync](
 
   def insert(
       block: BlockMessage,
-      invalid: Boolean
+      invalid: Boolean,
+      approved: Boolean
   ): F[BlockDagRepresentation[F]] =
     lock.withPermit(
-      underlying.insert(block, invalid) >> underlying.getRepresentation
+      underlying.insert(block, invalid, approved)
     )
 
   def insertIndexed(block: BlockMessage, genesis: BlockMessage, invalid: Boolean): F[BlockMessage] =
     lock.withPermit(for {
+      _         <- underlying.insert(genesis, invalid = false, approved = true)
       currentId <- currentIdRef.get
       dag       <- underlying.getRepresentation
       nextCreatorSeqNum <- if (block.seqNum == 0)
@@ -65,8 +69,11 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       underlying.accessEquivocationsTracker(f)
     )
 
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
-    finalizedBlockHashRef.update(_ + blockHash)
+  def recordDirectlyFinalized(
+      blockHash: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit] =
+    underlying.recordDirectlyFinalized(blockHash, finalizationEffect)
 
   def lookupById(id: Int): F[Option[BlockMessage]] =
     idToBlocksRef.get.map(_.get(id.toLong))
@@ -89,11 +96,13 @@ object IndexedBlockDagStorage {
       idToBlocks         <- Ref.of[F, Map[Long, BlockMessage]](Map.empty)
       currentId          <- Ref.of[F, Long](-1L)
       finalizedBlockHash <- Ref.of[F, Set[BlockHash]](Set.empty)
+      lastDinalizedBlock <- Ref.of[F, BlockHash](ByteString.EMPTY)
     } yield new IndexedBlockDagStorage[F](
       semaphore,
       underlying,
       idToBlocks,
       currentId,
+      lastDinalizedBlock,
       finalizedBlockHash
     )
 }

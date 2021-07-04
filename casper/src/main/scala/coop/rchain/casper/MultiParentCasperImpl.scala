@@ -8,7 +8,6 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.merging.BlockIndex
@@ -36,7 +35,7 @@ class MultiParentCasperImpl[F[_]
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
-  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     validatorId: Option[ValidatorIdentity],
@@ -113,39 +112,37 @@ class MultiParentCasperImpl[F[_]
 
   def lastFinalizedBlock: F[BlockMessage] = {
 
-    def finalisationEffect(blockHash: BlockHash): F[Unit] =
-      for {
-        block          <- BlockStore[F].getUnsafe(blockHash)
-        deploys        = block.body.deploys.map(_.deploy)
-        deploysRemoved <- DeployStorage[F].remove(deploys)
-        _ <- Log[F].info(
-              s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                .buildString(blockHash)}."
-            )
-        _ <- BlockDagStorage[F].addFinalizedBlockHash(blockHash)
-        _ = BlockIndex.cache.remove(block.blockHash)
-      } yield ()
+    def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
+      finalizedSet.toList.traverse { h =>
+        for {
+          block          <- BlockStore[F].getUnsafe(h)
+          deploys        = block.body.deploys.map(_.deploy)
+          deploysRemoved <- DeployStorage[F].remove(deploys)
+          _ <- Log[F].info(
+                s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                  .buildString(finalizedSet)}."
+              )
+          _ <- BlockIndex.cache.remove(h).pure
+        } yield ()
+      }.void
 
-    def newLfbEffect(newLFB: BlockHash): F[Unit] =
-      LastFinalizedStorage[F].put(newLFB) >>
-        EventPublisher[F]
-          .publish(
-            RChainEvent.blockFinalised(newLFB.base16String)
-          )
+    def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
+      BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.base16String))
 
     implicit val ms = CasperMetricsSource
 
     for {
       dag                      <- blockDag
-      lastFinalizedBlockHash   <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lastFinalizedBlockHash   = dag.lastFinalizedBlock
       lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
-      work = Finalizer.run[F](
-        dag,
-        casperShardConf.faultToleranceThreshold,
-        lastFinalizedBlockHeight,
-        newLfbEffect,
-        finalisationEffect
-      )
+      work = Finalizer
+        .run[F](
+          dag,
+          casperShardConf.faultToleranceThreshold,
+          lastFinalizedBlockHeight,
+          newLfbFoundEffect
+        )
       newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
       blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
     } yield blockMessage
@@ -258,7 +255,7 @@ class MultiParentCasperImpl[F[_]
         } yield result
       }
       invalidBlocks <- dag.invalidBlocksMap
-      lfb           <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lfb           = dag.lastFinalizedBlock
     } yield CasperSnapshot(
       dag,
       lfb,

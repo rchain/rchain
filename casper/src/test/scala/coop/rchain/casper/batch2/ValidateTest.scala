@@ -769,6 +769,7 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
+        _                                 <- blockDagStorage.insert(genesis, false, approved = true)
         kvm                               <- mkTestRNodeStoreManager[Task](storageDirectory)
         store                             <- kvm.rSpaceStores
         runtimes                          <- RhoRuntime.createRuntimes[Task](store)
@@ -793,6 +794,7 @@ class ValidateTest
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
+        _                <- blockDagStorage.insert(genesis, false, approved = true)
         dag              <- blockDagStorage.getRepresentation
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
@@ -819,6 +821,7 @@ class ValidateTest
       val (sk, pk) = context.validatorKeyPairs.head
       val sender   = ByteString.copyFrom(pk.bytes)
       for {
+        _                <- blockDagStorage.insert(genesis, false, approved = true)
         dag              <- blockDagStorage.getRepresentation
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
@@ -836,6 +839,7 @@ class ValidateTest
     val (sk, pk) = context.validatorKeyPairs.head
     val sender   = ByteString.copyFrom(pk.bytes)
     for {
+      _                <- blockDagStorage.insert(genesis, false, approved = true)
       dag              <- blockDagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1

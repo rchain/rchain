@@ -7,7 +7,6 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper._
@@ -43,7 +42,7 @@ class Initializing[F[_]
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -98,6 +97,9 @@ class Initializing[F[_]
               s"Valid approved block ${PrettyPrinter.buildString(block, short = true)} received. Restoring approved state."
             )
 
+        // Record approved block in DAG
+        _ <- BlockDagStorage[F].insert(block, invalid = false, approved = true)
+
         // Download approved state and all related blocks
         _ <- requestApprovedState(approvedBlock)
 
@@ -112,9 +114,6 @@ class Initializing[F[_]
                   .buildStringNoLimit(block.blockHash)
               )
             )
-
-        // Update last finalized block with received block hash
-        _ <- LastFinalizedStorage[F].put(block.blockHash)
 
         _ <- Log[F].info(
               s"Approved state for block ${PrettyPrinter.buildString(block, short = true)} is successfully restored."

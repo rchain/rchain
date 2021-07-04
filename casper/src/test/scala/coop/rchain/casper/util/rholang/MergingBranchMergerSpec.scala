@@ -356,7 +356,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               setParentsHashList = List().some,
               setDeploys = b._2.some
             )
-            _ <- dagStore.insert(base, false)
+            _ <- dagStore.insert(base, false, approved = true)
 
             // create children an all other
             baseChildren <- mkTailStates(b._1, n * 2 + 2, (n * 2 + 2).toLong)
@@ -387,7 +387,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                         )
                         .map(_.toMap)
 
-            _   <- dagStore.addFinalizedBlockHash(base.blockHash)
+            _   <- dagStore.recordDirectlyFinalized(base.blockHash, _ => ().pure[Task])
             dag <- dagStore.getRepresentation
             // merge children to get next preStateHash
             v <- DagMerger.merge[Task](

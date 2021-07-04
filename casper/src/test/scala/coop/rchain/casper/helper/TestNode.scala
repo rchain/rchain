@@ -20,7 +20,6 @@ import coop.rchain.blockstorage.dag.{
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
 import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
-import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
 import coop.rchain.casper
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -86,7 +85,6 @@ case class TestNode[F[_]: Timer](
     ],
     blockStoreEffect: BlockStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
-    lastFinalizedStorageEffect: LastFinalizedStorage[F],
     deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
     blockRetrieverEffect: BlockRetriever[F],
@@ -121,7 +119,6 @@ case class TestNode[F[_]: Timer](
   implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
-  implicit val lfs: LastFinalizedStorage[F]                   = lastFinalizedStorageEffect
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
   implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
@@ -521,9 +518,6 @@ object TestNode {
       runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
       (runtime, replayRuntime, history) = runtimes
       runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
-      lastFinalizedBlockDb              <- Resource.liftF(kvm.store("last-finalized-block"))
-      lastFinalizedStorage              = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-      _                                 <- Resource.liftF(blockDagStorage.addFinalizedBlockHash(genesis.blockHash))
 
       node <- Resource.liftF({
                implicit val bs                         = blockStore
@@ -538,7 +532,6 @@ object TestNode {
                implicit val transportLayerEff          = tle
                implicit val cliqueOracleEffect         = SafetyOracle.cliqueOracle[F]
                implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
-               implicit val lfs                        = lastFinalizedStorage
                implicit val lastFinalizedHeightConstraintChecker =
                  LastFinalizedHeightConstraintChecker[F]
                implicit val estimator             = Estimator[F](maxNumberOfParents, maxParentDepth)
@@ -630,7 +623,6 @@ object TestNode {
                    transportLayerEffect = transportLayerEff,
                    safetyOracleEffect = cliqueOracleEffect,
                    syncConstraintCheckerEffect = synchronyConstraintChecker,
-                   lastFinalizedStorageEffect = lfs,
                    lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
                    estimatorEffect = estimator,
                    rpConfAskEffect = rpConfAsk,

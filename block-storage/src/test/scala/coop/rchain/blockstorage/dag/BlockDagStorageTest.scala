@@ -1,5 +1,6 @@
 package coop.rchain.blockstorage.dag
 
+import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
@@ -21,13 +22,17 @@ trait BlockDagStorageTest
 
   def withDagStorage[R](f: BlockDagStorage[Task] => Task[R]): R
 
-  val genesis = getRandomBlock(setBonds = Some(List.empty))
+  val genesis = getRandomBlock(
+    setBonds = Some(List.empty),
+    setParentsHashList = List.empty.some,
+    setBlockNumber = 0L.some
+  )
 
   "DAG Storage" should "be able to lookup a stored block" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { dagStorage =>
         for {
-          _   <- blockElements.traverse_(dagStorage.insert(_, false))
+          _   <- blockElements.traverse(dagStorage.insert(_, false))
           dag <- dagStorage.getRepresentation
           blockElementLookups <- blockElements.traverse { b =>
                                   for {
@@ -44,8 +49,8 @@ trait BlockDagStorageTest
               latestMessageHash shouldBe Some(b.blockHash)
               latestMessage shouldBe Some(BlockMetadata.fromBlock(b, false))
           }
-          _      = latestMessageHashes.size shouldBe blockElements.size
-          result = latestMessages.size shouldBe blockElements.size
+          _      = latestMessageHashes.size shouldBe blockElements.size + 1
+          result = latestMessages.size shouldBe blockElements.size + 1
         } yield ()
       }
     }

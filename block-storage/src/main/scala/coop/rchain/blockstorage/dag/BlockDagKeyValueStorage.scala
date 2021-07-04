@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
@@ -20,7 +20,6 @@ import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -42,6 +41,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
       invalidBlocksSet: Set[BlockMetadata],
+      lastFinalizedBlockHash: BlockHash,
       finalizedBlocksSet: Set[BlockHash]
   ) extends BlockDagRepresentation[F] {
 
@@ -61,6 +61,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
 
     def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
+
+    override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
 
     // latestBlockNumber, topoSort and lookupByDeployId are only used in BlockAPI.
     // Do they need to be part of the DAG current state or they can be moved to DAG storage directly?
@@ -125,6 +127,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap           <- blockMetadataIndex.childMapData
       heightMap          <- blockMetadataIndex.heightMap
       invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
+      lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
       finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
     } yield KeyValueDagRepresentation(
       dagSet,
@@ -132,6 +135,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       childMap,
       heightMap,
       invalidBlocks,
+      lastFinalizedBlock,
       finalizedBlocksSet
     )
 
@@ -140,7 +144,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def insert(
       block: BlockMessage,
-      invalid: Boolean
+      invalid: Boolean,
+      approved: Boolean
   ): F[BlockDagRepresentation[F]] = {
     import cats.instances.list._
     import cats.instances.option._
@@ -223,19 +228,43 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
         // Add latest messages to DB
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)
+
+        // if block added as approved, record it as directly finalized.
+        _ <- blockMetadataIndex.recordFinalized(blockMetadata.blockHash, Set.empty).whenA(approved)
+
       } yield ()
     }
 
     lock.withPermit(
-      blockMetadataIndex.contains(block.blockHash).ifM(logAlreadyStored, doInsert) >> representation
+      blockMetadataIndex
+        .contains(block.blockHash)
+        .ifM(logAlreadyStored, doInsert) >> representation
     )
   }
 
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
 
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit] =
-    blockMetadataIndex.addFinalizedBlock(blockHash)
+  /** Record that some hash is directly finalized (detected by finalizer and becomes LFB). */
+  def recordDirectlyFinalized(
+      directlyFinalizedHash: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit] =
+    // Lock here is a safeguard for persisting changes in BlockMetadataIndex which can happen concurrently when
+    // blocks are replayed in parallel
+    lock.withPermit(
+      for {
+        dag    <- representation
+        errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
+        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        // all non finalized ancestors should be finalized as well (indirectly)
+        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        // invoke effects
+        _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
+        // persist finalization
+        _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
+      } yield ()
+    )
 }
 
 object BlockDagKeyValueStorage {
@@ -249,8 +278,7 @@ object BlockDagKeyValueStorage {
       equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
-      lastFinalizedBlockDb: LastFinalizedStorage[F]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -262,15 +290,7 @@ object BlockDagKeyValueStorage {
                           codecBlockHash,
                           codecBlockMetadata
                         )
-      // last finalized block
-      lastFinalizedBlockDb <- KeyValueStoreManager[F].database[Int, BlockHash](
-                               "last-finalized-block",
-                               codecSeqNum,
-                               codecBlockHash
-                             )
-      lastFinalizedStore = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-      lastFinalizedBlock <- lastFinalizedStore.get
-      blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb, lastFinalizedBlock)
+      blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
       // Equivocation tracker map
       equivocationTrackerDb <- KeyValueStoreManager[F]
                                 .database[(Validator, SequenceNumber), Set[BlockHash]](
@@ -305,8 +325,7 @@ object BlockDagKeyValueStorage {
       equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb,
-      lastFinalizedStore
+      deployIndexDb
     )
   }
 

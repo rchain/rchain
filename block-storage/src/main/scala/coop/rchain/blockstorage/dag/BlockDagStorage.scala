@@ -11,10 +11,14 @@ trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
       block: BlockMessage,
-      invalid: Boolean
+      invalid: Boolean,
+      approved: Boolean = false
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit]
+  def recordDirectlyFinalized(
+      direct: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit]
 }
 
 object BlockDagStorage {
@@ -37,6 +41,8 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
+  // DAG representation has to have finalized block, or it does not make sense
+  def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
 }
 
