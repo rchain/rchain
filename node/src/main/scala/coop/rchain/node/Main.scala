@@ -91,7 +91,7 @@ object Main {
       confWithPorts   <- checkPorts[F](nodeConf)
       confWithDecrypt <- loadPrivateKeyFromFile[F](confWithPorts)
       _               <- Log[F].info(VersionInfo.get)
-      _               <- logConfiguration[F](confWithDecrypt, profile, configFile, options)
+      _               <- logConfiguration[F](confWithDecrypt, profile, configFile)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
@@ -406,8 +406,7 @@ object Main {
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
       profile: Profile,
-      configFile: Option[File],
-      options: commandline.Options
+      configFile: Option[File]
   ): F[Unit] =
     Log[F].info(s"Starting with profile ${profile.name}") *>
       (if (configFile.isEmpty) Log[F].warn("No configuration file found, using defaults")

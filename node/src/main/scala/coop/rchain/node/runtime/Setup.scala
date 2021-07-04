@@ -5,12 +5,12 @@ import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
+import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.blockstorage.{BlockStore, FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
@@ -27,7 +27,6 @@ import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.lmdb.Context
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -47,7 +46,6 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared._
-import coop.rchain.store.LmdbDirStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -60,7 +58,6 @@ object Setup {
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
-      blockstorePath: Path,
       eventPublisher: EventPublisher[F],
       deployStorageConfig: LMDBDeployStorage.Config
   )(implicit mainScheduler: Scheduler): F[
@@ -98,22 +95,17 @@ object Setup {
       legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
       rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
 
+      // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
+      oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
+      oldBlockStoreMsg    = s"""
+       |Old file-based block storage detected (blockstore/storage). To use this version of RNode please first do the migration.
+       |Migration should be done with RNode version v0.10.2. More info can be found in PR:
+       |https://github.com/rchain/rchain/pull/3342
+      """.stripMargin
+      _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
+
       // Block storage
-      blockStore <- {
-        // Check if old file based block store exists
-        val oldBlockStoreExists = blockstorePath.resolve("storage").toFile.exists
-        // TODO: remove file based block store in future releases
-        def oldStorage: F[BlockStore[F]] = {
-          val blockstoreEnv = Context.env(blockstorePath, LmdbDirStoreManager.tb)
-          for {
-            blockStore <- FileLMDBIndexBlockStore
-                           .create[F](blockstoreEnv, blockstorePath)
-                           .map(_.right.get) // TODO handle errors
-          } yield blockStore
-        }
-        // Start block storage
-        if (oldBlockStoreExists) oldStorage else KeyValueBlockStore(rnodeStoreManager)
-      }
+      blockStore <- KeyValueBlockStore(rnodeStoreManager)
 
       // Last finalized Block storage
       lastFinalizedStorage <- {
@@ -195,7 +187,6 @@ object Setup {
                        .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
           (rhoRuntime, replayRhoRuntime) = runtimes
           reporter <- if (conf.apiServer.enableReporting) {
-                       import coop.rchain.rholang.interpreter.storage._
                        for {
                          // In reporting replay channels map is not needed
                          store <- rnodeStoreManager.rSpaceStores(useChannelsMap = false)
