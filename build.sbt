@@ -162,6 +162,7 @@ lazy val casper = (project in file("casper"))
       catsMtl,
       monix,
       fs2Core,
+      fs2Io,
       scalacheck % "slowcooker"
     )
   )
