@@ -243,8 +243,7 @@ object GenesisTest {
   val autogenShardSize = 5
   val rchainShardId    = "root"
 
-  implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
-  implicit val log          = new LogStub[Task]
+  implicit val log = new LogStub[Task]
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,

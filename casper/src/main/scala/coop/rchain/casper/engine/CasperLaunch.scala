@@ -1,16 +1,13 @@
 package coop.rchain.casper.engine
 
-import java.nio.file.Paths
-
 import cats.Parallel
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
@@ -35,7 +32,7 @@ object CasperLaunch {
 
   // format: off
   def of[F[_]
-    /* Execution */   : Concurrent: Parallel: Time: RaiseIOError
+    /* Execution */   : Concurrent: Parallel: ContextShift: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager

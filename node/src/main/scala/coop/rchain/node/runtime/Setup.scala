@@ -275,7 +275,6 @@ object Setup {
         implicit val bd     = blockDagStorage
         implicit val ec     = engineCell
         implicit val ev     = envVars
-        implicit val re     = raiseIOError
         implicit val br     = blockRetriever
         implicit val rm     = runtimeManager
         implicit val or     = oracle
