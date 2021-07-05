@@ -28,11 +28,11 @@ object BondsParser {
         .filter(_.trim.nonEmpty)
         .evalMap { line =>
           val lineFormat = "<public_key> <stake>"
+          val lineRegex  = raw"^([0-9a-fA-F]+) ([0-9]+)".r.unanchored
 
           // Line parser
           val pubKeyAndStake = tryWithMsg {
-            val Array(fst, snd, _*) = line.split(" ")
-            (fst, snd)
+            line match { case lineRegex(fst, snd, _*) => (fst, snd) }
           }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: `$line``")
 
           // Public key parser

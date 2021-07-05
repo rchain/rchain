@@ -27,12 +27,12 @@ object VaultParser {
         .filter(_.trim.nonEmpty)
         .evalMap { line =>
           val lineFormat = "<ETH_address>,<balance>,<private_key=0|contract=1>"
+          val lineRegex  = raw"^(?:0x)?([0-9a-fA-F]+),([0-9]+),([01])".r.unanchored
 
           // Line parser
           val ethAndBalance = tryWithMsg {
-            val Array(fst, snd, _*) = line.split(",")
-            (fst, snd)
-          }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: $line")
+            line match { case lineRegex(fst, snd, _*) => (fst, snd) }
+          }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: `$line`")
 
           // ETH address parser, converter to REV address
           def revAddress(ethAddressString: String) =
