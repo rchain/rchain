@@ -28,13 +28,20 @@ object PBundleNormalizer {
     def error(targetResult: ProcVisitOutputs): F[ProcVisitOutputs] = {
       val errMsg = {
         def at(variable: String, sourcePosition: SourcePosition): String =
-          variable + " line: " + sourcePosition.row + ", column: " + sourcePosition.column
+          s"$variable at $sourcePosition"
         val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
         val freeVarsPositions = targetResult.knownFree.levelBindings.map {
           case (n, LevelContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
         }
-        wildcardsPositions.mkString(" Wildcards at positions: ", ", ", ".") ++
-          freeVarsPositions.mkString(" Free variables at positions: ", ", ", ".")
+        val errMsgWildcards =
+          if (wildcardsPositions.nonEmpty)
+            wildcardsPositions.mkString(" Wildcards positions ", ", ", ".")
+          else ""
+        val errMsgFreeVars =
+          if (freeVarsPositions.nonEmpty)
+            freeVarsPositions.mkString(" Free variables positions ", ", ", ".")
+          else ""
+        errMsgWildcards + errMsgFreeVars
       }
       Sync[F].raiseError(
         UnexpectedBundleContent(

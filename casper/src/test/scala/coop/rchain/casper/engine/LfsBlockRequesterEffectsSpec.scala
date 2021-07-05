@@ -165,7 +165,7 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
     createMock[Task](startBlock, requestTimeout) { mock =>
       if (!runProcessingStream) test(mock)
       else (Stream.eval(test(mock)) concurrently mock.stream).compile.drain
-    }.runSyncUnsafe(timeout = 3.seconds)
+    }.runSyncUnsafe(timeout = 10.seconds)
 
   def asMap(bs: BlockMessage*): Map[BlockHash, BlockMessage] = bs.map(b => (b.blockHash, b)).toMap
 
