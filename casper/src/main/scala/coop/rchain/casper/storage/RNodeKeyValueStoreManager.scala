@@ -27,8 +27,9 @@ object RNodeKeyValueStoreManager {
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)
   // Blocks
-  private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
-  private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
+  private val blockStorageEnvConfig  = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
+  private val dagStorageEnvConfig    = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
+  private val deployStorageEnvConfig = LmdbEnvConfig(name = "deploystorage", maxEnvSize = 1 * gb)
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
@@ -52,6 +53,8 @@ object RNodeKeyValueStoreManager {
       (Db("invalid-blocks"), dagStorageEnvConfig),
       (Db("deploy-index"), dagStorageEnvConfig),
       (Db("last-finalized-block"), dagStorageEnvConfig),
+      // Deploy storage
+      (Db("deploy_storage"), deployStorageEnvConfig),
       // Reporting (trace) cache
       (Db("reporting-cache"), reportingEnvConfig),
       // CasperBuffer
