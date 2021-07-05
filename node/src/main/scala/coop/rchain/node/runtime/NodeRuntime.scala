@@ -389,21 +389,18 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
   def addShutdownHook(
       servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
+      runtimeCleanup: Cleanup[F]
   ): F[Unit] =
-    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore))).void
+    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).void
 
   def clearResources(
       servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
+      runtimeCleanup: Cleanup[F]
   ): Unit = {
     val shutdown = for {
       _ <- Sync[F].delay(Kamon.stopAllReporters())
       _ <- runtimeCleanup.close()
       _ <- Log[F].info("Bringing BlockStore down ...")
-      _ <- blockStore.close()
       _ <- Log[F].info("Goodbye.")
     } yield ()
 

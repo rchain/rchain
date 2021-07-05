@@ -25,12 +25,6 @@ trait BlockStore[F[_]] {
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit]
 
-  def checkpoint(): F[Unit]
-
-  def clear(): F[Unit]
-
-  def close(): F[Unit]
-
   // Defaults
 
   def put(blockMessage: BlockMessage): F[Unit] =
