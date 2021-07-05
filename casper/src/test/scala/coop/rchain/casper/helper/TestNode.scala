@@ -8,7 +8,7 @@ import cats.syntax.all.none
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
@@ -23,7 +23,6 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
-import coop.rchain.casper.util.rholang.Resources.StoragePaths
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.{Casper, ValidBlock, _}
 import coop.rchain.catscontrib.ski._
@@ -55,14 +54,14 @@ import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 case class TestNode[F[_]: Timer](
     name: String,
-    val local: PeerNode,
+    local: PeerNode,
     tle: TransportLayerTestImpl[F],
     tls: TransportLayerServerTestImpl[F],
-    val genesis: BlockMessage,
+    genesis: BlockMessage,
     validatorIdOpt: Option[ValidatorIdentity],
     logicalTime: LogicalTime[F],
     synchronyConstraintThreshold: Double,
-    val dataPath: StoragePaths,
+    dataDir: Path,
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
     maxParentDepth: Option[Int] = Int.MaxValue.some,
     shardId: String = "root",
@@ -487,7 +486,7 @@ object TestNode {
       currentPeerNode: PeerNode,
       genesis: BlockMessage,
       sk: PrivateKey,
-      storageMatrixPath: Path,
+      storageDir: Path,
       logicalTime: LogicalTime[F],
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
@@ -500,12 +499,12 @@ object TestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
     for {
-      paths                             <- Resources.copyStorage[F](storageMatrixPath)
-      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(paths.storageDir))
+      newStorageDir                     <- Resources.copyStorage[F](storageDir)
+      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
       blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
       blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
       deployStorage                     <- Resource.liftF(KeyValueDeployStorage[F](kvm))
-      casperBufferStorage               <- Resource.liftF(Resources.mkCasperBufferStorage[F](kvm))
+      casperBufferStorage               <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
       rspaceStore                       <- Resource.liftF(kvm.rSpaceStores)
       runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
       (runtime, replayRuntime, history) = runtimes
@@ -594,7 +593,7 @@ object TestNode {
                    validatorId,
                    logicalTime,
                    synchronyConstraintThreshold,
-                   paths,
+                   newStorageDir,
                    maxNumberOfParents,
                    maxParentDepth,
                    isReadOnly = isReadOnly,

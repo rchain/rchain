@@ -35,9 +35,9 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
   implicit val timeF: Time[Task] = new LogicalTime[Task]
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
-    dirs <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm  <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dirs.storageDir))
-    rm   <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
+    dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
+    kvm <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dir))
+    rm  <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
   } yield rm
 
   def makeTxAndCommitState(
