@@ -1,25 +1,16 @@
 package coop.rchain.casper.helper
 
-import java.net.URLEncoder
-import java.nio.file.Path
-import cats.{Monad, Parallel}
 import cats.data.State
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.implicits._
 import cats.syntax.all.none
+import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
-import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.{
-  BlockDagKeyValueStorage,
-  BlockDagRepresentation,
-  BlockDagStorage
-}
-import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
-import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -48,16 +39,18 @@ import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
+import fs2.{Pipe, Stream}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
 
+import java.net.URLEncoder
+import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 case class TestNode[F[_]: Timer](
@@ -511,8 +504,7 @@ object TestNode {
       kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(paths.storageDir))
       blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
       blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStoreConfig                 = Config(paths.deployStorageDir, 1024L * 1024L * 1024L)
-      deployStorage                     <- LMDBDeployStorage.make[F](deployStoreConfig)
+      deployStorage                     <- Resource.liftF(KeyValueDeployStorage[F](kvm))
       casperBufferStorage               <- Resource.liftF(Resources.mkCasperBufferStorage[F](kvm))
       rspaceStore                       <- Resource.liftF(kvm.rSpaceStores)
       runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))

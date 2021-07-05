@@ -103,9 +103,8 @@ object Main {
     * @param options command line options
     * @param console console
     */
-  private def runCLI[F[_]: Monixable: Sync: Timer](options: commandline.Options)(
-      implicit
-      console: ConsoleIO[F]
+  private def runCLI[F[_]: Sync: Monixable: ConsoleIO: Timer](
+      options: commandline.Options
   ): F[Unit] = {
     // Clients for executing gRPC calls on remote RNode instance
     implicit val replServiceClient: GrpcReplClient[F] =
@@ -128,8 +127,6 @@ object Main {
       )
 
     implicit val time: Time[F] = effects.time
-
-    import cats.instances.option._
 
     val program = subcommand(options) match {
       case Eval(files, printUnmatchedSendsOnly) =>

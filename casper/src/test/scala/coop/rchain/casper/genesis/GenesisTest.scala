@@ -4,29 +4,22 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, ProtoUtil, VaultParser}
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps.RichPath
-import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
-import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
-import coop.rchain.casper.genesis.Genesis.createGenesisBlock
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
-import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

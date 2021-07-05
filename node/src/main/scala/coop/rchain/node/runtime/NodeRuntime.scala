@@ -7,8 +7,6 @@ import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
-import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.BlockRetriever
@@ -143,9 +141,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _             <- initPeer.fold(().pure[F])(p => kademliaStore.updateLastSeen(p))
       nodeDiscovery = effects.nodeDiscovery(id)(Sync[F], kademliaStore, kademliaRPC)
 
-      deployStoragePath   = nodeConf.storage.dataDir.resolve("deploystorage")
-      deployStorageConfig = LMDBDeployStorage.Config(storagePath = deployStoragePath, mapSize = gb)
-
       eventBus <- RchainEvents[F]
 
       result <- {
@@ -158,8 +153,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           commUtil,
           blockRetriever,
           nodeConf,
-          eventBus,
-          deployStorageConfig
+          eventBus
         )
       }
       (
@@ -515,7 +509,6 @@ object NodeRuntime {
   }
 
   def cleanup[F[_]: Sync: Log](
-      deployStorageCleanup: F[Unit],
       casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
     new Cleanup[F] {
@@ -523,8 +516,6 @@ object NodeRuntime {
         for {
           _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
-          _ <- Log[F].info("Shutting down deploy storage ...")
-          _ <- deployStorageCleanup
         } yield ()
     }
 }

@@ -11,7 +11,7 @@ import coop.rchain.blockstorage.dag.{
   BlockDagRepresentation,
   BlockDagStorage
 }
-import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
+import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
@@ -95,13 +95,10 @@ object Resources {
       kvm: KeyValueStoreManager[F]
   ): F[CasperBufferStorage[F]] = CasperBufferKeyValueStorage.create[F](kvm)
 
-  def mkDeployStorageAt[F[_]: Sync](path: Path): Resource[F, DeployStorage[F]] =
-    LMDBDeployStorage.make[F](LMDBDeployStorage.Config(path, mapSize = 100 * mb))
+  def mkDeployStorageAt[F[_]: Sync](kvm: KeyValueStoreManager[F]): Resource[F, DeployStorage[F]] =
+    Resource.liftF(KeyValueDeployStorage[F](kvm))
 
-  case class StoragePaths(
-      storageDir: Path,
-      deployStorageDir: Path
-  )
+  case class StoragePaths(storageDir: Path)
 
   def copyStorage[F[_]: Sync](
       storageTemplatePath: Path
@@ -109,11 +106,7 @@ object Resources {
     for {
       storageDirectory <- mkTempDir(s"casper-test-")
       _                <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
-      deployStorageDir = storageDirectory.resolve("deploy-storage")
-    } yield StoragePaths(
-      storageDir = storageDirectory,
-      deployStorageDir = deployStorageDir
-    )
+    } yield StoragePaths(storageDir = storageDirectory)
 
   private def copyDir[F[_]: Sync](src: Path, dest: Path): F[Unit] = Sync[F].delay {
     Files

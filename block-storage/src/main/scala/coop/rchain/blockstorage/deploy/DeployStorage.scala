@@ -10,5 +10,5 @@ trait DeployStorage[F[_]] {
 }
 
 object DeployStorage {
-  def apply[F[_]](implicit ev: DeployStorage[F]): DeployStorage[F] = ev
+  def apply[F[_]](implicit F: DeployStorage[F]): F.type = F
 }
