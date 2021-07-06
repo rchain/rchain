@@ -251,8 +251,7 @@ object RSpace {
   final case class RSpaceStore[F[_]](
       history: KeyValueStore[F],
       roots: KeyValueStore[F],
-      cold: KeyValueStore[F],
-      channels: KeyValueStore[F]
+      cold: KeyValueStore[F]
   )
 
   def createPlay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
@@ -343,8 +342,7 @@ object RSpace {
       historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
                       store.history,
                       store.roots,
-                      store.cold,
-                      store.channels
+                      store.cold
                     )
       store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).base)
     } yield (historyRepo, store)

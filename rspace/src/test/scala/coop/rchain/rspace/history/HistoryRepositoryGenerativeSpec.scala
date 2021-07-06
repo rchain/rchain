@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.examples.StringExamples._
 import coop.rchain.rspace.examples.StringExamples.implicits._
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -42,8 +41,6 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootsLmdbKVStore   <- kvm.store("roots")
       rootsStore         = RootsStoreInstances.rootsStore(rootsLmdbKVStore)
       rootRepository     = new RootRepository[Task](rootsStore)
-      channelKVStore     <- kvm.store("channels")
-      channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
       emptyHistory       = HistoryInstances.merging(History.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
@@ -54,7 +51,6 @@ class LMDBHistoryRepositoryGenerativeSpec
           coldStore,
           exporter,
           importer,
-          channelStore,
           serializeString,
           serializePattern,
           serializeString,
@@ -76,23 +72,20 @@ class InmemHistoryRepositoryGenerativeSpec
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     implicit val log: Log[Task]   = new Log.NOPLog[Task]
     implicit val span: Span[Task] = new NoopSpan[Task]
-    val kvm                       = InMemoryStoreManager[Task]
-    for {
-      channelKVStore <- kvm.store("channels")
-      channelStore   = ChannelStoreImpl[Task, String](channelKVStore, stringSerialize)
-      r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
+
+    Sync[Task].delay(
+      HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
         emptyHistory,
         rootRepository,
         inMemColdStore,
         emptyExporter,
         emptyImporter,
-        channelStore,
         serializeString,
         serializePattern,
         serializeString,
         serializeCont
       )
-    } yield r
+    )
   }
 
 }

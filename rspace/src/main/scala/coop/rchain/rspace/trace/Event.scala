@@ -1,11 +1,9 @@
 package coop.rchain.rspace.trace
 
-import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.StableHashProvider._
 import coop.rchain.rspace.internal.ConsumeCandidate
-import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.shared.Serialize
-import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
 
@@ -64,12 +62,14 @@ object Produce {
       implicit
       serializeC: Serialize[C],
       serializeA: Serialize[A]
-  ): Produce =
+  ): Produce = {
+    val channelHash = hash(channel)(serializeC)
     new Produce(
-      hash(channel)(serializeC),
-      hash(channel, datum, persistent),
+      channelHash,
+      hash(channelHash.bytes, datum, persistent),
       persistent
     )
+  }
 
   def fromHash(
       channelsHash: Blake2b256Hash,
@@ -112,10 +112,13 @@ object Consume {
       serializeP: Serialize[P],
       serializeK: Serialize[K]
   ): Consume = {
-    val channelsByteVectors: Seq[ByteVector] = toOrderedByteVectors(channels)
+//    val channelsByteVectors: Seq[ByteVector] = toOrderedByteVectors(channels)
+    // Hash sorted serialized channels and sort by serialized hash
+    val channelsHashes        = hashSeq(channels)
+    val channelsEncodedSorted = channelsHashes.map(_.bytes)
     new Consume(
-      channelsByteVectors.map(Blake2b256Hash.create),
-      hash(channelsByteVectors, patterns, continuation, persistent),
+      channelsHashes,
+      hash(channelsEncodedSorted, patterns, continuation, persistent),
       persistent
     )
   }

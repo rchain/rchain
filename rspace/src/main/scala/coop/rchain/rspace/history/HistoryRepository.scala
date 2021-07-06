@@ -4,8 +4,6 @@ import cats.Parallel
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.metrics.Span
-import coop.rchain.rspace.channelStore.ChannelStore
-import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
@@ -30,7 +28,7 @@ final case class HistoryCache[F[_], C, P, A, K](
     jnsCache: LazyAdHocKeyValueCache[F, HistoryPointer, Seq[JoinsB[C]]]
 )
 
-trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
+trait HistoryRepository[F[_], C, P, A, K] {
   def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]]
 
   def doCheckpoint(actions: Seq[HotStoreTrieAction]): F[HistoryRepository[F, C, P, A, K]]
@@ -52,11 +50,14 @@ trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
 
 object HistoryRepositoryInstances {
 
+  val PREFIX_DATUM: Byte = 0x00
+  val PREFIX_KONT: Byte  = 0x01
+  val PREFIX_JOINS: Byte = 0x02
+
   def lmdbRepository[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](
       historyKeyValueStore: KeyValueStore[F],
       rootsKeyValueStore: KeyValueStore[F],
-      coldKeyValueStore: KeyValueStore[F],
-      channelKeyValueStore: KeyValueStore[F]
+      coldKeyValueStore: KeyValueStore[F]
   )(
       implicit
       sc: Serialize[C],
@@ -76,16 +77,14 @@ object HistoryRepositoryInstances {
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
-      exporter     = RSpaceExporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
-      importer     = RSpaceImporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
-      channelStore = ChannelStoreImpl(channelKeyValueStore, sc)
+      exporter = RSpaceExporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
+      importer = RSpaceImporterStore[F](historyKeyValueStore, coldKeyValueStore, rootsKeyValueStore)
     } yield HistoryRepositoryImpl[F, C, P, A, K](
       history,
       rootsRepository,
       coldStore,
       exporter,
       importer,
-      channelStore,
       sc,
       sp,
       sa,

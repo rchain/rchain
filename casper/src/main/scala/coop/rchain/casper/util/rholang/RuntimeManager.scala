@@ -207,7 +207,7 @@ object RuntimeManager {
     */
   val emptyStateHashFixed: StateHash =
     ByteString.copyFrom(
-      Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
+      Base16.unsafeDecode("6f8fa359a262cd915ad4ca780638ed9b7338b88032f8638073138f92e971ace4")
     )
 
   def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](

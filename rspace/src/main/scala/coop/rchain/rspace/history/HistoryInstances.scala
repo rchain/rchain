@@ -274,6 +274,14 @@ object HistoryInstances {
               case EmptyPointer      => Applicative[F].pure(None.asRight) // removed path
             }
 
+          // path has empty trie, last node deleted
+          case (v, EmptyTrie) =>
+            val curr = ByteVector(currentPath)
+            val prev = ByteVector(previousPath)
+            val key  = ByteVector(v)
+            println(s"EMPTY TRIE PATH: $key, current: $curr, prev: $prev")
+            Applicative[F].pure(None.asRight)
+
           case _ => Sync[F].raiseError(MalformedTrieError)
         }
 
@@ -350,12 +358,16 @@ object HistoryInstances {
                          (currentRoot, previousModificationOpt),
                          InsertAction(remainingPath, value)
                          ) =>
+//                       val key = ByteVector(remainingPath)
+//                       println(s"$index INSERT $key")
                        insert(currentRoot, previousModificationOpt, remainingPath, value)
 
                      case (
                          (currentRoot, previousModificationOpt),
                          DeleteAction(remainingPath)
                          ) =>
+//                       val key = ByteVector(remainingPath)
+//                       println(s"$index DELETE $key")
                        delete(currentRoot, previousModificationOpt, remainingPath)
                    }
         (root, _) = result
