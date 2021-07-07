@@ -19,7 +19,7 @@ final case class KeyValueDeployStorage[F[_]: Functor] private (
   def remove(deploys: List[Signed[DeployData]]): F[Int] =
     store.delete(deploys.map(_.sig))
 
-  def getUnfinalized: F[Set[Signed[DeployData]]] =
+  def readAll: F[Set[Signed[DeployData]]] =
     store.toMap.map(_.values.toSet)
 }
 

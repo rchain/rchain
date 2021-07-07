@@ -50,7 +50,7 @@ object BlockCreator {
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {
-          unfinalized         <- DeployStorage[F].getUnfinalized
+          unfinalized         <- DeployStorage[F].readAll
           earliestBlockNumber = blockNumber - s.onChainState.shardConf.deployLifespan
           valid = unfinalized.filter(
             d =>
