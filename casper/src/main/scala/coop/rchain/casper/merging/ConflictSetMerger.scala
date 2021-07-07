@@ -12,7 +12,7 @@ import coop.rchain.shared.{Log, Stopwatch}
 object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
-  def merge[F[_]: Concurrent: Log, R](
+  def merge[F[_]: Concurrent: Log, R: Ordering](
       baseState: Blake2b256Hash,
       actualSet: Set[R],
       lateSet: Set[R],
@@ -30,13 +30,25 @@ object ConflictSetMerger {
     def getOptimalRejection(
         options: Set[Set[Branch]],
         targetF: Branch => Long
-    ): Set[Branch] =
-      options.toList.minimumByOption(_.map(targetF).sum).getOrElse(Set.empty)
+    ): Set[Branch] = {
+      require(
+        options.map(_.map(_.head)).size == options.size,
+        "Same rejection unit is found in two rejection options. Please report this to code maintainer."
+      )
+      options.toList
+      // reject set with min sum of target function output,
+      // if equal value - min size of a branch,
+      // if equal size - sorted by head of rejection set option
+        .sortBy(b => (b.map(targetF).sum, b.size, b.head.head))
+        .headOption
+        .getOrElse(Set.empty)
+    }
 
     val (rejectedAsDependents, mergeSet) =
       actualSet.partition(t => lateSet.exists(depends(t, _)))
 
-    /** split merging set into branches without cross dependencies */
+    /** split merging set into branches without cross dependencies
+      * TODO make dependencies directional, maintain dependency graph. Now if l depends on r or otherwise - it does not matter.*/
     val (branches, branchesTime) =
       Stopwatch.profile(computeRelatedSets[R](mergeSet, (l, r) => depends(l, r)))
 
