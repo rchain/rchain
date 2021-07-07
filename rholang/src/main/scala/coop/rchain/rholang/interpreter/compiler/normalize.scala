@@ -113,6 +113,9 @@ object ProcNormalizeMatcher {
       case p: PSend =>
         PSendNormalizer.normalize(p, input)
 
+      case p: PSendSynch =>
+        PSendSynchNormalizer.normalize(p, input)
+
       case p: PContr =>
         PContrNormalizer.normalize(p, input)
 
@@ -127,6 +130,9 @@ object ProcNormalizeMatcher {
 
       case b: PBundle =>
         PBundleNormalizer.normalize(b, input)
+
+      case p: PLet =>
+        PLetNormalizer.normalize(p, input)
 
       case p: PMatch =>
         PMatchNormalizer.normalize(p, input)
