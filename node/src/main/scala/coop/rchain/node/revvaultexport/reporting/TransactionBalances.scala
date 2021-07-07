@@ -2,11 +2,9 @@ package coop.rchain.node.revvaultexport.reporting
 
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.implicits._
-import cats.mtl.FunctorRaise
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
-import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.blockstorage.{BlockStore, KeyValueBlockStore}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -20,16 +18,16 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.node.revvaultexport.mainnet1.reporting.SpecialCase.getSpecialTransfer
 import coop.rchain.node.revvaultexport.RhoTrieTraverser
 import coop.rchain.node.revvaultexport.mainnet1.reporting.PerValidatorVaults
+import coop.rchain.node.revvaultexport.mainnet1.reporting.SpecialCase.getSpecialTransfer
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
-import fs2._
+import fs2.Stream
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.ExecutionContext
@@ -104,14 +102,13 @@ object TransactionBalances {
     } yield perValidatorVaultAddr
   }
 
-  def generateRevAccountFromWalletAndBond[F[_]: Sync: Log](
+  def generateRevAccountFromWalletAndBond[F[_]: Sync: ContextShift: Log](
       walletPath: Path,
       bondsPath: Path
-  ): F[Map[String, RevAccount]] = {
-    implicit val raiseIOError: FunctorRaise[F, IOError] = IOError.raiseIOErrorThroughSync[F]
+  ): F[Map[String, RevAccount]] =
     for {
-      vaults   <- VaultParser.parse(walletPath)
       bondsMap <- BondsParser.parse(bondsPath)
+      vaults   <- VaultParser.parse(walletPath)
       accountMap = vaults
         .map(v => (v.revAddress.toBase58, RevAccount(v.revAddress, v.initialBalance, NormalVault)))
         .toMap
@@ -123,7 +120,6 @@ object TransactionBalances {
           vaultMap.updated(initialPosStakingVault.address.toBase58, newPosVault)
       }
     } yield revAccountMap
-  }
 
   def updateGenesisFromTransfer(
       genesisVault: GlobalVaultsInfo,
@@ -153,7 +149,7 @@ object TransactionBalances {
     genesisVault.copy(vaultMaps = resultMap)
   }
 
-  def getGenesisVaultMap[F[_]: Sync: Span: Log](
+  def getGenesisVaultMap[F[_]: Sync: ContextShift: Span: Log](
       walletPath: Path,
       bondsPath: Path,
       runtime: RhoRuntime[F],

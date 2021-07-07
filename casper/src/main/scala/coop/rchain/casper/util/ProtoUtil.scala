@@ -1,28 +1,25 @@
 package coop.rchain.casper.util
 
-import java.nio.charset.StandardCharsets
-
+import cats.Monad
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
-import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.casper.util.implicits._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 
+import java.nio.charset.StandardCharsets
 import scala.collection.immutable
 import scala.collection.immutable.Map
 
