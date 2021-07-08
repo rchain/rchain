@@ -53,6 +53,39 @@ object ChannelStoreImpl {
       } yield ()
 
     override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] = store.get(hash)
+
+    override def putChannelHashes(channels: Seq[C]): F[Unit] = {
+      def convert(channel: C): F[(Blake2b256Hash, DataJoinHash)] =
+        for {
+          // C => hash(C)
+          eventKey <- Sync[F].delay(StableHashProvider.hash(channel)(sc))
+
+          // C => hashPrefix(C)
+          dataHash = hashDataChannel(channel, sc)
+          joinHash = hashJoinsChannel(channel, sc)
+        } yield (eventKey, DataJoinHash(dataHash, joinHash))
+
+      channels.toList.traverse(convert).flatMap(store.put)
+    }
+
+    override def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit] = {
+      def convert(channels: Seq[C]): F[(Blake2b256Hash, ContinuationHash)] =
+        for {
+          // Hash each channel in a list
+          channelsHashes <- Sync[F].delay(
+                             toOrderedByteVectors(channels)(sc).map(Blake2b256Hash.create)
+                           )
+          // Concatenate channel hashes and hash result
+          // Seq[C] => Seq[hash(C)] => Seq[bytes(C)] => bytes(C) => hash(C)
+          eventKey = continuationKey(channelsHashes)
+
+          // Concatenate channels and hash result
+          // Seq[C] => Seq[bytes(C)] => bytes(C) => hashPrefix(C)
+          continuationHash = hashContinuationsChannels(channels, sc)
+        } yield (eventKey, ContinuationHash(continuationHash))
+
+      conts.toList.traverse(convert).flatMap(store.put)
+    }
   }
 
   def codecChannelHash: Codec[ChannelHash] =
@@ -71,8 +104,10 @@ object ChannelStoreImpl {
     * Useful in places where we want to have disabled or dummy storage.
     */
   final case class NoOpChannelStore[F[_]: Applicative, C]() extends ChannelStore[F, C] {
-    override def putChannelHash(channel: C): F[Unit]            = ().pure[F]
-    override def putContinuationHash(channels: Seq[C]): F[Unit] = ().pure[F]
+    override def putChannelHash(channel: C): F[Unit]                   = ().pure[F]
+    override def putContinuationHash(channels: Seq[C]): F[Unit]        = ().pure[F]
+    override def putChannelHashes(channel: Seq[C]): F[Unit]            = ().pure[F]
+    override def putContinuationHashes(channels: Seq[Seq[C]]): F[Unit] = ().pure[F]
     override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
       none[ChannelHash].pure[F]
   }

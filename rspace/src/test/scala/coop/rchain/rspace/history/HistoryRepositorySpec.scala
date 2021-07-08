@@ -206,6 +206,10 @@ trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
     override def putChannelHash(channel: String): Task[Unit] = ().pure[Task]
 
     override def putContinuationHash(channels: Seq[String]): Task[Unit] = ().pure[Task]
+
+    override def putChannelHashes(channels: Seq[String]): Task[Unit] = ().pure[Task]
+
+    override def putContinuationHashes(conts: Seq[Seq[String]]): Task[Unit] = ().pure[Task]
   }
   def inmemRootsStore =
     new RootsStore[Task] {

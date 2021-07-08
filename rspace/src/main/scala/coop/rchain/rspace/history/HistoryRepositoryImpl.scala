@@ -46,6 +46,12 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def putContinuationHash(channels: Seq[C]): F[Unit] =
     channelHashesStore.putContinuationHash(channels)
 
+  override def putChannelHashes(channels: Seq[C]): F[Unit] =
+    channelHashesStore.putChannelHashes(channels)
+
+  override def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit] =
+    channelHashesStore.putContinuationHashes(conts)
+
   type CacheAction = Blake2b256Hash => F[Unit]
   type ColdAction  = (Blake2b256Hash, Option[PersistedData])
 
@@ -86,21 +92,22 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         s"${key.toHex};delete-join;0"
     }.toList
 
-  private def storeChannelHash(action: HotStoreAction) =
-    action match {
-      case i: InsertData[C, A] =>
-        channelHashesStore.putChannelHash(i.channel)
-      case i: InsertContinuations[C, P, K] =>
-        channelHashesStore.putContinuationHash(i.channels)
-      case i: InsertJoins[C] =>
-        channelHashesStore.putChannelHash(i.channel)
-      case d: DeleteData[C] =>
-        channelHashesStore.putChannelHash(d.channel)
-      case d: DeleteContinuations[C] =>
-        channelHashesStore.putContinuationHash(d.channels)
-      case d: DeleteJoins[C] =>
-        channelHashesStore.putChannelHash(d.channel)
+  private def storeChannelHash(action: List[HotStoreAction]) = {
+    val insertChans = action.collect {
+      case i: InsertData[C, A] => i.channel
+      case i: InsertJoins[C]   => i.channel
+      case d: DeleteData[C]    => d.channel
+      case d: DeleteJoins[C]   => d.channel
     }
+    val insertConts = action.collect {
+      case i: InsertContinuations[C, P, K] => i.channels
+      case d: DeleteContinuations[C]       => d.channels
+    }
+    for {
+      _ <- channelHashesStore.putContinuationHashes(insertConts)
+      _ <- channelHashesStore.putChannelHashes(insertChans)
+    } yield ()
+  }
 
   private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
@@ -222,12 +229,10 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     val trieActions = actions.par.map(transform).toList
     // store channels mapping
-    val storeChannels = Stream
-      .emits(actions.map(a => Stream.eval(storeChannelHash(a).map(_.asLeft[History[F]]))))
-      .parJoinProcBounded
+    val storeChannels = storeChannelHash(actions).map(_.asLeft[History[F]])
     for {
       r <- doCheckpoint(trieActions)
-      _ <- storeChannels.compile.drain
+      _ <- storeChannels
       _ <- measure(actions)
     } yield r
   }
