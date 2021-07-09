@@ -1,7 +1,7 @@
 package coop.rchain.node.revvaultexport.mainnet1.reporting
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -172,12 +172,12 @@ object MergeBalanceMain {
                  .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                    store
                  )
-      (rSpacePlay, rSpaceReplay, _) = spaces
-      runtimes                      <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
-      (rhoRuntime, _)               = runtimes
-      blockOpt                      <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
-      block                         = blockOpt.get
-      postStateHash                 = block.body.state.postStateHash
+      (rSpacePlay, rSpaceReplay) = spaces
+      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
+      (rhoRuntime, _)            = runtimes
+      blockOpt                   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      block                      = blockOpt.get
+      postStateHash              = block.body.state.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {

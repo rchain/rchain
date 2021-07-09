@@ -315,7 +315,7 @@ object TransactionBalances {
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                    store
                  )
-      (rSpacePlay, rSpaceReplay, _) = spaces
+      (rSpacePlay, rSpaceReplay) = spaces
       runtimes <- RhoRuntime
                    .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
       (rhoRuntime, _)  = runtimes
