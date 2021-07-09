@@ -162,9 +162,7 @@ object Setup {
 
       // Reporting runtime
       reportingRuntime <- {
-        implicit val sp = span
-        implicit val bs = blockStore
-        implicit val bd = blockDagStorage
+        implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
           rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
@@ -191,11 +189,8 @@ object Setup {
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
-        implicit val bd = blockDagStorage
-        implicit val br = blockRetriever
-        implicit val cu = commUtil
-        implicit val bs = blockStore
-        implicit val cb = casperBufferStorage
+        implicit val (bs, bd)     = (blockStore, blockDagStorage)
+        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
         BlockProcessor[F]
       }
 
@@ -204,18 +199,11 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val rm         = runtimeManager
-        implicit val bs         = blockStore
-        implicit val bd         = blockDagStorage
-        implicit val sc         = synchronyConstraintChecker
-        implicit val lfhscc     = lastFinalizedHeightConstraintChecker
-        implicit val sp         = span
-        implicit val e          = estimator
-        implicit val ds         = deployStorage
-        implicit val br         = blockRetriever
-        implicit val cu         = commUtil
-        implicit val eb         = eventPublisher
-        val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
+        implicit val (bs, bd, ds)     = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, ep)         = (blockRetriever, eventPublisher)
+        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
+        val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
         val dummyDeployerKey =
           if (dummyDeployerKeyOpt.isEmpty) None
           else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
@@ -241,26 +229,12 @@ object Setup {
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
 
       casperLaunch = {
-        implicit val bs     = blockStore
-        implicit val bd     = blockDagStorage
-        implicit val ec     = engineCell
-        implicit val ev     = envVars
-        implicit val br     = blockRetriever
-        implicit val rm     = runtimeManager
-        implicit val or     = oracle
-        implicit val sp     = span
-        implicit val lb     = lab
-        implicit val rc     = rpConnections
-        implicit val ra     = rpConfAsk
-        implicit val eb     = eventPublisher
-        implicit val sc     = synchronyConstraintChecker
-        implicit val lfhscc = lastFinalizedHeightConstraintChecker
-        implicit val cu     = commUtil
-        implicit val es     = estimator
-        implicit val ds     = deployStorage
-        implicit val cbs    = casperBufferStorage
-        implicit val rsm    = rspaceStateManager
-
+        implicit val (bs, bd, ds)         = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
+        implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, es, or, cu)     = (runtimeManager, estimator, oracle, commUtil)
+        implicit val (rsm, sp)            = (rspaceStateManager, span)
         CasperLaunch.of[F](
           blockProcessorQueue,
           blockProcessorStateRef,
@@ -287,18 +261,12 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val ec = engineCell
-        implicit val bs = blockStore
-        implicit val or = oracle
+        implicit val (ec, bs, or) = (engineCell, blockStore, oracle)
         BlockReportAPI[F](reportingRuntime, reportingStore)
       }
       apiServers = {
-        implicit val bs = blockStore
-        implicit val ec = engineCell
-        implicit val or = oracle
-        implicit val sp = span
-        implicit val sc = synchronyConstraintChecker
-        implicit val lh = lastFinalizedHeightConstraintChecker
+        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
+        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -327,9 +295,7 @@ object Setup {
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
-        implicit val cu = commUtil
-        implicit val ec = engineCell
-        implicit val bs = blockStore
+        implicit val (ec, bs, cu) = (engineCell, blockStore, commUtil)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
@@ -340,10 +306,7 @@ object Setup {
         rnodeStoreManager
       )
       webApi = {
-        implicit val ec = engineCell
-        implicit val sp = span
-        implicit val or = oracle
-        implicit val bs = blockStore
+        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
@@ -352,10 +315,8 @@ object Setup {
         )
       }
       adminWebApi = {
-        implicit val ec     = engineCell
-        implicit val sp     = span
-        implicit val sc     = synchronyConstraintChecker
-        implicit val lfhscc = lastFinalizedHeightConstraintChecker
+        implicit val (ec, sp) = (engineCell, span)
+        implicit val (sc, lh) = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         new AdminWebApiImpl[F](
           triggerProposeFOpt,
           proposerStateRefOpt
