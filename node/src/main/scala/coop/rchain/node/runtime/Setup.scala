@@ -28,7 +28,6 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -43,7 +42,6 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
@@ -146,55 +144,32 @@ object Setup {
         implicit val bs = blockStore
         LastFinalizedHeightConstraintChecker[F]
       }
-      // runtime for `rnode eval`
+
+      // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        for {
-          store    <- rnodeStoreManager.evalStores
-          runtimes <- RhoRuntime.createRuntimes[F](store)
-        } yield runtimes._1
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
       }
 
-      r <- {
+      // Runtime manager (play and replay runtimes)
+      runtimeManagerWithHistory <- {
         implicit val sp = span
-        import coop.rchain.rholang.interpreter.storage._
-        implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
         // Use channels map only in block-merging (multi parents)
         val useChannelsMap = conf.casper.maxNumberOfParents > 1
-        for {
-          store <- rnodeStoreManager.rSpaceStores(useChannelsMap)
-          spaces <- RSpace
-                     .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                       store
-                     )
-        } yield spaces
+        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
       }
-      rSpacePlay   = r._1
-      rSpaceReplay = r._2
-      historyRepo  = r._3
+      (runtimeManager, historyRepo) = runtimeManagerWithHistory
 
-      // runtimes for on-chain execution
-      onchainRuntimes <- {
+      // Reporting runtime
+      reportingRuntime <- {
         implicit val sp = span
         implicit val bs = blockStore
         implicit val bd = blockDagStorage
-        for {
-          runtimes <- RhoRuntime
-                       .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
-          (rhoRuntime, replayRhoRuntime) = runtimes
-          reporter <- if (conf.apiServer.enableReporting) {
-                       for {
-                         // In reporting replay channels map is not needed
-                         store <- rnodeStoreManager.rSpaceStores(useChannelsMap = false)
-                       } yield ReportingCasper.rhoReporter(store)
-                     } else
-                       ReportingCasper.noop.pure[F]
-        } yield (rhoRuntime, replayRhoRuntime, reporter)
-      }
-      (playRuntime, replayRuntime, reportingRuntime) = onchainRuntimes
-      runtimeManager <- {
-        implicit val sp = span
-        RuntimeManager.fromRuntimes[F](playRuntime, replayRuntime, historyRepo)
+        if (conf.apiServer.enableReporting) {
+          // In reporting replay channels map is not needed
+          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+        } else
+          ReportingCasper.noop.pure[F]
       }
 
       // RNodeStateManager
