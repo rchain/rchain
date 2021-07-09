@@ -16,12 +16,15 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
+import coop.rchain.rspace
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
@@ -66,7 +69,7 @@ trait RuntimeManager[F[_]] {
   def getHistoryRepo: RhoHistoryRepository[F]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
+final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F]
@@ -203,19 +206,31 @@ object RuntimeManager {
       Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
     )
 
-  def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](
-      runtime: RhoRuntime[F],
-      replayRuntime: ReplayRhoRuntime[F],
+  def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
+
+  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      rSpace: RhoISpace[F],
+      replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F]
-  ): F[RuntimeManager[F]] =
-    Concurrent[F].delay(
-      new RuntimeManagerImpl(
-        runtime.getRSpace.asInstanceOf[RhoISpace[F]],
-        replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
-        historyRepo
-      )
-    )
+  ): F[RuntimeManagerImpl[F]] = Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo))
 
-  def apply[F[_]](implicit instance: RuntimeManager[F]): RuntimeManager[F] = instance
+  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      store: RSpaceStore[F]
+  )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
+    createWithHistory(store).map(_._1)
 
+  def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      store: RSpaceStore[F]
+  )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+
+    RSpace
+      .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      .flatMap {
+        case (rSpacePlay, rSpaceReplay) =>
+          val historyRepo = rSpacePlay.historyRepo
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo).map((_, historyRepo))
+      }
+  }
 }

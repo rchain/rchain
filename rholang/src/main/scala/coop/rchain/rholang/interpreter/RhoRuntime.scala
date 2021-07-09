@@ -1,12 +1,11 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.{Files, Path}
-import cats._
+import cats.{Monad, Parallel}
 import cats.data.Chain
 import cats.effect._
 import cats.effect.concurrent.Ref
-import cats.implicits._
 import cats.mtl.FunctorTell
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
@@ -17,12 +16,12 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.RholangMetricsSource
-import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace, RhoTuplespace}
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoReplayISpace}
+import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.SystemProcesses._
 import coop.rchain.rholang.interpreter.accounting.{_cost, Cost, CostAccounting, HasCost}
 import coop.rchain.rholang.interpreter.registry.RegistryBootstrap
 import coop.rchain.rholang.interpreter.storage.ChargingRSpace
-import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
@@ -138,8 +137,6 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     * Currently this is only for debug info mostly.
     */
   def getHotChanges: F[Map[Seq[Par], Row[BindPattern, ListParWithRandom, TaggedContinuation]]]
-
-  def getRSpace: RhoTuplespace[F]
 }
 
 trait ReplayRhoRuntime[F[_]] extends RhoRuntime[F] {
@@ -228,8 +225,6 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
       )
     invalidBlocksParam.setParams(invalidBlocksPar)
   }
-
-  override def getRSpace: RhoTuplespace[F] = space
 }
 
 class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
@@ -243,8 +238,6 @@ class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
   override def checkReplayData: F[Unit] = space.checkReplayData()
 
   override def rig(log: trace.Log): F[Unit] = space.rig(log)
-
-  override def getRSpace: RhoTuplespace[F] = space
 }
 
 object ReplayRhoRuntime {
@@ -279,17 +272,8 @@ object RhoRuntime {
   type RhoHistoryRepository[F[_]] =
     HistoryRepository[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  type CPAK[M[_], F[_[_], _, _, _, _]] =
-    F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
-
   type TCPAK[M[_], F[_[_], _, _, _, _]] =
-    F[
-      M,
-      Par,
-      BindPattern,
-      ListParWithRandom,
-      TaggedContinuation
-    ]
+    F[M, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
   def introduceSystemProcesses[F[_]: Sync: _cost: Span](
       spaces: List[RhoTuplespace[F]],
@@ -517,6 +501,26 @@ object RhoRuntime {
     } yield ()
   }
 
+  private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
+      rspace: RhoISpace[F],
+      extraSystemProcesses: Seq[Definition[F]],
+      initRegistry: Boolean
+  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
+    Span[F].trace(createPlayRuntime) {
+      for {
+        cost <- CostAccounting.emptyCost[F]
+        rhoEnv <- {
+          implicit val c: _cost[F] = cost
+          createRhoEnv(rspace, extraSystemProcesses)
+        }
+        (reducer, blockRef, invalidBlocks) = rhoEnv
+        runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
+        _ <- if (initRegistry) {
+              bootstrapRegistry(runtime) >> runtime.createCheckpoint
+            } else ().pure[F]
+      } yield runtime
+    }
+
   /**
     *
     * @param rspace the rspace which the runtime would operate on it
@@ -536,8 +540,8 @@ object RhoRuntime {
     */
   def createRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
-      initRegistry: Boolean = true
+      initRegistry: Boolean = true,
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
     createRuntime[F](rspace, extraSystemProcesses, initRegistry)
 
@@ -569,74 +573,6 @@ object RhoRuntime {
       } yield runtime
     }
 
-  private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
-      rspace: RhoISpace[F],
-      extraSystemProcesses: Seq[Definition[F]],
-      initRegistry: Boolean
-  )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
-    Span[F].trace(createPlayRuntime) {
-      for {
-        cost <- CostAccounting.emptyCost[F]
-        rhoEnv <- {
-          implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, extraSystemProcesses)
-        }
-        (reducer, blockRef, invalidBlocks) = rhoEnv
-        runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-        _ <- if (initRegistry) {
-              bootstrapRegistry(runtime) >> runtime.createCheckpoint
-            } else ().pure[F]
-      } yield runtime
-    }
-
-  // this is more for tests currently
-  def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      stores: RSpaceStore[F],
-      iniRegistry: Boolean = false,
-      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler
-  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
-    import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-    for {
-      hrstores <- RSpace
-                   .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores
-                   )
-      (space, replay, hr)      = hrstores
-      runtimes                 <- createRuntimes[F](space, replay, iniRegistry, additionalSystemProcesses)
-      (runtime, replayRuntime) = runtimes
-    } yield (runtime, replayRuntime, hr)
-  }
-
-  //TODO  remove this one or refactor
-  // currently this method is only for test to inspect cost Log
-  def createRuntimesWithCostLog[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      stores: RSpaceStore[F],
-      initRegistry: Boolean = false,
-      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
-  )(
-      implicit scheduler: Scheduler,
-      costLog: FunctorTell[F, Chain[Cost]]
-  ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
-    import coop.rchain.rholang.interpreter.storage._
-    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
-    for {
-      hrstores <- RSpace
-                   .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                     stores
-                   )
-      (space, replay, hr) = hrstores
-      rhoRuntime          <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
-      replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
-                           replay,
-                           additionalSystemProcesses,
-                           initRegistry
-                         )
-    } yield (rhoRuntime, replayRhoRuntime, hr)
-  }
-
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
@@ -644,11 +580,33 @@ object RhoRuntime {
       additionalSystemProcesses: Seq[Definition[F]]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses, initRegistry)
+      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replaySpace,
                            additionalSystemProcesses,
                            initRegistry
                          )
     } yield (rhoRuntime, replayRhoRuntime)
+
+  /*
+   * Create from KeyValueStore's
+   */
+
+  def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+      stores: RSpaceStore[F],
+      iniRegistry: Boolean = false,
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+  )(
+      implicit scheduler: Scheduler
+  ): F[RhoRuntime[F]] = {
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+    for {
+      space <- RSpace
+                .create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                  stores
+                )
+      runtime <- createRhoRuntime[F](space, iniRegistry, additionalSystemProcesses)
+    } yield runtime
+  }
 }
