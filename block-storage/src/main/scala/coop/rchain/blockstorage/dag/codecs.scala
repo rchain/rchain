@@ -37,4 +37,6 @@ object codecs {
   )
 
   val codecByteString = xmapToByteString(variableSizeBytes(uint8, bytes))
+
+  val codecDeploySignature = xmapToByteString(bytes)
 }

@@ -140,7 +140,6 @@ class RhoSpec(
       val genesis = GenesisBuilder.buildGenesis(genesisParameters)
 
       val runtimeResource = copyStorage[Task](genesis.storageDirectory)
-        .map(_.storageDir)
         .evalMap(mkTestRNodeStoreManager[Task])
         .evalMap(
           mkRuntimeAt[Task](

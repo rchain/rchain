@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
-import coop.rchain.blockstorage.deploy.InMemDeployStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
@@ -122,8 +122,7 @@ object Setup {
     implicit val lastFinalizedStorage = LastFinalizedMemoryStorage
       .make[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val deployStorage = InMemDeployStorage
-      .make[Task]
+    implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(

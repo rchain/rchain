@@ -93,13 +93,6 @@ class KeyValueBlockStore[F[_]: Sync](
     val keyBuffer                  = ByteVector(approvedBlockKey).toDirectByteBuffer
     storeApprovedBlock.put1(keyBuffer, block, toBuffer)
   }
-
-  // Resource management is done in KV manager
-  override def close(): F[Unit] = ().pure[F]
-
-  // Not used
-  override def checkpoint(): F[Unit] = ???
-  override def clear(): F[Unit]      = ???
 }
 
 object KeyValueBlockStore {

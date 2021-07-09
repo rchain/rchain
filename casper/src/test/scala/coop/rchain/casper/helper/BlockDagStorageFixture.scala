@@ -43,7 +43,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
     Resources
       .copyStorage[Task](context.storageDirectory)
-      .evalMap(r => create(r.storageDir))
+      .evalMap(create)
       .use(Function.uncurried(f).tupled)
       .unsafeRunSync
   }

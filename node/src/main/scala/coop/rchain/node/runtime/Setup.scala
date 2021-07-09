@@ -8,9 +8,8 @@ import cats.syntax.all._
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
-import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
@@ -49,7 +48,7 @@ import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 
 object Setup {
   def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
@@ -58,8 +57,7 @@ object Setup {
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
-      eventPublisher: EventPublisher[F],
-      deployStorageConfig: LMDBDeployStorage.Config
+      eventPublisher: EventPublisher[F]
   )(implicit mainScheduler: Scheduler): F[
     (
         PacketHandler[F],
@@ -129,9 +127,7 @@ object Setup {
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
 
       // Deploy storage
-      // TODO: Move deploy store to RNode store manager.
-      deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
-      (deployStorage, deployStorageCleanup) = deployStorageAllocation
+      deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
       oracle = {
         implicit val sp = span
@@ -216,7 +212,6 @@ object Setup {
       // Engine dynamic reference
       engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
-      raiseIOError        = IOError.raiseIOErrorThroughSync[F]
       blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
@@ -367,7 +362,6 @@ object Setup {
       }
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
-        deployStorageCleanup,
         rnodeStoreManager
       )
       webApi = {
