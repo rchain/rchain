@@ -594,7 +594,7 @@ object RhoRuntime {
 
   def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
-      iniRegistry: Boolean = false,
+      initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit scheduler: Scheduler
@@ -606,7 +606,7 @@ object RhoRuntime {
                 .create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                   stores
                 )
-      runtime <- createRhoRuntime[F](space, iniRegistry, additionalSystemProcesses)
+      runtime <- createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
     } yield runtime
   }
 }

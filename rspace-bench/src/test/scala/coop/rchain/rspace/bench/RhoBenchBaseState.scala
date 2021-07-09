@@ -6,14 +6,15 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
+import coop.rchain.rholang.Resources
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
-import java.nio.file.{Files, Path}
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -52,7 +53,7 @@ abstract class RhoBenchBaseState {
     for {
       kvm                         <- RholangCLI.mkRSpaceStoreManager[Task](dbDir)
       store                       <- kvm.rSpaceStores
-      spaces                      <- RhoRuntime.createRuntimes[Task](store)
+      spaces                      <- Resources.createRuntimes[Task](store)
       (runtime, replayRuntime, _) = spaces
     } yield (runtime, replayRuntime)
 

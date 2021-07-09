@@ -78,7 +78,7 @@ object ReplayRSpaceBench {
       dbDir = Files.createTempDirectory("replay-rspace-bench-")
       val kvm   = RholangCLI.mkRSpaceStoreManager[Id](dbDir)
       val store = kvm.rSpaceStores
-      val (space, replaySpace, _) =
+      val (space, replaySpace) =
         RSpace.createWithReplay[Id, Channel, Pattern, Entry, EntriesCaptor](store)
       this.space = space
       this.replaySpace = replaySpace

@@ -18,15 +18,7 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.{
-  CasperShardConf,
-  CasperSnapshot,
-  InvalidBlock,
-  OnChainCasperState,
-  ValidBlock,
-  Validate,
-  ValidatorIdentity
-}
+import coop.rchain.casper._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -34,7 +26,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Time
 import coop.rchain.shared.scalatestcontrib._
@@ -769,13 +760,11 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
-        _                                 <- blockDagStorage.insert(genesis, false, approved = true)
-        kvm                               <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store                             <- kvm.rSpaceStores
-        runtimes                          <- RhoRuntime.createRuntimes[Task](store)
-        (runtime, replayRuntime, history) = runtimes
-        runtimeManager                    <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, history)
-        dag                               <- blockDagStorage.getRepresentation
+        _              <- blockDagStorage.insert(genesis, false, approved = true)
+        kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
+        store          <- kvm.rSpaceStores
+        runtimeManager <- RuntimeManager[Task](store)
+        dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)

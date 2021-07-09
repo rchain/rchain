@@ -14,7 +14,6 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
@@ -141,16 +140,14 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      kvsManager                   <- mkTestRNodeStoreManager[Task](storageDirectory)
-      store                        <- kvsManager.rSpaceStores
-      runtimes                     <- RhoRuntime.createRuntimes(store)
-      (runtime, replayRuntime, hr) = runtimes
-      runtimeManager               <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, hr)
-      genesis                      <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      blockStore                   <- KeyValueBlockStore[Task](kvsManager)
-      _                            <- blockStore.put(genesis.blockHash, genesis)
-      blockDagStorage              <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      _                            <- blockDagStorage.insert(genesis, invalid = false, approved = true)
+      kvsManager      <- mkTestRNodeStoreManager[Task](storageDirectory)
+      store           <- kvsManager.rSpaceStores
+      runtimeManager  <- RuntimeManager(store)
+      genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      blockStore      <- KeyValueBlockStore[Task](kvsManager)
+      _               <- blockStore.put(genesis.blockHash, genesis)
+      blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
+      _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
   }
 

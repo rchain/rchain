@@ -23,7 +23,6 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -53,18 +52,16 @@ object Setup {
     val spaces = RSpace
       .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
       .runSyncUnsafe()
-    val (rspace, replay, historyRepo) = spaces
-    val runtimes =
-      RhoRuntime.createRuntimes[Task](rspace, replay, true, Seq.empty).unsafeRunSync
+    val (rspace, replay) = spaces
+    val historyRepo      = rspace.historyRepo
 
-    val (runtime, replayRuntime) = runtimes
     val (exporter, importer) = {
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
     implicit val runtimeManager =
-      RuntimeManager.fromRuntimes(runtime, replayRuntime, historyRepo).unsafeRunSync(scheduler)
+      RuntimeManager[Task](rspace, replay, historyRepo).unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap

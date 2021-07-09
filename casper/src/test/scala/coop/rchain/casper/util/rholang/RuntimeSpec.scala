@@ -4,9 +4,10 @@ import coop.rchain.casper.syntax._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.Resources.mkRuntimeAt
+import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
@@ -24,8 +25,8 @@ class RuntimeSpec extends FlatSpec with Matchers {
     val kvm = InMemoryStoreManager[Task]()
 
     for {
-      runtimes        <- mkRuntimeAt[Task](kvm)
-      (runtime, _, _) = runtimes
+      store   <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime(store)
 
       /**
         * Root hashes compatible with RChain main net network
@@ -75,12 +76,12 @@ class RuntimeSpec extends FlatSpec with Matchers {
       Tools.rng(Blake2b256Hash.create(Array[Byte](1)).toByteString.toByteArray)
 
     for {
-      runtimes        <- mkRuntimeAt[Task](kvm)
-      (runtime, _, _) = runtimes
-      r               <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
-      _               = r.errors should be(Vector.empty)
-      checkpoint      <- runtime.createCheckpoint
-      stateHash       = Base16.encode(checkpoint.root.toByteString.toByteArray)
+      store      <- kvm.rSpaceStores
+      runtime    <- RhoRuntime.createRuntime(store)
+      r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
+      _          = r.errors should be(Vector.empty)
+      checkpoint <- runtime.createCheckpoint
+      stateHash  = Base16.encode(checkpoint.root.toByteString.toByteArray)
       _ = "9ff69faea28024a50ddcee894066ec31233e5b95f0f2bbd87af06def2ad94e7c" should be(
         stateHash
       )

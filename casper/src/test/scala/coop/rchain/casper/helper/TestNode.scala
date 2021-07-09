@@ -3,8 +3,7 @@ package coop.rchain.casper.helper
 import cats.data.State
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
-import cats.implicits._
-import cats.syntax.all.none
+import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
@@ -38,7 +37,6 @@ import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
@@ -499,16 +497,14 @@ object TestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
     for {
-      newStorageDir                     <- Resources.copyStorage[F](storageDir)
-      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
-      blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStorage                     <- Resource.liftF(KeyValueDeployStorage[F](kvm))
-      casperBufferStorage               <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
-      rspaceStore                       <- Resource.liftF(kvm.rSpaceStores)
-      runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
-      (runtime, replayRuntime, history) = runtimes
-      runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
+      newStorageDir       <- Resources.copyStorage[F](storageDir)
+      kvm                 <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore          <- Resource.liftF(KeyValueBlockStore(kvm))
+      blockDagStorage     <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
+      deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
+      casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
+      rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
+      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore))
 
       node <- Resource.liftF({
                implicit val bs                         = blockStore
@@ -516,7 +512,7 @@ object TestNode {
                implicit val ds                         = deployStorage
                implicit val cbs                        = casperBufferStorage
                implicit val rm                         = runtimeManager
-               implicit val rhr                        = history
+               implicit val rhr                        = runtimeManager.getHistoryRepo
                implicit val logEff                     = new LogStub[F](Log.log[F])
                implicit val timeEff                    = logicalTime
                implicit val connectionsCell            = Cell.unsafe[F, Connections](Connect.Connections.empty)
