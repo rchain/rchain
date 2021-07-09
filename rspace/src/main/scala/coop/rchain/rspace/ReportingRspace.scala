@@ -1,9 +1,11 @@
 package coop.rchain.rspace
 
+import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.{
   ReportingComm,
   ReportingConsume,
@@ -15,6 +17,7 @@ import coop.rchain.rspace.internal._
 import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
@@ -46,6 +49,42 @@ object ReportingRspace {
       consume: ReportingConsume[C, P, K],
       produces: Seq[ReportingProduce[C, A]]
   ) extends ReportingEvent
+
+  /**
+    * Creates [[ReportingRspace]] from [[HistoryRepository]] and [[HotStore]].
+    */
+  def apply[F[_]: Concurrent: ContextShift: Span: Metrics: Log, C, P, A, K](
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      store: HotStore[F, C, P, A, K]
+  )(
+      implicit
+      sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      scheduler: ExecutionContext
+  ): F[ReportingRspace[F, C, P, A, K]] =
+    Sync[F].delay(new ReportingRspace[F, C, P, A, K](historyRepository, AtomicAny(store)))
+
+  /**
+    * Creates [[RSpace]] from [[KeyValueStore]]'s,
+    */
+  def create[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span, C, P, A, K](
+      store: RSpaceStore[F]
+  )(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      scheduler: ExecutionContext
+  ): F[ReportingRspace[F, C, P, A, K]] =
+    for {
+      history                          <- RSpace.createHistoryRepo[F, C, P, A, K](store)
+      (historyRepository, replayStore) = history
+      reportingRSpace                  <- ReportingRspace(historyRepository, replayStore)
+    } yield reportingRSpace
 }
 
 class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
