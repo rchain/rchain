@@ -47,10 +47,9 @@ object BlockIndex {
       sysProcessedDeploys: List[ProcessedSystemDeploy],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
-      historyRepository: HistoryRepository[F, C, P, A, K]
-  ): F[BlockIndex] = {
-    implicit val channelStore: HistoryRepository[F, C, P, A, K] = historyRepository
-
+      indexDeployLogF: (List[Event], Blake2b256Hash) => F[EventLogIndex],
+      computeStateChangeF: (EventLogIndex, Blake2b256Hash, Blake2b256Hash) => F[StateChange]
+  ): F[BlockIndex] =
     for {
       usrDeployIndices <- usrProcessedDeploys.toVector
                            .filterNot(_.isFailed)
@@ -59,7 +58,7 @@ object BlockIndex {
                                d.deploy.sig,
                                d.cost.cost,
                                d.deployLog,
-                               createEventLogIndex(_, historyRepository, preStateHash)
+                               indexDeployLogF(_, preStateHash)
                              )
                            }
       sysDeploysData = sysProcessedDeploys.toVector
@@ -77,7 +76,7 @@ object BlockIndex {
                                sig,
                                cost,
                                log,
-                               createEventLogIndex(_, historyRepository, preStateHash)
+                               indexDeployLogF(_, preStateHash)
                              )
                          }
 
@@ -88,15 +87,8 @@ object BlockIndex {
         (usrDeployIndices ++ sysDeployIndices).toSet,
         (l, r) => MergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
-      index <- deployChains.toVector
-                .traverse(
-                  DeployChainIndex(
-                    _,
-                    preStateHash,
-                    postStateHash,
-                    historyRepository
-                  )
-                )
+      index <- deployChains.toVector.traverse(
+                DeployChainIndex(_, preStateHash, postStateHash, computeStateChangeF)
+              )
     } yield BlockIndex(blockHash, index)
-  }
 }

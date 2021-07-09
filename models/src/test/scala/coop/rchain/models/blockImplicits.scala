@@ -66,9 +66,10 @@ object blockImplicits {
   val processedDeployGen: Gen[ProcessedDeploy] =
     for {
       deployData <- signedDeployDataGen
+      cost       <- arbitrary[Int].map(_.abs.toLong) // do not use arbitrary[Long] here to avoid overflows on sum
     } yield ProcessedDeploy(
       deploy = deployData,
-      cost = PCost(0L),
+      cost = PCost(cost),
       deployLog = List.empty,
       isFailed = false
     )
