@@ -107,13 +107,18 @@ object MergingLogic {
       .map(_.producesCopiedByPeek)
       .reduce(_ ++ _) diff Seq(x, y).map(producesCreated).reduce(_ ++ _)
 
-  /** Arrange list[v] into map v -> Iterator[v] for items that match predicate. */
+  /**
+    * Arrange list[v] into map v -> Iterator[v] for items that match predicate.
+    * NOTE: predicate here is forced to be non directional.
+    * If either (a,b) or (b,a) is true, both relations are recorded as true.
+    * TODO: adjust once dependency graph is implemented for branch computing
+    */
   def computeRelationMap[A](items: Set[A], relation: (A, A) => Boolean): Map[A, Set[A]] = {
     val init = items.map(_ -> Set.empty[A]).toMap
     items.toList
       .combinations(2)
       .filter {
-        case List(l, r) => relation(l, r)
+        case List(l, r) => relation(l, r) || relation(r, l)
       }
       .foldLeft(init) {
         case (acc, List(l, r)) => acc.updated(l, acc(l) + r).updated(r, acc(r) + l)
@@ -130,8 +135,8 @@ object MergingLogic {
       if (stop)
         acc
       else {
-        val next = toAdd.flatMap(v => relationMap.getOrElse(v, Set.empty))
-        addRelations(next, next)
+        val n = toAdd.flatMap(v => relationMap.getOrElse(v, Set.empty))
+        addRelations(n, next)
       }
     }
     relationMap.keySet.map(k => addRelations(relationMap(k), Set(k)))
@@ -150,8 +155,8 @@ object MergingLogic {
       if (stop)
         acc
       else {
-        val next = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
-        process(next, next, !reject)
+        val n = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
+        process(n, next, !reject)
       }
     }
     // each rejection option is defined by decision not to reject a key in rejection map

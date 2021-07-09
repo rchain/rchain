@@ -20,6 +20,9 @@ final case class DeployChainIndex(
 )
 
 object DeployChainIndex {
+
+  implicit val ord = Ordering.by((_: DeployChainIndex).postStateHash)
+
   def apply[F[_]: Concurrent, C, P, A, K](
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,
