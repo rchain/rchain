@@ -1,19 +1,17 @@
 package coop.rchain.rspace
 
 import cats._
-import cats.implicits._
-import cats.syntax.parallel._
-import cats.instances.parallel._
+import cats.syntax.all._
 import coop.rchain.rspace.examples.AddressBookExample
 import coop.rchain.rspace.examples.AddressBookExample._
 import coop.rchain.rspace.examples.AddressBookExample.implicits._
-import coop.rchain.rspace.util._
 import coop.rchain.rspace.test._
+import coop.rchain.rspace.util.{getK, runK, unpackOption}
+import monix.eval.Task
+import monix.execution.atomic.AtomicAny
 import scodec.Codec
 
 import scala.concurrent.ExecutionContext.Implicits.global
-import monix.eval.Task
-import monix.execution.atomic.AtomicAny
 
 trait StorageExamplesTests[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
@@ -33,8 +31,8 @@ trait StorageExamplesTests[F[_]]
       _             = r2 shouldBe None
       r3            <- space.produce(Channel("friends"), bob, persist = false)
       _             = r3 shouldBe defined
-      _             = runK(r3)
-      _             = getK(r3).results shouldBe List(List(bob, bob))
+      _             = runK(unpackOption(r3))
+      _             = getK(r3).continuation.results shouldBe List(List(bob, bob))
       insertActions <- store.changes().map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
@@ -55,8 +53,8 @@ trait StorageExamplesTests[F[_]]
                persist = false
              )
       _ = r3 shouldBe defined
-      _ = runK(r3)
-      _ = getK(r3).results shouldBe List(List(bob, bob))
+      _ = runK(unpackOption(r3))
+      _ = getK(r3).continuation.results shouldBe List(List(bob, bob))
     } yield (store.changes().map(_.isEmpty shouldBe true))
   }
 
@@ -81,8 +79,8 @@ trait StorageExamplesTests[F[_]]
       _  = r3 shouldBe None
       r4 <- space.produce(Channel("colleagues"), alice, persist = false)
       _  = r4 shouldBe defined
-      _  = runK(r4)
-      _  = getK(r4).results shouldBe List(List(alice, bob, bob))
+      _  = runK(unpackOption(r4))
+      _  = getK(r4).continuation.results shouldBe List(List(alice, bob, bob))
     } yield (store.changes().map(_.isEmpty shouldBe true))
 
   }
@@ -138,8 +136,8 @@ trait StorageExamplesTests[F[_]]
       _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
-      _ = runK(r10)
-      _ = getK(r10).results shouldBe List(
+      _ = runK(unpackOption(r10))
+      _ = getK(r10).continuation.results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
 
@@ -198,8 +196,8 @@ trait StorageExamplesTests[F[_]]
               )
 
       _ = r10 shouldBe defined
-      _ = runK(r10)
-      _ = getK(r10).results shouldBe List(
+      _ = runK(unpackOption(r10))
+      _ = getK(r10).continuation.results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
     } yield (store.changes().map(_.isEmpty shouldBe true))
@@ -258,8 +256,8 @@ trait StorageExamplesTests[F[_]]
       _ = r9 shouldBe None
       _ = r10 shouldBe defined
 
-      _ = runK(r10)
-      _ = getK(r10).results shouldBe List(
+      _ = runK(unpackOption(r10))
+      _ = getK(r10).continuation.results shouldBe List(
         List(carol, alice, carol, bob, bob, carol, alice, alice, carol)
       )
     } yield (store.changes().map(_.isEmpty shouldBe true))
@@ -268,14 +266,6 @@ trait StorageExamplesTests[F[_]]
 
 abstract class InMemoryHotStoreStorageExamplesTestsBase[F[_]]
     extends StorageTestsBase[F, Channel, Pattern, Entry, EntriesCaptor] {
-
-  implicit val channelCodec: Codec[Channel] =
-    AddressBookExample.implicits.serializeChannel.toSizeHeadCodec
-  implicit val patternCodec: Codec[Pattern] =
-    AddressBookExample.implicits.serializePattern.toSizeHeadCodec
-  implicit val entryCodec: Codec[Entry] = AddressBookExample.implicits.serializeInfo.toSizeHeadCodec
-  implicit val entryCaptorCodec: Codec[EntriesCaptor] =
-    AddressBookExample.implicits.serializeEntriesCaptor.toSizeHeadCodec
 
   override def fixture[R](f: (ST, AtST, T) => F[R]): R = {
     val creator: (HR, ST) => F[(ST, AtST, T)] =

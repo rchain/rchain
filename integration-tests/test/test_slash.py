@@ -129,6 +129,7 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
         invalid_block_num_block.blockHash = invalid_block_hash
         logging.info("Invalid block {}".format(invalid_block_hash.hex()))
         client.send_block(invalid_block_num_block, validator2)
+        wait_for_node_sees_block(context, validator2, invalid_block_hash.hex())
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
 
         slashed_block_hash = validator2.propose()
@@ -173,6 +174,7 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
         record_invalid = re.compile("Recording invalid block {}... for InvalidSequenceNumber".format(invalid_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
+        wait_for_node_sees_block(context, validator2, invalid_block_hash.hex())
         validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
 
         slashed_block_hash = validator2.propose()

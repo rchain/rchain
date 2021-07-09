@@ -5,7 +5,7 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.{RholangCLI, Runtime}
+import coop.rchain.rholang.interpreter.{ParBuilderUtil, RhoRuntime, RholangCLI}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
@@ -25,12 +25,10 @@ trait EvalBenchStateBase {
 
   val rhoScriptSource: String
 
-  val store               = kvm.rSpaceStores.unsafeRunSync
-  lazy val spaces         = Runtime.setupRSpace[Task](store).unsafeRunSync
-  val (space, replay, hr) = spaces
+  val store                        = kvm.rSpaceStores.unsafeRunSync
+  lazy val spaces                  = RhoRuntime.createRuntimes[Task](store).unsafeRunSync
+  val (runtime, replayRuntime, hr) = spaces
 
-  lazy val runtime: Runtime[Task] =
-    Runtime.createWithEmptyCost[Task]((space, replay)).unsafeRunSync
   val rand: Blake2b512Random = Blake2b512Random(128)
   var term: Option[Par]      = None
 
@@ -42,9 +40,6 @@ trait EvalBenchStateBase {
       case Right(par) => Some(par)
       case Left(err)  => throw err
     }
-    //make sure we always start from clean rspace
-    runtime.replaySpace.clear()
-    runtime.space.clear()
   }
 
   @TearDown

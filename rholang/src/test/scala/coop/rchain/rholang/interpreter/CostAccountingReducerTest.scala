@@ -7,7 +7,7 @@ import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.Runtime.RhoISpace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}
@@ -125,7 +125,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
       lazy val (_, reducer) =
         RholangAndScalaDispatcher
-          .create[Task, Task.Par](
+          .create[Task](
             pureRSpace,
             Map.empty,
             Map.empty

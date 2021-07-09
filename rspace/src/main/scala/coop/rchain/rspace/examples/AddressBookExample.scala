@@ -3,10 +3,9 @@ package coop.rchain.rspace.examples
 import cats.effect.{Concurrent, ContextShift}
 import cats.{Applicative, Id}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rspace.ISpace.IdISpace
-import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.rspace.util._
+import coop.rchain.rspace.util.{runKs, unpackOption, unpackSeq}
+import coop.rchain.rspace.{RSpace, _}
 import coop.rchain.shared.Language.ignore
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
@@ -227,7 +226,7 @@ object AddressBookExample {
     assert(pres2.nonEmpty)
     assert(pres3.isEmpty)
 
-    runKs(Seq(pres1, pres2))
+    runKs(unpackSeq(Seq(pres1, pres2)))
   }
 
   def exampleTwo(): Unit = {
@@ -268,7 +267,7 @@ object AddressBookExample {
     assert(cres2.isDefined)
     assert(cres3.isEmpty)
 
-    runKs(Seq(cres1, cres2))
+    runKs(unpackSeq(Seq(cres1, cres2)))
 
     Console.printf(space.toMap.toString())
   }
@@ -316,7 +315,7 @@ object AddressBookExample {
   }
 
   private[this] def withSpace(
-      f: IdISpace[Channel, Pattern, Entry, Printer] => Unit
+      f: ISpace[Id, Channel, Pattern, Entry, Printer] => Unit
   ) = {
 
     implicit val log: Log[Id]          = Log.log

@@ -1,10 +1,9 @@
 package coop.rchain.rspace.state.instances
 
 import java.nio.ByteBuffer
-
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RootsStoreInstances
 import coop.rchain.rspace.state.RSpaceImporter
 import coop.rchain.shared.ByteVectorOps.RichByteVector

@@ -72,6 +72,6 @@ class TraceEventCreationBench {
   def doBench(bh: Blackhole, seq: Seq[(Seq[Par], Seq[BindPattern], ListParWithRandom)]): Unit =
     seq.map {
       case (channels, patterns, continuation) =>
-        bh.consume(Consume.create(channels, patterns, continuation, false))
+        bh.consume(Consume(channels, patterns, continuation, false))
     }
 }

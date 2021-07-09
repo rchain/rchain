@@ -1,26 +1,26 @@
 package coop.rchain.rspace
 
 import cats.Applicative
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.syntax.all._
+import com.typesafe.scalalogging.Logger
+import coop.rchain.catscontrib._
+import coop.rchain.metrics.implicits._
+import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace.concurrent.ConcurrentTwoStepLockF
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
+import coop.rchain.rspace.history._
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
+import coop.rchain.shared.SyncVarOps._
+import coop.rchain.shared.{Log, Serialize}
+import monix.execution.atomic.AtomicAny
 
 import scala.collection.SortedSet
 import scala.concurrent.{ExecutionContext, SyncVar}
 import scala.util.Random
-import cats.effect.{Concurrent, ContextShift, Sync}
-import cats.implicits._
-import coop.rchain.catscontrib._
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.metrics.implicits._
-import coop.rchain.rspace.concurrent.{ConcurrentTwoStepLockF, TwoStepLock}
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{COMM, Consume, Produce, Log => EventLog}
-import coop.rchain.shared.{Cell, Log, Serialize}
-import coop.rchain.shared.SyncVarOps._
-import com.typesafe.scalalogging.Logger
-import monix.execution.atomic.AtomicAny
-import scodec.Codec
 
-abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
+abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     val storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -29,11 +29,11 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     serializeP: Serialize[P],
     serializeA: Serialize[A],
     serializeK: Serialize[K],
-    logF: Log[F],
-    spanF: Span[F],
-    contextShift: ContextShift[F],
     scheduler: ExecutionContext
 ) extends SpaceMatcher[F, C, P, A, K] {
+
+  override def syncF: Sync[F] = Sync[F]
+  override def spanF: Span[F] = Span[F]
 
   type MaybeProduceCandidate = Option[ProduceCandidate[C, P, A, K]]
   type MaybeActionResult     = Option[(ContResult[C, P, K], Seq[Result[C, A]])]
@@ -60,15 +60,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   protected[this] def produceCounters(produceRefs: Seq[Produce]): Map[Produce, Int] =
     produceRefs
-      .map(
-        p => (p -> produceCounter.get(p))
-      )
+      .map(p => p -> produceCounter.get(p))
       .toMap
 
-  implicit val codecC = serializeC.toSizeHeadCodec
-  val syncF: Sync[F]  = Concurrent[F]
-
-  private val lockF: TwoStepLock[F, Blake2b256Hash] = new ConcurrentTwoStepLockF(MetricsSource)
+  private val lockF = new ConcurrentTwoStepLockF[F, Blake2b256Hash](MetricsSource)
 
   //private[this] val installSpanLabel         = Metrics.Source(MetricsSource, "install")
   //private[this] val restoreInstallsSpanLabel = Metrics.Source(MetricsSource, "restore-installs")
@@ -104,6 +99,9 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
   def getWaitingContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     store.getContinuations(channels)
 
+  def getJoins(channel: C): F[Seq[Seq[C]]] =
+    store.getJoins(channel)
+
   protected[this] def consumeLockF(
       channels: Seq[C]
   )(
@@ -138,7 +136,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
     for {
       _ <- store.putContinuation(channels, wc)
       _ <- channels.traverse(channel => store.putJoin(channel, channels))
-      _ <- logF.debug(s"""|consume: no data found,
+      _ <- Log[F].debug(s"""|consume: no data found,
                           |storing <(patterns, continuation): (${wc.patterns}, ${wc.continuation})>
                           |at <channels: ${channels}>""".stripMargin.replace('\n', ' '))
     } yield None
@@ -150,9 +148,9 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       produceRef: Produce
   ): F[MaybeActionResult] =
     for {
-      _ <- logF.debug(s"produce: no matching continuation found")
+      _ <- Log[F].debug(s"produce: no matching continuation found")
       _ <- store.putDatum(channel, Datum(data, persist, produceRef))
-      _ <- logF.debug(s"produce: persisted <data: $data> at <channel: $channel>")
+      _ <- Log[F].debug(s"produce: persisted <data: $data> at <channel: $channel>")
     } yield None
 
   protected[this] def storePersistentData(
@@ -171,7 +169,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
           store.removeDatum(candidateChannel, dataIndex).unlessA(persistData)
       }
 
-  protected[this] def restoreInstalls(): F[Unit] =
+  def restoreInstalls(): F[Unit] =
     /*spanF.trace(restoreInstallsSpanLabel)*/
     installs.get.toList
       .traverse {
@@ -187,16 +185,18 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       persist: Boolean,
       peeks: SortedSet[Int] = SortedSet.empty
   ): F[MaybeActionResult] =
-    contextShift.evalOn(scheduler) {
+    ContextShift[F].evalOn(scheduler) {
       if (channels.isEmpty) {
         val msg = "channels can't be empty"
-        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
+        Log[F].error(msg) >> Sync[F]
+          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
       } else if (channels.length =!= patterns.length) {
         val msg = "channels.length must equal patterns.length"
-        logF.error(msg) >> syncF.raiseError(new IllegalArgumentException(msg))
+        Log[F].error(msg) >> Sync[F]
+          .raiseError[MaybeActionResult](new IllegalArgumentException(msg))
       } else
         (for {
-          consumeRef <- Consume.createF(channels, patterns, continuation, persist)
+          consumeRef <- Sync[F].delay(Consume(channels, patterns, continuation, persist))
           result <- consumeLockF(channels) {
                      lockedConsume(
                        channels,
@@ -224,9 +224,9 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       data: A,
       persist: Boolean
   ): F[MaybeActionResult] =
-    contextShift.evalOn(scheduler) {
+    ContextShift[F].evalOn(scheduler) {
       (for {
-        produceRef <- Produce.createF(channel, data, persist)
+        produceRef <- Sync[F].delay(Produce(channel, data, persist))
         result <- produceLockF(channel)(
                    lockedProduce(channel, data, persist, produceRef)
                  )
@@ -273,10 +273,10 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
        */
 
       for {
-        _ <- logF.debug(
+        _ <- Log[F].debug(
               s"install: searching for data matching <patterns: $patterns> at <channels: $channels>"
             )
-        consumeRef = Consume.create(channels, patterns, continuation, true)
+        consumeRef = Consume(channels, patterns, continuation, true)
         channelToIndexedData <- channels
                                  .traverse { c =>
                                    store.getData(c).shuffleWithIndex.map(c -> _)
@@ -304,7 +304,7 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
                        _ <- channels.traverse { channel =>
                              store.installJoin(channel, channels)
                            }
-                       _ <- logF.debug(
+                       _ <- Log[F].debug(
                              s"storing <(patterns, continuation): ($patterns, $continuation)> at <channels: $channels>"
                            )
                      } yield None
@@ -324,18 +324,22 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
       _           = eventLog.put(Seq.empty)
       _           = produceCounter.take()
       _           = produceCounter.put(Map.empty.withDefaultValue(0))
-      _           <- createNewHotStore(nextHistory)(serializeK.toSizeHeadCodec)
+      _           <- createNewHotStore(nextHistory.getHistoryReader(root))
       _           <- restoreInstalls()
+
+      // TODO: temp fix to release Semaphores inside TwoStepLock
+      //  Adjust when runtime changes got in, create instance on spawn runtime.
+      _ <- lockF.cleanUp
     } yield ()
   }
 
   override def clear(): F[Unit] = reset(History.emptyRootHash)
 
   protected def createNewHotStore(
-      historyReader: HistoryReader[F, C, P, A, K]
-  )(implicit ck: Codec[K]): F[Unit] =
+      historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
+  ): F[Unit] =
     for {
-      nextHotStore <- HotStore.empty(historyReader)
+      nextHotStore <- HotStore.empty(historyReader.base)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
@@ -351,12 +355,14 @@ abstract class RSpaceOps[F[_]: Concurrent: Metrics, C, P, A, K](
 
   override def revertToSoftCheckpoint(checkpoint: SoftCheckpoint[C, P, A, K]): F[Unit] =
     spanF.trace(revertSoftCheckpointSpanLabel) {
-      implicit val ck: Codec[K] = serializeK.toSizeHeadCodec
-      val history               = historyRepositoryAtom.get()
+      val history = historyRepositoryAtom.get()
       for {
-        hotStore <- HotStore.from(checkpoint.cacheSnapshot.cache, history)
-        _        = storeAtom.set(hotStore)
-        _        = eventLog.take()
+        hotStore <- HotStore.from(
+                     checkpoint.cacheSnapshot.cache,
+                     history.getHistoryReader(history.root).base
+                   )
+        _ = storeAtom.set(hotStore)
+        _ = eventLog.take()
 
         _ = eventLog.put(checkpoint.log)
         _ = produceCounter.take()

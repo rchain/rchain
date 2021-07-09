@@ -6,7 +6,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting.Chargeable._
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager

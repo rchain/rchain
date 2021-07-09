@@ -5,11 +5,11 @@ import cats.effect.Concurrent
 import cats.mtl.implicits._
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.{ReportingCasper, SafetyOracle}
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
+import coop.rchain.casper.{ProposeFunction, SafetyOracle}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
@@ -26,7 +26,8 @@ object DeployGrpcServiceV1 {
 
   def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
-      reportingCasper: ReportingCasper[F],
+      blockReportAPI: BlockReportAPI[F],
+      triggerProposeF: Option[ProposeFunction[F]],
       devMode: Boolean = false
   )(
       implicit worker: Scheduler
@@ -79,7 +80,7 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd)) { r =>
+              defer(BlockAPI.deploy[F](dd, triggerProposeF)) { r =>
                 import DeployResponse.Message
                 import DeployResponse.Message._
                 DeployResponse(r.fold[Message](Error, Result))
@@ -251,8 +252,10 @@ object DeployGrpcServiceV1 {
           }))
         }
 
-      override def getEventByHash(request: BlockQuery): Task[EventInfoResponse] =
-        defer(BlockAPI.blockReport[F](request.hash)(reportingCasper)) { r =>
+      override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
+        defer(
+          blockReportAPI.blockReport(request.hash, request.forceReplay)
+        ) { r =>
           import EventInfoResponse.Message
           import EventInfoResponse.Message._
           EventInfoResponse(r.fold[Message](Error, Result))

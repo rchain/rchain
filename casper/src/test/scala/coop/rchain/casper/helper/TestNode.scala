@@ -1,18 +1,30 @@
 package coop.rchain.casper.helper
 
-import cats.data.State
-import cats.effect.concurrent.{Ref, Semaphore}
-import cats.effect.{Concurrent, ContextShift, Resource, Sync}
-import cats.syntax.all._
+import java.net.URLEncoder
+import java.nio.file.Path
 import cats.{Monad, Parallel}
+import cats.data.State
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
+import cats.implicits._
+import cats.syntax.all.none
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
+import coop.rchain.rspace.syntax._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.blockstorage.dag.{
+  BlockDagKeyValueStorage,
+  BlockDagRepresentation,
+  BlockDagStorage
+}
+import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
+import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
+import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
 import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
 import coop.rchain.casper
-import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
+import coop.rchain.casper.blocks.BlockProcessor
+import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
@@ -21,70 +33,81 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
+import coop.rchain.casper.util.rholang.Resources.StoragePaths
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper.{Casper, ValidBlock, _}
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
+import coop.rchain.comm.protocol.routing.Protocol
 import coop.rchain.comm.rp.Connect
 import coop.rchain.comm.rp.Connect._
 import coop.rchain.comm.rp.HandleMessages.handle
+import coop.rchain.comm.transport.CommunicationResponse
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.Runtime.RhoHistoryRepository
+import coop.rchain.rholang.Resources.mkTempDir
+import coop.rchain.rholang.interpreter.RhoRuntime
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared._
+import fs2.{Pipe, Stream}
+import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
 
-import java.net.URLEncoder
-import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-class TestNode[F[_]](
+class TestNode[F[_]: Timer](
     name: String,
     val local: PeerNode,
     tle: TransportLayerTestImpl[F],
     tls: TransportLayerServerTestImpl[F],
     val genesis: BlockMessage,
-    sk: PrivateKey,
+    validatorIdOpt: Option[ValidatorIdentity],
     logicalTime: LogicalTime[F],
-    blockProcessingLock: Semaphore[F],
     synchronyConstraintThreshold: Double,
+    val dataPath: StoragePaths,
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
-    maxParentDepth: Option[Int] = None,
+    maxParentDepth: Option[Int] = Int.MaxValue.some,
     shardId: String = "root",
     finalizationRate: Int = 1,
-    isReadOnly: Boolean = false
-)(
-    implicit concurrentF: Concurrent[F],
-    implicit val blockStore: BlockStore[F],
-    implicit val blockDagStorage: BlockDagStorage[F],
-    implicit val lastFinalizedStorage: LastFinalizedStorage[F],
-    implicit val deployStorage: DeployStorage[F],
-    val metricEff: Metrics[F],
-    val span: Span[F],
-    val casperBufferStorage: CasperBufferStorage[F],
-    val runtimeManager: RuntimeManager[F],
-    val rhoHistoryRepository: RhoHistoryRepository[F]
-) {
-
-  implicit val logEff                       = new LogStub[F](Log.log[F])
-  implicit val timeEff                      = logicalTime
-  implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
-  implicit val transportLayerEff            = tle
-  implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
-  implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
-  implicit val estimator                    = Estimator[F](maxNumberOfParents, maxParentDepth)
-  implicit val synchronyConstraintChecker =
-    SynchronyConstraintChecker[F](synchronyConstraintThreshold)
-  implicit val lastFinalizedHeightConstraintChecker =
-    LastFinalizedHeightConstraintChecker[F](Long.MaxValue)
-  implicit val rpConfAsk = createRPConfAsk[F](local)
-  implicit val eventBus  = EventPublisher.noop[F]
-
+    isReadOnly: Boolean = false,
+    triggerProposeFOpt: Option[ProposeFunction[F]],
+    blockProcessorQueue: Queue[F, (Casper[F], BlockMessage)],
+    blockProcessorState: Ref[F, Set[BlockHash]],
+    blockProcessingPipe: Pipe[
+      F,
+      (Casper[F], BlockMessage),
+      ValidBlockProcessing
+    ],
+    blockStoreEffect: BlockStore[F],
+    blockDagStorageEffect: BlockDagStorage[F],
+    lastFinalizedStorageEffect: LastFinalizedStorage[F],
+    deployStorageEffect: DeployStorage[F],
+    commUtilEffect: CommUtil[F],
+    blockRetrieverEffect: BlockRetriever[F],
+    metricEffect: Metrics[F],
+    spanEffect: Span[F],
+    casperBufferStorageEffect: CasperBufferStorage[F],
+    runtimeManagerEffect: RuntimeManager[F],
+    rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
+    logEffect: LogStub[F],
+    requestedBlocksEffect: RequestedBlocks[F],
+    lastFinalizedBlockCalculatorEffect: LastFinalizedBlockCalculator[F],
+    syncConstraintCheckerEffect: SynchronyConstraintChecker[F],
+    lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
+    estimatorEffect: Estimator[F],
+    safetyOracleEffect: SafetyOracle[F],
+    timeEffect: Time[F],
+    transportLayerEffect: TransportLayerTestImpl[F],
+    connectionsCellEffect: Cell[F, Connections],
+    rpConfAskEffect: RPConfAsk[F],
+    eventPublisherEffect: EventPublisher[F]
+)(implicit concurrentF: Concurrent[F]) {
   // Scalatest `assert` macro needs some member of the Assertions trait.
   // An (inferior) alternative would be to inherit the trait...
   private val scalatestAssertions = new Assertions {}
@@ -93,9 +116,30 @@ class TestNode[F[_]](
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
   val apiMaxBlocksLimit              = 50
 
-  val validatorId: Option[ValidatorIdentity] =
-    if (isReadOnly) none[ValidatorIdentity]
-    else Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
+  implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
+  implicit val validatorId: Option[ValidatorIdentity]         = validatorIdOpt
+  implicit val logEff: LogStub[F]                             = logEffect
+  implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
+  implicit val blockStore: BlockStore[F]                      = blockStoreEffect
+  implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
+  implicit val lfs: LastFinalizedStorage[F]                   = lastFinalizedStorageEffect
+  implicit val ds: DeployStorage[F]                           = deployStorageEffect
+  implicit val cu: CommUtil[F]                                = commUtilEffect
+  implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
+  implicit val m: Metrics[F]                                  = metricEffect
+  implicit val s: Span[F]                                     = spanEffect
+  implicit val cbs: CasperBufferStorage[F]                    = casperBufferStorageEffect
+  implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
+  implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
+  implicit val lfbc: LastFinalizedBlockCalculator[F]          = lastFinalizedBlockCalculatorEffect
+  implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
+  implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
+  implicit val e: Estimator[F]                                = estimatorEffect
+  implicit val t: Time[F]                                     = timeEffect
+  implicit val transportLayerEff: TransportLayerTestImpl[F]   = transportLayerEffect
+  implicit val connectionsCell: Cell[F, Connections]          = connectionsCellEffect
+  implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
+  implicit val ep: EventPublisher[F]                          = eventPublisherEffect
 
   val approvedBlock =
     ApprovedBlock(
@@ -106,28 +150,66 @@ class TestNode[F[_]](
   implicit val labF        = LastApprovedBlock.unsafe[F](Some(approvedBlock))
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
-  implicit val requestedBlocks: RequestedBlocks[F] =
-    Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
-
-  implicit val commUtil: CommUtil[F]             = CommUtil.of[F]
-  implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
-
-  val blockProcessingState =
-    Ref.unsafe[F, BlockProcessingState](BlockProcessingState(Set.empty, Set.empty))
+  val shardConf = CasperShardConf(
+    -1,
+    shardId,
+    "",
+    finalizationRate,
+    maxNumberOfParents,
+    maxParentDepth.getOrElse(Int.MaxValue),
+    synchronyConstraintThreshold.toFloat,
+    Long.MaxValue,
+    // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
+    // Required to enable protection from re-submitting duplicate deploys
+    50,
+    1,
+    1,
+    0,
+    Long.MaxValue,
+    10000,
+    20000
+  )
 
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
-    genesis,
-    shardId,
-    finalizationRate,
-    blockProcessingLock,
-    blockProcessingState
+    shardConf,
+    genesis
   )
 
-  implicit val rspaceMan                 = RSpaceStateManagerTestImpl()
-  val engine                             = new Running(casperEff, approvedBlock, validatorId, ().pure[F], true)
+  implicit val rspaceMan = RSpaceStateManagerTestImpl()
+  val engine =
+    new coop.rchain.casper.engine.Running(
+      blockProcessorQueue,
+      blockProcessorState,
+      casperEff,
+      approvedBlock,
+      validatorId,
+      ().pure[F],
+      true
+    )
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
+
+  def proposeSync: F[BlockHash] =
+    for {
+      v <- (triggerProposeFOpt match {
+            case Some(p) => p(casperEff, false)
+            case None =>
+              Sync[F]
+                .raiseError(new Exception("Propose is called in read-only mode."))
+                .as(ProposerEmpty)
+          })
+      r <- v match {
+            case ProposerSuccess(_, b) => b.blockHash.pure[F]
+            case _ =>
+              Sync[F]
+                .raiseError(new Exception("Propose failed or another in progress"))
+                .as(ByteString.EMPTY)
+          }
+    } yield r
+
+  def addBlock(block: BlockMessage): F[ValidBlockProcessing] =
+    Stream((casperEff, block)).through(blockProcessingPipe).compile.lastOrError
 
   def addBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     addBlockStatus(ValidBlock.Valid.asRight)(deployDatums: _*)
@@ -135,32 +217,84 @@ class TestNode[F[_]](
   def publishBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
-      _     <- nodes.toList.filter(_ != this).traverse_(_.receive())
+      _     <- nodes.toList.filter(_ != this).traverse_(_.handleReceive())
     } yield block
 
   def propagateBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
       block <- addBlock(deployDatums: _*)
-      _     <- TestNode.propagate(nodes :+ this)
+      _ <- nodes.toList.traverse_ { node =>
+            node.processBlock(block)
+          }
     } yield block
 
   def addBlockStatus(
       expectedStatus: ValidBlockProcessing
   )(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
-      block  <- createBlock(deployDatums: _*)
-      status <- casperEff.addBlock(block)
-      _      = assert(status == expectedStatus)
+      r              <- createBlock(deployDatums: _*)
+      Created(block) = r
+      status         <- processBlock(block)
+      _              = assert(status == expectedStatus)
     } yield block
 
-  def createBlock(deployDatums: Signed[DeployData]*): F[BlockMessage] =
+  def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      createBlockResult <- casperEff.createBlock
-      Created(block)    = createBlockResult
+      cs                <- casperEff.getSnapshot
+      vid               <- casperEff.getValidator
+      createBlockResult <- BlockCreator.create(cs, vid.get)
+    } yield createBlockResult
+
+  // This method assumes that block will be created sucessfully
+  def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
+    for {
+      _                 <- deployDatums.toList.traverse(casperEff.deploy)
+      cs                <- casperEff.getSnapshot
+      vid               <- casperEff.getValidator
+      createBlockResult <- BlockCreator.create(cs, vid.get)
+      block <- createBlockResult match {
+                case Created(b) => b.pure[F]
+                case _ =>
+                  concurrentF.raiseError[BlockMessage](
+                    new Throwable(s"failed creating block: ${e}")
+                  )
+              }
     } yield block
 
-  def receive(): F[Unit] = tls.handleReceive(p => handle[F](p), kp(().pure[F])).void
+  def processBlock(b: BlockMessage): F[ValidBlockProcessing] =
+    for {
+      r <- Stream((casperEff, b)).through(blockProcessingPipe).compile.lastOrError
+    } yield r
+
+  def handleReceive(): F[Unit] =
+    tls
+      .handleReceive(
+        (
+            p =>
+              p.message match {
+                case Protocol.Message.Packet(packet) => {
+                  toCasperMessageProto(packet).toEither
+                    .flatMap(proto => CasperMessage.from(proto))
+                    .fold(
+                      err =>
+                        Log[F]
+                          .warn(s"Could not extract casper message from packet")
+                          .as(CommunicationResponse.notHandled(UnknownCommError(""))),
+                      message =>
+                        message match {
+                          case b: BlockMessage =>
+                            processBlock(b).as(CommunicationResponse.handledWithoutMessage)
+                          case _ => handle[F](p)
+                        }
+                    )
+                }
+                case _ => handle[F](p)
+              }
+          ),
+        kp(().pure[F])
+      )
+      .void
 
   val maxSyncAttempts = 10
   def syncWith(nodes: Seq[TestNode[F]]): F[Unit] = {
@@ -178,12 +312,13 @@ class TestNode[F[_]](
           )
           .toList
       )
-    val allSynced = RequestedBlocks[F].get.map(!_.exists(_._2.received == false))
+    val allSynced = RequestedBlocks[F].get.map(b => { !b.exists(_._2.received == false) })
     val doNothing = concurrentF.unit
 
-    def drainQueueOf(peerNode: PeerNode) = networkMap.get(peerNode).fold(doNothing)(_.receive())
+    def drainQueueOf(peerNode: PeerNode) =
+      networkMap.get(peerNode).fold(doNothing)(_.handleReceive())
 
-    val step = asked.flatMap(_.traverse(drainQueueOf)) >> receive()
+    val step = asked.flatMap(_.traverse(drainQueueOf)) >> handleReceive()
 
     def loop(cnt: Int, done: Boolean) =
       concurrentF.iterateUntilM(cnt -> done)({
@@ -192,7 +327,7 @@ class TestNode[F[_]](
         case (i, done) => i >= maxSyncAttempts || done
       }
 
-    (receive() >> allSynced >>= (done => loop(0, done))).flatTap {
+    (handleReceive() >> allSynced >>= (done => loop(0, done))).flatTap {
       case (_, false) =>
         RequestedBlocks[F].get
           .flatMap(
@@ -293,7 +428,7 @@ object TestNode {
     )
   }
 
-  private def networkF[F[_]: Concurrent: Parallel: ContextShift: TestNetwork](
+  private def networkF[F[_]: Concurrent: Parallel: ContextShift: Timer: TestNetwork](
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
@@ -354,7 +489,7 @@ object TestNode {
     }
   }
 
-  private def createNode[F[_]: Concurrent: Parallel: ContextShift: TestNetwork](
+  private def createNode[F[_]: Concurrent: Timer: Parallel: ContextShift: TestNetwork](
       name: String,
       currentPeerNode: PeerNode,
       genesis: BlockMessage,
@@ -370,51 +505,141 @@ object TestNode {
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
     implicit val log       = Log.log[F]
     implicit val metricEff = new Metrics.MetricsNOP[F]
-    implicit val spanEff   = NoopSpan[F]()
-
-    def create(dir: Path, deployStorage: DeployStorage[F]) =
-      for {
-        kvm                 <- Resources.mkTestRNodeStoreManager(dir)
-        blockStore          <- KeyValueBlockStore[F](kvm)
-        blockDDagStore      <- BlockDagKeyValueStorage.create[F](kvm)
-        runtimeManager      <- Resources.mkRuntimeManagerWithHistoryAt[F](kvm)
-        casperBufferStorage <- Resources.mkCasperBufferStorage[F](kvm)
-        lastFinalizedStore <- kvm
-                               .store("last-finalized-block")
-                               .map(LastFinalizedKeyValueStorage[F])
-        _                   <- TestNetwork.addPeer(currentPeerNode)
-        blockProcessingLock <- Semaphore[F](1)
-        node = new TestNode[F](
-          name,
-          currentPeerNode,
-          tle,
-          tls,
-          genesis,
-          sk,
-          logicalTime,
-          blockProcessingLock,
-          synchronyConstraintThreshold,
-          maxNumberOfParents,
-          maxParentDepth,
-          isReadOnly = isReadOnly
-        )(
-          Concurrent[F],
-          blockStore,
-          blockDDagStore,
-          lastFinalizedStore,
-          deployStorage,
-          metricEff,
-          spanEff,
-          casperBufferStorage,
-          runtimeManager._1,
-          runtimeManager._2
-        )
-      } yield node
-
+    implicit val spanEff   = new NoopSpan[F]
     for {
-      paths         <- Resources.copyStorage[F](storageMatrixPath)
-      deployStorage <- Resources.mkDeployStorageAt[F](paths.deployStorageDir)
-      node          <- Resource.liftF(create(paths.storageDir, deployStorage))
+      paths                             <- Resources.copyStorage[F](storageMatrixPath)
+      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(paths.storageDir))
+      blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
+      blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
+      deployStoreConfig                 = Config(paths.deployStorageDir, 1024L * 1024L * 1024L)
+      deployStorage                     <- LMDBDeployStorage.make[F](deployStoreConfig)
+      casperBufferStorage               <- Resource.liftF(Resources.mkCasperBufferStorage[F](kvm))
+      rspaceStore                       <- Resource.liftF(kvm.rSpaceStores)
+      runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
+      (runtime, replayRuntime, history) = runtimes
+      runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
+      lastFinalizedBlockDb              <- Resource.liftF(kvm.store("last-finalized-block"))
+      lastFinalizedStorage              = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+
+      node <- Resource.liftF({
+               implicit val bs                           = blockStore
+               implicit val bds                          = blockDagStorage
+               implicit val ds                           = deployStorage
+               implicit val cbs                          = casperBufferStorage
+               implicit val rm                           = runtimeManager
+               implicit val rhr                          = history
+               implicit val logEff                       = new LogStub[F](Log.log[F])
+               implicit val timeEff                      = logicalTime
+               implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
+               implicit val transportLayerEff            = tle
+               implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
+               implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
+               implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[F]
+               implicit val lfs                          = lastFinalizedStorage
+               implicit val lastFinalizedHeightConstraintChecker =
+                 LastFinalizedHeightConstraintChecker[F]
+               implicit val estimator             = Estimator[F](maxNumberOfParents, maxParentDepth)
+               implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
+               implicit val eventBus              = EventPublisher.noop[F]
+               implicit val commUtil: CommUtil[F] = CommUtil.of[F]
+               implicit val requestedBlocks: RequestedBlocks[F] =
+                 Ref.unsafe[F, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
+               implicit val blockRetriever: BlockRetriever[F] = BlockRetriever.of[F]
+
+               for {
+                 _ <- TestNetwork.addPeer(currentPeerNode)
+
+                 // Proposer
+                 validatorId = if (isReadOnly)
+                   none[ValidatorIdentity]
+                 else
+                   Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
+
+                 proposer = validatorId match {
+                   case Some(vi) => Proposer[F](vi).some
+                   case None     => None
+                 }
+                 // propose function in casper tests is always synchronous
+                 triggerProposeFOpt = proposer.map(
+                   p =>
+                     (casper: Casper[F], _: Boolean) =>
+                       for {
+                         d <- Deferred[F, ProposerResult]
+                         r <- p.propose(casper, false, d)
+                         r <- d.get
+                       } yield r
+                 )
+                 // Block processor
+                 blockProcessor = BlockProcessor[F]
+
+                 blockProcessingPipe = {
+                   in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
+                     in.evalMap(v => {
+                       val (c, b) = v
+                       blockProcessor
+                         .checkIfOfInterest(c, b)
+                         .ifM(
+                           blockProcessor
+                             .checkIfWellFormedAndStore(b)
+                             .ifM(
+                               blockProcessor
+                                 .checkDependenciesWithEffects(c, b)
+                                 .ifM(
+                                   blockProcessor.validateWithEffects(c, b),
+                                   BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]
+                                 ),
+                               BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
+                             ),
+                           BlockStatus.notOfInterest.asLeft[ValidBlock].pure[F]
+                         )
+                     })
+                 }
+                 blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
+                 blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)
+
+                 node = new TestNode[F](
+                   name,
+                   currentPeerNode,
+                   tle,
+                   tls,
+                   genesis,
+                   validatorId,
+                   logicalTime,
+                   synchronyConstraintThreshold,
+                   paths,
+                   maxNumberOfParents,
+                   maxParentDepth,
+                   isReadOnly = isReadOnly,
+                   triggerProposeFOpt = triggerProposeFOpt,
+                   blockProcessorQueue = blockProcessorQueue,
+                   blockProcessorState = blockProcessorState,
+                   blockProcessingPipe = blockProcessingPipe,
+                   blockStoreEffect = bs,
+                   blockDagStorageEffect = bds,
+                   deployStorageEffect = ds,
+                   casperBufferStorageEffect = cbs,
+                   runtimeManagerEffect = rm,
+                   rhoHistoryRepositoryEffect = rhr,
+                   spanEffect = spanEff,
+                   logEffect = logEff,
+                   timeEffect = timeEff,
+                   connectionsCellEffect = connectionsCell,
+                   transportLayerEffect = transportLayerEff,
+                   safetyOracleEffect = cliqueOracleEffect,
+                   lastFinalizedBlockCalculatorEffect = lastFinalizedBlockCalculator,
+                   syncConstraintCheckerEffect = synchronyConstraintChecker,
+                   lastFinalizedStorageEffect = lfs,
+                   lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
+                   estimatorEffect = estimator,
+                   rpConfAskEffect = rpConfAsk,
+                   eventPublisherEffect = eventBus,
+                   commUtilEffect = commUtil,
+                   requestedBlocksEffect = requestedBlocks,
+                   blockRetrieverEffect = blockRetriever,
+                   metricEffect = metricEff
+                 )
+               } yield node
+             })
     } yield node
   }
 
@@ -429,7 +654,7 @@ object TestNode {
     val network   = nodesList.head.transportLayerEff.testNetworkF
     val heatDeath =
       network.inspect(_.filterKeys(peers.contains(_)).valuesIterator.forall(_.isEmpty))
-    val propagation = nodesList.traverse_(_.receive())
+    val propagation = nodesList.traverse_(_.handleReceive())
 
     propagation.untilM_(heatDeath)
   }

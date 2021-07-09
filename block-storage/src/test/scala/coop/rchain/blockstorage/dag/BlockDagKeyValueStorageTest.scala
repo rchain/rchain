@@ -193,7 +193,6 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
               _ <- storage.accessEquivocationsTracker { tracker =>
                     tracker.insertEquivocationRecord(record)
                   }
-              _       <- storage.close()
               records <- storage.accessEquivocationsTracker(_.equivocationRecords)
               _       = records shouldBe Set(record)
               result  <- lookupElements(blockElements, storage)

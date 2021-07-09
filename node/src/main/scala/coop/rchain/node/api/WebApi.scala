@@ -1,23 +1,27 @@
 package coop.rchain.node.api
 
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper.SafetyOracle
+import coop.rchain.casper.{Casper, ProposeFunction, SafetyOracle}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
+import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
 import coop.rchain.state.StateManager
+import fs2.concurrent.Queue
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -57,7 +61,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
-      stateManager: StateManager[F]
+      triggerProposeF: Option[ProposeFunction[F]]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -79,7 +83,9 @@ object WebApi {
     }
 
     def deploy(request: DeployRequest): F[String] =
-      toSignedDeploy(request).flatMap(BlockAPI.deploy(_)).flatMap(_.liftToBlockApiErr)
+      toSignedDeploy(request)
+        .flatMap(BlockAPI.deploy(_, triggerProposeF))
+        .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
       BlockAPI

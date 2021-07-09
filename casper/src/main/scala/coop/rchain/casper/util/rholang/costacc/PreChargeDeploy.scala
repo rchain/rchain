@@ -12,7 +12,7 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
   import Expr.ExprInstance._
   import rholang.{implicits => toPar}
   import shapeless._
-  import syntax.singleton._
+  import shapeless.syntax.singleton._
 
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit

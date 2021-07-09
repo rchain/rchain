@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import coop.rchain.metrics.Span
 import coop.rchain.models.ListParWithRandom
-import coop.rchain.rholang.interpreter.Runtime.SystemProcess
+import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 
 /**
@@ -12,7 +12,7 @@ object DeployerIdContract {
   import cats.implicits._
 
   def get[F[_]: Concurrent: Span](
-      ctx: SystemProcess.Context[F]
+      ctx: ProcessContext[F]
   )(message: Seq[ListParWithRandom]): F[Unit] = {
 
     val isContractCall = new ContractCall(ctx.space, ctx.dispatcher)

@@ -29,7 +29,13 @@ class GenesisValidatorSpec extends WordSpec {
       val unapprovedBlock   = BlockApproverProtocolTest.createUnapproved(requiredSigs, genesis)
       val test = for {
         _ <- engineCell.set(
-              new GenesisValidator(validatorId, shardId, finalizationRate, bap)
+              new GenesisValidator(
+                fixture.blockProcessingQueue,
+                fixture.blockProcessingState,
+                fixture.casperShardConf,
+                validatorId,
+                bap
+              )
             )
         _             <- engineCell.read >>= (_.handle(local, unapprovedBlock))
         blockApproval = BlockApproverProtocol.getBlockApproval(expectedCandidate, validatorId)
@@ -57,7 +63,13 @@ class GenesisValidatorSpec extends WordSpec {
       val approvedBlockRequest = ApprovedBlockRequest("test")
       val test = for {
         _ <- engineCell.set(
-              new GenesisValidator(validatorId, shardId, finalizationRate, bap)
+              new GenesisValidator(
+                fixture.blockProcessingQueue,
+                fixture.blockProcessingState,
+                fixture.casperShardConf,
+                validatorId,
+                bap
+              )
             )
         _    <- engineCell.read >>= (_.handle(local, approvedBlockRequest))
         head = transportLayer.requests.head

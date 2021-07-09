@@ -1,27 +1,23 @@
 package coop.rchain.rspace
 
-import scala.collection.JavaConverters._
-import scala.collection.SortedSet
-import cats.Applicative
 import cats.effect._
-import cats.implicits._
-import coop.rchain.catscontrib._
-import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.trace.{Produce, _}
-import coop.rchain.shared.{Log, Serialize}
-import com.google.common.collect.Multiset
+import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.ReportingRspace.{
   ReportingComm,
   ReportingConsume,
   ReportingEvent,
   ReportingProduce
 }
-import monix.execution.atomic.AtomicAny
+import coop.rchain.rspace.history.HistoryRepository
+import coop.rchain.rspace.internal._
+import coop.rchain.rspace.trace.{Produce, _}
 import coop.rchain.shared.SyncVarOps._
-import scodec.Codec
+import coop.rchain.shared.{Log, Serialize}
+import monix.execution.atomic.AtomicAny
+
+import scala.collection.SortedSet
 import scala.concurrent.{ExecutionContext, SyncVar}
 
 /**
@@ -52,7 +48,7 @@ object ReportingRspace {
   ) extends ReportingEvent
 }
 
-class ReportingRspace[F[_]: Sync, C, P, A, K](
+class ReportingRspace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     historyRepository: HistoryRepository[F, C, P, A, K],
     storeAtom: AtomicAny[HotStore[F, C, P, A, K]]
 )(
@@ -62,12 +58,7 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
     serializeA: Serialize[A],
     serializeK: Serialize[K],
     m: Match[F, P, A],
-    concurrent: Concurrent[F],
-    logF: Log[F],
-    contextShift: ContextShift[F],
-    scheduler: ExecutionContext,
-    metricsF: Metrics[F],
-    spanF: Span[F]
+    scheduler: ExecutionContext
 ) extends ReplayRSpace[F, C, P, A, K](historyRepository, storeAtom) {
 
   protected[this] override val logger: Logger = Logger[this.type]
@@ -153,13 +144,11 @@ class ReportingRspace[F[_]: Sync, C, P, A, K](
     *
     */
   override def createCheckpoint(): F[Checkpoint] = syncF.defer {
-    val historyRepository = historyRepositoryAtom.get()
     for {
-      _ <- createNewHotStore(historyRepository)(serializeK.toSizeHeadCodec)
-      _ <- restoreInstalls()
-      _ = softReport.update(_ => Seq.empty[ReportingEvent])
-      _ = report.update(_ => Seq.empty[Seq[ReportingEvent]])
-    } yield (Checkpoint(historyRepository.history.root, Seq.empty))
+      checkpoint <- super.createCheckpoint()
+      _          = softReport.update(_ => Seq.empty[ReportingEvent])
+      _          = report.update(_ => Seq.empty[Seq[ReportingEvent]])
+    } yield checkpoint
   }
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =

@@ -3,6 +3,7 @@ package coop.rchain.blockstorage.casperbuffer
 import cats.effect.Concurrent
 import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.shared.syntax._
@@ -39,6 +40,14 @@ final class CasperBufferKeyValueStorage[F[_]: Concurrent: Log] private (
             )
       } yield ()
     )
+
+  def putPendant(block: BlockHash): F[Unit] = {
+    val tempBlock = ByteString.copyFromUtf8("tempblock")
+    for {
+      _ <- addRelation(tempBlock, block)
+      _ <- remove(tempBlock)
+    } yield ()
+  }
 
   override def remove(hash: BlockHash): F[Unit] =
     lock.withPermit(

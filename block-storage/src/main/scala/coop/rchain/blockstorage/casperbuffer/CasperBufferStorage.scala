@@ -12,6 +12,7 @@ trait CasperBufferStorage[F[_]] {
   def getChildren(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def getPendants: F[Set[BlockHash]]
   def addRelation(parent: BlockHash, child: BlockHash): F[Unit]
+  def putPendant(block: BlockHash): F[Unit]
   def remove(blockHash: BlockHash): F[Unit]
   def contains(blockHash: BlockHash): F[Boolean]
   def isPendant(blockHash: BlockHash): F[Boolean]

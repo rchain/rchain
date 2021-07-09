@@ -1,12 +1,15 @@
 package coop.rchain.casper.util.rholang
 
+import java.nio.file.Files
+
 import coop.rchain.casper.genesis.contracts.TestUtil
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models._
-import coop.rchain.rholang.interpreter.{PrettyPrinter, Runtime}
+import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
@@ -39,13 +42,13 @@ import scala.concurrent.duration._
   * >>> itp.cleanUp()
   * }}}
   */
-class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler) {
+class Interactive private (runtime: RhoRuntime[Task])(implicit scheduler: Scheduler) {
   implicit private val rand = Blake2b512Random(128)
 
   private val prettyPrinter = PrettyPrinter()
 
   private val checkpoints = new mutable.HashMap[String, Checkpoint]()
-  checkpoints.update("empty", runtime.space.createCheckpoint().unsafeRunSync)
+  checkpoints.update("empty", runtime.createCheckpoint.unsafeRunSync)
 
   def checkpointNames: List[String] = checkpoints.keys.toList
 
@@ -55,7 +58,7 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def query(code: String, name: String = "__out__"): Seq[Par] = {
     checkpoint("preQuery")
     eval(code)
-    val result = runtime.space
+    val result = runtime
       .getData(
         Par().copy(exprs = Seq(Expr(GString(name))))
       )
@@ -70,14 +73,14 @@ class Interactive private (runtime: Runtime[Task])(implicit scheduler: Scheduler
   def cleanUp(): Unit = ()
 
   def checkpoint(name: String): Unit =
-    checkpoints.update(name, runtime.space.createCheckpoint().unsafeRunSync)
+    checkpoints.update(name, runtime.createCheckpoint.unsafeRunSync)
   def getCheckpoint(name: String): Option[Checkpoint] = checkpoints.get(name)
 
   def restore(name: String): Boolean =
     checkpoints
       .get(name)
       .fold(false)(ch => {
-        runtime.space.reset(ch.root).unsafeRunSync
+        runtime.reset(ch.root).unsafeRunSync
         true
       })
 }
@@ -87,14 +90,10 @@ object Interactive {
     implicit val logger: Log[Task]         = Log.log[Task]
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-    implicit val kvsManager                = InMemoryStoreManager[Task]
-
-    val store = kvsManager.rSpaceStores.unsafeRunSync
-    val spaces = Runtime
-      .setupRSpace[Task](store)
-      .unsafeRunSync
-    val (rspace, replay, _) = spaces
-
-    new Interactive(Runtime.createWithEmptyCost[Task]((rspace, replay)).runSyncUnsafe(5.seconds))
+    val p                                  = Files.createTempDirectory("interactive-")
+    val kvm                                = RNodeKeyValueStoreManager[Task](p).unsafeRunSync
+    val rspaceStore                        = kvm.rSpaceStores.runSyncUnsafe()
+    val (runtime, _, _)                    = RhoRuntime.createRuntimes[Task](rspaceStore).unsafeRunSync
+    new Interactive(runtime)
   }
 }

@@ -22,8 +22,8 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared
@@ -46,8 +46,9 @@ class Initializing[F[_]
   /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
-    shardId: String,
-    finalizationRate: Int,
+    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
+    blocksInProcessing: Ref[F, Set[BlockHash]],
+    casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
@@ -164,10 +165,10 @@ class Initializing[F[_]
 
       // Request tuple space state for Last Finalized State
       stateValidator = {
-        implicit val codecPar  = storage.serializePar.toSizeHeadCodec
-        implicit val codecBind = storage.serializeBindPattern.toSizeHeadCodec
-        implicit val codecPars = storage.serializePars.toSizeHeadCodec
-        implicit val codecCont = storage.serializeTaggedContinuation.toSizeHeadCodec
+        implicit val codecPar  = storage.serializePar
+        implicit val codecBind = storage.serializeBindPattern
+        implicit val codecPars = storage.serializePars
+        implicit val codecCont = storage.serializeTaggedContinuation
         RSpaceImporter.validateStateItems[
           F,
           Par,
@@ -271,12 +272,13 @@ class Initializing[F[_]
       casper <- MultiParentCasper
                  .hashSetCasper[F](
                    validatorId,
-                   ab,
-                   shardId,
-                   finalizationRate
+                   casperShardConf,
+                   ab
                  )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
+            blockProcessingQueue,
+            blocksInProcessing,
             casper,
             approvedBlock,
             validatorId,

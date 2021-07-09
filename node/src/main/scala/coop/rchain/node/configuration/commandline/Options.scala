@@ -167,10 +167,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Start a stand-alone node."
     )
 
-    val devMode = opt[Flag](
-      descr = "Enable all developer tools."
-    )
-
     val bootstrap = opt[PeerNode](
       short = 'b',
       descr = "Address of RNode to bootstrap from when connecting to a network."
@@ -178,6 +174,11 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val networkId = opt[String](
       descr = "ID of the RChain network to connect to."
+    )
+
+    val autopropose = opt[Flag](
+      descr =
+        "Make node automatically trying to propose block after new block added or new deploy received."
     )
 
     val noUpnp = opt[Flag](
@@ -455,6 +456,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Minimum bond accepted by the PoS contract in the genesis block."
     )
 
+    val genesisBlockNumber = opt[Long](
+      descr = "Configure genesis blockNumber for hard fork."
+    )
+
     val bondMaximum = opt[Long](
       descr = "Maximum bond accepted by the PoS contract in the genesis block."
     )
@@ -515,6 +520,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     // TODO remove
     val deployTimestamp = opt[Long](
       descr = "Timestamp for the deploys."
+    )
+
+    // Dev mode options
+    val devMode = opt[Flag](
+      descr = "Enable all developer tools."
+    )
+
+    val deployerPrivateKey = opt[String](
+      descr = "Private key for dummy deploys."
     )
 
   }

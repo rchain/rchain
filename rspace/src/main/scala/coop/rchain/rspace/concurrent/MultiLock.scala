@@ -1,19 +1,19 @@
 package coop.rchain.rspace.concurrent
 
-import scala.collection.concurrent.TrieMap
-
-import cats.effect.Concurrent
 import cats.effect.concurrent.Semaphore
-import cats.implicits._
-
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.all._
 import coop.rchain.catscontrib.ski.kp
 import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.Source
 
+import scala.collection.concurrent.TrieMap
+
 class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
 
   implicit private val ms: Source = metricSource
-  private[this] val locks         = TrieMap.empty[K, Semaphore[F]]
+
+  private[this] val locks = TrieMap.empty[K, Semaphore[F]]
 
   def acquire[R](
       keys: Seq[K]
@@ -23,23 +23,26 @@ class MultiLock[F[_]: Concurrent: Metrics, K](metricSource: Metrics.Source) {
         semaphores <- keys.toSet.toList.sorted.traverse(
                        k =>
                          Semaphore[F](1)
-                           .map { s => // if the lock exists this is waste. how to avoid?
+                           .map { s =>
                              locks.getOrElseUpdate(k, s)
                            }
                      )
-        acquired <- semaphores.traverse(s => s.acquire.map(_ => s))
+        acquired <- semaphores.traverse(s => s.acquire.as(s))
       } yield acquired
 
-    def releaseLocks(acquired: List[Semaphore[F]]): F[Unit] = acquired.traverse(_.release).as(())
+    def releaseLocks(acquired: List[Semaphore[F]]): F[Unit] = acquired.traverse_(_.release)
 
     import coop.rchain.metrics.implicits._
 
     Concurrent[F].bracket(
       for {
         _     <- Metrics[F].incrementGauge("lock.queue")
-        locks <- Concurrent[F].defer(acquireLocks).timer("lock.acquire")
+        locks <- acquireLocks.timer("lock.acquire")
         _     <- Metrics[F].decrementGauge("lock.queue")
       } yield locks
     )(kp(thunk))(releaseLocks)
   }
+
+  // Release memory (stored semaphores)
+  def cleanUp: F[Unit] = Sync[F].delay(locks.clear)
 }

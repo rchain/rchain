@@ -12,11 +12,12 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.{Clique, ProtoUtil}
+import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockMetadata
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{DagOps, Log, StreamT}
+import coop.rchain.shared.{Log, StreamT}
 
 /*
  * Implementation inspired by Ethereum's CBC casper simulator's clique oracle implementation.

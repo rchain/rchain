@@ -1,19 +1,18 @@
 package coop.rchain.rspace.state.exporters
 
-import java.nio.file.{Path}
-
 import cats.Monad
-import cats.effect.{Concurrent}
+import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.ByteVectorOps.RichByteVector
-import coop.rchain.shared.{Log, Stopwatch}
+import coop.rchain.shared.{Log, Serialize, Stopwatch}
 import coop.rchain.store.{KeyValueStore, LmdbStoreManager}
 import fs2.Stream
-import scodec.Codec
 import scodec.bits.ByteVector
+
+import java.nio.file.Path
 
 object RSpaceExporterDisk {
 
@@ -22,7 +21,7 @@ object RSpaceExporterDisk {
       root: Blake2b256Hash,
       dirPath: Path,
       chunkSize: Int
-  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
+  )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
     def writeChunkRec(historyStore: KeyValueStore[F], dataStore: KeyValueStore[F])(
         p: Param

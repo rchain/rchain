@@ -2,14 +2,13 @@ package coop.rchain.rspace.state
 
 import cats.effect._
 import cats.syntax.all._
-import coop.rchain.rspace.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryRepositoryImpl.{decodeJoins, decodeSorted}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history._
-import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
-import coop.rchain.shared.AttemptOps._
+import coop.rchain.rspace.serializers.ScodecSerialize._
+import coop.rchain.shared.AttemptOps.{RichAttempt, _}
+import coop.rchain.shared.Serialize
 import coop.rchain.state.TrieImporter
 import fs2.Stream
-import scodec.Codec
 import scodec.bits.ByteVector
 
 trait RSpaceImporter[F[_]] extends TrieImporter[F] {
@@ -34,7 +33,7 @@ object RSpaceImporter {
       chunkSize: Int,
       skip: Int,
       getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
-  )(implicit codecC: Codec[C], codecP: Codec[P], codecA: Codec[A], codecK: Codec[K]): F[Unit] = {
+  )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
     import cats.instances.list._
 
     val receivedHistorySize = historyItems.size
@@ -45,7 +44,7 @@ object RSpaceImporter {
     def raiseErrorEx[T](msg: String, cause: Throwable): F[T] =
       new StateValidationError(msg, cause).raiseError[F, T]
 
-    def decodeTrie(bytes: ByteVector): Trie = Trie.codecTrie.decodeValue(bytes.bits).get
+    def decodeTrie(bytes: ByteVector): Trie = codecTrie.decodeValue(bytes.bits).get
 
     def decodeData(bytes: ByteVector) =
       ColdStoreInstances.codecPersistedData.decodeValue(bytes.bits).toEitherThrowable
@@ -102,10 +101,9 @@ object RSpaceImporter {
                     Sync[F]
                       .delay {
                         persistedData match {
-                          case JoinsLeaf(bytes) => decodeJoins[C](bytes)
-                          case DataLeaf(bytes)  => decodeSorted[Datum[A]](bytes)
-                          case ContinuationsLeaf(bytes) =>
-                            decodeSorted[WaitingContinuation[P, K]](bytes)
+                          case JoinsLeaf(bytes)         => decodeJoins[C](bytes)
+                          case DataLeaf(bytes)          => decodeDatums[A](bytes)
+                          case ContinuationsLeaf(bytes) => decodeContinuations[P, K](bytes)
                         }
                       }
                       .void

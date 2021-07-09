@@ -1,30 +1,25 @@
 package coop.rchain.blockstorage
 
-import cats._
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.implicits._
-
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.InMemBlockStore.emptyMapRef
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.lmdb.Context
+import coop.rchain.metrics.Metrics
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits.{blockBatchesGen, blockElementsGen}
-import coop.rchain.rspace.Context
 import coop.rchain.shared.Log
 import coop.rchain.shared.PathOps._
-
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.anyvals.PosInt
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import scala.language.higherKinds
-
-import coop.rchain.metrics.Metrics
 
 trait BlockStoreTest
     extends FlatSpecLike
@@ -128,11 +123,11 @@ trait BlockStoreTest
 
 class InMemBlockStoreTest extends BlockStoreTest {
   override def withStore[R](f: BlockStore[Task] => Task[R]): R = {
+    implicit val metrics = new MetricsNOP[Task]()
     val test = for {
       refTask          <- emptyMapRef[Task]
       approvedBlockRef <- Ref[Task].of(none[ApprovedBlock])
-      metrics          = new MetricsNOP[Task]()
-      store            = InMemBlockStore.create[Task](Monad[Task], refTask, approvedBlockRef, metrics)
+      store            = InMemBlockStore.create[Task](refTask, approvedBlockRef)
       _                <- store.find(_ => true).map(map => assert(map.isEmpty))
       result           <- f(store)
     } yield result

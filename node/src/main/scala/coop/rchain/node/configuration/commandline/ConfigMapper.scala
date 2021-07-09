@@ -19,7 +19,7 @@ object ConfigMapper {
       val run = options.run
       val add = addToMap()
       add("standalone", run.standalone)
-      add("dev-mode", run.devMode)
+      add("autopropose", run.autopropose)
       add("protocol-server.network-id", run.networkId)
       add("protocol-server.dynamic-ip", run.dynamicIp)
       add("protocol-server.no-upnp", run.noUpnp)
@@ -84,6 +84,7 @@ object ConfigMapper {
       add("casper.genesis-block-data.quarantine-length", run.quarantineLength)
       add("casper.genesis-block-data.number-of-active-validators", run.numberOfActiveValidators)
       add("casper.genesis-block-data.deploy-timestamp", run.deployTimestamp)
+      add("casper.genesis-block-data.genesis-block-number", run.genesisBlockNumber)
 
       add("casper.genesis-ceremony.required-signatures", run.requiredSignatures)
       add("casper.genesis-ceremony.genesis-validator-mode", run.genesisValidator)
@@ -115,6 +116,10 @@ object ConfigMapper {
       add("metrics.influxdb-udp", run.influxdbUdp)
       add("metrics.zipkin", run.zipkin)
       add("metrics.sigar", run.sigar)
+
+      add("dev-mode", run.devMode)
+      add("dev.deployer-private-key", run.deployerPrivateKey)
+
       //TODO remove
       //add(keys.KnownValidatorsFile, run.knownValidators
     }

@@ -1,5 +1,20 @@
 package coop.rchain.node.configuration.commandline
 
+import java.nio.file.Paths
+
+import scala.concurrent.duration._
+import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
+import coop.rchain.comm.{CommError, PeerNode}
+import coop.rchain.node.configuration.{
+  ApiServer,
+  DevConf,
+  Metrics,
+  NodeConf,
+  PeersDiscovery,
+  ProtocolClient,
+  ProtocolServer,
+  Storage
+}
 import com.typesafe.config.ConfigFactory
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
@@ -84,6 +99,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         "--bond-maximum 111111",
         "--epoch-length 111111",
         "--quarantine-length 111111",
+        "--genesis-block-number 222",
         "--number-of-active-validators 111111",
         "--deploy-timestamp 111111",
         "--required-signatures 111111",
@@ -130,6 +146,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
     val expectedConfig = NodeConf(
       defaultDataDir = "/var/lib/rnode",
       standalone = true,
+      autopropose = false,
       devMode = true,
       protocolServer = ProtocolServer(
         networkId = "testnet",
@@ -214,14 +231,15 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         ),
         genesisBlockData = GenesisBlockData(
           genesisDataDir = Paths.get("/var/lib/rnode/genesis"),
-          bondsFile = Some("/var/lib/rnode/genesis/bonds1.txt"),
-          walletsFile = Some("/var/lib/rnode/genesis/wallets1.txt"),
+          bondsFile = "/var/lib/rnode/genesis/bonds1.txt",
+          walletsFile = "/var/lib/rnode/genesis/wallets1.txt",
           bondMaximum = 111111,
           bondMinimum = 111111,
           epochLength = 111111,
           quarantineLength = 111111,
           numberOfActiveValidators = 111111,
-          deployTimestamp = Some(111111)
+          deployTimestamp = Some(111111),
+          genesisBlockNumber = 222
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 111111,
@@ -238,7 +256,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         influxdbUdp = true,
         zipkin = true,
         sigar = true
-      )
+      ),
+      dev = DevConf(deployerPrivateKey = None)
     )
     config shouldEqual expectedConfig
   }

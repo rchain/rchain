@@ -2,22 +2,16 @@ package coop.rchain.rholang.interpreter.storage
 
 import cats.implicits._
 import cats.Applicative
-import coop.rchain.rspace.{
-  internal,
-  Blake2b256Hash,
-  Checkpoint,
-  ContResult,
-  ISpace,
-  Match,
-  Result,
-  SoftCheckpoint
-}
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.{internal, Checkpoint, ContResult, ISpace, Match, Result, SoftCheckpoint}
 
 import scala.collection.SortedSet
 
 class ISpaceStub[F[_]: Applicative, C, P, A, K] extends ISpace[F, C, P, A, K] {
 
   implicit val m: Match[F, P, A] = (_: P, _: A) => Applicative[F].pure(none)
+
+  override def getJoins(channel: C): F[Seq[Seq[C]]] = ???
 
   override def consume(
       channels: Seq[C],

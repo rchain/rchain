@@ -4,7 +4,7 @@ import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
-import coop.rchain.casper.{Created, MultiParentCasper, MultiParentCasperImpl}
+import coop.rchain.casper.{MultiParentCasper, MultiParentCasperImpl}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -25,17 +25,13 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
     TestNode.standaloneEff(genesis).use { implicit node =>
-      implicit val casper: MultiParentCasperImpl[Effect] = node.casperEff
-      implicit val rm: RuntimeManager[Effect]            = node.runtimeManager
+      implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
-        deploy <- ConstructDeploy.basicDeployData[Effect](0)
-        _      <- MultiParentCasper[Effect].deploy(deploy)
-
-        createBlockResult <- MultiParentCasper[Effect].createBlock
-        Created(block)    = createBlockResult
-        deploys           = block.body.deploys.map(_.deploy)
-        parents           = ProtoUtil.parentHashes(block)
+        deploy  <- ConstructDeploy.basicDeployData[Effect](0)
+        block   <- node.createBlockUnsafe(deploy)
+        deploys = block.body.deploys.map(_.deploy)
+        parents = ProtoUtil.parentHashes(block)
 
         _      = parents.size should be(1)
         _      = parents.head should be(genesis.genesisBlock.blockHash)

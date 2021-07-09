@@ -59,10 +59,10 @@ object ApproveBlockProtocol {
     )
 
   def of[F[_]: Sync: Concurrent: RaiseIOError: CommUtil: Log: EventLog: Time: Metrics: RuntimeManager: LastApprovedBlock](
-      maybeBondsPath: Option[String],
+      bondsPath: String,
       autogenShardSize: Int,
       genesisPath: Path,
-      maybeVaultsPath: Option[String],
+      vaultsPath: String,
       minimumBond: Long,
       maximumBond: Long,
       epochLength: Int,
@@ -72,18 +72,17 @@ object ApproveBlockProtocol {
       deployTimestamp: Option[Long],
       requiredSigs: Int,
       duration: FiniteDuration,
-      interval: FiniteDuration
+      interval: FiniteDuration,
+      blockNumber: Long
   ): F[ApproveBlockProtocol[F]] =
     for {
       now       <- Time[F].currentMillis
       timestamp = deployTimestamp.getOrElse(now)
 
-      vaults <- VaultParser.parse[F](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      vaults <- VaultParser.parse[F](vaultsPath)
       bonds <- BondsParser.parse[F](
-                maybeBondsPath,
-                genesisPath.resolve("bonds.txt"),
-                autogenShardSize,
-                genesisPath
+                bondsPath,
+                autogenShardSize
               )
 
       genesisBlock <- if (bonds.size <= requiredSigs)
@@ -108,7 +107,8 @@ object ApproveBlockProtocol {
                              validators = validators
                            ),
                            vaults = vaults,
-                           supply = Long.MaxValue
+                           supply = Long.MaxValue,
+                           blockNumber = blockNumber
                          )
                        )
                      }

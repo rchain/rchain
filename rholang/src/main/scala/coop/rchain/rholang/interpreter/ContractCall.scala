@@ -1,12 +1,11 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.{ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.Runtime.RhoTuplespace
-import coop.rchain.rspace.util.unpackCont
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 
 /**
   * This is a tool for unapplying the messages sent to the system contracts.
@@ -45,7 +44,7 @@ class ContractCall[F[_]: Concurrent: Span](
       _ <- produceResult.fold(Sync[F].unit) {
             case (cont, channels) =>
               dispatcher.dispatch(
-                unpackCont(cont),
+                cont.continuation,
                 channels.map(_.matchedDatum)
               )
           }

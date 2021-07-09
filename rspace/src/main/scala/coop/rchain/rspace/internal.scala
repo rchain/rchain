@@ -2,16 +2,15 @@ package coop.rchain.rspace
 
 import com.google.common.collect.{HashMultiset, Multiset}
 import coop.rchain.rspace.trace.{Consume, Produce}
-import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
-import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bool, bytes, int32, int64, uint8, variableSizeBytesLong}
 
 import scala.collection.SortedSet
 
-@SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
 object internal {
+
+  /** helper class to package data and serialization (encoded by scodec) */
+  final case class Encoded[D](item: D, byteVector: ByteVector)
 
   final case class Datum[A](a: A, persist: Boolean, source: Produce)
 
@@ -21,7 +20,7 @@ object internal {
         serializeC: Serialize[C],
         serializeA: Serialize[A]
     ): Datum[A] =
-      Datum(a, persist, Produce.create(channel, a, persist))
+      Datum(a, persist, Produce(channel, a, persist))
   }
 
   final case class WaitingContinuation[P, K](
@@ -50,7 +49,7 @@ object internal {
         continuation,
         persist,
         peek,
-        Consume.create(channels, patterns, continuation, persist)
+        Consume(channels, patterns, continuation, persist)
       )
   }
 
@@ -70,30 +69,8 @@ object internal {
 
   final case class Row[P, A, K](data: Seq[Datum[A]], wks: Seq[WaitingContinuation[P, K]])
 
-  implicit val codecByteVector: Codec[ByteVector] =
-    variableSizeBytesLong(int64, bytes)
-
-  implicit def codecSeq[A](implicit codecA: Codec[A]): Codec[Seq[A]] =
-    seqOfN(int32, codecA)
-
-  implicit def codecMap[K, V](implicit codecK: Codec[K], codecV: Codec[V]): Codec[Map[K, V]] =
-    seqOfN(int32, codecK.pairedWith(codecV)).xmap(_.toMap, _.toSeq)
-
-  implicit def codecDatum[A](implicit codecA: Codec[A]): Codec[Datum[A]] =
-    (codecA :: bool :: Codec[Produce]).as[Datum[A]]
-
-  def sortedSet[A](codecA: Codec[A])(implicit O: Ordering[A]): Codec[SortedSet[A]] =
-    codecSeq[A](codecA).xmap[SortedSet[A]](s => SortedSet(s: _*), _.toSeq)
-
-  implicit def codecWaitingContinuation[P, K](
-      implicit
-      codecP: Codec[P],
-      codecK: Codec[K]
-  ): Codec[WaitingContinuation[P, K]] =
-    (codecSeq(codecP) :: codecK :: bool :: sortedSet[Int](uint8) :: Codec[Consume])
-      .as[WaitingContinuation[P, K]]
-
   import scala.collection.concurrent.TrieMap
+
   type MultisetMultiMap[K, V] = TrieMap[K, Multiset[V]]
 
   object MultisetMultiMap {
@@ -103,6 +80,7 @@ object internal {
   implicit class RichMultisetMultiMap[K, V](private val value: MultisetMultiMap[K, V])
       extends AnyVal {
 
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
     def addBinding(k: K, v: V): MultisetMultiMap[K, V] =
       value.get(k) match {
         case Some(current) =>
@@ -115,6 +93,7 @@ object internal {
           value
       }
 
+    @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
     def removeBinding(k: K, v: V): MultisetMultiMap[K, V] =
       value.get(k) match {
         case Some(current) =>
@@ -131,22 +110,4 @@ object internal {
   final case class Install[F[_], P, A, K](patterns: Seq[P], continuation: K)
 
   type Installs[F[_], C, P, A, K] = Map[Seq[C], Install[F, P, A, K]]
-
-  import scodec.Attempt
-
-  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  implicit class RichAttempt[T](a: Attempt[T]) {
-    def get: T =
-      a match {
-        case Attempt.Successful(res) => res
-        case Attempt.Failure(err) =>
-          throw new Exception("Data in RSpace is corrupted. " + err.messageWithContext)
-      }
-  }
-
-  def toOrderedByteVectors[A](elements: Seq[A])(implicit serialize: Serialize[A]): Seq[ByteVector] =
-    elements
-      .map(e => serialize.encode(e))
-      .sorted(util.ordByteVector)
-
 }

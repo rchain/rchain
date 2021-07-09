@@ -20,9 +20,10 @@ This code has not yet completed a security review. We strongly recommend that yo
 The RChain Cooperative maintains a public testnet running the latest version of RNode. Learn more at [RChain public testnet information](https://rchain.atlassian.net/wiki/spaces/CORE/pages/678756429/RChain+public+testnet+information).
 
 ## Installation
+
 ### Docker
 
-`$ docker pull rchain/rnode`
+`$ docker pull rchain/rnode:latest`
 
 ### Debian/Ubuntu
 
@@ -44,25 +45,27 @@ The RChain Cooperative maintains a public testnet running the latest version of 
 Docker will be used in the examples port portability reasons, but running the
 node as a standalone process is very similar.
 
-To fetch the latest version of RNode from the remote Docker hub and run it
-(exit with `C-c`):
+To fetch the latest version of RNode from the remote Docker hub and run it (exit with `C-c`):
 
-```
-$ docker run -v $HOME/tmp:/var/lib/rnode -ti -p 40400:40400 rchain/rnode:latest
+```sh
+$ docker run -it -p 40400:40400 rchain/rnode:latest
+
+# With binding of RNode data directory to the host directory $HOME/rnode 
+$ docker run -v $HOME/rnode:/var/lib/rnode -it -p 40400:40400 rchain/rnode:latest
 ```
 
 In order to use both the peer-to-peer network and REPL capabilities of the
-node, you need to run more than one Docker Rnode on the same host, the
+node, you need to run more than one Docker RNode on the same host, the
 containers need to be connected to one user-defined network bridge:
 
 ```bash
 $ docker network create rnode-net
 
-$ docker run -v $HOME/tmp/peer0:/var/lib/rnode -dit --name rnode0 --network rnode-net rchain/rnode:latest run -s --network localnet
+$ docker run -dit --name rnode0 --network rnode-net rchain/rnode:latest run -s
 
 $ docker ps
-CONTAINER ID        IMAGE                      COMMAND             CREATED             STATUS              PORTS               NAMES
-15aa78b45da4        rchain/rnode:latest        "/bin/main.sh -s"   3 seconds ago       Up 2 seconds                            rnode0
+CONTAINER ID   IMAGE                 COMMAND                  CREATED          STATUS          PORTS     NAMES
+ef770b4d4139   rchain/rnode:latest   "bin/rnode --profile…"   23 seconds ago   Up 22 seconds             rnode0
 ```
 
 To attach terminal to RNode logstream execute
@@ -77,106 +80,104 @@ $ docker logs -f rnode0
 A repl instance can be invoked in a separate terminal using the following command:
 
 ```bash
-$ docker run -v $HOME/tmp/rnode-repl:/var/lib/rnode -it --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 repl
+$ docker run -it --rm --name rnode-repl --network rnode-net rchain/rnode:latest --grpc-host rnode0 --grpc-port 40402 repl
 
-  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦
-  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║
+  ╦═╗┌─┐┬ ┬┌─┐┬┌┐┌  ╔╗╔┌─┐┌┬┐┌─┐  ╦═╗╔═╗╔═╗╦  
+  ╠╦╝│  ├─┤├─┤││││  ║║║│ │ ││├┤   ╠╦╝║╣ ╠═╝║  
   ╩╚═└─┘┴ ┴┴ ┴┴┘└┘  ╝╚╝└─┘─┴┘└─┘  ╩╚═╚═╝╩  ╩═╝
-
+    
 rholang $
 ```
 
-Type `5` in REPL console. This command should result in (`rnode0` output):
+Type `@42!("Hello!")` in REPL console. This command should result in (`rnode0` output):
 ```bash
-[...]
 Evaluating:
-5
+@{42}!("Hello!")
 ```
 
 A peer node can be started with the following command (note that `--bootstrap` takes the listening address of `rnode0`):
 
 ```bash
-$ docker run -v $HOME/tmp/peer1:/var/lib/rnode -it --name rnode1 --network rnode-net rchain/rnode:latest run --network localnet --bootstrap 'rnode://ee00a5357f2f4cb58b08a8a4c949da1b@172.18.0.2?protocol=40400&discovery=40404'
+$ docker run -it --rm --name rnode1 --network rnode-net rchain/rnode:latest run --bootstrap 'rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404' --allow-private-addresses --host rnode1
 [...]
-08:58:36.267 [main] INFO  logger - Listening for traffic on rnode://d04b133a3a9a0209d8278713a0235b9fc0ec34f3@172.18.0.2?protocol=40400&discovery=40404.
-08:58:36.279 [main] INFO  logger - Bootstrapping from #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
-08:58:36.294 [main] INFO  logger - Initialize first phase handshake (encryption handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
-08:58:36.816 [repl-io-29] INFO  logger - Initialize second phase handshake (protocol handshake) to #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}
-08:58:36.890 [repl-io-30] INFO  logger - Connected #{PeerNode ee00a5357f2f4cb58b08a8a4c949da1b}.
-08:58:41.939 [repl-io-30] INFO  logger - Peers: 1.
+15:41:41.818 [INFO ] [node-runner-39      ] [coop.rchain.node.NodeRuntime ] - Starting node that will bootstrap from rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404
+15:57:37.021 [INFO ] [node-runner-32      ] [coop.rchain.comm.rp.Connect$ ] - Peers: 1
+15:57:46.495 [INFO ] [node-runner-32      ] [c.r.c.util.comm.CommUtil$    ] - Successfully sent ApprovedBlockRequest to rnode://8c775b2143b731a225f039838998ef0fac34ba25@rnode0?protocol=40400&discovery=40404
+15:57:50.463 [INFO ] [node-runner-40      ] [c.r.c.engine.Initializing    ] - Rholang state received and saved to store.
+15:57:50.482 [INFO ] [node-runner-34      ] [c.r.casper.engine.Engine$    ] - Making a transition to Running state.
 ```
 
 The above command should result in (`rnode0` output):
 ```bash
-08:58:36.769 [repl-io-29] INFO  logger - Responded to encryption handshake request from #{PeerNode 29d77e8cfd924db49e715d4cf4eeb28d}.
-08:58:36.882 [repl-io-29] INFO  logger - Responded to protocol handshake request from #{PeerNode 29d77e8cfd924db49e715d4cf4eeb28d}
-08:58:37.211 [repl-io-35] INFO  logger - Peers: 1.
+15:57:37.021 [INFO ] [node-runner-42      ] [c.r.comm.rp.HandleMessages$  ] - Responded to protocol handshake request from rnode://e80faf589973c2c1b9b8441790d34a9a0ffdd3ce@rnode1?protocol=40400&discovery=40404
+15:57:37.023 [INFO ] [node-runner-42      ] [coop.rchain.comm.rp.Connect$ ] - Peers: 1
+15:57:46.530 [INFO ] [node-runner-43      ] [c.r.casper.engine.Running$   ] - ApprovedBlock sent to rnode://e80faf589973c2c1b9b8441790d34a9a0ffdd3ce@rnode1?protocol=40400&discovery=40404
+15:57:48.283 [INFO ] [node-runner-43      ] [c.r.casper.engine.Running$   ] - Store items sent to rnode://e80faf589973c2c1b9b8441790d34a9a0ffdd3ce@rnode1?protocol=40400&discovery=40404
 ```
 
-To get a full list of options rnode accepts, use the `--help` option: `$ docker
-run -it rchain/rnode --help`.
+To get a full list of options rnode accepts, use the `--help` option:
+
+```sh
+$ docker run -it --rm rchain/rnode:latest --help
+```
 
 ### Configuration file
 
-Most of the command line options can be specified in a configuration file
-`rnode.conf`.
+Most of the command line options can be specified in a configuration file.
 
 The default location of the configuration file is the data directory. An
-alternative location can be specified with the command line option
-`--config-file <path>`.
+alternative location can be specified with the command line option `--config-file <path>`.
 
 The format of the configuration file is [HOCON](https://github.com/lightbend/config/blob/master/HOCON.md).
 
-The [reference.conf](node/src/main/resources/reference.conf) configuration
-file shows all options and default values.
+The [defaults.conf](node/src/main/resources/defaults.conf) configuration file shows all options and default values.
 
 Example configuration file:
 
-```hocon
-rnode {
-  server {
-    host = localhost
-    upnp = false
-    port = 40400
-    port-http = 40403
-    port-kademlia = 40404
-    port-admin-http = 40405
-    send-timeout = 2 seconds
-    standalone = false
-    bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
-    data-dir = "/var/lib/rnode"
-    store-size = 1G
-    map-size = 1G
-    max-connections = 500
-    max-message-size = 256K
+```yml
+standalone = false
 
-    tls {
-      certificate = /etc/ssl/node.certificate.pem"
-      key = /etc/ssl/node.key.pem
-    }
-
-    metrics {
-      prometheus = false
-      influxdb = true
-      zipkin = false
-      sigar = false
-    }
-  }
-
-  grpc {
-    host = localhost
-    port-external = 40401
-    port-internal = 40402
-  }
-
-  casper {
-    # validator-public-key =
-    # validator-private-key-path =
-    # bonds-file =
-    # known-validators-file =
-    validators = 5
-   }
+protocol-server {
+  network-id = "testnet"
+  port = 40400
 }
+
+protocol-client {
+  network-id = "testnet"
+  bootstrap = "rnode://de6eed5d00cf080fc587eeb412cb31a75fd10358@52.119.8.109?protocol=40400&discovery=40404"
+}
+
+peers-discovery {
+  port = 40404
+}
+
+api-server {
+  host = "my-rnode.domain.com"
+  port-grpc-external = 40401
+  port-grpc-internal = 40402
+  port-http = 40403
+  port-admin-http = 40405
+}
+
+storage {
+  data-dir = "/my-data-dir"
+}
+
+casper {
+  fault-tolerance-threshold = 1
+  shard-name = root
+  finalization-rate = 1
+}
+
+metrics {
+  prometheus = false
+  influxdb = false
+  influxdb-udp = false
+  zipkin = false
+  sigar = false
+}
+
+dev-mode = false
 ```
 
 ## Development
@@ -184,13 +185,16 @@ rnode {
 Compile the project with:
 
 ```bash
-$ sbt clean rholang/bnfc:clean rholang/bnfc:generate compile node/docker:publishLocal
+$ sbt clean compile
+
+# With executable and Docker image
+$ sbt clean compile stage docker:publishLocal
 ```
 
 Run the resulting binary with:
 
 ```bash
-$ ./node/target/docker/stage/opt/docker/bin/rnode
+$ ./node/target/universal/stage/bin/rnode
 ```
 
 For more detailed instructions, see the [developer guide](DEVELOPER.md).
@@ -199,13 +203,11 @@ For more detailed instructions, see the [developer guide](DEVELOPER.md).
 
 ### Caveats
 
-During this pre-release phase of the RChain software, there are some [known
-issues](https://rchain.atlassian.net/wiki/spaces/CORE/pages/428376244/RChain+software+unresolved+bugs+and+known+issues).
+During this pre-release phase of the RChain software, there are some [known issues](https://github.com/rchain/rchain/issues?q=is%3Aopen+is%3Aissue+label%3Abug).
 
 ### Filing Issues
 
-File issues in our Public Jira Instance: [File a
-bug](https://rchain.atlassian.net/secure/CreateIssueDetails!init.jspa?pid=10105&issuetype=10103&versions=10012&components=10004&assignee=medha&summary=issue+created%20via+link)
+File issues in GitHub repository issue tracker: [File a bug](https://github.com/rchain/rchain/issues/new/choose).
 
 ## Acknowledgements
 

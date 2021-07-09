@@ -9,7 +9,6 @@ import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
@@ -19,7 +18,7 @@ import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.interpreter.Runtime.BlockData
+import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared._
 
 /**
@@ -173,19 +172,40 @@ object BlockApproverProtocol {
             vaults,
             Long.MaxValue
           )
-          .toSet
         blockDeploys = block.body.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
+
+        // check if expected blessed contracts and ones reported by candidate are equal
+        // order should be the same and terms should be the same
+        wrongDeploys = (blockDeploys.iterator zip genesisBlessedContracts.iterator)
+          .filter {
+            case (candidateDeploy, expectedContract) =>
+              candidateDeploy.deploy.data.term != expectedContract.data.term
+          }
+          .map {
+            case (candidateDeploy, _) =>
+              candidateDeploy.deploy.data.term.substring(0, 100)
+          }
+          .take(5)
+
+        _ <- wrongDeploys.isEmpty
+              .either(())
+              .or(
+                s"Genesis candidate deploys do not match expected blessed contracts.\nBad contracts (5 first):\n${wrongDeploys
+                  .mkString("\n")}"
+              )
       } yield (blockDeploys, block.body.state)
 
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
+      emptyStateHash            <- EitherT.right(RuntimeManager.emptyStateHashFixed.pure[F])
+      // check if candidate blessed contracts match candidate postStateHash
       stateHash <- EitherT(
                     runtimeManager
-                      .replayComputeState(runtimeManager.emptyStateHash)(
+                      .replayComputeState(emptyStateHash)(
                         blockDeploys,
                         List.empty,
                         BlockData.fromBlock(candidate.block),

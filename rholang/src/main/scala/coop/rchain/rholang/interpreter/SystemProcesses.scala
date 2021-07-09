@@ -1,17 +1,21 @@
 package coop.rchain.rholang.interpreter
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.implicits._
+import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.Logger
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics.Span
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.Runtime.{BlockData, InvalidBlocks, RhoTuplespace}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.registry.Registry
+import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
 
@@ -32,8 +36,8 @@ trait SystemProcesses[F[_]] {
   def sha256Hash: Contract[F]
   def keccak256Hash: Contract[F]
   def blake2b256Hash: Contract[F]
-  def getBlockData(blockData: Ref[F, BlockData]): Contract[F]
-  def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F]
+  def getBlockData(blockData: Ref[F, SystemProcesses.BlockData]): Contract[F]
+  def invalidBlocks(invalidBlocks: SystemProcesses.InvalidBlocks[F]): Contract[F]
   def revAddress: Contract[F]
   def deployerIdOps: Contract[F]
   def registryOps: Contract[F]
@@ -41,6 +45,112 @@ trait SystemProcesses[F[_]] {
 }
 
 object SystemProcesses {
+  type RhoSysFunction[F[_]] = Seq[ListParWithRandom] => F[Unit]
+  type RhoDispatchMap[F[_]] = Map[Long, RhoSysFunction[F]]
+  type Name                 = Par
+  type Arity                = Int
+  type Remainder            = Option[Var]
+  type BodyRef              = Long
+  class InvalidBlocks[F[_]](val invalidBlocks: Ref[F, Par]) {
+    def setParams(invalidBlocks: Par): F[Unit] =
+      this.invalidBlocks.set(invalidBlocks)
+  }
+
+  object InvalidBlocks {
+    def apply[F[_]]()(implicit F: Sync[F]): F[InvalidBlocks[F]] =
+      for {
+        invalidBlocks <- Ref[F].of(Par())
+      } yield new InvalidBlocks[F](invalidBlocks)
+
+    def unsafe[F[_]]()(implicit F: Sync[F]): InvalidBlocks[F] =
+      new InvalidBlocks(Ref.unsafe[F, Par](Par()))
+  }
+
+  final case class BlockData private (
+      timeStamp: Long,
+      blockNumber: Long,
+      sender: PublicKey,
+      seqNum: Int
+  )
+
+  def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
+
+  object FixedChannels {
+    val STDOUT: Par             = byteName(0)
+    val STDOUT_ACK: Par         = byteName(1)
+    val STDERR: Par             = byteName(2)
+    val STDERR_ACK: Par         = byteName(3)
+    val ED25519_VERIFY: Par     = byteName(4)
+    val SHA256_HASH: Par        = byteName(5)
+    val KECCAK256_HASH: Par     = byteName(6)
+    val BLAKE2B256_HASH: Par    = byteName(7)
+    val SECP256K1_VERIFY: Par   = byteName(8)
+    val GET_BLOCK_DATA: Par     = byteName(10)
+    val GET_INVALID_BLOCKS: Par = byteName(11)
+    val REV_ADDRESS: Par        = byteName(12)
+    val DEPLOYER_ID_OPS: Par    = byteName(13)
+    val REG_LOOKUP: Par         = byteName(14)
+    val REG_INSERT_RANDOM: Par  = byteName(15)
+    val REG_INSERT_SIGNED: Par  = byteName(16)
+    val REG_OPS: Par            = byteName(17)
+    val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
+  }
+  object BodyRefs {
+    val STDOUT: Long             = 0L
+    val STDOUT_ACK: Long         = 1L
+    val STDERR: Long             = 2L
+    val STDERR_ACK: Long         = 3L
+    val ED25519_VERIFY: Long     = 4L
+    val SHA256_HASH: Long        = 5L
+    val KECCAK256_HASH: Long     = 6L
+    val BLAKE2B256_HASH: Long    = 7L
+    val SECP256K1_VERIFY: Long   = 9L
+    val GET_BLOCK_DATA: Long     = 11L
+    val GET_INVALID_BLOCKS: Long = 12L
+    val REV_ADDRESS: Long        = 13L
+    val DEPLOYER_ID_OPS: Long    = 14L
+    val REG_OPS: Long            = 15L
+    val SYS_AUTHTOKEN_OPS: Long  = 16L
+  }
+  final case class ProcessContext[F[_]: Concurrent: Span](
+      space: RhoTuplespace[F],
+      dispatcher: RhoDispatch[F],
+      blockData: Ref[F, BlockData],
+      invalidBlocks: InvalidBlocks[F]
+  ) {
+    val systemProcesses = SystemProcesses[F](dispatcher, space)
+  }
+  final case class Definition[F[_]](
+      urn: String,
+      fixedChannel: Name,
+      arity: Arity,
+      bodyRef: BodyRef,
+      handler: ProcessContext[F] => Seq[ListParWithRandom] => F[Unit],
+      remainder: Remainder = None
+  ) {
+    def toDispatchTable(
+        context: ProcessContext[F]
+    ): (BodyRef, Seq[ListParWithRandom] => F[Unit]) =
+      bodyRef -> handler(context)
+
+    def toUrnMap: (String, Par) = {
+      val bundle: Par = Bundle(fixedChannel, writeFlag = true)
+      urn -> bundle
+    }
+
+    def toProcDefs: (Name, Arity, Remainder, BodyRef) =
+      (fixedChannel, arity, remainder, bodyRef)
+  }
+  object BlockData {
+    def empty: BlockData = BlockData(0, 0, PublicKey(Base16.unsafeDecode("00")), 0)
+    def fromBlock(template: BlockMessage) =
+      BlockData(
+        template.header.timestamp,
+        template.body.state.blockNumber,
+        PublicKey(template.sender),
+        template.seqNum
+      )
+  }
   type Contract[F[_]] = Seq[ListParWithRandom] => F[Unit]
 
   def apply[F[_]](
@@ -271,7 +381,7 @@ object SystemProcesses {
           illegalArgumentException("blockData expects only a return channel")
       }
 
-      def invalidBlocks(invalidBlocks: Runtime.InvalidBlocks[F]): Contract[F] = {
+      def invalidBlocks(invalidBlocks: InvalidBlocks[F]): Contract[F] = {
         case isContractCall(produce, Seq(ack)) =>
           for {
             invalidBlocks <- invalidBlocks.invalidBlocks.get

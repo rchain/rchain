@@ -54,7 +54,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
                     deploy.data.timestamp
                   )
                 )
-              ).map(_ shouldBe Seq("""([4, 6, 10, 14], "The timestamp is 2")"""))
+              ).map(
+                _ shouldBe Seq(
+                  s"""([4, 6, 10, 14], "The timestamp is ${signedBlock.header.timestamp}")"""
+                )
+              )
         } yield ()
       }
   }
@@ -66,8 +70,8 @@ class RholangBuildTest extends FlatSpec with Matchers {
       .map(i => (Secp256k1.newKeyPair, i))
       .map { case ((_, publicKey), i) => Vault(RevAddress.fromPublicKey(publicKey).get, i.toLong) }
       .toSeq
-    val (keyPairs, genesis) = buildGenesisParameters()
-    val genesisParams       = (keyPairs, genesis.copy(vaults = vaults))
+    val (keyPairs, genesisVaults, genesis) = buildGenesisParameters()
+    val genesisParams                      = (keyPairs, genesisVaults, genesis.copy(vaults = vaults))
     TestNode
       .standaloneEff(buildGenesis(genesisParams))
       .use { node =>

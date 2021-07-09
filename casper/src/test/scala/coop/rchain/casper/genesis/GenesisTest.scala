@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.util.io.IOError
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
@@ -15,9 +16,17 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.rholang.interpreter.Runtime
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps.RichPath
+import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
+import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
+import coop.rchain.casper.genesis.Genesis.createGenesisBlock
+import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
+import coop.rchain.metrics
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.shared.Time
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -31,6 +40,25 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val span: Span[Task]          = NoopSpan[Task]()
+
+  def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
+    CasperSnapshot(
+      dag,
+      ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
+      List.empty,
+      Set.empty,
+      Map.empty,
+      Set.empty,
+      0,
+      Map.empty,
+      OnChainCasperState(
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        Map.empty,
+        Seq.empty
+      )
+    )
 
   val validators = Seq(
     "299670c52849f1aa82e8dfe5be872c16b600bf09cc8983e04b903411358f2de6",
@@ -78,14 +106,14 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _ <- fromInputFiles()(runtimeManager, genesisPath, log, time)
           _ = log.warns.count(
             _.contains(
-              "Bonds file was not specified and default bonds file does not exist. Falling back on generating random validators."
+              "Creating file with random bonds"
             )
           ) should be(1)
-        } yield log.infos.count(_.contains("Created validator")) should be(autogenShardSize)
+        } yield log.infos.count(_.contains("Bond generated")) should be(autogenShardSize)
     }
   )
 
-  it should "fail with error when bonds file does not exist" in taskTest(
+  it should "tell when bonds file does not exist" in taskTest(
     withGenResources {
       (
           runtimeManager: RuntimeManager[Task],
@@ -100,9 +128,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                              log,
                              time
                            ).attempt
-        } yield genesisAttempt.left.value.getMessage should be(
-          "Specified bonds file not/a/real/file does not exist"
-        )
+        } yield log.warns.exists(_.contains("BONDS FILE NOT FOUND"))
     }
   )
 
@@ -128,7 +154,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                              time
                            ).attempt
         } yield genesisAttempt.left.value.getMessage should include(
-          "misformatted.txt cannot be parsed"
+          "FAILED PARSING BONDS FILE"
         )
     }
   )
@@ -152,7 +178,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
                       time
                     )
           bonds = ProtoUtil.bonds(genesis)
-          _     = log.infos.length should be(2)
+          _     = log.infos.length should be(3)
           result = validators
             .map {
               case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
@@ -178,7 +204,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
-                                            dag,
+                                            mkCasperSnapshot(dag),
                                             runtimeManager
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
@@ -229,7 +255,8 @@ object GenesisTest {
       quarantineLength: Int = 50000,
       numberOfActiveValidators: Int = 100,
       shardId: String = rchainShardId,
-      deployTimestamp: Option[Long] = Some(System.currentTimeMillis())
+      deployTimestamp: Option[Long] = Some(System.currentTimeMillis()),
+      blockNumber: Long = 0
   )(
       implicit runtimeManager: RuntimeManager[Task],
       genesisPath: Path,
@@ -238,12 +265,12 @@ object GenesisTest {
   ): Task[BlockMessage] =
     for {
       timestamp <- deployTimestamp.fold(Time[Task].currentMillis)(x => x.pure[Task])
-      vaults    <- VaultParser.parse[Task](maybeVaultsPath, genesisPath.resolve("wallets.txt"))
+      vaults <- VaultParser.parse[Task](
+                 maybeVaultsPath.getOrElse(genesisPath + "/wallets.txt")
+               )
       bonds <- BondsParser.parse[Task](
-                maybeBondsPath,
-                genesisPath.resolve("bonds.txt"),
-                autogenShardSize,
-                genesisPath
+                maybeBondsPath.getOrElse(genesisPath + "/bonds.txt"),
+                autogenShardSize
               )
       validators = bonds.toSeq.map(Validator.tupled)
       genesisBlock <- createGenesisBlock(
@@ -260,13 +287,19 @@ object GenesisTest {
                            validators = validators
                          ),
                          vaults = vaults,
-                         supply = Long.MaxValue
+                         supply = Long.MaxValue,
+                         blockNumber = blockNumber
                        )
                      )
     } yield genesisBlock
 
   def withRawGenResources(
-      body: (Runtime[Task], Path, LogicalTime[Task]) => Task[Unit]
+      body: (
+          RhoHistoryRepository[Task],
+          (RhoRuntime[Task], ReplayRhoRuntime[Task]),
+          Path,
+          LogicalTime[Task]
+      ) => Task[Unit]
   ): Task[Unit] = {
     val storePath                           = storageLocation
     val gp                                  = genesisPath
@@ -275,14 +308,13 @@ object GenesisTest {
     val time                                = new LogicalTime[Task]
 
     for {
-      kvsManager          <- Resources.mkTestRNodeStoreManager[Task](storePath)
-      store               <- kvsManager.rSpaceStores
-      spaces              <- Runtime.setupRSpace[Task](store)
-      (rspace, replay, _) = spaces
-      runtime             <- Runtime.createWithEmptyCost((rspace, replay))
-      result              <- body(runtime, genesisPath, time)
-      _                   <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _                   <- Sync[Task].delay { gp.recursivelyDelete() }
+      kvsManager                   <- Resources.mkTestRNodeStoreManager[Task](storePath)
+      store                        <- kvsManager.rSpaceStores
+      spaces                       <- RhoRuntime.createRuntimes[Task](store)
+      (runtime, replayRuntime, hr) = spaces
+      result                       <- body(hr, (runtime, replayRuntime), genesisPath, time)
+      _                            <- Sync[Task].delay { storePath.recursivelyDelete() }
+      _                            <- Sync[Task].delay { gp.recursivelyDelete() }
     } yield result
   }
 
@@ -291,8 +323,15 @@ object GenesisTest {
   )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
     withRawGenResources {
       implicit val log = new LogStub[Task]
-      (runtime: Runtime[Task], genesisPath: Path, time: LogicalTime[Task]) =>
-        RuntimeManager.fromRuntime(runtime).flatMap(body(_, genesisPath, log, time))
+      (
+          historyRepo: RhoHistoryRepository[Task],
+          runtimes: (RhoRuntime[Task], ReplayRhoRuntime[Task]),
+          genesisPath: Path,
+          time: LogicalTime[Task]
+      ) =>
+        RuntimeManager
+          .fromRuntimes(runtimes._1, runtimes._2, historyRepo)
+          .flatMap(body(_, genesisPath, log, time))
     }
 
   def taskTest[R](f: Task[R]): R =

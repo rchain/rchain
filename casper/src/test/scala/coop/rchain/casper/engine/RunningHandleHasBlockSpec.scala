@@ -59,9 +59,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
     PeerNode(NodeIdentifier(name.getBytes), endpoint(port))
 
   private def alwaysSuccess: PeerNode => Protocol => CommErr[Unit] = kp(kp(Right(())))
-  private def alwaysDoNotIgnoreF: BlockHash => Task[Running.IgnoreCasperMessageStatus] =
-    kp(IgnoreCasperMessageStatus(false, DoNotIgnore).pure[Task])
-
+  private def alwaysDoNotIgnoreF: BlockHash => Task[Boolean]       = _ => false.pure[Task]
   override def beforeEach(): Unit = {
     transportLayer.reset()
     transportLayer.setResponses(alwaysSuccess)
@@ -142,9 +140,8 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
       describe("if there is already an entry in the RequestState blocks") {
         it("should ignore if peer on the RequestState peers list") {
           // given
-          val sender = peerNode("somePeer", 40400)
-          val casperContains: BlockHash => Task[IgnoreCasperMessageStatus] =
-            kp(Task(IgnoreCasperMessageStatus(true, BlockIsInCasperBuffer)))
+          val sender                                     = peerNode("somePeer", 40400)
+          val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
           // when
           Running.handleHasBlockMessage[Task](sender, hb)(casperContains).runSyncUnsafe()
           // then
@@ -158,8 +155,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
     describe("handleHasBlock") {
       it("should not call send hash to BlockReceiver if it is ignorable hash") {
         // given
-        val casperContains: BlockHash => Task[IgnoreCasperMessageStatus] =
-          kp(Task(IgnoreCasperMessageStatus(doIgnore = true, BlockIsInCasperBuffer)))
+        val casperContains: BlockHash => Task[Boolean] = _ => true.pure[Task]
         // when
         Running.handleHasBlockMessage[Task](null, hb)(casperContains).runSyncUnsafe()
         // then

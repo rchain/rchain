@@ -13,11 +13,12 @@ final case class SlashDeploy(
     initialRand: Blake2b512Random
 ) extends SystemDeploy(initialRand) {
   import coop.rchain.models._
+  import coop.rchain.models.syntax._
   import Expr.ExprInstance._
   import rholang.{implicits => toPar}
   import shapeless._
   import record._
-  import syntax.singleton._
+  import shapeless.syntax.singleton._
 
   type Output = (RhoBoolean, Either[RhoString, RhoNil])
   type Result = Unit

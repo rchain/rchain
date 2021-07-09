@@ -18,3 +18,4 @@ trait AllSyntaxShared
     with KeyValueStoreManagerSyntax
     with MonixableSyntax
     with Fs2StreamSyntax
+    with catscontrib.ToBooleanF
