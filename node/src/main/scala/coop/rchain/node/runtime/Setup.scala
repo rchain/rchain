@@ -6,6 +6,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
 import coop.rchain.blockstorage.KeyValueBlockStore
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
@@ -28,7 +29,15 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
+import coop.rchain.models.{
+  BindPattern,
+  GPrivate,
+  GUnforgeable,
+  ListParWithRandom,
+  Par,
+  TaggedContinuation
+}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -39,6 +48,7 @@ import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
+import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
@@ -364,6 +374,29 @@ object Setup {
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
+      // This is the hard-coded unforgeable name for
+      // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
+      // This hard-coded value is only useful with current(above link version) `RevVault.rho` implementation but it is
+      // useful for all the networks(testnet, custom network and mainnet) starting with this `RevVault.rho`.
+      //
+      // This hard-coded value needs to be changed when
+      // 1. `RevVault.rho` is changed
+      // 2. [[coop.rchain.casper.genesis.contracts.StandardDeploys.revVault]] is changed
+      // 3. The random seed algorithm for unforgeable name of the deploy is changed
+      //
+      // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
+      transferUnforgeable = GUnforgeable(
+        GPrivateBody(
+          GPrivate(
+            ByteString.copyFrom(
+              Base16
+                .unsafeDecode("72d0f333c719323406901bca34c2935e4d92c31402fa80a2c273422e923af550")
+            )
+          )
+        )
+      )
+      transactionAPI      = Transaction[F](blockReportAPI, Par(unforgeables = Seq(transferUnforgeable)))
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
         implicit val ec = engineCell
         implicit val sp = span
@@ -372,6 +405,7 @@ object Setup {
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
+          cacheTransactionAPI,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]]
         )

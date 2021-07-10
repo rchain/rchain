@@ -11,6 +11,7 @@ import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
 import io.circe.generic.semiauto._
 import org.http4s.{HttpRoutes, Response}
+import coop.rchain.node.encode.JsonEncoder._
 
 object WebApiRoutes {
 
@@ -86,16 +87,18 @@ object WebApiRoutes {
     implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
 
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]
+
     // Encoders
-    implicit val stringEncoder     = jsonEncoderOf[F, String]
-    implicit val booleanEncode     = jsonEncoderOf[F, Boolean]
-    implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]
-    implicit val blockInfoEncoder  = jsonEncoderOf[F, BlockInfo]
-    implicit val lightBlockEncoder = jsonEncoderOf[F, LightBlockInfo]
-    implicit val lightBlockListEnc = jsonEncoderOf[F, List[LightBlockInfo]]
-    implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
-    implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
-    implicit val explRespEncoder   = jsonEncoderOf[F, ExploratoryDeployResponse]
+    implicit val stringEncoder              = jsonEncoderOf[F, String]
+    implicit val booleanEncode              = jsonEncoderOf[F, Boolean]
+    implicit val apiStatusEncoder           = jsonEncoderOf[F, ApiStatus]
+    implicit val blockInfoEncoder           = jsonEncoderOf[F, BlockInfo]
+    implicit val lightBlockEncoder          = jsonEncoderOf[F, LightBlockInfo]
+    implicit val lightBlockListEnc          = jsonEncoderOf[F, List[LightBlockInfo]]
+    implicit val dataRespEncoder            = jsonEncoderOf[F, DataResponse]
+    implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
+    implicit val explRespEncoder            = jsonEncoderOf[F, ExploratoryDeployResponse]
+    implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
     // Decoders
     implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
     implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
@@ -160,6 +163,9 @@ object WebApiRoutes {
 
       case GET -> Root / "is-finalized" / hash =>
         webApi.isFinalized(hash).handle
+
+      case GET -> Root / "transactions" / hash =>
+        webApi.getTransaction(hash).handle
     }
   }
 
