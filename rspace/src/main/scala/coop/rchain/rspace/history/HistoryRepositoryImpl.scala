@@ -92,7 +92,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         s"${key.toHex};delete-join;0"
     }.toList
 
-  private def storeChannelHash(action: List[HotStoreAction]) = {
+  private def storeChannels(action: List[HotStoreAction]) = {
     val insertChans = action.collect {
       case i: InsertData[C, A] => i.channel
       case i: InsertJoins[C]   => i.channel
@@ -228,11 +228,9 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     val trieActions = actions.par.map(transform).toList
-    // store channels mapping
-    val storeChannels = storeChannelHash(actions).map(_.asLeft[History[F]])
     for {
       r <- doCheckpoint(trieActions)
-      _ <- storeChannels
+      _ <- storeChannels(actions)
       _ <- measure(actions)
     } yield r
   }

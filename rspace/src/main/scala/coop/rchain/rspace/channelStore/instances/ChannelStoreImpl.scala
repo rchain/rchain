@@ -3,6 +3,7 @@ package coop.rchain.rspace.channelStore.instances
 import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore, ContinuationHash, DataJoinHash}
 import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.hashing.ChannelHash._
@@ -13,6 +14,8 @@ import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import scodec.Codec
 import scodec.codecs.{discriminated, uint2}
+
+import java.util.Comparator
 
 object ChannelStoreImpl {
   def apply[F[_]: Sync, C](
@@ -54,6 +57,10 @@ object ChannelStoreImpl {
 
     override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] = store.get(hash)
 
+    // Get lexical Ordering for ByteString
+    implicit val bsLexicalOrdering: Ordering[ByteString] =
+      Ordering.comparatorToOrdering(ByteString.unsignedLexicographicalComparator())
+
     override def putChannelHashes(channels: Seq[C]): F[Unit] = {
       def convert(channel: C): F[(Blake2b256Hash, DataJoinHash)] =
         for {
@@ -65,7 +72,9 @@ object ChannelStoreImpl {
           joinHash = hashJoinsChannel(channel, sc)
         } yield (eventKey, DataJoinHash(dataHash, joinHash))
 
-      channels.toList.traverse(convert).flatMap(store.put)
+      channels.toList
+        .traverse(convert)
+        .flatMap(kvs => store.put(kvs.sortBy({ case (k, _) => k.toByteString })(bsLexicalOrdering)))
     }
 
     override def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit] = {
@@ -84,7 +93,9 @@ object ChannelStoreImpl {
           continuationHash = hashContinuationsChannels(channels, sc)
         } yield (eventKey, ContinuationHash(continuationHash))
 
-      conts.toList.traverse(convert).flatMap(store.put)
+      conts.toList
+        .traverse(convert)
+        .flatMap(kvs => store.put(kvs.sortBy({ case (k, _) => k.toByteString })(bsLexicalOrdering)))
     }
   }
 
