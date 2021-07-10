@@ -59,11 +59,15 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
       _ <- Log[F].info("Migration of LFB done.")
 
       // record finalized blocks
-      finalizedBlockSet = DagOps
-        .bfTraverse(List(lfb)) { bh =>
-          blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
-        }
-        .toList
+      finalizedBlockSet <- DagOps
+                            .bfTraverseF(List(lfb)) { bh =>
+                              blocksInfoMap
+                                .get(bh)
+                                // with trimmed state edge parents might not be in the blockmetadataDB, so filter them out
+                                .map(_.parents.toList.filterA(blockMetadataDb.contains(_)))
+                                .getOrElse(List.empty[BlockHash].pure)
+                            }
+                            .toList
 
       processChunk = (chunk: List[BlockHash]) => {
         implicit val s = new Show[BlockHash] {
