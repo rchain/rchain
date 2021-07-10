@@ -246,9 +246,9 @@ class Initializing[F[_]
         .map(_.latestBlockHash)
         .toSet
 
-      // Add sorted DAG in order from oldest to approved block
+      // Add sorted DAG in order from approved block to oldest
       minHeight <- getMinBlockHeight
-      _ <- heightMap.flatMap(_._2).toList.traverse_ { hash =>
+      _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
