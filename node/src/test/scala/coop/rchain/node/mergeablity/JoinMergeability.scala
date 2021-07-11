@@ -4,12 +4,10 @@ import coop.rchain.node.mergeablity.OperationOn0Ch._
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
 class JoinMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
-  it should "J S N 2" in MergeableCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)
-
   it should "J S S" in ConflictingCase(S0)(S1)(J_)(J_.rstate ++ S0.rstate)(
     J_.rstate ++ S1.rstate
   )
-  it should "J S N" in MergeableCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)
+  it should "J S N" in ConflictingCase(S0)(Nil)(J_)(J_.rstate ++ S0.rstate)(J_.rstate)
   it should "J S 4" in ConflictingCase(S0)(F_)(J_)(J_.rstate ++ S0.rstate)(
     J_.rstate ++ F_.rstate
   )
@@ -41,7 +39,7 @@ class JoinMergeability extends FlatSpec with Matchers with Inspectors with Basic
   it should "J R P" in ConflictingCase(R0)(P_)(J_)(J_.rstate ++ R0.rstate)(
     J_.rstate ++ P_.rstate
   )
-  it should "J R N" in MergeableCase(R0)(Nil)(J_)(J_.rstate ++ R0.rstate)
+  it should "J R N" in ConflictingCase(R0)(Nil)(J_)(J_.rstate ++ R0.rstate)(J_.rstate)
   it should "J P P" in MergeableCase(P1)(P0)(J_)(J_.rstate ++ P1.rstate ++ P0.rstate)
   it should "J P N" in MergeableCase(P1)(Nil)(J_)(J_.rstate ++ P1.rstate)
   it should "J N N" in MergeableCase(Nil)(Nil)(J_)(J_.rstate)

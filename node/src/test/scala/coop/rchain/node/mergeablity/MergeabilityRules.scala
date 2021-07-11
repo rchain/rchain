@@ -279,6 +279,9 @@ trait BasicMergeabilityRules extends ComputeMerge {
                   | """.stripMargin
           _ <- Sync[Task]
                 .raiseError(new Exception(errMsg))
+                .whenA(rejectedDeploys.isEmpty == isConflict)
+          _ <- Sync[Task]
+                .raiseError(new Exception(errMsg))
                 .whenA(dataContinuationAtMergedState != mergedStateResult)
         } yield ()
       },
