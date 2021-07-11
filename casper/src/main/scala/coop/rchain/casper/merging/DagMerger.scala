@@ -15,12 +15,16 @@ import coop.rchain.shared.Log
 
 object DagMerger {
 
+  def costOptimalRejectionAlg: DeployChainIndex => Long =
+    (r: DeployChainIndex) => r.deploysWithCost.map(_.cost).sum
+
   def merge[F[_]: Concurrent: Log](
       dag: BlockDagRepresentation[F],
       lfb: BlockHash,
       lfbPostState: Blake2b256Hash,
       index: BlockHash => F[Vector[DeployChainIndex]],
-      historyRepository: RhoHistoryRepository[F]
+      historyRepository: RhoHistoryRepository[F],
+      rejectionCostF: DeployChainIndex => Long
   ): F[(Blake2b256Hash, Seq[ByteString])] =
     for {
       // all not finalized blocks (conflict set)
@@ -57,7 +61,7 @@ object DagMerger {
             depends =
               (target, source) => MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
             conflicts = branchesAreConflicting,
-            cost = r => r.deploysWithCost.map(_.cost).sum,
+            cost = rejectionCostF,
             stateChanges = r => r.stateChanges.pure,
             computeTrieActions = computeTrieActions,
             applyTrieActions = applyTrieActions

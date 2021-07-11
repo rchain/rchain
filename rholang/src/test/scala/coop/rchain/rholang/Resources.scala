@@ -12,7 +12,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpa
 import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rspace
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.rspace.{Match, RSpace}
+import coop.rchain.rspace.RSpace
 import coop.rchain.shared.Log
 import coop.rchain.store.KeyValueStoreManager
 import monix.execution.Scheduler
@@ -62,28 +62,34 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[F, RhoRuntime[F]] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
-      .evalMap(mkRuntimeAt(_))
+      .evalMap(mkRuntimeAt(_, initRegistry = false))
       .map(_._1)
 
   def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
-      prefix: String
+      prefix: String,
+      initRegistry: Boolean = false
   )(
       implicit scheduler: Scheduler
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
-      .evalMap(mkRuntimeAt(_))
+      .evalMap(mkRuntimeAt(_, initRegistry = initRegistry))
 
   def mkRuntimeAt[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
       kvm: KeyValueStoreManager[F],
-      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
+      additionalSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      initRegistry: Boolean = false
   )(
       implicit scheduler: Scheduler
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     for {
       store <- kvm.rSpaceStores
       runtimes <- RhoRuntime
-                   .createRuntimes[F](store, additionalSystemProcesses = additionalSystemProcesses)
+                   .createRuntimes[F](
+                     store,
+                     iniRegistry = initRegistry,
+                     additionalSystemProcesses = additionalSystemProcesses
+                   )
       (runtime, replayRuntime, hr) = runtimes
     } yield (runtime, replayRuntime, hr)
 
