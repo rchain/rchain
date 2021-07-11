@@ -426,7 +426,8 @@ object RhoRuntime {
     "rho:registry:insertSigned:secp256k1" -> Bundle(
       FixedChannels.REG_INSERT_SIGNED,
       writeFlag = true
-    )
+    ),
+    "rho:registry:insertBlessed" -> Bundle(FixedChannels.REG_INSERT_BLESSED, writeFlag = true)
   )
 
   def setupReducer[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](

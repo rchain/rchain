@@ -94,6 +94,7 @@ object SystemProcesses {
     val REG_INSERT_SIGNED: Par  = byteName(16)
     val REG_OPS: Par            = byteName(17)
     val SYS_AUTHTOKEN_OPS: Par  = byteName(18)
+    val REG_INSERT_BLESSED: Par = byteName(19)
   }
   object BodyRefs {
     val STDOUT: Long             = 0L
@@ -111,6 +112,7 @@ object SystemProcesses {
     val DEPLOYER_ID_OPS: Long    = 14L
     val REG_OPS: Long            = 15L
     val SYS_AUTHTOKEN_OPS: Long  = 16L
+    val REG_INSERT_BLESSED: Long = 17L
   }
   final case class ProcessContext[F[_]: Concurrent: Span](
       space: RhoTuplespace[F],
