@@ -231,6 +231,8 @@ class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
     override val reducer: Reduce[F],
     override val space: RhoReplayISpace[F],
     override val cost: _cost[F],
+    // TODO: Runtime must be immutable. Block data and invalid blocks should be supplied when Runtime is created.
+    //  This also means to unify all special names necessary to spawn a new Runtime.
     override val blockDataRef: Ref[F, BlockData],
     override val invalidBlocksParam: InvalidBlocks[F]
 ) extends RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam)
