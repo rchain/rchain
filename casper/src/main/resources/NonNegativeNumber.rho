@@ -14,7 +14,15 @@
  9.  | 4,         | registry           | uri = rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
+
+new
+  NonNegativeNumber,
+  NonNegativeNumberDispatcher,
+  NonNegativeNumberLoc,
+  rb(`rho:registry:insertBlessed`),
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut
+in {
   contract NonNegativeNumber(@init, return) = {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
@@ -52,17 +60,71 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       return!(bundle+{*this}) |
       match init { //Initial balance is zero if given is negative on non-integer
         Int => {
-          if (init >= 0) { valueStore!(init)  }
-          else           { valueStore!(0) }
+          if (init > 0) {
+            valueStore!(init)
+          } else {
+            valueStore!(0)
+          }
         }
          _ => { valueStore!(0) }
       }
     }
   } |
-  
+  // Dispatcher contract
+  // for use with 1-9 arguments
+  contract NonNegativeNumberDispatcher(@arg1) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4, arg5)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+    }
+  } |
+  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+    for (realNNN <<- NonNegativeNumberLoc) {
+      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+    }
+  } |
+  // Put NNN contract on the location channel
+  NonNegativeNumberLoc!(bundle+{*NonNegativeNumber}) |
+  // Insert the contract location in the registry location map
+  rb!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberLoc) |
+  // Inserts signed write-only dispatcher contract into the registry
   rs!(
     "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),
-    (9223372036854775807, bundle+{*NonNegativeNumber}),
+    (9223372036854775807, bundle+{*NonNegativeNumberDispatcher}),
     "304402202b27c904bcecd83a7355db7f235fbe447c692079325deeefacba62c8ee236eb9022077b97df4e21784897e6da490b4b60c420a1db64b5807ad98acefa0a38c7f6f22".hexToBytes(),
     *uriOut
   )

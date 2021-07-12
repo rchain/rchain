@@ -17,10 +17,21 @@ new
   TreeHashMapLoc,
   TreeHashMapDispatcher,
   MultiSig,
-  msMethodsRet,
-  msRet
+  msRet,
+  secpVerify(`rho:crypto:secp256k1Verify`),
+  blake2b256(`rho:crypto:blake2b256Hash`),
+  hashVerify
 in {
-
+  contract hashVerify(@data, @sig, @pubKey, ret) = {
+    new hashCh in {
+      // hash the data
+      blake2b256!(data.toByteArray(), *hashCh) |
+      for (@hash <- hashCh) {
+        // verify the signature
+        secpVerify!(hash, sig, pubKey, *ret)
+      }
+    }
+  } |
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
   // that method assumes the registry already exists.
@@ -337,7 +348,16 @@ in {
         } |
         // Returns `TreeHashMap`'s method names and number of arguments
         contract TreeHashMap(@"api", ret) = {
-          ret!({ "init" : 2, "get" : 3, "fastUnsafeGet" : 3, "set" : 4, "contains" : 3, "update" : 4, "api" : 1, "extractState" : 1 })
+          ret!({
+            "init"          : 2,
+            "get"           : 3,
+            "fastUnsafeGet" : 3,
+            "set"           : 4,
+            "contains"      : 3,
+            "update"        : 4,
+            "api"           : 1,
+            "extractState"  : 1
+          })
         } |
         // Returns the current map
         contract TreeHashMap(@"extractState", ret) = {
@@ -346,6 +366,12 @@ in {
           }
         } |
         // TreeHashMap dispatcher contract
+        // for use with 1-9 arguments
+        contract TreeHashMapDispatcher(@arg1) = {
+          for (realThm <<- TreeHashMapLoc) {
+            realThm!(arg1)
+          }
+        } |
         contract TreeHashMapDispatcher(@arg1, @arg2) = {
           for (realThm <<- TreeHashMapLoc) {
             realThm!(arg1, arg2)
@@ -365,19 +391,39 @@ in {
           for (realThm <<- TreeHashMapLoc) {
             realThm!(arg1, arg2, arg3, arg4, arg5)
           }
+        } |
+        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+          for (realThm <<- TreeHashMapLoc) {
+            realThm!(arg1, arg2, arg3, arg4, arg5, arg6)
+          }
+        } |
+        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+          for (realThm <<- TreeHashMapLoc) {
+            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+          }
+        } |
+        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+          for (realThm <<- TreeHashMapLoc) {
+            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+          }
+        } |
+        contract TreeHashMapDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+          for (realThm <<- TreeHashMapLoc) {
+            realThm!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+          }
         }
       }
     }
   } |
   // blessed contract uri shorthand map
   match {
-    `rho:lang:either` : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
-    `rho:lang:listOps` : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
-    `rho:lang:nonNegativeNumber` : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
-    `rho:rchain:authKey` : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
-    `rho:rchain:makeMint` : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
-    `rho:rchain:pos` : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
-    `rho:rchain:revVault` : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
+    `rho:lang:either`             : `rho:id:qrh6mgfp5z6orgchgszyxnuonanz7hw3amgrprqtciia6astt66ypn`,
+    `rho:lang:listOps`            : `rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks`,
+    `rho:lang:nonNegativeNumber`  : `rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9`,
+    `rho:rchain:authKey`          : `rho:id:1qw5ehmq1x49dey4eadr1h4ncm361w3536asho7dr38iyookwcsp6i`,
+    `rho:rchain:makeMint`         : `rho:id:asysrwfgzf8bf7sxkiowp4b3tcsy4f8ombi3w96ysox4u3qdmn1wbc`,
+    `rho:rchain:pos`              : `rho:id:m3xk7h8r54dtqtwsrnxqzhe81baswey66nzw6m533nyd45ptyoybqr`,
+    `rho:rchain:revVault`         : `rho:id:6zcfqnwnaqcwpeyuysx1rm48ndr6sgsbbgjuwf45i5nor3io7dr76j`,
     `rho:rchain:multiSigRevVault` : `rho:id:b9s6j3xeobgset4ndn64hje64grfcj7a43eekb3fh43yso5ujiecfn`
     } {
     shorthands => {
@@ -395,6 +441,7 @@ in {
             blessedContractLocMapCh!(blessedContractLocMap.set(`rho:lang:treeHashMap`, *TreeHashMapLoc)) |
             TreeHashMapLoc!(bundle+{*TreeHashMap})
           } |
+          // Registers `lookupCh` as a lookup channel for the registry
           bootstrapLookup!(*lookupCh) | // this will work only once
           for (lookup <- lookupCh) {
             contract lookup(@uriOrShorthand, ret) = {
@@ -484,69 +531,51 @@ in {
           }
         }
       } |
-      // insertBlessed
       // blessedContractMap: uriShorthand -> location
       blessedContractLocMapCh!({}) |
+      // Registers `insertBlessedCh` as an insertBlessed channel in the registry
       bootstrapInsertBlessed!(*insertBlessedCh) |
       for (insertBlessed <- insertBlessedCh) {
-        // a consume is included for each blessed contract
+        // a consume is included for each (stateful) blessed contract
         // AuthKey
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
-        // Either
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
-          }
-        } |
-        // ListOps
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
-          }
-        } |
+        // We do not include stateless contracts in the blessed contract map
         // MakeMint
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
         // MultiSigRevVault
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
         // NonNegativeNumber
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
         // PoS
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
         // RevVault
-        for (@uri, @loc, @data, @sig, ack <- insertBlessed) {
+        for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc)) |
-            ack!()
+            blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         }
       } |
+      // --------
       // MultiSig
       // -------------------------------------------------------------------------------------
       // MultiSig enables similiar functionality to a multisig vault. 
@@ -560,7 +589,7 @@ in {
             new
               multisig,       // MultiSig contract's method entry point
               agreementMapCh, // channel on which the agreement map is stored
-              proposeMapCh,   // channel on which the propose map is stored
+              proposalMapCh,  // channel on which the propose map is stored
               multisigLoc,
               multisigDispatcher
             in {
@@ -569,63 +598,78 @@ in {
               agreementMapCh!({}) |
               // Initialize propose map
               // uri -> (contractData, methodData)
-              proposeMapCh!({}) |
+              proposalMapCh!({}) |
+              // -------
               // Propose
-              // --------------------------------
+              // --------------------------------------------------------------------------------
               // Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
               // There is only one proposal per uri possible at a time.
+              // --------------------------------------------------------------------------------
               contract multisig(@"propose", @pubKey, @uri, @con, @meth, @sig, @newApi, ret) = {
-                // TODO verify sig of (uri, con, meth)
-                if (pubKeys.contains(pubKey)) {
-                  // `pubKey` has the privilege to propose updates
-                  for (@bcMap <<- blessedContractLocMapCh) {
-                    if (bcMap.contains(uri)) {
-                      // `uri` belongs to a blessed contract
-                      match (uri, con, meth) {
-                        key => {
-                          for (@proposeMap <- proposeMapCh) {
-                            if (not proposeMap.contains(uri)) {
-                              // the update proposal is unique
-                              match proposeMap.set(uri, (con, meth)) {
-                                newProposeMap => {
-                                  new oldApiCh, newApiCh in {
-                                    // bcMap.get(uri) = loc
-                                    for (aMethod <<- @{bcMap.get(uri)}) {
-                                      aMethod!("api", *oldApiCh) |
-                                      for (@oldApi <- oldApiCh) {
-                                        if (oldApi.toSet().diff(newApi.toSet()) == Set()) {
-                                          // all old methods have an entry point in the new contract
-                                          proposeMapCh!(newProposeMap) |
-                                          for (@agreeMap <- agreementMapCh) {
-                                            // the proposer is the first to agree with a proposal
-                                            agreementMapCh!(agreeMap.set(key, Set(pubKey))) |
-                                            ret!((true, uri, con, meth))
+                new verifyCh in {
+                  if (pubKeys.contains(pubKey)) {
+                    // `pubKey` has the privilege to propose updates
+                    for (@bcMap <<- blessedContractLocMapCh) {
+                      if (bcMap.contains(uri)) {
+                        // `uri` belongs to a blessed contract
+                        match (uri, con, meth) {
+                          key => {
+                            for (@proposalMap <- proposalMapCh) {
+                              if (not proposalMap.contains(uri)) {
+                                // the update proposal is unique
+                                // check the signature of (uri, con, meth) = key
+                                hashVerify!(key, sig, pubKey, *verifyCh) |
+                                for (@verified <- verifyCh) {
+                                  if (verified) {
+                                    // signature is valid
+                                    match proposalMap.set(uri, (con, meth)) {
+                                      newproposalMap => {
+                                        new oldApiCh, newApiCh in {
+                                          // bcMap.get(uri) = loc
+                                          for (aMethod <<- @{bcMap.get(uri)}) {
+                                            aMethod!("api", *oldApiCh) |
+                                            for (@oldApi <- oldApiCh) {
+                                              if (oldApi.toSet().diff(newApi.toSet()) == Set()) {
+                                                // all old methods have an entry point in the new contract
+                                                proposalMapCh!(newproposalMap) |
+                                                for (@agreeMap <- agreementMapCh) {
+                                                  // the proposer is the first to agree with a proposal
+                                                  agreementMapCh!(agreeMap.set(key, Set(pubKey))) |
+                                                  ret!((true, uri, con, meth))
+                                                }
+                                              } else {
+                                                // all old methods must still have entry points in the new contract
+                                                proposalMapCh!(proposalMap) |
+                                                ret!((false, "APIs do not match"))
+                                              }
+                                            }
                                           }
-                                        } else {
-                                          // all old methods must still have entry points in the new contract
-                                          ret!((false, "APIs do not match"))
                                         }
                                       }
                                     }
+                                  } else {
+                                    // signature is invalid
+                                    proposalMapCh!(proposalMap) |
+                                    ret!((false, "invalid signature"))
                                   }
                                 }
+                              } else {
+                                // an update has already been proposed for this uri
+                                proposalMapCh!(proposalMap) |
+                                ret!((false, "location already exists"))
                               }
-                            } else {
-                              // an update has already been proposed for this uri
-                              proposeMapCh!(proposeMap) |
-                              ret!((false, "location already exists"))
                             }
                           }
                         }
+                      } else {
+                        // `uri` does not belong to a blessed contract
+                        ret!((false, "uri does not exist"))
                       }
-                    } else {
-                      // `uri` does not belong to a blessed contract
-                      ret!((false, "uri does not exist"))
                     }
+                  } else {
+                    // `pubKey` does not have the privilege to propose updates
+                    ret!((false, "invalid public key"))
                   }
-                } else {
-                  // `pubKey` does not have the privilege to propose updates
-                  ret!((false, "invalid public key"))
                 }
               } |
               // Agree
@@ -634,21 +678,31 @@ in {
               // Manages the `agreementMap`: (uri, contractData, methodData) -> set of agreeing pubKeys
               // --------------------------------------------------------------------------------------
               contract multisig(@"agree", @pubKey, @uri, @con, @meth, @sig, ret) = {
-                match (uri, con, meth) {
-                  agreeTruple => {
-                    if (pubKeys.contains(pubKey)) {
-                      // TODO verify sig of (uri, con, meth)
-                      for (@map <- agreementMapCh) {
-                        match map.getOrElse(agreeTruple, Set()).add(pubKey) {
-                          agreeing => {
-                            agreementMapCh!(map.set(agreeTruple, agreeing)) |
-                            ret!((true, uri, con, meth, agreeing))
+                new verifyCh in {
+                  match (uri, con, meth) {
+                    agreedTuple => {
+                      if (pubKeys.contains(pubKey)) {
+                        hashVerify!(agreedTuple, sig, pubKey, *verifyCh) |
+                        for (@verified <- verifyCh) {
+                          if (verified) {
+                            // valid signature
+                            for (@map <- agreementMapCh) {
+                              match map.getOrElse(agreedTuple, Set()).add(pubKey) {
+                                agreeing => {
+                                  agreementMapCh!(map.set(agreedTuple, agreeing)) |
+                                  ret!((true, uri, con, meth, agreeing))
+                                }
+                              }
+                            }
+                          } else {
+                            // invalvid signature
+                            ret!((false, "invalid signature"))
                           }
                         }
+                      } else {
+                        // pubKey is not in pubKeys
+                        ret!((false, "invalid public key"))
                       }
-                    } else {
-                      // pubKey is not in pubKeys
-                      ret!((false, "invalid public key"))
                     }
                   }
                 }
@@ -660,10 +714,10 @@ in {
               // then this method updates the contract data and manages the internal maps accordingly
               // ------------------------------------------------------------------------------------
               contract multisig(@"update", @uri, ret) = {
-                for (@proposeMap <- proposeMapCh) {
-                  if (proposeMap.contains(uri)) {
+                for (@proposalMap <- proposalMapCh) {
+                  if (proposalMap.contains(uri)) {
                     for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-                      match (blessedContractLocMap.get(uri), proposeMap.get(uri)) {
+                      match (blessedContractLocMap.get(uri), proposalMap.get(uri)) {
                         (loc, (con, meth)) => {
                           for (@agreementMap <- agreementMapCh) {
                             if (agreementMap.getOrElse((uri, con, meth), Set()).size() >= quorumSize) {
@@ -677,7 +731,7 @@ in {
                                     @con!(oldState, *newARet) |
                                     // manage agreement and propose maps
                                     agreementMapCh!(agreementMap.delete((uri, con, meth))) |
-                                    proposeMapCh!(proposeMap.delete(uri)) |
+                                    proposalMapCh!(proposalMap.delete(uri)) |
                                     // write new method entry point to location channel
                                     @loc!(meth) |
                                     ret!((true, (*newApiCh, *newARet)))
@@ -686,7 +740,7 @@ in {
                               }
                             } else {
                               agreementMapCh!(agreementMap) |
-                              proposeMapCh!(proposeMap) |
+                              proposalMapCh!(proposalMap) |
                               ret!((false, "quorum does not exist"))
                             }
                           }
@@ -694,7 +748,7 @@ in {
                       }
                     }
                   } else {
-                    proposeMapCh!(proposeMap) |
+                    proposalMapCh!(proposalMap) |
                     ret!((false, "invalid proposal uri"))
                   }
                 }
@@ -709,8 +763,8 @@ in {
               contract multisig(@"read", ret) = {
                 for (@agreementMap <<- agreementMapCh;
                      @blessedMap   <<- blessedContractLocMapCh;
-                     @proposeMap   <<- proposeMapCh) {
-                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposeMap })
+                     @proposalMap  <<- proposalMapCh) {
+                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
                 }
               } |
               // Returns the api for `multisig`
@@ -721,8 +775,8 @@ in {
               contract multisig(@"extractState", ret) = {
                 for (@agreementMap <<- agreementMapCh;
                      @blessedMap   <<- blessedContractLocMapCh;
-                     @proposeMap   <<- proposeMapCh) {
-                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposeMap })
+                     @proposalMap  <<- proposalMapCh) {
+                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
                 }
               } |
               msRet!(bundle+{*multisig}, pubKeys, quorumSize) |
@@ -737,6 +791,53 @@ in {
                     blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:multisig`, *multisigLoc)) |
                     multisigLoc!(bundle+{*multisig})
                   }
+                }
+              } |
+              // multisig dispatcher contract
+              // for use with 1-9 arguments
+              contract multisigDispatcher(@arg1) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4, arg5)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+                }
+              } |
+              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+                for (realMS <<- multisigLoc) {
+                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
                 }
               }
               // TODO send each member of pubKeys a handle to `multisig`

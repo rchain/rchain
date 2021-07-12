@@ -14,7 +14,11 @@
  9.  | 4,         | registry           | uri = rho:id:6fzorimqngeedepkrizgiqms6zjt76zjeciktt1eifequy4osz35ks
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
+new
+  ListOps,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  uriOut
+in {
   contract ListOps(@"prepend", @head, @tail, return) = {
     return!([head] ++ tail)
   } |
@@ -23,10 +27,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     return!(list ++ [element])
   } |
 
-  //A fold over the list which breaks early if a condition is met.
-  //Both the condition and combinator are are combined into a single
-  //function which returns a [boolean, value] pair.
-  //Use cases: see get and indexOf
+  // A fold over the list which breaks early if a condition is met.
+  // Both the condition and combinator are combined into a single
+  // function which returns a [boolean, value] pair.
+  // Use cases: see get and indexOf
   new loop in {
     contract loop(@accumulatedValue, @lst, combinatorAndCondition, return) = {
       match lst {
@@ -47,10 +51,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     }
   } |
 
-  //A fold over the list which breaks early if a condition is met.
-  //Both the condition and combinator are are combined into a single
-  //function which returns a [boolean, value] pair.
-  //Use cases: see get and indexOf
+  // A fold over the list which breaks early if a condition is met.
+  // Both the condition and combinator are are combined into a single
+  // function which returns a [boolean, value] pair.
+  // Use cases: see get and indexOf
   new loop in {
     contract loop(@accumulatedValue, @lst, combinatorAndCondition, @state, return) = {
       match lst {
@@ -147,10 +151,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     contract ListOps(@"parMap", @list, function, return) = {
       new namesListCh, startProcess in {
         contract startProcess(@x, ret) = { new outCh in { function!(x, *outCh) | ret!(*outCh) } } |
-        //map each element to a name listening for the result of the function
+        // map each element to a name listening for the result of the function
         ListOps!("map", list, *startProcess, *namesListCh) |
         for(@namesList <- namesListCh) {
-          //map each name to its result
+          // map each name to its result
           ListOps!("map", namesList, *getOutput, *return)
         }
       }
@@ -164,10 +168,10 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     } |
     contract ListOps(@"parMapClean", @list, function, @state, return) = {
       new namesListCh in {
-        //map each element to a name listening for the result of the function
+        // map each element to a name listening for the result of the function
         ListOps!("mapClean", list, *startProcess, (*function, state), *namesListCh) |
         for(@namesList <- namesListCh) {
-          //map each name to its result
+          // map each name to its result
           ListOps!("mapClean", namesList, *getOutput, Nil, *return)
         }
       }
@@ -187,17 +191,17 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
 
     contract ListOps(@"unorderedParMap", @list, function, return) = {
       new collect, startCount, completeCount, accCh in {
-        //Spawn processes, each computing one element
-        //also processes listening for the result
-        //add a result to our accumulating list
+        // Spawn processes, each computing one element
+        // also processes listening for the result
+        // add a result to our accumulating list
         contract collect(@result) = {
           for(@sc <- startCount) {
             for (@cc <- completeCount) {
               for (@acc <- accCh) {
                 startCount!(sc) |
-                if (sc == cc + 1) { //all started processes completed!
+                if (sc == cc + 1) { // all started processes completed!
                   return!([result] ++ acc)
-                } else {            //still waiting on some
+                } else {            // still waiting on some
                   completeCount!(cc + 1) |
                   accCh!([result] ++ acc)
                 }
@@ -226,17 +230,17 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
 
     contract ListOps(@"unorderedParMapClean", @list, function, @state, return) = {
       new collect, startCount, completeCount, accCh in {
-        //Spawn processes, each computing one element
-        //also processes listening for the result
-        //add a result to our accumulating list
+        // Spawn processes, each computing one element
+        // also processes listening for the result
+        // add a result to our accumulating list
         contract collect(@result) = {
           for(@sc <- startCount) {
             for (@cc <- completeCount) {
               for (@acc <- accCh) {
                 startCount!(sc) |
-                if (sc == cc + 1) { //all started processes completed!
+                if (sc == cc + 1) { // all started processes completed!
                   return!([result] ++ acc)
-                } else {            //still waiting on some
+                } else {            // still waiting on some
                   completeCount!(cc + 1) |
                   accCh!([result] ++ acc)
                 }
@@ -255,7 +259,7 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
   contract ListOps(@"foreach", @list, proc, isDone) = {
     new combinator, nilReturn in {
       contract combinator(@head, @accumulatedValue, return) = {
-        //Need return flag from `proc` in order to guarantee execution order
+        // Need return flag from `proc` in order to guarantee execution order
         new isDone in { proc!(head, *isDone) | for(_ <- isDone){ return!(Nil) } }
       } |
       ListOps!("fold", list, Nil, *combinator, *nilReturn) | for(_ <- nilReturn){ isDone!(true) }
@@ -264,7 +268,7 @@ new  ListOps, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
 
   new combinator in {
     contract combinator(@(proc, state), @head, @accumulatedValue, return) = {
-      //Need return flag from `proc` in order to guarantee execution order
+      // Need return flag from `proc` in order to guarantee execution order
       new isDone in { @proc!(state, head, *isDone) | for(_ <- isDone){ return!(Nil) } }
     } |
     contract ListOps(@"foreachClean", @list, proc, @state, isDone) = {

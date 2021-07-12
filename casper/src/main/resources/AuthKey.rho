@@ -16,10 +16,12 @@
  */
 new 
   AuthKey,
+  AuthKeyLoc,
+  AuthKeyDispatcher,
+  rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut,
-  _authKey,
-  stdout(`rho:io:stdout`)
+  _authKey
 in {
 
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
@@ -66,13 +68,62 @@ in {
       }
     }
   } |
-
+  // Dispatcher contract
+  // for use with 1-9 arguments
+  contract AuthKeyDispatcher(@arg1) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4, arg5)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+    }
+  } |
+  contract AuthKeyDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+    for (realAK <<- AuthKeyLoc) {
+      realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+    }
+  } |
+  // Insert location channel into the registry location map
+  rb!(`rho:rchain:authKey`, *AuthKeyLoc) |
+  // Put the contract data on the location channel
+  AuthKeyLoc!(bundle+{*AuthKey}) |
+  // Inserts signed write-only AuthKey contract into the registry
   rs!(
     "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510".hexToBytes(),
-    (9223372036854775807, bundle+{*AuthKey}),
+    (9223372036854775807, bundle+{*AuthKeyDispatcher}),
     "304402205d2dc163a40804a445237ef6bd181249a68598d146e66d0c96484c6cfeaaaffd02205e537f1e7bae82b99abbdc25c8472c44f5848085a3a3f23357507c05524be4a7".hexToBytes(),
     *uriOut
   )
 }
-  
-  

@@ -14,63 +14,55 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
 new
-  MakeMint, rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-  rl(`rho:registry:lookup`), NonNegativeNumberCh
+  MakeMint,
+  MakeMintLoc,
+  MakeMintDispatcher,
+  uriOut,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  rl(`rho:registry:lookup`),
+  rb(`rho:registry:insertBlessed`),
+  NonNegativeNumberCh
 in {
   rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
   for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
+    // user calls MakeMint
+    // we actually go to MakeMintLoc and get the real MakeMint contract definition
     contract MakeMint(return) = {
-      new thisMint, internalMakePurse, decr in {
+      new thisMint, thisMintLoc, internalMakePurse, decr in {
         contract thisMint(@"makePurse", @init, return) = {
-          new balanceCh in {
-            @NonNegativeNumber!(init, *balanceCh) |
-            for(@balance <- balanceCh) {
-              internalMakePurse!(balance, *return)
+          for (@realThisMint <<- thisMintLoc) {
+            new balanceCh in {
+              @NonNegativeNumber!(init, *balanceCh) |
+              for(@balance <- balanceCh) {
+                internalMakePurse!(balance, *return)
+              }
             }
           }
         } |
         contract internalMakePurse(balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
-          new thisPurse, logStore in {
-            logStore!(Nil) |
-            new letCh in { // let thisDecr = ...
-              letCh!(bundle0{bundle0{*thisPurse}|*decr}) |
-              for (thisDecr <- letCh) {
+          new thisPurse in {
+            match {bundle0{bundle0{*thisPurse}|*decr}} {
+              thisDecr => {
                 // Checks mint and either decreases the balance of this purse by the given amount and returns true or
                 // doesn't not decrease and returns false.
-                contract thisPurse(@=*thisDecr, @amount, return) = {
-                  new success, thisPurseDecrCh, decrCh,
-                      bd(`rho:block:data`), bdCh
-                  in {
+                contract thisPurse(@=thisDecr, @amount, return) = {
+                  new success, thisPurseDecrCh, decrCh in {
                     // Checks that this purse has been provided with the correct decr.
                     decrCh!(bundle0{*decr}) |
                     thisPurse!("decr", *thisPurseDecrCh) |
                     for (@thisPurseDecr <- thisPurseDecrCh;
-                         @decrBundle    <- decrCh) {
-                      for (logCh <<- logStore) {
-                        if (thisPurseDecr == decrBundle) {
-                          // Correct mint.
-                          // Calls "sub" method on balance in the NonNegativeNumber contract.
-                          balance!("sub", amount, *success) |
-                          for (@subOk <- success) {
-                            return!(subOk) |
-                            if (Nil != *logCh) {
-                              bd!(*bdCh) |
-                              for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                logCh!(["*decr", amount, subOk, blockNumber, timestamp, sender])
-                              }
-                            }
-                          }
-                        } else {
-                          // Incorrect mint.
-                          return!(false) |
-                          if (Nil != *logCh) {
-                            bd!(*bdCh) |
-                            for (@blockNumber, @timestamp, @sender <- bdCh) {
-                              logCh!(["*decr", amount, false, blockNumber, timestamp, sender])
-                            }
-                          }
+                          @decrBundle    <- decrCh) {
+                      if (thisPurseDecr == decrBundle) {
+                        // Correct mint.
+                        // Calls "sub" method on balance in the NonNegativeNumber contract.
+                        balance!("sub", amount, *success) |
+                        for (@subOk <- success) {
+                          return!(subOk)
                         }
+                      } else {
+                        // Incorrect mint.
+                        return!(false)
                       }
                     }
                   }
@@ -80,10 +72,6 @@ in {
                   return!(bundle0{*decr})
                 }
               }
-            } |
-            // Set to Nil to disable logging
-            contract thisPurse(@"setLog", logCh, ack) = {
-              for (_ <- logStore) { logStore!(*logCh) | ack!(Nil) }
             } |
             contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
             contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
@@ -109,65 +97,38 @@ in {
                 @src!("decr", *srcDecrCh) |
                 for (@thisDecr <- thisDecrCh;
                      @srcDecr  <- srcDecrCh) {
-                  for (logCh <<- logStore) {
-                    new bd(`rho:block:data`), bdCh in {
-                      if (thisDecr == srcDecr) {
-                        // Adds amount to this purse if same mint.
-                        // Checks balance of this purse after adding amount to it to make sure an overflow did not occur.
-                        balance!("add", amount, *addSuccessCh) |
-                        for (@addSuccess <- addSuccessCh) {
-                          if (addSuccess) {
-                            // No overflow occurred.
-                            @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
-                            for (@decrSuccess <- result) {
-                              if (decrSuccess) {
-                                // Proper authority to subtract amount from src, amount subtracted from src.
-                                success!(true) |
-                                // log
-                                if (Nil != *logCh) {
-                                  bd!(*bdCh) |
-                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                    logCh!(["deposit", amount, src.toByteArray(), true, blockNumber, timestamp, sender])
-                                  }
-                                }
-                              } else {
-                                // Insufficient funds in src purse.
-                                // The amount must now be subtracted from this purse.
-                                new subCh in {
-                                  balance!("sub", amount, *subCh) |
-                                  for (_ <- subCh) {
-                                    success!(false)
-                                  }
-                                } |
-                                if (Nil != *logCh) {
-                                  bd!(*bdCh) |
-                                  for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                    logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                                  }
+                  new bd(`rho:block:data`), bdCh in {
+                    if (thisDecr == srcDecr) {
+                      // Adds amount to this purse if same mint.
+                      // Checks balance of this purse after adding amount to it to make sure an overflow did not occur.
+                      balance!("add", amount, *addSuccessCh) |
+                      for (@addSuccess <- addSuccessCh) {
+                        if (addSuccess) {
+                          // No overflow occurred.
+                          @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                          for (@decrSuccess <- result) {
+                            if (decrSuccess) {
+                              // Proper authority to subtract amount from src, amount subtracted from src.
+                              success!(true)
+                            } else {
+                              // Insufficient funds in src purse.
+                              // The amount must now be subtracted from this purse.
+                              new subCh in {
+                                balance!("sub", amount, *subCh) |
+                                for (_ <- subCh) {
+                                  success!(false)
                                 }
                               }
                             }
-                          } else {
-                            // Failed to add funds to this purse due to overflow or negative amount.
-                            success!(false) |
-                            if (Nil != *logCh) {
-                              bd!(*bdCh) |
-                              for (@blockNumber, @timestamp, @sender <- bdCh) {
-                                logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                              }
-                            }
                           }
-                        }
-                      } else {
-                        // Mint mismatch. No transfer occurs.
-                        success!(false) |
-                        if (Nil != *logCh) {
-                          bd!(*bdCh) |
-                          for (@blockNumber, @timestamp, @sender <- bdCh) {
-                            logCh!(["deposit", amount, src.toByteArray(), false, blockNumber, timestamp, sender])
-                          }
+                        } else {
+                          // Failed to add funds to this purse due to overflow or negative amount.
+                          success!(false)
                         }
                       }
+                    } else {
+                      // Mint mismatch. No transfer occurs.
+                      success!(false)
                     }
                   }
                 }
@@ -178,11 +139,63 @@ in {
         } |
         return!(bundle+{*thisMint})
       }
+    } |
+    // Dispatcher contract
+    // for use with 1-9 arguments
+    contract MakeMintDispatcher(@arg1) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4, arg5)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4, arg5, arg6)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+      }
+    } |
+    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+      for (realMM <<- MakeMintLoc) {
+        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+      }
     }
   } |
+  // Insert location channel into the registry location map
+  rb!(`rho:rchain:makeMint`, *MakeMintLoc) |
+  // Put the contract data on the location channel
+  MakeMintLoc!(bundle+{*MakeMint}) |
+  // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
     "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28".hexToBytes(),
-    (9223372036854775807, bundle+{*MakeMint}),
+    (9223372036854775807, bundle+{*MakeMintDispatcher}),
     "304402202fa3b242149821b91b35b058faa3943efdd5ce938cb8c6873a4cb5b2694ed53202200a7a443b29411e659806b1c8e1583eec1e0404b218d43f45fef6a3c418326649".hexToBytes(),
     *uriOut
   )
