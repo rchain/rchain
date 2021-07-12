@@ -1,7 +1,5 @@
 package coop.rchain.casper.util.rholang
 
-import java.nio.file.Files
-
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.catscontrib.TaskContrib._
@@ -13,10 +11,10 @@ import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
-import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler
 
+import java.nio.file.Files
 import scala.collection.mutable
 import scala.concurrent.duration._
 
@@ -93,7 +91,7 @@ object Interactive {
     val p                                  = Files.createTempDirectory("interactive-")
     val kvm                                = RNodeKeyValueStoreManager[Task](p).unsafeRunSync
     val rspaceStore                        = kvm.rSpaceStores.runSyncUnsafe()
-    val (runtime, _, _)                    = RhoRuntime.createRuntimes[Task](rspaceStore).unsafeRunSync
+    val runtime                            = RhoRuntime.createRuntime[Task](rspaceStore).unsafeRunSync
     new Interactive(runtime)
   }
 }

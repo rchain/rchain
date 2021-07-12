@@ -1,16 +1,13 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
-import cats.implicits._
 import cats.mtl.implicits._
-import coop.rchain.catscontrib.mtl.implicits._
-import coop.rchain.metrics.{Metrics, Span}
+import cats.syntax.all._
+import coop.rchain.metrics.Span
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.rholang.interpreter._
-import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.matcher._
 import coop.rchain.rspace.{Match => StorageMatch}
 import coop.rchain.shared.Serialize

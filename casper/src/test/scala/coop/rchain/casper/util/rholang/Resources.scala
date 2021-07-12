@@ -4,24 +4,18 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.blockstorage.dag.{
-  BlockDagKeyValueStorage,
-  BlockDagRepresentation,
-  BlockDagStorage
-}
-import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.rholang.Resources.{mkRuntimeAt, mkTempDir}
+import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
 import coop.rchain.store.LmdbDirStoreManager.mb
 import coop.rchain.store.{KeyValueStoreManager, LmdbDirStoreManager}
@@ -54,6 +48,8 @@ object Resources {
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix).evalMap(mkTestRNodeStoreManager[F]).evalMap(mkRuntimeManagerAt[F])
 
+  // TODO: This is confusing to create another instances for Log, Metrics and Span.
+  //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](kvm: KeyValueStoreManager[F])(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -62,8 +58,8 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtime        <- mkRuntimeAt[F](kvm)
-      runtimeManager <- RuntimeManager.fromRuntimes(runtime._1, runtime._2, runtime._3)
+      store          <- kvm.rSpaceStores
+      runtimeManager <- RuntimeManager(store)
     } yield runtimeManager
   }
 
@@ -77,19 +73,15 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      runtimes                          <- mkRuntimeAt[F](kvm)
-      (runtime, replayRuntime, history) = runtimes
-      runtimeManager                    <- RuntimeManager.fromRuntimes(runtime, replayRuntime, history)
-    } yield (runtimeManager, history)
+      store                     <- kvm.rSpaceStores
+      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(store)
+    } yield runtimeManagerWithHistory
   }
 
   def copyStorage[F[_]: Sync](
       storageTemplatePath: Path
   ): Resource[F, Path] =
-    for {
-      storageDirectory <- mkTempDir(s"casper-test-")
-      _                <- Resource.liftF(copyDir(storageTemplatePath, storageDirectory))
-    } yield storageDirectory
+    mkTempDir(s"casper-test-").evalTap(copyDir[F](storageTemplatePath, _))
 
   private def copyDir[F[_]: Sync](src: Path, dest: Path): F[Unit] = Sync[F].delay {
     Files

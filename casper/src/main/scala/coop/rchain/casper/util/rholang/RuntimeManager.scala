@@ -16,12 +16,15 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
+import coop.rchain.rspace
+import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.Log
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
@@ -59,20 +62,20 @@ trait RuntimeManager[F[_]] {
   def getContinuation(hash: StateHash)(
       channels: Seq[Par]
   ): F[Seq[(Seq[BindPattern], Par)]]
-  def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A]
-  def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A]
+  def spawnRuntime: F[RhoRuntime[F]]
+  def spawnReplayRuntime: F[ReplayRhoRuntime[F]]
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
   def getHistoryRepo: RhoHistoryRepository[F]
 }
 
-class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
+final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F]
 ) extends RuntimeManager[F] {
 
-  def withRuntime[A](f: RhoRuntime[F] => F[A]): F[A] =
+  def spawnRuntime: F[RhoRuntime[F]] =
     for {
       newSpace <- space
                    .asInstanceOf[
@@ -80,10 +83,9 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
                    ]
                    .spawn
       runtime <- RhoRuntime.createRhoRuntime(newSpace)
-      r       <- f(runtime)
-    } yield r
+    } yield runtime
 
-  def withReplayRuntime[A](f: ReplayRhoRuntime[F] => F[A]): F[A] =
+  def spawnReplayRuntime: F[ReplayRhoRuntime[F]] =
     for {
       newReplaySpace <- replaySpace
                          .asInstanceOf[ReplayRSpace[
@@ -95,23 +97,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
                          ]]
                          .spawn
       runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace)
-      r       <- f(runtime)
-    } yield r
+    } yield runtime
 
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
   ): F[SystemDeployPlayResult[systemDeploy.Result]] =
-    withRuntime(runtime => runtime.playSystemDeploy(stateHash)(systemDeploy))
+    spawnRuntime.flatMap(_.playSystemDeploy(stateHash)(systemDeploy))
 
   // TODO: method is used only in tests
   def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S,
       processedSystemDeploy: ProcessedSystemDeploy
   ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
-    withReplayRuntime(
-      replayRuntime =>
-        replayRuntime.replaySystemDeploy(stateHash)(systemDeploy, processedSystemDeploy)
-    )
+    spawnReplayRuntime.flatMap { replayRuntime =>
+      replayRuntime.replaySystemDeploy(stateHash)(systemDeploy, processedSystemDeploy)
+    }
 
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
@@ -119,15 +119,13 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    withRuntime(
-      runtime => runtime.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks)
-    )
+    spawnRuntime.flatMap(_.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks))
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    withRuntime(runtime => runtime.computeGenesis(terms, blockTime))
+    spawnRuntime.flatMap(_.computeGenesis(terms, blockTime))
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
@@ -136,22 +134,21 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
-    withReplayRuntime(
-      replayRuntime =>
-        replayRuntime
-          .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
-    )
+    spawnReplayRuntime.flatMap { replayRuntime =>
+      replayRuntime
+        .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
+    }
 
   def captureResults(
       start: StateHash,
       deploy: Signed[DeployData]
-  ): F[Seq[Par]] = withRuntime(runtime => runtime.captureResults(start, deploy))
+  ): F[Seq[Par]] = spawnRuntime.flatMap(_.captureResults(start, deploy))
 
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
-    withRuntime(runtime => runtime.getActiveValidators(startHash))
+    spawnRuntime.flatMap(_.getActiveValidators(startHash))
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] =
-    withRuntime(runtime => {
+    spawnRuntime.flatMap { runtime =>
       def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
         case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
           Log[F].error(
@@ -172,25 +169,24 @@ class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Par
         RetryPolicies.limitRetries[F](5),
         onError = logError
       )(runtime.computeBonds(hash))
-    })
+    }
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
   def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] =
-    withRuntime(runtime => runtime.playExploratoryDeploy(term, hash))
+    spawnRuntime.flatMap(_.playExploratoryDeploy(term, hash))
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
-    withRuntime(
-      runtime => runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getDataPar(channel)
-    )
+    spawnRuntime.flatMap { runtime =>
+      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getDataPar(channel)
+    }
 
   def getContinuation(
       hash: StateHash
   )(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
-    withRuntime(
-      runtime =>
-        runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getContinuationPar(channels)
-    )
+    spawnRuntime.flatMap { runtime =>
+      runtime.reset(Blake2b256Hash.fromByteString(hash)) >> runtime.getContinuationPar(channels)
+    }
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo
 }
@@ -210,19 +206,31 @@ object RuntimeManager {
       Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
     )
 
-  def fromRuntimes[F[_]: Concurrent: Metrics: Span: Log: Parallel: ContextShift](
-      runtime: RhoRuntime[F],
-      replayRuntime: ReplayRhoRuntime[F],
+  def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
+
+  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      rSpace: RhoISpace[F],
+      replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F]
-  ): F[RuntimeManager[F]] =
-    Concurrent[F].delay(
-      new RuntimeManagerImpl(
-        runtime.getRSpace.asInstanceOf[RhoISpace[F]],
-        replayRuntime.getRSpace.asInstanceOf[RhoReplayISpace[F]],
-        historyRepo
-      )
-    )
+  ): F[RuntimeManagerImpl[F]] = Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo))
 
-  def apply[F[_]](implicit instance: RuntimeManager[F]): RuntimeManager[F] = instance
+  def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      store: RSpaceStore[F]
+  )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
+    createWithHistory(store).map(_._1)
 
+  def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
+      store: RSpaceStore[F]
+  )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
+    import coop.rchain.rholang.interpreter.storage._
+    implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
+
+    RSpace
+      .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
+      .flatMap {
+        case (rSpacePlay, rSpaceReplay) =>
+          val historyRepo = rSpacePlay.historyRepo
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo).map((_, historyRepo))
+      }
+  }
 }

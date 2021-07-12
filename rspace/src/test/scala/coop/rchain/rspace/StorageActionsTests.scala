@@ -923,7 +923,6 @@ trait StorageActionsTests[F[_]]
       checkpoint0 <- space.createCheckpoint()
       _           = checkpoint0.log should not be empty
       _           <- space.createCheckpoint()
-      _           <- space.clear()
       //force clearing of trie store state
       _ <- space.clear()
       //the checkpointing mechanism should not interfere with the empty root

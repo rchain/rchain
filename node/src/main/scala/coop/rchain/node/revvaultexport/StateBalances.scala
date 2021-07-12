@@ -44,9 +44,9 @@ object StateBalances {
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                    store
                  )
-      (rSpacePlay, rSpaceReplay, _) = spaces
-      runtimes                      <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty)
-      (rhoRuntime, _)               = runtimes
+      (rSpacePlay, rSpaceReplay) = spaces
+      runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty)
+      (rhoRuntime, _)            = runtimes
       _ <- rhoRuntime.reset(
             Blake2b256Hash.fromByteString(block.body.state.postStateHash)
           )

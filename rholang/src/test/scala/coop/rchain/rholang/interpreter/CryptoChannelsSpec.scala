@@ -1,7 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import java.nio.file.Files
-import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.codec.Base16
@@ -15,9 +13,9 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.testImplicits._
-import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
-import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.Resources
 import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
@@ -28,6 +26,7 @@ import org.scalactic.TripleEqualsSupport
 import org.scalatest.prop.PropertyChecks
 import org.scalatest.{fixture, Assertion, Matchers, Outcome}
 
+import java.nio.file.Files
 import scala.collection.immutable.BitSet
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -222,10 +221,10 @@ class CryptoChannelsSpec
     implicit val kvm                        = InMemoryStoreManager[Task]
 
     val runtime = (for {
-      store                        <- kvm.rSpaceStores
-      spaces                       <- RhoRuntime.createRuntimes[Task](store)
-      (runtime, replayRuntime, hr) = spaces
-      _                            <- runtime.cost.set(Cost.UNSAFE_MAX)
+      store                       <- kvm.rSpaceStores
+      spaces                      <- Resources.createRuntimes[Task](store)
+      (runtime, replayRuntime, _) = spaces
+      _                           <- runtime.cost.set(Cost.UNSAFE_MAX)
     } yield runtime).unsafeRunSync
 
     try {
