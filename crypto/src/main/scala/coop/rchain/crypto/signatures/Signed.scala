@@ -18,6 +18,13 @@ final case class Signed[A] private (
   // https://contributors.scala-lang.org/t/removing-copy-operation-from-case-classes-with-private-constructors/2605/2
   private def copy(): Unit = hack
   private def hack(): Unit = copy
+
+  override def hashCode(): Int = sig.hashCode()
+
+  override def equals(obj: Any): Boolean = obj match {
+    case s: Signed[A] => s.sig == this.sig
+    case _            => false
+  }
 }
 
 object Signed {
