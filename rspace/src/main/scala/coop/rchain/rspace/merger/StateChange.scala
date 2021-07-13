@@ -128,8 +128,22 @@ object StateChange {
             .compile
             .drain
       produceChanges <- datumsDiffRef.get
+      _ <- new Exception("State change compute logic error: empty channel change for produce.")
+            .raiseError[F, StateChange]
+            .whenA(
+              produceChanges
+                .map { case (_, ChannelChange(add, del)) => add.isEmpty && del.isEmpty }
+                .exists(_ == true)
+            )
       consumeChanges <- kontsDiffRef.get
-      joinsMap       <- joinsMapRef.get
+      _ <- new Exception("State change compute logic error: empty channel change for consume.")
+            .raiseError[F, StateChange]
+            .whenA(
+              consumeChanges
+                .map { case (_, ChannelChange(add, del)) => add.isEmpty && del.isEmpty }
+                .exists(_ == true)
+            )
+      joinsMap <- joinsMapRef.get
     } yield StateChange(produceChanges, consumeChanges, joinsMap)
 
   def empty: StateChange = StateChange(Map.empty, Map.empty, Map.empty)

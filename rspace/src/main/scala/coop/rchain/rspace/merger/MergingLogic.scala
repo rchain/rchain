@@ -88,7 +88,7 @@ object MergingLogic {
   /** Produces that are affected by event log - locally created + external destroyed. */
   def producesAffected(e: EventLogIndex): Set[Produce] = {
     def externalProducesDestroyed(e: EventLogIndex): Set[Produce] =
-      e.producesConsumed diff producesCreated(e)
+      (e.producesConsumed diff producesCreated(e)).filterNot(_.persistent)
 
     producesCreatedAndNotDestroyed(e) ++ externalProducesDestroyed(e)
   }
@@ -96,7 +96,7 @@ object MergingLogic {
   /** Consumes that are affected by event log - locally created + external destroyed. */
   def consumesAffected(e: EventLogIndex): Set[Consume] = {
     def externalConsumesDestroyed(e: EventLogIndex): Set[Consume] =
-      e.consumesProduced diff consumesCreated(e)
+      (e.consumesProduced diff consumesCreated(e)).filterNot(_.persistent)
 
     consumesCreatedAndNotDestroyed(e) ++ externalConsumesDestroyed(e)
   }
