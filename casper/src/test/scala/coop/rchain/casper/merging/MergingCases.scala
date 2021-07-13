@@ -74,13 +74,13 @@ class MergingCases extends FlatSpec with Matchers {
               )
           (_, processedDeploys, _) = r
           _                        = processedDeploys.size shouldBe 2
-          idxs <- processedDeploys.toList.traverse(
+          idxs <- processedDeploys.toList.traverse { d =>
                    BlockIndex.createEventLogIndex(
-                     _,
+                     d.deployLog,
                      runtimeManager.getHistoryRepo,
                      Blake2b256Hash.fromByteString(baseState)
                    )
-                 )
+                 }
           firstDepends  = MergingLogic.depends(idxs.head, idxs(1))
           secondDepends = MergingLogic.depends(idxs(1), idxs.head)
           conflicts     = MergingLogic.areConflicting(idxs.head, idxs(1))
