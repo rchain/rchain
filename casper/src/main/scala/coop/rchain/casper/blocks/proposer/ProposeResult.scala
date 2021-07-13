@@ -55,9 +55,11 @@ object ProposeResult {
 }
 
 trait BlockCreatorResult
-case object NoNewDeploys                             extends BlockCreatorResult with ProposeFailure
-final case class Created(blockMessage: BlockMessage) extends BlockCreatorResult
+case object NoNewDeploys                                        extends BlockCreatorResult with ProposeFailure
+final case class Created(blockMessage: BlockMessage)            extends BlockCreatorResult
+final case class CreatedAttestation(blockMessage: BlockMessage) extends BlockCreatorResult
 object BlockCreatorResult {
-  def noNewDeploys: BlockCreatorResult             = NoNewDeploys
-  def created(b: BlockMessage): BlockCreatorResult = Created(b)
+  def noNewDeploys: BlockCreatorResult                        = NoNewDeploys
+  def created(b: BlockMessage): BlockCreatorResult            = Created(b)
+  def createdAttestation(b: BlockMessage): BlockCreatorResult = CreatedAttestation(b)
 }
