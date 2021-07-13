@@ -52,7 +52,7 @@ class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Mat
   val hb   = HasBlock(hash)
 
   val networkId = "nid"
-  val conf      = RPConf(local, networkId, null, null, 0, null)
+  val conf      = RPConf(local, networkId, None, 100, null)
 
   private def endpoint(port: Int): Endpoint = Endpoint("host", port, port)
   private def peerNode(name: String, port: Int): PeerNode =

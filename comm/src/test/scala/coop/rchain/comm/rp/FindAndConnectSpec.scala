@@ -26,7 +26,7 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
   implicit val time              = new LogicalTime[Effect]
   implicit val metric            = new Metrics.MetricsNOP[Id]
   implicit val nodeDiscovery     = new NodeDiscoveryStub[Effect]()
-  implicit val rpConf            = conf(defaultTimeout = deftimeout)
+  implicit val rpConf            = conf()
 
   var willConnectSuccessfully       = List.empty[PeerNode]
   var connectCalled: List[PeerNode] = List.empty[PeerNode]
@@ -112,13 +112,11 @@ class FindAndConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach w
 
   private def conf(
       maxNumOfConnections: Int = 5,
-      numOfConnectionsPinged: Int = 5,
-      defaultTimeout: FiniteDuration
+      numOfConnectionsPinged: Int = 5
   ): RPConfAsk[Id] =
     new ConstApplicativeAsk(
       RPConf(
         clearConnections = ClearConnectionsConf(numOfConnectionsPinged),
-        defaultTimeout = defaultTimeout,
         local = peer("src"),
         networkId = "test",
         bootstrap = None,
