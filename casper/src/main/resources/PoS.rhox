@@ -287,31 +287,7 @@ in {
                                 getBlockData!(*blockDataCh) |
                                 for (_, _, @sender <- blockDataCh) {
                                   for (@state <<- stateCh) {
-                                    transferFromBlockSender!(deployerRevAddress, state.get("activeValidators"), sender, refundAmount, *transferCh) |
-                                    for (@transferResult <- transferCh){
-                                      match transferResult {
-                                        (true, _) => {
-                                          new newRewardsCh, pendingUpdatedCh in {
-                                            distributeRewards!(
-                                              initialPaymentAmount - refundAmount,
-                                              state.get("activeValidators"),
-                                              state.get("allBonds"),
-                                              *newRewardsCh
-                                            ) |
-                                            for (@newRewards <- newRewardsCh) {
-                                              // Add new pending rewards to validator pending rewards state
-                                              PendingRewards!("append", sender, newRewards, *pendingUpdatedCh) |
-                                              for (_ <- pendingUpdatedCh) {
-                                                return!((true, Nil))
-                                              }
-                                            }
-                                          }
-                                        }
-                                        (_, errorMessage) => {
-                                          return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
-                                        }
-                                      }
-                                    }
+                                    return!((true, Nil))
                                   }
                                 }
                               }
