@@ -15,22 +15,26 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
 
-new MultiSigRevVault,
-    rs(`rho:registry:insertSigned:secp256k1`), uriOut,
-    rl(`rho:registry:lookup`),
-    _fromPublicKey,
-    _multiSigRevVault,
-    RevVaultCh,
-    AuthKeyCh,
-    ListOpsCh
+new
+  MultiSigRevVault,
+  MultiSigRevVaultLoc,
+  MultiSigRevVaultDispatcher,
+  rb(`rho:registry:insertBlessed`),
+  rs(`rho:registry:insertSigned:secp256k1`), uriOut,
+  rl(`rho:registry:lookup`),
+  _fromPublicKey,
+  _multiSigRevVault,
+  RevVaultCh,
+  AuthKeyCh,
+  ListOpsCh
 in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
-  for(@(_, ListOps) <- ListOpsCh;
-      @(_, AuthKey) <- AuthKeyCh;
+  for(@(_, ListOps)  <- ListOpsCh;
+      @(_, AuthKey)  <- AuthKeyCh;
       @(_, RevVault) <- RevVaultCh) {
-
+    // 
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
       new mapStore, sealer, unsealer in {
         mapStore!({}) |
@@ -65,29 +69,45 @@ in {
         }
       }
     } |
-
+    // Returns list of auth keys for each public key on `ret`
     contract _fromPublicKey(@publicKey, ret) = {
-      new RevAddress(`rho:rev:address`), revAddrCh in {
-        RevAddress!("fromPublicKey", publicKey, *revAddrCh)|
+      new
+        revAddrCh,
+        RevAddress(`rho:rev:address`)
+      in {
+        RevAddress!("fromPublicKey", publicKey, *revAddrCh) |
         for (@revAddress <- revAddrCh) {
           @AuthKey!("make", (*_multiSigRevVault, revAddress), *ret)
         }
       }
     } |
-
-    // MultiSig
+    // MultiSig vault creation method
     // Returns (false, errorMsg) or (true, (multiSigVault, revAddress, revVault))
     contract MultiSigRevVault(@"create", @publicKeys, @unsealers, @quorumSize, ret) = {
-      if (quorumSize > publicKeys.length() + unsealers.length() or
-          quorumSize <= 0) {
+      if (quorumSize > publicKeys.length() + unsealers.length() or quorumSize <= 0) {
         ret!((false, "invalid quorum size"))
       } else {
-        new unf, authKeyCh, authPubKeysCh, RevAddress(`rho:rev:address`), revAddrCh in {
+        new
+          unf,
+          authKeyCh,
+          authPubKeysCh,
+          RevAddress(`rho:rev:address`),
+          revAddrCh
+        in {
           RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
           @RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
           @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
-          for (@revVaultAuthKey <- authKeyCh; @authPubKeys <- authPubKeysCh; @revAddr <- revAddrCh) {
-            new multiSig, nonceStore, nonceMapStore, revVaultCh, verify in {
+          for (@revAddr         <- revAddrCh;       // revAddr         = Rev address of the multisig vault
+               @revVaultAuthKey <- authKeyCh;       // revVaultAuthKey = auth key for the multisig Rev vault
+               @authPubKeys     <- authPubKeysCh) { // authPubKeys     = list of each public key's auth key
+            new
+              multiSig,
+              nonceStore,
+              nonceMapStore,
+              revVaultCh,
+              verify
+            in {
+              // create the multisig Rev vault
               @RevVault!("findOrCreate", revAddr, *revVaultCh) |
               for (@maybeRevVault <- revVaultCh) {
                 match maybeRevVault {
@@ -132,7 +152,8 @@ in {
                     contract multiSig(@"transfer", @targetRevAddress, @amount, @auth, ret) = {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
+                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh;
+                             @unsealed, @info <- unsealedCh) {
                           if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore); @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
@@ -179,7 +200,8 @@ in {
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys <- idxAuthPubKeysCh; @unsealed, @info <- unsealedCh) {
+                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh;
+                             @unsealed, @info <- unsealedCh) {
                           if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
@@ -253,11 +275,63 @@ in {
         } // new
       } // quorum size
     } |
-    rs!(
-      "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a".hexToBytes(),
-      (9223372036854775807, bundle+{*MultiSigRevVault}),
-      "30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4".hexToBytes(),
-      *uriOut
-    )
-  }
+    // Dispatcher contract
+    // for use with 1-9 arguments
+    contract MultiSigRevVaultDispatcher(@arg1) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4, arg5)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+      }
+    } |
+    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+      for (realMSRV <<- MultiSigRevVaultLoc) {
+        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+      }
+    }
+  } |
+  // Insert location channel into the registry location map
+  rb!(`rho:rchain:multiSigRevVault`, *MultiSigRevVaultLoc) |
+  // Put the contract data on the location channel
+  MultiSigRevVaultLoc!(bundle+{*MultiSigRevVault}) |
+  // Insert the signed, write-only dispatcher contract into the registry uri map
+  rs!(
+    "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a".hexToBytes(),
+    (9223372036854775807, bundle+{*MultiSigRevVaultDispatcher}),
+    "30450221008539caafe08b2a27cfcabdcf9c7c345a1c1a926330a1a320ca614cf9240f6c77022024ad8465597c8a673431007b8e33317bd49c9c68dacb41eef6a4316d933909c4".hexToBytes(),
+    *uriOut
+  )
 }

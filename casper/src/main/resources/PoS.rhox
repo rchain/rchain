@@ -22,23 +22,29 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
-new PoS,
-    registryLookup(`rho:registry:lookup`),
-    revAddressOps(`rho:rev:address`),
-    revVaultCh, listOpsCh,
-    getUser,
-    pickActiveValidators,
-    runMVar,
-    fst,
-    deposit, distributeRewards,
-    perActiveValidatorPosVaultsCh,
-    transferFromBlockSender,
-    rs(`rho:registry:insertSigned:secp256k1`),
-    posId(`rho:rchain:deployerId`),
-    PendingRewards, MergeIntMaps, treeHashMapCh,
-    sysAuthTokenOps(`sys:authToken:ops`),
-    multiSigRevVaultCh, coopVaultCh,
-    uriOut, sumFromPair
+new
+  PoS,
+  registryLookup(`rho:registry:lookup`),
+  revAddressOps(`rho:rev:address`),
+  getUser,
+  pickActiveValidators,
+  runMVar,
+  fst,
+  deposit,
+  distributeRewards,
+  perActiveValidatorPosVaultsCh,
+  transferFromBlockSender,
+  rs(`rho:registry:insertSigned:secp256k1`),
+  posId(`rho:rchain:deployerId`),
+  PendingRewards, MergeIntMaps,
+  sysAuthTokenOps(`sys:authToken:ops`),
+  coopVaultCh,
+  uriOut,
+  sumFromPair,
+  treeHashMapCh,
+  revVaultCh,
+  multiSigRevVaultCh,
+  listOpsCh
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -49,8 +55,12 @@ in {
        @(_, ListOps)          <- listOpsCh;
        TreeHashMap            <- treeHashMapCh;
        @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
-    new posRevAddressCh, posAuthKeyCh, posVaultCh,
-        initialActiveCh, pendingRewardsMapCh
+    new
+      posRevAddressCh,
+      posAuthKeyCh,
+      posVaultCh,
+      initialActiveCh,
+      pendingRewardsMapCh
     in {
       // Creates a Rev vault for each active validator, in parallel.
       new rangeCh, makeVault in {

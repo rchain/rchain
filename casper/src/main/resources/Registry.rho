@@ -346,19 +346,6 @@ in {
             }
           }
         } |
-        // Returns `TreeHashMap`'s method names and number of arguments
-        contract TreeHashMap(@"api", ret) = {
-          ret!({
-            "init"          : 2,
-            "get"           : 3,
-            "fastUnsafeGet" : 3,
-            "set"           : 4,
-            "contains"      : 3,
-            "update"        : 4,
-            "api"           : 1,
-            "extractState"  : 1
-          })
-        } |
         // Returns the current map
         contract TreeHashMap(@"extractState", ret) = {
           for (@map <<- _registryStore) {
@@ -605,7 +592,7 @@ in {
               // Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
               // There is only one proposal per uri possible at a time.
               // --------------------------------------------------------------------------------
-              contract multisig(@"propose", @pubKey, @uri, @con, @meth, @sig, @newApi, ret) = {
+              contract multisig(@"propose", @pubKey, @uri, @con, @meth, @sig, ret) = {
                 new verifyCh in {
                   if (pubKeys.contains(pubKey)) {
                     // `pubKey` has the privilege to propose updates
@@ -622,30 +609,11 @@ in {
                                 for (@verified <- verifyCh) {
                                   if (verified) {
                                     // signature is valid
-                                    match proposalMap.set(uri, (con, meth)) {
-                                      newproposalMap => {
-                                        new oldApiCh, newApiCh in {
-                                          // bcMap.get(uri) = loc
-                                          for (aMethod <<- @{bcMap.get(uri)}) {
-                                            aMethod!("api", *oldApiCh) |
-                                            for (@oldApi <- oldApiCh) {
-                                              if (oldApi.toSet().diff(newApi.toSet()) == Set()) {
-                                                // all old methods have an entry point in the new contract
-                                                proposalMapCh!(newproposalMap) |
-                                                for (@agreeMap <- agreementMapCh) {
-                                                  // the proposer is the first to agree with a proposal
-                                                  agreementMapCh!(agreeMap.set(key, Set(pubKey))) |
-                                                  ret!((true, uri, con, meth))
-                                                }
-                                              } else {
-                                                // all old methods must still have entry points in the new contract
-                                                proposalMapCh!(proposalMap) |
-                                                ret!((false, "APIs do not match"))
-                                              }
-                                            }
-                                          }
-                                        }
-                                      }
+                                    proposalMapCh!(proposalMap.set(uri, (con, meth))) |
+                                    for (@agreeMap <- agreementMapCh) {
+                                      // the proposer is the first to agree with a proposal
+                                      agreementMapCh!(agreeMap.set(key, Set(pubKey))) |
+                                      ret!((true, uri, con, meth))
                                     }
                                   } else {
                                     // signature is invalid
@@ -682,6 +650,7 @@ in {
                   match (uri, con, meth) {
                     agreedTuple => {
                       if (pubKeys.contains(pubKey)) {
+                        // `pubKey` is a member of `pubKeys`
                         hashVerify!(agreedTuple, sig, pubKey, *verifyCh) |
                         for (@verified <- verifyCh) {
                           if (verified) {
@@ -689,6 +658,7 @@ in {
                             for (@map <- agreementMapCh) {
                               match map.getOrElse(agreedTuple, Set()).add(pubKey) {
                                 agreeing => {
+                                  // add `pubKey` to the set of supporters
                                   agreementMapCh!(map.set(agreedTuple, agreeing)) |
                                   ret!((true, uri, con, meth, agreeing))
                                 }
@@ -710,12 +680,13 @@ in {
               // ------
               // Update
               // ------------------------------------------------------------------------------------
-              // if there is a quorum of privileged public keys agreeing on the update for `uri`
+              // if there is a quorum of privileged public keys agreeing on the update for `uri`,
               // then this method updates the contract data and manages the internal maps accordingly
               // ------------------------------------------------------------------------------------
               contract multisig(@"update", @uri, ret) = {
                 for (@proposalMap <- proposalMapCh) {
                   if (proposalMap.contains(uri)) {
+                    // there is an update proposal for `uri`
                     for (@blessedContractLocMap <<- blessedContractLocMapCh) {
                       match (blessedContractLocMap.get(uri), proposalMap.get(uri)) {
                         (loc, (con, meth)) => {
@@ -724,21 +695,22 @@ in {
                               // sufficiently many keys agree to update
                               // consume data on location channel in order to replace contract data
                               for (oldData <- @loc) {
-                                new tmp, newApiCh, newARet in {
+                                new tmp, newARet in {
                                   oldData!("extractState", *tmp) |
                                   for (@oldState <- tmp) {
                                     // launch new contract instance with initial state extracted from the old instance
                                     @con!(oldState, *newARet) |
-                                    // manage agreement and propose maps
+                                    // manage agreement and proposal maps
                                     agreementMapCh!(agreementMap.delete((uri, con, meth))) |
                                     proposalMapCh!(proposalMap.delete(uri)) |
                                     // write new method entry point to location channel
                                     @loc!(meth) |
-                                    ret!((true, (*newApiCh, *newARet)))
+                                    ret!((true, *newARet))
                                   }
                                 }
                               }
                             } else {
+                              // there isn't a quorum of support for the update
                               agreementMapCh!(agreementMap) |
                               proposalMapCh!(proposalMap) |
                               ret!((false, "quorum does not exist"))
@@ -748,6 +720,7 @@ in {
                       }
                     }
                   } else {
+                    // there isn't an update proposal for `uri`
                     proposalMapCh!(proposalMap) |
                     ret!((false, "invalid proposal uri"))
                   }
@@ -766,10 +739,6 @@ in {
                      @proposalMap  <<- proposalMapCh) {
                   ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
                 }
-              } |
-              // Returns the api for `multisig`
-              contract multisig(@"api", ret) = {
-                ret!({ "propose" : 7, "agree" : 6, "update" : 2, "read" : 1, "api" : 1, "extractState" : 1 })
               } |
               // Returns a map containing all the internal maps used in MultiSig
               contract multisig(@"extractState", ret) = {
