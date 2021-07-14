@@ -236,9 +236,9 @@ class MultiParentCasperImpl[F[_]
           j       = m.justifications.map { case Justification(v, h) => (v, h) }.toMap
           dagView <- fullDag.truncate(j)
           // compute LFB for the view
-          minNum       <- p.map(_.blockHash).traverse(fullDag.lookupUnsafe).map(_.map(_.blockNum).min)
+          minNum       <- p.map(_.blockHash).traverse(dagView.lookupUnsafe).map(_.map(_.blockNum).min)
           lowestHeight = minNum - Finalizer.MaxSearchDepth // lowest height puts a constraint on search area
-          lfb <- fullDag
+          lfb <- dagView
                   .findLastFinalizedBlock(
                     latestMessagesView = j,
                     faultToleranceThreshold = casperShardConf.faultToleranceThreshold,
@@ -251,7 +251,7 @@ class MultiParentCasperImpl[F[_]
                     // Also in future approved block restored from LFS might be finalized with fault tolerance less then current
                     // fault tolerance from shard config
 
-                    val approvedBlockIsInRange = fullDag
+                    val approvedBlockIsInRange = dagView
                       .lookupUnsafe(approvedBlock.blockHash)
                       .map(_.blockNum)
                       .map(_ >= lowestHeight)
