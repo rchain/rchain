@@ -7,6 +7,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.{HistoryReaderBinary, HistoryRepository}
 import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import fs2.Stream
