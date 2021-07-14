@@ -20,7 +20,7 @@ object ConflictSetMerger {
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
       stateChanges: R => F[StateChange],
-      computeTrieActions: (Blake2b256Hash, StateChange) => F[List[HotStoreTrieAction]],
+      computeTrieActions: (Blake2b256Hash, StateChange) => F[Vector[HotStoreTrieAction]],
       applyTrieActions: (Blake2b256Hash, Seq[HotStoreTrieAction]) => F[Blake2b256Hash]
   ): F[(Blake2b256Hash, Set[R])] = {
 

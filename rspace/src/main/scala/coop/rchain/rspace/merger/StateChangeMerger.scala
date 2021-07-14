@@ -26,10 +26,10 @@ object StateChangeMerger {
   def computeTrieActions[F[_]: Concurrent, C, P, A, K](
       changes: StateChange,
       baseReader: HistoryReaderBinary[F, C, P, A, K]
-  ): F[List[HotStoreTrieAction]] = {
+  ): F[Vector[HotStoreTrieAction]] = {
 
-    val consumeAndJoinActionsCompute: F[List[ConsumeAndJoinActions]] =
-      changes.kontChanges.toList.traverse {
+    val consumeAndJoinActionsCompute: F[Vector[ConsumeAndJoinActions]] =
+      changes.kontChanges.toVector.traverse {
         case (consumeChannels, ChannelChange(added, removed)) =>
           val historyPointer = StableHashProvider.hash(consumeChannels)
           for {
@@ -91,7 +91,7 @@ object StateChangeMerger {
       // trie actions for consumes
       consumeTrieActions = consumeWithJoinActions.collect { case ConsumeAndJoinActions(v, _) => v }
       // trie actions for produces
-      produceTrieActions <- changes.datumsChanges.toList.traverse {
+      produceTrieActions <- changes.datumsChanges.toVector.traverse {
                              case (historyPointer, changes) =>
                                mkTrieAction(
                                  historyPointer,
@@ -123,16 +123,17 @@ object StateChangeMerger {
           }
         case (acc, _) => acc // no join action
       }
-      joinsTrieActions <- joinsChanges.toList.traverse {
-                           case (historyPointer, changes) =>
-                             mkTrieAction(
-                               historyPointer,
-                               baseReader.getJoins(_).map(_.map(_.raw)),
-                               changes,
-                               TrieDeleteJoins,
-                               TrieInsertBinaryJoins
-                             )
-                         }
+      joinsTrieActions <- joinsChanges.toVector
+                           .traverse {
+                             case (historyPointer, changes) =>
+                               mkTrieAction(
+                                 historyPointer,
+                                 baseReader.getJoins(_).map(_.map(_.raw)),
+                                 changes,
+                                 TrieDeleteJoins,
+                                 TrieInsertBinaryJoins
+                               )
+                           }
     } yield produceTrieActions ++ consumeTrieActions ++ joinsTrieActions
   }
 }
