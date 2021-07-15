@@ -1,7 +1,4 @@
-package coop.rchain.casper.util.comm
-
-import java.io.Closeable
-import java.util.concurrent.TimeUnit
+package coop.rchain.node.api.client
 
 import cats.effect.Sync
 import coop.rchain.casper.protocol._
@@ -11,6 +8,8 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
 import io.grpc.{ManagedChannel, ManagedChannelBuilder}
 
+import java.io.Closeable
+import java.util.concurrent.TimeUnit
 import scala.util.Either
 
 trait ProposeService[F[_]] {
