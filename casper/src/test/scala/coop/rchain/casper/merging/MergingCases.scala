@@ -88,6 +88,7 @@ class MergingCases extends FlatSpec with Matchers {
             idxs.toSet,
             MergingLogic.depends
           )
+
           // deploys inside one state transition never conflict, as executed in a sequence (for now)
           _ = conflicts shouldBe false
           // first deploy does not depend on the second

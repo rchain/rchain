@@ -9,7 +9,7 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.MergingLogic.{computeRelatedSets, depends}
+import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.trace.Produce
@@ -47,7 +47,8 @@ object BlockIndex {
       sysProcessedDeploys: List[ProcessedSystemDeploy],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
-      historyRepository: HistoryRepository[F, C, P, A, K]
+      indexDeployLogF: (List[Event], Blake2b256Hash) => F[EventLogIndex],
+      computeStateChangeF: (EventLogIndex, Blake2b256Hash, Blake2b256Hash) => F[StateChange]
   ): F[BlockIndex] =
     for {
       usrDeployIndices <- usrProcessedDeploys.toVector
@@ -57,7 +58,7 @@ object BlockIndex {
                                d.deploy.sig,
                                d.cost.cost,
                                d.deployLog,
-                               createEventLogIndex(_, historyRepository, preStateHash)
+                               indexDeployLogF(_, preStateHash)
                              )
                            }
       sysDeploysData = sysProcessedDeploys.toVector
@@ -75,7 +76,7 @@ object BlockIndex {
                                sig,
                                cost,
                                log,
-                               createEventLogIndex(_, historyRepository, preStateHash)
+                               indexDeployLogF(_, preStateHash)
                              )
                          }
 
@@ -86,14 +87,8 @@ object BlockIndex {
         (usrDeployIndices ++ sysDeployIndices).toSet,
         (l, r) => MergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
-      index <- deployChains.toVector
-                .traverse(
-                  DeployChainIndex(
-                    _,
-                    preStateHash,
-                    postStateHash,
-                    historyRepository
-                  )
-                )
+      index <- deployChains.toVector.traverse(
+                DeployChainIndex(_, preStateHash, postStateHash, computeStateChangeF)
+              )
     } yield BlockIndex(blockHash, index)
 }

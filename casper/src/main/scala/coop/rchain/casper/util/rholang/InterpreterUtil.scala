@@ -17,11 +17,12 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{NormalizerEnv, Par}
+import coop.rchain.models.{BindPattern, ListParWithRandom, NormalizerEnv, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
 
@@ -257,13 +258,18 @@ object InterpreterUtil {
             val cached = BlockIndex.cache.get(v).map(_.pure)
             cached.getOrElse {
               BlockStore[F].getUnsafe(v).flatMap { b =>
-                BlockIndex(
+                val historyRepository = runtimeManager.getHistoryRepo
+                BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                   b.blockHash,
                   b.body.deploys,
                   b.body.systemDeploys,
                   Blake2b256Hash.fromByteString(b.body.state.preStateHash),
                   Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                  runtimeManager.getHistoryRepo
+                  (log, preState) =>
+                    BlockIndex.createEventLogIndex(log, historyRepository, preState),
+                  (index, preState, postState) =>
+                    merger.StateChange
+                      .compute(index, historyRepository, preState, postState)
                 )
               }
             }

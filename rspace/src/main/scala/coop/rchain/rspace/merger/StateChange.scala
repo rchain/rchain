@@ -5,8 +5,9 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
-import coop.rchain.rspace.history.HistoryReaderBinary
+import coop.rchain.rspace.history.{HistoryReaderBinary, HistoryRepository}
 import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import fs2.Stream
@@ -37,6 +38,24 @@ object StateChange {
       added      = endValue diff startValue
       deleted    = startValue diff endValue
     } yield ChannelChange(added, deleted)
+
+  def compute[F[_]: Concurrent, C, P, A, K](
+      eventLogIndex: EventLogIndex,
+      historyRepository: HistoryRepository[F, C, P, A, K],
+      preStateHash: Blake2b256Hash,
+      postStateHash: Blake2b256Hash
+  ): F[StateChange] = {
+    val preStateReader  = historyRepository.getHistoryReader(preStateHash).readerBinary
+    val postStateReader = historyRepository.getHistoryReader(postStateHash).readerBinary
+    for {
+      stateChanges <- StateChange[F, C, P, A, K](
+                       preStateReader = preStateReader,
+                       postStateReader = postStateReader,
+                       eventLogIndex,
+                       historyRepository.getSerializeC
+                     )
+    } yield stateChanges
+  }
 
   def apply[F[_]: Concurrent, C, P, A, K](
       preStateReader: HistoryReaderBinary[F, C, P, A, K],

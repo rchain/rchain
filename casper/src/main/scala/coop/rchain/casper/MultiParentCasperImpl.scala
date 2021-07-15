@@ -27,6 +27,8 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger
+import coop.rchain.rspace.merger.{EventLogIndex, StateChange}
 import coop.rchain.shared._
 
 // format: off
@@ -305,17 +307,23 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    val indexBlock = for {
-      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                RuntimeManager[F].getHistoryRepo
-              )
-      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
-    } yield ()
+    val indexBlock = {
+      val historyRepository = RuntimeManager[F].getHistoryRepo
+      for {
+        index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                  b.blockHash,
+                  b.body.deploys,
+                  b.body.systemDeploys,
+                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                  (log, preState) =>
+                    BlockIndex.createEventLogIndex(log, historyRepository, preState),
+                  (index, preState, postState) =>
+                    StateChange.compute(index, historyRepository, preState, postState)
+                )
+        _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+      } yield ()
+    }
 
     val validationProcessDiag = for {
       // Create block and measure duration

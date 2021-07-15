@@ -18,6 +18,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger.StateChange
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.InMemoryStoreManager
@@ -375,6 +376,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
             _ = println(s)
 
+            historyRepository = runtimeManager.getHistoryRepo
             indices <- (base +: mergingBlocks)
                         .traverse(
                           b =>
@@ -384,7 +386,10 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                               b.body.systemDeploys,
                               Blake2b256Hash.fromByteString(b.body.state.preStateHash),
                               Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                              runtimeManager.getHistoryRepo
+                              (log, preState) =>
+                                BlockIndex.createEventLogIndex(log, historyRepository, preState),
+                              (index, preState, postState) =>
+                                StateChange.compute(index, historyRepository, preState, postState)
                             ).map((b.blockHash -> _))
                         )
                         .map(_.toMap)
