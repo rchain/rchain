@@ -116,8 +116,11 @@ object Resources {
 
       override def lastFinalizedBlock: BlockHash = ???
 
+      override def nonFinalizedSet: Set[BlockHash] = ???
+
       override def truncate(
-          latestMessages: Map[Validator, BlockHash]
+          latestMessages: Map[Validator, BlockHash],
+          findLfb: Map[Validator, BlockHash] => F[BlockHash]
       ): F[BlockDagRepresentation[F]] = ???
     }
     CasperSnapshot[F](
