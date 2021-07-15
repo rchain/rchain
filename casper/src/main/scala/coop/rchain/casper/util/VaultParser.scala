@@ -26,19 +26,20 @@ object VaultParser {
         .through(text.lines)
         .filter(_.trim.nonEmpty)
         .evalMap { line =>
-          val lineFormat = "<ETH_address>,<balance>,<private_key=0|contract=1>"
-          val lineRegex  = raw"^(?:0x)?([0-9a-fA-F]+),([0-9]+),([01])".r.unanchored
+          val lineFormat = "<REV_address>,<balance>"
+          val lineRegex  = raw"^([1-9a-zA-Z]+),([0-9]+)".r.unanchored
 
           // Line parser
-          val ethAndBalance = tryWithMsg {
+          val revAndBalance = tryWithMsg {
             line match { case lineRegex(fst, snd, _*) => (fst, snd) }
           }(failMsg = s"INVALID LINE FORMAT: `$lineFormat`, actual: `$line`")
 
-          // ETH address parser, converter to REV address
-          def revAddress(ethAddressString: String) =
+          // REV address parser, converter to REV address
+          def revAddress(revAddressString: String) =
             RevAddress
-              .fromEthAddress(ethAddressString)
-              .liftTo[F](new Exception(s"INVALID ETH ADDRESS: `$ethAddressString`"))
+              .parse(revAddressString)
+              .leftMap(ex => new Exception(s"PARSE ERROR: $ex, `$lineFormat`, actual: `$line`"))
+              .liftTo[F]
 
           // Balance parser
           def revBalance(revBalanceStr: String) = tryWithMsg(revBalanceStr.toLong)(
@@ -46,7 +47,7 @@ object VaultParser {
           )
 
           // Parse REV address and balance
-          ethAndBalance
+          revAndBalance
             .flatMap(_.bitraverse(revAddress, revBalance))
             .map(Vault.tupled)
             .tupleRight(line)

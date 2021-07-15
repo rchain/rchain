@@ -105,7 +105,7 @@ in {
           pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
           // Initializes pending rewards TreeHashMap.
           // - each key in pending rewards state is Map[PublicKey, Int] accumulated by calling "refundDeploy".
-          TreeHashMap!("init", 1, *pendingRewardsMapCh) |
+          TreeHashMap!("init", 4, *pendingRewardsMapCh) |
           for (@(true, posVault)  <- posVaultCh;
                @initialActive     <- initialActiveCh;
                @pendingRewardsMap <- pendingRewardsMapCh) {

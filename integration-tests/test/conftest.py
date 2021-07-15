@@ -98,7 +98,7 @@ def temporary_bonds_file(validator_bonds_dict: Dict[PrivateKey, int]) -> Generat
 def make_wallets_file_lines(wallet_balance_from_private_key: Dict[PrivateKey, int]) -> List[str]:
     result = []
     for private_key, token_amount in wallet_balance_from_private_key.items():
-        line = '{},{},0'.format(private_key.get_public_key().get_eth_address(), token_amount)
+        line = '{},{},0'.format(private_key.get_public_key().get_rev_address(), token_amount)
         result.append(line)
     return result
 

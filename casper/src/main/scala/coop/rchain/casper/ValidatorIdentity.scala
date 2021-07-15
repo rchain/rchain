@@ -33,7 +33,7 @@ final case class ValidatorIdentity(
     // Hash should include sigAlgorithm and sender
     val b = block.copy(sigAlgorithm = sigAlgorithm, sender = sender)
 
-    val blockHash = ProtoUtil.hashSignedBlock(b)
+    val blockHash = ProtoUtil.hashBlock(b)
 
     val sig = signature(blockHash.toByteArray).sig
 
