@@ -46,9 +46,7 @@ object DagMerger {
 
       computeTrieActions = (baseState: Blake2b256Hash, changes: StateChange) => {
         val baseReader = historyRepository.getHistoryReader(baseState).readerBinary
-        val joinsPointerForChannel = (channel: Blake2b256Hash) =>
-          historyRepository.getJoinMapping(Seq(channel)).map(_.head)
-        StateChangeMerger.computeTrieActions(changes, baseReader, joinsPointerForChannel)
+        StateChangeMerger.computeTrieActions(changes, baseReader)
       }
 
       applyTrieActions = (baseState: Blake2b256Hash, actions: Seq[HotStoreTrieAction]) =>

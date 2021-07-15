@@ -20,7 +20,7 @@ object ConflictSetMerger {
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
       stateChanges: R => F[StateChange],
-      computeTrieActions: (Blake2b256Hash, StateChange) => F[List[HotStoreTrieAction]],
+      computeTrieActions: (Blake2b256Hash, StateChange) => F[Vector[HotStoreTrieAction]],
       applyTrieActions: (Blake2b256Hash, Seq[HotStoreTrieAction]) => F[Blake2b256Hash]
   ): F[(Blake2b256Hash, Set[R])] = {
 
@@ -74,7 +74,7 @@ object ConflictSetMerger {
       (trieActions, computeActionsTime) = r
       r                                 <- Stopwatch.duration(applyTrieActions(baseState, trieActions))
       (newState, applyActionsTime)      = r
-      overallChanges                    = s"${allChanges.datumChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.joinsIndex.size} J"
+      overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
       logStr = s"Merging done: " +
         s"late set size ${lateSet.size}; " +
         s"actual set size ${actualSet.size}; " +

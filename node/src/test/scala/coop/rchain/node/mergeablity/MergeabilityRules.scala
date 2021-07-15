@@ -265,9 +265,9 @@ trait BasicMergeabilityRules extends ComputeMerge {
                                             mergedRoot
                                           )
           errMsg = s""" FAILED
-                  | base = ${baseDeploy}
-                  | left   = ${leftDeploy}
-                  | right   = ${rightDeploy}
+                  | base    = ${baseDeploy.data.term}
+                  | left    = ${leftDeploy.data.term}
+                  | right   = ${rightDeploy.data.term}
                   | Conflict: ${rejectedDeploys.nonEmpty} should be ${isConflict} with ${rejectedDeploys}
                   | isRejectRight: ${rejectRight}
                   | Merged state
