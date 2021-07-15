@@ -4,6 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -449,12 +450,16 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         // all blocks should be present in full DAG
         _ <- (excess ++ inView).findM(fullDag.contains(_).not) shouldBeF None
 
+        findLfb = (_: Map[Validator, BlockHash]) => genesis.blockHash.pure[Task]
+
         tDag <- fullDag.truncate(
                  List(
                    (v0, l1.blockHash),
                    (v1, l0.blockHash),
-                   (v2, l2.blockHash)
-                 ).toMap
+                   (v2, l2.blockHash),
+                   (v3, genesis.blockHash)
+                 ).toMap,
+                 findLfb
                )
         // all these should be absent in truncated DAG
         _ <- excess.findM(tDag.contains) shouldBeF None

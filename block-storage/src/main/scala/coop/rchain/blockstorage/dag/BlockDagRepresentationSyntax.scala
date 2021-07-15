@@ -98,6 +98,18 @@ final class BlockDagRepresentationOps[F[_]](
           .map(_.map(next => (next, next.latestBlockHash)))
     )
 
+  def fromSenderBelowWith[A](start: BlockHash, proj: BlockMetadata => A)(
+      implicit sync: Sync[F]
+  ): Stream[F, A] =
+    Stream.unfoldLoopEval(start)(
+      message =>
+        lookupUnsafe(message)
+          .map { meta =>
+            val selfJustification = meta.justifications.find(_.validator == meta.sender)
+            (proj(meta), selfJustification.map(_.latestBlockHash))
+          }
+    )
+
   def selfJustification(h: BlockHash)(implicit sync: Sync[F]): F[Option[Justification]] =
     selfJustificationChain(h).head.compile.last
 
@@ -133,20 +145,7 @@ final class BlockDagRepresentationOps[F[_]](
     dag.lookup(item).map(_.map(v => v.parents)) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 
-  def nonFinalizedBlocks(implicit sync: Sync[F]): F[Set[BlockHash]] =
-    for {
-      tips <- latestMessages.map(_.values.map(_.blockHash).toList)
-      r <- Stream
-            .unfoldLoopEval(tips) { lvl =>
-              for {
-                out  <- lvl.filterA(dag.isFinalized(_).not)
-                next <- out.traverse(dag.lookup(_).map(_.map(_.parents))).map(_.flatten.flatten)
-              } yield (out, next.nonEmpty.guard[Option].as(next))
-            }
-            .flatMap(Stream.emits)
-            .compile
-            .to(Set)
-    } yield r
+  def nonFinalizedBlocks(implicit sync: Sync[F]): F[Set[BlockHash]] = dag.nonFinalizedSet.pure
 
   def descendants(blockHash: BlockHash)(implicit sync: Sync[F]): F[Set[BlockHash]] =
     Stream
@@ -178,4 +177,29 @@ final class BlockDagRepresentationOps[F[_]](
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
     ancestors(List(blockHash), filterF).map(_ + blockHash)
+
+  def latestFinalized(lfb: BlockHash, targetSenders: Set[Validator])(
+      implicit sync: Sync[F]
+  ): F[Map[Validator, BlockHash]] =
+    Stream
+      .unfoldLoopEval((List(lfb), Map.empty[Validator, BlockHash])) {
+        case (lvl, acc) =>
+          for {
+            metas <- lvl.traverse(this.lookupUnsafe).map(_.distinct)
+            newAcc = metas.foldLeft(acc)(
+              (a, m) =>
+                if (a.contains(m.sender)) a
+                else
+                  a.updated(m.sender, m.blockHash)
+            )
+            done = newAcc.keySet == targetSenders
+            next = if (done) none[(List[BlockHash], Map[Validator, BlockHash])]
+            else {
+              val parents = metas.flatMap(_.parents).distinct
+              parents.nonEmpty.guard[Option].as((parents, newAcc))
+            }
+          } yield (newAcc, next)
+      }
+      .compile
+      .lastOrError
 }
