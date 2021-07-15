@@ -44,8 +44,10 @@ trait BlockDagRepresentation[F[_]] {
   // DAG representation has to have finalized block, or it does not make sense
   def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
+  def nonFinalizedSet: Set[BlockHash]
   def truncate(
-      latestMessages: Map[Validator, BlockHash]
+      latestMessages: Map[Validator, BlockHash],
+      findLfb: Map[Validator, BlockHash] => F[BlockHash]
   ): F[BlockDagRepresentation[F]]
 }
 
