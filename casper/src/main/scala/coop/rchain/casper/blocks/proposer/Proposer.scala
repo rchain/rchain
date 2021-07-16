@@ -166,7 +166,7 @@ object Proposer {
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
-    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
+    val getCasperSnapshot = (c: Casper[F]) => c.getSnapshot()
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
@@ -208,7 +208,7 @@ object Proposer {
         EventPublisher[F].publish(MultiParentCasperImpl.createdEvent(b))
 
     new Proposer(
-      getCasperSnapshotSnapshot,
+      getCasperSnapshot,
       checkValidatorIsActive,
       checkEnoughBaseStake,
       checkLastFinalizedHeightConstraint,
