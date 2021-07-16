@@ -21,7 +21,6 @@ new
   _authKey,
   stdout(`rho:io:stdout`)
 in {
-
   // An `AuthKey` is a means for creating a safe authentication token based on a process / unfograble name
   // (the `shape` of the key) without risking the leak of that process / name.
   //
@@ -35,38 +34,36 @@ in {
   // `AuthKey` would be to mix a private, non-leaking unforgrable name into its `shape`.
   //
   // A good usage example (at the time of writing) is the RevVault contract.
-
+  //
   // Creates an `AuthKey` based on the provided `shape` and retuns it on `ret`.
   contract AuthKey(@"make", @shape, ret) = {
     new authKey in {
-
       // Notice that having this publicly-callable
       // (and not secured from contract impersonation by using a private unforgable name as part of method name)
       // is (AFAICT) needed for the `check` call to return in a synchronous manner.
       // Despite this, the `shape` never leaks, as the impersonating contract's `challenge` is called with just a return
       // channel, and the "original" implementation returns the shape via a bundle0, along with a "originality proof"
       // (the non-leaking `_authKey` unforgable name).
-
+      //
       // We could make the key 'usable once' by changing this to a single (vs persistent) receive
       // and returning the response along with a nonce (an unforgable naem), created inside the "challenge" method.
       contract authKey(@"challenge", retCh) = {
-        retCh!(bundle0{ (*_authKey, shape)})
+        retCh!(bundle0{(*_authKey, shape)})
       } |
-
-      ret ! (bundle+{*authKey})
+      ret!(bundle+{*authKey})
     }
   } |
-
-  // Returns `true` iff the provided `key` is of the provided `shape`. Returns `false` otherwise.
+  // returns true iff the provided key is of the provided shape
+  // returns false otherwise
   contract AuthKey(@"check", key, @shape, ret) = {
     new responseCh in {
       key!("challenge", *responseCh) |
       for (@response <- responseCh) {
-        ret!(response == { bundle0{ (*_authKey, shape) } } )
+        ret!(response == { bundle0{(*_authKey, shape)} })
       }
     }
   } |
-
+  // Inserts signed write-only AuthKey contract into the registry
   rs!(
     "04f4b4417f930e6fab5765ac0defcf9fce169982acfd046e7c27f9b14c0804014623c0439e5c8035e9607599a549303b5b6b90cd9685e6965278bddca65dac7510".hexToBytes(),
     (9223372036854775807, bundle+{*AuthKey}),

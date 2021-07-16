@@ -11,11 +11,10 @@ new _registryStore,
     blake2b256(`rho:crypto:blake2b256Hash`),
     TreeHashMap
 in {
-
   // TreeHashMap is defined here because the registry uses it internally.
   // We can't define it in another file like MakeMint or NonNegativeNumber because
   // that method assumes the registry already exists.
-
+  //
   // Rholang map desiderata: speedy insert & lookup,  no conflicts on lookup, no conflicts on inserts to different keys
   // This implementation: O(log n) insert & lookup; also provides O(1) lookup when it is known that the value at a key exists.
   // Conflict analysis
@@ -53,30 +52,38 @@ in {
   //     }
   //   }
   // }
-
-  new MakeNode, ByteArrayToNybbleList,
-      TreeHashMapSetter, TreeHashMapGetter, TreeHashMapContains, TreeHashMapUpdater,
-      powersCh, storeToken, nodeGet in {
+  new
+    MakeNode,
+    ByteArrayToNybbleList,
+    TreeHashMapSetter,
+    TreeHashMapGetter,
+    TreeHashMapContains,
+    TreeHashMapUpdater,
+    powersCh,
+    storeToken,
+    nodeGet
+  in {
     match [1,2,4,8,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536] {
       powers => {
+        // Initializes `node` with `initVal`
         contract MakeNode(@initVal, @node) = {
           @[node, *storeToken]!(initVal)
         } |
-
+        // Peeks the value stored on `node` and returns it on `ret`
         contract nodeGet(@node, ret) = {
           for (@val <<- @[node, *storeToken]) {
             ret!(val)
           }
         } |
-
+        // Converts the byte array `ba` into a nybble list and returns it on `ret`
         contract ByteArrayToNybbleList(@ba, @n, @len, @acc, ret) = {
           if (n == len) {
             ret!(acc)
           } else {
-            ByteArrayToNybbleList!(ba, n+1, len, acc ++ [ ba.nth(n) % 16, ba.nth(n) / 16 ], *ret)
+            ByteArrayToNybbleList!(ba, n + 1, len, acc ++ [ ba.nth(n) % 16, ba.nth(n) / 16 ], *ret)
           }
         } |
-
+        // Initializes the TreeHashMap with given `depth` and returns it on `ret`
         contract TreeHashMap(@"init", @depth, ret) = {
           new map in {
             MakeNode!(0, (*map, [])) |
@@ -84,9 +91,9 @@ in {
             ret!(*map)
           }
         } |
-
+        // Intrnal, recursive TreeHashMap get method
         contract TreeHashMapGetter(@map, @nybList, @n, @len, @suffix, ret) = {
-          // Look up the value of the node at (map, nybList.slice(0, n + 1))
+          // Look up the value of the node at (map, nybList.slice(0, len))
           new valCh in {
             nodeGet!((map, nybList.slice(0, n)), *valCh) |
             for (@val <- valCh) {
@@ -107,9 +114,14 @@ in {
             }
           }
         } |
-
+        // TreeHashMap get method
+        // Retrieves the value stored on the node with `key` path prefix in `map`
         contract TreeHashMap(@"get", @map, @key, ret) = {
-          new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
+          new
+            hashCh,
+            nybListCh,
+            keccak256Hash(`rho:crypto:keccak256Hash`)
+          in {
             // Hash the key to get a 256-bit array
             keccak256Hash!(key.toByteArray(), *hashCh) |
             for (@hash <- hashCh) {
@@ -123,7 +135,6 @@ in {
             }
           }
         } |
-
         // Doesn't walk the path, just tries to fetch it directly.
         // Will hang if there's no key with that 64-bit prefix.
         // Returns Nil like "get" does if there is some other key with
@@ -148,17 +159,18 @@ in {
             }
           }
         } |
-
+        // Internal, recursive TreeHashMap set method
         contract TreeHashMapSetter(@map, @nybList, @n, @len, @newVal, @suffix, ret) = {
-          // Look up the value of the node at (map, nybList.slice(0, n + 1))
+          // Set the value of the node at (map, nybList.slice(0, len))
           new valCh, restCh in {
             match (map, nybList.slice(0, n)) {
               node => {
                 for (@val <<- @[node, *storeToken]) {
                   if (n == len) {
-                    // Acquire the lock on this node
+                    // finished walking the path
+                    // acquire the lock on this node
                     for (@val <- @[node, *storeToken]) {
-                      // If we're at the end of the path, set the node to newVal.
+                      // set the node to newVal
                       if (val == 0) {
                         // Release the lock
                         @[node, *storeToken]!({suffix: newVal}) |
@@ -175,12 +187,12 @@ in {
                   } else {
                     // Otherwise make the rest of the path exist.
                     // Bit k set means child node k exists.
-                    if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                    if ((val / powers.nth(nybList.nth(n))) % 2 == 0) {
                       // Child node missing
                       // Acquire the lock
                       for (@val <- @[node, *storeToken]) {
                         // Re-test value
-                        if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                        if ((val / powers.nth(nybList.nth(n))) % 2 == 0) {
                           // Child node still missing
                           // Create node, set node to 0
                           MakeNode!(0, (map, nybList.slice(0, n + 1))) |
@@ -206,7 +218,7 @@ in {
                         }
                       }
                     } else {
-                      // Child node exists, loop
+                      // child node exists, try next depth
                       TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
                     }
                   }
@@ -215,7 +227,8 @@ in {
             }
           }
         } |
-
+        // TreeHashMap set method
+        // Sets the value of the node with `key` path prefix in `map` to `newVal`
         contract TreeHashMap(@"set", @map, @key, @newVal, ret) = {
           new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
             // Hash the key to get a 256-bit array
@@ -231,28 +244,39 @@ in {
             }
           }
         } |
-
+        // Internal, recursive TreeHashMap contains method
         contract TreeHashMapContains(@map, @nybList, @n, @len, @suffix, ret) = {
-          // Look up the value of the node at [map, nybList.slice(0, n + 1)]
+          // Check if the value of the node at (map, nybList.slice(0, len)) contains suffix
           new valCh in {
+            // read the value at @[(map, nybList.slice(0, n)), *storeToken]
             nodeGet!((map, nybList.slice(0, n)), *valCh) |
             for (@val <- valCh) {
               if (n == len) {
+                // we have walked the entire path
+                // return result
                 ret!(val.contains(suffix))
               } else {
-                // See getter for explanation of formula
-                if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
+                // not finished walking the path
+                // node does not exist if (val / powers.nth(nybList.nth(n))) % 2 == 1
+                // return false
+                if ((val / powers.nth(nybList.nth(n))) % 2 == 0) {
                   ret!(false)
                 } else {
+                  // child node exists, check next depth
                   TreeHashMapContains!(map, nybList, n + 1, len, suffix, *ret)
                 }
               }
             }
           }
         } |
-
+        // TreeHashMap contains method
+        // Checks if the node with `key` path prefix in `map` exists and returns true or false on `ret`
         contract TreeHashMap(@"contains", @map, @key, ret) = {
-          new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
+          new
+            hashCh,
+            nybListCh,
+            keccak256Hash(`rho:crypto:keccak256Hash`)
+          in {
             // Hash the key to get a 256-bit array
             keccak256Hash!(key.toByteArray(), *hashCh) |
             for (@hash <- hashCh) {
@@ -266,51 +290,53 @@ in {
             }
           }
         } |
-
+        // Internal, recursive TreeHashMap update method
         contract TreeHashMapUpdater(@map, @nybList, @n, @len, update, @suffix, ret) = {
-          // Look up the value of the node at [map, nybList.slice(0, n + 1)
-          new valCh in {
-            match (map, nybList.slice(0, n)) {
-              node => {
-                for (@val <<- @[node, *storeToken]) {
-                  if (n == len) {
-                    // We're at the end of the path.
-                    if (val == 0) {
-                      // There's nothing here.
-                      // Return
-                      ret!(Nil)
-                    } else {
-                      new resultCh in {
-                        // Acquire the lock on this node
-                        for (@val <- @[node, *storeToken]) {
-                          // Update the current value
-                          update!(val.get(suffix), *resultCh) |
-                          for (@newVal <- resultCh) {
-                            // Release the lock
-                            @[node, *storeToken]!(val.set(suffix, newVal)) |
-                            // Return
-                            ret!(Nil)
-                          }
+          // Update the value of the node at (map, nybList.slice(0, len))
+          match (map, nybList.slice(0, n)) {
+            node => {
+              // peek @val on node at (map, nybList.slice(0, n))
+              for (@val <<- @[node, *storeToken]) {
+                if (n == len) {
+                  // if at the end of the path
+                  if (val == 0) {
+                    // if there's nothing here
+                    // return Nil
+                    ret!(Nil)
+                  } else {
+                    // else there's somthing here
+                    new resultCh in {
+                      // acquire the lock on this node
+                      for (@val <- @[node, *storeToken]) {
+                        // update the current value with val.get(suffix)
+                        update!(val.get(suffix), *resultCh) |
+                        for (@newVal <- resultCh) {
+                          // release the lock
+                          @[node, *storeToken]!(val.set(suffix, newVal)) |
+                          // and return Nil
+                          ret!(Nil)
                         }
                       }
                     }
+                  }
+                } else {
+                  // else try to continue walking the path
+                  // bit k set means child node k exists
+                  if ((val / powers.nth(nybList.nth(n))) % 2 == 0) {
+                    // if the path doesn't exist, there's no value to update
+                    // return Nil
+                    ret!(Nil)
                   } else {
-                    // Otherwise try to reach the end of the path.
-                    // Bit k set means child node k exists.
-                    if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
-                      // If the path doesn't exist, there's no value to update.
-                      // Return
-                      ret!(Nil)
-                    } else {
-                      // Child node exists, loop
-                      TreeHashMapUpdater!(map, nybList, n + 1, len, *update, suffix, *ret)
-                    }
+                    // child node exists, try next depth
+                    TreeHashMapUpdater!(map, nybList, n + 1, len, *update, suffix, *ret)
                   }
                 }
               }
             }
           }
         } |
+        // TreeHashMap update method
+        // Updates the value stored on the node with `key` path prefix in `map` with `update`
         contract TreeHashMap(@"update", @map, @key, update, ret) = {
           new hashCh, nybListCh, keccak256Hash(`rho:crypto:keccak256Hash`) in {
             // Hash the key to get a 256-bit array
@@ -329,14 +355,14 @@ in {
       }
     }
   } |
-
   // Use 4 * 8 = 32-bit paths to leaf nodes.
   TreeHashMap!("init", 4, *_registryStore) |
   new ack in {
+    // Store write-only `TreeHashMap` bundle on the node with prefix ``rho:lang:treeHashMap``
     for (@map <<- _registryStore) {
       TreeHashMap!("set", map, `rho:lang:treeHashMap`, bundle+{*TreeHashMap}, *ack)
     } |
-
+    // Wait for the set to finish, then register `lookupCh` as the uri/shorthand lookup channel
     for (_ <- ack) {
       bootstrapLookup!(*lookupCh) | // this will work only once
       for (lookup <- lookupCh) {
@@ -361,12 +387,15 @@ in {
       }
     }
   } |
-
+  // Registers `insertArbitraryCh` as an insertArbitrary channel for the registry
   bootstrapInsertArbitrary!(*insertArbitraryCh) | // this will work only once
   for (insertArbitrary <- insertArbitraryCh) {
+    // Generates uri and seed to store and access `data` in the registry, returns the generated uri on `ret`
     contract insertArbitrary(@data, ret) = {
-
-      new seed, uriCh in {
+      new
+        seed,
+        uriCh
+      in {
         ops!("buildUri", *seed.toByteArray(), *uriCh) |
         for (@uri <- uriCh) {
           for (@map <<- _registryStore) {
@@ -381,19 +410,24 @@ in {
       }
     }
   } |
-
+  // Registers `insertSignedCh` as an insertSigned channel in the registry
   bootstrapInsertSigned!(*insertSignedCh) | // this will work only once
   for (insertSigned <- insertSignedCh) {
-
+    // Verifies signature and inserts data into registry
     contract insertSigned(@pubKeyBytes, @value, @sig, ret) = {
       match value {
         (nonce, data) => {
-          new uriCh, hashCh, verifyCh in {
+          new
+            uriCh,
+            hashCh,
+            verifyCh
+          in {
             blake2b256!((nonce, data).toByteArray(), *hashCh) |
             for (@hash <- hashCh) {
               secpVerify!(hash, sig, pubKeyBytes, *verifyCh) |
               for (@verified <- verifyCh) {
                 if (verified) {
+                  // if verified, build the uri from `pubKeyBytes` and try to set `value` in the registry
                   ops!("buildUri", pubKeyBytes, *uriCh) |
                   for (@uri <- uriCh) {
                     for (@map <<- _registryStore) {
@@ -401,6 +435,7 @@ in {
                         TreeHashMap!("get", map, uri, *responseCh) |
                         for (@response <- responseCh) {
                           match response {
+                            // Nothing previously stored at this node
                             Nil => {
                               new ack in {
                                 TreeHashMap!("set", map, uri, (nonce, data), *ack) |
@@ -409,15 +444,18 @@ in {
                                 }
                               }
                             }
+                            // Data exists at this node, the new nonce must exceed the old nonce in order to set the new data
                             (oldNonce, _) => {
                               if (nonce > oldNonce) {
                                 new ack in {
                                   TreeHashMap!("set", map, uri, (nonce, data), *ack) |
                                   for (_ <- ack) {
+                                    // New data set, return uri
                                     ret!(uri)
                                   }
                                 }
                               } else {
+                                // `nonce` was not large enough, nothing is changed
                                 ret!(Nil)
                               }
                             }
@@ -427,6 +465,7 @@ in {
                     }
                   }
                 } else {
+                  // not verified, nothing is changed
                   ret!(Nil)
                 }
               }
