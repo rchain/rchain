@@ -28,32 +28,32 @@ in {
     // user calls MakeMint
     // we actually go to MakeMintLoc and get the real MakeMint contract definition
     contract MakeMint(return) = {
-      new thisMint, thisMintLoc, internalMakePurse, decr in {
+      new
+        thisMint,
+        internalMakePurse,
+        decr
+      in {
         contract thisMint(@"makePurse", @init, return) = {
-          for (@realThisMint <<- thisMintLoc) {
-            new balanceCh in {
-              @NonNegativeNumber!(init, *balanceCh) |
-              for(@balance <- balanceCh) {
-                internalMakePurse!(balance, *return)
-              }
+          new balanceCh in {
+            @NonNegativeNumber!(init, *balanceCh) |
+            for(@balance <- balanceCh) {
+              internalMakePurse!(balance, *return)
             }
           }
         } |
         contract internalMakePurse(balance, return) = {
           //balance must be a name that NonNegativeNumber contract is listening on
           new thisPurse in {
-            match {bundle0{bundle0{*thisPurse}|*decr}} {
+            match {bundle0{bundle0{*thisPurse} | *decr}} {
               thisDecr => {
                 // Checks mint and either decreases the balance of this purse by the given amount and returns true or
                 // doesn't not decrease and returns false.
                 contract thisPurse(@=thisDecr, @amount, return) = {
                   new success, thisPurseDecrCh, decrCh in {
                     // Checks that this purse has been provided with the correct decr.
-                    decrCh!(bundle0{*decr}) |
                     thisPurse!("decr", *thisPurseDecrCh) |
-                    for (@thisPurseDecr <- thisPurseDecrCh;
-                          @decrBundle    <- decrCh) {
-                      if (thisPurseDecr == decrBundle) {
+                    for (@thisPurseDecr <- thisPurseDecrCh) {
+                      if (thisPurseDecr == {bundle0{*decr}}) {
                         // Correct mint.
                         // Calls "sub" method on balance in the NonNegativeNumber contract.
                         balance!("sub", amount, *success) |
@@ -73,10 +73,17 @@ in {
                 }
               }
             } |
-            contract thisPurse(@"getBalance", return) = { balance!("value", *return) } |
-            contract thisPurse(@"sprout", return) = { thisMint!("makePurse", 0, *return) } |
+            contract thisPurse(@"getBalance", return) = {
+              balance!("value", *return)
+            } |
+            contract thisPurse(@"sprout", return) = {
+              thisMint!("makePurse", 0, *return)
+            } |
             contract thisPurse(@"split", @amount, return) = {
-              new destPurseCh, successCh in {
+              new
+                destPurseCh,
+                successCh
+              in {
                 thisPurse!("sprout", *destPurseCh) |
                 for (@destPurse <- destPurseCh) {
                   @destPurse!("deposit", amount, *thisPurse, *successCh) |
@@ -91,7 +98,12 @@ in {
               }
             } |
             contract thisPurse(@"deposit", @amount, @src, success) = {
-              new result, addSuccessCh, thisDecrCh, srcDecrCh in {
+              new
+                result,
+                addSuccessCh,
+                thisDecrCh,
+                srcDecrCh
+              in {
                 // Checks if mints match.
                 thisPurse!("decr", *thisDecrCh) |
                 @src!("decr", *srcDecrCh) |
@@ -105,7 +117,7 @@ in {
                       for (@addSuccess <- addSuccessCh) {
                         if (addSuccess) {
                           // No overflow occurred.
-                          @src!(bundle0{bundle0{src}|*decr}, amount, *result) | //call src decr function.
+                          @src!(bundle0{bundle0{src} | *decr}, amount, *result) | // call src decr function.
                           for (@decrSuccess <- result) {
                             if (decrSuccess) {
                               // Proper authority to subtract amount from src, amount subtracted from src.

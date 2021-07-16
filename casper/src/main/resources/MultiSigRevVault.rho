@@ -34,9 +34,13 @@ in {
   for(@(_, ListOps)  <- ListOpsCh;
       @(_, AuthKey)  <- AuthKeyCh;
       @(_, RevVault) <- RevVaultCh) {
-    // 
+    // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
-      new mapStore, sealer, unsealer in {
+      new
+        mapStore,
+        sealer,
+        unsealer
+      in {
         mapStore!({}) |
         contract sealer(@value, retS) = {
           for (@map <- mapStore) {
@@ -58,18 +62,20 @@ in {
         ret!((*sealer, *unsealer))
       }
     } |
-
+    // Returns a MultiSigRevVault auth key for `deployerId` on `ret`
     contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
-      new DeployerIdOps(`rho:rchain:deployerId:ops`),
-          revAddrCh,
-          deployerPubKeyBytesCh in {
+      new
+        DeployerIdOps(`rho:rchain:deployerId:ops`),
+        revAddrCh,
+        deployerPubKeyBytesCh
+      in {
         DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
         for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
           _fromPublicKey!(deployerPubKeyBytes, *ret)
         }
       }
     } |
-    // Returns list of auth keys for each public key on `ret`
+    // Returns a MultiSigRevVault auth key for `publickey` on `ret`
     contract _fromPublicKey(@publicKey, ret) = {
       new
         revAddrCh,
@@ -142,7 +148,6 @@ in {
                         }
                       }
                     } |
-
                     // Creates transfer and "signs" with first account.
                     // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, *ret) tuple
@@ -190,7 +195,6 @@ in {
                         }
                       }
                     } |
-
                     // Confirms transfer transaction.
                     // auth is either a deployerAuthKey or
                     //                a sealed (*multiSig, targetRevAddress, amount, nonce, *ret) tuple

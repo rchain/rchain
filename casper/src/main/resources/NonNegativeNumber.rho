@@ -17,8 +17,8 @@
 
 new
   NonNegativeNumber,
-  NonNegativeNumberDispatcher,
   NonNegativeNumberLoc,
+  NonNegativeNumberDispatcher,
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut

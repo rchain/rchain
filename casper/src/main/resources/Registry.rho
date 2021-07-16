@@ -574,18 +574,18 @@ in {
           MultiSig!(pubKeys, 2, *msRet) |
           for (@pubKeys, @quorumSize, msRet <- MultiSig) {
             new
-              multisig,       // MultiSig contract's method entry point
-              agreementMapCh, // channel on which the agreement map is stored
-              proposalMapCh,  // channel on which the propose map is stored
-              multisigLoc,
-              multisigDispatcher
+              multisig,           // MultiSig contract's method entry point
+              agreementMapCh,     // channel on which the agreement map is stored
+              proposalMapCh,      // channel on which the propose map is stored
+              multisigLoc,        // MultiSig contract's location channel
+              multisigDispatcher  // MultiSig contract's dispatcher
             in {
-              // Initialize agreement map
-              // (uri, contractData, methodData) -> agreement set
-              agreementMapCh!({}) |
               // Initialize propose map
               // uri -> (contractData, methodData)
               proposalMapCh!({}) |
+              // Initialize agreement map
+              // (uri, contractData, methodData) -> agreement set
+              agreementMapCh!({}) |
               // -------
               // Propose
               // --------------------------------------------------------------------------------
@@ -809,7 +809,6 @@ in {
                   realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
                 }
               }
-              // TODO send each member of pubKeys a handle to `multisig`
             }
           }
         }
