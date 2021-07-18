@@ -223,8 +223,26 @@ class Initializing[F[_]
     def getMinBlockHeight: F[Long] = {
       val blockHashes = startBlock.justifications.map(_.latestBlockHash)
       for {
-        blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
-        minHeight = if (blocks.isEmpty) 0L else blocks.map(ProtoUtil.blockNumber).min
+        lowestBlockHeights <- fs2.Stream
+                               .fromIterator(blockHashes.toIterator)
+                               .evalMap { BlockStore[F].getUnsafe(_) }
+                               .evalMap { b =>
+                                 val noSelfJustificationErr =
+                                   "No latest messages justifications downloaded when reconstructed Last Finalized State"
+                                 val selfJ =
+                                   ProtoUtil
+                                     .creatorJustification(b)
+                                     .map(_.latestBlockHash)
+                                     .get
+                                 BlockStore[F]
+                                   .get(selfJ)
+                                   .flatMap(_.liftTo(new Exception(noSelfJustificationErr)))
+                                   .map(_.body.state.blockNumber)
+                               }
+                               .compile
+                               .toList
+
+        minHeight = if (lowestBlockHeights.isEmpty) 0L else lowestBlockHeights.min
         // We need parent of oldest latest block, that's why -1.
         // The same condition is also applied when downloading.
         // https://github.com/rchain/rchain/blob/0a09467628/casper/src/main/scala/coop/rchain/casper/engine/LastFinalizedStateBlockRequester.scala#L154

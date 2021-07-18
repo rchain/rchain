@@ -69,11 +69,16 @@ object LfsBlockRequester {
 
     // Confirm key is Received if it was Requested.
     // Returns updated state with the flags if Requested and last latest received.
-    def received(k: Key, height: Long): (ST[Key], ReceiveInfo) = {
+    def received(
+        k: Key,
+        height: Long,
+        latestReplacement: Option[Key] = None
+    ): (ST[Key], ReceiveInfo) = {
       val isReq = d.get(k).contains(Requested)
       if (isReq) {
         // Remove message from the set of latest messages (if exists)
-        val newLatest    = latest - k
+        val adjLatest    = latest - k
+        val newLatest    = latestReplacement.map(adjLatest + _).getOrElse(adjLatest)
         val isLatest     = latest != newLatest
         val isLastLatest = isLatest && newLatest.isEmpty
         // Save in height map
@@ -82,7 +87,8 @@ object LfsBlockRequester {
         // Calculate new minimum height if latest message
         //  - we need parents of latest message so it's `-1`
         val newLowerBound = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
-        val newSt         = d + ((k, Received))
+        val newSt =
+          latestReplacement.foldLeft(d + ((k, Received)))((acc, k) => acc + (k -> Requested))
         // Set new minimum height and update latest
         (
           this.copy(newSt, newLatest, newLowerBound, newHeightMap),
@@ -192,7 +198,15 @@ object LfsBlockRequester {
         val blockNumber = ProtoUtil.blockNumber(block)
         for {
           // Mark block as received and calculate minimum height (if latest)
-          receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
+          receivedResult <- st.modify(st => {
+                             // if message received is latest as per approved block - add its self justification
+                             // to target latest messages that has to be pulled
+                             val lmReplacement =
+                               if (latestMessages.contains(block.blockHash))
+                                 ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
+                               else None
+                             st.received(block.blockHash, blockNumber, lmReplacement)
+                           })
           // Result if block is received and if last latest is received
           ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
 
