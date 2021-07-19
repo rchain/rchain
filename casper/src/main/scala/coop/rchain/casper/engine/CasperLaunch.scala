@@ -128,6 +128,8 @@ object CasperLaunch {
                                   s"is available in DAG, database is supposedly in inconsistent state."
                               )
                               .whenA(dc)
+                        _ <- CasperBufferStorage[F].remove(hash).whenA(dc)
+                        _ <- Concurrent[F].raiseError[Unit](new Exception("Dag error"))
                         _ <- BlockRetriever[F].ackReceive(hash)
                         _ <- blockProcessingQueue.enqueue1((casper, block))
                       } yield ()

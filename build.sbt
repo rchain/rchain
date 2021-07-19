@@ -132,7 +132,7 @@ lazy val shared = (project in file("shared"))
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest,
-      enumeratum,
+      enumeratum
     )
   )
 
@@ -238,6 +238,46 @@ lazy val models = (project in file("models"))
   )
   .dependsOn(shared % "compile->compile;test->test", rspace)
 
+lazy val revdefine = (project in file("revdefine"))
+  .settings(commonSettings: _*)
+  .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
+  .settings(
+    name := "revdefine",
+    organization := "com.revdefine",
+    scalacOptions -= "-Ywarn-unused:locals",
+    libraryDependencies ++=
+      apiServerDependencies ++ commonDependencies ++ Seq(
+        "org.mongodb.scala" %% "mongo-scala-driver" % "4.2.3",
+        "org.http4s" %% "rho-swagger" % "0.21.0",
+        "com.github.nscala-time" %% "nscala-time" % "2.28.0"
+      ),
+    buildInfoPackage := "com.revdefine",
+    mainClass in Compile := Some("com.revdefine.Main"),
+    mainClass in assembly := Some("com.revdefine.Main"),
+    dockerBaseImage := "openjdk:11-jre-slim",
+    packageName in Docker := "revdefine",
+    version in Docker := "0.1.0",
+    dockerCommands := {
+      val daemon = (daemonUser in Docker).value
+      Seq(
+        Cmd("FROM", dockerBaseImage.value),
+        Cmd("LABEL", s"""MAINTAINER="${maintainer.value}""""),
+        Cmd("WORKDIR", (defaultLinuxInstallLocation in Docker).value),
+        Cmd("ADD", s"--chown=$daemon:$daemon opt /opt"),
+        Cmd("USER", "root"),
+        ExecCmd(
+          "ENTRYPOINT",
+          "bin/revdefine",
+          "--profile=docker",
+          "-XX:ErrorFile=/var/lib/rnode/hs_err_pid%p.log"
+        ),
+        ExecCmd("CMD", "run")
+      )
+    },
+    conflictManager := ConflictManager.latestCompatible
+  )
+  .dependsOn(node)
+
 lazy val node = (project in file("node"))
   .settings(commonSettings: _*)
   .enablePlugins(RpmPlugin, DebianPlugin, JavaAppPackaging, BuildInfoPlugin)
@@ -271,6 +311,7 @@ lazy val node = (project in file("node"))
       scalapb.gen(grpc = false)  -> (sourceManaged in Compile).value / "protobuf",
       grpcmonix.generators.gen() -> (sourceManaged in Compile).value / "protobuf"
     ),
+    conflictManager := ConflictManager.latestCompatible,
     buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, git.gitHeadCommit),
     buildInfoPackage := "coop.rchain.node",
     mainClass in Compile := Some("coop.rchain.node.Main"),

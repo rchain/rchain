@@ -42,7 +42,7 @@ final class BlockStoreOps[F[_]: Sync](
       enclosing: sourcecode.Enclosing
   ): F[BlockMessage] = {
     def source = s"${file.value}:${line.value} ${enclosing.value}"
-    def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
+    def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildStringNoLimit(hash)}\n  $source"
     blockStore.get(hash) >>= (_.liftTo(BlockStoreInconsistencyError(errMsg)))
   }
 

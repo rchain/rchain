@@ -62,6 +62,9 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
       result <- lock.withPermit(
                  for {
                    cached <- reportStore.get(b.blockHash)
+                   _ <- Log[F].info(
+                         s"${cached.nonEmpty} Found ${Base16.encode(b.blockHash.toByteArray)} reporting cached in the store"
+                       )
                    res <- if (cached.isEmpty || forceReplay)
                            replayBlock(b).flatTap(reportStore.put(b.blockHash, _))
                          else

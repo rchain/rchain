@@ -1,0 +1,57 @@
+<configuration>
+
+  <contextListener class="ch.qos.logback.classic.jul.LevelChangePropagator">
+    <resetJUL>true</resetJUL>
+  </contextListener>
+
+  <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>INFO</level>
+    </filter>
+    <!-- encoders are  by default assigned the type ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
+    <encoder>
+      <pattern>%d{HH:mm:ss.SSS} [%highlight(%-5level{5})] [%cyan(%-20.20thread{20})] [%cyan(%-29.29logger{29})] - %msg%n </pattern>
+    </encoder>
+  </appender>
+
+  <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <file>${rnode.data.dir}/rnode.log</file>
+    <append>true</append>
+    <encoder>
+      <pattern>%d{ISO8601, UTC} [%-5level{5}] [%-20.20thread{30}] [%-29.29logger{29}]- %msg%n </pattern>
+    </encoder>
+  </appender>
+
+  <appender name="REVDEFINE" class="ch.qos.logback.core.FileAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>DEBUG</level>
+    </filter>
+    <file>${rnode.data.dir}/revdefine.log</file>
+    <append>true</append>
+    <encoder>
+      <pattern>%d{ISO8601, UTC} [%-5level{5}] [%-20.20thread{30}] [%-29.29logger{29}]- %msg%n </pattern>
+    </encoder>
+  </appender>
+
+  <logger name="coop.rchain.shared.EventLogger" level="OFF" />
+  <logger name="coop.rchain.rspace" level="info" />
+  <logger name="org.http4s" level="warn" />
+  <logger name="io.netty" level="warn" />
+  <logger name="io.grpc" level="warn" />
+  <logger name="org.http4s.blaze.channel.nio1.NIO1SocketServerGroup" level="OFF" />
+
+  <logger name="com.revdefine.node">
+    <appender-ref ref="REVDEFINE" />
+  </logger>
+  <logger name="org.mongodb">
+    <appender-ref ref="REVDEFINE" />
+  </logger>
+
+  <root level="debug">
+    <appender-ref ref="STDOUT" />
+    <appender-ref ref="FILE" />
+  </root>
+
+</configuration>
