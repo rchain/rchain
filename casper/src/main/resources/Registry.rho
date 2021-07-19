@@ -523,14 +523,19 @@ in {
       // Registers `insertBlessedCh` as an insertBlessed channel in the registry
       bootstrapInsertBlessed!(*insertBlessedCh) |
       for (insertBlessed <- insertBlessedCh) {
-        // a consume is included for each (stateful) blessed contract
+        // A consume is included for each (stateful) blessed contract
+        // - AuthKey
+        // - MakeMint
+        // - MultiSigRevVault
+        // - NonNegativeNumber
+        // - PoS
+        // - RevVault
         // AuthKey
         for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
             blessedContractLocMapCh!(bcMap.set(uri, loc))
           }
         } |
-        // We do not include stateless contracts in the blessed contract map
         // MakeMint
         for (@uri, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
@@ -726,21 +731,13 @@ in {
                   }
                 }
               } |
-              // Read
+              // ExtractState
               // --------------------------------------------
               // Returns a map containing the current maps:
               // "blessed"   - blessed contract location map
               // "agreement" - agreement map
               // "propose"   - proposals map
               // --------------------------------------------
-              contract multisig(@"read", ret) = {
-                for (@agreementMap <<- agreementMapCh;
-                     @blessedMap   <<- blessedContractLocMapCh;
-                     @proposalMap  <<- proposalMapCh) {
-                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
-                }
-              } |
-              // Returns a map containing all the internal maps used in MultiSig
               contract multisig(@"extractState", ret) = {
                 for (@agreementMap <<- agreementMapCh;
                      @blessedMap   <<- blessedContractLocMapCh;
@@ -748,7 +745,7 @@ in {
                   ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
                 }
               } |
-              msRet!(bundle+{*multisig}, pubKeys, quorumSize) |
+              msRet!(bundle+{*multisigDispatcher}, pubKeys, quorumSize) |
               new ack in {
                 for (@map <<- _registryStore) {
                   // add multisig dispatcher to the uri map

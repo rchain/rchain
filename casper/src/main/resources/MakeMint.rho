@@ -152,6 +152,11 @@ in {
         return!(bundle+{*thisMint})
       }
     } |
+    // No internal state to return.
+    // Method required for updates.
+    contract MakeMint(@"extractState", ret) = {
+      ret!([])
+    } |
     // Dispatcher contract
     // for use with 1-9 arguments
     contract MakeMintDispatcher(@arg1) = {

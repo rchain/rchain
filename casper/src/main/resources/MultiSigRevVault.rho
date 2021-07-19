@@ -279,6 +279,11 @@ in {
         } // new
       } // quorum size
     } |
+    // No internal state to return.
+    // Method required for updates.
+    contract MultiSigRevVault(@"extractState", ret) = {
+      ret!([])
+    } |
     // Dispatcher contract
     // for use with 1-9 arguments
     contract MultiSigRevVaultDispatcher(@arg1) = {

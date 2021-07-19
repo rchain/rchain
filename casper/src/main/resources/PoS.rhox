@@ -191,6 +191,17 @@ in {
               contract PoS(@"getQuarantineLength", returnCh) = {
                 returnCh!($$quarantineLength$$)
               } |
+              // Returns current state elements on `ret`.
+              contract PoS(@"extractState", ret) = {
+                for (@state <<- stateCh) {
+                  ret!({
+                    "state"     : state,
+                    "coopVault" : coopVault,
+                    "posVault"  : posVault,
+                    "pending"   : pendingRewardsMap
+                  })
+                }
+              } |
               // Public method allowing users to bond and become validators.
               contract PoS(@"bond", @deployerId, @amount, returnCh) = {
                 new userCh, depositCh,

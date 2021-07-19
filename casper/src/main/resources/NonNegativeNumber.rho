@@ -70,6 +70,11 @@ in {
       }
     }
   } |
+  // No internal state to return.
+  // Method required for updates.
+  contract NonNegativeNumber(@"extractState", ret) = {
+    ret!([])
+  } |
   // Dispatcher contract
   // for use with 1-9 arguments
   contract NonNegativeNumberDispatcher(@arg1) = {

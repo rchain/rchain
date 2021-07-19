@@ -277,6 +277,11 @@ in {
               }
             }
           } |
+          // Method to extract the current state of the RevVault contract.
+          // Returns the current `vaultMap`.
+          contract RevVault(@"extractState", ret) = {
+            ret!(vaultMap)
+          } |
           // Dispatcher contract
           // for use with 1-9 arguments
           contract RevVaultDispatcher(@arg1) = {
