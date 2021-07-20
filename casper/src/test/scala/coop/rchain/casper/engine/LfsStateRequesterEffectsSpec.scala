@@ -156,9 +156,6 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
         override val stream: Stream[F, ST[StatePartPath]] = processingStream
       }
 
-      // Take one element from the stream, processed the first signal on start
-      _ <- processingStream.take(1).compile.drain
-
       // Execute test function together with processing stream
       _ <- test(mock)
     } yield ()
@@ -191,6 +188,7 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "send request for next state chunk" in bootstrapTest { mock =>
     import mock._
     for {
+      // Process initial request
       reqs <- sentRequests.take(1).compile.toList
 
       // After start, first request should be for approved block post state
@@ -209,6 +207,9 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "save (import) received state chunk" in bootstrapTest { mock =>
     import mock._
     for {
+      // Process initial request
+      _ <- sentRequests.take(1).compile.drain
+
       // Receives store items message
       _ <- receive(StoreItemsMessage(historyPath1, historyPath2, history1, data1))
 
@@ -229,6 +230,7 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "not request next chunk if message is not requested" in bootstrapTest { mock =>
     import mock._
     for {
+      // Process initial request
       reqs <- sentRequests.take(1).compile.toList
 
       // After start, first request should be for approved block post state
@@ -245,6 +247,9 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "not save (import) state chunk if not requested" in bootstrapTest { mock =>
     import mock._
     for {
+      // Process initial request
+      _ <- sentRequests.take(1).compile.drain
+
       // Receives store items message which is not requested
       _ <- receive(StoreItemsMessage(historyPath2, historyPath3, history2, data2))
 
@@ -261,6 +266,13 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   ) { mock =>
     import mock._
     for {
+      // Process initial request
+      _ <- stream.take(1).compile.drain
+      _ <- sentRequests.take(1).compile.drain
+
+      // No other requests should be sent
+      _ = sentRequests should notEmit
+
       // Receives store items message
       _ <- receive(StoreItemsMessage(historyPath1, historyPath2, invalidHistory, data1))
 
@@ -275,6 +287,13 @@ class LfsStateRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
     mock =>
       import mock._
       for {
+        // Process initial request
+        _ <- stream.take(1).compile.drain
+        _ <- sentRequests.take(1).compile.drain
+
+        // No other requests should be sent
+        _ = sentRequests should notEmit
+
         // Receives store items message (start path is equal to end path)
         _ <- receive(StoreItemsMessage(historyPath1, historyPath1, history1, data1))
 
