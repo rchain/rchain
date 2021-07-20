@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.BlockStatus.Offence
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.merging.BlockIndex
@@ -186,7 +187,10 @@ class MultiParentCasperImpl[F[_]
     } yield ()
   }
 
-  override def getSnapshot(targetMessageOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = {
+  override def getSnapshot(
+      targetMessageOpt: Option[BlockMessage],
+      targetDag: Option[BlockDagRepresentation[F]] = None
+  ): F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
     def computeOnChainState(b: BlockMessage): F[OnChainCasperState] =
@@ -229,7 +233,7 @@ class MultiParentCasperImpl[F[_]
 
     for {
       // the most recent view on the DAG, includes everything node seen so far
-      fullDag <- BlockDagStorage[F].getRepresentation
+      fullDag <- targetDag.map(_.pure[F]).getOrElse(BlockDagStorage[F].getRepresentation)
 
       getBlockView = (m: BlockMessage) =>
         for {
@@ -330,8 +334,8 @@ class MultiParentCasperImpl[F[_]
   override def validate(
       b: BlockMessage,
       s: CasperSnapshot[F]
-  ): F[Either[BlockError, ValidBlock]] = {
-    val validationProcess: EitherT[F, BlockError, ValidBlock] =
+  ): F[Either[Offence, Unit]] = {
+    val validationProcess: EitherT[F, Offence, Unit] =
       for {
         _ <- EitherT(
               Validate

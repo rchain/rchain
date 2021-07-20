@@ -32,13 +32,13 @@ class BlockProcessor[F[_]: Concurrent](
     // Casper state to validate block against
     getCasperSnapshot: (Casper[F], BlockMessage) => F[CasperSnapshot[F]],
     validateBlock: (Casper[F], CasperSnapshot[F], BlockMessage) => F[ValidBlockProcessing],
-    effValidBlock: (Casper[F], BlockMessage) => F[BlockDagRepresentation[F]],
+    effValidBlock: (Casper[F], BlockMessage) => F[CasperSnapshot[F]],
     effInvalidVBlock: (
         Casper[F],
         BlockMessage,
         InvalidBlock,
         CasperSnapshot[F]
-    ) => F[BlockDagRepresentation[F]]
+    ) => F[CasperSnapshot[F]]
 ) {
 
   // check if block should be processed
@@ -96,13 +96,13 @@ class BlockProcessor[F[_]: Concurrent](
     for {
       cs     <- if (s.isDefined) s.get.pure[F] else getCasperSnapshot(c, b)
       status <- validateBlock(c, cs, b)
-      _ <- status
-            .map(s => effValidBlock(c, b))
+      r <- status
+            .map(_ => effValidBlock(c, b))
             .leftMap {
               // this is to maintain backward compatibility with casper validate method.
               // as it returns not only InvalidBlock or ValidBlock
               case i: InvalidBlock => effInvalidVBlock(c, b, i, cs)
-              case _               => cs.dag.pure[F] // this should never happen
+              case _               => cs.pure[F] // this should never happen
             }
             .merge
       // once block is validated and effects are invoked, it should be removed from buffer
@@ -186,9 +186,10 @@ object BlockProcessor {
 
     val effectsForValidBlock = (c: Casper[F], b: BlockMessage) =>
       for {
-        r <- c.handleValidBlock(b)
-        _ <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
-      } yield r
+        r  <- c.handleValidBlock(b)
+        cs <- c.getSnapshot(targetDag = r.some)
+        _  <- CommUtil[F].sendBlockHash(b.blockHash, b.sender)
+      } yield cs
 
     new BlockProcessor[F](
       storeBlock,
