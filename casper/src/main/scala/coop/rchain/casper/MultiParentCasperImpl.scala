@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.BlockStatus.Offence
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.merging.BlockIndex
@@ -27,6 +28,8 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger
+import coop.rchain.rspace.merger.{EventLogIndex, StateChange}
 import coop.rchain.shared._
 
 // format: off
@@ -184,10 +187,13 @@ class MultiParentCasperImpl[F[_]
     } yield ()
   }
 
-  override def getSnapshot: F[CasperSnapshot[F]] = {
+  override def getSnapshot(
+      targetMessageOpt: Option[BlockMessage],
+      targetDag: Option[BlockDagRepresentation[F]] = None
+  ): F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
-    def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
+    def computeOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
         av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
@@ -195,43 +201,100 @@ class MultiParentCasperImpl[F[_]
         shardConfig = casperShardConf
       } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
 
+    // parents do not include invalid latest messages and share the same bonds map
+    def computeParents(dag: BlockDagRepresentation[F]): F[List[BlockMessage]] =
+      for {
+        r         <- Estimator[F].tips(dag, approvedBlock)
+        (_, tips) = (r.lca, r.tips)
+
+        /**
+          * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
+          * have conflicting parents. With introducing block merge, all parents that share the same bonds map
+          * should be parents. Parents that have different bond maps are only one that cannot be merged in any way.
+          */
+        // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
+        // bond maps that has biggest cumulative stake.
+        blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
+        parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
+      } yield parents
+
+    /**
+      * Justifications might include invalid latest messages and should be bonded in parents
+      * We ensure that only the justifications given in the block are those
+      * which are bonded validators in the chosen parent. This is safe because
+      * any latest message not from a bonded validator will not change the
+      * final fork-choice.
+      */
+    def computeJustifications(
+        dag: BlockDagRepresentation[F],
+        onChainState: OnChainCasperState
+    ): F[Map[Validator, BlockHash]] =
+      dag.latestMessageHashes.map(_.filterKeys(onChainState.bondsMap.keySet.contains(_)))
+
     for {
-      dag         <- BlockDagStorage[F].getRepresentation
-      r           <- Estimator[F].tips(dag, approvedBlock)
-      (lca, tips) = (r.lca, r.tips)
+      // the most recent view on the DAG, includes everything node seen so far
+      fullDag <- targetDag.map(_.pure[F]).getOrElse(BlockDagStorage[F].getRepresentation)
 
-      /**
-        * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
-        * have conflicting parents. With introducing block merge, all parents that share the same bonds map
-        * should be parents. Parents that have different bond maps are only one that cannot be merged in any way.
-        */
-      parents <- for {
-                  // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
-                  // bond maps that has biggest cumulative stake.
-                  blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
-                  parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
-                } yield parents
-      onChainState <- getOnChainState(parents.head)
-
-      /**
-        * We ensure that only the justifications given in the block are those
-        * which are bonded validators in the chosen parent. This is safe because
-        * any latest message not from a bonded validator will not change the
-        * final fork-choice.
-        */
-      justifications <- {
+      getBlockView = (m: BlockMessage) =>
         for {
-          lms <- dag.latestMessages
-          r = lms.toList
-            .map {
-              case (validator, blockMetadata) => Justification(validator, blockMetadata.blockHash)
-            }
-            .filter(j => onChainState.bondsMap.keySet.contains(j.validator))
-        } yield r.toSet
-      }
-      parentMetas <- parents.traverse(b => dag.lookupUnsafe(b.blockHash))
-      maxBlockNum = ProtoUtil.maxBlockNumberMetadata(parentMetas)
-      maxSeqNums  <- dag.latestMessages.map(m => m.map { case (k, v) => k -> v.seqNum })
+          p <- m.header.parentsHashList.traverse(BlockStore[F].getUnsafe)
+          s <- computeOnChainState(p.head)
+          j = m.justifications.map { case Justification(v, h) => (v, h) }.toMap
+
+          findLfb = (latestMessages: Map[Validator, BlockHash]) =>
+            for {
+              minNum       <- p.map(_.blockHash).traverse(fullDag.lookupUnsafe).map(_.map(_.blockNum).min)
+              lowestHeight = minNum - Finalizer.MaxSearchDepth // lowest height puts a constraint on search area
+
+              lfb <- fullDag
+                      .findLastFinalizedBlock(
+                        latestMessagesView = latestMessages,
+                        faultToleranceThreshold = casperShardConf.faultToleranceThreshold,
+                        lowestHeight = lowestHeight
+                      )
+                      .flatMap { lfbOpt =>
+                        // if approved block is in search range - return it.
+                        // This is required because genesis has fault tolerance less then max value so wont be finalized for
+                        // all thresholds.
+                        // Also in future approved block restored from LFS might be finalized with fault tolerance less then current
+                        // fault tolerance from shard config
+
+                        val approvedBlockIsInRange = fullDag
+                          .lookupUnsafe(approvedBlock.blockHash)
+                          .map(_.blockNum)
+                          .map(_ >= lowestHeight)
+
+                        val notFoundF = approvedBlockIsInRange.ifM(
+                          approvedBlock.blockHash.pure[F], {
+                            val lfbNotFoundErrMsg = s"No last finalized block found when creating casper snapshot for " +
+                              s"${targetMessageOpt.map(PrettyPrinter.buildString(_)).getOrElse("the most recent view")}."
+                            new Exception(lfbNotFoundErrMsg).raiseError[F, BlockHash]
+                          }
+                        )
+                        lfbOpt.map(_.pure[F]).getOrElse(notFoundF)
+                      }
+            } yield lfb
+          dagView <- fullDag.truncate(j, findLfb)
+        } yield (dagView, p, s, j)
+
+      getLatestView = for {
+        p <- computeParents(fullDag)
+        s <- computeOnChainState(p.head)
+        j <- computeJustifications(fullDag, s)
+      } yield (fullDag, p, s, j)
+
+      // if target message supplied, create dag view, otherwise get the most recent view
+      view                                         <- targetMessageOpt.map(getBlockView).getOrElse(getLatestView)
+      (dag, parents, onChainState, justifications) = view
+      lfb                                          = dag.lastFinalizedBlock
+
+      parentMetas <- parents.map(_.blockHash).traverse(dag.lookupUnsafe)
+      maxBlockNum = parentMetas.map(_.blockNum).max
+      maxSeqNums <- justifications.toList
+                     .traverse {
+                       case (v, h) => dag.lookupUnsafe(h).map((v -> _.seqNum))
+                     }
+                     .map(_.toMap)
       deploysInScope <- {
         val currentBlockNumber  = maxBlockNum + 1
         val earliestBlockNumber = currentBlockNumber - onChainState.shardConf.deployLifespan
@@ -255,14 +318,11 @@ class MultiParentCasperImpl[F[_]
         } yield result
       }
       invalidBlocks <- dag.invalidBlocksMap
-      lfb           = dag.lastFinalizedBlock
     } yield CasperSnapshot(
       dag,
       lfb,
-      lca,
-      tips,
       parents,
-      justifications,
+      justifications.map { case (v, h) => Justification(v, h) }.toSet,
       invalidBlocks,
       deploysInScope,
       maxBlockNum,
@@ -274,8 +334,8 @@ class MultiParentCasperImpl[F[_]
   override def validate(
       b: BlockMessage,
       s: CasperSnapshot[F]
-  ): F[Either[BlockError, ValidBlock]] = {
-    val validationProcess: EitherT[F, BlockError, ValidBlock] =
+  ): F[Either[Offence, Unit]] = {
+    val validationProcess: EitherT[F, Offence, Unit] =
       for {
         _ <- EitherT(
               Validate
@@ -305,17 +365,23 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    val indexBlock = for {
-      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                RuntimeManager[F].getHistoryRepo
-              )
-      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
-    } yield ()
+    val indexBlock = {
+      val historyRepository = RuntimeManager[F].getHistoryRepo
+      for {
+        index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                  b.blockHash,
+                  b.body.deploys,
+                  b.body.systemDeploys,
+                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                  (log, preState) =>
+                    BlockIndex.createEventLogIndex(log, historyRepository, preState),
+                  (index, preState, postState) =>
+                    StateChange.compute(index, historyRepository, preState, postState)
+                )
+        _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+      } yield ()
+    }
 
     val validationProcessDiag = for {
       // Create block and measure duration

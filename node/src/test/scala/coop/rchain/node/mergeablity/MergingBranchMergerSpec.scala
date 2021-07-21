@@ -6,18 +6,23 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
-import coop.rchain.casper.protocol.{ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
+import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.merger.StateChange
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
 import coop.rchain.store.InMemoryStoreManager
@@ -41,6 +46,30 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
     rm  <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
   } yield rm
 
+  def txRho(payer: String, payee: String) =
+    s"""
+       |new
+       |  rl(`rho:registry:lookup`), stdout(`rho:io:stdout`),  revVaultCh, log
+       |in {
+       |  rl!(`rho:rchain:revVault`, *revVaultCh) |
+       |  for (@(_, revVault) <- revVaultCh) {
+       |    match ("${payer}", "${payee}", 50) {
+       |      (from, to, amount) => {
+       |        new vaultCh, revVaultKeyCh, deployerId(`rho:rchain:deployerId`) in {
+       |          @revVault!("findOrCreate", from, *vaultCh) |
+       |          @revVault!("deployerAuthKey", *deployerId, *revVaultKeyCh) |
+       |          for (@(true, vault) <- vaultCh; key <- revVaultKeyCh) {
+       |            new resultCh in {
+       |              stdout!("TX from ${payer} to ${payee} succeed.")|
+       |              @vault!("transfer", to, amount, *key, *resultCh) 
+       |            }
+       |          }
+       |        }
+       |      }
+       |    }
+       |  }
+       |}""".stripMargin
+
   def makeTxAndCommitState(
       runtimeManager: RuntimeManager[Task],
       baseState: StateHash,
@@ -48,9 +77,20 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
       validator: PublicKey,
       seqNum: Int = 0,
       blockNum: Long = 0
-  ): Task[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
+  ): Task[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] = {
+    val payerAddr = RevAddress.fromPublicKey(Secp256k1.toPublic(payerKey)).get.address.toBase58
+    // random address for recipient
+    val payeeAddr =
+      RevAddress
+        .fromDeployerId(Array.fill(Validator.Length)((scala.util.Random.nextInt(256) - 128).toByte))
+        .get
+        .address
+        .toBase58
     for {
-      txDeploy    <- ConstructDeploy.sourceDeployNowF("Nil", sec = payerKey)
+      txDeploy <- ConstructDeploy.sourceDeployNowF(
+                   txRho(payerAddr, payeeAddr),
+                   sec = payerKey
+                 )
       userDeploys = txDeploy :: Nil
       systemDeploys = CloseBlockDeploy(
         SystemDeployUtil
@@ -73,11 +113,16 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
             invalidBlocks
           )
     } yield r
+  }
 
-  def mkStatesSteams(preStateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkBlocksSteams(preStateHash: StateHash, seqNum: Int, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
-  ) =
-    (genesisContext.validatorPks zip genesisContext.genesisVaultsSks).map {
+  ) = {
+    val pksWithSingleConflict = {
+      val a = genesisContext.genesisVaultsSks.last
+      genesisContext.genesisVaultsSks.dropRight(2) ++ List(a, a)
+    }
+    (genesisContext.validatorPks zip pksWithSingleConflict).map {
       case (validatorPk, payerSk) =>
         Stream
           .eval(
@@ -90,23 +135,39 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               blockNum
             )
           )
+          .map { s =>
+            getRandomBlock(
+              setPreStateHash = preStateHash.some,
+              setPostStateHash = s._1.some,
+              setDeploys = s._2.some,
+              setBlockNumber = blockNum.some,
+              setSeqNumber = seqNum.some,
+              setValidator = ByteString.copyFrom(validatorPk.bytes).some,
+              setBonds = genesisContext.validatorKeyPairs
+                .map(_._2)
+                .map(pk => Bond(ByteString.copyFrom(pk.bytes), 1))
+                .toList
+                .some
+            )
+          }
     }.toList
+  }
 
-  def mkState(stateHash: StateHash, seqNum: Int, blockNum: Long, n: Int)(
+  def mkBlocks(stateHash: StateHash, seqNum: Int, blockNum: Long, n: Int)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
-    mkStatesSteams(stateHash, seqNum, blockNum).get(n.toLong).get.compile.lastOrError
+    mkBlocksSteams(stateHash, seqNum, blockNum).get(n.toLong).get.compile.lastOrError
 
-  def mkHeadState(stateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkHeadBlock(stateHash: StateHash, seqNum: Int, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
-    mkStatesSteams(stateHash, seqNum, blockNum).head.compile.lastOrError
+    mkBlocksSteams(stateHash, seqNum, blockNum).head.compile.lastOrError
 
-  def mkTailStates(stateHash: StateHash, seqNum: Int, blockNum: Long)(
+  def mkTailBlocks(stateHash: StateHash, seqNum: Int, blockNum: Long)(
       implicit runtimeManager: RuntimeManager[Task]
   ) =
     Stream
-      .emits(mkStatesSteams(stateHash, seqNum, blockNum).tail)
+      .emits(mkBlocksSteams(stateHash, seqNum, blockNum).tail)
       .parJoinUnbounded
       .compile
       .toList
@@ -332,50 +393,36 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 //    getRejectedBlocksAtTheTop(template)
 //  }
 
-  "multiple 1 block branches" should "be merged" in effectTest {
+  "merging with leader" should "work" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       {
         implicit val rm: RuntimeManager[Task] = runtimeManager
         implicit val concurrent               = Concurrent[Task]
         implicit val metrics                  = new Metrics.MetricsNOP
-        val genesisPostStateHash              = genesis.body.state.postStateHash
         import coop.rchain.models.blockImplicits._
 
-        // simulates 0.99 sync threshold - first validator create state, then all other create on top of that/
-        // merge state of resulting blocks returned
+        // simulates 0.99 sync threshold
         def mkLayer(
-            startPreStateHash: StateHash,
-            n: Int,
+            baseBlock: BlockMessage,
             dagStore: BlockDagStorage[Task]
-        ): Task[StateHash] =
-          for {
-            // create state on first validator
-            b <- mkHeadState(startPreStateHash, n * 2 + 1, (n * 2 + 1).toLong)
-            base = getRandomBlock(
-              setPostStateHash = b._1.some,
-              setPreStateHash = startPreStateHash.some,
-              setParentsHashList = List().some,
-              setDeploys = b._2.some
-            )
-            _ <- dagStore.insert(base, false, approved = true)
+        ): Task[BlockMessage] = {
 
-            // create children an all other
-            baseChildren <- mkTailStates(b._1, n * 2 + 2, (n * 2 + 2).toLong)
-            mergingBlocks = baseChildren.map(
-              s =>
-                getRandomBlock(
-                  setPostStateHash = s._1.some,
-                  setPreStateHash = b._1.some,
-                  setParentsHashList = List(base.blockHash).some,
-                  setDeploys = s._2.some
-                )
+          val baseState        = baseBlock.body.state.postStateHash
+          val seqNum           = baseBlock.seqNum + 1
+          val mergingBlocksNum = (baseBlock.seqNum * 2 + 1).toLong
+          val nexBaseBlockNum  = (baseBlock.seqNum * 2 + 2).toLong
+
+          for {
+            // create children blocks
+            r <- mkTailBlocks(baseState, seqNum, mergingBlocksNum)
+            mergingBlocks = r.map(
+              b => b.copy(header = b.header.copy(parentsHashList = List(baseBlock.blockHash)))
             )
             _ <- mergingBlocks.traverse(dagStore.insert(_, false))
 
-            s = s"merging ${mergingBlocks.size} children into ${PrettyPrinter.buildString(startPreStateHash)}"
-            _ = println(s)
-
-            indices <- (base +: mergingBlocks)
+            // merge children blocks
+            historyRepository = runtimeManager.getHistoryRepo
+            indices <- (baseBlock +: mergingBlocks)
                         .traverse(
                           b =>
                             BlockIndex(
@@ -384,33 +431,49 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                               b.body.systemDeploys,
                               Blake2b256Hash.fromByteString(b.body.state.preStateHash),
                               Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                              runtimeManager.getHistoryRepo
+                              (log, preState) =>
+                                BlockIndex.createEventLogIndex(log, historyRepository, preState),
+                              (index, preState, postState) =>
+                                StateChange.compute(index, historyRepository, preState, postState)
                             ).map((b.blockHash -> _))
                         )
                         .map(_.toMap)
-
-            _   <- dagStore.recordDirectlyFinalized(base.blockHash, _ => ().pure[Task])
             dag <- dagStore.getRepresentation
-            // merge children to get next preStateHash
             v <- DagMerger.merge[Task](
                   dag,
-                  base.blockHash,
-                  Blake2b256Hash.fromByteString(base.body.state.postStateHash),
+                  baseBlock.blockHash,
+                  Blake2b256Hash.fromByteString(baseState),
                   indices(_).deployChains.pure,
                   runtimeManager.getHistoryRepo,
                   DagMerger.costOptimalRejectionAlg
                 )
             (postState, rejectedDeploys) = v
-            nextPreStateHash             = ByteString.copyFrom(postState.bytes.toArray)
-            _                            = assert(rejectedDeploys.size == 0)
-            _                            = assert(nextPreStateHash != base.body.state.postStateHash)
-            _                            = println(s"merge result ${PrettyPrinter.buildString(nextPreStateHash)}")
-          } yield nextPreStateHash
+            mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
+            _                            = assert(rejectedDeploys.size == 1)
+            _                            = assert(mergedState != baseBlock.body.state.postStateHash)
+
+            // create next base block (merge block)
+            r <- mkHeadBlock(mergedState, seqNum, nexBaseBlockNum)
+            nextBaseBlock = r.copy(
+              header = r.header.copy(parentsHashList = mergingBlocks.map(_.blockHash))
+            )
+            _ <- dagStore.insert(nextBaseBlock, false)
+            _ <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[Task])
+          } yield nextBaseBlock
+        }
 
         val kvm = new InMemoryStoreManager
         for {
           dagStore <- BlockDagKeyValueStorage.create[Task](kvm)
-          _        <- mkLayer(genesisPostStateHash, 0, dagStore)
+          _        <- dagStore.insert(genesis, false, true)
+          _ <- ((genesis, 0)).tailRecM {
+                case (start, layerNum) =>
+                  if (layerNum < 4)
+                    mkLayer(start, dagStore).map(
+                      post => (post, layerNum + 1).asLeft[BlockMessage]
+                    )
+                  else (start).asRight[(BlockMessage, Int)].pure
+              }
         } yield ()
       }
     }

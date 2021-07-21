@@ -4,9 +4,7 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.{StateChange, _}
-import coop.rchain.rspace.syntax._
 
 final case class DeployIdWithCost(id: ByteString, cost: Long)
 
@@ -27,27 +25,20 @@ object DeployChainIndex {
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
-      historyRepository: HistoryRepository[F, C, P, A, K]
+      computeStateChangeF: (EventLogIndex, Blake2b256Hash, Blake2b256Hash) => F[StateChange]
   ): F[DeployChainIndex] = {
 
     val deploysWithCost = deploys.map(v => DeployIdWithCost(v.deployId, v.cost))
     val eventLogIndex   = deploys.map(_.eventLogIndex).toList.combineAll
 
-    val preStateReader  = historyRepository.getHistoryReader(preStateHash).readerBinary
-    val postStateReader = historyRepository.getHistoryReader(postStateHash).readerBinary
-    for {
-      stateChanges <- StateChange[F, C, P, A, K](
-                       preStateReader = preStateReader,
-                       postStateReader = postStateReader,
-                       eventLogIndex,
-                       historyRepository.getSerializeC
-                     )
-    } yield DeployChainIndex(
-      deploysWithCost,
-      preStateHash,
-      postStateHash,
-      eventLogIndex,
-      stateChanges
+    computeStateChangeF(eventLogIndex, preStateHash, postStateHash).map(
+      DeployChainIndex(
+        deploysWithCost,
+        preStateHash,
+        postStateHash,
+        eventLogIndex,
+        _
+      )
     )
   }
 }

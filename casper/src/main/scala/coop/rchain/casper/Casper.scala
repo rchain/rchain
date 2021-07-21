@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.BlockStatus.Validated
 import coop.rchain.casper.engine.{BlockRetriever, Running}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
@@ -48,7 +49,10 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot: F[CasperSnapshot[F]]
+  def getSnapshot(
+      targetBlockOpt: Option[BlockMessage] = None,
+      targetDag: Option[BlockDagRepresentation[F]] = None
+  ): F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -58,7 +62,7 @@ trait Casper[F[_]] {
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
-  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Either[BlockError, ValidBlock]]
+  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Validated[F]]
   def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]]
   def handleInvalidBlock(
       block: BlockMessage,
@@ -93,8 +97,6 @@ object MultiParentCasper extends MultiParentCasperInstances {
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
     lastFinalizedBlock: BlockHash,
-    lca: BlockHash,
-    tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
     invalidBlocks: Map[Validator, BlockHash],
@@ -103,6 +105,19 @@ final case class CasperSnapshot[F[_]](
     maxSeqNums: Map[Validator, Int],
     onChainState: OnChainCasperState
 )
+
+object CasperState {
+  def atomicUpdate[F[_]: Sync](
+      preState: CasperSnapshot[F],
+      message: BlockHash,
+      lock: Semaphore[F]
+  ): F[CasperSnapshot[F]] =
+    Sync[F]
+      .bracket(lock.acquire)(_ => add[F](preState, message))(_ => lock.release)
+
+  def add[F](casperState: CasperSnapshot[F], message: BlockHash): F[CasperSnapshot[F]] =
+    casperState.pure //TODO
+}
 
 final case class OnChainCasperState(
     shardConf: CasperShardConf,

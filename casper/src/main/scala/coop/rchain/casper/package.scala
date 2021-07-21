@@ -11,7 +11,8 @@ package object casper {
   type BlockProcessing[A]   = Either[BlockError, A]
   type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
-  type ProposeFunction[F[_]] = (Casper[F], Boolean) => F[ProposerResult]
+  type ProposeFunction[F[_]] = (CasperSnapshot[F], Boolean) => F[ProposerResult]
+  type AsyncProposeF[F[_]]   = (CasperSnapshot[F]) => F[ProposerResult]
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
 
@@ -23,6 +24,7 @@ package object casper {
       with AllSyntaxComm
       with AllSyntaxBlockStorage
       with RhoRuntimeSyntax
+      with BlockDagRepresentationSyntax
 }
 
 // Casper syntax
