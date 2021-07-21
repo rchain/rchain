@@ -343,18 +343,13 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
   /**
     * Assuming recreating view of target block T.
-    * Bi are seen, 0i not seen, but already in the most recent view.
+    * Bi are seen, Oi not seen, but already in the most recent view.
     * All Os should be removed.
     *
-    * O2 and O3 are high excess
-    * O1 is range excess
-    * O4 is unseenSender excess - some validator bonded in genesis has been waiting for a while before creating new block.
-    *   And created on top of genesis without referencing all new messages.
-    *
-    *   03
-    *   02     T
-    *   L1 01 L2
-    *      L0
+    *   O3
+    *   O2     T
+    *   L1 O1 L2
+    *      LO
     *   B0 B1 B2 O4
     * G
     */
@@ -373,14 +368,16 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
 
       for {
         _ <- storage.insert(g, false, true)
-        Seq(b0, b1, b2) = Seq(v0, v1, v2).map { v =>
-          getRandomBlock(
-            setParentsHashList = List(g.blockHash).some,
-            setJustifications = List(v0, v1, v2, v3).map(Justification(_, g.blockHash)).some,
-            setBlockNumber = 1L.some,
-            setValidator = v.some,
-            setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
-          )
+        Seq(b0, b1, b2) = Seq((v0, 1), (v1, 1), (v2, 1)).map {
+          case (v, seqNum) =>
+            getRandomBlock(
+              setParentsHashList = List(g.blockHash).some,
+              setJustifications = List(v0, v1, v2, v3).map(Justification(_, g.blockHash)).some,
+              setBlockNumber = 1L.some,
+              setSeqNumber = seqNum.some,
+              setValidator = v.some,
+              setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+            )
         }
         l0 = getRandomBlock(
           setParentsHashList = List(b0, b1, b2).map(_.blockHash).some,
@@ -391,26 +388,30 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
             Justification(v3, g.blockHash)
           ).some,
           setBlockNumber = 2L.some,
+          setSeqNumber = 2.some,
           setValidator = v1.some,
           setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
         )
-        Seq(l1, o1, l2) = Seq(v0, v1, v2).map { v =>
-          getRandomBlock(
-            setParentsHashList = List(l0.blockHash).some,
-            setJustifications = List(
-              Justification(v0, b0.blockHash),
-              Justification(v1, l0.blockHash),
-              Justification(v2, b2.blockHash),
-              Justification(v3, g.blockHash)
-            ).some,
-            setBlockNumber = 3L.some,
-            setValidator = v.some,
-            setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
-          )
+        Seq(l1, o1, l2) = Seq((v0, 2), (v1, 3), (v2, 2)).map {
+          case (v, seqNum) =>
+            getRandomBlock(
+              setParentsHashList = List(l0.blockHash).some,
+              setJustifications = List(
+                Justification(v0, b0.blockHash),
+                Justification(v1, l0.blockHash),
+                Justification(v2, b2.blockHash),
+                Justification(v3, g.blockHash)
+              ).some,
+              setBlockNumber = 3L.some,
+              setSeqNumber = seqNum.some,
+              setValidator = v.some,
+              setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+            )
         }
         o2 = getRandomBlock(
           setParentsHashList = List(l1, o1, l2).map(_.blockHash).some,
           setBlockNumber = 4L.some,
+          setSeqNumber = 3.some,
           setJustifications = List(
             Justification(v0, l1.blockHash),
             Justification(v1, o1.blockHash),
@@ -429,6 +430,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
             Justification(v3, g.blockHash)
           ).some,
           setBlockNumber = 5L.some,
+          setSeqNumber = 4.some,
           setValidator = v0.some,
           setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
         )
@@ -438,6 +440,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
           setParentsHashList = List(g.blockHash).some,
           setJustifications = List(v0, v1, v2, v3).map(Justification(_, g.blockHash)).some,
           setBlockNumber = 1L.some,
+          setSeqNumber = 1.some,
           setValidator = v3.some,
           setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
         )
