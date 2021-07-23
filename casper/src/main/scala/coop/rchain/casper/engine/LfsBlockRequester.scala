@@ -50,7 +50,13 @@ object LfsBlockRequester {
     //  in case of resend together with Requested.
     // Returns updated state with requested keys.
     def getNext(resend: Boolean): (ST[Key], Set[Key]) = {
-      val requested = d
+      val requests = {
+        // Check is latest are requested
+        if (latest.isEmpty) d
+        // Add latest to Init if not already
+        else d ++ (latest -- d.keySet).map((_, Init))
+      }
+      val newRequests = requests
         .filter {
           case (key, status) =>
             // Select initialized or re-request if resending
@@ -64,7 +70,7 @@ object LfsBlockRequester {
             }
         }
         .mapValues(_ => Requested)
-      this.copy(d ++ requested) -> requested.keySet
+      this.copy(d ++ newRequests) -> newRequests.keySet
     }
 
     // Confirm key is Received if it was Requested.
@@ -77,9 +83,10 @@ object LfsBlockRequester {
       val isReq = d.get(k).contains(Requested)
       if (isReq) {
         // Remove message from the set of latest messages (if exists)
-        val adjLatest    = latest - k
+        val adjLatest = latest - k
+        val isLatest  = latest != adjLatest
+        // Add replacement message if supplied
         val newLatest    = latestReplacement.map(adjLatest + _).getOrElse(adjLatest)
-        val isLatest     = latest != newLatest
         val isLastLatest = isLatest && newLatest.isEmpty
         // Save in height map
         val heightKeys   = heightMap.getOrElse(height, Set())
@@ -87,8 +94,7 @@ object LfsBlockRequester {
         // Calculate new minimum height if latest message
         //  - we need parents of latest message so it's `-1`
         val newLowerBound = if (isLatest) Math.min(height - 1, lowerBound) else lowerBound
-        val newSt =
-          latestReplacement.foldLeft(d + ((k, Received)))((acc, k) => acc + (k -> Requested))
+        val newSt         = d + ((k, Received))
         // Set new minimum height and update latest
         (
           this.copy(newSt, newLatest, newLowerBound, newHeightMap),
@@ -161,7 +167,7 @@ object LfsBlockRequester {
     // - for approved state to be complete it is required to have block from each of them
     val latestMessages = block.justifications.map(_.latestBlockHash).toSet
 
-    val initialHashes = latestMessages + block.blockHash
+    val initialHashes = Set(block.blockHash)
 
     def createStream(
         st: Ref[F, ST[BlockHash]],
@@ -326,7 +332,7 @@ object LfsBlockRequester {
       st <- Ref.of[F, ST[BlockHash]](
              ST(
                initialHashes,
-               latest = initialHashes,
+               latest = latestMessages,
                lowerBound = initialMinimumHeight
              )
            )
