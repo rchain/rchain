@@ -130,7 +130,7 @@ object LfsTupleSpaceRequester {
         */
       val requestStream = for {
         // Request queue is a trigger when to check the state
-        resend <- requestQueue.dequeue
+        resend <- requestQueue.dequeueChunk(maxSize = 1)
 
         // Check if stream is finished (no more requests)
         isEnd <- Stream.eval(st.get.map(_.isFinished))
