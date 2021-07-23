@@ -193,7 +193,7 @@ class Initializing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
-        populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan, st.heightMap)
+        populateDag(approvedBlock.candidate.block, st.lowerBound, st.heightMap)
       }
 
       // Run both streams in parallel until tuple space and all needed blocks are received
@@ -215,39 +215,10 @@ class Initializing[F[_]
 
   private def populateDag(
       startBlock: BlockMessage,
-      initialMinHeight: Long,
+      minHeight: Long,
       heightMap: SortedMap[Long, Set[BlockHash]]
   ): F[Unit] = {
     import cats.instances.list._
-
-    def getMinBlockHeight: F[Long] = {
-      val blockHashes = startBlock.justifications.map(_.latestBlockHash)
-      for {
-        lowestBlockHeights <- fs2.Stream
-                               .fromIterator(blockHashes.toIterator)
-                               .evalMap { BlockStore[F].getUnsafe(_) }
-                               .evalMap { b =>
-                                 val noSelfJustificationErr =
-                                   "No latest messages justifications downloaded when reconstructed Last Finalized State"
-                                 val selfJ =
-                                   ProtoUtil
-                                     .creatorJustification(b)
-                                     .map(_.latestBlockHash)
-                                     .get
-                                 BlockStore[F]
-                                   .get(selfJ)
-                                   .flatMap(_.liftTo(new Exception(noSelfJustificationErr)))
-                                   .map(_.body.state.blockNumber)
-                               }
-                               .compile
-                               .toList
-
-        minHeight = if (lowestBlockHeights.isEmpty) 0L else lowestBlockHeights.min
-        // We need parent of oldest latest block, that's why -1.
-        // The same condition is also applied when downloading.
-        // https://github.com/rchain/rchain/blob/0a09467628/casper/src/main/scala/coop/rchain/casper/engine/LastFinalizedStateBlockRequester.scala#L154
-      } yield Math.min(minHeight - 1, initialMinHeight)
-    }
 
     def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
       Log[F].info(
@@ -265,7 +236,6 @@ class Initializing[F[_]
         .toSet
 
       // Add sorted DAG in order from approved block to oldest
-      minHeight <- getMinBlockHeight
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)
