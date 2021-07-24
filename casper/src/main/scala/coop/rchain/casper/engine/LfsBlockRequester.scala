@@ -49,7 +49,7 @@ object LfsBlockRequester {
     // Get next keys not already requested or
     //  in case of resend together with Requested.
     // Returns updated state with requested keys.
-    def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
+    def getNext(resend: Boolean): (ST[Key], Set[Key]) = {
       val requested = d
         .filter {
           case (key, status) =>
@@ -64,7 +64,7 @@ object LfsBlockRequester {
             }
         }
         .mapValues(_ => Requested)
-      this.copy(d ++ requested) -> requested.keysIterator.toSeq
+      this.copy(d ++ requested) -> requested.keySet
     }
 
     // Confirm key is Received if it was Requested.
@@ -163,11 +163,11 @@ object LfsBlockRequester {
         responseHashQueue: Queue[F, BlockHash]
     ): Stream[F, ST[BlockHash]] = {
 
-      def broadcastStreams(ids: Seq[BlockHash]): Stream[Pure, Stream[F, Unit]] = {
+      def broadcastStreams(ids: Set[BlockHash]): Stream[F, Stream[F, Unit]] = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(requestForBlock andThen Stream.eval)
         // Create stream of requests
-        Stream.emits(broadcastRequests)
+        Stream.fromIterator(broadcastRequests.iterator)
       }
 
       def processBlock(block: BlockMessage): F[Unit] =
@@ -237,34 +237,41 @@ object LfsBlockRequester {
           _ <- st.update(_.done(block.blockHash))
         } yield ()
 
-      import cats.instances.list._
+      /**
+        * Reads current state for next blocks and send the requests.
+        *
+        * @param resend should re-request already requested blocks
+        */
+      def requestNext(resend: Boolean) =
+        for {
+          // Check if stream is finished (no more requests)
+          isEnd <- st.get.map(_.isFinished)
+
+          // Take next set of items to request (w/o duplicates)
+          hashes <- st.modify(_.getNext(resend))
+
+          // Check existing blocks
+          existingHashes <- hashes.toList.filterA(containsBlock)
+
+          // Enqueue hashes of exiting blocks
+          _ <- responseHashQueue
+                .enqueue(Stream.emits(existingHashes))
+                .compile
+                .drain
+                .whenA(existingHashes.nonEmpty)
+
+          // Missing blocks not already in the block store
+          missingBlocks = hashes -- existingHashes
+
+          // Send all requests in parallel for missing blocks
+          _ <- broadcastStreams(missingBlocks).parJoinUnbounded.compile.drain
+                .whenA(!isEnd && missingBlocks.nonEmpty)
+        } yield ()
 
       /**
         * Request stream is pulling new block hashes ready for broadcast requests.
         */
-      val requestStream = for {
-        // Request queue is a trigger when to check the state
-        resend <- requestQueue.dequeueChunk(maxSize = 1)
-
-        // Check if stream is finished (no more requests)
-        isEnd <- Stream.eval(st.get.map(_.isFinished))
-
-        // Take next set of items to request (w/o duplicates)
-        hashes <- Stream.eval(st.modify(_.getNext(resend)))
-
-        // Check existing blocks
-        existingHashes <- Stream.eval(hashes.toList.filterA(containsBlock))
-
-        // Enqueue hashes of exiting blocks
-        _ <- responseHashQueue.enqueue(Stream.emits(existingHashes)).whenA(existingHashes.nonEmpty)
-
-        // Missing blocks not already in the block store
-        missingBlocks = hashes.diff(existingHashes)
-
-        // Send all requests in parallel for missing blocks (using `last` to drain the stream)
-        _ <- broadcastStreams(missingBlocks).parJoinUnbounded.last
-              .whenA(!isEnd && missingBlocks.nonEmpty)
-      } yield resend
+      val requestStream = requestQueue.dequeueChunk(maxSize = 1).evalTap(requestNext)
 
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
