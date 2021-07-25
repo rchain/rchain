@@ -5,6 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
@@ -13,6 +14,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared
+import coop.rchain.shared.syntax._
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 
@@ -336,6 +338,136 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
         // all finalized should be in set supplied for finalization effect
         effects <- effectsRef.get
         _       = effects shouldBe Set(b1, b2, b3).map(_.blockHash)
+      } yield ()
+    }
+
+  /**
+    * Assuming recreating view of target block T.
+    * Bi are seen, Oi not seen, but already in the most recent view.
+    * All Os should be removed.
+    *
+    *   O3
+    *   O2     T
+    *   L1 O1 L2
+    *      LO
+    *   B0 B1 B2 O4
+    * G
+    */
+  "truncate" should "remove all excess messages" in
+    withDagStorage { storage =>
+      def randomValidator: ByteString =
+        ByteString.copyFrom(Array.fill(65)((scala.util.Random.nextInt(256) - 128).toByte))
+      // v0, v1, v2 are bonded in genesis, v4 is bonded later in late message
+      val Seq(v0, v1, v2, v3) = (1 to 4).map(_ => randomValidator)
+      val g = genesis.copy(
+        body = genesis.body.copy(
+          state = genesis.body.state
+            .copy(bonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)))
+        )
+      )
+
+      for {
+        _ <- storage.insert(g, false, true)
+        Seq(b0, b1, b2) = Seq((v0, 1), (v1, 1), (v2, 1)).map {
+          case (v, seqNum) =>
+            getRandomBlock(
+              setParentsHashList = List(g.blockHash).some,
+              setJustifications = List(v0, v1, v2, v3).map(Justification(_, g.blockHash)).some,
+              setBlockNumber = 1L.some,
+              setSeqNumber = seqNum.some,
+              setValidator = v.some,
+              setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+            )
+        }
+        l0 = getRandomBlock(
+          setParentsHashList = List(b0, b1, b2).map(_.blockHash).some,
+          setJustifications = List(
+            Justification(v0, b0.blockHash),
+            Justification(v1, b1.blockHash),
+            Justification(v2, b2.blockHash),
+            Justification(v3, g.blockHash)
+          ).some,
+          setBlockNumber = 2L.some,
+          setSeqNumber = 2.some,
+          setValidator = v1.some,
+          setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+        )
+        Seq(l1, o1, l2) = Seq((v0, 2), (v1, 3), (v2, 2)).map {
+          case (v, seqNum) =>
+            getRandomBlock(
+              setParentsHashList = List(l0.blockHash).some,
+              setJustifications = List(
+                Justification(v0, b0.blockHash),
+                Justification(v1, l0.blockHash),
+                Justification(v2, b2.blockHash),
+                Justification(v3, g.blockHash)
+              ).some,
+              setBlockNumber = 3L.some,
+              setSeqNumber = seqNum.some,
+              setValidator = v.some,
+              setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+            )
+        }
+        o2 = getRandomBlock(
+          setParentsHashList = List(l1, o1, l2).map(_.blockHash).some,
+          setBlockNumber = 4L.some,
+          setSeqNumber = 3.some,
+          setJustifications = List(
+            Justification(v0, l1.blockHash),
+            Justification(v1, o1.blockHash),
+            Justification(v2, l2.blockHash),
+            Justification(v3, g.blockHash)
+          ).some,
+          setValidator = v0.some,
+          setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+        )
+        o3 = getRandomBlock(
+          setParentsHashList = List(o2.blockHash).some,
+          setJustifications = List(
+            Justification(v0, o2.blockHash),
+            Justification(v1, o1.blockHash),
+            Justification(v2, l2.blockHash),
+            Justification(v3, g.blockHash)
+          ).some,
+          setBlockNumber = 5L.some,
+          setSeqNumber = 4.some,
+          setValidator = v0.some,
+          setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+        )
+        // o4 is late and building on top of genesis. So it is below range of target latest messages
+        // and should be deleted
+        o4 = getRandomBlock(
+          setParentsHashList = List(g.blockHash).some,
+          setJustifications = List(v0, v1, v2, v3).map(Justification(_, g.blockHash)).some,
+          setBlockNumber = 1L.some,
+          setSeqNumber = 1.some,
+          setValidator = v3.some,
+          setBonds = List(Bond(v0, 1), Bond(v1, 1), Bond(v2, 1), Bond(v3, 1)).some
+        )
+        fullDag <- List(b0, b1, b2, l0, l1, o1, l2, o2, o3, o4)
+                    .traverse(storage.insert(_, false))
+                    .map(_.last)
+        excess = Vector(o1, o2, o3, o4).map(_.blockHash)
+        inView = Vector(b0, b1, b2, l0, l1, l2, g).map(_.blockHash)
+
+        // all blocks should be present in full DAG
+        _ <- (excess ++ inView).findM(fullDag.contains(_).not) shouldBeF None
+
+        findLfb = (_: Map[Validator, BlockHash]) => genesis.blockHash.pure[Task]
+
+        tDag <- fullDag.truncate(
+                 List(
+                   (v0, l1.blockHash),
+                   (v1, l0.blockHash),
+                   (v2, l2.blockHash),
+                   (v3, genesis.blockHash)
+                 ).toMap,
+                 findLfb
+               )
+        // all these should be absent in truncated DAG
+        _ <- excess.findM(tDag.contains) shouldBeF None
+        // all these should be present in truncated DAG
+        _ <- inView.findM(tDag.contains(_).not) shouldBeF None
       } yield ()
     }
 }

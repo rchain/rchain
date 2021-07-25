@@ -115,12 +115,17 @@ object Resources {
       override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
 
       override def lastFinalizedBlock: BlockHash = ???
+
+      override def nonFinalizedSet: Set[BlockHash] = ???
+
+      override def truncate(
+          latestMessages: Map[Validator, BlockHash],
+          findLfb: Map[Validator, BlockHash] => F[BlockHash]
+      ): F[BlockDagRepresentation[F]] = ???
     }
     CasperSnapshot[F](
       dummyRepresentation,
       ByteString.EMPTY,
-      ByteString.EMPTY,
-      IndexedSeq.empty,
       List.empty,
       Set.empty,
       Map.empty,
