@@ -64,119 +64,78 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     // in the genesis ceremony.
     transferUnforgeable: Par
 ) extends TransactionAPI[F] {
-  private def findUserDeployTransaction(
+  // Helper which accepts TransactionType constructor
+  private def makeDeployTransaction(
       d: DeployInfoWithEventData,
       report: SingleReport,
-      index: Int
-  ) = {
-    val transactions = findTransactions(report)
-    index match {
-      // the index order is based on how we play a user deploy
-      case 0 =>
-        transactions.map(t => TransactionInfo(t, PreCharge(d.deployInfo.get.sig))).pure
-      case 1 =>
-        transactions.map(t => TransactionInfo(t, UserDeploy(d.deployInfo.get.sig))).pure
-      case 2 =>
-        transactions.map(t => TransactionInfo(t, Refund(d.deployInfo.get.sig))).pure
-      case _ =>
-        Sync[F].raiseError[Vector[TransactionInfo]](
-          new Exception(
-            "It is not possible that user deploy got more than 3 reports(precharge, user, refund)."
-          )
-        )
-    }
-  }
+      txCtor: String => TransactionType
+  ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
 
   def getTransaction(blockHash: BlockHash): F[Seq[TransactionInfo]] = {
     val blockHashStr = Base16.encode(blockHash.toByteArray)
-    for {
-      report <- blockReportAPI.blockReport(blockHash, forceReplay = false)
-      ts <- report match {
-             case Right(b) =>
-               for {
-                 udts <- b.deploys.toList.traverse(d => {
-                          d.report.zipWithIndex.toList.traverse {
-                            case (report, index) => findUserDeployTransaction(d, report, index)
-                          }
-                        })
-                 userTransactions = udts.flatten.flatten
-                 systemDeployTransactions = b.systemDeploys.flatMap { s =>
-                   // system doesn't get precharge and refund , so it would always get one
-                   val transactions = findTransactions(s.report.head)
-                   s.systemDeploy.get.systemDeploy.value match {
-                     case SlashSystemDeployDataProto(_, _) =>
-                       transactions.map(
-                         t => TransactionInfo(t, SlashingDeploy(blockHashStr))
-                       )
-                     case CloseBlockSystemDeployDataProto() =>
-                       transactions.map(t => TransactionInfo(t, CloseBlock(blockHashStr)))
-                   }
-                 }
-                 transactions = userTransactions ++ systemDeployTransactions
-               } yield transactions
-
-             case Left(_) => Seq.empty.pure
-           }
-    } yield ts
-  }
-
-  private def findTransactions(report: SingleReport): Vector[Transaction] = {
-    val transactions = report.events.foldLeft(Vector.empty[Transaction]) {
-      case (acc, reportProto) =>
-        reportProto.report.value match {
-          case ReportCommProto(Some(consume), produces) =>
-            consume.channels.headOption
-              .flatMap { channel =>
-                if (channel == transferUnforgeable) {
-                  // based on RevVault.rho:line188 transfer method
-                  // _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret2)
-                  val produce        = produces.head
-                  val fromAddr       = produce.data.get.pars.head.exprs.head.getGString
-                  val toAddr         = produce.data.get.pars(2).exprs.head.getGString
-                  val amount         = produce.data.get.pars(3).exprs.head.getGInt
-                  val retUnforgeable = produce.data.get.pars(5)
-                  val transaction    = Transaction(fromAddr, toAddr, amount, retUnforgeable, None)
-                  Some(acc :+ transaction)
-                } else None
-              }
-              .getOrElse(acc)
-
-          case _ => acc
+    blockReportAPI.blockReport(blockHash, forceReplay = false).map {
+      case Right(b) =>
+        val userTransactions = b.deploys.flatMap(d => {
+          d.report
+            .zip(Seq(PreCharge, UserDeploy, Refund))
+            .flatMap {
+              case (report, txCtor) =>
+                makeDeployTransaction(d, report, txCtor)
+            }
+        })
+        val systemDeployTransactions = b.systemDeploys.flatMap { s =>
+          // system doesn't get precharge and refund , so it would always get one
+          val transactions = findTransactions(s.report.head)
+          val txCtor = s.systemDeploy.get.systemDeploy.value match {
+            case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
+            case CloseBlockSystemDeployDataProto() => CloseBlock
+          }
+          transactions.map(t => TransactionInfo(t, txCtor(blockHashStr)))
         }
-    }
+        userTransactions ++ systemDeployTransactions
 
-    // traverse all the transactions to check if the transaction is completed or fail with reason
-    transactions.foldLeft(Vector.empty[Transaction]) {
-      case (acc, transaction) =>
-        val transactionWithResult = report.events
-          .find { p =>
-            p.report.value match {
-              case ReportProduceProto(channel, _) =>
-                channel
-                  .flatMap { c =>
-                    Some(c == transaction.retUnforgeable)
-                  }
-                  .getOrElse(false)
-              case _ => false
-            }
-          }
-          .flatMap { event =>
-            event.report.value match {
-              case ReportProduceProto(_, data) =>
-                val success =
-                  data.get.pars.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool
-                val failReason =
-                  if (success) None
-                  else
-                    Some(data.get.pars.head.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
-                Some(transaction.copy(failReason = failReason))
-              case _ => None
-            }
-          }
-          .getOrElse(transaction)
-        acc :+ transactionWithResult
+      case Left(_) => Seq.empty
     }
   }
+
+  private def findTransactions(report: SingleReport): Seq[Transaction] = {
+    val transactions = report.events
+      .map(_.report.value)
+      .collect {
+        case ReportCommProto(Some(consume), produces) =>
+          consume.channels.headOption.map((_, produces))
+      }
+      .flatten
+      .collect { case (channel, produces) if channel == transferUnforgeable => produces.head }
+      .map { produce =>
+        val fromAddr       = produce.data.get.pars.head.exprs.head.getGString
+        val toAddr         = produce.data.get.pars(2).exprs.head.getGString
+        val amount         = produce.data.get.pars(3).exprs.head.getGInt
+        val retUnforgeable = produce.data.get.pars(5)
+        Transaction(fromAddr, toAddr, amount, retUnforgeable, None)
+      }
+
+    val transactionRetUnforgeables = transactions.map(_.retUnforgeable).toSet
+
+    val failedMap = report.events.iterator
+      .map(_.report.value)
+      .collect {
+        case ReportProduceProto(Some(channel), data)
+            if transactionRetUnforgeables.contains(channel) =>
+          val success =
+            data.get.pars.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool
+          val failedReason =
+            if (success) None
+            else Some(data.get.pars.head.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
+          (channel, failedReason)
+      }
+      .toMap
+    transactions.map { t =>
+      val failReason = failedMap.getOrElse(t.retUnforgeable, None)
+      t.copy(failReason = failReason)
+    }
+  }
+
 }
 
 final case class CacheTransactionAPI[F[_]: Sync: Concurrent](
