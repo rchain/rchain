@@ -2,9 +2,11 @@ package coop.rchain.node.web
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.protocol.BlockEventInfo
+import coop.rchain.crypto.codec.Base16
 import org.http4s.HttpRoutes
 import org.http4s.circe.jsonEncoderOf
 import coop.rchain.models.syntax._
@@ -46,7 +48,15 @@ object ReportingRoutes {
 
     HttpRoutes.of[F] {
       case GET -> Root / "trace" :? BlockHashParam(hash) +& ForceReplayParam(forceReplay) =>
-        Ok(transforResult(hash, blockReportAPI.blockReport(hash, forceReplay.getOrElse(false))))
+        Ok(
+          transforResult(
+            hash,
+            blockReportAPI.blockReport(
+              ByteString.copyFrom(Base16.unsafeDecode(hash)),
+              forceReplay.getOrElse(false)
+            )
+          )
+        )
     }
   }
 }

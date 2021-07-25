@@ -6,10 +6,20 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.genesis.contracts.StandardDeploys
-import coop.rchain.casper.protocol.{CloseBlockSystemDeployDataProto, DeployInfoWithEventData, ReportCommProto, ReportProduceProto, SingleReport, SlashSystemDeployDataProto}
 import coop.rchain.casper.util.rholang.Tools
 import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
-import coop.rchain.models.{GPrivate, GUnforgeable, Par}
+import coop.rchain.models.{GPrivate, GUnforgeable}
+import coop.rchain.casper.protocol.{
+  CloseBlockSystemDeployDataProto,
+  DeployInfoWithEventData,
+  ReportCommProto,
+  ReportProduceProto,
+  SingleReport,
+  SlashSystemDeployDataProto
+}
+import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Par
 import coop.rchain.node.encode.JsonEncoder.convertCcodecToScodec
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
@@ -41,7 +51,7 @@ final case class TransactionInfo(transaction: Transaction, transactionType: Tran
 final case class TransactionResponse(data: Seq[TransactionInfo])
 
 trait TransactionAPI[F[_]] {
-  def getTransaction(blockHash: String): F[Seq[TransactionInfo]]
+  def getTransaction(blockHash: BlockHash): F[Seq[TransactionInfo]]
 }
 
 /**
@@ -77,7 +87,8 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     }
   }
 
-  def getTransaction(blockHash: String): F[Seq[TransactionInfo]] =
+  def getTransaction(blockHash: BlockHash): F[Seq[TransactionInfo]] = {
+    val blockHashStr = Base16.encode(blockHash.toByteArray)
     for {
       report <- blockReportAPI.blockReport(blockHash, forceReplay = false)
       ts <- report match {
@@ -95,10 +106,10 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
                    s.systemDeploy.get.systemDeploy.value match {
                      case SlashSystemDeployDataProto(_, _) =>
                        transactions.map(
-                         t => TransactionInfo(t, SlashingDeploy(blockHash))
+                         t => TransactionInfo(t, SlashingDeploy(blockHashStr))
                        )
                      case CloseBlockSystemDeployDataProto() =>
-                       transactions.map(t => TransactionInfo(t, CloseBlock(blockHash)))
+                       transactions.map(t => TransactionInfo(t, CloseBlock(blockHashStr)))
                    }
                  }
                  transactions = userTransactions ++ systemDeployTransactions
@@ -107,6 +118,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
              case Left(_) => Seq.empty.pure
            }
     } yield ts
+  }
 
   private def findTransactions(report: SingleReport): Vector[Transaction] = {
     val transactions = report.events.foldLeft(Vector.empty[Transaction]) {
@@ -179,9 +191,11 @@ final case class CacheTransactionAPI[F[_]: Sync: Concurrent](
       defNew <- Deferred[F, Unit]
       defer  = blockDeferMap.getOrElseUpdate(blockHash, defNew)
       _ <- (for {
-            transactions <- transactionAPI.getTransaction(blockHash)
-            _            <- store.put(blockHash, TransactionResponse(transactions))
-            _            <- defer.complete(())
+            transactions <- transactionAPI.getTransaction(
+                             ByteString.copyFrom(Base16.unsafeDecode(blockHash))
+                           )
+            _ <- store.put(blockHash, TransactionResponse(transactions))
+            _ <- defer.complete(())
           } yield ()).whenA(defNew == defer)
       _               <- defer.get
       transactionsOpt <- store.get(blockHash)
