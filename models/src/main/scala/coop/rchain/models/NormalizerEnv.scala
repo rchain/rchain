@@ -7,6 +7,7 @@ import coop.rchain.crypto.signatures.Signed
 
 import scala.annotation.implicitNotFound
 
+/** TODO: Check why environment is needed in normalizer? It's used only in reducer. */
 final class NormalizerEnv[Env](env: Env) {
   import NormalizerEnv._
   def toEnv(implicit ToEnvMap: ToEnvMap[Env]): Map[String, Par]      = ToEnvMap(env)

@@ -381,6 +381,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
         if (!urnMap.contains(urn))
+          /** TODO: Injections (from normalizer) are not used currently, see [[NormalizerEnv]]. */
           // If `urn` can't be found in `urnMap`, it must be referencing an injection
           neu.injections
             .get(urn)
