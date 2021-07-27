@@ -17,16 +17,13 @@ final class NormalizerEnv[Env](env: Env) {
 
 object NormalizerEnv {
   import shapeless._
-  import syntax.singleton._
-  import ops.record.{Keys, Selector, Values}
   import ops.hlist.ToList
+  import ops.record.{Keys, Selector, Values}
+  import shapeless.syntax.singleton._
 
   type UriString = String
 
   val Empty: NormalizerEnv[HNil] = new NormalizerEnv(HNil)
-
-  def withDeployId(deployId: Array[Byte]) =
-    new NormalizerEnv(("rho:rchain:deployId" ->> GDeployId(ByteString.copyFrom(deployId))) :: HNil)
 
   def withDeployerId(deployerPk: PublicKey) =
     new NormalizerEnv(
