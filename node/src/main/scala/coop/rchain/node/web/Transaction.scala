@@ -18,14 +18,11 @@ import coop.rchain.casper.protocol.{
   SlashSystemDeployDataProto
 }
 import coop.rchain.crypto.codec.Base16
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
-import coop.rchain.node.encode.JsonEncoder.convertCcodecToScodec
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
-import scodec.Codec
 import scodec.codecs.utf8
 
 import scala.collection.concurrent.TrieMap
@@ -48,11 +45,10 @@ final case class CloseBlock(blockHash: String)     extends SystemTransaction
 final case class SlashingDeploy(blockHash: String) extends SystemTransaction
 
 final case class TransactionInfo(transaction: Transaction, transactionType: TransactionType)
-
-final case class TransactionResponse(data: Seq[TransactionInfo])
+final case class TransactionResponse(data: List[TransactionInfo])
 
 trait TransactionAPI[F[_]] {
-  def getTransaction(blockHash: Blake2b256Hash): F[Seq[TransactionInfo]]
+  def getTransaction(blockHash: Blake2b256Hash): F[List[TransactionInfo]]
 }
 
 /**
@@ -72,7 +68,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
       txCtor: String => TransactionType
   ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
 
-  def getTransaction(blockHash: Blake2b256Hash): F[Seq[TransactionInfo]] =
+  def getTransaction(blockHash: Blake2b256Hash): F[List[TransactionInfo]] =
     blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).map {
       case Right(b) =>
         val userTransactions = b.deploys.flatMap(d => {
@@ -92,9 +88,9 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
           }
           transactions.map(t => TransactionInfo(t, txCtor(Base16.encode(blockHash.bytes.toArray))))
         }
-        userTransactions ++ systemDeployTransactions
+        (userTransactions ++ systemDeployTransactions).toList
 
-      case Left(_) => Seq.empty
+      case Left(_) => List.empty
     }
 
   private def findTransactions(report: SingleReport): Seq[Transaction] = {
@@ -178,8 +174,45 @@ object Transaction {
       deriveDecoder[TransactionResponse]
   }
 
-  def transactionResponseCodec: Codec[TransactionResponse] =
-    convertCcodecToScodec(Encode.encodeTransactionResponse, Encode.decodeTransactionResponse)
+  object SCodec {
+    import scodec._
+    import scodec.bits._
+    import scodec.codecs._
+    import coop.rchain.rholang.interpreter.storage._
+
+    val transactionCodec: Codec[Transaction] =
+      (utf8_32L :: utf8_32L :: long(63) :: serializePar.toSizeHeadCodec :: optional[String](
+        bool,
+        utf8_32L
+      )).as[Transaction]
+    val precharge: Codec[PreCharge]   = utf8_32L.as[PreCharge]
+    val refund: Codec[Refund]         = utf8_32L.as[Refund]
+    val user: Codec[UserDeploy]       = utf8_32L.as[UserDeploy]
+    val closeBlock: Codec[CloseBlock] = utf8_32L.as[CloseBlock]
+    val slash: Codec[SlashingDeploy]  = utf8_32L.as[SlashingDeploy]
+    val transactionType: Codec[TransactionType] = discriminated[TransactionType]
+      .by(uint8)
+      .subcaseP(0) {
+        case e: PreCharge => e
+      }(precharge)
+      .subcaseP(1) {
+        case s: UserDeploy => s
+      }(user)
+      .subcaseP(2) {
+        case pb: Refund => pb
+      }(refund)
+      .subcaseP(3) {
+        case c: CloseBlock => c
+      }(closeBlock)
+      .subcaseP(4) {
+        case s: SlashingDeploy => s
+      }(slash)
+
+    val transactionInfo: Codec[TransactionInfo] =
+      (transactionCodec :: transactionType).as[TransactionInfo]
+    val transactionResponseCodec: Codec[TransactionResponse] = list(transactionInfo)
+      .as[TransactionResponse]
+  }
 
   // This is the hard-coded unforgeable name for
   // https://github.com/rchain/rchain/blob/43257ddb7b2b53cffb59a5fe1d4c8296c18b8292/casper/src/main/resources/RevVault.rho#L25
@@ -215,7 +248,7 @@ object Transaction {
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =
-    kvm.database("transaction", utf8, transactionResponseCodec).map { s =>
+    kvm.database("transaction", utf8, SCodec.transactionResponseCodec).map { s =>
       CacheTransactionAPI(
         transactionAPI,
         s
