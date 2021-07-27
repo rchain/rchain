@@ -10,6 +10,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Par
 import coop.rchain.node.web.{PreCharge, Refund, Transaction, UserDeploy}
 import coop.rchain.rholang.interpreter.util.RevAddress
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -59,8 +60,9 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
           Par(unforgeables = Seq(Transaction.transferUnforgeable))
         )
         transferBlock <- node.addBlock(deploy)
-        transactions  <- transactionAPI.getTransaction(transferBlock.blockHash)
-        _             = transactions.length should be(3)
+        transactions <- transactionAPI
+                         .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
+        _ = transactions.length should be(3)
         _ = transactions.foreach { t =>
           t.transactionType match {
             case UserDeploy(_) =>

@@ -22,6 +22,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.node.encode.JsonEncoder.convertCcodecToScodec
 import coop.rchain.node.web.Transaction.TransactionStore
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
 import scodec.Codec
@@ -51,7 +52,7 @@ final case class TransactionInfo(transaction: Transaction, transactionType: Tran
 final case class TransactionResponse(data: Seq[TransactionInfo])
 
 trait TransactionAPI[F[_]] {
-  def getTransaction(blockHash: BlockHash): F[Seq[TransactionInfo]]
+  def getTransaction(blockHash: Blake2b256Hash): F[Seq[TransactionInfo]]
 }
 
 /**
@@ -71,9 +72,8 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
       txCtor: String => TransactionType
   ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
 
-  def getTransaction(blockHash: BlockHash): F[Seq[TransactionInfo]] = {
-    val blockHashStr = Base16.encode(blockHash.toByteArray)
-    blockReportAPI.blockReport(blockHash, forceReplay = false).map {
+  def getTransaction(blockHash: Blake2b256Hash): F[Seq[TransactionInfo]] =
+    blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).map {
       case Right(b) =>
         val userTransactions = b.deploys.flatMap(d => {
           d.report
@@ -90,13 +90,12 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
             case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
             case CloseBlockSystemDeployDataProto() => CloseBlock
           }
-          transactions.map(t => TransactionInfo(t, txCtor(blockHashStr)))
+          transactions.map(t => TransactionInfo(t, txCtor(Base16.encode(blockHash.bytes.toArray))))
         }
         userTransactions ++ systemDeployTransactions
 
       case Left(_) => Seq.empty
     }
-  }
 
   private def findTransactions(report: SingleReport): Seq[Transaction] = {
     val transactions = report.events
@@ -150,11 +149,9 @@ final case class CacheTransactionAPI[F[_]: Sync: Concurrent](
       defNew <- Deferred[F, Unit]
       defer  = blockDeferMap.getOrElseUpdate(blockHash, defNew)
       _ <- (for {
-            transactions <- transactionAPI.getTransaction(
-                             ByteString.copyFrom(Base16.unsafeDecode(blockHash))
-                           )
-            _ <- store.put(blockHash, TransactionResponse(transactions))
-            _ <- defer.complete(())
+            transactions <- transactionAPI.getTransaction(Blake2b256Hash.fromHex(blockHash))
+            _            <- store.put(blockHash, TransactionResponse(transactions))
+            _            <- defer.complete(())
           } yield ()).whenA(defNew == defer)
       _               <- defer.get
       transactionsOpt <- store.get(blockHash)
@@ -218,10 +215,10 @@ object Transaction {
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =
-    kvm.database("transaction", utf8, transactionResponseCodec) >>= { s =>
+    kvm.database("transaction", utf8, transactionResponseCodec).map { s =>
       CacheTransactionAPI(
         transactionAPI,
         s
-      ).pure
+      )
     }
 }

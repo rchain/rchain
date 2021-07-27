@@ -2,14 +2,12 @@ package coop.rchain.node.web
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.protocol.BlockEventInfo
-import coop.rchain.crypto.codec.Base16
-import org.http4s.HttpRoutes
+import org.http4s.{HttpRoutes, QueryParamDecoder}
 import org.http4s.circe.jsonEncoderOf
-import coop.rchain.models.syntax._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 object ReportingRoutes {
 
@@ -17,15 +15,15 @@ object ReportingRoutes {
   final case class BlockTracesReport(
       report: BlockEventInfo
   ) extends ReportResponse
-  final case class BlockReportError(hash: String, errorMessage: String) extends ReportResponse
+  final case class BlockReportError(errorMessage: String) extends ReportResponse
 
   type ReportingHttpRoutes[F[_]] = HttpRoutes[F]
 
   def transforResult[F[_]: Sync](
-      hash: String,
+      hash: Blake2b256Hash,
       state: F[ApiErr[BlockEventInfo]]
   ): F[ReportResponse] =
-    state.map(_.fold(BlockReportError(hash, _), BlockTracesReport))
+    state.map(_.fold(BlockReportError, BlockTracesReport))
 
   def service[F[_]: Concurrent](
       blockReportAPI: BlockReportAPI[F]
@@ -42,7 +40,9 @@ object ReportingRoutes {
         .withKebabCaseConstructorNames
         .withKebabCaseMemberNames
 
-    object BlockHashParam   extends QueryParamDecoderMatcher[String]("blockHash")
+    implicit val blake2b256HashParamDecoder =
+      QueryParamDecoder.stringQueryParamDecoder.map(Blake2b256Hash.fromHex)
+    object BlockHashParam   extends QueryParamDecoderMatcher[Blake2b256Hash]("blockHash")
     object ForceReplayParam extends OptionalQueryParamDecoderMatcher[Boolean]("forceReplay")
     implicit val encodeReportResponse = jsonEncoderOf[F, ReportResponse]
 
@@ -51,10 +51,7 @@ object ReportingRoutes {
         Ok(
           transforResult(
             hash,
-            blockReportAPI.blockReport(
-              ByteString.copyFrom(Base16.unsafeDecode(hash)),
-              forceReplay.getOrElse(false)
-            )
+            blockReportAPI.blockReport(hash.toByteString, forceReplay.getOrElse(false))
           )
         )
     }
