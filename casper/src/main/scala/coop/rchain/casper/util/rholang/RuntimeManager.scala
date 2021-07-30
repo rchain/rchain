@@ -54,7 +54,8 @@ trait RuntimeManager[F[_]] {
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long
+      blockTime: Long,
+      blockNumber: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])]
   def computeBonds(startHash: StateHash): F[Seq[Bond]]
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]]
@@ -123,9 +124,10 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long
+      blockTime: Long,
+      blockNumber: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    spawnRuntime.flatMap(_.computeGenesis(terms, blockTime))
+    spawnRuntime.flatMap(_.computeGenesis(terms, blockTime, blockNumber))
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
