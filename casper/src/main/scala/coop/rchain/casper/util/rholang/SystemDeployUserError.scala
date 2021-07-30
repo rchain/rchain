@@ -1,21 +1,16 @@
 package coop.rchain.casper.util.rholang
 
 import coop.rchain.models.Par
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.PrettyPrinter
+import coop.rchain.rholang.interpreter.errors.InterpreterError
 
-sealed trait SystemDeployFailure
+final case class SystemDeployUserError(errorMessage: String)
 
-sealed abstract class SystemDeployUserError(val errorMessage: String) extends SystemDeployFailure
-
-object SystemDeployUserError {
-  final case class SystemDeployError(errorMsg: String) extends SystemDeployUserError(errorMsg)
-  def apply(errorMsg: String) = SystemDeployError(errorMsg)
-}
-
+/**
+  * Fatal error - node should exit on these errors.
+  */
 sealed abstract class SystemDeployPlatformFailure(errorMessage: String)
     extends RuntimeException(s"Platform failure: $errorMessage")
-    with SystemDeployFailure
 
 object SystemDeployPlatformFailure {
   private def showSeqPar(pars: Seq[Par]) = pars match {
@@ -26,12 +21,15 @@ object SystemDeployPlatformFailure {
 
   final case class UnexpectedResult(result: Seq[Par])
       extends SystemDeployPlatformFailure(s"Unable to proceed with ${showSeqPar(result)}")
+
   final case class UnexpectedSystemErrors(errors: Vector[InterpreterError])
       extends SystemDeployPlatformFailure(
         s"Caught errors in Rholang interpreter ${errors.mkString("[", ", ", "]")}"
       )
+
   final case class GasRefundFailure(errorMsg: String)
       extends SystemDeployPlatformFailure(s"Unable to refund remaining gas ($errorMsg)")
+
   case object ConsumeFailed
       extends SystemDeployPlatformFailure("Unable to consume results of system deploy")
 }
