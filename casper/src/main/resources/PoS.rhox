@@ -23,9 +23,9 @@
 */
 
 new
+  PosDispatcher,
   PoS,
   PosLoc,
-  PosDispatcher,
   rb(`rho:registry:insertBlessed`),
   rl(`rho:registry:lookup`),
   revAddressOps(`rho:rev:address`),

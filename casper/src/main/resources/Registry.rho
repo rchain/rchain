@@ -473,46 +473,43 @@ in {
             hashCh,
             verifyCh
           in {
-            blake2b256!((nonce, data).toByteArray(), *hashCh) |
-            for (@hash <- hashCh) {
-              secpVerify!(hash, sig, pubKeyBytes, *verifyCh) |
-              for (@verified <- verifyCh) {
-                if (verified) {
-                  ops!("buildUri", pubKeyBytes, *uriCh) |
-                  for (@uri <- uriCh) {
-                    for (@map <<- _registryStore) {
-                      new responseCh in {
-                        TreeHashMap!("get", map, uri, *responseCh) |
-                        for (@response <- responseCh) {
-                          match response {
-                            Nil => {
+            hashVerify!((nonce, data), sig, pubKeyBytes, *verifyCh) |
+            for (@verified <- verifyCh) {
+              if (verified) {
+                ops!("buildUri", pubKeyBytes, *uriCh) |
+                for (@uri <- uriCh) {
+                  for (@map <<- _registryStore) {
+                    new responseCh in {
+                      TreeHashMap!("get", map, uri, *responseCh) |
+                      for (@response <- responseCh) {
+                        match response {
+                          Nil => {
+                            new ack in {
+                              TreeHashMap!("set", map, uri, (nonce, data), *ack) |
+                              for (_ <- ack) {
+                                ret!(uri)
+                              }
+                            }
+                          }
+                          (oldNonce, _) => {
+                            if (nonce > oldNonce) {
                               new ack in {
                                 TreeHashMap!("set", map, uri, (nonce, data), *ack) |
                                 for (_ <- ack) {
                                   ret!(uri)
                                 }
                               }
-                            }
-                            (oldNonce, _) => {
-                              if (nonce > oldNonce) {
-                                new ack in {
-                                  TreeHashMap!("set", map, uri, (nonce, data), *ack) |
-                                  for (_ <- ack) {
-                                    ret!(uri)
-                                  }
-                                }
-                              } else {
-                                ret!(Nil)
-                              }
+                            } else {
+                              ret!(Nil)
                             }
                           }
                         }
                       }
                     }
                   }
-                } else {
-                  ret!(Nil)
                 }
+              } else {
+                ret!(Nil)
               }
             }
           }
@@ -523,47 +520,35 @@ in {
       // Registers `insertBlessedCh` as an insertBlessed channel in the registry
       bootstrapInsertBlessed!(*insertBlessedCh) |
       for (insertBlessed <- insertBlessedCh) {
-        // A consume is included for each (stateful) blessed contract
-        // - AuthKey
-        // - MakeMint
-        // - MultiSigRevVault
-        // - NonNegativeNumber
-        // - PoS
-        // - RevVault
-        // AuthKey
-        for (@uri, @loc <- insertBlessed) {
+        // A consume is included for each (updatable) blessed contract
+        for (@`rho:rchain:authKey`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:rchain:authKey`, loc))
           }
         } |
-        // MakeMint
-        for (@uri, @loc <- insertBlessed) {
+        for (@`rho:rchain:makeMint`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:rchain:makeMint`, loc))
           }
         } |
-        // MultiSigRevVault
-        for (@uri, @loc <- insertBlessed) {
+        for (@`rho:rchain:multiSigRevVault`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:rchain:multiSigRevVault`, loc))
           }
         } |
-        // NonNegativeNumber
-        for (@uri, @loc <- insertBlessed) {
+        for (@`rho:lang:nonNegativeNumber`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:lang:nonNegativeNumber`, loc))
           }
         } |
-        // PoS
-        for (@uri, @loc <- insertBlessed) {
+        for (@`rho:rchain:pos`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:rchain:pos`, loc))
           }
         } |
-        // RevVault
-        for (@uri, @loc <- insertBlessed) {
+        for (@`rho:rchain:revVault`, @loc <- insertBlessed) {
           for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(uri, loc))
+            blessedContractLocMapCh!(bcMap.set(`rho:rchain:revVault`, loc))
           }
         }
       } |
@@ -597,9 +582,9 @@ in {
               // Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
               // There is only one proposal per uri possible at a time.
               // --------------------------------------------------------------------------------
-              contract multisig(@"propose", @pubKey, @uri, @con, @meth, @sig, ret) = {
+              contract multisig(@"propose", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
                 new verifyCh in {
-                  if (pubKeys.contains(pubKey)) {
+                  if (pubKeys.contains(pubKeyBytes)) {
                     // `pubKey` has the privilege to propose updates
                     for (@bcMap <<- blessedContractLocMapCh) {
                       if (bcMap.contains(uri)) {
@@ -610,14 +595,14 @@ in {
                               if (not proposalMap.contains(uri)) {
                                 // the update proposal is unique
                                 // check the signature of (uri, con, meth) = key
-                                hashVerify!(key, sig, pubKey, *verifyCh) |
+                                hashVerify!(key, sig, pubKeyBytes, *verifyCh) |
                                 for (@verified <- verifyCh) {
                                   if (verified) {
                                     // signature is valid
                                     proposalMapCh!(proposalMap.set(uri, (con, meth))) |
                                     for (@agreeMap <- agreementMapCh) {
                                       // the proposer is the first to agree with a proposal
-                                      agreementMapCh!(agreeMap.set(key, Set(pubKey))) |
+                                      agreementMapCh!(agreeMap.set(key, Set(pubKeyBytes))) |
                                       ret!((true, uri, con, meth))
                                     }
                                   } else {
@@ -640,7 +625,7 @@ in {
                       }
                     }
                   } else {
-                    // `pubKey` does not have the privilege to propose updates
+                    // `pubKeyBytes` does not have the privilege to propose updates
                     ret!((false, "invalid public key"))
                   }
                 }
@@ -650,20 +635,20 @@ in {
               // Privileged public keys can agree with update proposals.
               // Manages the `agreementMap`: (uri, contractData, methodData) -> set of agreeing pubKeys
               // --------------------------------------------------------------------------------------
-              contract multisig(@"agree", @pubKey, @uri, @con, @meth, @sig, ret) = {
+              contract multisig(@"agree", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
                 new verifyCh in {
                   match (uri, con, meth) {
                     agreedTuple => {
-                      if (pubKeys.contains(pubKey)) {
+                      if (pubKeys.contains(pubKeyBytes)) {
                         // `pubKey` is a member of `pubKeys`
-                        hashVerify!(agreedTuple, sig, pubKey, *verifyCh) |
+                        hashVerify!(agreedTuple, sig, pubKeyBytes, *verifyCh) |
                         for (@verified <- verifyCh) {
                           if (verified) {
                             // valid signature
                             for (@map <- agreementMapCh) {
-                              match map.getOrElse(agreedTuple, Set()).add(pubKey) {
+                              match map.getOrElse(agreedTuple, Set()).add(pubKeyBytes) {
                                 agreeing => {
-                                  // add `pubKey` to the set of supporters
+                                  // add `pubKeyBytes` to the set of supporters
                                   agreementMapCh!(map.set(agreedTuple, agreeing)) |
                                   ret!((true, uri, con, meth, agreeing))
                                 }
@@ -675,7 +660,7 @@ in {
                           }
                         }
                       } else {
-                        // pubKey is not in pubKeys
+                        // `pubKeyBytes` is not in `pubKeys`
                         ret!((false, "invalid public key"))
                       }
                     }
@@ -700,17 +685,17 @@ in {
                               // sufficiently many keys agree to update
                               // consume data on location channel in order to replace contract data
                               for (oldData <- @loc) {
-                                new tmp, newARet in {
+                                new tmp, newRet in {
                                   oldData!("extractState", *tmp) |
                                   for (@oldState <- tmp) {
                                     // launch new contract instance with initial state extracted from the old instance
-                                    @con!(oldState, *newARet) |
+                                    @con!(oldState, *newRet) |
                                     // manage agreement and proposal maps
                                     agreementMapCh!(agreementMap.delete((uri, con, meth))) |
                                     proposalMapCh!(proposalMap.delete(uri)) |
                                     // write new method entry point to location channel
                                     @loc!(meth) |
-                                    ret!((true, *newARet))
+                                    ret!((true, *newRet))
                                   }
                                 }
                               }
