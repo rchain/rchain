@@ -2,6 +2,7 @@ package coop.rchain.rspace.merger
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
+import fs2.Stream
 
 import scala.Function.tupled
 import scala.annotation.tailrec
@@ -147,23 +148,45 @@ object MergingLogic {
 
   /** Given conflicts map, output possible rejection options. */
   def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
-    @tailrec
-    def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
-      // stop if all new dependencies are already in set
-      val next = if (reject) (acc ++ newSet) else acc
-      val stop = if (reject) next == acc else false
-      if (stop)
-        acc
-      else {
-        val n = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
-        process(n, next, !reject)
+    // Set of rejection paths with corresponding remaining conflicts map
+    final case class RejectionOption(rejectedSoFar: Set[A], remainingConflictsMap: Map[A, Set[A]])
+
+    def gatherRejOptions(conflictsMap: Map[A, Set[A]]): Set[RejectionOption] =
+      conflictsMap.keySet.map(keepKey => {
+        // reject conflicting with keep decision
+        val toReject = conflictsMap(keepKey)
+        val remainingConflictsMap =
+          conflictsMap
+            .filterKeys(!toReject.contains(_)) // remove rejected key
+            .mapValues(_ -- toReject)          // remove rejected amongst values
+            .filter { case (_, v) => v.nonEmpty } // remove keys that do not conflict with anything now
+        RejectionOption(toReject, remainingConflictsMap)
+      })
+
+    // start with rejecting nothing and full conflicts map
+    val start = Set(RejectionOption(Set.empty[A], conflictMap.filter {
+      // only keys that have conflicts associated should be examined
+      case (_, conflicts) => conflicts.nonEmpty
+    }))
+
+    Stream
+      .unfoldLoop(start) { rejections =>
+        val (out, next) = rejections
+          .flatMap {
+            case RejectionOption(rejectedAcc, remainingConflictsMap) =>
+              gatherRejOptions(remainingConflictsMap).map { v: RejectionOption =>
+                v.copy(rejectedSoFar = rejectedAcc ++ v.rejectedSoFar)
+              }
+          }
+          // emit rejection option that do not have more conflicts, pass others further into the loop
+          .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
+
+        (out, if (next.nonEmpty) Some(next) else None)
       }
-    }
-    // each rejection option is defined by decision not to reject a key in rejection map
-    conflictMap
-    // only keys that have conflicts associated should be examined
-      .filter { case (_, conflicts) => conflicts.nonEmpty }
-      .keySet
-      .map(k => process(conflictMap(k), Set.empty, reject = true))
+      .map(v => Stream.emits(v.toList))
+      .flatten
+      .map { case RejectionOption(v, _) => v } // collect only rejection options, maps here are empty
+      .toList
+      .toSet
   }
 }
