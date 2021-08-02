@@ -57,10 +57,9 @@ object ConstructDeploy {
       sec: PrivateKey = defaultSec,
       vabn: Long = 0
   ): F[Signed[DeployData]] =
-    Time[F].currentMillis
-      .map(
-        sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec, vabn: Long)
-      )
+    Time[F].nanoTime.map {
+      sourceDeploy(source, _, phloLimit = phloLimit, phloPrice = phloPrice, sec = sec, vabn: Long)
+    }
 
   // TODO: replace usages with basicSendDeployData
   def basicDeployData[F[_]: Monad: Time](
