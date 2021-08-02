@@ -137,6 +137,7 @@ object BlockCreator {
                 _             <- Span[F].mark("before-packing-block")
                 shardId       = s.onChainState.shardConf.shardName
                 casperVersion = s.onChainState.shardConf.casperVersion
+                // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(
                   blockData,
                   parents.map(_.blockHash),
@@ -150,7 +151,9 @@ object BlockCreator {
                   shardId,
                   casperVersion
                 )
-                _           <- Span[F].mark("block-created")
+                _ <- Span[F].mark("block-created")
+                // signedBlock add signature and replace hashed-without-signature
+                // blockHash to hashed-with-signature blockHash
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
               } yield BlockCreatorResult.created(signedBlock)

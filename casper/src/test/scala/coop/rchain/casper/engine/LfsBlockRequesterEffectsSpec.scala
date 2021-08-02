@@ -135,9 +135,6 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
         override val stream: Stream[F, ST[BlockHash]] = processingStream
       }
 
-      // Take one element from the stream, processed the first signal on start
-      _ <- processingStream.take(1).compile.drain
-
       // Execute test function together with processing stream
       _ <- test(mock)
     } yield ()
@@ -229,6 +226,10 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "save received blocks if requested" in dagFromBlock(b9) { mock =>
     import mock._
     for {
+      // Wait for initial request to be sent
+      reqs <- sentRequests.take(1).compile.to(List)
+      _    = reqs.sorted shouldBe List(hash8)
+
       // Receive first block dependencies
       _ <- receiveBlock(b8)
 
@@ -238,7 +239,10 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
 
       // Wait for requests to be sent
       reqs <- sentRequests.take(2).compile.to(List)
-      _    = reqs.sorted shouldBe List(hash8, hash7)
+      _    = reqs.sorted shouldBe List(hash7, hash5)
+
+      // No other requests should be sent
+      _ = sentRequests should notEmit
 
       // Receive one dependency
       _ <- receiveBlock(b7)
@@ -255,12 +259,15 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "drop all blocks not requested" in dagFromBlock(b9) { mock =>
     import mock._
     for {
+      // Wait for initial request to be sent
+      reqs <- sentRequests.take(1).compile.to(List)
+      _    = reqs.sorted shouldBe List(hash8)
+
       // Receive blocks not requested
       _ <- receiveBlock(b7, b6, b5, b4, b3, b2, b1)
 
-      // It should contain only request for the first block
-      reqs <- sentRequests.take(1).compile.to(List)
-      _    = reqs.sorted shouldBe List(hash8)
+      // No other requests should be sent
+      _ = sentRequests should notEmit
 
       // Nothing else should be saved
       _ = savedBlocks should notEmit
@@ -270,6 +277,10 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
   it should "skip received invalid blocks" in dagFromBlock(b9) { mock =>
     import mock._
     for {
+      // Wait for initial request to be sent
+      reqs <- sentRequests.take(1).compile.to(List)
+      _    = reqs.sorted shouldBe List(hash8)
+
       // Receive first block dependencies
       _ <- receiveBlock(b8)
 
@@ -294,8 +305,8 @@ class LfsBlockRequesterEffectsSpec extends FlatSpec with Matchers with Fs2Stream
       _ = savedBlocks should notEmit
 
       // Only dependencies from valid block should requested
-      reqs <- sentRequests.take(4).compile.to(List)
-      _    = reqs.sorted shouldBe List(hash8, hash7, hash6, hash5)
+      reqs <- sentRequests.take(3).compile.to(List)
+      _    = reqs.sorted shouldBe List(hash7, hash6, hash5)
 
       // No other requests should be sent
       _ = sentRequests should notEmit

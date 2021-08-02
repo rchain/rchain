@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.util.ProtoUtil.hashSignedBlock
+import coop.rchain.casper.util.ProtoUtil.hashBlock
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.SignaturesAlg
 import coop.rchain.models.BlockHash.BlockHash
@@ -16,7 +16,7 @@ object BlockUtil {
       SignaturesAlg(b.sigAlgorithm).get.sign
 
     val blockHash =
-      hashSignedBlock(b)
+      hashBlock(b)
     val sig = ByteString.copyFrom(signFunction(blockHash.toByteArray, sk))
     b.copy(blockHash = blockHash, sig = sig)
   }
