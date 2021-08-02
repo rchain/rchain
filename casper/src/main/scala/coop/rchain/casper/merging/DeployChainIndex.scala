@@ -3,6 +3,7 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.{StateChange, _}
@@ -12,6 +13,7 @@ final case class DeployIdWithCost(id: ByteString, cost: Long)
 
 /** index of deploys depending on each other inside a single block (state transition) */
 final case class DeployChainIndex(
+    blockHash: BlockHash, // user might submit the same deploy to multiple validators, so index should include block hash as well
     deploysWithCost: Set[DeployIdWithCost],
     preStateHash: Blake2b256Hash,
     postStateHash: Blake2b256Hash,
@@ -24,6 +26,7 @@ object DeployChainIndex {
   implicit val ord = Ordering.by((_: DeployChainIndex).postStateHash)
 
   def apply[F[_]: Concurrent, C, P, A, K](
+      blockHash: BlockHash,
       deploys: Set[DeployIndex],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
@@ -43,6 +46,7 @@ object DeployChainIndex {
                        historyRepository.getSerializeC
                      )
     } yield DeployChainIndex(
+      blockHash,
       deploysWithCost,
       preStateHash,
       postStateHash,

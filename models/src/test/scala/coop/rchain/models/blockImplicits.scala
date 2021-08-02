@@ -156,11 +156,12 @@ object blockImplicits {
                       Random.shuffle(bonds).headOption.getOrElse(bondGen.sample.get).validator
                     )
                   else Gen.const(setValidator.get)
+      blockHash <- arbitrary[BlockHash](arbitraryBlockHash)
       version   = if (setVersion.isEmpty) 1L else setVersion.get
       timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
       shardId   = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
-        blockHash = ByteString.EMPTY,
+        blockHash = blockHash,
         header = Header(
           parentsHashList = parentsHashList.toList,
           timestamp = timestamp,

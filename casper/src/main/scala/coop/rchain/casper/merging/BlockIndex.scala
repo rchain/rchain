@@ -89,6 +89,7 @@ object BlockIndex {
       index <- deployChains.toVector
                 .traverse(
                   DeployChainIndex(
+                    blockHash,
                     _,
                     preStateHash,
                     postStateHash,
