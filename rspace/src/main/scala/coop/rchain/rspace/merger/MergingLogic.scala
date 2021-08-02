@@ -1,7 +1,11 @@
 package coop.rchain.rspace.merger
 
+import cats.Parallel
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.shared.Stopwatch
 import fs2.Stream
 
 import scala.Function.tupled
@@ -10,9 +14,14 @@ import scala.annotation.tailrec
 object MergingLogic {
 
   /** If target depends on source. */
-  def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
+  def depends(target: EventLogIndex, source: EventLogIndex): Boolean = {
+    val dependentProduces = (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed)
+    val dependentConsumes = (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced)
+
+    // this should not be the case in real life, but to make function more robust
+    (dependentProduces diff (producesCreatedAndNotDestroyed(target))).nonEmpty ||
+    (dependentConsumes diff (consumesCreatedAndNotDestroyed(target))).nonEmpty
+  }
 
   /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -147,30 +156,32 @@ object MergingLogic {
     gatherRelatedSets(computeRelationMap(items, relation))
 
   /** Given conflicts map, output possible rejection options. */
-  def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
+  def computeRejectionOptions[A](
+      conflictMap: Map[A, Set[A]]
+  ): Set[Set[A]] = {
     // Set of rejection paths with corresponding remaining conflicts map
     final case class RejectionOption(rejectedSoFar: Set[A], remainingConflictsMap: Map[A, Set[A]])
 
     def gatherRejOptions(conflictsMap: Map[A, Set[A]]): Set[RejectionOption] =
-      conflictsMap.keySet.map(keepKey => {
-        // reject conflicting with keep decision
-        val toReject = conflictsMap(keepKey)
-        val remainingConflictsMap =
-          conflictsMap
-            .filterKeys(!toReject.contains(_)) // remove rejected key
-            .mapValues(_ -- toReject)          // remove rejected amongst values
-            .filter { case (_, v) => v.nonEmpty } // remove keys that do not conflict with anything now
-        RejectionOption(toReject, remainingConflictsMap)
-      })
+      conflictsMap.iterator.map {
+        case (_, toReject) =>
+          // reject conflicting with keep decision
+          val remainingConflictsMap =
+            conflictsMap
+              .filterKeys(!toReject.contains(_)) // remove rejected key
+              .mapValues(_ -- toReject)          // remove rejected amongst values
+              .filter { case (_, v) => v.nonEmpty } // remove keys that do not conflict with anything now
+          RejectionOption(toReject, remainingConflictsMap)
+      }.toSet
 
-    // start with rejecting nothing and full conflicts map
-    val start = Set(RejectionOption(Set.empty[A], conflictMap.filter {
+    val conflictsOnlyMap = conflictMap.filter {
       // only keys that have conflicts associated should be examined
       case (_, conflicts) => conflicts.nonEmpty
-    }))
-
+    }
+    //     start with rejecting nothing and full conflicts map
+    val start = RejectionOption(Set.empty[A], conflictsOnlyMap)
     Stream
-      .unfoldLoop(start) { rejections =>
+      .unfoldLoop(Set(start)) { rejections =>
         val (out, next) = rejections
           .flatMap {
             case RejectionOption(rejectedAcc, remainingConflictsMap) =>
@@ -181,12 +192,26 @@ object MergingLogic {
           // emit rejection option that do not have more conflicts, pass others further into the loop
           .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
 
-        (out, if (next.nonEmpty) Some(next) else None)
+        (out.map(_.rejectedSoFar).toList, if (next.nonEmpty) Some(next) else None)
       }
-      .map(v => Stream.emits(v.toList))
-      .flatten
-      .map { case RejectionOption(v, _) => v } // collect only rejection options, maps here are empty
+      .flatMap(Stream.emits)
       .toList
       .toSet
+
+//    @tailrec
+//    def go(doneAcc: Set[RejectionOption], toDoAcc: Set[RejectionOption]): Set[Set[A]] = {
+//      val (done, next) = toDoAcc
+//        .flatMap {
+//          case RejectionOption(rejectedAcc, remainingConflictsMap) =>
+//            gatherRejOptions(remainingConflictsMap).map { v: RejectionOption =>
+//              v.copy(rejectedSoFar = rejectedAcc ++ v.rejectedSoFar)
+//            }
+//        }
+//        // emit rejection option that do not have more conflicts, pass others further into the loop
+//        .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
+//      if (next.isEmpty) done.map(_.rejectedSoFar)
+//      else go(doneAcc ++ done, next)
+//    }
+//    go(Set.empty[RejectionOption], gatherRejOptions(conflictsOnlyMap))
   }
 }

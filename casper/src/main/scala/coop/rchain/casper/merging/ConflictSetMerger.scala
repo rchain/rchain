@@ -78,7 +78,7 @@ object ConflictSetMerger {
       logStr = s"Merging done: " +
         s"late set size ${lateSet.size}; " +
         s"actual set size ${actualSet.size}; " +
-        s"computed branches (${branches.size}) in ${branchesTime}; " +
+        s"computed branches (${branches.size} {${branches.toList.map(_.size).mkString(";")}) in ${branchesTime}; " +
         s"conflicts map in ${conflictsMapTime}; " +
         s"rejection options (${rejectionOptions.size}) in ${rejectionOptionsTime}; " +
         s"optimal rejection set size ${optimalRejection.size}; " +

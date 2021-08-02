@@ -9,6 +9,8 @@ import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.{StateChange, _}
 import coop.rchain.rspace.syntax._
 
+import java.util.Arrays
+
 final case class DeployIdWithCost(id: ByteString, cost: Long)
 
 /** index of deploys depending on each other inside a single block (state transition) */
@@ -19,7 +21,18 @@ final case class DeployChainIndex(
     postStateHash: Blake2b256Hash,
     eventLogIndex: EventLogIndex,
     stateChanges: StateChange
-)
+) {
+  // this is required because conflict resolution logic relies heavily on equality so it should be fast
+  override def equals(obj: Any): Boolean = obj match {
+    case d: DeployChainIndex => {
+      d.deploysWithCost.map(_.id) == this.deploysWithCost.map(_.id) && d.blockHash == this.blockHash
+    }
+    case _ => false
+  }
+
+  override def hashCode(): Int =
+    deploysWithCost.map(_.id).foldLeft(blockHash.hashCode * 31)((acc, v) => acc + v.hashCode() * 31)
+}
 
 object DeployChainIndex {
 
