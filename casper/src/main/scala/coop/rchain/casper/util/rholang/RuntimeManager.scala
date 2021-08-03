@@ -20,9 +20,14 @@ import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.scodec.codecs
 import coop.rchain.shared.Log
+import coop.rchain.shared.syntax._
+import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
+import scodec.Codec
+import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
@@ -63,10 +68,13 @@ trait RuntimeManager[F[_]] {
   def getHistoryRepo: RhoHistoryRepository[F]
 }
 
+final case class DeployMergeableData(channels: Seq[Blake2b256Hash])
+
 final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
-    historyRepo: RhoHistoryRepository[F]
+    historyRepo: RhoHistoryRepository[F],
+    mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -192,16 +200,20 @@ object RuntimeManager {
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       rSpace: RhoISpace[F],
       replayRSpace: RhoReplayISpace[F],
-      historyRepo: RhoHistoryRepository[F]
-  ): F[RuntimeManagerImpl[F]] = Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo))
+      historyRepo: RhoHistoryRepository[F],
+      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
+  ): F[RuntimeManagerImpl[F]] =
+    Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore))
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
-      store: RSpaceStore[F]
+      store: RSpaceStore[F],
+      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
   )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store).map(_._1)
+    createWithHistory(store, mergeableStore).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
-      store: RSpaceStore[F]
+      store: RSpaceStore[F],
+      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
   )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -211,7 +223,28 @@ object RuntimeManager {
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo).map((_, historyRepo))
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore)
+            .map((_, historyRepo))
       }
   }
+
+  def mergeableStore[F[_]: Sync](
+      kvm: KeyValueStoreManager[F]
+  ): F[KeyValueTypedStore[F, ByteVector, DeployMergeableData]] =
+    kvm.database[ByteVector, DeployMergeableData](
+      "mergeable-channel-cache",
+      scodec.codecs.bytes,
+      deployMergeableDataCodec
+    )
+
+  val codecBlake2b256Hash: Codec[Blake2b256Hash] =
+    scodec.codecs.bytes
+      .xmap[Blake2b256Hash](Blake2b256Hash.fromByteVector, _.bytes)
+      .as[Blake2b256Hash]
+
+  // Deploy mergeable channels support from Replay
+  val deployMergeableDataCodec: Codec[DeployMergeableData] =
+    codecs
+      .seqOfN(scodec.codecs.int32, codecBlake2b256Hash)
+      .as[DeployMergeableData]
 }

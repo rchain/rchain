@@ -60,14 +60,17 @@ object Blake2b256Hash {
   def create(byteVector: ByteVector): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVector)))
 
+  def fromByteVector(bytes: ByteVector): Blake2b256Hash =
+    new Blake2b256Hash(bytes)
+
   def fromHex(string: String): Blake2b256Hash =
-    new Blake2b256Hash(ByteVector(Base16.unsafeDecode(string)))
+    fromByteVector(ByteVector(Base16.unsafeDecode(string)))
 
   def fromByteArray(bytes: Array[Byte]): Blake2b256Hash =
-    new Blake2b256Hash(ByteVector(bytes))
+    fromByteVector(ByteVector(bytes))
 
   def fromByteString(byteString: ByteString): Blake2b256Hash =
-    new Blake2b256Hash(ByteVector(byteString.toByteArray))
+    fromByteVector(ByteVector(byteString.toByteArray))
 
   val codecPureBlake2b256Hash: Codec[Blake2b256Hash] = new Codec[Blake2b256Hash] {
     val bitLength = (length * 8).toLong

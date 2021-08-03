@@ -296,8 +296,9 @@ object GenesisTest {
 
     for {
       kvsManager     <- Resources.mkTestRNodeStoreManager[F](storePath)
-      store          <- kvsManager.rSpaceStores
-      runtimeManager <- RuntimeManager[F](store)
+      rStore         <- kvsManager.rSpaceStores
+      mStore         <- RuntimeManager.mergeableStore(kvsManager)
+      runtimeManager <- RuntimeManager[F](rStore, mStore)
       result         <- body(runtimeManager, genesisPath, log, time)
       _              <- Sync[F].delay { storePath.recursivelyDelete() }
       _              <- Sync[F].delay { gp.recursivelyDelete() }

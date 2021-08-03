@@ -59,6 +59,8 @@ object RNodeKeyValueStoreManager {
       (Db("reporting-cache"), reportingEnvConfig),
       // CasperBuffer
       (Db("parents-map"), casperBufferEnvConfig),
+      // Runtime mergeable store (cache of mergeable channels for block-merge)
+      (Db("mergeable-channel-cache"), casperBufferEnvConfig),
       // Rholang evaluator store
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),

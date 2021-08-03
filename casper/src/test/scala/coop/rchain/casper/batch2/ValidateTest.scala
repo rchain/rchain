@@ -760,8 +760,9 @@ class ValidateTest
       for {
         _              <- blockDagStorage.insert(genesis, false, approved = true)
         kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store          <- kvm.rSpaceStores
-        runtimeManager <- RuntimeManager[Task](store)
+        rStore         <- kvm.rSpaceStores
+        mStore         <- RuntimeManager.mergeableStore(kvm)
+        runtimeManager <- RuntimeManager[Task](rStore, mStore)
         dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)

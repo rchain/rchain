@@ -141,8 +141,9 @@ object GenesisBuilder {
 
     (for {
       kvsManager      <- mkTestRNodeStoreManager[Task](storageDirectory)
-      store           <- kvsManager.rSpaceStores
-      runtimeManager  <- RuntimeManager(store)
+      rStore          <- kvsManager.rSpaceStores
+      mStore          <- RuntimeManager.mergeableStore(kvsManager)
+      runtimeManager  <- RuntimeManager(rStore, mStore)
       genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       blockStore      <- KeyValueBlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)

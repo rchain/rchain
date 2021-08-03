@@ -13,7 +13,7 @@ import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{DeployMergeableData, RuntimeManager}
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
@@ -27,10 +27,11 @@ import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
-import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.store.{InMemoryStoreManager, KeyValueTypedStore}
 import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
+import scodec.bits.ByteVector
 
 object Setup {
   def apply() = new {
@@ -60,8 +61,9 @@ object Setup {
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
+    val mStore = RuntimeManager.mergeableStore(spaceKVManager).unsafeRunSync(scheduler)
     implicit val runtimeManager =
-      RuntimeManager[Task](rspace, replay, historyRepo).unsafeRunSync(scheduler)
+      RuntimeManager[Task](rspace, replay, historyRepo, mStore).unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap

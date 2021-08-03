@@ -504,7 +504,8 @@ object TestNode {
       deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
       rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
-      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore))
+      mStore              <- Resource.liftF(RuntimeManager.mergeableStore(kvm))
+      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore, mStore))
 
       node <- Resource.liftF({
                implicit val bs                         = blockStore
