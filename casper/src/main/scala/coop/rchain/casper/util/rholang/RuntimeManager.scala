@@ -28,13 +28,6 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.FiniteDuration
 
 trait RuntimeManager[F[_]] {
-  def playSystemDeploy[S <: SystemDeploy](startHash: StateHash)(
-      systemDeploy: S
-  ): F[SystemDeployPlayResult[systemDeploy.Result]]
-  def replaySystemDeploy[S <: SystemDeploy](startHash: StateHash)(
-      systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]]
   def captureResults(
       startHash: StateHash,
       deploy: Signed[DeployData]
@@ -99,20 +92,6 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
                          .spawn
       runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace)
     } yield runtime
-
-  def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
-      systemDeploy: S
-  ): F[SystemDeployPlayResult[systemDeploy.Result]] =
-    spawnRuntime.flatMap(_.playSystemDeploy(stateHash)(systemDeploy))
-
-  // TODO: method is used only in tests
-  def replaySystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
-      systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): F[Either[ReplayFailure, SystemDeployReplayResult[systemDeploy.Result]]] =
-    spawnReplayRuntime.flatMap { replayRuntime =>
-      replayRuntime.replaySystemDeploy(stateHash)(systemDeploy, processedSystemDeploy)
-    }
 
   def computeState(startHash: StateHash)(
       terms: Seq[Signed[DeployData]],
