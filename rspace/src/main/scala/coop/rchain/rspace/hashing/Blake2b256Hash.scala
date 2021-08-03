@@ -63,6 +63,13 @@ object Blake2b256Hash {
   def fromHex(string: String): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Base16.unsafeDecode(string)))
 
+  def fromHexEither(string: String): Either[String, Blake2b256Hash] =
+    Base16
+      .decode(string)
+      .fold[Either[String, Blake2b256Hash]](Left(s"Invalid hex string $string"))(
+        b => Right(new Blake2b256Hash(ByteVector(b)))
+      )
+
   def fromByteArray(bytes: Array[Byte]): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(bytes))
 

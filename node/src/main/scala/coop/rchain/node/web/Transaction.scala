@@ -69,32 +69,34 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
   ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
 
   def getTransaction(blockHash: Blake2b256Hash): F[List[TransactionInfo]] =
-    blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).map {
-      case Right(b) =>
-        val userTransactions = b.deploys.flatMap(d => {
-          d.report
-            .zip(Seq(PreCharge, UserDeploy, Refund))
-            .flatMap {
-              case (report, txCtor) =>
-                makeDeployTransaction(d, report, txCtor)
+    blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).map { res =>
+      res
+        .map { b =>
+          val userTransactions = b.deploys.flatMap(d => {
+            d.report
+              .zip(Seq(PreCharge, UserDeploy, Refund))
+              .flatMap {
+                case (report, txCtor) =>
+                  makeDeployTransaction(d, report, txCtor)
+              }
+          })
+          val systemDeployTransactions = b.systemDeploys.flatMap { s =>
+            // system doesn't get precharge and refund , so it would always get one
+            val transactions = findTransactions(s.report.head)
+            val txCtor = s.systemDeploy.get.systemDeploy.value match {
+              case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
+              case CloseBlockSystemDeployDataProto() => CloseBlock
             }
-        })
-        val systemDeployTransactions = b.systemDeploys.flatMap { s =>
-          // system doesn't get precharge and refund , so it would always get one
-          val transactions = findTransactions(s.report.head)
-          val txCtor = s.systemDeploy.get.systemDeploy.value match {
-            case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
-            case CloseBlockSystemDeployDataProto() => CloseBlock
+            transactions
+              .map(t => TransactionInfo(t, txCtor(Base16.encode(blockHash.bytes.toArray))))
           }
-          transactions.map(t => TransactionInfo(t, txCtor(Base16.encode(blockHash.bytes.toArray))))
+          (userTransactions ++ systemDeployTransactions).toList
         }
-        (userTransactions ++ systemDeployTransactions).toList
-
-      case Left(_) => List.empty
+        .getOrElse(List.empty)
     }
 
   private def findTransactions(report: SingleReport): Seq[Transaction] = {
-    val transactions = report.events
+    val transactions = report.events.iterator
       .map(_.report.value)
       .collect {
         case ReportCommProto(Some(consume), produces) =>
@@ -128,7 +130,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     transactions.map { t =>
       val failReason = failedMap.getOrElse(t.retUnforgeable, None)
       t.copy(failReason = failReason)
-    }
+    }.toList
   }
 
 }
@@ -181,15 +183,15 @@ object Transaction {
     import coop.rchain.rholang.interpreter.storage._
 
     val transactionCodec: Codec[Transaction] =
-      (utf8_32L :: utf8_32L :: long(63) :: serializePar.toSizeHeadCodec :: optional[String](
+      (utf8_32 :: utf8_32 :: vlong :: serializePar.toSizeHeadCodec :: optional[String](
         bool,
-        utf8_32L
+        utf8_32
       )).as[Transaction]
-    val precharge: Codec[PreCharge]   = utf8_32L.as[PreCharge]
-    val refund: Codec[Refund]         = utf8_32L.as[Refund]
-    val user: Codec[UserDeploy]       = utf8_32L.as[UserDeploy]
-    val closeBlock: Codec[CloseBlock] = utf8_32L.as[CloseBlock]
-    val slash: Codec[SlashingDeploy]  = utf8_32L.as[SlashingDeploy]
+    val precharge: Codec[PreCharge]   = utf8_32.as[PreCharge]
+    val refund: Codec[Refund]         = utf8_32.as[Refund]
+    val user: Codec[UserDeploy]       = utf8_32.as[UserDeploy]
+    val closeBlock: Codec[CloseBlock] = utf8_32.as[CloseBlock]
+    val slash: Codec[SlashingDeploy]  = utf8_32.as[SlashingDeploy]
     val transactionType: Codec[TransactionType] = discriminated[TransactionType]
       .by(uint8)
       .subcaseP(0) {
@@ -231,9 +233,7 @@ object Transaction {
       StandardDeploys.revVault.data.timestamp
     )
     // the 11th unforgeable name
-    val unfogeableBytes = (1 to 11).foldLeft(Array.empty[Byte]) {
-      case (_, _) => seedForRevVault.next()
-    }
+    val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()
     GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
   }
 

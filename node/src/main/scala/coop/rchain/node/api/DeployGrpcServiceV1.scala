@@ -256,10 +256,18 @@ object DeployGrpcServiceV1 {
 
       override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
         defer(
-          blockReportAPI.blockReport(
-            ByteString.copyFrom(Base16.unsafeDecode(request.hash)),
-            request.forceReplay
-          )
+          Base16
+            .decode(request.hash)
+            .fold(s"Request hash: ${request.hash} is not valid hex string".asLeft[Array[Byte]])(
+              Right(_)
+            )
+            .flatTraverse(
+              hash =>
+                blockReportAPI.blockReport(
+                  ByteString.copyFrom(hash),
+                  request.forceReplay
+                )
+            )
         ) { r =>
           import EventInfoResponse.Message
           import EventInfoResponse.Message._

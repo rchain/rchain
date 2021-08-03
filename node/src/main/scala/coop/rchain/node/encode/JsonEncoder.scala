@@ -152,18 +152,19 @@ object JsonEncoder {
     Decoder.decodeUnit.map[AlwaysEqual[BitSet]](_ => AlwaysEqual(BitSet()))
 
   // FIXME blake2b512Random decode. Question Is that really neccessary?
-  implicit val decodeBlake2b512Random: Decoder[Blake2b512Random] =
+  implicit val decodeDummyBlake2b512Random: Decoder[Blake2b512Random] =
     Decoder.decodeUnit.map[Blake2b512Random](_ => Blake2b512Random(1))
 
   // convert the circe codec into scodec
   def convertCcodecToScodec[A](encoder: Encoder[A], decoder: Decoder[A]): SCodec[A] =
     utf8.exmap(
-      s =>
+      { s =>
         Attempt.fromEither {
           parse(s)
             .flatMap(j => decoder.decodeJson(j))
             .leftMap(e => Err.General(e.getMessage, e.getStackTrace.map(_.toString).toList))
-        },
+        }
+      },
       value => Attempt.successful(encoder.apply(value).noSpaces)
     )
 }
