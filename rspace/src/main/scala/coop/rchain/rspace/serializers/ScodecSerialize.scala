@@ -166,8 +166,6 @@ object ScodecSerialize {
     (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
       .as[COMM]
 
-  val codecSkip: Codec[Skip] = (codecByteVector :: codecTrieValuePointer).as[Skip]
-
   val memoizingSkipCodec: Codec[Skip] =
     Codec.apply((s: Skip) => Attempt.successful(s.encoded), codecSkip.decode)
 
@@ -180,27 +178,17 @@ object ScodecSerialize {
   /*
    * scodec for History types
    */
-
-  val codecPointerBlock: Codec[PointerBlock] =
-    vectorOfN(
-      provide(length),
-      codecTriePointer
-    ).as[PointerBlock]
-
-  val codecTrie: Codec[Trie] =
-    discriminated[Trie]
-      .by(uint2)
-      .subcaseP(0) {
-        case e: EmptyTrie.type => e
-      }(provide(EmptyTrie))
-      .subcaseP(1) {
-        case s: Skip => s
-      }(memoizingSkipCodec)
-      .subcaseP(2) {
-        case pb: PointerBlock => pb
-      }(memoizingPointerBlockCodec)
-
-  implicit def codecTriePointer: Codec[TriePointer] =
+  /**
+    * CodecTriePointer
+    *
+    * Encoded format:
+    * |head 2 bits|content|
+    * |0b00|(nothing)|  -> emptyPointer
+    * |0b01|32bytes|    -> LeafPointer
+    * |0b10|32bytes|    -> SkipPointer
+    * |0b11|32bytes|    -> NodePointer
+    */
+  val codecTriePointer: Codec[TriePointer] =
     discriminated[TriePointer]
       .by(uint2)
       .subcaseP(0) {
@@ -216,7 +204,23 @@ object ScodecSerialize {
         case p: NodePointer => p
       }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
 
-  implicit def codecTrieValuePointer: Codec[ValuePointer] =
+  /**
+    * Encoded format:
+    *  |bitsOf[[codecTriePointer]]|bitsOf[[codecTriePointer]]|...|bitsOf[[codecTriePointer]]|
+    */
+  val codecPointerBlock: Codec[PointerBlock] =
+    vectorOfN(
+      provide(length),
+      codecTriePointer
+    ).as[PointerBlock]
+
+  /**
+    * Encoded format:
+    * |head 1 bits|content|
+    * |0b00|32bytes|   ->LeafPointer
+    * |0b01|32bytes|   ->NodePointer
+    */
+  val codecTrieValuePointer: Codec[ValuePointer] =
     discriminated[ValuePointer]
       .by(uint(1))
       .subcaseP(0) {
@@ -225,6 +229,33 @@ object ScodecSerialize {
       .subcaseP(1) {
         case p: NodePointer => p
       }(Blake2b256Hash.codecWithBytesStringBlake2b256Hash.as[NodePointer])
+
+  /**
+    * Encoded format:
+    *   |bitsOf([[Skip.affix]])|bitsOf[[codecTrieValuePointer]]
+    */
+  val codecSkip: Codec[Skip] = (codecByteVector :: codecTrieValuePointer).as[Skip]
+
+  /**
+    * Encoded format:
+    * |head 2 bits|content|
+    * |0b00|(nothing)|
+    * |0b01|bitsOf[[codecSkip]]|
+    * |0b10|bitsOf[[codecPointerBlock]]|
+    * |0b11|NotImplemented|
+    */
+  val codecTrie: Codec[Trie] =
+    discriminated[Trie]
+      .by(uint2)
+      .subcaseP(0) {
+        case e: EmptyTrie.type => e
+      }(provide(EmptyTrie))
+      .subcaseP(1) {
+        case s: Skip => s
+      }(codecSkip)
+      .subcaseP(2) {
+        case pb: PointerBlock => pb
+      }(codecPointerBlock)
 
   /*
    * Converters from Serialize to scodec
