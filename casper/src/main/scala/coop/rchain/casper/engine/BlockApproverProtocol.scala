@@ -201,7 +201,7 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      emptyStateHash            <- EitherT.right(RuntimeManager.emptyStateHashFixed.pure[F])
+      emptyStateHash            <- EitherT.right(RuntimeManager.preGenesisStateHashFixed.pure[F])
       // check if candidate blessed contracts match candidate postStateHash
       stateHash <- EitherT(
                     runtimeManager

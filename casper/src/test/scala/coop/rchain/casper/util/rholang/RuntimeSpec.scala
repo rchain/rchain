@@ -40,8 +40,8 @@ class RuntimeSpec extends FlatSpec with Matchers {
       // Par(receives = Seq(Receive(binds = Seq(ReceiveBind()))))
       // 2a5adf05eb519bd0858414e5a4b31a8e22fd64e5203fae4e1ec8f9b1b5113ff0
 
-      hardCodedHash = RuntimeManager.emptyStateHashFixed
-      emptyRootHash <- runtime.emptyStateHash
+      hardCodedHash = RuntimeManager.preGenesisStateHashFixed
+      emptyRootHash <- runtime.preGenesisStateHash
 
       emptyHashHardCoded = Blake2b256Hash.fromByteString(hardCodedHash)
       emptyHash          = Blake2b256Hash.fromByteString(emptyRootHash)

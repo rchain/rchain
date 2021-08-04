@@ -198,12 +198,12 @@ object RuntimeManager {
   type StateHash = ByteString
 
   /**
-    * This is a hard-coded value for `emptyStateHash` which is calculated by
-    * [[coop.rchain.casper.util.rholang.RhoRuntimeOps.emptyStateHash]].
+    * This is a hard-coded value for `preGenesisStateHash` which is calculated by
+    * [[coop.rchain.casper.util.rholang.RhoRuntimeOps.preGenesisStateHash]].
     * Because of the value is actually the same all
     * the time. For some situations, we can just use the value directly for better performance.
     */
-  val emptyStateHashFixed: StateHash =
+  val preGenesisStateHashFixed: StateHash =
     ByteString.copyFrom(
       Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
     )

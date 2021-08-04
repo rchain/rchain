@@ -45,7 +45,7 @@ class DeployIdTest extends FlatSpec with Matchers {
         .use(
           mgr =>
             for {
-              hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
+              hash <- RuntimeManager.preGenesisStateHashFixed.pure[Task]
               res  <- mgr.captureResults(hash, d)
             } yield res
         )

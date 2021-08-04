@@ -106,7 +106,7 @@ trait ComputeMerge {
             kvm      = new InMemoryStoreManager
             dagStore <- BlockDagKeyValueStorage.create[F](kvm)
             bBlock = getRandomBlock(
-              setPreStateHash = RuntimeManager.emptyStateHashFixed.some,
+              setPreStateHash = RuntimeManager.preGenesisStateHashFixed.some,
               setPostStateHash = ByteString.copyFrom(baseCheckpoint.root.bytes.toArray).some,
               setParentsHashList = List.empty.some
             )

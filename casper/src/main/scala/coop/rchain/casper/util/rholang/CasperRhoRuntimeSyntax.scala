@@ -79,11 +79,10 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
   }
 
   /**
-    * Because of the history legacy, the emptyStateHash does not really represent an empty trie.
-    * The `emptyStateHash` is used as genesis block pre state which the state only contains registry
+    * The `preGenesisStateHash` is used as genesis block pre state which the state only contains registry
     * fixed channels in the state.
     */
-  def emptyStateHash: F[StateHash] =
+  def preGenesisStateHash: F[StateHash] =
     for {
       _          <- runtime.reset(emptyRootHash)
       _          <- bootstrapRegistry(runtime)
@@ -228,7 +227,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
         _ <- runtime.setBlockData(
               BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0)
             )
-        genesisPreStateHash <- emptyStateHash
+        genesisPreStateHash <- preGenesisStateHash
         evalResult          <- processDeploys(genesisPreStateHash, terms, processDeploy)
       } yield (genesisPreStateHash, evalResult._1, evalResult._2)
     }

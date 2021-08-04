@@ -243,7 +243,7 @@ object InterpreterUtil {
       parents match {
         // For genesis, use empty trie's root hash
         case Seq() =>
-          (RuntimeManager.emptyStateHashFixed, Seq.empty[ByteString]).pure[F]
+          (RuntimeManager.preGenesisStateHashFixed, Seq.empty[ByteString]).pure[F]
 
         // For single parent, get itd post state hash
         case Seq(parent) =>

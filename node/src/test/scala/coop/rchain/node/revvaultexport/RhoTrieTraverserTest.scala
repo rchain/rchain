@@ -60,7 +60,7 @@ class RhoTrieTraverserTest extends FlatSpec {
     val t = rhoRuntimeEff[Effect](false).use {
       case (runtime, _, _) =>
         for {
-          hash1 <- runtime.emptyStateHash
+          hash1 <- runtime.preGenesisStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
           rd    <- runtime.processDeploy(StandardDeploys.registry)
           check <- runtime.createCheckpoint
