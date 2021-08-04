@@ -13,6 +13,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployId, Par}
+import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -42,13 +43,7 @@ class DeployIdTest extends FlatSpec with Matchers {
     val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
     val result =
       runtimeManager
-        .use(
-          mgr =>
-            for {
-              hash <- RuntimeManager.preGenesisStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, d)
-            } yield res
-        )
+        .use(mgr => mgr.captureResults(emptyRootHash.toByteString, d))
         .runSyncUnsafe(10.seconds)
 
     result.size should be(1)

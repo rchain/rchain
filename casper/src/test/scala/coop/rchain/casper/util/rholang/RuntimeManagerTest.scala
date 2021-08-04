@@ -26,6 +26,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
+import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.shared.{Log, Time}
@@ -415,23 +416,11 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val deployNoRes = ConstructDeploy.sourceDeploy(termNoRes, timestamp = 0)
     val manyResults =
       runtimeManagerResource
-        .use(
-          mgr =>
-            for {
-              hash <- RuntimeManager.preGenesisStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
-            } yield res
-        )
+        .use(mgr => mgr.captureResults(emptyRootHash.toByteString, deploy))
         .runSyncUnsafe(10.seconds)
     val noResults =
       runtimeManagerResource
-        .use(
-          mgr =>
-            for {
-              hash <- RuntimeManager.preGenesisStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deployNoRes)
-            } yield res
-        )
+        .use(mgr => mgr.captureResults(emptyRootHash.toByteString, deployNoRes))
         .runSyncUnsafe(10.seconds)
 
     noResults.isEmpty should be(true)
@@ -446,14 +435,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term   = s""" new return in { return.undefined() } """
     val deploy = ConstructDeploy.sourceDeploy(term, timestamp = 0)
     val task =
-      runtimeManagerResource
-        .use(
-          mgr =>
-            for {
-              hash <- RuntimeManager.preGenesisStateHashFixed.pure[Task]
-              res  <- mgr.captureResults(hash, deploy)
-            } yield res
-        )
+      runtimeManagerResource.use(mgr => mgr.captureResults(emptyRootHash.toByteString, deploy))
 
     Await.result(task.failed.runToFuture, 1.seconds) shouldBe a[BugFoundError]
   }

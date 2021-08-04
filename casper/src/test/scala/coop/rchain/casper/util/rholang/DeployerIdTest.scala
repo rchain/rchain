@@ -13,6 +13,7 @@ import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.shared.Log
 import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.eval.Task
@@ -37,10 +38,9 @@ class DeployerIdTest extends FlatSpec with Matchers {
                    s"""new return, auth(`rho:rchain:deployerId`) in { return!(*auth) }""",
                    sec = sk
                  )
-        emptyStateHash = RuntimeManager.preGenesisStateHashFixed
-        result         <- mgr.captureResults(emptyStateHash, deploy)
-        _              = result.size should be(1)
-        _              = result.head should be(GDeployerId(pk): Par)
+        result <- mgr.captureResults(emptyRootHash.toByteString, deploy)
+        _      = result.size should be(1)
+        _      = result.head should be(GDeployerId(pk): Par)
       } yield ()
     }
   }
