@@ -8,7 +8,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
-import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
+import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -75,9 +75,10 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
     action match {
       case i: TrieInsertProduce[A] =>
-        val data     = encodeDatums(i.data)(serializeA)
-        val dataLeaf = DataLeaf(data)
-        val dataHash = Blake2b256Hash.create(data)
+        val data            = encodeDatums(i.data)(serializeA)
+        val dataLeaf        = DataLeaf(data)
+        val dataLeafEncoded = codecPersistedData.encode(dataLeaf).getUnsafe.toByteVector
+        val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
           InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
@@ -85,23 +86,27 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
       case i: TrieInsertConsume[P, K] =>
         val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
         val continuationsLeaf = ContinuationsLeaf(data)
-        val continuationsHash = Blake2b256Hash.create(data)
+        val continuationsLeafEncoded =
+          codecPersistedData.encode(continuationsLeaf).getUnsafe.toByteVector
+        val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
           InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
         )
       case i: TrieInsertJoins[C] =>
-        val data      = encodeJoins(i.joins)(serializeC)
-        val joinsLeaf = JoinsLeaf(data)
-        val joinsHash = Blake2b256Hash.create(data)
+        val data             = encodeJoins(i.joins)(serializeC)
+        val joinsLeaf        = JoinsLeaf(data)
+        val joinsLeafEncoded = codecPersistedData.encode(joinsLeaf).getUnsafe.toByteVector
+        val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
           InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
         )
       case i: TrieInsertBinaryProduce =>
-        val data     = encodeDatumsBinary(i.data)
-        val dataLeaf = DataLeaf(data)
-        val dataHash = Blake2b256Hash.create(data)
+        val data            = encodeDatumsBinary(i.data)
+        val dataLeaf        = DataLeaf(data)
+        val dataLeafEncoded = codecPersistedData.encode(dataLeaf).getUnsafe.toByteVector
+        val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
           InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
@@ -109,15 +114,18 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
       case i: TrieInsertBinaryConsume =>
         val data              = encodeContinuationsBinary(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
-        val continuationsHash = Blake2b256Hash.create(data)
+        val continuationsLeafEncoded =
+          codecPersistedData.encode(continuationsLeaf).getUnsafe.toByteVector
+        val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
           InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
         )
       case i: TrieInsertBinaryJoins =>
-        val data      = encodeJoinsBinary(i.joins)
-        val joinsLeaf = JoinsLeaf(data)
-        val joinsHash = Blake2b256Hash.create(data)
+        val data             = encodeJoinsBinary(i.joins)
+        val joinsLeaf        = JoinsLeaf(data)
+        val joinsLeafEncoded = codecPersistedData.encode(joinsLeaf).getUnsafe.toByteVector
+        val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
           InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
