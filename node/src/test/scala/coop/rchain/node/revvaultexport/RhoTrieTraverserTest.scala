@@ -3,10 +3,10 @@ package coop.rchain.node.revvaultexport
 import cats.effect.Concurrent
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.helper.TestNode.Effect
-import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.rholang.Resources.mkRuntimes
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -57,7 +57,7 @@ class RhoTrieTraverserTest extends FlatSpec {
     implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
     implicit val logger: Log[Effect]         = Log.log[Task]
-    val t = rhoRuntimeEff[Effect](false).use {
+    val t = mkRuntimes[Effect](prefix = "rho-tree-traverser", initRegistry = false).use {
       case (runtime, _, _) =>
         for {
           hash1 <- runtime.preGenesisStateHash

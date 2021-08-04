@@ -3,13 +3,13 @@ package coop.rchain.node.mergeablity
 import cats.Monoid
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.node.mergeablity.RhoState.State
+import coop.rchain.rholang.Resources.mkRuntimes
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.syntax._
@@ -94,7 +94,7 @@ object OperationOn0Ch {
       implicit val logger: Log[Task]         = Log.log[Task]
       implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
       implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-      rhoRuntimeEff[Task](initRegistry = false).use {
+      mkRuntimes[Task](prefix = "operation-channel0", initRegistry = false).use {
         case (runtime, _, _) =>
           for {
             _            <- runtime.evaluate(value, Cost(500L))

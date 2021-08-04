@@ -5,7 +5,6 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
-import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.syntax._
@@ -17,9 +16,11 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.casper.syntax._
+import coop.rchain.rholang.Resources.mkRuntimes
 import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
+import monix.execution.Scheduler.Implicits.global
 
 trait ComputeMerge {
 
@@ -56,7 +57,7 @@ trait ComputeMerge {
   ): F[Unit] = {
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
 
-    rhoRuntimeEff[F](true)
+    mkRuntimes[F](prefix = "compute-merge", initRegistry = true)
       .use {
         case (runtime, _, historyRepo) =>
           for {
