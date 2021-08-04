@@ -166,15 +166,6 @@ object ScodecSerialize {
     (codecConsume :: codecSeq(codecProduce) :: sortedSet(uint8) :: codecMap(codecProduce, int32))
       .as[COMM]
 
-  val memoizingSkipCodec: Codec[Skip] =
-    Codec.apply((s: Skip) => Attempt.successful(s.encoded), codecSkip.decode)
-
-  val memoizingPointerBlockCodec: Codec[PointerBlock] =
-    Codec.apply(
-      (s: PointerBlock) => Attempt.successful(s.encoded),
-      codecPointerBlock.decode
-    )
-
   /*
    * scodec for History types
    */
