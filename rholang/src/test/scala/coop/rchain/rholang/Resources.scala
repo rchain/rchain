@@ -61,19 +61,17 @@ object Resources {
       .evalMap(RhoRuntime.createRuntime(_))
 
   def mkRuntimes[F[_]: Concurrent: Parallel: ContextShift: Metrics: Span: Log](
-      prefix: String,
-      initRegistry: Boolean = false
+      prefix: String
   )(
       implicit scheduler: Scheduler
   ): Resource[F, (RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] =
     mkTempDir(prefix)
       .evalMap(RholangCLI.mkRSpaceStoreManager[F](_))
       .evalMap(_.rSpaceStores)
-      .evalMap(createRuntimes(_, initRegistry = initRegistry))
+      .evalMap(createRuntimes(_))
 
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
-      initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit scheduler: Scheduler
@@ -87,7 +85,7 @@ object Resources {
                    )
       (space, replay) = hrstores
       runtimes <- RhoRuntime
-                   .createRuntimes[F](space, replay, initRegistry, additionalSystemProcesses)
+                   .createRuntimes[F](space, replay, additionalSystemProcesses)
       (runtime, replayRuntime) = runtimes
     } yield (runtime, replayRuntime, space.historyRepo)
   }

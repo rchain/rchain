@@ -57,7 +57,7 @@ class RhoTrieTraverserTest extends FlatSpec {
     implicit val metricsEff: Metrics[Effect] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Effect]      = NoopSpan[Task]()
     implicit val logger: Log[Effect]         = Log.log[Task]
-    val t = mkRuntimes[Effect](prefix = "rho-tree-traverser", initRegistry = false).use {
+    val t = mkRuntimes[Effect](prefix = "rho-tree-traverser").use {
       case (runtime, _, _) =>
         for {
           hash1 <- runtime.preGenesisStateHash

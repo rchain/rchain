@@ -493,6 +493,18 @@ object RhoRuntime {
       .getBytes()
   )
 
+  /**
+    * For a newly created rspace, you might need to bootstrap registry
+    * in the runtime to use rholang registry normally. Actually this initRegistry
+    * is not the only thing you need for rholang registry, after the bootstrap
+    * registry, you still need to insert registry contract on the rspace.
+    *
+    * For an exist rspace which bootstrap registry before, you can skip this.
+    *
+    * For some test cases, you don't need the registry then you can skip this
+    * init process which can be faster.
+    * @return
+    */
   def bootstrapRegistry[F[_]: Monad](runtime: RhoRuntime[F]): F[Unit] = {
     implicit val rand: Blake2b512Random = bootstrapRand
     for {
@@ -505,8 +517,7 @@ object RhoRuntime {
 
   private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
-      extraSystemProcesses: Seq[Definition[F]],
-      initRegistry: Boolean
+      extraSystemProcesses: Seq[Definition[F]]
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
     Span[F].trace(createPlayRuntime) {
       for {
@@ -517,9 +528,6 @@ object RhoRuntime {
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-        _ <- if (initRegistry) {
-              bootstrapRegistry(runtime) >> runtime.createCheckpoint
-            } else ().pure[F]
       } yield runtime
     }
 
@@ -528,13 +536,6 @@ object RhoRuntime {
     * @param rspace the rspace which the runtime would operate on it
     * @param extraSystemProcesses extra system rholang processes exposed to the runtime
     *                             which you can execute function on it
-    * @param initRegistry For a newly created rspace, you might need to bootstrap registry
-    *                     in the runtime to use rholang registry normally. Actually this initRegistry
-    *                     is not the only thing you need for rholang registry, after the bootstrap
-    *                     registry, you still need to insert registry contract on the rspace.
-    *                     For a exist rspace which bootstrap registry before, you can skip this.
-    *                     For some test cases, you don't need the registry then you can skip this
-    *                     init process which can be faster.
     * @param costLog currently only the testcases needs a special costLog for test information.
     *                Normally you can just
     *                use [[coop.rchain.rholang.interpreter.accounting.noOpCostLog]]
@@ -542,23 +543,20 @@ object RhoRuntime {
     */
   def createRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
-      initRegistry: Boolean = true,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
-    createRuntime[F](rspace, extraSystemProcesses, initRegistry)
+    createRuntime[F](rspace, extraSystemProcesses)
 
   /**
     *
     * @param rspace the replay rspace which the runtime operate on it
     * @param extraSystemProcesses same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
-    * @param initRegistry same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
     * @param costLog same as [[coop.rchain.rholang.interpreter.RhoRuntime.createRhoRuntime]]
     * @return
     */
   def createReplayRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoReplayISpace[F],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
-      initRegistry: Boolean = true
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] =
     Span[F].trace(createReplayRuntime) {
       for {
@@ -569,24 +567,19 @@ object RhoRuntime {
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime                            = new ReplayRhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
-        _ <- if (initRegistry) {
-              bootstrapRegistry(runtime) >> runtime.createCheckpoint
-            } else ().pure[F]
       } yield runtime
     }
 
   def createRuntimes[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
-      initRegistry: Boolean,
       additionalSystemProcesses: Seq[Definition[F]]
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replaySpace,
-                           additionalSystemProcesses,
-                           initRegistry
+                           additionalSystemProcesses
                          )
     } yield (rhoRuntime, replayRhoRuntime)
 
@@ -596,7 +589,6 @@ object RhoRuntime {
 
   def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
-      initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
       implicit scheduler: Scheduler
@@ -608,7 +600,7 @@ object RhoRuntime {
                 .create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                   stores
                 )
-      runtime <- createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      runtime <- createRhoRuntime[F](space, additionalSystemProcesses)
     } yield runtime
   }
 }

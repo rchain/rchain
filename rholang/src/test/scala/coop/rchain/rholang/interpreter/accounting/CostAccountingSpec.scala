@@ -63,7 +63,6 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   private def createRuntimesWithCostLog[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
       costLog: FunctorTell[F, Chain[Cost]],
-      initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
@@ -76,11 +75,10 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                      stores
                    )
       (space, replay) = hrstores
-      rhoRuntime      <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      rhoRuntime      <- RhoRuntime.createRhoRuntime[F](space, additionalSystemProcesses)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replay,
-                           additionalSystemProcesses,
-                           initRegistry
+                           additionalSystemProcesses
                          )
     } yield (rhoRuntime, replayRhoRuntime, space.historyRepo)
   }

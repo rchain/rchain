@@ -94,7 +94,7 @@ object OperationOn0Ch {
       implicit val logger: Log[Task]         = Log.log[Task]
       implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
       implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
-      mkRuntimes[Task](prefix = "operation-channel0", initRegistry = false).use {
+      mkRuntimes[Task](prefix = "operation-channel0").use {
         case (runtime, _, _) =>
           for {
             _            <- runtime.evaluate(value, Cost(500L))

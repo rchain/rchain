@@ -57,7 +57,7 @@ trait ComputeMerge {
   ): F[Unit] = {
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
 
-    mkRuntimes[F](prefix = "compute-merge", initRegistry = true)
+    mkRuntimes[F](prefix = "compute-merge")
       .use {
         case (runtime, _, historyRepo) =>
           for {
