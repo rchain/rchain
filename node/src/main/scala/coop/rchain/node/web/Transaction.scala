@@ -111,6 +111,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
         val retUnforgeable = produce.data.get.pars(5)
         Transaction(fromAddr, toAddr, amount, retUnforgeable, None)
       }
+      .toList
 
     val transactionRetUnforgeables = transactions.map(_.retUnforgeable).toSet
 
@@ -130,7 +131,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     transactions.map { t =>
       val failReason = failedMap.getOrElse(t.retUnforgeable, None)
       t.copy(failReason = failReason)
-    }.toList
+    }
   }
 
 }
