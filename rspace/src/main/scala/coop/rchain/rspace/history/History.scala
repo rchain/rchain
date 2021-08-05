@@ -104,8 +104,6 @@ object Trie {
 
   /**
     * Creates hash of Merkle Trie
-    *
-    * TODO: Fix encoding to use codec for the whole [[Trie]] and not for specific inherited variant.
     */
   def hash(trie: Trie): Blake2b256Hash =
     trie match {

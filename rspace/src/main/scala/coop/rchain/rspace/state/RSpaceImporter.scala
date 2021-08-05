@@ -69,13 +69,8 @@ object RSpaceImporter {
     // - validate trie hash to match decoded trie hash
     def tries: F[List[(Blake2b256Hash, Trie)]] = historyItems.toList traverse {
       case (hash, trieBytes) =>
-        val trie = decodeTrie(trieBytes)
-        // TODO: this is strange that we need to encode Trie again to get the hash.
-        //  - the reason is that hash is not calculated on result of `Trie.codecTrie.encode`
-        //    but on each case of Trie instance (see `Trie.hash`)
-        //  - this adds substantial time for validation e.g. 20k records 450ms (with encoding 2.4sec)
-        // https://github.com/rchain/rchain/blob/4dd216a7/rspace/src/main/scala/coop/rchain/rspace/history/HistoryStore.scala#L25-L26
-        val trieHash = Trie.hash(trie)
+        val trie     = decodeTrie(trieBytes)
+        val trieHash = Blake2b256Hash.create(trieBytes)
         if (hash == trieHash) (hash, trie).pure[F]
         else
           raiseError(
