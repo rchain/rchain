@@ -4,6 +4,7 @@ import cats.data.State
 import cats.effect.Concurrent
 import cats.mtl.implicits._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
@@ -11,6 +12,7 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.casper.{ProposeFunction, SafetyOracle}
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
@@ -254,7 +256,18 @@ object DeployGrpcServiceV1 {
 
       override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
         defer(
-          blockReportAPI.blockReport(request.hash, request.forceReplay)
+          Base16
+            .decode(request.hash)
+            .fold(s"Request hash: ${request.hash} is not valid hex string".asLeft[Array[Byte]])(
+              Right(_)
+            )
+            .flatTraverse(
+              hash =>
+                blockReportAPI.blockReport(
+                  ByteString.copyFrom(hash),
+                  request.forceReplay
+                )
+            )
         ) { r =>
           import EventInfoResponse.Message
           import EventInfoResponse.Message._
