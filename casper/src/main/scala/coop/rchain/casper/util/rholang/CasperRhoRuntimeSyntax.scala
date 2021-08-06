@@ -56,18 +56,18 @@ import coop.rchain.rspace.util.ReplayException
 import coop.rchain.shared.Log
 
 trait RhoRuntimeSyntax {
-  implicit final def syntaxRuntime[F[_]: Sync: Span: Log](
+  implicit final def syntaxRuntime[F[_]: Sync](
       runtime: RhoRuntime[F]
   ): RhoRuntimeOps[F] =
     new RhoRuntimeOps[F](runtime)
 
-  implicit final def syntaxReplayRuntime[F[_]: Sync: Span: Log](
+  implicit final def syntaxReplayRuntime[F[_]: Sync](
       runtime: ReplayRhoRuntime[F]
   ): ReplayRhoRuntimeOps[F] =
     new ReplayRhoRuntimeOps[F](runtime)
 }
 
-final class RhoRuntimeOps[F[_]: Sync: Span: Log](
+final class RhoRuntimeOps[F[_]: Sync](
     private val runtime: RhoRuntime[F]
 ) {
 
@@ -221,7 +221,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
       blockNumber: Long
-  ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
+  )(implicit log: Log[F], span: Span[F]): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
@@ -232,7 +232,9 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       } yield (genesisPreStateHash, evalResult._1, evalResult._2)
     }
 
-  def processDeployWithCostAccounting(deploy: Signed[DeployData]) = {
+  def processDeployWithCostAccounting(
+      deploy: Signed[DeployData]
+  )(implicit log: Log[F], span: Span[F]) = {
     import cats.instances.vector._
     EitherT(
       WriterT(
@@ -305,7 +307,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
 
   def processDeploy(
       deploy: Signed[DeployData]
-  ): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
+  )(implicit log: Log[F], span: Span[F]): F[ProcessedDeploy] = Span[F].withMarks("process-deploy") {
     for {
       fallback                     <- runtime.createSoftCheckpoint
       evaluateResult               <- evaluate(deploy)
@@ -335,6 +337,8 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
 
   def playSystemDeployInternal[S <: SystemDeploy](
       systemDeploy: S
+  )(
+      implicit span: Span[F]
   ): F[(Vector[Event], Either[SystemDeployError, systemDeploy.Result])] =
     for {
       evaluateResult <- Span[F].traceI("evaluate-system-source") {
@@ -399,7 +403,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
   }
   def playSystemDeploy[S <: SystemDeploy](stateHash: StateHash)(
       systemDeploy: S
-  ): F[SystemDeployPlayResult[systemDeploy.Result]] =
+  )(implicit span: Span[F]): F[SystemDeployPlayResult[systemDeploy.Result]] =
     runtime.reset(Blake2b256Hash.fromByteString(stateHash)) >>
       playSystemDeployInternal(systemDeploy) >>= {
       case (eventLog, Right(result)) =>
@@ -439,6 +443,9 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+  )(
+      implicit log: Log[F],
+      span: Span[F]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     Span[F].traceI("compute-state") {
       for {
@@ -471,7 +478,7 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
     }
 }
 
-final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
+final class ReplayRhoRuntimeOps[F[_]: Sync](
     private val runtime: ReplayRhoRuntime[F]
 ) {
   implicit val rhoRuntimeOps = new RhoRuntimeOps(runtime)
@@ -566,12 +573,12 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
 
   def replayDeploy(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
-  ): F[Option[ReplayFailure]] =
+  )(implicit log: Log[F], span: Span[F]): F[Option[ReplayFailure]] =
     replayDeployE(withCostAccounting)(processedDeploy).swap.toOption.value
 
   def replayDeployE(withCostAccounting: Boolean)(
       processedDeploy: ProcessedDeploy
-  ): EitherT[F, ReplayFailure, Unit] = {
+  )(implicit log: Log[F], span: Span[F]): EitherT[F, ReplayFailure, Unit] = {
     import processedDeploy._
     val deployEvaluator = EitherT
       .liftF {
@@ -664,7 +671,7 @@ In both cases we want to check reply data and see if everything is in order */
       systemDeploys: Seq[ProcessedSystemDeploy],
       replayDeploy: ProcessedDeploy => F[Option[ReplayFailure]],
       replaySystemDeploy: ProcessedSystemDeploy => F[Option[ReplayFailure]]
-  ): F[Either[ReplayFailure, StateHash]] =
+  )(implicit span: Span[F]): F[Either[ReplayFailure, StateHash]] =
     (for {
       _ <- EitherT.right(runtime.reset(Blake2b256Hash.fromByteString(startHash)))
       _ <- EitherT(
@@ -698,7 +705,7 @@ In both cases we want to check reply data and see if everything is in order */
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
-  ): F[Either[ReplayFailure, StateHash]] =
+  )(implicit log: Log[F], span: Span[F]): F[Either[ReplayFailure, StateHash]] =
     Span[F].traceI("replay-compute-state") {
       for {
         _ <- runtime.setBlockData(blockData)
@@ -756,7 +763,9 @@ In both cases we want to check reply data and see if everything is in order */
 
   def replaySystemDeploy(
       blockData: BlockData
-  )(processedSystemDeploy: ProcessedSystemDeploy): F[Option[ReplayFailure]] =
+  )(
+      processedSystemDeploy: ProcessedSystemDeploy
+  )(implicit span: Span[F]): F[Option[ReplayFailure]] =
     Span[F].withMarks("replay-system-deploy")(
       replaySystemDeployE(blockData)(processedSystemDeploy).swap.toOption.value
     )
