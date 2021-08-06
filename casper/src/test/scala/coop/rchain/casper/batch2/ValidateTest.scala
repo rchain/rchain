@@ -5,7 +5,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
-import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{
@@ -19,6 +18,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper._
+import coop.rchain.casper.syntax._
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -764,6 +764,7 @@ class ValidateTest
         kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
         store          <- kvm.rSpaceStores
         runtimeManager <- RuntimeManager[Task](store)
+        _              <- runtimeManager.spawnRuntime.flatMap(r => r.preGenesisStateHash)
         dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)

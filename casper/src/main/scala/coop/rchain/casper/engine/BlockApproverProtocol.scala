@@ -3,12 +3,13 @@ package coop.rchain.casper.engine
 import cats.MonadError
 import cats.data.EitherT
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
@@ -201,7 +202,9 @@ object BlockApproverProtocol {
     (for {
       result                    <- EitherT(validate.pure[F])
       (blockDeploys, postState) = result
-      emptyStateHash            <- EitherT.right(RuntimeManager.preGenesisStateHashFixed.pure[F])
+      emptyStateHash <- EitherT.right(runtimeManager.spawnRuntime >>= { r =>
+                         r.preGenesisStateHash
+                       })
       // check if candidate blessed contracts match candidate postStateHash
       stateHash <- EitherT(
                     runtimeManager

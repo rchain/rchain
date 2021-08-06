@@ -61,6 +61,7 @@ trait ComputeMerge {
       .use {
         case (runtime, _, historyRepo) =>
           for {
+            _           <- runtime.preGenesisStateHash
             baseDeploys <- baseDeploySources.toList.traverse(runtime.processDeploy)
             _ <- Sync[F]
                   .raiseError(
