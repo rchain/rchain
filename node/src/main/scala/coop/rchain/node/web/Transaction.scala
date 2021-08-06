@@ -213,7 +213,7 @@ object Transaction {
 
     val transactionInfo: Codec[TransactionInfo] =
       (transactionCodec :: transactionType).as[TransactionInfo]
-    val transactionResponseCodec: Codec[TransactionResponse] = list(transactionInfo)
+    val transactionResponseCodec: Codec[TransactionResponse] = listOfN(int32, transactionInfo)
       .as[TransactionResponse]
   }
 
