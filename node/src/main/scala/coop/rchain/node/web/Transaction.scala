@@ -1,7 +1,7 @@
 package coop.rchain.node.web
 
 import cats.effect.concurrent.Deferred
-import cats.effect.{Concurrent, Sync}
+import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.api.BlockReportAPI
@@ -136,26 +136,33 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
 
 }
 
-final case class CacheTransactionAPI[F[_]: Sync: Concurrent](
+final case class CacheTransactionAPI[F[_]: Concurrent](
     transactionAPI: TransactionAPI[F],
     store: TransactionStore[F]
 ) {
 
-  private val blockDeferMap: TrieMap[String, Deferred[F, Unit]] = TrieMap.empty
+  private val blockDeferMap: TrieMap[String, Deferred[F, TransactionResponse]] = TrieMap.empty
 
   def getTransaction(blockHash: String): F[TransactionResponse] =
-    for {
-      defNew <- Deferred[F, Unit]
-      defer  = blockDeferMap.getOrElseUpdate(blockHash, defNew)
-      _ <- (for {
-            transactions <- transactionAPI.getTransaction(Blake2b256Hash.fromHex(blockHash))
-            _            <- store.put(blockHash, TransactionResponse(transactions))
-            _            <- defer.complete(())
-          } yield ()).whenA(defNew == defer)
-      _               <- defer.get
-      transactionsOpt <- store.get(blockHash)
-      transactions    <- transactionsOpt.liftTo(new Exception(s"Transactions $blockHash not found."))
-    } yield transactions
+    store.get(blockHash) >>= { transactionOpt =>
+      transactionOpt.fold {
+        for {
+          defNew <- Deferred[F, TransactionResponse]
+          defer  = blockDeferMap.getOrElseUpdate(blockHash, defNew)
+          _ <- (for {
+                transactions <- transactionAPI.getTransaction(
+                                 Blake2b256Hash.fromHex(blockHash)
+                               )
+                transactionResp = TransactionResponse(transactions)
+                _               <- store.put(blockHash, TransactionResponse(transactions))
+                _               <- defer.complete(transactionResp)
+              } yield transactionResp).whenA(defNew == defer)
+          result <- defer.get
+          // remove to reduce memory consumption
+          _ = blockDeferMap.remove(blockHash)
+        } yield result
+      }(_.pure)
+    }
 }
 
 object Transaction {
@@ -238,14 +245,14 @@ object Transaction {
     GUnforgeable(GPrivateBody(GPrivate(ByteString.copyFrom(unfogeableBytes))))
   }
 
-  def apply[F[_]: Sync: Concurrent](
+  def apply[F[_]: Concurrent](
       blockReportAPI: BlockReportAPI[F],
       // The transferUnforgeable can be retrieved based on the deployer and the timestamp of RevVault.rho
       // in the genesis ceremony.
       transferUnforgeable: Par
   ): TransactionAPIImpl[F] = TransactionAPIImpl(blockReportAPI, transferUnforgeable)
 
-  def cacheTransactionAPI[F[_]: Sync: Concurrent](
+  def cacheTransactionAPI[F[_]: Concurrent](
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =
