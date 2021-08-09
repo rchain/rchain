@@ -1,6 +1,7 @@
 package coop.rchain
 
 import coop.rchain.casper.blocks.proposer.ProposerResult
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.comm.CommUtilSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
@@ -24,6 +25,8 @@ package object casper {
       with AllSyntaxBlockStorage
       with RhoRuntimeSyntax
       with BlockDagRepresentationSyntax
+
+  def isAttestationBlock(block: BlockMessage): Boolean = block.body.deploys.isEmpty
 }
 
 // Casper syntax

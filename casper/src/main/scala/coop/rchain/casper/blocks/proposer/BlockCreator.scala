@@ -39,6 +39,7 @@ object BlockCreator {
   def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
+      isAttestation: Boolean,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
@@ -101,7 +102,7 @@ object BlockCreator {
 
       val createBlockProcess = for {
         _ <- Log[F].info(
-              s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
+              s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum}) isAttestation: ${isAttestation}"
             )
         userDeploys     <- prepareUserDeploys(nextBlockNum)
         dummyDeploys    = prepareDummyDeploy(nextBlockNum)
@@ -111,8 +112,8 @@ object BlockCreator {
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+        deploys = if (isAttestation) List.empty else userDeploys -- s.deploysInScope ++ dummyDeploys
+        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty || isAttestation)
               for {
                 now           <- Time[F].currentMillis
                 invalidBlocks = s.invalidBlocks

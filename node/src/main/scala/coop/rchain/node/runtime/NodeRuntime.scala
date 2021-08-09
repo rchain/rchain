@@ -13,7 +13,7 @@ import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.util.comm._
-import coop.rchain.casper.{engine, _}
+import coop.rchain.casper.{Casper, ValidBlockProcessing, engine, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -172,7 +172,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         blockProcessor,
         blockProcessorState,
         blockProcessorQueue,
-        triggerProposeF
+        triggerProposeF,
+        attestationCheck
       ) = result
 
       // 4. launch casper
@@ -205,7 +206,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           proposerStateRefOpt,
           blockProcessor,
           blockProcessorState,
-          blockProcessorQueue
+          blockProcessorQueue,
+          attestationCheck
         )
       }
       _ <- handleUnrecoverableErrors(program)
@@ -236,7 +238,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
+      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)],
+      attestationCheck: (Casper[F], BlockMessage, ValidBlockProcessing) => F[Option[Unit]]
   )(
       implicit
       time: Time[F],
@@ -341,12 +344,14 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       engineInitStream = fs2.Stream.eval(engineInit)
 
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
-      blockProcessorStream = BlockProcessorInstance.create(
-        incomingBlocksQueue,
-        blockProcessor,
-        blockProcessingState,
-        if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
-      )
+      blockProcessorStream = BlockProcessorInstance
+        .create(
+          incomingBlocksQueue,
+          blockProcessor,
+          blockProcessingState,
+          if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
+        )
+        .flatTap { case (c, b, r) => fs2.Stream.eval(attestationCheck(c, b, r)) }
 
       proposerStream = if (proposer.isDefined)
         ProposerInstance

@@ -13,7 +13,7 @@ import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
-import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
+import coop.rchain.casper.blocks.proposer.{BlockCreator, Created, Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
@@ -74,7 +74,8 @@ object Setup {
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
         Queue[F, (Casper[F], BlockMessage)],
-        Option[ProposeFunction[F]]
+        Option[ProposeFunction[F]],
+        (Casper[F], BlockMessage, ValidBlockProcessing) => F[Option[Unit]]
     )
   ] =
     for {
@@ -322,6 +323,46 @@ object Setup {
           proposerStateRefOpt
         )
       }
+
+      createAttestation = (
+          casper: Casper[F],
+          block: BlockMessage,
+          isValid: ValidBlockProcessing
+      ) => {
+        implicit val bs = blockStore
+        implicit val ds = deployStorage
+        implicit val rm = runtimeManager
+        implicit val sp = span
+        validatorIdentityOpt.flatTraverse(
+          validatorId =>
+            isValid.toOption.traverse(
+              _ =>
+                for {
+                  shouldAttestation <- {
+                    implicit val c = casper
+                    Attestation.shouldProposeAttestation
+                  }
+                  _ <- Log[F]
+                        .info(s"After processing block $block, the node propose attestation block")
+                        .whenA(shouldAttestation)
+                  _ <- casper
+                        .getSnapshot(None)
+                        .flatMap(
+                          (s => BlockCreator.create(s, validatorId, isAttestation = true, None))
+                        )
+                        .flatTap {
+                          case Created(b) =>
+                            proposer.traverse(p => p.createBlockEffect(casper, b)) >> Log[F]
+                              .info(s"Succefully create attestation ${b}")
+                          case reason =>
+                            Log[F].info(s"Create attestation block failed with ${reason}")
+                        }
+                        .whenA(shouldAttestation)
+                } yield ()
+            )
+        )
+      }
+
     } yield (
       packetHandler,
       apiServers,
@@ -338,6 +379,7 @@ object Setup {
       blockProcessor,
       blockProcessorStateRef,
       blockProcessorQueue,
-      triggerProposeFOpt
+      triggerProposeFOpt,
+      createAttestation
     )
 }

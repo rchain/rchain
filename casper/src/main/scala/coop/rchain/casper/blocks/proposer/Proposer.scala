@@ -151,6 +151,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
 
     } yield result
   }
+  def createBlockEffect(casper: Casper[F], blockMessage: BlockMessage) =
+    proposeEffect(casper, blockMessage)
 }
 
 object Proposer {
@@ -169,7 +171,7 @@ object Proposer {
     val getCasperSnapshot = (c: Casper[F]) => c.getSnapshot()
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
-      BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
+      BlockCreator.create(s, validatorIdentity, isAttestation = false, dummyDeployOpt)
 
     val validateBlock = (casper: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
       casper.validate(b, s)

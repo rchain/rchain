@@ -233,7 +233,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot()
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, isAttestation = false)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -242,7 +242,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot()
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, isAttestation = false)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>

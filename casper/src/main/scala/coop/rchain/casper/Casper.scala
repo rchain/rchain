@@ -68,6 +68,10 @@ trait Casper[F[_]] {
   def getDependencyFreeFromBuffer: F[List[BlockMessage]]
 }
 
+object Casper {
+  def apply[F[_]](implicit instance: Casper[F]): Casper[F] = instance
+}
+
 trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
