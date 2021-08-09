@@ -17,7 +17,16 @@ final case class DeployChainIndex(
     postStateHash: Blake2b256Hash,
     eventLogIndex: EventLogIndex,
     stateChanges: StateChange
-)
+) {
+  // equals and hash overrides are required to make conflict resolution faster, particularly rejection options calculation
+  override def equals(obj: Any): Boolean = obj match {
+    case that: DeployChainIndex => that.deploysWithCost.map(_.id) == this.deploysWithCost.map(_.id)
+    case _                      => false
+  }
+
+  override def hashCode(): Int =
+    deploysWithCost.map(_.id).foldLeft(0)((acc, v) => acc + v.hashCode() * 31)
+}
 
 object DeployChainIndex {
 
