@@ -12,6 +12,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.monix.Monixable
+import coop.rchain.node.benchmark.ConcurrencyBench
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
@@ -63,10 +64,21 @@ object Main {
     if (options.subcommand.contains(options.run))
       // Start the node
       startNode[Task](options).unsafeRunSync
+    else if (options.subcommand.contains(options.bench))
+      startBench[Task](options).unsafeRunSync
     //or
     else
       // Execute CLI command
       runCLI[Task](options).unsafeRunSync
+  }
+
+  private def startBench[F[_]: Monixable: ConcurrentEffect: Parallel: ContextShift: Timer: ConsoleIO: Log: EventLog](
+      options: commandline.Options
+  )(implicit scheduler: Scheduler): F[Unit] = {
+    implicit val time: Time[F] = effects.time
+    if (options.subcommands.contains(options.bench.concurrency))
+      ConcurrencyBench.go(options.bench.concurrency.maxConcurrentTx(), options.bench.dataDir())
+    else new Exception(s"Please select benchmark mode").raiseError
   }
 
   /**

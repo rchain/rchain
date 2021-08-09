@@ -25,6 +25,14 @@ object Stopwatch {
       m  = Duration.fromNanos(t1 - t0)
     } yield (a, showTime(m))
 
+  def durationNano[F[_]: Sync, A](block: => F[A]): F[(A, Long)] =
+    for {
+      t0 <- Sync[F].delay(System.nanoTime)
+      a  <- block
+      t1 = System.nanoTime
+      m  = t1 - t0
+    } yield (a, m)
+
   def profile[A](block: => A): (A, String) = {
     val t0 = System.nanoTime
     val a  = block
