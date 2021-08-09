@@ -50,15 +50,23 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
         _ <- Log[F].debug(
               s"consume: searching for data matching <patterns: $patterns> at <channels: $channels>"
             )
-        _                    <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
-        channelToIndexedData <- fetchChannelToIndexData(channels)
-        options <- extractDataCandidates(
-                    channels.zip(patterns),
-                    channelToIndexedData,
-                    Nil
-                  ).map(_.sequence)
+        _ <- logConsume(consumeRef, channels, patterns, continuation, persist, peeks)
+        channelToIndexedData <- Span[F].traceI("locked-consume.fetchChannelToIndexData")(
+                                 fetchChannelToIndexData(channels)
+                               )
+        options <- Span[F].traceI("locked-consume.extractDataCandidates")(
+                    extractDataCandidates(
+                      channels.zip(patterns),
+                      channelToIndexedData,
+                      Nil
+                    ).map(_.sequence)
+                  )
         wk = WaitingContinuation(patterns, continuation, persist, peeks, consumeRef)
-        result <- options.fold(storeWaitingContinuation(channels, wk))(
+        result <- options.fold(
+                   Span[F].traceI("locked-consume.storeWaitingContinuation")(
+                     storeWaitingContinuation(channels, wk)
+                   )
+                 )(
                    dataCandidates =>
                      for {
                        _ <- logComm(
@@ -106,17 +114,23 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     Span[F].traceI("locked-produce") {
       for {
         //TODO fix double join fetch
-        groupedChannels <- store.getJoins(channel)
+        groupedChannels <- Span[F].traceI("locked-produce.getJoins")(store.getJoins(channel))
         _ <- Log[F].debug(
               s"produce: searching for matching continuations at <groupedChannels: $groupedChannels>"
             )
         _ <- logProduce(produceRef, channel, data, persist)
-        extracted <- extractProduceCandidate(
-                      groupedChannels,
-                      channel,
-                      Datum(data, persist, produceRef)
+        extracted <- Span[F].traceI("locked-produce.extractProduceCandidate")(
+                      extractProduceCandidate(
+                        groupedChannels,
+                        channel,
+                        Datum(data, persist, produceRef)
+                      )
                     )
-        r <- extracted.fold(storeData(channel, data, persist, produceRef))(processMatchFound)
+        r <- extracted.fold(
+              Span[F].traceI("locked-produce.storeData")(
+                storeData(channel, data, persist, produceRef)
+              )
+            )(v => Span[F].traceI("locked-produce.processMatch")(processMatchFound(v)))
       } yield r
     }
 
