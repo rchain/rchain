@@ -69,7 +69,7 @@ sealed trait NonEmptyTrie extends Trie
 case object EmptyTrie extends Trie
 
 final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
-  lazy val encoded: BitVector = codecSkip.encode(this).getUnsafe
+  lazy val encoded: BitVector = codecTrie.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
@@ -85,7 +85,7 @@ final case class PointerBlock private (toVector: Vector[TriePointer]) extends No
 
   def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
 
-  lazy val encoded: BitVector = codecPointerBlock.encode(this).getUnsafe
+  lazy val encoded: BitVector = codecTrie.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
@@ -104,8 +104,6 @@ object Trie {
 
   /**
     * Creates hash of Merkle Trie
-    *
-    * TODO: Fix encoding to use codec for the whole [[Trie]] and not for specific inherited variant.
     */
   def hash(trie: Trie): Blake2b256Hash =
     trie match {

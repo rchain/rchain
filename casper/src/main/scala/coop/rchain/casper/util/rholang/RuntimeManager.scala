@@ -205,7 +205,7 @@ object RuntimeManager {
     */
   val emptyStateHashFixed: StateHash =
     ByteString.copyFrom(
-      Base16.unsafeDecode("6f8fa359a262cd915ad4ca780638ed9b7338b88032f8638073138f92e971ace4")
+      Base16.unsafeDecode("d4d6befb45c3cc475a5906b73c45f9453a1df0924f688606251e196780a3e876")
     )
 
   def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
