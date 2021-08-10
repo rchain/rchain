@@ -706,13 +706,14 @@ match (
           contract closeBlock(ackCh) = {
             new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
               @PoS!("closeBlock", sysAuthToken, *ackCh0) |
-              @PoS!("getActiveValidators", *activeValidatorsCh) |
-              for (@ack              <- ackCh0;
-                   @activeValidators <- activeValidatorsCh) {
-                // For testing we need one of the active validators to be the block sender
-                setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
-                for (_ <- blockDataSet) {
-                  ackCh!(ack)
+              for (@ack              <- ackCh0) {
+                @PoS!("getActiveValidators", *activeValidatorsCh) |
+                for (@activeValidators <- activeValidatorsCh){
+                  // For testing we need one of the active validators to be the block sender
+                  setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
+                  for (_ <- blockDataSet) {
+                    ackCh!(ack)
+                  }
                 }
               }
             }
@@ -793,7 +794,7 @@ match (
                       @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
                       for (@(true, _) <- chargeCh;
                            @(true, _) <- refundCh) {
-                        match activeValidators.nth(1) {
+                        match activeValidators.nth(3) {
                           slashedValidator => {
                             computeHash!(slashedValidator, *hashCh) |
                             for (@hash <- hashCh) {
