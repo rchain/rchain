@@ -233,7 +233,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      approved: Boolean
+      approved: Boolean,
+      attestation: Boolean
   ): F[BlockDagRepresentation[F]] = {
     import cats.instances.list._
     import cats.instances.option._
@@ -277,7 +278,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def doInsert: F[Unit] = {
-      val blockMetadata      = BlockMetadata.fromBlock(block, invalid)
+      val blockMetadata      = BlockMetadata.fromBlock(block, invalid, attestation)
       val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
 
       for {

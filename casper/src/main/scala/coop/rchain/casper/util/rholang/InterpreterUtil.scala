@@ -203,8 +203,7 @@ object InterpreterUtil {
       systemDeploys: Seq[SystemDeploy],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F],
-      blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      blockData: BlockData
   )(
       implicit spanF: Span[F]
   ): F[
@@ -222,7 +221,7 @@ object InterpreterUtil {
                    deploys,
                    systemDeploys,
                    blockData,
-                   invalidBlocks
+                   s.invalidBlocks
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (

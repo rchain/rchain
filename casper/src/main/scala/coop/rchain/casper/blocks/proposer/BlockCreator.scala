@@ -112,54 +112,64 @@ object BlockCreator {
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+
+        // issue attestation when now state change to perform and all parents have the same post state
+        attest = deploys.isEmpty &&
+          slashingDeploys.isEmpty &&
+          parents.map(_.body.state.postStateHash).toSet.size == 1
+
+        now       <- Time[F].currentMillis
+        blockData = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+
+        v <- if (attest)
+              parents.headOption
+                .map { mainParent =>
+                  val st  = mainParent.body.state.postStateHash // attest the a state that all parents share
+                  val pd  = List()                              // no usr deploys in attestation block
+                  val psd = List()                              // no sys deploys in attestation block
+                  val rd  = List()                              // no rejected deploys in attestation block
+                  ((st, st, pd, psd, rd), mainParent.body.state.bonds)
+                }
+                .liftTo[F](new Exception(s"Empty parents when issuing attestation."))
+            else
               for {
-                now           <- Time[F].currentMillis
-                invalidBlocks = s.invalidBlocks
-                blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
                 checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
                                    parents,
                                    deploys.toSeq,
                                    systemDeploys,
                                    s,
                                    runtimeManager,
-                                   blockData,
-                                   invalidBlocks
+                                   blockData
                                  )
-                (
-                  preStateHash,
-                  postStateHash,
-                  processedDeploys,
-                  rejectedDeploys,
-                  processedSystemDeploys
-                )             = checkpointData
-                newBonds      <- runtimeManager.computeBonds(postStateHash)
-                _             <- Span[F].mark("before-packing-block")
-                shardId       = s.onChainState.shardConf.shardName
-                casperVersion = s.onChainState.shardConf.casperVersion
-                // unsignedBlock got blockHash(hashed without signature)
-                unsignedBlock = packageBlock(
-                  blockData,
-                  parents.map(_.blockHash),
-                  justifications.toSeq,
-                  preStateHash,
-                  postStateHash,
-                  processedDeploys,
-                  rejectedDeploys,
-                  processedSystemDeploys,
-                  newBonds,
-                  shardId,
-                  casperVersion
-                )
-                _ <- Span[F].mark("block-created")
-                // signedBlock add signature and replace hashed-without-signature
-                // blockHash to hashed-with-signature blockHash
-                signedBlock = validatorIdentity.signBlock(unsignedBlock)
-                _           <- Span[F].mark("block-signed")
-              } yield BlockCreatorResult.created(signedBlock)
-            else
-              BlockCreatorResult.noNewDeploys.pure[F]
-      } yield r
+                (_, postStateHash, _, _, _) = checkpointData
+                newBonds                    <- runtimeManager.computeBonds(postStateHash)
+                _                           <- Span[F].mark("before-packing-block")
+              } yield (checkpointData, newBonds)
+        (
+          (preStateHash, postStateHash, processedDeploys, rejectedDeploys, processedSystemDeploys),
+          newBonds
+        ) = v
+        _ <- Span[F].mark("block-created")
+
+        // signedBlock add signature and replace hashed-without-signature
+        // blockHash to hashed-with-signature blockHash
+        signedBlock = validatorIdentity.signBlock(
+          packageBlock(
+            blockData,
+            parents.map(_.blockHash),
+            justifications.toSeq,
+            preStateHash,
+            postStateHash,
+            processedDeploys,
+            rejectedDeploys,
+            processedSystemDeploys,
+            newBonds,
+            s.onChainState.shardConf.shardName,
+            s.onChainState.shardConf.casperVersion
+          )
+        )
+        _ <- Span[F].mark("block-signed")
+      } yield BlockCreatorResult.created(signedBlock)
 
       for {
         // Create block and measure duration

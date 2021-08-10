@@ -62,7 +62,7 @@ final class Estimator[F[_]: Sync: Log: Metrics: Span](
       filteredLatestMessagesHashes = latestMessagesHashes -- invalidLatestMessages.keys
       lca <- calculateLCA(
               dag,
-              BlockMetadata.fromBlock(genesis, false),
+              BlockMetadata.fromBlock(genesis, false, false),
               filteredLatestMessagesHashes
             )
       _                          <- Span[F].mark("lca")

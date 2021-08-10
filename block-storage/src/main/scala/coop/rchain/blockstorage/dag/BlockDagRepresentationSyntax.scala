@@ -3,12 +3,14 @@ package coop.rchain.blockstorage.dag
 import cats.data.OptionT
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.Justification
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared.syntax._
 import fs2.Stream
 
@@ -65,6 +67,19 @@ final class BlockDagRepresentationOps[F[_]](
       )
   }
 
+  def latestSTMessageHashes(implicit sync: Sync[F]): F[Map[Validator, BlockHash]] =
+    for {
+      lmhs <- dag.latestMessageHashes.map(_.values)
+      r <- lmhs.toList.traverse(
+            selfMessagesChain(_, meta => meta)
+              .filterNot(_.isAttestation)
+              .head
+              .compile
+              .last
+              .flatMap(_.liftTo(new Exception(s"No state transition message dound ")))
+          )
+    } yield r.map(m => (m.sender, m.blockHash)).toMap
+
   def invalidLatestMessages(implicit sync: Sync[F]): F[Map[Validator, BlockHash]] =
     latestMessages.flatMap(
       lm =>
@@ -87,6 +102,16 @@ final class BlockDagRepresentationOps[F[_]](
       ib <- dag.invalidBlocks
       r  = ib.map(block => (block.blockHash, block.sender)).toMap
     } yield r
+
+  def selfMessagesChain[A](h: BlockHash, proj: BlockMetadata => A)(
+      implicit sync: Sync[F]
+  ): Stream[F, A] =
+    Stream.unfoldLoopEval(h) { h =>
+      for {
+        meta  <- lookupUnsafe(h)
+        selfJ = meta.justifications.find(_.validator == meta.sender).map(_.latestBlockHash)
+      } yield (proj(meta), selfJ)
+    }
 
   def selfJustificationChain(h: BlockHash)(implicit sync: Sync[F]): Stream[F, Justification] =
     Stream.unfoldEval(h)(

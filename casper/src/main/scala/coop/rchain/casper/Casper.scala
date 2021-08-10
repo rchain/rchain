@@ -85,6 +85,41 @@ object MultiParentCasper extends MultiParentCasperInstances {
     kp2(().pure)
 }
 
+object Casper {
+  import coop.rchain.blockstorage.syntax._
+
+  def isAttestaton[F[_]: Sync](b: BlockMessage)(implicit blockStore: BlockStore[F]): F[Boolean] =
+    for {
+      parentsPostStates <- b.header.parentsHashList.traverse {
+                            BlockStore[F].getUnsafe(_).map(_.body.state.postStateHash)
+                          }
+    } yield parentsPostStates.toSet.size == 1
+
+  def validateAttestation[F[_]: Sync: BlockStore](
+      b: BlockMessage
+  ): F[Either[BlockError, ValidBlock]] =
+    for {
+      parents <- b.header.parentsHashList.traverse(BlockStore[F].getUnsafe)
+      mainP <- parents.headOption
+                .liftTo[F](new Exception(s"Block does not have parents on validation"))
+      valid =
+      // all parents should have the same post state
+      parents.map(_.body.state.postStateHash).toSet.size == 1 &&
+        // pre state and post state should be equal to post state of parents
+        parents.head.body.state.postStateHash == b.body.state.preStateHash &&
+        b.body.state.preStateHash == b.body.state.postStateHash &&
+        // attestation should not contain deploys
+        b.body.deploys.isEmpty &&
+        b.body.systemDeploys.isEmpty &&
+        b.body.rejectedDeploys.isEmpty &&
+        // bonds should be the same as for parents
+        b.body.state.bonds.toSet == mainP.body.state.bonds.toSet
+      r = if (valid) BlockStatus.valid.asRight[BlockError]
+      else BlockStatus.invalidAttestation.asLeft[ValidBlock]
+    } yield r
+
+}
+
 /**
   * Casper snapshot is a state that is changing in discrete manner with each new block added.
   * This class represents full information about the state. It is required for creating new blocks

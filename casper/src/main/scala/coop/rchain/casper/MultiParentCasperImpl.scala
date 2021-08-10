@@ -385,7 +385,14 @@ class MultiParentCasperImpl[F[_]
             .getOrElse(().pure[F])
     } yield valResult
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
+    Casper
+      .isAttestaton(b)
+      .ifM(
+        Log[F]
+          .info(s"Validating attestation ${PrettyPrinter.buildString(b, short = true)}.") *>
+          Casper.validateAttestation(b),
+        Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
+      )
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =

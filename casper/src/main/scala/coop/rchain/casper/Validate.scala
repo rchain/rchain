@@ -206,8 +206,7 @@ object Validate {
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
-      blockMetadata       = BlockMetadata.fromBlock(block, invalid = false)
-      initParents         <- ProtoUtil.getParentsMetadata(blockMetadata, s.dag)
+      initParents         <- block.header.parentsHashList.traverse(s.dag.lookupUnsafe)
       maxBlockNumber      = ProtoUtil.maxBlockNumberMetadata(initParents)
       earliestBlockNumber = maxBlockNumber + 1 - expirationThreshold
       _                   <- Span[F].mark("before-repeat-deploy-duplicate-block")

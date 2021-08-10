@@ -12,7 +12,8 @@ trait BlockDagStorage[F[_]] {
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      approved: Boolean = false
+      approved: Boolean = false,
+      attestation: Boolean = false
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def recordDirectlyFinalized(

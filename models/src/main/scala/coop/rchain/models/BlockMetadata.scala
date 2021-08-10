@@ -14,7 +14,8 @@ final case class BlockMetadata(
     seqNum: Int,
     invalid: Boolean,
     directlyFinalized: Boolean,
-    finalized: Boolean
+    finalized: Boolean,
+    isAttestation: Boolean
 ) {
   def toByteString = BlockMetadata.typeMapper.toBase(this).toByteString
 }
@@ -31,7 +32,8 @@ object BlockMetadata {
       internal.seqNum,
       internal.invalid,
       internal.directlyFinalized,
-      internal.finalized
+      internal.finalized,
+      internal.isAttestation
     )
   } { metadata =>
     BlockMetadataInternal(
@@ -44,7 +46,8 @@ object BlockMetadata {
       metadata.seqNum,
       metadata.invalid,
       metadata.directlyFinalized,
-      metadata.finalized
+      metadata.finalized,
+      metadata.isAttestation
     )
   }
 
@@ -70,6 +73,7 @@ object BlockMetadata {
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
+      isAttestation: Boolean,
       directlyFinalized: Boolean = false,
       finalized: Boolean = false
   ): BlockMetadata =
@@ -84,6 +88,7 @@ object BlockMetadata {
       invalid,
       // this value is not used anywhere down the call pipeline, so its safe to set it to false
       directlyFinalized,
-      finalized
+      finalized,
+      isAttestation
     )
 }

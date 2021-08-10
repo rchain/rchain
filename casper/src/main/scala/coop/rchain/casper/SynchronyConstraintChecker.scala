@@ -21,10 +21,10 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
       dag: BlockDagRepresentation[F]
   ): F[Set[Validator]] =
     for {
-      latestMessages <- dag.latestMessageHashes
+      latestSTMessages <- dag.latestSTMessageHashes
       seenSendersSince = lastProposed.justifications.flatMap {
         case Justification(validator, latestBlockHash) =>
-          if (validator != lastProposed.sender && latestMessages(validator) != latestBlockHash) {
+          if (validator != lastProposed.sender && latestSTMessages(validator) != latestBlockHash) {
             // Since we would have fetched missing justifications initially, it can only mean
             // that we have received at least one new block since then
             Some(validator)
