@@ -39,10 +39,11 @@ object DagMerger {
       lateSet <- lateBlocks.toList.traverse(index).map(_.flatten.toSet)
 
       branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-        MergingLogic.areConflicting(
-          as.map(_.eventLogIndex).toList.combineAll,
-          bs.map(_.eventLogIndex).toList.combineAll
-        )
+        (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
+          MergingLogic.areConflicting(
+            as.map(_.eventLogIndex).toList.combineAll,
+            bs.map(_.eventLogIndex).toList.combineAll
+          )
 
       computeTrieActions = (baseState: Blake2b256Hash, changes: StateChange) => {
         val baseReader = historyRepository.getHistoryReader(baseState).readerBinary

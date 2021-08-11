@@ -63,11 +63,11 @@ object BlockIndex {
       sysDeploysData = sysProcessedDeploys.toVector
         .collect {
           case Succeeded(log, SlashSystemDeployData(_, _)) =>
-            (SYS_SLASH_DEPLOY_ID, SYS_SLASH_DEPLOY_COST, log)
+            (blockHash.concat(SYS_SLASH_DEPLOY_ID), SYS_SLASH_DEPLOY_COST, log)
           case Succeeded(log, CloseBlockSystemDeployData) =>
-            (SYS_CLOSE_BLOCK_DEPLOY_ID, SYS_CLOSE_BLOCK_DEPLOY_COST, log)
+            (blockHash.concat(SYS_CLOSE_BLOCK_DEPLOY_ID), SYS_CLOSE_BLOCK_DEPLOY_COST, log)
           case Succeeded(log, Empty) =>
-            (SYS_EMPTY_DEPLOY_ID, SYS_EMPTY_DEPLOY_COST, log)
+            (blockHash.concat(SYS_EMPTY_DEPLOY_ID), SYS_EMPTY_DEPLOY_COST, log)
         }
       sysDeployIndices <- sysDeploysData.traverse {
                            case (sig, cost, log) =>

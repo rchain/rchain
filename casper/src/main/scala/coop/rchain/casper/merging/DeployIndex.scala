@@ -20,9 +20,9 @@ object DeployIndex {
   val SYS_CLOSE_BLOCK_DEPLOY_COST = 0L
   val SYS_EMPTY_DEPLOY_COST       = 0L
   // These are to be put in rejected set in blocks, so prefix format is defined for identification purposes.
-  val SYS_SLASH_DEPLOY_ID       = ByteString.copyFrom(64.toByte +: new Array[Byte](31))  // 1000000xxx
-  val SYS_CLOSE_BLOCK_DEPLOY_ID = ByteString.copyFrom(96.toByte +: new Array[Byte](31))  // 1100000xxx
-  val SYS_EMPTY_DEPLOY_ID       = ByteString.copyFrom(112.toByte +: new Array[Byte](31)) // 1110000xxx
+  val SYS_SLASH_DEPLOY_ID       = ByteString.copyFrom(Array(1.toByte))
+  val SYS_CLOSE_BLOCK_DEPLOY_ID = ByteString.copyFrom(Array(2.toByte))
+  val SYS_EMPTY_DEPLOY_ID       = ByteString.copyFrom(Array(3.toByte))
 
   def apply[F[_]: Concurrent](
       sig: ByteString,
