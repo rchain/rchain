@@ -8,6 +8,8 @@ import coop.rchain.rspace.history.HistoryRepository
 import coop.rchain.rspace.merger.{StateChange, _}
 import coop.rchain.rspace.syntax._
 
+import scala.util.Random
+
 final case class DeployIdWithCost(id: ByteString, cost: Long)
 
 /** index of deploys depending on each other inside a single block (state transition) */
@@ -59,4 +61,19 @@ object DeployChainIndex {
       stateChanges
     )
   }
+
+  def random: Iterator[DeployChainIndex] =
+    Iterator.continually[Int](Random.nextInt(10)).map { size =>
+      val deployIds = Range(0, size)
+        .map(
+          _ => ByteString.copyFrom(Array.fill(64)((scala.util.Random.nextInt(256) - 128).toByte))
+        )
+      DeployChainIndex(
+        deployIds.map(id => DeployIdWithCost(id, 0)).toSet,
+        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
+        Blake2b256Hash.fromByteArray(new Array[Byte](32)),
+        EventLogIndex.empty,
+        StateChange.empty
+      )
+    }
 }

@@ -34,25 +34,17 @@ class MergingLogic extends FlatSpec with Matchers {
       )
     ) shouldBe Set(Set(2, 3, 4), Set(1, 3), Set(1, 4))
 
+    computeRejectionOptions(
+      Map(
+        1 -> Set.empty[Int],
+        2 -> Set(3),
+        3 -> Set(2, 4),
+        4 -> Set(3)
+      )
+    ) shouldBe Set(Set(3), Set(2, 4))
+
     val all         = (1 to 1000) toSet
     val conflictMap = (1 to 1000).map(i => i -> (all - i)).toMap
     computeRejectionOptions(conflictMap) shouldBe (1 to 1000).map(all - _).toSet
-  }
-
-  "benchmark" should "" ignore {
-    val conflictSetSizes = Range(10, 100, 5)
-    conflictSetSizes.map { conflictSetSize =>
-      val fullPairs = (1 to conflictSetSize).combinations(2).toSet
-      // One third random pairs are conflicting
-      val conflictingPairs = fullPairs.take(fullPairs.size / 3)
-      val conflictMap = conflictingPairs.foldLeft(Map.empty[Int, Set[Int]]) {
-        case (acc, Seq(l, r)) =>
-          acc +
-            (l -> (acc.getOrElse(l, Set.empty) + r)) +
-            (r -> (acc.getOrElse(r, Set.empty) + l))
-      }
-      val (_, time) = Stopwatch.profile(computeRejectionOptions(conflictMap))
-      println(s"$conflictSetSize in ${time}")
-    }
   }
 }
