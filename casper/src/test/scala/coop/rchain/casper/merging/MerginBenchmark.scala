@@ -21,7 +21,7 @@ class MergingBenchmark extends FlatSpec {
 
       // One third random pairs are conflicting
       val dciConflictingPairs = dciFullPairs.take(dciFullPairs.size / 3)
-      val intConflictingPairs = intFullPairs.take(dciFullPairs.size / 3)
+      val intConflictingPairs = intFullPairs.take(intFullPairs.size / 3)
 
       val (_, dciTime) =
         Stopwatch.profile(computeRejectionOptions(conflictsMap(dciConflictingPairs)))
