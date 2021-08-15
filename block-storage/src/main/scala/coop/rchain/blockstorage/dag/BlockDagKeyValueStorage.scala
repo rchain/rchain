@@ -18,6 +18,7 @@ import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.models.syntax._
@@ -44,7 +45,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       heightMap: SortedMap[Long, Set[BlockHash]],
       invalidBlocksSet: Set[BlockMetadata],
       lastFinalizedBlockHash: BlockHash,
-      finalizedBlocksSet: Set[BlockHash]
+      finalizedBlocksSet: Set[BlockHash],
+      // how many times particular valid state is met in DAG as postState for block
+      validStatesCounter: Map[StateHash, Int]
   ) extends BlockDagRepresentation[F] {
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
@@ -135,6 +138,20 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         }
         truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
 
+        excessStates <- excessSet.toList.traverse(
+                         this.lookupUnsafe(_).map(_.postStateHash)
+                       )
+        newValidStatesCounter = excessStates.foldLeft(validStatesCounter) {
+          case (acc, s) =>
+            assert(
+              acc.contains(s),
+              s"validStatesCounter does not have state from excess message when truncating DAG."
+            )
+            val curV = acc(s)
+            val newV = curV - 1
+            if (newV == 0) acc - s else acc.updated(s, curV - 1)
+        }
+
         view = this.copy(
           lastFinalizedBlockHash = lfb,
           finalizedBlocksSet = truncatedFinalizesSet,
@@ -142,7 +159,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
           childMap = newChildrenMap,
           latestMessagesMap = targetLatestMessages,
           heightMap = truncatedHeightMap,
-          invalidBlocksSet = truncatedInvalidSet
+          invalidBlocksSet = truncatedInvalidSet,
+          validStatesCounter = newValidStatesCounter
         )
       } yield view
     }
@@ -186,6 +204,22 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     override def nonFinalizedSet: Set[BlockHash] =
       dagSet diff finalizedBlocksSet
+
+    override def reachedAcquiescence: F[Boolean] =
+      for {
+        statesOfNotFinalizedBlocks <- nonFinalizedSet.toList.traverse(
+                                       this.lookupUnsafe(_).map(_.postStateHash)
+                                     )
+        // how many time each state is met across non finalized blocks
+        stateSeenInNonFinalizedCounter = statesOfNotFinalizedBlocks
+          .groupBy(identity)
+          .mapValues(_.size)
+
+        // if all occurrences of a state are in not finalized blocks - state is not finalized, no acquiescence
+        hasNotFinalizedState = stateSeenInNonFinalizedCounter.exists {
+          case (state, qty) => validStatesCounter(state) == qty
+        }
+      } yield !hasNotFinalizedState
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
@@ -217,6 +251,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
       lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
       finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
+      validStatesCounter <- blockMetadataIndex.validStatesCounter
     } yield KeyValueDagRepresentation(
       dagSet,
       latestMessages,
@@ -224,7 +259,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       heightMap,
       invalidBlocks,
       lastFinalizedBlock,
-      finalizedBlocksSet
+      finalizedBlocksSet,
+      validStatesCounter
     )
 
   def getRepresentation: F[BlockDagRepresentation[F]] =

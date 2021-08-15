@@ -49,6 +49,7 @@ trait BlockDagRepresentation[F[_]] {
       latestMessages: Map[Validator, BlockHash],
       findLfb: Map[Validator, BlockHash] => F[BlockHash]
   ): F[BlockDagRepresentation[F]]
+  def reachedAcquiescence: F[Boolean]
 }
 
 trait EquivocationsTracker[F[_]] {

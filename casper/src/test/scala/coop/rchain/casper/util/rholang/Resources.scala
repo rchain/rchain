@@ -122,6 +122,8 @@ object Resources {
           latestMessages: Map[Validator, BlockHash],
           findLfb: Map[Validator, BlockHash] => F[BlockHash]
       ): F[BlockDagRepresentation[F]] = ???
+
+      override def reachedAcquiescence: F[Boolean] = false.pure[F]
     }
     CasperSnapshot[F](
       dummyRepresentation,
