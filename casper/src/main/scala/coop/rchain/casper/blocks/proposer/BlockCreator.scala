@@ -63,13 +63,9 @@ object BlockCreator {
 
       def prepareSlashingDeploys(seqNum: Int): F[Seq[SlashDeploy]] =
         for {
-          ilm <- s.dag.invalidLatestMessages
-          // if the node is already not active as per main parent, the node won't slash once more
-          ilmFromBonded = ilm.toList.filter {
-            case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
-          }
+          bondedOffenders <- Casper.bondedOffenders(s)
           // TODO: Add `slashingDeploys` to DeployStorage
-          slashingDeploys = ilmFromBonded
+          slashingDeploys = bondedOffenders
             .map(_._2)
             .map(
               invalidBlockHash =>
@@ -79,6 +75,7 @@ object BlockCreator {
                   SystemDeployUtil.generateSlashDeployRandomSeed(selfId, seqNum)
                 )
             )
+            .toList
           _ <- slashingDeploys.traverse_(
                 sd =>
                   Log[F].info(

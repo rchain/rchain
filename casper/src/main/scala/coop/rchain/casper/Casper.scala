@@ -87,15 +87,22 @@ object Casper {
     *    This rule also can be validated and offence detected.
     *    TODO this can be narrowed down to "if sender already propagated its weight down to all states known"
     */
-  def shouldPropose[F[_]: Monad](
+  def shouldPropose[F[_]: Sync](
       s: CasperSnapshot[F],
       deploysWaiting: F[Set[Signed[DeployData]]]
   ): F[Boolean] = {
     val hasParentsToMerge = (s.parents.map(_.body.state.postStateHash).distinct.size > 1).pure[F]
     val hasDeploysToOffer = deploysWaiting.map(_ -- s.deploysInScope).map(_.nonEmpty)
+    val needToSlash       = bondedOffenders(s).map(_.nonEmpty)
     val noAcquiescence    = s.dag.reachedAcquiescence.not
-    hasDeploysToOffer ||^ hasParentsToMerge ||^ noAcquiescence
+    hasDeploysToOffer ||^ hasParentsToMerge ||^ needToSlash ||^ noAcquiescence
   }
+
+  // Validators that should be slashed because of invalid block, but still active in this state
+  def bondedOffenders[F[_]: Sync](s: CasperSnapshot[F]): F[Iterator[(Validator, BlockHash)]] =
+    s.dag.invalidLatestMessages.map(_.toIterator.filter {
+      case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
+    })
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
