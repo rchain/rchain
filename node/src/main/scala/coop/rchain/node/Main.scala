@@ -12,7 +12,7 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.monix.Monixable
-import coop.rchain.node.benchmark.ConcurrencyBench
+import coop.rchain.node.benchmark.{ConcurrentReplayBench, LeaderfulHardening}
 import coop.rchain.node.configuration.Configuration.Profile
 import coop.rchain.node.configuration._
 import coop.rchain.node.effects._
@@ -77,7 +77,15 @@ object Main {
   )(implicit scheduler: Scheduler): F[Unit] = {
     implicit val time: Time[F] = effects.time
     if (options.subcommands.contains(options.bench.concurrency))
-      ConcurrencyBench.go(options.bench.concurrency.maxConcurrentTx(), options.bench.dataDir())
+      ConcurrentReplayBench.go(options.bench.concurrency.maxConcurrentTx(), options.bench.dataDir())
+    else if (options.subcommands.contains(options.bench.leaderful))
+      LeaderfulHardening.run(
+        options.bench.dataDir(),
+        options.bench.leaderful.validatorsNum(),
+        options.bench.leaderful.usersNum(),
+        options.bench.leaderful.maxTxPerBlock(),
+        options.bench.leaderful.epochLength()
+      )
     else new Exception(s"Please select benchmark mode").raiseError
   }
 

@@ -3,7 +3,7 @@ package coop.rchain.casper.merging
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.Event
+import coop.rchain.casper.protocol.{BlockMessage, Event}
 import coop.rchain.rspace.merger.EventLogIndex
 
 /** index of a single deploy */
@@ -23,6 +23,10 @@ object DeployIndex {
   val SYS_SLASH_DEPLOY_ID       = ByteString.copyFrom(Array(1.toByte))
   val SYS_CLOSE_BLOCK_DEPLOY_ID = ByteString.copyFrom(Array(2.toByte))
   val SYS_EMPTY_DEPLOY_ID       = ByteString.copyFrom(Array(3.toByte))
+
+  def sysSlashId(b: BlockMessage)      = b.blockHash.concat(SYS_SLASH_DEPLOY_ID)
+  def sysCloseBlockId(b: BlockMessage) = b.blockHash.concat(SYS_CLOSE_BLOCK_DEPLOY_ID)
+  def sysEmptyId(b: BlockMessage)      = b.blockHash.concat(SYS_EMPTY_DEPLOY_ID)
 
   def apply[F[_]: Concurrent](
       sig: ByteString,

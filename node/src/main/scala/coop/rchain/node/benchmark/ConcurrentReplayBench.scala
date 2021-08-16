@@ -12,7 +12,7 @@ import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.node.benchmark.utils.GenesisParams.genesisParameters
-import coop.rchain.node.benchmark.utils.LeaderfulDagBuilder.ValidatorWithPayments
+import coop.rchain.node.benchmark.utils.LeaderfulSimulation.ValidatorWithPayments
 import coop.rchain.node.benchmark.utils.{Payment, StateTransition, User}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.syntax._

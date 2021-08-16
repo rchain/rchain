@@ -546,6 +546,15 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       val maxConcurrentTx = opt[Int](default = Some(40))
     }
     addSubcommand(concurrency)
+
+    val leaderful = new Subcommand("leaderful") {
+      helpWidth(width)
+      val validatorsNum = opt[Int](default = Some(5), name = "validators-num")
+      val usersNum      = opt[Int](default = Some(10), name = "users-num")
+      val maxTxPerBlock = opt[Int](default = Some(5), name = "max-block-tx")
+      val epochLength   = opt[Int](default = Some(10), name = "epoch-length")
+    }
+    addSubcommand(leaderful)
   }
   addSubcommand(bench)
 

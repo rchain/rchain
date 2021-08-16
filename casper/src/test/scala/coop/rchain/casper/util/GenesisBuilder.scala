@@ -89,8 +89,45 @@ object GenesisBuilder {
     )
   }
 
+  def mkGenesis(
+      validatorKeyPairs: Iterable[(PrivateKey, PublicKey)],
+      genesisVaults: Iterable[(PrivateKey, PublicKey)]
+  ): GenesisContext = {
+    val bonds = createBonds(validatorKeyPairs.map { case (_, pk) => pk })
+    val params: GenesisParameters = (
+      validatorKeyPairs,
+      genesisVaults,
+      Genesis(
+        shardId = "root",
+        timestamp = 0L,
+        proofOfStake = ProofOfStake(
+          minimumBond = 0L,
+          maximumBond = Long.MaxValue,
+          // Epoch length is set to large number to prevent trigger of epoch change
+          // in PoS close block method, which causes block merge conflicts
+          // - epoch change can be set as a parameter in Rholang tests (e.g. PoSSpec)
+          epochLength = 1000,
+          quarantineLength = 50000,
+          numberOfActiveValidators = 100,
+          validators = bonds.map(Validator.tupled).toSeq
+        ),
+        vaults = genesisVaults.map(_._2).toList.map(predefinedVault) ++
+          bonds.toList.map {
+            case (pk, _) =>
+              // Initial validator vaults contain 0 Rev
+              RevAddress.fromPublicKey(pk).map(Vault(_, 0))
+          }.flattenOption,
+        supply = Long.MaxValue,
+        blockNumber = 0
+      )
+    )
+    doBuildGenesis(params)
+  }
+
+  val predefinedVaultsAmt = 9000000L
+
   private def predefinedVault(pub: PublicKey): Vault =
-    Vault(RevAddress.fromPublicKey(pub).get, 9000000)
+    Vault(RevAddress.fromPublicKey(pub).get, predefinedVaultsAmt)
 
   type GenesisParameters =
     (Iterable[(PrivateKey, PublicKey)], Iterable[(PrivateKey, PublicKey)], Genesis)

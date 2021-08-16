@@ -3,7 +3,7 @@ package coop.rchain.node.benchmark.utils
 import cats.Functor
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.casper.protocol.DeployData
+import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -23,12 +23,15 @@ final case class Payment(
     source: User,
     dest: User,
     amt: Long,
-    rejected: Boolean = false
+    rejected: Boolean = false,
+    timestamp: Long = Random.nextLong() // this is to make all payments different
 )
 final case class PaymentDeploy(d: Signed[DeployData], payment: Payment)
 final case class Charged[A](v: A, charge: Payment)
 
 object Payment {
+
+  final case class BlockWithPayments(b: BlockMessage, payments: Seq[Charged[PaymentDeploy]])
 
   type BalanceSheet = Map[User, (Long, Seq[Payment])]
 

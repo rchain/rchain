@@ -14,7 +14,8 @@ object GenesisParams {
 
   def genesisParameters(
       bondedValidators: Seq[Validator],
-      genesisVaults: List[PublicKey]
+      genesisVaults: List[PublicKey],
+      epochLength: Int = 1000
   ): Genesis = {
     def predefinedVault(pub: PublicKey): Vault =
       Vault(RevAddress.fromPublicKey(pub).get, predefinedVaultsAmt)
@@ -28,7 +29,7 @@ object GenesisParams {
         // Epoch length is set to large number to prevent trigger of epoch change
         // in PoS close block method, which causes block merge conflicts
         // - epoch change can be set as a parameter in Rholang tests (e.g. PoSSpec)
-        epochLength = 1000,
+        epochLength = epochLength,
         quarantineLength = 50000,
         numberOfActiveValidators = 100,
         validators = bondedValidators

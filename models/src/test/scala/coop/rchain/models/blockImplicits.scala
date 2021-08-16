@@ -127,6 +127,8 @@ object blockImplicits {
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[Justification]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
+      setRejDeploys: Option[Seq[RejectedDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
@@ -147,6 +149,10 @@ object blockImplicits {
       deploys <- if (setDeploys.isEmpty)
                   arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys)
                 else Gen.const(setDeploys.get)
+      sysDeploys <- if (setSysDeploys.isEmpty) Gen.const(List.empty)
+                   else Gen.const(setSysDeploys.get)
+      rejDeploys <- if (setRejDeploys.isEmpty) Gen.const(List.empty)
+                   else Gen.const(setRejDeploys.get)
       // 10 random validators in bonds list
       bonds <- if (setBonds.isEmpty) Gen.containerOfN[List, Bond](10, bondGen)
               else Gen.const(setBonds.get)
@@ -174,8 +180,8 @@ object blockImplicits {
             blockNumber = setBlockNumber.get
           ),
           deploys = deploys.toList,
-          systemDeploys = List.empty,
-          rejectedDeploys = List.empty
+          systemDeploys = sysDeploys.toList,
+          rejectedDeploys = rejDeploys.toList
         ),
         justifications = justifications.toList,
         sender = validator,
@@ -221,6 +227,8 @@ object blockImplicits {
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[Justification]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
+      setRejDeploys: Option[Seq[RejectedDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
@@ -236,6 +244,8 @@ object blockImplicits {
       setParentsHashList,
       setJustifications,
       setDeploys,
+      setSysDeploys,
+      setRejDeploys,
       setBonds,
       setShardId,
       hashF
