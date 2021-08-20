@@ -69,17 +69,29 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
   ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
 
   def getTransaction(blockHash: Blake2b256Hash): F[List[TransactionInfo]] =
-    blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).map { res =>
+    blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).flatMap { res =>
       res
-        .map { b =>
-          val userTransactions = b.deploys.flatMap(d => {
-            d.report
-              .zip(Seq(PreCharge, UserDeploy, Refund))
-              .flatMap {
+        .traverse { b =>
+          val userTransactions = b.deploys.toList.flatTraverse { d =>
+            // FIXME https://github.com/rchain/rchain/issues/3150#issuecomment-701123669
+            val zippedReport = d.report.length match {
+              case 1 => d.report.zip(Seq(PreCharge)).pure // precharge fail with insufficient fund
+              case 2 =>
+                d.report
+                  .zip(Seq(PreCharge, Refund))
+                  .pure // user deploy doesn't generate logs like `new a in {}`
+              case 3 => d.report.zip(Seq(PreCharge, UserDeploy, Refund)).pure // normal execution
+              case _ =>
+                new Exception(
+                  s"It is not possible that user report ${d.deployInfo} amount is not equal to 1,2 or 3"
+                ).raiseError[F, Seq[(SingleReport, String => TransactionType)]]
+            }
+            zippedReport
+              .map(_.flatMap {
                 case (report, txCtor) =>
                   makeDeployTransaction(d, report, txCtor)
-              }
-          })
+              }.toList)
+          }
           val systemDeployTransactions = b.systemDeploys.flatMap { s =>
             // system doesn't get precharge and refund , so it would always get one
             val transactions = findTransactions(s.report.head)
@@ -90,9 +102,9 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
             transactions
               .map(t => TransactionInfo(t, txCtor(Base16.encode(blockHash.bytes.toArray))))
           }
-          (userTransactions ++ systemDeployTransactions).toList
+          (userTransactions.map(_ ++ systemDeployTransactions))
         }
-        .getOrElse(List.empty)
+        .map(_.getOrElse(List.empty))
     }
 
   private def findTransactions(report: SingleReport): Seq[Transaction] = {
