@@ -3,6 +3,8 @@ package coop.rchain.models
 import cats.Show
 import com.google.protobuf.ByteString
 import coop.rchain.crypto.codec.Base16
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import scodec.bits.ByteVector
 
 trait ByteStringSyntax {
   implicit final def modelsSyntaxByteString(bs: ByteString): ByteStringOps =
@@ -21,4 +23,8 @@ final class ByteStringOps(
     private val bs: ByteString
 ) extends AnyVal {
   def base16String: String = Base16.encode(bs.toByteArray)
+
+  def toByteVector: ByteVector = ByteVector(bs.toByteArray)
+
+  def toBlake2b256Hash: Blake2b256Hash = Blake2b256Hash.fromByteString(bs)
 }
