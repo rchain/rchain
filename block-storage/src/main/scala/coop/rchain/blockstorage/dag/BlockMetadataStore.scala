@@ -7,6 +7,7 @@ import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{AtomicMonadState, Log}
 import coop.rchain.store.KeyValueTypedStore
@@ -44,7 +45,8 @@ object BlockMetadataStore {
       // Also lots of tests do not have genesis properly initialised, so fixing all this is pain.
       // So this is Option.
       lastFinalizedBlock: Option[(BlockHash, Long)],
-      finalizedBlockSet: Set[BlockHash]
+      finalizedBlockSet: Set[BlockHash],
+      validStatesCounter: Map[StateHash, Int]
   )
 
   def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
@@ -54,7 +56,8 @@ object BlockMetadataStore {
       blockMeta.blockNum,
       blockMeta.invalid,
       blockMeta.directlyFinalized,
-      blockMeta.finalized
+      blockMeta.finalized,
+      blockMeta.postStateHash
     )
 
   class BlockMetadataStore[F[_]: Monad](
@@ -145,6 +148,9 @@ object BlockMetadataStore {
     }
 
     def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
+
+    def validStatesCounter: F[Map[StateHash, Int]] =
+      dagState.get.map(_.validStatesCounter)
   }
 
   private def addBlockToDagState(block: BlockInfo)(state: DagState): DagState = {
@@ -174,12 +180,20 @@ object BlockMetadataStore {
     val newFinalisedBlockSet =
       if (block.isFinalized) state.finalizedBlockSet + block.hash else state.finalizedBlockSet
 
+    val newValidStatesCounter =
+      if (block.isInvalid) state.validStatesCounter
+      else {
+        val newVal = state.validStatesCounter.getOrElse(block.postState, 0) + 1
+        state.validStatesCounter.updated(block.postState, newVal)
+      }
+
     state.copy(
       dagSet = newDagSet,
       childMap = newChildMap,
       heightMap = newHeightMap,
       lastFinalizedBlock = newLastFinalizedBlock,
-      finalizedBlockSet = newFinalisedBlockSet
+      finalizedBlockSet = newFinalisedBlockSet,
+      validStatesCounter = newValidStatesCounter
     )
   }
 
@@ -198,7 +212,8 @@ object BlockMetadataStore {
       blockNum: Long,
       isInvalid: Boolean,
       isDirectlyFinalized: Boolean,
-      isFinalized: Boolean
+      isFinalized: Boolean,
+      postState: StateHash
   )
 
   private def recreateInMemoryState(
@@ -210,7 +225,8 @@ object BlockMetadataStore {
         childMap = Map(),
         heightMap = SortedMap(),
         lastFinalizedBlock = none[(BlockHash, Long)],
-        finalizedBlockSet = Set()
+        finalizedBlockSet = Set(),
+        validStatesCounter = Map.empty
       )
 
     // Add blocks to DAG state

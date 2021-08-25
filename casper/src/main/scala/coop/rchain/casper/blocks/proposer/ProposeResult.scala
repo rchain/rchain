@@ -22,12 +22,14 @@ sealed trait CheckProposeConstraintsFailure
 case object NotBonded                  extends CheckProposeConstraintsFailure
 case object NotEnoughNewBlocks         extends CheckProposeConstraintsFailure
 case object TooFarAheadOfLastFinalized extends CheckProposeConstraintsFailure
+case object NoReasonToPropose          extends CheckProposeConstraintsFailure
 
 object CheckProposeConstraintsResult {
   def success: CheckProposeConstraintsResult                    = CheckProposeConstraintsSuccess
   def notBonded: CheckProposeConstraintsResult                  = NotBonded
   def notEnoughNewBlock: CheckProposeConstraintsResult          = NotEnoughNewBlocks
   def tooFarAheadOfLastFinalized: CheckProposeConstraintsResult = TooFarAheadOfLastFinalized
+  def noReasonToPropose: CheckProposeConstraintsResult          = NoReasonToPropose
 }
 
 object ProposeResult {
@@ -35,7 +37,7 @@ object ProposeResult {
   implicit val showProposeResut: Show[ProposeStatus] = new Show[ProposeStatus] {
     def show(result: ProposeStatus): String = result match {
       case ProposeSuccess(r)   => s"Propose succeed: $r"
-      case NoNewDeploys        => s"Proposal failed: NoNewDeploys"
+      case NoReasonToPropose   => s"Proposal failed: NoReasonToPropose"
       case InternalDeployError => s"Proposal failed: internal deploy error"
       case NotBonded           => s"Proposal failed: ReadOnlyMode"
       case NotEnoughNewBlocks  => s"Proposal failed: Must wait for more blocks from other validators"
@@ -45,7 +47,7 @@ object ProposeResult {
     }
   }
 
-  def noNewDeploys: ProposeFailure                   = NoNewDeploys
+  def noReasonToPropose: ProposeResult               = ProposeResult(NoReasonToPropose)
   def internalDeployError: ProposeFailure            = InternalDeployError
   def notBonded: ProposeResult                       = ProposeResult(NotBonded)
   def notEnoughBlocks: ProposeResult                 = ProposeResult(NotEnoughNewBlocks)
@@ -55,9 +57,7 @@ object ProposeResult {
 }
 
 trait BlockCreatorResult
-case object NoNewDeploys                             extends BlockCreatorResult with ProposeFailure
 final case class Created(blockMessage: BlockMessage) extends BlockCreatorResult
 object BlockCreatorResult {
-  def noNewDeploys: BlockCreatorResult             = NoNewDeploys
   def created(b: BlockMessage): BlockCreatorResult = Created(b)
 }

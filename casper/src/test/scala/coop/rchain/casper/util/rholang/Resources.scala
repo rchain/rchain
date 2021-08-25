@@ -97,9 +97,10 @@ object Resources {
 
       override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
 
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] = ???
+      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+        Map.empty[Validator, BlockHash].pure[F]
 
-      override def invalidBlocks: F[Set[BlockMetadata]] = ???
+      override def invalidBlocks: F[Set[BlockMetadata]] = Set.empty[BlockMetadata].pure[F]
 
       override def latestBlockNumber: F[Long] = ???
 
@@ -122,6 +123,8 @@ object Resources {
           latestMessages: Map[Validator, BlockHash],
           findLfb: Map[Validator, BlockHash] => F[BlockHash]
       ): F[BlockDagRepresentation[F]] = ???
+
+      override def reachedAcquiescence: F[Boolean] = false.pure[F]
     }
     CasperSnapshot[F](
       dummyRepresentation,

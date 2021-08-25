@@ -5,7 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
-import coop.rchain.casper.blocks.proposer.NoNewDeploys
+import coop.rchain.casper.blocks.proposer.NoReasonToPropose
 import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
@@ -126,22 +126,23 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
-  it should "not allow empty blocks with multiple parents" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-      for {
-        deployDatas <- (0 to 1).toList
-                        .traverse[Effect, Signed[DeployData]](
-                          i => ConstructDeploy.basicDeployData[Effect](i)
-                        )
-        _ <- nodes(0).addBlock(deployDatas(0))
-        _ <- nodes(1).addBlock(deployDatas(1))
-        _ <- nodes(1).handleReceive() // receive block1
-        _ <- nodes(0).handleReceive() // receive block2
-
-        status <- nodes(1).createBlock()
-      } yield (assert(status == NoNewDeploys))
-    }
-  }
+  // Test does not make sense given attestation messages
+//  it should "not allow empty blocks with multiple parents" in effectTest {
+//    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+//      for {
+//        deployDatas <- (0 to 1).toList
+//                        .traverse[Effect, Signed[DeployData]](
+//                          i => ConstructDeploy.basicDeployData[Effect](i)
+//                        )
+//        _ <- nodes(0).addBlock(deployDatas(0))
+//        _ <- nodes(1).addBlock(deployDatas(1))
+//        _ <- nodes(1).handleReceive() // receive block1
+//        _ <- nodes(0).handleReceive() // receive block2
+//
+//        status <- nodes(1).createBlock()
+//      } yield (assert(status == NoReasonToPropose))
+//    }
+//  }
 
   it should "create valid blocks when peek syntax is present in a deploy" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>

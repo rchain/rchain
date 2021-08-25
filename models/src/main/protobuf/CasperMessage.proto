@@ -121,6 +121,7 @@ message BlockMetadataInternal {
   bool invalid                          = 8; // whether the block was marked as invalid
   bool directlyFinalized                = 9; // whether the block has been last finalized block (LFB)
   bool finalized                        = 10;// whether the block is finalized
+  bytes postStateHash                    = 11;// whether the block is finalized
 }
 
 message HeaderProto {
