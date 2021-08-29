@@ -19,7 +19,7 @@ import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.builder.ADTBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
@@ -43,7 +43,7 @@ object InterpreterUtil {
   def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
   ): Either[Throwable, Par] =
-    ParBuilder[Coeval, Par].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
+    ADTBuilder[Coeval, String, Par].buildWithEnv(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys

@@ -8,7 +8,7 @@ import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.RhoRuntime
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.builder.ADTBuilder
 
 object TestUtil {
   def eval[F[_]: Sync, Env](
@@ -21,7 +21,7 @@ object TestUtil {
       runtime: RhoRuntime[F],
       normalizerEnv: Map[String, Par]
   )(implicit rand: Blake2b512Random): F[Unit] =
-    ParBuilder[F, Par].buildNormalizedTerm(code, normalizerEnv) >>= (evalTerm(_, runtime))
+    ADTBuilder[F, String, Par].buildWithEnv(code, normalizerEnv) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,

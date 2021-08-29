@@ -7,7 +7,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.builder.ADTBuilder
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
@@ -19,7 +19,14 @@ import monix.eval.{Coeval, Task}
 import monix.execution.{CancelableFuture, Scheduler}
 import org.rogach.scallop.{stringListConverter, ScallopConf}
 
-import java.io.{BufferedOutputStream, FileOutputStream, FileReader, IOException}
+import java.io.{
+  BufferedOutputStream,
+  FileOutputStream,
+  FileReader,
+  IOException,
+  Reader,
+  StringReader
+}
 import java.nio.file.{Files, Path}
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
@@ -209,8 +216,8 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    ParBuilder[Coeval, Par]
-      .buildNormalizedTerm(source, Map.empty[String, Par])
+    ADTBuilder[Coeval, Reader, Par]
+      .buildWithEnv(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
 
