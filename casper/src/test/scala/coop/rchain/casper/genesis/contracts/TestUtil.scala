@@ -21,7 +21,7 @@ object TestUtil {
       runtime: RhoRuntime[F],
       normalizerEnv: Map[String, Par]
   )(implicit rand: Blake2b512Random): F[Unit] =
-    ParBuilder[F].buildNormalizedTerm(code, normalizerEnv) >>= (evalTerm(_, runtime))
+    ParBuilder[F, Par].buildNormalizedTerm(code, normalizerEnv) >>= (evalTerm(_, runtime))
 
   private def evalTerm[F[_]: FlatMap](
       term: Par,

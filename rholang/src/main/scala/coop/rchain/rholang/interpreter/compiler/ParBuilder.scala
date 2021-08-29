@@ -12,20 +12,20 @@ import coop.rchain.rholang.interpreter.errors._
 
 import java.io.{Reader, StringReader}
 
-trait ParBuilder[F[_]] {
-  def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par]
+trait ParBuilder[F[_], ADT] {
+  def buildNormalizedTerm(source: String, normalizerEnv: Map[String, ADT]): F[ADT]
 
-  def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, Par]): F[Par]
+  def buildNormalizedTerm(reader: Reader, normalizerEnv: Map[String, ADT]): F[ADT]
 
-  def buildPar(proc: Proc, normalizerEnv: Map[String, Par]): F[Par]
+  def buildPar(proc: Proc, normalizerEnv: Map[String, ADT]): F[ADT]
   private[interpreter] def buildAST(reader: Reader): F[Proc]
 }
 
 object ParBuilder {
 
-  def apply[F[_]](implicit parBuilder: ParBuilder[F]): ParBuilder[F] = parBuilder
+  def apply[F[_], ADT](implicit parBuilder: ParBuilder[F, ADT]): ParBuilder[F, ADT] = parBuilder
 
-  implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F] = new ParBuilder[F] {
+  implicit def parBuilder[F[_]](implicit F: Sync[F]): ParBuilder[F, Par] = new ParBuilder[F, Par] {
     def buildNormalizedTerm(source: String, normalizerEnv: Map[String, Par]): F[Par] =
       buildNormalizedTerm(new StringReader(source), normalizerEnv)
 

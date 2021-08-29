@@ -23,7 +23,7 @@ object ReplGrpcService {
       def exec(source: String, printUnmatchedSendsOnly: Boolean = false): F[ReplResponse] =
         Sync[F]
           .attempt(
-            ParBuilder[F]
+            ParBuilder[F, Par]
               .buildNormalizedTerm(source, Map.empty[String, Par])
           )
           .flatMap {

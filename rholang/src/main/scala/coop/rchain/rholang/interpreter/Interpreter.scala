@@ -50,7 +50,7 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
       _ <- Span[F].traceI("set-initial-cost") { C.set(initialPhlo) }
       _ <- Span[F].traceI("charge-parsing-cost") { charge[F](parsingCost) }
       parsed <- Span[F].traceI("build-normalized-term") {
-                 ParBuilder[F]
+                 ParBuilder[F, Par]
                    .buildNormalizedTerm(term, normalizerEnv)
                    .handleErrorWith {
                      case err: InterpreterError => ParserError(err).raiseError[F, Par]

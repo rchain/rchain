@@ -10,18 +10,18 @@ import monix.eval.Coeval
 
 object ParBuilderUtil {
   def mkTerm(rho: String): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, Map.empty[String, Par]).runAttempt
+    ParBuilder[Coeval, Par].buildNormalizedTerm(rho, Map.empty[String, Par]).runAttempt
 
   def buildNormalizedTerm[F[_]: Sync](rho: String): F[Par] =
-    ParBuilder[F].buildNormalizedTerm(rho, Map.empty[String, Par])
+    ParBuilder[F, Par].buildNormalizedTerm(rho, Map.empty[String, Par])
 
   def buildNormalizedTerm[F[_]: Sync](reader: Reader): F[Par] =
-    ParBuilder[F].buildNormalizedTerm(reader, Map.empty[String, Par])
+    ParBuilder[F, Par].buildNormalizedTerm(reader, Map.empty[String, Par])
 
   def buildPar[F[_]: Sync](proc: Proc): F[Par] =
-    ParBuilder[F].buildPar(proc, Map.empty[String, Par])
+    ParBuilder[F, Par].buildPar(proc, Map.empty[String, Par])
 
   def buildAST[F[_]: Sync](rho: String): F[Proc] =
-    ParBuilder[F].buildAST(new StringReader(rho))
+    ParBuilder[F, Par].buildAST(new StringReader(rho))
 
 }

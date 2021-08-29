@@ -209,7 +209,7 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    ParBuilder[Coeval]
+    ParBuilder[Coeval, Par]
       .buildNormalizedTerm(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
