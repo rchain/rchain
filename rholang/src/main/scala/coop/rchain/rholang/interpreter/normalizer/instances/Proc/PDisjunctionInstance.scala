@@ -6,13 +6,9 @@ import coop.rchain.models.Connective.ConnectiveInstance.ConnOrBody
 import coop.rchain.models.rholang.implicits.{ParExtension, VectorPar}
 import coop.rchain.models.{Connective, ConnectiveBody, Par}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PDisjunction, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, SourcePosition}
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
+import coop.rchain.rholang.interpreter.compiler.Visit._
 
 import scala.collection.immutable.Vector
 

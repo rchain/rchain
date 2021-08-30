@@ -5,12 +5,8 @@ import coop.rchain.models.Connective.ConnectiveInstance.ConnNotBody
 import coop.rchain.models.{Connective, Par}
 import coop.rchain.models.rholang.implicits.{ParExtension, VectorPar}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PNegation, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, SourcePosition}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 trait PNegationInstance {
   implicit def PNegationInstance[F[_]: Sync]

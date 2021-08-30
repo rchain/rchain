@@ -12,14 +12,10 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   PBundle,
   Proc
 }
-import coop.rchain.rholang.interpreter.compiler.{
-  LevelContext,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import coop.rchain.rholang.interpreter.compiler.{LevelContext, SourcePosition}
 import coop.rchain.rholang.interpreter.errors.UnexpectedBundleContent
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
+import coop.rchain.rholang.interpreter.compiler.Visit._
 
 trait PBundleInstance {
   implicit def PBundleInstance[F[_]: Sync]

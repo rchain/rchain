@@ -3,7 +3,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.Par
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PPar, Proc}
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 trait PParInstance {
   implicit def PParInstance[F[_]: Sync]

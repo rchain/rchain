@@ -5,12 +5,11 @@ import cats.syntax.all._
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{ParExtension, VectorPar}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
 import coop.rchain.rholang.interpreter.errors.UnrecognizedNormalizerError
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.rholang.interpreter.normalizer.instances.Proc._
 import coop.rchain.models.rholang.implicits._
-
+import coop.rchain.rholang.interpreter.compiler.Visit._
 trait ProcNormalizer
     extends PBundleInstance
     with PCollectInstance

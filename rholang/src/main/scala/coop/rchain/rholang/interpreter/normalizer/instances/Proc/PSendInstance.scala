@@ -4,12 +4,7 @@ import cats.syntax.all._
 import coop.rchain.models.{Par, Send}
 import coop.rchain.models.rholang.implicits.{ParExtension, ParLocallyFree, VectorPar}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, PSend, Proc, SendMultiple, SendSingle}
-import coop.rchain.rholang.interpreter.compiler.{
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 
 import scala.collection.convert.ImplicitConversionsToScala._

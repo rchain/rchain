@@ -17,7 +17,7 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   PGround,
   Ground => AbsynGround
 }
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 

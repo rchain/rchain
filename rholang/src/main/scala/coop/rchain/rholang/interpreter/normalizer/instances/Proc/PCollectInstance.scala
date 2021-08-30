@@ -26,19 +26,13 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   TupleMultiple,
   TupleSingle
 }
-import coop.rchain.rholang.interpreter.compiler.{
-  CollectVisitInputs,
-  CollectVisitOutputs,
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  VarSort
-}
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, VarSort}
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import monix.eval.Coeval
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{KeyValuePair => AbsynKeyValuePair, _}
 import coop.rchain.models.rholang.implicits._
 import scala.collection.convert.ImplicitConversionsToScala._
+import coop.rchain.rholang.interpreter.compiler.Visit._
 
 import scala.collection.immutable.{BitSet, Vector}
 

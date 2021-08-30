@@ -8,15 +8,12 @@ import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   IndexMapChain,
   NameSort,
-  NameVisitInputs,
-  NameVisitOutputs,
   ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
   SourcePosition,
   VarSort
 }
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.rholang.interpreter.normalizer.instances.Proc.{normalizeBool, normalizeGround}
 import monix.eval.Coeval

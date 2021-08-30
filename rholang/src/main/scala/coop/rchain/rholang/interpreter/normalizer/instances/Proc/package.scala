@@ -29,12 +29,11 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
 import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   LevelContext,
-  NameVisitOutputs,
   ProcSort,
-  ProcVisitInputs,
   SourcePosition,
   VarSort
 }
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   NormalizerError,

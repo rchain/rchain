@@ -6,7 +6,7 @@ import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.{Match, MatchCase, Par}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PIf, PIfElse, PNil, Proc}
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.models.rholang.implicits._
 

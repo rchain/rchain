@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.models.{EMethod, Par}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PMethod, Proc}
-import coop.rchain.rholang.interpreter.compiler.{ProcVisitInputs, ProcVisitOutputs}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.models.rholang.implicits._
 import scala.collection.convert.ImplicitConversionsToScala._

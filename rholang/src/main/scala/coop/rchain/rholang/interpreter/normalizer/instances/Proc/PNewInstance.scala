@@ -4,12 +4,8 @@ import cats.syntax.all._
 import coop.rchain.models.{New, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{NameDeclSimpl, NameDeclUrn, PNew, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  NameSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import coop.rchain.rholang.interpreter.compiler.{NameSort, SourcePosition}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.NormalizerError
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 

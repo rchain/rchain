@@ -5,19 +5,13 @@ import coop.rchain.models.Connective.ConnectiveInstance.VarRefBody
 import coop.rchain.models.rholang.implicits.ParExtension
 import coop.rchain.models.{Connective, Par, VarRef}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVarRef, VarRefKindName, VarRefKindProc}
-import coop.rchain.rholang.interpreter.compiler.{
-  IndexContext,
-  NameSort,
-  ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  SourcePosition
-}
+import coop.rchain.rholang.interpreter.compiler.{IndexContext, NameSort, ProcSort, SourcePosition}
 import coop.rchain.rholang.interpreter.errors.{
   UnboundVariableRef,
   UnexpectedNameContext,
   UnexpectedProcContext
 }
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 trait PVarRefInstance {
   implicit def PVarRefInstance[F[_]: Sync]

@@ -15,11 +15,10 @@ import coop.rchain.rholang.interpreter.compiler.{
   IndexMapChain,
   NameSort,
   ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
   SourcePosition,
   VarSort
 }
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import monix.eval.Coeval
 

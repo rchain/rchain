@@ -11,13 +11,12 @@ import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   IndexMapChain,
   NameSort,
-  NameVisitInputs,
-  NameVisitOutputs,
   ProcSort,
   SourcePosition,
   VarSort
 }
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import monix.eval.Coeval
 
 class NameMatcherSpec extends FlatSpec with Matchers {

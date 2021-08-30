@@ -10,10 +10,9 @@ import coop.rchain.rholang.interpreter.compiler.{
   LevelContext,
   NameSort,
   ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
   SourcePosition
 }
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.{
   UnexpectedProcContext,
   UnexpectedReuseOfProcContextFree

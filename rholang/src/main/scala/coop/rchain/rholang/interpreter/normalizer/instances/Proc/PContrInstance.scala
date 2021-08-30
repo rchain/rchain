@@ -5,15 +5,9 @@ import cats.syntax.all._
 import coop.rchain.models.{Par, Receive, ReceiveBind}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, PContr, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcVisitInputs,
-  ProcVisitOutputs,
-  VarSort
-}
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, VarSort}
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
+import coop.rchain.rholang.interpreter.compiler.Visit._
 
 import scala.collection.immutable.{BitSet, Vector}
 import scala.collection.convert.ImplicitConversionsToScala._

@@ -8,13 +8,8 @@ import coop.rchain.models.rholang.implicits.VectorPar
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.Proc
 import coop.rchain.rholang.interpreter.builder.{ADTBuilder, ASTBuilder}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  IndexMapChain,
-  LevelContext,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.{DeBruijnLevelMap, IndexMapChain, LevelContext}
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.{
   TopLevelFreeVariablesNotAllowedError,
   TopLevelLogicalConnectivesNotAllowedError,

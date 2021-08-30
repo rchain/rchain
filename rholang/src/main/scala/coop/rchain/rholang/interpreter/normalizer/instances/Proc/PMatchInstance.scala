@@ -5,11 +5,8 @@ import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Match, MatchCase, Par}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.DeBruijnLevelMap
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.UnrecognizedNormalizerError
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import scala.collection.convert.ImplicitConversionsToScala._

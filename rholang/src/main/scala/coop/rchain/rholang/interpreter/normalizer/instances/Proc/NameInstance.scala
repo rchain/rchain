@@ -9,11 +9,7 @@ import coop.rchain.rholang.interpreter.compiler.{
   IndexContext,
   LevelContext,
   NameSort,
-  NameVisitInputs,
-  NameVisitOutputs,
   ProcSort,
-  ProcVisitInputs,
-  ProcVisitOutputs,
   SourcePosition
 }
 import coop.rchain.rholang.interpreter.errors.{
@@ -22,6 +18,7 @@ import coop.rchain.rholang.interpreter.errors.{
 }
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.rholang.interpreter.compiler.Visit._
 
 trait NameInstance {
   implicit def nameInstance[F[_]: Sync]

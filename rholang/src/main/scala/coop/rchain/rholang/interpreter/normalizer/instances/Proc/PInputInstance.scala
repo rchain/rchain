@@ -22,13 +22,10 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
 import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   LevelContext,
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcVisitInputs,
-  ProcVisitOutputs,
   ReceiveBindsSortMatcher,
   VarSort
 }
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.errors.{
   NormalizerError,
   ReceiveOnSameChannelsError,

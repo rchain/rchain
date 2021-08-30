@@ -4,11 +4,8 @@ import cats.syntax.all._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{EMatches, Par}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PMatches, Proc}
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.DeBruijnLevelMap
+import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 trait PMatchesInstance {
   implicit def PMatchesInstance[F[_]: Sync]

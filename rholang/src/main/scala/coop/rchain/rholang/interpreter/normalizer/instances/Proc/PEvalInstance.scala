@@ -5,12 +5,8 @@ import cats.syntax.all._
 import coop.rchain.models.Par
 import coop.rchain.models.rholang.implicits.ParExtension
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, PEval}
-import coop.rchain.rholang.interpreter.compiler.{
-  NameVisitInputs,
-  NameVisitOutputs,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.Visit._
+
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
 
 trait PEvalInstance {
