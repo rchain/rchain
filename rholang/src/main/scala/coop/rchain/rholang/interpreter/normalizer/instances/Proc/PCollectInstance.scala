@@ -40,9 +40,9 @@ trait PCollectInstance {
   implicit def PCollectInstance[F[_]: Sync]
       : Normalizer[F, PCollect, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PCollect, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PCollect, input: ProcVisitInputs)(
+      override def normalize(p: PCollect, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         normalizeMatch(p.collection_, CollectVisitInputs(input.env, input.knownFree)).map(
           collectResult =>
             ProcVisitOutputs(

@@ -14,9 +14,9 @@ import scala.collection.immutable.Vector
 trait PIfInstance {
   implicit def PIfInstance[F[_]: Sync]: Normalizer[F, PIf, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PIf, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PIf, input: ProcVisitInputs)(
+      override def normalize(p: PIf, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         normalizeIF(p.proc_1, p.proc_2, new PNil(), input.copy(par = VectorPar()))
           .map(n => n.copy(par = n.par ++ input.par))
     }
@@ -24,9 +24,9 @@ trait PIfInstance {
   implicit def PIfElseInstance[F[_]: Sync]
       : Normalizer[F, PIfElse, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PIfElse, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PIfElse, input: ProcVisitInputs)(
+      override def normalize(p: PIfElse, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         normalizeIF(p.proc_1, p.proc_2, p.proc_3, input.copy(par = VectorPar()))
           .map(n => n.copy(par = n.par ++ input.par))
     }
@@ -35,10 +35,10 @@ trait PIfInstance {
       valueProc: Proc,
       trueBodyProc: Proc,
       falseBodyProc: Proc,
-      input: ProcVisitInputs
+      input: ProcVisitInputs[Par]
   )(
       implicit env: Map[String, Par]
-  ): F[ProcVisitOutputs] =
+  ): F[ProcVisitOutputs[Par]] =
     for {
       targetResult <- Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
                        .normalize(valueProc, input)

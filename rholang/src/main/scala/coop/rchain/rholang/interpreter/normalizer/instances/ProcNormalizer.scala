@@ -34,12 +34,12 @@ trait ProcNormalizer
   implicit def procInstance[F[_]: Sync]
       : Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: Proc, input: ProcVisitInputs)(
+      override def normalize(p: Proc, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = Sync[F].defer {
-        def unaryExp[T](subProc: Proc, input: ProcVisitInputs, constructor: Par => T)(
+      ): F[ProcVisitOutputs[Par]] = Sync[F].defer {
+        def unaryExp[T](subProc: Proc, input: ProcVisitInputs[Par], constructor: Par => T)(
             implicit toExprInstance: T => Expr
-        ): F[ProcVisitOutputs] =
+        ): F[ProcVisitOutputs[Par]] =
           normalize(subProc, input.copy(par = VectorPar()))
             .map(
               subResult =>
@@ -52,9 +52,9 @@ trait ProcNormalizer
         def binaryExp[T](
             subProcLeft: Proc,
             subProcRight: Proc,
-            input: ProcVisitInputs,
+            input: ProcVisitInputs[Par],
             constructor: (Par, Par) => T
-        )(implicit toExprInstance: T => Expr): F[ProcVisitOutputs] =
+        )(implicit toExprInstance: T => Expr): F[ProcVisitOutputs[Par]] =
           for {
             leftResult <- normalize(subProcLeft, input.copy(par = VectorPar()))
             rightResult <- normalize(

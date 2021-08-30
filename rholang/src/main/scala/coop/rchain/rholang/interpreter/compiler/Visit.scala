@@ -11,19 +11,19 @@ object Visit {
     * @param env
     * @param knownFree
     */
-  final case class ProcVisitInputs(
-      par: Par,
+  final case class ProcVisitInputs[T](
+      par: T,
       env: IndexMapChain[VarSort],
       knownFree: DeBruijnLevelMap[VarSort]
   )
   // Returns the update Par and an updated map of free variables.
-  final case class ProcVisitOutputs(par: Par, knownFree: DeBruijnLevelMap[VarSort])
+  final case class ProcVisitOutputs[T](par: T, knownFree: DeBruijnLevelMap[VarSort])
 
-  final case class NameVisitInputs(
+  final case class NameVisitInputs[T](
       env: IndexMapChain[VarSort],
       knownFree: DeBruijnLevelMap[VarSort]
   )
-  final case class NameVisitOutputs(chan: Par, knownFree: DeBruijnLevelMap[VarSort])
+  final case class NameVisitOutputs[T](chan: T, knownFree: DeBruijnLevelMap[VarSort])
 
   final case class CollectVisitInputs(
       env: IndexMapChain[VarSort],

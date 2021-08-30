@@ -17,9 +17,9 @@ trait PVarRefInstance {
   implicit def PVarRefInstance[F[_]: Sync]
       : Normalizer[F, PVarRef, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PVarRef, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PVarRef, input: ProcVisitInputs)(
+      override def normalize(p: PVarRef, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = input.env.find(p.var_) match {
+      ): F[ProcVisitOutputs[Par]] = input.env.find(p.var_) match {
         case None =>
           Sync[F].raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
         case Some((IndexContext(idx, kind, sourcePosition), depth)) =>

@@ -22,9 +22,9 @@ trait PVarInstance {
   implicit def PVarInstance[F[_]: Sync]
       : Normalizer[F, PVar, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PVar, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PVar, input: ProcVisitInputs)(
+      override def normalize(p: PVar, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = p.procvar_ match {
+      ): F[ProcVisitOutputs[Par]] = p.procvar_ match {
         case pvv: ProcVarVar =>
           input.env.get(pvv.var_) match {
             case Some(IndexContext(level, ProcSort, _)) =>

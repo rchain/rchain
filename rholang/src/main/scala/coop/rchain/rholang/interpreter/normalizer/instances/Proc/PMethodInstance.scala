@@ -14,9 +14,9 @@ trait PMethodInstance {
   implicit def PMethodInstance[F[_]: Sync]
       : Normalizer[F, PMethod, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PMethod, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PMethod, input: ProcVisitInputs)(
+      override def normalize(p: PMethod, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         for {
           targetResult <- Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
                            .normalize(p.proc_, input.copy(par = Par()))

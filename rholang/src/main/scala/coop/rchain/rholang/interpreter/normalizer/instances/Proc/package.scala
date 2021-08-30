@@ -88,11 +88,11 @@ package object Proc {
         handleProcVar[F](nr.procvar_, knownFree)
     }
 
-  def failOnInvalidConnective(
-      input: ProcVisitInputs,
+  def failOnInvalidConnective[T](
+      input: ProcVisitInputs[T],
       depth: Int,
-      nameRes: NameVisitOutputs
-  ): Either[InterpreterError, NameVisitOutputs] =
+      nameRes: NameVisitOutputs[T]
+  ): Either[InterpreterError, NameVisitOutputs[T]] =
     if (input.env.depth == 0) {
       Either
         .fromOption(

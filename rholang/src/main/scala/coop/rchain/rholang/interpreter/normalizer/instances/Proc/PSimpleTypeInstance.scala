@@ -25,9 +25,9 @@ trait PSimpleTypeInstance {
   implicit def PSimpleTypeInstance[F[_]: Sync]
       : Normalizer[F, PSimpleType, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PSimpleType, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PSimpleType, input: ProcVisitInputs)(
+      override def normalize(p: PSimpleType, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = p.simpletype_ match {
+      ): F[ProcVisitOutputs[Par]] = p.simpletype_ match {
         case _: SimpleTypeBool =>
           ProcVisitOutputs(
             input.par

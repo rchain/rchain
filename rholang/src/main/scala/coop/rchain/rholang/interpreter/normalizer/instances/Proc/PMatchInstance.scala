@@ -16,9 +16,9 @@ trait PMatchInstance {
   implicit def PMatchInstance[F[_]: Sync]
       : Normalizer[F, PMatch, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PMatch, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PMatch, input: ProcVisitInputs)(
+      override def normalize(p: PMatch, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = {
+      ): F[ProcVisitOutputs[Par]] = {
 
         def liftCase(c: Case): F[(Proc, Proc)] = c match {
           case ci: CaseImpl => Applicative[F].pure[(Proc, Proc)]((ci.proc_1, ci.proc_2))

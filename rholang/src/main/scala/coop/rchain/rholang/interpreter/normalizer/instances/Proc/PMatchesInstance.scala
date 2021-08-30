@@ -11,9 +11,9 @@ trait PMatchesInstance {
   implicit def PMatchesInstance[F[_]: Sync]
       : Normalizer[F, PMatches, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PMatches, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PMatches, input: ProcVisitInputs)(
+      override def normalize(p: PMatches, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = // In case of 'matches' expression the free variables from the pattern are thrown away
+      ): F[ProcVisitOutputs[Par]] = // In case of 'matches' expression the free variables from the pattern are thrown away
         // and only the ones from the target are used.
         // This is because the "target matches pattern" should have the same semantics as
         // "match target { pattern => true ; _ => false}

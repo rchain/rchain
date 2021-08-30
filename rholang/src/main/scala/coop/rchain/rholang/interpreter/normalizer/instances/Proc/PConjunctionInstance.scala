@@ -16,9 +16,9 @@ trait PConjunctionInstance {
   implicit def PConjunctionInstance[F[_]: Sync]
       : Normalizer[F, PConjunction, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PConjunction, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PConjunction, input: ProcVisitInputs)(
+      override def normalize(p: PConjunction, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         for {
           leftResult <- Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par].normalize(
                          p.proc_1,

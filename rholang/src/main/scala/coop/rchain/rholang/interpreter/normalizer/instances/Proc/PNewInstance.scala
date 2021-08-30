@@ -15,9 +15,9 @@ trait PNewInstance {
   implicit def PNewInstance[F[_]: Sync]
       : Normalizer[F, PNew, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PNew, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PNew, input: ProcVisitInputs)(
+      override def normalize(p: PNew, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = {
+      ): F[ProcVisitOutputs[Par]] = {
 
         val deployIdUri   = "rho:rchain:deployId"
         val deployerIdUri = "rho:rchain:deployerId"
@@ -46,9 +46,9 @@ trait PNewInstance {
         def missingEnvElement(name: String, uri: String) =
           NormalizerError(s"`$uri` was used in rholang usage context where $name is not available.")
         if (requiresDeployId && env.get(deployIdUri).forall(_.singleDeployId().isEmpty))
-          missingEnvElement("DeployId", deployIdUri).raiseError[F, ProcVisitOutputs]
+          missingEnvElement("DeployId", deployIdUri).raiseError[F, ProcVisitOutputs[Par]]
         else if (requiresDeployerId && env.get(deployerIdUri).forall(_.singleDeployerId().isEmpty))
-          missingEnvElement("DeployerId", deployerIdUri).raiseError[F, ProcVisitOutputs]
+          missingEnvElement("DeployerId", deployerIdUri).raiseError[F, ProcVisitOutputs[Par]]
         else {
           Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
             .normalize(p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree))

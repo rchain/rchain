@@ -16,9 +16,9 @@ trait PDisjunctionInstance {
   implicit def PDisjunctionInstance[F[_]: Sync]
       : Normalizer[F, PDisjunction, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PDisjunction, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PDisjunction, input: ProcVisitInputs)(
+      override def normalize(p: PDisjunction, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         for {
           leftResult <- Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
                          .normalize(

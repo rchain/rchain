@@ -14,9 +14,9 @@ trait PSendInstance {
   implicit def PSendInstance[F[_]: Sync]
       : Normalizer[F, PSend, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PSend, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PSend, input: ProcVisitInputs)(
+      override def normalize(p: PSend, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         for {
           nameMatchResult <- Normalizer[F, Name, NameVisitInputs, NameVisitOutputs, Par].normalize(
                               p.name_,

@@ -12,9 +12,9 @@ trait PNegationInstance {
   implicit def PNegationInstance[F[_]: Sync]
       : Normalizer[F, PNegation, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PNegation, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PNegation, input: ProcVisitInputs)(
+      override def normalize(p: PNegation, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
           .normalize(
             p.proc_,

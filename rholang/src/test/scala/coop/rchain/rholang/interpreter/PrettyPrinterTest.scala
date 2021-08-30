@@ -1011,7 +1011,7 @@ class IncrementTester extends FlatSpec with Matchers {
 
 class NamePrinterSpec extends FlatSpec with Matchers {
 
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty, DeBruijnLevelMap.empty)
+  val inputs                                   = NameVisitInputs[Par](IndexMapChain.empty, DeBruijnLevelMap.empty)
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "Print" in {
@@ -1028,7 +1028,8 @@ class NamePrinterSpec extends FlatSpec with Matchers {
   val nvar = new NameVar("x")
 
   "NameVar" should "Print" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
@@ -1042,8 +1043,9 @@ class NamePrinterSpec extends FlatSpec with Matchers {
   val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
 
   "NameQuote" should "Print" in {
-    val nqeval      = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val nqeval = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
     val result =
       PrettyPrinter(0, 1).buildString(
         Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]

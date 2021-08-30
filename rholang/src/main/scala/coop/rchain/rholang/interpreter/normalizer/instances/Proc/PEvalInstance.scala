@@ -13,9 +13,9 @@ trait PEvalInstance {
   implicit def PEvalInstance[F[_]: Sync]
       : Normalizer[F, PEval, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PEval, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PEval, input: ProcVisitInputs)(
+      override def normalize(p: PEval, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         Normalizer[F, Name, NameVisitInputs, NameVisitOutputs, Par]
           .normalize(p.name_, NameVisitInputs(input.env, input.knownFree))
           .map(

@@ -21,10 +21,10 @@ trait PBundleInstance {
   implicit def PBundleInstance[F[_]: Sync]
       : Normalizer[F, PBundle, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PBundle, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(b: PBundle, input: ProcVisitInputs)(
+      override def normalize(b: PBundle, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = {
-        def error(targetResult: ProcVisitOutputs): F[ProcVisitOutputs] = {
+      ): F[ProcVisitOutputs[Par]] = {
+        def error(targetResult: ProcVisitOutputs[Par]): F[ProcVisitOutputs[Par]] = {
           val errMsg = {
             def at(variable: String, sourcePosition: SourcePosition): String =
               s"$variable at $sourcePosition"

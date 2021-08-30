@@ -9,9 +9,9 @@ trait PParInstance {
   implicit def PParInstance[F[_]: Sync]
       : Normalizer[F, PPar, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PPar, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PPar, input: ProcVisitInputs)(
+      override def normalize(p: PPar, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         Sync[F].suspend {
           for {
             result <- Normalizer[F, Proc, ProcVisitInputs, ProcVisitOutputs, Par]

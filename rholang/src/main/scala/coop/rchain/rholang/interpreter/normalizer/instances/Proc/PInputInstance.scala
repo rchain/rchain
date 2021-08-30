@@ -42,9 +42,9 @@ trait PInputInstance {
   implicit def PInputInstance[F[_]: Sync]
       : Normalizer[F, PInput, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PInput, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PInput, input: ProcVisitInputs)(
+      override def normalize(p: PInput, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] = {
+      ): F[ProcVisitOutputs[Par]] = {
         // To handle the most common case where we can sort the binds because
         // they're from different sources, Each channel's list of patterns starts its free variables at 0.
         // We check for overlap at the end after sorting. We could check before, but it'd be an extra step.
@@ -84,7 +84,7 @@ trait PInputInstance {
                     .normalize(n, NameVisitInputs(input.env.push, acc._2))
                     .flatMap { res =>
                       failOnInvalidConnective(input, input.env.depth, res)
-                        .fold(err => Sync[F].raiseError[NameVisitOutputs](err), _.pure[F])
+                        .fold(err => Sync[F].raiseError[NameVisitOutputs[Par]](err), _.pure[F])
                     }
                     .map(
                       result =>

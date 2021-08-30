@@ -24,17 +24,17 @@ trait NameInstance {
   implicit def nameInstance[F[_]: Sync]
       : Normalizer[F, Name, NameVisitInputs, NameVisitOutputs, Par] =
     new Normalizer[F, Name, NameVisitInputs, NameVisitOutputs, Par] {
-      override def normalize(p: Name, input: NameVisitInputs)(
+      override def normalize(p: Name, input: NameVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[NameVisitOutputs] = p match {
+      ): F[NameVisitOutputs[Par]] = p match {
         case wc: NameWildcard =>
           val wildcardBindResult =
             input.knownFree.addWildcard(SourcePosition(wc.line_num, wc.col_num))
-          NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[F]
+          NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())): Par, wildcardBindResult).pure[F]
         case n: NameVar =>
           input.env.get(n.var_) match {
             case Some(IndexContext(level, NameSort, _)) => {
-              NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[F]
+              NameVisitOutputs(EVar(BoundVar(level)): Par, input.knownFree).pure[F]
             }
             case Some(IndexContext(_, ProcSort, sourcePosition)) => {
               Sync[F].raiseError(
@@ -46,7 +46,7 @@ trait NameInstance {
                 case None =>
                   val newBindingsPair =
                     input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
-                  NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)), newBindingsPair)
+                  NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)): Par, newBindingsPair)
                     .pure[F]
                 case Some(LevelContext(_, _, sourcePosition)) =>
                   Sync[F].raiseError(

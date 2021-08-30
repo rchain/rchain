@@ -16,9 +16,9 @@ trait PContrInstance {
   implicit def PContrInstance[F[_]: Sync]
       : Normalizer[F, PContr, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PContr, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PContr, input: ProcVisitInputs)(
+      override def normalize(p: PContr, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         // A free variable can only be used once in any of the parameters.
         // And we start with the empty free variable map because these free
         // variables aren't free in the surrounding context: they're binders
@@ -41,7 +41,7 @@ trait PContrInstance {
                                  .flatMap { res =>
                                    failOnInvalidConnective(input, input.env.depth, res)
                                      .fold(
-                                       err => Sync[F].raiseError[NameVisitOutputs](err),
+                                       err => Sync[F].raiseError[NameVisitOutputs[Par]](err),
                                        _.pure[F]
                                      )
                                  }

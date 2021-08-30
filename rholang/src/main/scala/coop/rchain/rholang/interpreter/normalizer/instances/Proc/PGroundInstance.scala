@@ -26,9 +26,9 @@ trait PGroundInstance {
   implicit def PGroundInstance[F[_]: Sync]
       : Normalizer[F, PGround, ProcVisitInputs, ProcVisitOutputs, Par] =
     new Normalizer[F, PGround, ProcVisitInputs, ProcVisitOutputs, Par] {
-      override def normalize(p: PGround, input: ProcVisitInputs)(
+      override def normalize(p: PGround, input: ProcVisitInputs[Par])(
           implicit env: Map[String, Par]
-      ): F[ProcVisitOutputs] =
+      ): F[ProcVisitOutputs[Par]] =
         normalizeGround(p.ground_)
           .map(
             expr =>

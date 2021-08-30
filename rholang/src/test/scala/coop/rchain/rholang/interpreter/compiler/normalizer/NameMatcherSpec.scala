@@ -20,7 +20,8 @@ import coop.rchain.rholang.interpreter.compiler.Visit._
 import monix.eval.Coeval
 
 class NameMatcherSpec extends FlatSpec with Matchers {
-  val inputs                                   = NameVisitInputs(IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
+  val inputs: NameVisitInputs[Par] =
+    NameVisitInputs(IndexMapChain.empty[VarSort], DeBruijnLevelMap.empty[VarSort])
   implicit val normalizerEnv: Map[String, Par] = Map.empty
 
   "NameWildcard" should "add a wildcard count to knownFree" in {
@@ -35,7 +36,8 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   val nvar = new NameVar("x")
 
   "NameVar" should "Compile as BoundVar if it's in env" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
 
     val result = Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
       .normalize(nvar, boundInputs)
@@ -53,7 +55,8 @@ class NameMatcherSpec extends FlatSpec with Matchers {
       (inputs.knownFree.put(("x", NameSort, SourcePosition(0, 0))))
   }
   "NameVar" should "Not compile if it's in env of the wrong sort" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
 
     an[UnexpectedNameContext] should be thrownBy {
       Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
@@ -62,7 +65,7 @@ class NameMatcherSpec extends FlatSpec with Matchers {
     }
   }
   "NameVar" should "Not compile if it's used free somewhere else" in {
-    val boundInputs =
+    val boundInputs: NameVisitInputs[Par] =
       inputs.copy(knownFree = inputs.knownFree.put(("x", NameSort, SourcePosition(0, 0))))
 
     an[UnexpectedReuseOfNameContextFree] should be thrownBy {
@@ -75,8 +78,9 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
 
   "NameQuote" should "compile to a var if the var is bound" in {
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
-    val nqvar       = new NameQuote(new PVar(new ProcVarVar("x")))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", ProcSort, SourcePosition(0, 0))))
+    val nqvar = new NameQuote(new PVar(new ProcVarVar("x")))
     val result = Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
       .normalize(nqvar, boundInputs)
       .value
@@ -105,8 +109,9 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   }
 
   "NameQuote" should "collapse an eval" in {
-    val nqeval      = new NameQuote(new PEval(new NameVar("x")))
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val nqeval = new NameQuote(new PEval(new NameVar("x")))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
     val result = Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
       .normalize(nqeval, boundInputs)
       .value
@@ -116,8 +121,9 @@ class NameMatcherSpec extends FlatSpec with Matchers {
   }
 
   "NameQuote" should "not collapse an eval | eval" in {
-    val nqeval      = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
-    val boundInputs = inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
+    val nqeval = new NameQuote(new PPar(new PEval(new NameVar("x")), new PEval(new NameVar("x"))))
+    val boundInputs: NameVisitInputs[Par] =
+      inputs.copy(env = inputs.env.put(("x", NameSort, SourcePosition(0, 0))))
     val result = Normalizer[Coeval, Name, NameVisitInputs, NameVisitOutputs, Par]
       .normalize(nqeval, boundInputs)
       .value
