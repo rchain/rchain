@@ -12,7 +12,6 @@ import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   IndexMapChain,
   LevelContext,
-  ProcNormalizeMatcher,
   ProcVisitInputs,
   ProcVisitOutputs
 }

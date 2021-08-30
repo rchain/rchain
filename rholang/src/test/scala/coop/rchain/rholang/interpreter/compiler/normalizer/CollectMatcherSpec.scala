@@ -1,7 +1,6 @@
 package coop.rchain.rholang.interpreter.compiler.normalizer
 
 import coop.rchain.rholang.ast.rholang_mercury.Absyn._
-
 import org.scalatest._
 
 import scala.collection.immutable.BitSet
@@ -15,12 +14,13 @@ import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   IndexMapChain,
   NameSort,
-  ProcNormalizeMatcher,
   ProcSort,
   ProcVisitInputs,
+  ProcVisitOutputs,
   SourcePosition,
   VarSort
 }
+import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import monix.eval.Coeval
 
 class CollectMatcherSpec extends FlatSpec with Matchers {
@@ -43,7 +43,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     listData.add(new PGround(new GroundInt("7")))
     val list = new PCollect(new CollectList(listData, new ProcRemainderEmpty()))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](list, inputs).value
+    val result =
+      Normalizer[Coeval, Proc, ProcVisitInputs, ProcVisitOutputs, Par].normalize(list, inputs).value
     result.par should be(
       inputs.par.prepend(
         EList(
@@ -87,7 +88,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     val tuple =
       new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
+    val result = Normalizer[Coeval, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
+      .normalize(tuple, inputs)
+      .value
     result.par should be(
       inputs.par.prepend(
         ETuple(
@@ -115,7 +118,9 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       new PCollect(new CollectTuple(new TupleMultiple(new PVar(new ProcVarVar("Q")), tupleData)))
 
     an[UnexpectedReuseOfProcContextFree] should be thrownBy {
-      ProcNormalizeMatcher.normalizeMatch[Coeval](tuple, inputs).value
+      Normalizer[Coeval, Proc, ProcVisitInputs, ProcVisitOutputs, Par]
+        .normalize(tuple, inputs)
+        .value
     }
   }
   "Tuple" should "sort the insides of their elements" in {
@@ -128,7 +133,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     setData.add(new PPar(new PGround(new GroundInt("8")), new PVar(new ProcVarVar("Q"))))
     val set = new PCollect(new CollectSet(setData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](set, inputs).value
+    val result =
+      Normalizer[Coeval, Proc, ProcVisitInputs, ProcVisitOutputs, Par].normalize(set, inputs).value
 
     result.par should be(
       inputs.par.prepend(
@@ -164,7 +170,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
     mapData.add(new KeyValuePairImpl(new PVar(new ProcVarVar("P")), new PEval(new NameVar("Q"))))
     val map = new PCollect(new CollectMap(mapData, new ProcRemainderVar(new ProcVarVar("Z"))))
 
-    val result = ProcNormalizeMatcher.normalizeMatch[Coeval](map, inputs).value
+    val result =
+      Normalizer[Coeval, Proc, ProcVisitInputs, ProcVisitOutputs, Par].normalize(map, inputs).value
     result.par should be(
       inputs.par.prepend(
         ParMap(
