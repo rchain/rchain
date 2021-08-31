@@ -4,7 +4,7 @@ import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.shared.Stopwatch
 import org.scalatest.{FlatSpec, Matchers}
 
-class MergingLogic extends FlatSpec with Matchers {
+class MergingLogicSpec extends FlatSpec with Matchers {
   // some random conflict maps and rejection options, computed manually
   "rejection options" should "be computed correctly" in {
     computeRejectionOptions(
