@@ -132,7 +132,9 @@ object LeaderfulSimulation {
     val validatorsNum    = validatorsWithPayments.size
 
     val mkBlocksToMerge =
-      Log[F].info(s"${validatorsNum - 1} validators create blocks concurrently.") *>
+      Log[F].info(
+        s"${validatorsNum - 1} validators create blocks concurrently. (x3: play, replay, validation)"
+      ) *>
         Stream
           .emits(
             mkBlocks[F](validatorsWithPayments, baseState, seqNum, mergingBlocksNum).dropRight(1)
@@ -151,7 +153,9 @@ object LeaderfulSimulation {
 
     for {
       // create children blocks
-      v                            <- Stopwatch.duration(mkBlocksToMerge)
+      v                            <- Stopwatch.duration(mkBlocksToMerge) // play
+      _                            <- mkBlocksToMerge // replay
+      _                            <- mkBlocksToMerge // validation
       (t, tailStateTransitionTime) = v
 
       _                         <- Log[F].info(s"Done in ${tailStateTransitionTime}")
@@ -174,38 +178,42 @@ object LeaderfulSimulation {
                   .map(_.toMap)
       dag <- dagStore.getRepresentation
 
-      _ <- Log[F].info("Preparing merged state...")
-      v <- Stopwatch.duration(
-            DagMerger.merge[F](
-              dag,
-              baseBlock.blockHash,
-              Blake2b256Hash.fromByteString(baseState),
-              indices(_).deployChains.pure,
-              runtimeManager.getHistoryRepo,
-              DagMerger.costOptimalRejectionAlg
-            )
-          )
+      _ <- Log[F].info("Preparing merged state... (x3: play, replay, validation)")
+      merge = DagMerger.merge[F](
+        dag,
+        baseBlock.blockHash,
+        Blake2b256Hash.fromByteString(baseState),
+        indices(_).deployChains.pure,
+        runtimeManager.getHistoryRepo,
+        DagMerger.costOptimalRejectionAlg
+      )
+      v                                         <- Stopwatch.duration(merge) //play
+      _                                         <- merge // replay
+      _                                         <- merge // validation
       ((postState, rejectedDeploys), mergeTime) = v
       mergedState                               = ByteString.copyFrom(postState.bytes.toArray)
 
       // create next base block (merge block)
-      _ <- Log[F].info("Creating merge block...")
-      r <- mkBlocks[F](
-            validatorsWithPayments,
-            mergedState,
-            seqNum,
-            mergerBlockNum,
-            rejectedDeploys
-          ).last
-            .map {
-              case (b, balancesDiff) =>
-                (
-                  b.copy(header = b.header.copy(parentsHashList = toMerge.map(_.blockHash))),
-                  balancesDiff
-                )
-            }
-            .compile
-            .lastOrError
+      _ <- Log[F].info("Creating merge block... (x3: play, replay, validation)")
+      mkMergeBlock = mkBlocks[F](
+        validatorsWithPayments,
+        mergedState,
+        seqNum,
+        mergerBlockNum,
+        rejectedDeploys
+      ).last
+        .map {
+          case (b, balancesDiff) =>
+            (
+              b.copy(header = b.header.copy(parentsHashList = toMerge.map(_.blockHash))),
+              balancesDiff
+            )
+        }
+        .compile
+        .lastOrError
+      r                               <- mkMergeBlock // play
+      _                               <- mkMergeBlock // replay
+      _                               <- mkMergeBlock // validation
       (nextBaseBlock, leaderPayments) = r
       _                               <- dagStore.insert(nextBaseBlock, false)
       _                               <- dagStore.recordDirectlyFinalized(nextBaseBlock.blockHash, _ => ().pure[F])
