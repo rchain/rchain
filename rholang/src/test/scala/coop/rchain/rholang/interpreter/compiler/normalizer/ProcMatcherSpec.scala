@@ -19,6 +19,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.ParBuilderUtil
+import coop.rchain.rholang.interpreter.builder.ADTBuilder
 import coop.rchain.rholang.interpreter.compiler.{
   DeBruijnLevelMap,
   IndexMapChain,
@@ -29,6 +30,7 @@ import coop.rchain.rholang.interpreter.compiler.{
 }
 import coop.rchain.rholang.interpreter.compiler.Visit._
 import coop.rchain.rholang.interpreter.normalizer.Normalizer
+import coop.rchain.rholang.interpreter.normalizer.instances.ProcSourceNormalizer.SourcePar
 import monix.eval.Coeval
 
 class ProcMatcherSpec extends FlatSpec with Matchers {

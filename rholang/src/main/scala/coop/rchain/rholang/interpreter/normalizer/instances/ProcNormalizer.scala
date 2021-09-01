@@ -10,6 +10,7 @@ import coop.rchain.rholang.interpreter.normalizer.Normalizer
 import coop.rchain.rholang.interpreter.normalizer.instances.Proc._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.Visit._
+
 trait ProcNormalizer
     extends PBundleInstance
     with PCollectInstance
