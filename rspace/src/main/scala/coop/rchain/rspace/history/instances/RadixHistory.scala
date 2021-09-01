@@ -7,12 +7,9 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History.KeyPath
 import coop.rchain.rspace.history.RadixTree.{emptyTree, NodeR, RadixTreeImpl, TreeR}
 import coop.rchain.rspace.history._
-import coop.rchain.shared.Stopwatch
 import scodec.bits.ByteVector
 
-import java.util.concurrent.TimeUnit
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.duration.FiniteDuration
 
 /**
   * History implementation with radix tree
@@ -45,11 +42,12 @@ final case class RadixHistory[F[_]: Sync: Parallel](
             new RuntimeException("Cannot process duplicate actions on one key")
           )(hasNoDuplicates)
 
-      useParallel = true
-
-      newRootTree <- if (useParallel) processParallel(actions)
-                    else Sync[F].delay(processSequential(actions))
-
+      funNum = 2
+      newRootTree <- funNum match {
+                      case 0 => Sync[F].delay(processOneSequential(actions))
+                      case 1 => Sync[F].delay(processSequential(actions))
+                      case 2 => processParallel(actions)
+                    }
       newRootHash = impl.saveRef(newRootTree)
     } yield this.copy(currentRoot = newRootHash, store = store)
 
@@ -74,24 +72,32 @@ final case class RadixHistory[F[_]: Sync: Parallel](
 //    newRootTree._1
 //  }
 
+  private def processOneSequential(actions: List[HistoryAction]): TreeR =
+    actions.foldLeft(rootTree) {
+      case (subTree, action) =>
+        val (prefix, value) = fromAction(action)
+        impl.write(subTree, prefix, value)
+    }
+
   private def processSequential(actions: List[HistoryAction]): TreeR = {
     val partitions = actions.groupBy(_.key.head).toList
 
     partitions.foldLeft(rootTree) {
-      case (subTree, (byteIdx, subActions)) =>
-        val startMs = System.currentTimeMillis
+//      case (subTree, (byteIdx, subActions)) =>
+      case (subTree, (_, subActions)) =>
+//        val startMs = System.currentTimeMillis
         val newNode = subActions.foldLeft(subTree) {
           case (subTree, action) =>
             val (prefix, value) = fromAction(action)
             impl.write(subTree, prefix, value)
         }
-        val count    = subActions.size
-        val deltaMs  = System.currentTimeMillis - startMs
-        val duration = FiniteDuration(deltaMs, TimeUnit.MILLISECONDS)
-        val durStr   = Stopwatch.showTime(duration)
-        val perMs    = count.toDouble / deltaMs
-        val idxHex   = ByteVector(byteIdx).toHex
-        println(s"Progress ($idxHex): $count, elapsed: $durStr, per ms: $perMs")
+//        val count    = subActions.size
+//        val deltaMs  = System.currentTimeMillis - startMs
+//        val duration = FiniteDuration(deltaMs, TimeUnit.MILLISECONDS)
+//        val durStr   = Stopwatch.showTime(duration)
+//        val perMs    = count.toDouble / deltaMs
+//        val idxHex   = ByteVector(byteIdx).toHex
+//        println(s"Progress ($idxHex): $count, elapsed: $durStr, per ms: $perMs")
 
         newNode
     }
