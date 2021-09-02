@@ -48,7 +48,7 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
 import coop.rchain.shared._
-import coop.rchain.store.LmdbDirStoreManager
+import coop.rchain.store.{InMemoryStoreManager, LmdbDirStoreManager}
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -96,9 +96,10 @@ object Setup {
       else Span.noop[F]
 
       // RNode key-value store manager / manages LMDB databases
-      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
-      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
-      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+//      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
+//      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
+//      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
+      rnodeStoreManager = InMemoryStoreManager()
 
       // Block storage
       blockStore <- {
