@@ -1,32 +1,36 @@
 package coop.rchain.casper.util.rholang
 
 import cats.Parallel
+import cats.data.EitherT
 import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
+  deployMergeableDataSeqCodec,
+  DeployMergeableData
+}
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
-import coop.rchain.scodec.codecs
 import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
-import scodec.Codec
 import scodec.bits.ByteVector
 
 import scala.concurrent.ExecutionContext
@@ -66,15 +70,14 @@ trait RuntimeManager[F[_]] {
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
   def getHistoryRepo: RhoHistoryRepository[F]
+  def getMergeableStore: MergeableStore[F]
 }
-
-final case class DeployMergeableData(channels: Seq[Blake2b256Hash])
 
 final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
-    mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
+    mergeableStore: MergeableStore[F]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -178,11 +181,15 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     }
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo
+
+  def getMergeableStore: MergeableStore[F] = mergeableStore
 }
 
 object RuntimeManager {
 
   type StateHash = ByteString
+
+  type MergeableStore[F[_]] = KeyValueTypedStore[F, ByteVector, Seq[DeployMergeableData]]
 
   /**
     * This is a hard-coded value for `emptyStateHash` which is calculated by
@@ -201,19 +208,19 @@ object RuntimeManager {
       rSpace: RhoISpace[F],
       replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F],
-      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
+      mergeableStore: MergeableStore[F]
   ): F[RuntimeManagerImpl[F]] =
     Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore))
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
-      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
+      mergeableStore: MergeableStore[F]
   )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
     createWithHistory(store, mergeableStore).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
-      mergeableStore: KeyValueTypedStore[F, ByteVector, DeployMergeableData]
+      mergeableStore: MergeableStore[F]
   )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -228,23 +235,16 @@ object RuntimeManager {
       }
   }
 
-  def mergeableStore[F[_]: Sync](
-      kvm: KeyValueStoreManager[F]
-  ): F[KeyValueTypedStore[F, ByteVector, DeployMergeableData]] =
-    kvm.database[ByteVector, DeployMergeableData](
+  /**
+    * Creates connection to [[MergeableStore]] database.
+    *
+    * Mergeable (number) channels store is used in [[RuntimeManager]] implementation.
+    * This function provides default instantiation.
+    */
+  def mergeableStore[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[MergeableStore[F]] =
+    kvm.database[ByteVector, Seq[DeployMergeableData]](
       "mergeable-channel-cache",
       scodec.codecs.bytes,
-      deployMergeableDataCodec
+      deployMergeableDataSeqCodec
     )
-
-  val codecBlake2b256Hash: Codec[Blake2b256Hash] =
-    scodec.codecs.bytes
-      .xmap[Blake2b256Hash](Blake2b256Hash.fromByteVector, _.bytes)
-      .as[Blake2b256Hash]
-
-  // Deploy mergeable channels support from Replay
-  val deployMergeableDataCodec: Codec[DeployMergeableData] =
-    codecs
-      .seqOfN(scodec.codecs.int32, codecBlake2b256Hash)
-      .as[DeployMergeableData]
 }

@@ -876,7 +876,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         implicit val cost          = CostAccounting.emptyCost[Task].unsafeRunSync
         def byteName(b: Byte): Par = GPrivate(ByteString.copyFrom(Array[Byte](b)))
         val reducer = RholangOnlyDispatcher
-          .create[Task, Task.Par](space, Map("rho:test:foo" -> byteName(42)))
+          .create2[Task](space, Map("rho:test:foo" -> byteName(42)))
           ._2
         cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
         implicit val env = Env[Par]()

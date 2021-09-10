@@ -91,7 +91,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     }
     implicit val rand        = Blake2b512Random(128)
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val (_, chargingReducer) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
+    val (_, chargingReducer) = RholangAndScalaDispatcher.create2(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test                 = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
@@ -125,7 +125,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
 
       lazy val (_, reducer) =
         RholangAndScalaDispatcher
-          .create[Task](
+          .create2[Task](
             pureRSpace,
             Map.empty,
             Map.empty

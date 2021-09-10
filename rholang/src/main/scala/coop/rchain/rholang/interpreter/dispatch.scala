@@ -2,6 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
@@ -10,6 +11,7 @@ import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
@@ -53,15 +55,26 @@ object RholangAndScalaDispatcher {
   def create[M[_]: Sync: Parallel: _cost](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
-      urnMap: Map[String, Par]
+      urnMap: Map[String, Par],
+      mergeChs: Ref[M, Set[Par]]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M](tuplespace, dispatcher, urnMap)
+      new DebruijnInterpreter[M](tuplespace, dispatcher, urnMap, mergeChs)
 
     (dispatcher, reducer)
+  }
+
+  def create2[M[_]: Sync: Parallel: _cost](
+      tuplespace: RhoTuplespace[M],
+      dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
+      urnMap: Map[String, Par]
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
+    val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
+
+    create(tuplespace, dispatchTable, urnMap, emptyMergeableRef)
   }
 }
