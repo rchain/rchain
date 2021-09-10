@@ -1,14 +1,12 @@
 package coop.rchain.crypto.hash
 
 import com.google.protobuf.ByteString
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.LongBuffer
-import java.security.SecureRandom
 import org.bouncycastle.util.Pack
 import org.scalacheck.{Arbitrary, Gen}
 import scalapb.TypeMapper
 
+import java.nio.{ByteBuffer, ByteOrder, LongBuffer}
+import java.security.SecureRandom
 import scala.annotation.tailrec
 
 /** Blake2b512 based splittable and mergeable random number generator
@@ -144,7 +142,6 @@ object Blake2b512Random {
     apply(init, 0, init.length)
 
   def merge(children: Seq[Blake2b512Random]): Blake2b512Random = {
-    import coop.rchain.crypto.codec.Base16
     @tailrec
     def internalMerge(children: Vector[Blake2b512Random]): Blake2b512Random = {
       val squashedBuilder = Vector.newBuilder[Blake2b512Random]
@@ -170,10 +167,14 @@ object Blake2b512Random {
       } else
         internalMerge(result)
     }
-    if (children.size == 0)
-      new Blake2b512Random(Blake2b512Block(0.toByte), ByteBuffer.allocate(128))
-    else
-      internalMerge(children.toVector)
+
+    // Throw error if at least two random generators are merging
+    assert(children.size >= 2, {
+      s"Blake2b512Random should have at least 2 inputs to merge, received ${children.size}."
+    })
+
+    // Merge two or more random generators
+    internalMerge(children.toVector)
   }
 
   implicit val typeMapper = TypeMapper((byteStr: ByteString) => {
@@ -214,7 +215,7 @@ object Blake2b512Random {
     val digestSize = 80
     // 128-bit rand count, digest, 2 positions, partial path, and remainder
     val totalSize = 16 + digestSize + 2 + rand.pathView.position() + remainderSize
-    val result    = ByteBuffer.allocateDirect(totalSize)
+    val result    = ByteBuffer.allocate(totalSize)
     result.order(ByteOrder.LITTLE_ENDIAN).asLongBuffer().put(rand.countView.asReadOnlyBuffer())
     result.position(16)
     Blake2b512Block.fillByteBuffer(rand.digest, result)
@@ -230,7 +231,7 @@ object Blake2b512Random {
     ByteString.copyFrom(result)
   })
 
-  val BLANK_BLOCK = ByteBuffer.allocateDirect(128).asReadOnlyBuffer()
+  val BLANK_BLOCK = ByteBuffer.allocate(128).asReadOnlyBuffer()
 
   // For testing only, will result in incorrect results otherwise
   def tweakLength0(rand: Blake2b512Random): Unit =

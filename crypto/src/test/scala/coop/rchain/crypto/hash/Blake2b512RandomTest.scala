@@ -1,13 +1,15 @@
 package coop.rchain.crypto.hash
 
 import coop.rchain.crypto.codec._
+import coop.rchain.shared.Stopwatch
+import org.scalacheck.{Arbitrary, Prop}
 import org.scalatest._
-import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.prop.{Checkers, Configuration}
 
-import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Arrays
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * All of the test vectors here were created with the b2sum utility and a
@@ -16,7 +18,7 @@ import java.util.Arrays
   * For the rollover tests, we use the block format which is 112 bytes of path
   * info, followed by 16 bytes of length info in little endian format.
   */
-class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Configuration {
+class Blake2b512RandomTest extends FlatSpec with Matchers with Checkers with Configuration {
   implicit override val generatorDrivenConfig: PropertyCheckConfiguration =
     PropertyCheckConfiguration(minSuccessful = 1000)
 
@@ -37,8 +39,8 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
       }) &&
       (half == onceAndHalf || {
         println("not same encoding.")
-        println(s"halfEncode:        ${Base16.encode(half.toByteArray())}")
-        println(s"onceAndHalfEncode: ${Base16.encode(onceAndHalf.toByteArray())}")
+        println(s"halfEncode:        ${Base16.encode(half.toByteArray)}")
+        println(s"onceAndHalfEncode: ${Base16.encode(onceAndHalf.toByteArray)}")
         false
       }) && {
         val baseNext   = rand.next()
@@ -238,18 +240,25 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
     )
   }
 
-  "A merge with a single child" should "give a predictable result" in {
-    val b2RandomBase      = Blake2b512Random(emptyMsg)
-    val b2Random0         = b2RandomBase.splitByte(0)
-    val singleMergeRandom = Blake2b512Random.merge(List(b2Random0))
-    val res1              = singleMergeRandom.next()
-    val res2              = singleMergeRandom.next()
-    Base16.encode(res1) should be(
-      "a3904853d9db8de44202bf6ab64c2ee5b6c78fe8abc7799dc0e3426d6572e4eb"
-    )
-    Base16.encode(res2) should be(
-      "1d6da76e99ce1fa6fe756f7d7117c3eae6c0fd4fa53854e04de3083d557d0a01"
-    )
+  "Instances created with the same seed" should "be equal" in {
+    val rnd1 = Blake2b512Random(emptyMsg).splitByte(42)
+    val rnd2 = Blake2b512Random(emptyMsg).splitByte(42)
+
+    rnd1 shouldBe rnd2
+  }
+
+  "A merge with an empty child" should "throw an error" in {
+    intercept[AssertionError] {
+      Blake2b512Random.merge(Seq())
+    }
+  }
+
+  "A merge with a single child" should "throw an error" in {
+    val rnd = Blake2b512Random(emptyMsg).splitByte(0)
+
+    intercept[AssertionError] {
+      Blake2b512Random.merge(Seq(rnd))
+    }
   }
 
   "A merge with two children" should "give a predictable result" in {
@@ -276,7 +285,7 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
         val splitTwice = splitOnce.splitByte(j.toByte)
         for (k <- 0 until 255) {
           val splitThrice = splitTwice.splitByte(k.toByte)
-          builder += splitThrice;
+          builder += splitThrice
         }
       }
     }
@@ -290,4 +299,121 @@ class Blake2b512RandomSpec extends FlatSpec with Matchers with Checkers with Con
       "d30832a104feffed4502542768e8f3b05d12593ba29aacdc086c4d1db405e4e6"
     )
   }
+
+  "A merge result" should "not be equal on different order of inputs" in {
+    val rnd  = Blake2b512Random(emptyMsg)
+    val rnd1 = rnd.splitByte(1)
+    val rnd2 = rnd.splitByte(2)
+
+    val merged12 = Blake2b512Random.merge(Seq(rnd1, rnd2))
+    val merged21 = Blake2b512Random.merge(Seq(rnd2, rnd1))
+
+    merged12 shouldBe merged12
+
+    merged12 shouldNot be(merged21)
+  }
+
+  /* Performance tests */
+
+  "Performance test" should "show performance of random splitter" in {
+    val baseRnd = Blake2b512Random(128)
+
+    def run(size: Int) =
+      (0 until size).foldLeft(baseRnd) {
+        case (rnd, _) => rnd.splitByte(1)
+      }
+
+    def runChunks(size: Int) = duration(run(size))
+
+    val chunkSize = 100000
+
+    // Warm up
+    runChunks(chunkSize)
+
+    // Measure
+    iterate(3) {
+      measure("splitShort", rounds = 50, chunkSize)(runChunks)
+    }
+  }
+
+  it should "show performance of generating next random value" in {
+    val baseRnd = Blake2b512Random(128)
+
+    def run(size: Int) =
+      (0 until size).foldLeft((List[Array[Byte]](), baseRnd)) {
+        case ((acc, rnd), _) =>
+          val nextValue = rnd.next()
+          (nextValue +: acc, rnd)
+      }
+
+    def runChunks(size: Int) = duration(run(size))
+
+    val chunkSize = 100000
+
+    // Warm up
+    runChunks(chunkSize)
+
+    // Measure
+    iterate(3) {
+      measure("getNext", rounds = 20, chunkSize)(runChunks)
+    }
+  }
+
+  it should "show performance of random serializer" in {
+    def generate(size: Int) = {
+      val baseRnd = Blake2b512Random(128)
+
+      (0 until size).foldLeft((List[Blake2b512Random](), baseRnd)) {
+        case ((acc, rnd), _) =>
+          val rndNext = rnd.splitShort(1)
+          (rndNext +: acc, rndNext)
+      }
+    }
+
+    def serialize(rnds: List[Blake2b512Random]) =
+      rnds foreach Blake2b512Random.typeMapper.toBase
+
+    def runChunks(size: Int) = {
+      // Generate new set of random generators
+      val (randoms, _) = generate(size)
+
+      // Measure serialization
+      duration(serialize(randoms))
+    }
+
+    val chunkSize = 100000
+
+    // Warm up
+    runChunks(chunkSize)
+
+    // Measure
+    iterate(3) {
+      measure("toByteString", rounds = 10, chunkSize)(runChunks)
+    }
+  }
+
+  private def measure(tag: String, rounds: Int, perChunk: Int)(taskChunk: Int => FiniteDuration) = {
+    val results = iterate(rounds)(taskChunk(perChunk))
+
+    val totalTime = results.reduce(_ + _)
+    val timeStr   = Stopwatch.showTime(totalTime)
+
+    val totalSize = rounds * perChunk
+
+    val totalMillis = totalTime.toNanos.toFloat / (1000 * 1000)
+    val perSec      = totalSize.toFloat / totalMillis
+
+    println(s"$tag $totalSize, per ms: $perSec, total: $timeStr")
+  }
+
+  private def iterate[A](count: Int)(task: => A) =
+    (0 until count) map (_ => task)
+
+  private def duration(task: => Unit): FiniteDuration = {
+    val t0 = System.nanoTime
+    task
+    val t1 = System.nanoTime
+    FiniteDuration(t1 - t0, TimeUnit.NANOSECONDS)
+  }
+
 }
