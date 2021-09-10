@@ -42,7 +42,7 @@ object ReplGrpcService {
                 prettyStorage <- if (printUnmatchedSendsOnly)
                                   StoragePrinter.prettyPrintUnmatchedSends(runtime)
                                 else StoragePrinter.prettyPrint(runtime)
-                EvaluateResult(cost, errors) = res
+                EvaluateResult(cost, errors, _) = res
               } yield {
                 val errorStr =
                   if (errors.isEmpty)

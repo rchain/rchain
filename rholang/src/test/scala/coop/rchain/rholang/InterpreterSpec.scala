@@ -105,7 +105,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
   it should "signal syntax errors to the caller" in {
     val badRholang = "new f, x in { f(x) }"
-    val EvaluateResult(_, errors) =
+    val EvaluateResult(_, errors, _) =
       mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           execute(runtime, badRholang)
@@ -118,7 +118,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
 
   it should "capture rholang parsing errors and charge for parsing" in {
     val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
-    val EvaluateResult(cost, errors) =
+    val EvaluateResult(cost, errors, _) =
       mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           execute(runtime, badRholang)
@@ -132,7 +132,7 @@ class InterpreterSpec extends FlatSpec with Matchers {
   it should "charge for parsing even when there's not enough phlo to complete it" in {
     val sendRho     = "@{0}!(0)"
     val initialPhlo = parsingCost(sendRho) - Cost(1)
-    val EvaluateResult(cost, errors) =
+    val EvaluateResult(cost, errors, _) =
       mkRuntime[Task](tmpPrefix)
         .use { runtime =>
           runtime.evaluate(sendRho, initialPhlo)

@@ -2,8 +2,8 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect._
 import cats.syntax.all._
-import cats.implicits
 import coop.rchain.crypto.hash.Blake2b512Random
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.RholangMetricsSource
@@ -14,9 +14,12 @@ import coop.rchain.rholang.interpreter.errors.{
   InterpreterError,
   OutOfPhlogistonsError
 }
-import coop.rchain.metrics.implicits._
 
-final case class EvaluateResult(cost: Cost, errors: Vector[InterpreterError]) {
+final case class EvaluateResult(
+    cost: Cost,
+    errors: Vector[InterpreterError],
+    mergeable: Set[Par]
+) {
   val failed: Boolean    = errors.nonEmpty
   val succeeded: Boolean = !failed
 }
@@ -79,16 +82,16 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
     error match {
       // Parsing error consumes only parsing cost
       case ParserError(parseError: InterpreterError) =>
-        EvaluateResult(parsingCost, Vector(parseError)).pure[F]
+        EvaluateResult(parsingCost, Vector(parseError), Set()).pure[F]
 
       // For Out Of Phlogistons error initial cost is used because evaluated cost can be higher
       // - all phlos are consumed
       case error: OutOfPhlogistonsError.type =>
-        EvaluateResult(initialCost, Vector(error)).pure[F]
+        EvaluateResult(initialCost, Vector(error), Set()).pure[F]
 
       // InterpreterError(s) - multiple errors are result of parallel execution
       case AggregateError(ipErrs, errs) if errs.isEmpty =>
-        EvaluateResult(initialCost, ipErrs).pure[F]
+        EvaluateResult(initialCost, ipErrs, Set()).pure[F]
 
       // Aggregated fatal errors are rethrown
       case error: AggregateError =>
@@ -96,7 +99,7 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
 
       // InterpreterError is returned as a result
       case error: InterpreterError =>
-        EvaluateResult(initialCost, Vector(error)).pure[F]
+        EvaluateResult(initialCost, Vector(error), Set()).pure[F]
 
       // Any other error is unexpected and it's fatal, rethrow
       case error: Throwable =>

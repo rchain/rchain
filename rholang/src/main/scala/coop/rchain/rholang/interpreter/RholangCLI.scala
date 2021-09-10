@@ -218,8 +218,8 @@ object RholangCLI {
 
   def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =
     runtime.evaluate(source).map {
-      case EvaluateResult(_, Vector()) =>
-      case EvaluateResult(_, errors) =>
+      case EvaluateResult(_, Vector(), _) =>
+      case EvaluateResult(_, errors, _) =>
         errors.foreach {
           case ie: InterpreterError =>
             // we don't want to print stack trace for user errors
@@ -234,7 +234,7 @@ object RholangCLI {
   def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(EvaluateResult(cost, errors))) =>
+        case Some(Success(EvaluateResult(cost, errors, _))) =>
           printCost(cost)
           printErrors(errors)
         case Some(Failure(e)) => throw e
