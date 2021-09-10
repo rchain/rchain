@@ -37,6 +37,12 @@ object ScodecSerialize {
     encodeSortedSeq[Datum[A]](datums, codec)
   }
 
+  def encodeDatum[A](datum: Datum[A])(implicit sa: Serialize[A]): ByteVector = {
+    val codec = serializeToCodecDatumMemo(sa)
+
+    codec.encode(datum).getUnsafe.toByteVector
+  }
+
   def encodeDatumsBinary[A](datums: Seq[ByteVector]): ByteVector =
     encodeSortedSeq(datums, bytes)
 
