@@ -327,8 +327,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       _           <- createNewHotStore(nextHistory.getHistoryReader(root))
       _           <- restoreInstalls()
 
-      // TODO: temp fix to release Semaphores inside TwoStepLock
-      //  Adjust when runtime changes got in, create instance on spawn runtime.
+      // Clean channel locks
       _ <- lockF.cleanUp
     } yield ()
   }

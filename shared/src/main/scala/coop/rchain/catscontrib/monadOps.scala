@@ -1,11 +1,15 @@
 package coop.rchain.catscontrib
 
-import ski._
-import cats._, cats.data._, cats.implicits._
+import cats.{Functor, Monad}
+import cats.data.EitherT
+import cats.syntax.all._
+import coop.rchain.catscontrib.ski.kp
 
-final class MonadOps[F[_], A](val self: F[A])(implicit val F: Monad[F]) {
-  def liftM[G[_[_], _]](implicit G: MonadTrans[G]): G[F, A] = G.liftM(self)
-  def forever: F[A]                                         = MonadOps.forever(self)
+// TODO: Rename this syntax to include functor, monad, ... (HKTSyntax?)
+
+final class MonadOps[F[_], A](val self: F[A]) extends AnyVal {
+  def liftM[G[_[_], _]](implicit M: Monad[F], G: MonadTrans[G]): G[F, A] = G.liftM(self)
+  def forever(implicit M: Monad[F]): F[A]                                = MonadOps.forever(self)
 }
 
 object MonadOps {
@@ -16,6 +20,5 @@ object MonadOps {
 }
 
 trait ToMonadOps {
-  implicit def ToMonadOps[F[_], A](v: F[A])(implicit F0: Monad[F]): MonadOps[F, A] =
-    new MonadOps[F, A](v)
+  implicit def ToMonadOps[F[_], A](v: F[A]): MonadOps[F, A] = new MonadOps[F, A](v)
 }

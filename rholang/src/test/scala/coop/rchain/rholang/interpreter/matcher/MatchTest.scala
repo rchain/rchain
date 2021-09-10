@@ -1,16 +1,10 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats._
-import cats.data._
 import cats.effect._
-import cats.effect.concurrent.Semaphore
-import cats.mtl._
 import cats.mtl.implicits._
 import cats.{Eval => _}
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.MonadError_._
-import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance._
@@ -18,15 +12,11 @@ import coop.rchain.models.Var.WildcardMsg
 import coop.rchain.models._
 import coop.rchain.models.rholang.sorter.Sortable
 import coop.rchain.rholang.interpreter._
-import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.accounting.utils._
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler.Implicits.global
 import org.scalactic.TripleEqualsSupport
 import org.scalatest._
 import org.scalatest.concurrent.TimeLimits
-import scalapb.GeneratedMessage
 
 import scala.collection.immutable.BitSet
 import scala.concurrent.duration._
@@ -134,8 +124,6 @@ class VarMatcherSpec extends FlatSpec with Matchers with TimeLimits with TripleE
     //This is a very common case in rspace that can be handled in linear time, yet was quadratic for a short while
     val target: Par  = Par(exprs = Seq.fill(1000)(GInt(1): Expr))
     val pattern: Par = EVar(FreeVar(0))
-
-    import org.scalatest.time.SpanSugar._
     assertSpatialMatch(target, pattern, Some(Map[Int, Par](0 -> target)))
   }
 

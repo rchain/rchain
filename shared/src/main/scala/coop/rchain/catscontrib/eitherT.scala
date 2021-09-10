@@ -1,10 +1,10 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._
 
-object eitherT extends EitherTInstances
+object eitherT extends EitherTSyntax
 
-trait EitherTInstances {
+trait EitherTSyntax {
   implicit def eitherTMonadTrans[A]: MonadTrans[EitherT[?[_], A, ?]] = new EitherTMonadTrans[A] {}
 }
 

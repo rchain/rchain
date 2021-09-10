@@ -13,7 +13,7 @@ import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.util.rholang.{DeployMergeableData, RuntimeManager}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
 import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
@@ -27,11 +27,10 @@ import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Cell
-import coop.rchain.store.{InMemoryStoreManager, KeyValueTypedStore}
+import coop.rchain.store.InMemoryStoreManager
 import fs2.concurrent.Queue
 import monix.eval.Task
 import monix.execution.Scheduler
-import scodec.bits.ByteVector
 
 object Setup {
   def apply() = new {
