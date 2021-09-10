@@ -10,6 +10,10 @@ import coop.rchain.catscontrib.ski.kp
 final class MonadOps[F[_], A](val self: F[A]) extends AnyVal {
   def liftM[G[_[_], _]](implicit M: Monad[F], G: MonadTrans[G]): G[F, A] = G.liftM(self)
   def forever(implicit M: Monad[F]): F[A]                                = MonadOps.forever(self)
+
+  /* EitherT syntax */
+
+  def liftEitherT[L](implicit f: Functor[F]): EitherT[F, L, A] = EitherT.liftF[F, L, A](self)
 }
 
 object MonadOps {
