@@ -168,7 +168,7 @@ object Setup {
         implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }

@@ -20,22 +20,16 @@ final class RSpaceStoreManagerOps[F[_]](
   /**
     * Create stores used in RSpace
     */
-  def rSpaceStores(useChannelsMap: Boolean)(implicit m: Monad[F]): F[RSpaceStore[F]] =
-    getStores("rspace", useChannelsMap)
-
-  /**
-    * Create stores used in RSpace
-    */
   def rSpaceStores(implicit m: Monad[F]): F[RSpaceStore[F]] =
-    getStores("rspace", useChannelsMap = true)
+    getStores("rspace")
 
   /**
     * Create stores used in Rholang evaluator
     */
   def evalStores(implicit m: Monad[F]): F[RSpaceStore[F]] =
-    getStores("eval", useChannelsMap = false)
+    getStores("eval")
 
-  private def getStores(dbPrefix: String, useChannelsMap: Boolean)(
+  private def getStores(dbPrefix: String)(
       implicit m: Monad[F]
   ): F[RSpaceStore[F]] =
     for {
