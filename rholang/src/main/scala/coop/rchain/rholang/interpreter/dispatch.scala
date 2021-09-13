@@ -3,15 +3,11 @@ package coop.rchain.rholang.interpreter
 import cats.Parallel
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.mtl.FunctorTell
 import coop.rchain.crypto.hash.Blake2b512Random
-import coop.rchain.metrics.Span
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
-import coop.rchain.rspace.hashing.Blake2b256Hash
 
 trait Dispatch[M[_], A, K] {
   def dispatch(continuation: K, dataList: Seq[A]): M[Unit]
@@ -38,11 +34,8 @@ class RholangAndScalaDispatcher[M[_]] private (
         reducer.eval(parWithRand.body)(env, Blake2b512Random.merge(randoms))
       case ScalaBodyRef(ref) =>
         _dispatchTable.get(ref) match {
-          case Some(f) =>
-            f(
-              dataList.map(dl => ListParWithRandom(dl.pars, dl.randomState))
-            )
-          case None => s.raiseError(new Exception(s"dispatch: no function for $ref"))
+          case Some(f) => f(dataList)
+          case None    => s.raiseError(new Exception(s"dispatch: no function for $ref"))
         }
       case Empty =>
         s.unit
@@ -52,7 +45,7 @@ class RholangAndScalaDispatcher[M[_]] private (
 object RholangAndScalaDispatcher {
   type RhoDispatch[F[_]] = Dispatch[F, ListParWithRandom, TaggedContinuation]
 
-  def create[M[_]: Sync: Parallel: _cost](
+  def apply[M[_]: Sync: Parallel: _cost](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par],
@@ -68,13 +61,13 @@ object RholangAndScalaDispatcher {
     (dispatcher, reducer)
   }
 
-  def create2[M[_]: Sync: Parallel: _cost](
+  def apply[M[_]: Sync: Parallel: _cost](
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
     val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
 
-    create(tuplespace, dispatchTable, urnMap, emptyMergeableRef)
+    apply(tuplespace, dispatchTable, urnMap, emptyMergeableRef)
   }
 }

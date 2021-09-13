@@ -34,7 +34,7 @@ trait PersistentStoreTester {
     val space = RSpace
       .create[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
       .unsafeRunSync
-    val reducer = RholangOnlyDispatcher.create2[Task](space)._2
+    val reducer = RholangOnlyDispatcher(space)._2
     cost.set(Cost.UNSAFE_MAX).runSyncUnsafe(1.second)
 
     // Execute test
@@ -53,7 +53,7 @@ trait PersistentStoreTester {
             cost <- CostAccounting.emptyCost[Task]
             reducer = {
               implicit val c = cost
-              RholangOnlyDispatcher.create2[Task](rspace)._2
+              RholangOnlyDispatcher(rspace)._2
             }
             _   <- cost.set(Cost.UNSAFE_MAX)
             res <- f(rspace, reducer)

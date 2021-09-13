@@ -452,7 +452,7 @@ object RhoRuntime {
       )
 
     lazy val (replayDispatcher, replayReducer) =
-      RholangAndScalaDispatcher.create(
+      RholangAndScalaDispatcher(
         chargingRSpace,
         replayDispatchTable,
         urnMap,

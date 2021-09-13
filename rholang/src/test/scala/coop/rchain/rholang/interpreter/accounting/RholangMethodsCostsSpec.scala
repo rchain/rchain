@@ -814,7 +814,7 @@ class RholangMethodsCostsSpec
 
     val test = for {
       _   <- cost.set(Cost.UNSAFE_MAX)
-      res <- f(RholangOnlyDispatcher.create2[Task](space)._2)
+      res <- f(RholangOnlyDispatcher(space)._2)
     } yield res
     test.runSyncUnsafe(5.seconds)
   }

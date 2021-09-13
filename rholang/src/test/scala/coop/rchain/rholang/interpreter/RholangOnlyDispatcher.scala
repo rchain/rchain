@@ -12,9 +12,9 @@ import coop.rchain.rholang.interpreter.accounting._
 
 object RholangOnlyDispatcher {
 
-  def create[F[_]: Sync: Parallel: _cost](
+  def apply[F[_]: Sync: Parallel: _cost](
       tuplespace: RhoTuplespace[F],
-      urnMap: Map[String, Par] = Map.empty,
+      urnMap: Map[String, Par],
       mergeChs: Ref[F, Set[Par]]
   ): (Dispatch[F, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[F]) = {
 
@@ -27,13 +27,13 @@ object RholangOnlyDispatcher {
     (dispatcher, reducer)
   }
 
-  def create2[F[_]: Sync: Parallel: _cost](
+  def apply[F[_]: Sync: Parallel: _cost](
       tuplespace: RhoTuplespace[F],
       urnMap: Map[String, Par] = Map.empty
   ): (Dispatch[F, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[F]) = {
     val initMergeChannelsRef = Ref.unsafe[F, Set[Par]](Set.empty)
 
-    create(tuplespace, urnMap, initMergeChannelsRef)
+    apply(tuplespace, urnMap, initMergeChannelsRef)
   }
 }
 
