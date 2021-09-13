@@ -123,6 +123,7 @@ jobs:
           - "'casper/test:testOnly coop.rchain.casper.batch2.*'"
           - "'casper/test:testOnly coop.rchain.casper.engine.*'"
           - "'casper/test:testOnly coop.rchain.casper.genesis.*'"
+          - "'casper/test:testOnly coop.rchain.casper.merging.*'"
           - "'casper/test:testOnly coop.rchain.casper.util.*'"
           - REMAINDER # Do not modify/remove!
     env:
