@@ -150,7 +150,8 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
     val space: RhoISpace[F],
     val cost: _cost[F],
     val blockDataRef: Ref[F, BlockData],
-    val invalidBlocksParam: InvalidBlocks[F]
+    val invalidBlocksParam: InvalidBlocks[F],
+    val mergeChs: Ref[F, Set[Par]]
 ) extends RhoRuntime[F] {
   private val emptyContinuation = TaggedContinuation()
 
@@ -170,6 +171,7 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
       implicit rand: Blake2b512Random
   ): F[EvaluateResult] = {
     implicit val c: _cost[F]       = cost
+    implicit val m                 = mergeChs
     implicit val i: Interpreter[F] = Interpreter.newIntrepreter[F]
     Interpreter[F].injAttempt(
       reducer,
@@ -234,8 +236,9 @@ class ReplayRhoRuntimeImpl[F[_]: Sync: Span](
     // TODO: Runtime must be immutable. Block data and invalid blocks should be supplied when Runtime is created.
     //  This also means to unify all special names necessary to spawn a new Runtime.
     override val blockDataRef: Ref[F, BlockData],
-    override val invalidBlocksParam: InvalidBlocks[F]
-) extends RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam)
+    override val invalidBlocksParam: InvalidBlocks[F],
+    override val mergeChs: Ref[F, Set[Par]]
+) extends RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam, mergeChs)
     with ReplayRhoRuntime[F] {
   override def checkReplayData: F[Unit] = space.checkReplayData()
 
@@ -248,8 +251,9 @@ object ReplayRhoRuntime {
       space: RhoReplayISpace[F],
       cost: _cost[F],
       blockDataRef: Ref[F, BlockData],
-      invalidBlocksParam: InvalidBlocks[F]
-  ) = new ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam)
+      invalidBlocksParam: InvalidBlocks[F],
+      mergeChs: Ref[F, Set[Par]]
+  ) = new ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam, mergeChs)
 }
 
 object RhoRuntime {
@@ -263,8 +267,9 @@ object RhoRuntime {
       space: RhoISpace[F],
       cost: _cost[F],
       blockDataRef: Ref[F, BlockData],
-      invalidBlocksParam: InvalidBlocks[F]
-  ) = new RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam)
+      invalidBlocksParam: InvalidBlocks[F],
+      mergeChs: Ref[F, Set[Par]]
+  ) = new RhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam, mergeChs)
 
   type RhoTuplespace[F[_]]   = TCPAK[F, Tuplespace]
   type RhoISpace[F[_]]       = TCPAK[F, ISpace]
@@ -434,7 +439,8 @@ object RhoRuntime {
       blockDataRef: Ref[F, BlockData],
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[Definition[F]],
-      urnMap: Map[String, Par]
+      urnMap: Map[String, Par],
+      mergeChs: Ref[F, Set[Par]]
   ): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
@@ -449,7 +455,8 @@ object RhoRuntime {
       RholangAndScalaDispatcher.create(
         chargingRSpace,
         replayDispatchTable,
-        urnMap
+        urnMap,
+        mergeChs
       )
     replayReducer
   }
@@ -470,6 +477,7 @@ object RhoRuntime {
 
   def createRhoEnv[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
       rspace: RhoISpace[F],
+      mergeChs: Ref[F, Set[Par]],
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[(Reduce[F], Ref[F, BlockData], InvalidBlocks[F])] =
     for {
@@ -480,7 +488,8 @@ object RhoRuntime {
         blockDataRef,
         invalidBlocks,
         extraSystemProcesses,
-        urnMap
+        urnMap,
+        mergeChs
       )
       res <- introduceSystemProcesses(rspace :: Nil, procDefs.toList)
       _   = assert(res.forall(_.isEmpty))
@@ -510,13 +519,14 @@ object RhoRuntime {
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
     Span[F].trace(createPlayRuntime) {
       for {
-        cost <- CostAccounting.emptyCost[F]
+        cost     <- CostAccounting.emptyCost[F]
+        mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, extraSystemProcesses)
+          createRhoEnv(rspace, mergeChs, extraSystemProcesses)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
-        runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
+        runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks, mergeChs)
         _ <- if (initRegistry) {
               bootstrapRegistry(runtime) >> runtime.createCheckpoint
             } else ().pure[F]
@@ -562,13 +572,21 @@ object RhoRuntime {
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] =
     Span[F].trace(createReplayRuntime) {
       for {
-        cost <- CostAccounting.emptyCost[F]
+        cost     <- CostAccounting.emptyCost[F]
+        mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, extraSystemProcesses)
+          createRhoEnv(rspace, mergeChs, extraSystemProcesses)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
-        runtime                            = new ReplayRhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks)
+        runtime = new ReplayRhoRuntimeImpl[F](
+          reducer,
+          rspace,
+          cost,
+          blockRef,
+          invalidBlocks,
+          mergeChs
+        )
         _ <- if (initRegistry) {
               bootstrapRegistry(runtime) >> runtime.createCheckpoint
             } else ().pure[F]
