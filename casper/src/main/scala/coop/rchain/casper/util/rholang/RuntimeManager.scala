@@ -110,14 +110,43 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    spawnRuntime.flatMap(_.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks))
+    for {
+      runtime                                 <- spawnRuntime
+      computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks)
+      (stateHash, usrDeployRes, sysDeployRes) = computed
+      (usrProcessed, usrMergeable)            = usrDeployRes.unzip
+      (sysProcessed, sysMergeable)            = sysDeployRes.unzip
+
+      // Concat user and system deploys mergeable channel maps
+      mergeableChs = usrMergeable ++ sysMergeable
+
+      // Block data used for mergeable key
+      BlockData(_, _, sender, seqNum) = blockData
+      // Convert from final to diff values and persist mergeable (number) channels for post-state hash
+      preStateHash  = startHash.toBlake2b256Hash
+      postSTateHash = stateHash.toBlake2b256Hash
+      _ <- this
+            .saveMergeableChannels(postSTateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
+    } yield (stateHash, usrProcessed, sysProcessed)
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
       blockNumber: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    spawnRuntime.flatMap(_.computeGenesis(terms, blockTime, blockNumber))
+    spawnRuntime
+      .flatMap(_.computeGenesis(terms, blockTime, blockNumber))
+      .flatMap {
+        case (preState, stateHash, processed) =>
+          val (processedDeploys, mergeableChs) = processed.unzip
+
+          // Convert from final to diff values and persist mergeable (number) channels for post-state hash
+          val preStateHash  = preState.toBlake2b256Hash
+          val postStateHash = stateHash.toBlake2b256Hash
+          this
+            .saveMergeableChannels(postStateHash, Array(), seqNum = 0, mergeableChs, preStateHash)
+            .as((preState, stateHash, processedDeploys))
+      }
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
@@ -127,8 +156,18 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
-      replayRuntime
+      val replayOp = replayRuntime
         .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
+      EitherT(replayOp).semiflatMap {
+        case (stateHash, mergeableChs) =>
+          // Block data used for mergeable key
+          val BlockData(_, _, sender, seqNum) = blockData
+          // Convert from final to diff values and persist mergeable (number) channels for post-state hash
+          val preStateHash = startHash.toBlake2b256Hash
+          this
+            .saveMergeableChannels(stateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
+            .as(stateHash.toByteString)
+      }.value
     }
 
   def captureResults(
