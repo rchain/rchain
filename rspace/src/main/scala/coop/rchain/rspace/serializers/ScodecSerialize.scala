@@ -9,9 +9,9 @@ import coop.rchain.rspace.util
 import coop.rchain.scodec.codecs.seqOfN
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.Serialize._
+import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs.{bool, bytes, discriminated, int32, provide, uint, uint2, uint8, vectorOfN}
-import scodec.{Attempt, Codec}
 
 import scala.collection.SortedSet
 import scala.collection.concurrent.TrieMap
@@ -43,7 +43,7 @@ object ScodecSerialize {
     codec.encode(datum).getUnsafe.toByteVector
   }
 
-  def encodeDatumsBinary[A](datums: Seq[ByteVector]): ByteVector =
+  def encodeDatumsBinary(datums: Seq[ByteVector]): ByteVector =
     encodeSortedSeq(datums, bytes)
 
   def decodeDatums[A](bytes: ByteVector)(implicit sa: Serialize[A]): Seq[Datum[A]] =
@@ -339,20 +339,19 @@ object ScodecSerialize {
    */
 
   /** Datum with ByteVector representation */
-  final case class DatumB[A](decoded: Datum[A], raw: ByteVector)
-      extends WrapWithBinary[Datum[A]](raw)
+  final case class DatumB[A](decoded: Datum[A], raw: ByteVector) extends WrapWithBinary(raw)
 
   /** Continuation with ByteVector representation */
   final case class WaitingContinuationB[P, K](decoded: WaitingContinuation[P, K], raw: ByteVector)
-      extends WrapWithBinary[WaitingContinuation[P, K]](raw)
+      extends WrapWithBinary(raw)
 
   /** Joins with ByteVector representation */
-  final case class JoinsB[C](decoded: Seq[C], raw: ByteVector) extends WrapWithBinary[Seq[C]](raw)
+  final case class JoinsB[C](decoded: Seq[C], raw: ByteVector) extends WrapWithBinary(raw)
 
   /**
     * Equality for Datum, WaitingContinuation and Joins defined with binary equality.
     */
-  sealed abstract class WrapWithBinary[A](raw: ByteVector) {
+  sealed abstract class WrapWithBinary(raw: ByteVector) {
     override def hashCode(): Int = raw.hashCode
 
     override def equals(obj: Any): Boolean = obj match {
