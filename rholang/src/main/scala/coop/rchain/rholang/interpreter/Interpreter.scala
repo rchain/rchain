@@ -1,6 +1,7 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect._
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.implicits._
@@ -33,7 +34,8 @@ trait Interpreter[F[_]] {
   )(implicit rand: Blake2b512Random): F[EvaluateResult]
 }
 
-class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interpreter[F] {
+class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F], mergeChs: Ref[F, Set[Par]])
+    extends Interpreter[F] {
   implicit val InterpreterMetricSource = Metrics.Source(RholangMetricsSource, "interpreter")
 
   // Internal helper exception to mark parser error
@@ -59,18 +61,19 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
                      case err: InterpreterError => ParserError(err).raiseError[F, Par]
                    }
                }
-      _         <- Span[F].traceI("reduce-term") { reducer.inj(parsed) }
-      phlosLeft <- C.get
-    } yield EvaluateResult(initialPhlo - phlosLeft, Vector())
+      // Empty mergeable channels
+      _ <- mergeChs.update(_.empty)
+
+      _                 <- Span[F].traceI("reduce-term") { reducer.inj(parsed) }
+      phlosLeft         <- C.get
+      mergeableChannels <- mergeChs.get
+    } yield EvaluateResult(initialPhlo - phlosLeft, Vector(), mergeableChannels)
 
     // Convert InterpreterError(s) to EvaluateResult
     // - all other errors are rethrown (not valid interpreter errors)
-    evaluationResult.handleErrorWith(
-      error =>
-        C.get >>= (
-            phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error)
-        )
-    )
+    evaluationResult.handleErrorWith { error =>
+      C.get >>= (phlosLeft => handleError(initialPhlo, parsingCost, initialPhlo - phlosLeft, error))
+    }
   }
 
   def handleError(
@@ -111,7 +114,10 @@ object Interpreter {
 
   def apply[F[_]](implicit instance: Interpreter[F]): Interpreter[F] = instance
 
-  def newIntrepreter[F[_]: Sync: Span](implicit cost: _cost[F]): Interpreter[F] =
+  def newIntrepreter[F[_]: Sync: Span](
+      implicit cost: _cost[F],
+      mergeChs: Ref[F, Set[Par]]
+  ): Interpreter[F] =
     new InterpreterImpl[F]()
 
 }
