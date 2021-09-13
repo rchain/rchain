@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.HistoryReaderBinary
+import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
 import scodec.bits.ByteVector
 
 object StateChangeMerger {
@@ -25,7 +26,14 @@ object StateChangeMerger {
 
   def computeTrieActions[F[_]: Concurrent, C, P, A, K](
       changes: StateChange,
-      baseReader: HistoryReaderBinary[F, C, P, A, K]
+      baseReader: HistoryReaderBinary[F, C, P, A, K],
+      mergeableChs: NumberChannelsDiff,
+      // Override channel change
+      handleChannelChange: (
+          Blake2b256Hash,
+          ChannelChange[ByteVector],
+          NumberChannelsDiff
+      ) => F[Option[HotStoreTrieAction]]
   ): F[Vector[HotStoreTrieAction]] = {
 
     val consumeAndJoinActionsCompute: F[Vector[ConsumeAndJoinActions]] =
@@ -93,13 +101,23 @@ object StateChangeMerger {
       // trie actions for produces
       produceTrieActions <- changes.datumsChanges.toVector.traverse {
                              case (historyPointer, changes) =>
-                               mkTrieAction(
-                                 historyPointer,
-                                 baseReader.getData(_).map(_.map(_.raw)),
-                                 changes,
-                                 TrieDeleteProduce,
-                                 TrieInsertBinaryProduce
-                               )
+                               for {
+                                 actionOpt <- handleChannelChange(
+                                               historyPointer,
+                                               changes,
+                                               mergeableChs
+                                             )
+
+                                 trieAction <- actionOpt.map(_.pure).getOrElse {
+                                                mkTrieAction(
+                                                  historyPointer,
+                                                  baseReader.getData(_).map(_.map(_.raw)),
+                                                  changes,
+                                                  TrieDeleteProduce,
+                                                  TrieInsertBinaryProduce
+                                                )
+                                              }
+                               } yield trieAction
                            }
       // trie actions for joins
       joinsChannelsToBodyMap = changes.consumeChannelsToJoinSerializedMap

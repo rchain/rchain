@@ -9,10 +9,26 @@ import scala.annotation.tailrec
 
 object MergingLogic {
 
+  /**
+    * Map used to represent mergeable (numeric) channels with intermediate values
+    */
+  type NumberChannelsEndVal = Map[Blake2b256Hash, Long]
+
+  type NumberChannelsDiff = Map[Blake2b256Hash, Long]
+
   /** If target depends on source. */
-  def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
+  def depends(target: EventLogIndex, source: EventLogIndex): Boolean = {
+    val producesSource = producesCreatedAndNotDestroyed(source) diff source.producesMergeable
+    val producesTarget = target.producesConsumed diff source.producesMergeable
+
+    val consumesSource = consumesCreatedAndNotDestroyed(source)
+    val consumesTarget = target.consumesProduced
+
+    val producesDepends = producesSource intersect producesTarget
+    val consumesDepends = consumesSource intersect consumesTarget
+
+    producesDepends.nonEmpty || consumesDepends.nonEmpty
+  }
 
   /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -30,10 +46,13 @@ object MergingLogic {
       * Consume is considered destroyed in COMM when it is not persistent.
       */
     val racesForSameIOEvent = {
-      val consumeRaces =
-        (a.consumesProduced intersect b.consumesProduced).toIterator.filterNot(_.persistent)
+      val consumeRaces = {
+        (a.consumesProduced intersect b.consumesProduced -- a.consumesMergeable -- b.consumesMergeable).toIterator
+          .filterNot(_.persistent)
+      }
       val produceRaces =
-        (a.producesConsumed intersect b.producesConsumed).toIterator.filterNot(_.persistent)
+        (a.producesConsumed intersect b.producesConsumed -- a.producesMergeable -- b.producesMergeable).toIterator
+          .filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }

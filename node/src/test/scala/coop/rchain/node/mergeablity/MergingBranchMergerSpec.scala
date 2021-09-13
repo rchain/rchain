@@ -4,7 +4,6 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -18,6 +17,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -60,7 +60,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
        |          for (@(true, vault) <- vaultCh; key <- revVaultKeyCh) {
        |            new resultCh in {
        |              stdout!("TX from ${payer} to ${payee} succeed.")|
-       |              @vault!("transfer", to, amount, *key, *resultCh) 
+       |              @vault!("transfer", to, amount, *key, *resultCh)
        |            }
        |          }
        |        }
@@ -398,7 +398,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         implicit val rm: RuntimeManager[Task] = runtimeManager
         implicit val concurrent               = Concurrent[Task]
         implicit val metrics                  = new Metrics.MetricsNOP
-        import coop.rchain.models.blockImplicits._
 
         // simulates 0.99 sync threshold
         def mkLayer(
@@ -421,17 +420,25 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
             // merge children blocks
             indices <- (baseBlock +: mergingBlocks)
-                        .traverse(
-                          b =>
-                            BlockIndex(
-                              b.blockHash,
-                              b.body.deploys,
-                              b.body.systemDeploys,
-                              Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                              Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                              runtimeManager.getHistoryRepo
-                            ).map((b.blockHash -> _))
-                        )
+                        .traverse { b =>
+                          val preStateHash  = b.body.state.preStateHash
+                          val postStateHash = b.body.state.postStateHash
+                          // Create empty mergeable channels data
+                          val deployCount   = b.body.deploys.size + b.body.systemDeploys.size
+                          val numberChsData = Seq.fill(deployCount)(Map[Blake2b256Hash, Long]())
+
+                          for {
+                            blockIndex <- BlockIndex(
+                                           b.blockHash,
+                                           b.body.deploys,
+                                           b.body.systemDeploys,
+                                           preStateHash.toBlake2b256Hash,
+                                           postStateHash.toBlake2b256Hash,
+                                           runtimeManager.getHistoryRepo,
+                                           numberChsData
+                                         ).map(b.blockHash -> _)
+                          } yield blockIndex
+                        }
                         .map(_.toMap)
             dag <- dagStore.getRepresentation
             v <- DagMerger.merge[Task](

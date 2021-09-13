@@ -13,15 +13,15 @@ object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
   def merge[F[_]: Concurrent: Log, R: Ordering](
-      baseState: Blake2b256Hash,
       actualSet: Set[R],
       lateSet: Set[R],
       depends: (R, R) => Boolean,
       conflicts: (Set[R], Set[R]) => Boolean,
       cost: R => Long,
       stateChanges: R => F[StateChange],
-      computeTrieActions: (Blake2b256Hash, StateChange) => F[Vector[HotStoreTrieAction]],
-      applyTrieActions: (Blake2b256Hash, Seq[HotStoreTrieAction]) => F[Blake2b256Hash]
+      mergeableChannels: R => NumberChannelsDiff,
+      computeTrieActions: (StateChange, NumberChannelsDiff) => F[Vector[HotStoreTrieAction]],
+      applyTrieActions: Seq[HotStoreTrieAction] => F[Blake2b256Hash]
   ): F[(Blake2b256Hash, Set[R])] = {
 
     type Branch = Set[R]
@@ -68,11 +68,16 @@ object ConflictSetMerger {
     val rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
 
     for {
-      r                                 <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
-      (allChanges, combineAllChanges)   = r
-      r                                 <- Stopwatch.duration(computeTrieActions(baseState, allChanges))
+      r                               <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
+      (allChanges, combineAllChanges) = r
+
+      // All number channels merged
+      // TODO: Negative or overflow should be rejected before!
+      allMergeableChannels = toMerge.toList.flatten.map(mergeableChannels).combineAll
+
+      r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
       (trieActions, computeActionsTime) = r
-      r                                 <- Stopwatch.duration(applyTrieActions(baseState, trieActions))
+      r                                 <- Stopwatch.duration(applyTrieActions(trieActions))
       (newState, applyActionsTime)      = r
       overallChanges                    = s"${allChanges.datumsChanges.size} D, ${allChanges.kontChanges.size} K, ${allChanges.consumeChannelsToJoinSerializedMap.size} J"
       logStr = s"Merging done: " +

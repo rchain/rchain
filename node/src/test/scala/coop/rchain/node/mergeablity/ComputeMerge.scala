@@ -16,8 +16,6 @@ import coop.rchain.models.blockImplicits.getRandomBlock
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.casper.syntax._
-import coop.rchain.rspace.Checkpoint
 import coop.rchain.shared.Log
 import coop.rchain.store.InMemoryStoreManager
 
@@ -60,14 +58,20 @@ trait ComputeMerge {
       .use {
         case (runtime, _, historyRepo) =>
           for {
-            baseDeploys <- baseDeploySources.toList.traverse(runtime.processDeploy)
+            baseDeploysRes <- baseDeploySources.toList.traverse(
+                               runtime.processDeployWithMergeableData
+                             )
+            (baseDeploys, baseMergeChs) = baseDeploysRes.unzip
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${baseDeploys.filter(_.isFailed)} failed")
                   )
                   .whenA(baseDeploys.exists(_.isFailed))
             baseCheckpoint <- runtime.createCheckpoint
-            leftDeploys    <- leftDeploySources.toList.traverse(runtime.processDeploy)
+            leftDeploysRes <- leftDeploySources.toList.traverse(
+                               runtime.processDeployWithMergeableData
+                             )
+            (leftDeploys, leftMergeChs) = leftDeploysRes.unzip
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${leftDeploys.filter(_.isFailed)} failed")
@@ -75,7 +79,10 @@ trait ComputeMerge {
                   .whenA(leftDeploys.exists(_.isFailed))
             leftCheckpoint @ _ <- runtime.createCheckpoint
             _                  <- runtime.reset(baseCheckpoint.root)
-            rightDeploys       <- rightDeploySources.toList.traverse(runtime.processDeploy)
+            rightDeploysRes <- rightDeploySources.toList.traverse(
+                                runtime.processDeployWithMergeableData
+                              )
+            (rightDeploys, rightMergeChs) = rightDeploysRes.unzip
             _ <- Sync[F]
                   .raiseError(
                     new Exception(s"Process deploy ${rightDeploys.filter(_.isFailed)} failed")
@@ -89,7 +96,8 @@ trait ComputeMerge {
                           List.empty,
                           baseCheckpoint.root,
                           leftCheckpoint.root,
-                          historyRepo
+                          historyRepo,
+                          leftMergeChs
                         )
             rightIndex <- BlockIndex(
                            ByteString.copyFromUtf8("r"),
@@ -97,7 +105,8 @@ trait ComputeMerge {
                            List.empty,
                            baseCheckpoint.root,
                            rightCheckpoint.root,
-                           historyRepo
+                           historyRepo,
+                           rightMergeChs
                          )
             baseIndex <- BlockIndex(
                           ByteString.EMPTY,
@@ -105,7 +114,8 @@ trait ComputeMerge {
                           List.empty,
                           baseCheckpoint.root, // this does not matter
                           baseCheckpoint.root,
-                          historyRepo
+                          historyRepo,
+                          Seq.empty
                         )
             kvm      = new InMemoryStoreManager
             dagStore <- BlockDagKeyValueStorage.create[F](kvm)
