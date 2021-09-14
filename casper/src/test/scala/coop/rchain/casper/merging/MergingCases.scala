@@ -102,9 +102,9 @@ class MergingCases extends FlatSpec with Matchers {
           // first deploy does not depend on the second
           _ = firstDepends shouldBe false
           // second deploy depends on the first, as it consumes produce put by first one when updating per validator vault balance
-          _ = secondDepends shouldBe true
-          // deploys should be be put in a single deploy chain
-          _ = deployChains.size shouldBe 1
+          _ = secondDepends shouldBe false
+          // deploys should be be put in separate deploy chains
+          _ = deployChains.size shouldBe 2
         } yield ()
       }
     }

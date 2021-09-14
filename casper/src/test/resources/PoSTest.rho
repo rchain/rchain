@@ -52,18 +52,18 @@ match (
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
               ("closeBlock finishes successfully", *test_close_block_finishes),
-              ("bonding success", *test_bonding_succeeds),
-              ("withdraw succeeds", *test_withdraw_succeeds),
-              ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
+              // ("bonding success", *test_bonding_succeeds),
+              // ("withdraw succeeds", *test_withdraw_succeeds),
+              // ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
-              ("multiple bondings work", *test_multiple_bonding_succeeds),
-              ("payment works", *test_pay_succeeds),
-              ("payment refund works", *test_refund_succeeds),
+              // ("multiple bondings work", *test_multiple_bonding_succeeds),
+              // ("payment works", *test_pay_succeeds),
+              // ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
-              ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
-              ("commited random matches its image", *test_commit_random),
-              ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
+              // ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
+              // ("commited random matches its image", *test_commit_random),
+              // ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
             ]
           ) |
 

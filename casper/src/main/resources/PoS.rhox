@@ -32,7 +32,6 @@ new PoS,
     fst,
     deposit, distributeRewards,
     perActiveValidatorPosVaultsCh,
-    transferFromBlockSender,
     rs(`rho:registry:insertSigned:secp256k1`),
     posId(`rho:rchain:deployerId`),
     PendingRewards, MergeIntMaps, treeHashMapCh,
@@ -52,24 +51,6 @@ in {
     new posRevAddressCh, posAuthKeyCh, posVaultCh,
         initialActiveCh, pendingRewardsMapCh
     in {
-      // Creates a Rev vault for each active validator, in parallel.
-      new rangeCh, makeVault in {
-        contract makeVault(_, returnCh) = {
-          new unf, revAddressCh, vaultCh in {
-            revAddressOps!("fromUnforgeable", *unf, *revAddressCh) |
-            for (@revAddress <- revAddressCh) {
-              @RevVault!("findOrCreate", revAddress, *vaultCh) |
-              for (@(true, vault) <- vaultCh) {
-                returnCh!((*unf, revAddress, vault))
-              }
-            }
-          }
-        } |
-        @ListOps!("range", 0, $$numberOfActiveValidators$$, *rangeCh) |
-        for (@range <- rangeCh) {
-          @ListOps!("parMap", range, *makeVault, *perActiveValidatorPosVaultsCh)
-        }
-      } |
       // Creates the auth key and Rev vault associated with the PoS contract.
       new posPkCh in {
         @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
@@ -103,32 +84,23 @@ in {
           } |
           // Selects the initial active validators.
           pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
-          // Initializes pending rewards TreeHashMap.
-          // - each key in pending rewards state is Map[PublicKey, Int] accumulated by calling "refundDeploy".
-          TreeHashMap!("init", 4, *pendingRewardsMapCh) |
           for (@(true, posVault)  <- posVaultCh;
-               @initialActive     <- initialActiveCh;
-               @pendingRewardsMap <- pendingRewardsMapCh) {
+               @initialActive     <- initialActiveCh) {
             new stateCh, pendingRewardsInitializedCh in {
-              // Initializes empty pending rewards state for each validator.
-              // - states must be initialized to prevent conflicts during "set" (only lookup can be conflict free)
-              PendingRewards!("init", initialActive, *pendingRewardsInitializedCh) |
-              for (_ <- pendingRewardsInitializedCh) {
-                // Initializes PoS state structure.
-                stateCh!({
-                  // Map[PublicKey, Int] - each validator stake
-                  "allBonds"        : $$initialBonds$$,
-                  // List[PublicKey]     - the active validators
-                  "activeValidators": initialActive,
-                  // Map[PublicKey, Int] - are moved from pendingRewards on epoch change or slashing
-                  "committedRewards": {},
-                  // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
-                  //                       This begins at the start of the next epoch + quarantineLength.
-                  "withdrawers"     : {},
-                  "randomImages"    : {},
-                  "randomNumbers"   : {},
-                })
-              } |
+              // Initializes PoS state structure.
+              stateCh!({
+                // Map[PublicKey, Int] - each validator stake
+                "allBonds"        : $$initialBonds$$,
+                // List[PublicKey]     - the active validators
+                "activeValidators": initialActive,
+                // Map[PublicKey, Int] - are moved from pendingRewards on epoch change or slashing
+                "committedRewards": {},
+                // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
+                //                       This begins at the start of the next epoch + quarantineLength.
+                "withdrawers"     : {},
+                "randomImages"    : {},
+                "randomNumbers"   : {},
+              }) |
               // Peeks at bonds map.
               contract PoS(@"getBonds", returnCh) = {
                 for (@state <<- stateCh) {
@@ -194,8 +166,8 @@ in {
                     } else if (amount > $$maximumBond$$) {
                       resultCh!(state, (false, "Bond is greater than maximum!"))
                     } else {
-                      // Transfers user's bond amount to the block sender's per validator vault.
-                      deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
+                      // Transfers user's bond amount to the PoS vault.
+                      deposit!(deployerId, amount, posRevAddress, *depositCh) |
                       for (@depositResult <- depositCh) {
                         match depositResult {
                           // If deposit is successful, the user becomes a bonded validator.
@@ -248,17 +220,15 @@ in {
                     for (@isValid <- isValidTokenCh) {
                       if (isValid) {
                         new depositCh in {
-                          for (@state <<- stateCh) {
-                            deposit!(deployerId, amount, state.get("activeValidators"), *depositCh) |
-                            for (@depositResult <- depositCh){
-                              match depositResult {
-                                (true, _) => {
-                                  currentDeployerData!((deployerId, amount)) |
-                                  return!(depositResult)
-                                }
-                                (_, errorMessage) => {
-                                  return!((false, "Deploy payment failed: " ++ errorMessage))
-                                }
+                          deposit!(deployerId, amount, posRevAddress, *depositCh) |
+                          for (@depositResult <- depositCh){
+                            match depositResult {
+                              (true, _) => {
+                                currentDeployerData!((deployerId, amount)) |
+                                return!(depositResult)
+                              }
+                              (_, errorMessage) => {
+                                return!((false, "Deploy payment failed: " ++ errorMessage))
                               }
                             }
                           }
@@ -278,70 +248,30 @@ in {
                     for (@isValid <- isValidTokenCh) {
                       if (isValid) {
                         for (@(deployerId, initialPaymentAmount) <- currentDeployerData){
-                          new revAddressCh in {
-                            revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-                            for (@deployerRevAddress <- revAddressCh){
-                              new transferCh, blockDataCh,
-                                  getBlockData(`rho:block:data`)
-                              in {
-                                getBlockData!(*blockDataCh) |
-                                for (_, _, @sender <- blockDataCh) {
-                                  for (@state <<- stateCh) {
-                                    transferFromBlockSender!(deployerRevAddress, state.get("activeValidators"), sender, refundAmount, *transferCh) |
-                                    for (@transferResult <- transferCh){
-                                      match transferResult {
-                                        (true, _) => {
-                                          new newRewardsCh, pendingUpdatedCh in {
-                                            distributeRewards!(
-                                              initialPaymentAmount - refundAmount,
-                                              state.get("activeValidators"),
-                                              state.get("allBonds"),
-                                              *newRewardsCh
-                                            ) |
-                                            for (@newRewards <- newRewardsCh) {
-                                              // Add new pending rewards to validator pending rewards state
-                                              PendingRewards!("append", sender, newRewards, *pendingUpdatedCh) |
-                                              for (_ <- pendingUpdatedCh) {
-                                                return!((true, Nil))
-                                              }
-                                            }
-                                          }
-                                        }
-                                        (_, errorMessage) => {
-                                          return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
-                                        }
-                                      }
+                          if (refundAmount > 0) {
+                            new revAddressCh, transferCh in {
+                              revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
+                              for (@deployerRevAddress <- revAddressCh) {
+                                // Transfer (from sender to deployer) called in refundDeploy.
+                                @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
+                                for (@transferResult <- transferCh) {
+                                  match transferResult {
+                                    (true, _) => {
+                                      return!((true, Nil))
+                                    }
+                                    (_, errorMessage) => {
+                                      return!((false, "(Bug found) Deploy refund failed: " ++ errorMessage))
                                     }
                                   }
                                 }
                               }
                             }
+                          } else {
+                            return!((true, Nil))
                           }
                         }
                       } else {
                         return!((false, "Invalid system auth token"))
-                      }
-                    }
-                  }
-                } |
-                // Transfer (from sender to deployer) called in refundDeploy.
-                contract transferFromBlockSender(@deployerRevAddress, @activeValidators, @sender, @refundAmount, returnCh) = {
-                  new indexSender, unfAuthKeyCh, tmpCh in {
-                    @ListOps!("indexOf", activeValidators, sender, *indexSender) |
-                    for (@idx <- indexSender) {
-                      if (idx == -1) {
-                        returnCh!((false, "Sender is not an active validator"))
-                      } else {
-                        for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                          match vaults.nth(idx) {
-                            (unf, _, activeValidatorVault) => {
-                              @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
-                              for (@authKey <- unfAuthKeyCh) {
-                                @activeValidatorVault!("transfer", deployerRevAddress, refundAmount, authKey, *returnCh)
-                              }
-                            }
-                          }
-                        }
                       }
                     }
                   }
@@ -369,73 +299,42 @@ in {
                                 new toBeSlashed, valBondCh, valRewardCh in {
                                   // Flow of logic:
                                   // 0. check if blockHash is the hash of an invalid block
-                                  // 1. accumulateDeposits
-                                  // 2. commitRewards
-                                  // 3. transfer slashed funds to Coop
-                                  // 4. update state
+                                  // 1. transfer stake of slashed validator from PoS to Coop vault
+                                  // 2. update state
                                   // Retrieves either public key of sender of invalid block or the deployer public key.
                                   toBeSlashed!(invalidBlocks.getOrElse(blockHash, userPk)) |
                                   for (@validator <- toBeSlashed) {
-                                    new commitRewardsCh, accDepositsDoneCh in {
-                                      // Slashed funds:
-                                      // + valPendingRewards
-                                      // + state.get("committedRewards").get(validator)
-                                      // + state.get("allBonds").get(validator)
-                                      // Collects all deposits from per validator vaults.
-                                      accumulateDeposits!(*accDepositsDoneCh) |
-                                      for (_ <- accDepositsDoneCh) {
-                                        new pendingRewardsAllCh in {
-                                          // Collects pending rewards from each validator and resets to zero.
-                                          PendingRewards!("collect", state.get("activeValidators"), *pendingRewardsAllCh) |
-                                          for (@pendingRewards <- pendingRewardsAllCh) {
-                                            new ackInitCh in {
-                                              // Initialize empty pending rewards state with current set of validators.
-                                              PendingRewards!("init", state.get("activeValidators"), *ackInitCh) |
-                                              for (_ <- ackInitCh) {
-                                                // Add all pending rewards to global committed rewards.
-                                                commitRewards!(pendingRewards, state.get("committedRewards"), *commitRewardsCh)
-                                              }
-                                            }
-                                          }
-                                        } |
-                                        for (@committedRewardsList <- commitRewardsCh) {
-                                          // Collects slashed validator's committed rewards and bond.
-                                          valRewardCh!(committedRewardsList.toMap().getOrElse(validator, 0)) |
-                                          valBondCh!(state.get("allBonds").get(validator)) |
-                                          for (@valReward <- valRewardCh;
-                                               @valBond   <- valBondCh) {
-                                            // Transfers slashed funds from PoS vault to Coop vault, then updates state.
-                                            new transferDoneCh in {
-                                              @posVault!(
-                                                "transfer",
-                                                coopRevAddress,
-                                                valReward + valBond,
-                                                posAuthKey,
-                                                *transferDoneCh
-                                              ) |
-                                              for (_ <- transferDoneCh) {
-                                                // Moves slashed validator to withdrawers map to unbond at next epoch change.
-                                                new blockDataCh,
-                                                    getBlockData(`rho:block:data`)
-                                                in {
-                                                  getBlockData!(*blockDataCh) |
-                                                  for (@blockNumber, _, _ <- blockDataCh) {
-                                                    // Sets slashed validator's committed rewards and bond to 0 in state.
-                                                    // Moves slashed validator to withdrawers map with no quarantine period.
-                                                    stateUpdateCh!({
-                                                      "allBonds"        : state.get("allBonds").set(validator, 0),
-                                                      "committedRewards": committedRewardsList.toMap().set(validator, 0),
-                                                      "activeValidators": state.get("activeValidators"),
-                                                      "withdrawers"     : state.get("withdrawers")
-                                                                                .set(validator,
-                                                                                  $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$)),
-                                                      "randomImages"    : state.get("randomImages"),
-                                                      "randomNumbers"   : state.get("randomNumbers")
-                                                    },
-                                                    (true, Nil))
-                                                  }
-                                                }
-                                              }
+                                    // Takes the stake of slashed validator
+                                    valBondCh!(state.get("allBonds").get(validator)) |
+                                    for (@valBond <- valBondCh) {
+                                      // Transfers slashed funds from PoS vault to Coop vault, then updates state.
+                                      new transferDoneCh in {
+                                        @posVault!(
+                                          "transfer",
+                                          coopRevAddress,
+                                          valBond,
+                                          posAuthKey,
+                                          *transferDoneCh
+                                        ) |
+                                        for (_ <- transferDoneCh) {
+                                          // Moves slashed validator to withdrawers map to unbond at next epoch change.
+                                          new blockDataCh,
+                                              getBlockData(`rho:block:data`)
+                                          in {
+                                            getBlockData!(*blockDataCh) |
+                                            for (@blockNumber, _, _ <- blockDataCh) {
+                                              // Sets slashed validator's committed rewards and bond to 0 in state.
+                                              // Moves slashed validator to withdrawers map with no quarantine period.
+                                              stateUpdateCh!({
+                                                "allBonds"        : state.get("allBonds").set(validator, 0),
+                                                "activeValidators": state.get("activeValidators"),
+                                                "withdrawers"     : state.get("withdrawers")
+                                                                          .set(validator,
+                                                                            $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$)),
+                                                "randomImages"    : state.get("randomImages"),
+                                                "randomNumbers"   : state.get("randomNumbers")
+                                              },
+                                              (true, Nil))
                                             }
                                           }
                                         }
@@ -474,49 +373,25 @@ in {
                               in {
                                 runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                 for (@state, stateUpdateCh <- stateProcessCh) {
-                                  // Before choosing new active validators and paying out any withdrawers (i.e. updating the state),
-                                  // per validator vaults are accumulated into the PoS vault.
-                                  accumulateDeposits!(*accDepositsDoneCh) |
                                   // New active validators will be choosen from set of bonded validators who have not withdrawn.
                                   pickActiveValidators!(state.get("allBonds"), state.get("withdrawers"), *newValidatorsCh) |
-                                  new pendingRewardsAllCh in {
-                                    // Collects pending rewards from all validators and resets to zero.
-                                    PendingRewards!("collect", state.get("activeValidators"), *pendingRewardsAllCh) |
-                                    for (@pendingRewards <- pendingRewardsAllCh) {
-                                      for (@newValidatorKeys <<- newValidatorsCh) {
-                                        new ackInitCh in {
-                                          // Initialize empty pending rewards state with new set of validators.
-                                          PendingRewards!("init", newValidatorKeys, *ackInitCh) |
-                                          for (_ <- ackInitCh) {
-                                            // Add all pending rewards to global committed rewards.
-                                            commitRewards!(pendingRewards, state.get("committedRewards"), *commitRewardsCh)
-                                          }
-                                        }
-                                      }
-                                    }
-                                  } |
-                                  // After pending rewards are committed, quarantined withdrawers are removed
-                                  // from the bonds and withdrawers maps.
-                                  for (@committedRewards <- commitRewardsCh) {
-                                    removeQuarantinedWithdrawers!(
-                                      blockNumber,
-                                      state.get("allBonds"),
-                                      state.get("withdrawers"),
-                                      committedRewards,
-                                      *removeQuarantinedCh)
-                                  } |
+
+                                  // Remove quarantined withdrawers from the bonds and withdrawers maps.
+                                  removeQuarantinedWithdrawers!(
+                                    blockNumber,
+                                    state.get("allBonds"),
+                                    state.get("withdrawers"),
+                                    *removeQuarantinedCh) |
                                   // After new active validators are selected, deposits are accumulated, and
                                   // quarantined withdrawers are removed from the bonds map,
                                   // these withdrawing validators are paid out, then the state is updated.
-                                  for (@newValidators                                    <- newValidatorsCh;
-                                       @(payments, newBonds, newWithdrawers, newRewards) <- removeQuarantinedCh;
-                                       _                                                 <- accDepositsDoneCh) {
+                                  for (@newValidators                        <- newValidatorsCh;
+                                       @(payments, newBonds, newWithdrawers) <- removeQuarantinedCh) {
                                     payWithdrawers!(payments, *paymentDoneCh) |
                                     for (_ <- paymentDoneCh) {
                                       stateUpdateCh!({
                                         "allBonds"        : newBonds,
                                         "activeValidators": newValidators,
-                                        "committedRewards": newRewards,
                                         "withdrawers"     : newWithdrawers,
                                         "randomImages"    : {},
                                         "randomNumbers"   : {},
@@ -525,7 +400,7 @@ in {
                                     }
                                   }
                                 } |
-                                // Transfers withdrawing validator's bond + accumulated (committed) rewards from PoS vault to their vault.
+                                // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
                                 new payWithdrawer in {
                                   contract payWithdrawer(@(pk, amount), returnCh) = {
                                     new vaultCh, revAddressCh in {
@@ -542,48 +417,53 @@ in {
                                 // Checks withdrawer's quarantine period against current block number,
                                 // then computes their payment, removes them from the bonds and withdrawers maps, and
                                 // updates the committed rewards map.
-                                contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, @rewards, returnCh) = {
+                                contract removeQuarantinedWithdrawers(@currentBlockNumber, @allBonds, @withdrawers, returnCh) = {
                                   new quarantinedValidatorsCh, validatorsToWithdrawListCh,
                                       isQuarantineFinished, notWithdrawn,
                                       paymentsCh, computePay,
                                       newBondsListCh, newWithdrawersListCh,
                                       newRewardsListCh
                                   in {
-                                    @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
-                                    for (@quarantinedValidators <- quarantinedValidatorsCh) {
-                                      @ListOps!("map", quarantinedValidators, *fst, *validatorsToWithdrawListCh) |
-                                      for (@validatorsToWithdrawList <- validatorsToWithdrawListCh) {
-                                        @ListOps!("map", validatorsToWithdrawList, *computePay, *paymentsCh) |
-                                        contract computePay(@pk, resultCh) = {
-                                          resultCh!((pk, allBonds.get(pk) + rewards.getOrElse(pk, 0)))
-                                        } |
-                                        match validatorsToWithdrawList.toSet() {
-                                          validatorsToWithdrawSet => {
-                                            @ListOps!("filter", allBonds.toList(), *notWithdrawn, *newBondsListCh) |
-                                            @ListOps!("filter", withdrawers.toList(), *notWithdrawn, *newWithdrawersListCh) |
-                                            @ListOps!("filter", rewards.toList(), *notWithdrawn, *newRewardsListCh) |
-                                            for (@newWithdrawersList <- newWithdrawersListCh;
-                                                 @newBondsList       <- newBondsListCh;
-                                                 @newRewardsList     <- newRewardsListCh;
-                                                 @payments           <- paymentsCh) {
-                                              returnCh!((
-                                                payments,
-                                                newBondsList.toMap(),
-                                                newWithdrawersList.toMap(),
-                                                newRewardsList.toMap()
-                                              ))
+                                    // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
+                                    match {"<val_pub_key>": 0 /* reward */} {
+                                      rewards => {
+                                        @ListOps!("filter", withdrawers.toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
+                                        for (@quarantinedValidators <- quarantinedValidatorsCh) {
+                                          @ListOps!("map", quarantinedValidators, *fst, *validatorsToWithdrawListCh) |
+                                          for (@validatorsToWithdrawList <- validatorsToWithdrawListCh) {
+                                            @ListOps!("map", validatorsToWithdrawList, *computePay, *paymentsCh) |
+                                            contract computePay(@pk, resultCh) = {
+                                              resultCh!((pk, allBonds.get(pk) + rewards.getOrElse(pk, 0)))
                                             } |
-                                            // Checks that the validator is not a withdrawer.
-                                            contract notWithdrawn(@(pk, _), resultCh) = {
-                                              resultCh!(not validatorsToWithdrawSet.contains(pk))
+                                            match validatorsToWithdrawList.toSet() {
+                                              validatorsToWithdrawSet => {
+                                                @ListOps!("filter", allBonds.toList(), *notWithdrawn, *newBondsListCh) |
+                                                @ListOps!("filter", withdrawers.toList(), *notWithdrawn, *newWithdrawersListCh) |
+                                                @ListOps!("filter", rewards.toList(), *notWithdrawn, *newRewardsListCh) |
+                                                for (@newWithdrawersList <- newWithdrawersListCh;
+                                                    @newBondsList       <- newBondsListCh;
+                                                    @newRewardsList     <- newRewardsListCh;
+                                                    @payments           <- paymentsCh) {
+                                                  returnCh!((
+                                                    payments,
+                                                    newBondsList.toMap(),
+                                                    newWithdrawersList.toMap(),
+                                                    // newRewardsList.toMap()
+                                                  ))
+                                                } |
+                                                // Checks that the validator is not a withdrawer.
+                                                contract notWithdrawn(@(pk, _), resultCh) = {
+                                                  resultCh!(not validatorsToWithdrawSet.contains(pk))
+                                                }
+                                              }
                                             }
                                           }
+                                        } |
+                                        // Check whether quarantine period is finished.
+                                        contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
+                                          resultCh!(currentBlockNumber >= blockNumber)
                                         }
                                       }
-                                    } |
-                                    // Check whether quarantine period is finished.
-                                    contract isQuarantineFinished(@(_, blockNumber), resultCh) = {
-                                      resultCh!(currentBlockNumber >= blockNumber)
                                     }
                                   }
                                 }
@@ -595,15 +475,6 @@ in {
                         ackCh!((false, "Invalid system auth token"))
                       }
                     }
-                  }
-                } |
-                // Adds pending rewards to global committed rewards for bookkeeping.
-                new commitReward in {
-                  contract commitReward(@(pk, pending), @acc, resultCh) = {
-                    resultCh!(acc.set(pk, acc.getOrElse(pk, 0) + pending))
-                  } |
-                  contract commitRewards(@pendingRewards, @rewards, newRewardsCh) = {
-                    @ListOps!("fold", pendingRewards.toList(), rewards, *commitReward, *newRewardsCh)
                   }
                 } |
                 // Moves the entire contents of a validator's vault to the PoS vault.
@@ -670,91 +541,23 @@ in {
                     }
                   }
                 }
-              } |
-              // Initialize pending rewards state for each validator
-              contract PendingRewards(@"init", @validatorKeys, @return) = {
-                new createStateKeyCh in {
-                  @ListOps!("map", validatorKeys, *createStateKeyCh, return) |
-                  contract createStateKeyCh(@key, @ackCh) = {
-                    TreeHashMap!("set", pendingRewardsMap, key, {}, ackCh)
-                  }
-                }
-              } |
-              // Sum of new pending rewards with existing state
-              contract PendingRewards(@"append", @validatorKey, @newRewards, @return) = {
-                new currentRewardsCh in {
-                  // Get existing pending rewards (per validator)
-                  // - validator key is always initialized so here we can use unsafe get
-                  TreeHashMap!("fastUnsafeGet", pendingRewardsMap, validatorKey, *currentRewardsCh) |
-                  for (@currentRewards <- currentRewardsCh) {
-                    new mergeResultCh in {
-                      // Merge (sum) current pending rewards with new pending rewards
-                      MergeIntMaps!(currentRewards, newRewards, *mergeResultCh) |
-                      for (@mergeResult <- mergeResultCh) {
-                        // Update pending rewards state
-                        TreeHashMap!("set", pendingRewardsMap, validatorKey, mergeResult, return)
-                      }
-                    }
-                  }
-                }
-              } |
-              // Collect pending rewards from all validators (in a map) / reset state to zero.
-              contract PendingRewards(@"collect", @validatorKeys, @return) = {
-                new collectMaps, mapsListCh in {
-                  // Get pending rewards (maps) for list of validators (public keys).
-                  @ListOps!("fold", validatorKeys, [], *collectMaps, *mapsListCh) |
-                  contract collectMaps(@validatorKey, @acc, mergeRet) = {
-                    new updateCh, updateAckCh in {
-                      // Update (per validator) pending rewards.
-                      // - collect existing values and reset to empty map
-                      TreeHashMap!("update", pendingRewardsMap, validatorKey, *updateCh, *updateAckCh) |
-                      for (@rewardsMap, rewardsRet <- updateCh) {
-                        // Reset per validator pending rewards state.
-                        rewardsRet!({}) |
-                        // Accumulate all rewards maps.
-                        for (_ <- updateAckCh) {
-                          mergeRet!(acc ++ [rewardsMap])
-                        }
-                      }
-                    }
-                  } |
-                  // Merge all pending rewards maps into one map.
-                  for (@mapsList <- mapsListCh) {
-                    @ListOps!("fold", mapsList, {}, *MergeIntMaps, return)
-                  }
-                }
               }
             }
           }
         } |
         // Transfers funds from deployer to block sender.
-        contract deposit(@deployerId, @amount, @activeValidators, returnCh) = {
+        contract deposit(@deployerId, @amount, @toTargetAddress, returnCh) = {
           new vaultCh, revAddressCh,
-              indexSender, authKeyCh,
-              getBlockData(`rho:block:data`), blockDataCh
+              indexSender, authKeyCh
           in {
             @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
             revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
             for (@authKey        <- authKeyCh;
                  @fromRevAddress <- revAddressCh) {
               @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
-              getBlockData!(*blockDataCh) |
-              for (@(true, fromVault) <- vaultCh;
-                   _, _, @sender      <- blockDataCh) {
-                @ListOps!("indexOf", activeValidators, sender, *indexSender) |
-                for (@idx <- indexSender) {
-                  for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                    if (idx == -1) {
-                      returnCh!((false, "Sender is not an active validator"))
-                    } else {
-                      match vaults.nth(idx) {
-                        (_, activeValidatorVault, _) => {
-                          @fromVault!("transfer", activeValidatorVault, amount, authKey, *returnCh)
-                        }
-                      }
-                    }
-                  }
-                }
+              for (@(true, fromVault) <- vaultCh) {
+                // Transfers from deployer to PoS vault
+                @fromVault!("transfer", toTargetAddress, amount, authKey, *returnCh)
               }
             }
           }
@@ -818,22 +621,6 @@ in {
               // TODO: Randomly select 100 active validators once we have on-chain randomness
               returnCh!(pks.take($$numberOfActiveValidators$$))
             }
-          }
-        }
-      }
-    } |
-    // Merge (sum) maps with integer values
-    // MergeIntMaps({"a": 1, "b": 4}, {"a": 2, "c": 5, "d": Nil})
-    //            = {"a": 3, "b": 4, "c": 5}
-    contract MergeIntMaps(@map1, @map2, return) = {
-      new mergeKey in {
-        @ListOps!("fold", map2.toList(), map1, *mergeKey, *return) |
-        contract mergeKey(@(key, v1), @acc, ret) = {
-          match (v1, acc.get(key)) {
-            (Int, v2 /\ Int) => ret!(acc.set(key, v1 + v2))
-            (Int, _)         => ret!(acc.set(key, v1))
-            (_, v2 /\ Int)   => ret!(acc.set(key, v2))
-            _                => ret!(acc)
           }
         }
       }

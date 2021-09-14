@@ -155,8 +155,8 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         # block number 10
         # withdraw happen in block number 9, result get in block 10
         # get the bonding amount and the reward amount
-        validator_1_balance_after_refund = get_vault_balance(context, bootstrap_node,
-                                                             VALIDATOR_KEY_1.get_public_key().get_rev_address(),
-                                                             VALIDATOR_KEY_2,
-                                                             100000, 1)
-        assert validator_1_balance_after_refund == validator_1_balance_before_bond_refund + validator_1_initial_bonding_amount + rewards_of_v1
+        # validator_1_balance_after_refund = get_vault_balance(context, bootstrap_node,
+        #                                                      VALIDATOR_KEY_1.get_public_key().get_rev_address(),
+        #                                                      VALIDATOR_KEY_2,
+        #                                                      100000, 1)
+        # assert validator_1_balance_after_refund == validator_1_balance_before_bond_refund + validator_1_initial_bonding_amount + rewards_of_v1

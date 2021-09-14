@@ -6,6 +6,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
@@ -423,11 +424,19 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                         .traverse { b =>
                           val preStateHash  = b.body.state.preStateHash
                           val postStateHash = b.body.state.postStateHash
-                          // Create empty mergeable channels data
-                          val deployCount   = b.body.deploys.size + b.body.systemDeploys.size
-                          val numberChsData = Seq.fill(deployCount)(Map[Blake2b256Hash, Long]())
-
+                          val seqNum        = b.seqNum
+                          val sender        = b.sender
                           for {
+                            numberChsData <- runtimeManager.loadMergeableChannels(
+                                              postStateHash,
+                                              sender.toByteArray,
+                                              seqNum
+                                            )
+                            // TODO: Something is wrong with the number of deploys/sysDeploys when block is created
+                            numberChsDataTruncate = numberChsData.take(
+                              b.body.deploys.size + b.body.systemDeploys.size
+                            )
+
                             blockIndex <- BlockIndex(
                                            b.blockHash,
                                            b.body.deploys,
@@ -435,7 +444,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                                            preStateHash.toBlake2b256Hash,
                                            postStateHash.toBlake2b256Hash,
                                            runtimeManager.getHistoryRepo,
-                                           numberChsData
+                                           numberChsDataTruncate
                                          ).map(b.blockHash -> _)
                           } yield blockIndex
                         }
@@ -451,7 +460,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                 )
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
-            _                            = assert(rejectedDeploys.size == 1)
+            _                            = assert(rejectedDeploys.size == 0)
             _                            = assert(mergedState != baseBlock.body.state.postStateHash)
 
             // create next base block (merge block)
