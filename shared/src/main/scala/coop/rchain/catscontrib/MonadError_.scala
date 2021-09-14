@@ -1,8 +1,11 @@
 package coop.rchain.catscontrib
+
 import cats.MonadError
 
-trait MonadError_[F[_], E] extends ApplicativeError_[F, E] {
+trait MonadError_[F[_], E] {
   implicit val instance: MonadError[F, E]
+
+  def raiseError[A](e: E): F[A] = instance.raiseError(e)
 }
 
 object MonadError_ {

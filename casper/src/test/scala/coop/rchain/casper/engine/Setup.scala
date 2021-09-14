@@ -15,7 +15,6 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{GenesisBuilder, TestTime}
-import coop.rchain.catscontrib.ApplicativeError_
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.{Connections, ConnectionsCell}
@@ -34,6 +33,16 @@ import monix.execution.Scheduler
 
 object Setup {
   def apply() = new {
+
+    implicit val errHandler =
+      new ApplicativeError[Task, CommError] {
+        override def raiseError[A](e: CommError): Task[A] =
+          Task.raiseError(new Exception(s"CommError: $e"))
+        override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
+          fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
+        override def pure[A](x: A): Task[A]                           = Task.pure(x)
+        override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
+      }
 
     implicit val log              = new LogStub[Task]
     implicit val eventLogStub     = new EventLogStub[Task]
@@ -100,15 +109,6 @@ object Setup {
     implicit val currentRequests: engine.BlockRetriever.RequestedBlocks[Task] =
       Ref.unsafe[Task, Map[BlockHash, RequestState]](Map.empty[BlockHash, RequestState])
     implicit val commUtil = CommUtil.of[Task]
-    implicit val errHandler =
-      ApplicativeError_.applicativeError(new ApplicativeError[Task, CommError] {
-        override def raiseError[A](e: CommError): Task[A] =
-          Task.raiseError(new Exception(s"CommError: $e"))
-        override def handleErrorWith[A](fa: Task[A])(f: CommError => Task[A]): Task[A] =
-          fa.onErrorHandleWith(th => f(UnknownCommError(th.getMessage)))
-        override def pure[A](x: A): Task[A]                           = Task.pure(x)
-        override def ap[A, B](ff: Task[A => B])(fa: Task[A]): Task[B] = Applicative[Task].ap(ff)(fa)
-      })
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     val kvm = InMemoryStoreManager[Task]()
