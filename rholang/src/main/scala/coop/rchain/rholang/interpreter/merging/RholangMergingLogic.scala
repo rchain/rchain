@@ -46,8 +46,8 @@ object RholangMergingLogic {
       .flatMap(_.keySet)
       .distinct
       .toList
-      .traverse(key => getInitialValue(key).map((key, _)))
-      .map(_.collect { case (k, Some(v)) => (k, v) })
+      // Read initial value, default is 0 if not found
+      .traverse(key => getInitialValue(key).map(v => (key, v.getOrElse(0L))))
       .map(_.toMap)
       .flatMap(Ref.of(_))
 
@@ -92,20 +92,19 @@ object RholangMergingLogic {
       getBaseData: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
   )(diff: Long): F[HotStoreTrieAction] =
     for {
-      baseVals <- getBaseData(channelHash)
-
-      _ = assert(baseVals.size == 1, s"Single value expected on a number channel.")
+      // Read initial value of number channel from base state
+      initValOpt <- convertToReadNumber(getBaseData).apply(channelHash)
 
       // Calculate number channel new value
-      (initNum, _) = getNumberWithRnd(baseVals.head.a)
-      newVal       = initNum + diff
+      initNum = initValOpt getOrElse 0L
+      newVal  = initNum + diff
 
       // Calculate merged random generator
       newRnd = if (changes.added.size == 1) {
         // Single branch, just use available random generator
         decodeRnd(changes.added.head)
       } else {
-        // Merge random generators
+        // Multiple branches, merge random generators
         val rndAddedSorted = changes.added
           .map(decodeRnd)
           .distinct
@@ -135,7 +134,9 @@ object RholangMergingLogic {
   }
 
   def getNumberWithRnd(parWithRnd: ListParWithRandom): (Long, Blake2b512Random) = {
-    assert(parWithRnd.pars.size == 1, s"Number channel should contain single Int term.")
+    assert(parWithRnd.pars.size == 1, {
+      s"Number channel should contain single Int term, found ${parWithRnd.pars}."
+    })
 
     val Number(num) = parWithRnd.pars.head
 
@@ -167,22 +168,18 @@ object RholangMergingLogic {
   /**
     * Converts function to get all data on a channel to function to get single number value.
     */
-  def convertToReadNumber[F[_]: Sync](
+  def convertToReadNumber[F[_]: Monad](
       getDataFunc: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
   ): Blake2b256Hash => F[Option[Long]] =
     (hash: Blake2b256Hash) =>
       // Read existing value
-      getDataFunc(hash).map { datums =>
-        // Extract single number value if exists
-        if (datums.isEmpty) none
-        else {
-          assert(datums.size == 1, s"Single value expected on a number channel $hash -> $datums.")
+      getDataFunc(hash).map { data =>
+        assert(data.size <= 1, {
+          s"To calculate difference on a number channel, single value is expected, found $data."
+        })
 
-          // Get single number value
-          val datum    = datums.head
-          val (num, _) = getNumberWithRnd(datum.a)
-          num.some
-        }
+        // Extract single number value if exists
+        data.headOption.map(_.a).map(getNumberWithRnd).map(_._1)
       }
 
   /* Mergeable channel store encoders/decoders */

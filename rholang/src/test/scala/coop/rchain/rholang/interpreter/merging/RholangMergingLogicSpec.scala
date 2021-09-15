@@ -14,10 +14,10 @@ class RholangMergingLogicSpec extends FlatSpec with Matchers {
     /*
      *        A   B   C        A   B   C
      *  ---------------       ----------
-     *  PSH  10   2  20
+     *  PSH  10      20
      *
      *   0.  20               10
-     *   1.       5      ==>       3
+     *   1.       3      ==>       3
      *   2.  15      10       -5     -10
      */
 
@@ -27,13 +27,12 @@ class RholangMergingLogicSpec extends FlatSpec with Matchers {
 
     val initValues = Map(
       (chA, 10L),
-      (chB, 2L),
       (chC, 20L)
     )
 
     val input = Seq(
       Map((chA, 20L)),
-      Map((chB, 5L), ("D", 1L)), // Contains change on non-initialized key (channel)
+      Map((chB, 3L)), // Contains change on non-initialized key (channel)
       Map((chA, 15L), (chC, 10L))
     )
 
