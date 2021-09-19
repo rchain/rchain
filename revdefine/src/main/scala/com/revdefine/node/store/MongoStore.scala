@@ -88,6 +88,7 @@ final case class MongoStore[F[_]: Async: ContextShift](uri: String) {
                          .liftToF
         _ <- transactions
               .filter(_.isSucceeded)
+              .filter(_.amount != 0)
               .toList
               .traverse(
                 t =>
