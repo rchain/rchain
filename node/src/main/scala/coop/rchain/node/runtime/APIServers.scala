@@ -35,14 +35,11 @@ object APIServers {
   )(
       implicit
       blockStore: BlockStore[F],
-      oracle: SafetyOracle[F],
       concurrent: Concurrent[F],
       metrics: Metrics[F],
       span: Span[F],
       engineCell: EngineCell[F],
       logF: Log[F],
-      synchronyConstraintChecker: SynchronyConstraintChecker[F],
-      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
       mainScheduler: Scheduler
   ): APIServers = {
     val repl = ReplGrpcService(runtime, mainScheduler)

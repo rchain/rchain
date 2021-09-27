@@ -50,12 +50,12 @@ object RNodeKeyValueStoreManager {
       (Db("invalid-blocks"), dagStorageEnvConfig),
       (Db("deploy-index"), dagStorageEnvConfig),
       (Db("last-finalized-block"), dagStorageEnvConfig),
+      // Casper buffer
+      (Db("casper-buffer"), casperBufferEnvConfig),
       // Deploy storage
       (Db("deploy_storage"), deployStorageEnvConfig),
       // Reporting (trace) cache
       (Db("reporting-cache"), reportingEnvConfig),
-      // CasperBuffer
-      (Db("parents-map"), casperBufferEnvConfig),
       // Runtime mergeable store (cache of mergeable channels for block-merge)
       (Db("mergeable-channel-cache"), casperBufferEnvConfig),
       // Rholang evaluator store
