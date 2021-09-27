@@ -4,7 +4,7 @@ import cats.Monoid
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.BlockIndex
+import coop.rchain.casper.merging.BlockIndexer
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GInt

@@ -1,32 +1,29 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
-import coop.rchain.shared.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.metrics.{Metrics, MetricsSemaphore}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
-import fs2.concurrent.Queue
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
 
-import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
 object Running {
@@ -185,19 +182,17 @@ object Running {
   // TODO name for this message is misleading, as its a request for all tips, not just fork choice.
   def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode
-  )(casper: MultiParentCasper[F]): F[Unit] = {
+  )(getTips: F[Iterable[BlockHash]]): F[Unit] = {
     val logRequest = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
-    def logResponse(tips: Seq[BlockHash]): F[Unit] =
+    def logResponse(tips: Iterable[BlockHash]): F[Unit] =
       Log[F].info(
         s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTips = casper.blockDag.flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
+
     // TODO respond with all tips in a single message
     def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 
-    logRequest >> getTips >>= { t =>
-      t.traverse(respondToPeer) >> logResponse(t)
-    }
+    logRequest >> getTips.flatMap(t => t.toList.traverse(respondToPeer) >> logResponse(t))
   }
 
   /**
@@ -251,71 +246,52 @@ class Running[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
-    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-    blocksInProcessing: Ref[F, Set[BlockHash]],
     casper: MultiParentCasper[F],
+    blockDagStateRef: Ref[F, BlockDagState],
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
-    disableStateExporter: Boolean
+    disableStateExporter: Boolean,
+    processBlockInRunning: BlockMessage => F[Unit]
 ) extends Engine[F] {
 
   import Engine._
   import Running._
-  import coop.rchain.catscontrib.Catscontrib._
 
   private val F    = Applicative[F]
   private val noop = F.unit
 
   private def ignoreCasperMessage(hash: BlockHash): F[Boolean] =
-    blocksInProcessing.get.map(_.contains(hash)) ||^
-      casper.bufferContains(hash) ||^
-      casper.dagContains(hash)
+    blockDagStateRef.get.map(_.received(hash))
 
   override def init: F[Unit] = theInit
 
   override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
+    case b: BlockMessage => processBlockInRunning(b)
     case h: BlockHashMessage =>
       handleBlockHashMessage(peer, h)(
         ignoreCasperMessage
       )
-    case b: BlockMessage =>
-      for {
-        _ <- casper.getValidator.flatMap {
-              case None => ().pure[F]
-              case Some(id) =>
-                F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
-                  Log[F].warn(
-                    s"There is another node $peer proposing using the same private key as you. " +
-                      s"Or did you restart your node?"
-                  )
-                )
-            }
-        _ <- ignoreCasperMessage(b.blockHash).ifM(
-              Log[F].debug(
-                s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                  s"from ${peer.endpoint.host}"
-              ),
-              blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
-                s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                  s"from ${peer.endpoint.host}"
-              )
-            )
-      } yield ()
 
     case br: BlockRequest => handleBlockRequest(peer, br)
     // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
     // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
-    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
-    case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+    case hbr: HasBlockRequest =>
+      handleHasBlockRequest(peer, hbr) { h =>
+        blockDagStateRef.get.map(_.validated.dagSet.contains(h))
+      }
+    case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
     case _: ForkChoiceTipRequest.type =>
-      handleForkChoiceTipRequest(peer)(casper)
+      handleForkChoiceTipRequest(peer)(
+        blockDagStateRef.get.map(_.validated.latestMessagesMap.values)
+      )
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
+        lfBlockHash <- BlockDagStorage[F].getRepresentation
+                        .flatMap(_.genesis) //.flatMap(_.lastFinalizedBlock)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
@@ -364,5 +340,6 @@ class Running[F[_]
   override def withCasper[A](
       f: MultiParentCasper[F] => F[A],
       default: F[A]
-  ): F[A] = f(casper)
+  ): F[A] =
+    f(casper)
 }

@@ -19,21 +19,15 @@ object PrettyPrinter {
 
   // TODO shouldn header.parentsHashList be nonempty list?
   private def buildString(b: BlockMessage, short: Boolean): String =
-    b.header.parentsHashList.headOption
-      .fold(
-        s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
-      )(
-        mainParent =>
-          if (short) {
-            s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
-          } else {
-            s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
-              s"-- Sender ID ${buildString(b.sender)} " +
-              s"-- M Parent Hash ${buildString(mainParent)} " +
-              s"-- Contents ${buildString(b.body.state)}" +
-              s"-- Shard ID ${limit(b.shardId, 10)}"
-          }
-      )
+    s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)" +
+      (if (short) {
+         s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
+       } else {
+         s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
+           s"-- Sender ID ${buildString(b.sender)} " +
+           s"-- Contents ${buildString(b.body.state)}" +
+           s"-- Shard ID ${limit(b.shardId, 10)}"
+       })
 
   def buildString(bh: BlockHashMessage): String =
     s"Block hash: ${buildString(bh.blockHash)}"

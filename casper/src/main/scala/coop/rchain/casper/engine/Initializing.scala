@@ -4,14 +4,14 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.ValidBlock.Valid
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{StateMetadata, _}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
@@ -22,8 +22,6 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared
 import coop.rchain.shared._
@@ -41,19 +39,18 @@ class Initializing[F[_]
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
-    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-    blocksInProcessing: Ref[F, Set[BlockHash]],
+    blockDagStateRef: Ref[F, BlockDagState],
     casperShardConf: CasperShardConf,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true,
-    disableStateExporter: Boolean
+    disableStateExporter: Boolean,
+    processBlockInRunning: BlockMessage => F[Unit]
 ) extends Engine[F] {
 
   import Engine._
@@ -98,7 +95,11 @@ class Initializing[F[_]
             )
 
         // Record approved block in DAG
-        _ <- BlockDagStorage[F].insert(block, invalid = false, approved = true)
+        _ <- BlockDagStorage[F].insert(
+              block,
+              invalid = false,
+              StateMetadata(List(), List(), List())
+            )
 
         // Download approved state and all related blocks
         _ <- requestApprovedState(approvedBlock)
@@ -211,7 +212,11 @@ class Initializing[F[_]
     def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
       Log[F].info(
         s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
-      ) <* BlockDagStorage[F].insert(block, invalid = isInvalid)
+      ) <* BlockDagStorage[F].insert(
+        block,
+        invalid = isInvalid,
+        StateMetadata(List(), List(), List())
+      )
 
     for {
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
@@ -241,26 +246,24 @@ class Initializing[F[_]
     } yield ()
   }
 
-  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
-    val ab = approvedBlock.candidate.block
+  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] =
     for {
       casper <- MultiParentCasper
                  .hashSetCasper[F](
                    validatorId,
-                   casperShardConf,
-                   ab
+                   casperShardConf.shardName,
+                   casperShardConf.faultToleranceThreshold
                  )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
-            blockProcessingQueue,
-            blocksInProcessing,
             casper,
+            blockDagStateRef,
             approvedBlock,
             validatorId,
             ().pure,
-            disableStateExporter
+            disableStateExporter,
+            processBlockInRunning
           )
       _ <- CommUtil[F].sendForkChoiceTipRequest
     } yield ()
-  }
 }

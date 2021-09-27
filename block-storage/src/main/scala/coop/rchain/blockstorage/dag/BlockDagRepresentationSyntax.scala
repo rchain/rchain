@@ -101,38 +101,6 @@ final class BlockDagRepresentationOps[F[_]](
   def selfJustification(h: BlockHash)(implicit sync: Sync[F]): F[Option[Justification]] =
     selfJustificationChain(h).head.compile.last
 
-  def mainParentChain(h: BlockHash, stopAtHeight: Long = 0)(
-      implicit sync: Sync[F]
-  ): Stream[F, BlockHash] =
-    Stream.unfoldEval(h) { message =>
-      lookupUnsafe(message).map(
-        meta =>
-          if (meta.blockNum <= stopAtHeight)
-            none[(BlockHash, BlockHash)]
-          else
-            meta.parents.headOption.map(v => (v, v))
-      )
-    }
-
-  def isInMainChain(ancestor: BlockHash, descendant: BlockHash)(
-      implicit sync: Sync[F]
-  ): F[Boolean] = {
-    val result = OptionT(dag.lookup(ancestor).map(_.map(_.blockNum))).semiflatMap { aHeight =>
-      mainParentChain(descendant, aHeight)
-        .filter(_ == ancestor)
-        .head
-        .compile
-        .last
-        .map(_.isDefined)
-    }
-    (descendant == ancestor).pure ||^ result.getOrElse(false)
-  }
-
-  def parentsUnsafe(item: BlockHash)(implicit sync: Sync[F]): F[List[BlockHash]] = {
-    def errMsg = s"Parents lookup failed: DAG is missing ${item.show}"
-    dag.lookup(item).map(_.map(v => v.parents)) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
-  }
-
   def descendants(blockHash: BlockHash)(implicit sync: Sync[F]): F[Set[BlockHash]] =
     Stream
       .unfoldLoopEval(List(blockHash)) { lvl =>
@@ -152,7 +120,7 @@ final class BlockDagRepresentationOps[F[_]](
       .unfoldEval(start) { lvl =>
         val parents = lvl
           .traverse(lookupUnsafe)
-          .flatMap(_.flatMap(_.parents).distinct.filterA(filterF))
+          .flatMap(_.flatMap(_.justifications.map(_.latestBlockHash)).distinct.filterA(filterF))
         parents.map(p => p.nonEmpty.guard[Option].as(p, p))
       }
       .flatMap(Stream.emits)
@@ -163,29 +131,4 @@ final class BlockDagRepresentationOps[F[_]](
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
     ancestors(List(blockHash), filterF).map(_ + blockHash)
-
-  def latestFinalized(lfb: BlockHash, targetSenders: Set[Validator])(
-      implicit sync: Sync[F]
-  ): F[Map[Validator, BlockMetadata]] =
-    Stream
-      .unfoldLoopEval((List(lfb), Map.empty[Validator, BlockMetadata])) {
-        case (lvl, acc) =>
-          for {
-            metas <- lvl.traverse(this.lookupUnsafe).map(_.distinct)
-            newAcc = metas.foldLeft(acc)(
-              (a, m) =>
-                if (a.contains(m.sender)) a
-                else
-                  a.updated(m.sender, m)
-            )
-            done = newAcc.keySet == targetSenders
-            next = if (done) none[(List[BlockHash], Map[Validator, BlockMetadata])]
-            else {
-              val parents = metas.flatMap(_.parents).distinct
-              parents.nonEmpty.guard[Option].as((parents, newAcc))
-            }
-          } yield (newAcc, next)
-      }
-      .compile
-      .lastOrError
 }

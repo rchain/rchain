@@ -17,7 +17,8 @@ final case class Genesis(
     blockNumber: Long,
     proofOfStake: ProofOfStake,
     vaults: Seq[Vault],
-    supply: Long
+    supply: Long,
+    sender: ByteString = ByteString.EMPTY
 )
 
 object Genesis {
@@ -103,7 +104,7 @@ object Genesis {
     val version = 1L //FIXME make this part of Genesis, and pass it from upstream
     val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
 
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
+    unsignedBlockProto(body, header, List.empty[Justification], shardId, sender = genesis.sender)
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {
