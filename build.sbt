@@ -132,7 +132,7 @@ lazy val shared = (project in file("shared"))
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest,
-      enumeratum,
+      enumeratum
     )
   )
 
@@ -174,8 +174,23 @@ lazy val casper = (project in file("casper"))
     crypto,
     models % "compile->compile;test->test",
     rspace,
-    rholang % "compile->compile;test->test"
+    rholang % "compile->compile;test->test",
+    casperv2
   )
+
+lazy val casperv2 = (project in file("casper-v2"))
+  .settings(commonSettings: _*)
+  .settings(
+    name := "casperv2",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsRetry,
+      catsMtl,
+      fs2Core,
+      fs2Io
+    )
+  )
+  .dependsOn(shared)
 
 lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
@@ -381,7 +396,7 @@ lazy val node = (project in file("node"))
       "openssl"
     )
   )
-  .dependsOn(casper % "compile->compile;test->test", comm, crypto, rholang)
+  .dependsOn(casper % "compile->compile;test->test", casperv2, comm, crypto, rholang)
 
 lazy val regex = (project in file("regex"))
   .settings(commonSettings: _*)
@@ -453,7 +468,7 @@ lazy val blockStorage = (project in file("block-storage"))
       catsMtl
     )
   )
-  .dependsOn(shared, models % "compile->compile;test->test")
+  .dependsOn(shared, casperv2, models % "compile->compile;test->test")
 
 lazy val rspace = (project in file("rspace"))
   .configs(IntegrationTest extend Test)
@@ -518,6 +533,7 @@ lazy val rchain = (project in file("."))
   .aggregate(
     blockStorage,
     casper,
+    casperv2,
     comm,
     crypto,
     graphz,
