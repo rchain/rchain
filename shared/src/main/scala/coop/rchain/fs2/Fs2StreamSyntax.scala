@@ -12,6 +12,19 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 trait Fs2StreamSyntax {
   implicit final def sharedSyntaxFs2Stream[F[_], A](stream: Stream[F, A]): Fs2StreamOps[F, A] =
     new Fs2StreamOps[F, A](stream)
+
+  def zipStreamList[F[_], A](streams: List[Stream[F, A]]): Stream[F, A] =
+    streams
+      .foldLeft[Stream[F, List[Option[A]]]](Stream.empty) { (acc, s) =>
+        zipStreams(acc, s)
+      }
+      .flatMap(l => Stream.emits(l.reverse.flatten))
+
+  def zipStreams[F[_], A](
+      s1: Stream[F, List[Option[A]]],
+      s2: Stream[F, A]
+  ): Stream[F, List[Option[A]]] =
+    s1.zipAllWith(s2.map(Option(_)))(Nil, Option.empty[A]) { case (acc, a) => a :: acc }
 }
 
 class Fs2StreamOps[F[_], A](
