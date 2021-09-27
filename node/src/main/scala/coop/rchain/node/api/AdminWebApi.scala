@@ -6,11 +6,7 @@ import cats.syntax.all._
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.{
-  LastFinalizedHeightConstraintChecker,
-  ProposeFunction,
-  SynchronyConstraintChecker
-}
+import coop.rchain.casper.{ProposeFunction}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.shared.Log
 
@@ -20,7 +16,7 @@ trait AdminWebApi[F[_]] {
 }
 
 object AdminWebApi {
-  class AdminWebApiImpl[F[_]: Concurrent: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Span: Metrics](
+  class AdminWebApiImpl[F[_]: Concurrent: EngineCell: Log: Span: Metrics](
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
   ) extends AdminWebApi[F] {
