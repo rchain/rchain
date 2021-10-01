@@ -15,28 +15,28 @@ final class CasperOps[F[_], M, S](val c: Casper[F, M, S]) extends AnyVal {
   import c._
 
   def messageScope(
-      latestMessages: Set[M],
+      justifications: Set[M],
       dag: DependencyGraph[F, M, S],
       safetyOracle: SafetyOracle[F, M, S]
   )(implicit sync: Sync[F], ordering: Ordering[M]): F[MessageScope[M]] = {
     import dag._
 
-    val allSenders    = latestMessages.map(sender)
-    val latestSeqNums = latestMessages.map(m => sender(m) -> seqNum(m)).toMap
+    val allSenders    = justifications.map(sender)
+    val latestSeqNums = justifications.map(m => sender(m) -> seqNum(m)).toMap
     val visitsInit    = Map.empty[S, Set[M]] // Accumulator for messages visited while pulling the stream.
     val fringeInit    = Map.empty[S, M] // Accumulator for finalization fringe
 
     safetyOracle
-      .faultTolerances(latestMessages, dag)
+      .faultTolerances(justifications, dag)
       // Accumulate fringe and messages visited
       .scan((fringeInit, visitsInit)) {
         case ((fringeAcc, visitsAcc), level) =>
           val finalized = level.collect { case (m, ft) if ft > faultToleranceThreshold => m }
           val newFringeAcc = finalized.foldLeft(fringeAcc) {
             case (acc, m) =>
-              val s                      = sender(m)
-              val shouldRecordFringeItem = !acc.get(s).exists(seqNum(_) >= seqNum(m))
-              if (shouldRecordFringeItem) acc.updated(s, m) else acc
+              val s                         = sender(m)
+              val higherMessageAlreadyFound = acc.get(s).exists(seqNum(_) >= seqNum(m))
+              if (higherMessageAlreadyFound) acc else acc.updated(s, m)
           }
           val newVisitsAcc = level.foldLeft(visitsAcc) {
             case (acc, (m, _)) =>
@@ -51,9 +51,10 @@ final class CasperOps[F[_], M, S](val c: Casper[F, M, S]) extends AnyVal {
       .zipWithIndex
       .find {
         case ((fringeAcc, _), idx) =>
-          val fringeComplete = fringeAcc.keySet == allSenders
+          val fringeComplete  = fringeAcc.keySet == allSenders
           val fringeIsHighest =
-            fringeAcc.valuesIterator.forall(m => idx >= latestSeqNums(sender(m)) - seqNum(m))
+            // As first element in message view is a visit of itself, here `>` is used and not `>=`.
+            fringeAcc.valuesIterator.forall(m => idx > latestSeqNums(sender(m)) - seqNum(m))
           fringeComplete && fringeIsHighest
       }
       // Clear non finalized set accumulator from messages below the fringe

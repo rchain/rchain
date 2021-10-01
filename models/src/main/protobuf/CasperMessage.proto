@@ -125,11 +125,12 @@ message BlockMetadataInternal {
   bytes postStateHash                   = 2;
   bytes sender                          = 3;
   repeated JustificationProto justifications = 4 [(scalapb.field).collection_type="collection.immutable.List"];
-  repeated BondProto bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
-  int64 blockNum                        = 6;
-  int32 seqNum                          = 7;
-  bool invalid                          = 8; // whether the block was marked as invalid
-  StateMetadata stateMetadata           = 9;
+  repeated bytes parents                = 5 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated BondProto bonds              = 6 [(scalapb.field).collection_type="collection.immutable.List"];
+  int64 blockNum                        = 7;
+  int32 seqNum                          = 8;
+  bool invalid                          = 9; // whether the block was marked as invalid
+  StateMetadata stateMetadata           = 10;
 }
 
 message HeaderProto {

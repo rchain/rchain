@@ -1,8 +1,11 @@
 package coop.rchain.casper.state
 
+import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage.CasperBufferStorage
 import coop.rchain.state.StateManager
 
-trait BlockStateManager[F[_]] extends StateManager[F]
+trait BlockStateManager[F[_]] extends StateManager[F] {
+  def casperBuffer: CasperBufferStorage[F]
+}
 
 final case class BlockStateStatus()
 

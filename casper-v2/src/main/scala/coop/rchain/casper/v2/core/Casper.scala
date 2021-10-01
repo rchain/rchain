@@ -13,11 +13,23 @@ trait Casper[F[_], M, S] {
 
 object Casper {
 
+  /** As equivocation is possible, there can be several latest messages from sender. */
+  final case class LatestMessages[S, M](private val v: Map[S, Set[M]]) extends AnyVal
+
   /** Highest finalized messages from all known senders. Defines finalized state of the network. */
-  final case class FinalizationFringe[M](v: Set[M])
+  final case class FinalizationFringe[M](private val v: Set[M])
 
   /** All messages above the finalization fringe. */
-  final case class ConflictScope[M](v: Set[M])
+  final case class ConflictScope[M](private val v: Set[M]) extends AnyVal {
+
+    /**
+      * @param u   Conflict units per message
+      * @tparam U  Type for conflict unit
+      * @return    Conflict set for conflict scope
+      */
+    def conflictSet[U](us: M => Iterable[U]): Set[U] = v.flatMap(us)
+    def messages                                     = v
+  }
 
   /**
     * Scope of the message.
@@ -26,7 +38,8 @@ object Casper {
     * @param conflictScope       [[ConflictScope]]
     * @tparam M                  Type of the message.
     */
-  final case class MessageScope[M](
+  final case class MessageScope[S, M](
+      latestMessages: LatestMessages[S, M],
       finalizationFringe: FinalizationFringe[M],
       conflictScope: ConflictScope[M]
   )

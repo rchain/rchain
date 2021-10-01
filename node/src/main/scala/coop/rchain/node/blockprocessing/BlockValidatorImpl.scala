@@ -1,7 +1,7 @@
 package coop.rchain.node.blockprocessing
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage.CasperBufferStorage
@@ -21,6 +21,8 @@ import coop.rchain.casper.{
   CasperConf,
   InvalidBlock,
   MultiParentCasperImpl,
+  NetworkSnapshot,
+  PrettyPrinter,
   ValidatorIdentity
 }
 import coop.rchain.metrics.{Metrics, Span}
@@ -41,7 +43,7 @@ final case class BlockValidatorImpl[F[_]
 (
     override val input: Stream[F, BlockHash],
     append: BlockHash => F[Unit],
-    blockDagStatRef: Ref[F, BlockDagState],
+    blockDagStateRef: Ref[F, BlockDagState],
     casperConf: CasperConf,
     bufferStorage: CasperBufferStorage[F]
 ) extends MessageValidator[F, BlockHash, BlockDagState] {
@@ -66,7 +68,7 @@ final case class BlockValidatorImpl[F[_]
                   case _                     => casper.handleValidBlock(block, snapshot)
                 }
       _ <- offenceOpt.traverse(o => Log[F].info(s"Validating ${message.show}. Done. Invalid: ${o}"))
-      r <- blockDagStatRef.modify { st =>
+      r <- blockDagStateRef.modify { st =>
             val ValidatedResult(newSt, unlockedChildren) =
               st.ackValidated(message, newRepr.getPureState)
             (newSt, ValidationResult(newSt, unlockedChildren))
@@ -95,14 +97,23 @@ object BlockValidatorImpl {
       // Adjust this to modify behaviour of validation
       validationQueue <- Queue.unbounded[F, BlockHash]
       stream          = validationQueue.dequeueChunk(1)
-      append          = h => validationQueue.enqueue1(h)
+      append          = validationQueue.enqueue1 _
       // Send to validation blocks that are in pending validation status
       // (e.g. node has been restarted in the middle of validation)
       // Note: validation will be started when stream is started
       dagState          <- blockDagStateRef.get
       pendingValidation = dagState.buffer.collect { case (h, ValidationInProgress) => h }
       _                 <- pendingValidation.toList.traverse(append)
-    } yield BlockValidatorImpl(stream, append, blockDagStateRef, casperShardConf, bufferStore)
+      _ <- Log[F].info(
+            s"Pending blocks added to validation queue: ${PrettyPrinter.buildString(pendingValidation.toList)}."
+          )
+    } yield BlockValidatorImpl(
+      stream,
+      append,
+      blockDagStateRef,
+      casperShardConf,
+      bufferStore
+    )
   }
 
 }

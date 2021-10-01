@@ -9,12 +9,19 @@ import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFi
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.merging.DeployChainIndex
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.state.NetworkStateMerged
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.v2.core.Casper.MessageScope
+import coop.rchain.casper.v2.core.Casper.{
+  ConflictScope,
+  FinalizationFringe,
+  LatestMessages,
+  MessageScope
+}
 import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.crypto.signatures.Signed
@@ -22,6 +29,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
 
 sealed trait DeployError
@@ -65,18 +73,6 @@ trait Casper[F[_]] {
   ): F[BlockDagRepresentation[F]]
 }
 
-object Casper {
-
-  // Validators that should be slashed because of invalid block, but still active in this state
-  def bondedOffenders[F[_]: Sync](
-      s: CasperSnapshot[F],
-      activeValidators: Set[Validator]
-  ): F[Iterator[(Validator, BlockHash)]] =
-    s.dag.invalidLatestMessages.map(_.toIterator.filter {
-      case (validator, _) => activeValidators.contains(validator)
-    })
-}
-
 trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[BlockDagRepresentation[F]]
   // This is the weight of faults that have been accumulated so far.
@@ -95,24 +91,17 @@ object MultiParentCasper extends MultiParentCasperInstances {
 }
 
 /**
-  * Casper snapshot is a state that is changing in discrete manner with each new block added.
-  * This class represents full information about the state. It is required for creating new blocks
-  * as well as for validating blocks.
+  * Casper snapshot contains prepared data for validation/proposing. It is pure and does not have access to any effects.
   */
-final case class CasperSnapshot[F[_]](
-    dag: BlockDagRepresentation[F],
-    messageScope: MessageScope[BlockMetadata],
-    conflictResolution: ConflictResolution[DeployChain],
-    state: StateHash,
-    finalizationState: BlockDagFinalizationState,
-    latestMessages: Map[Validator, BlockMetadata],
-    invalidBlocks: Map[Validator, BlockHash],
-    deploysInScope: Set[DeployId],
+final case class CasperSnapshot(
+    networkState: NetworkSnapshot,
+    conflictScopeResolution: ConflictResolution[DeployChain],
+    snapshotState: StateHash,
     maxBlockNum: Long,
     maxSeqNums: Map[Validator, Int],
     deployLifespan: Int,
-    shardName: String,
-    casperVersion: Long
+    shardNam: String,
+    casperVersion: Int
 )
 
 final case class OnChainCasperState(

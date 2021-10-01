@@ -18,7 +18,7 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
   import c._
 
   /**
-    * @return Stream containing message + ancestors of the message (justifications), topologically sorted.
+    * @return Stream containing message + ancestors of the message (parents), topologically sorted.
     *         Messages of the same topological order are sorted by identity.
     *         Can contain duplicates, as the same message can be seen through multiple paths.
     *         Not flattened to keep the notion of distance.
@@ -27,7 +27,7 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
     Stream
       .unfoldLoopEval(List(message)) { lvl =>
         lvl
-          .flatTraverse(s => justifications(s))
+          .flatTraverse(s => parents(s))
           // Sort output to keep function pure
           .map(_.distinct.sorted)
           .map(next => (lvl, next.nonEmpty.guard[Option].as(next)))

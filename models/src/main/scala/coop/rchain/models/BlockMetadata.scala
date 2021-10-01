@@ -2,6 +2,7 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.models.BlockHash.BlockHash
 import scalapb.TypeMapper
 
 final case class BlockMetadata(
@@ -9,6 +10,7 @@ final case class BlockMetadata(
     postStateHash: ByteString,
     sender: ByteString,
     justifications: List[Justification],
+    parents: List[BlockHash],
     weightMap: Map[ByteString, Long],
     blockNum: Long,
     seqNum: Int,
@@ -26,6 +28,7 @@ object BlockMetadata {
       internal.postStateHash,
       internal.sender,
       internal.justifications.map(Justification.from),
+      internal.parents,
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
@@ -38,6 +41,7 @@ object BlockMetadata {
       metadata.postStateHash,
       metadata.sender,
       metadata.justifications.map(Justification.toProto),
+      metadata.parents,
       metadata.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
       metadata.blockNum,
       metadata.seqNum,
@@ -75,6 +79,7 @@ object BlockMetadata {
       b.body.state.postStateHash,
       b.sender,
       b.justifications,
+      List(), // This is computed and filled when inserting to storage
       weightMap(b.body.state),
       b.body.state.blockNumber,
       b.seqNum,

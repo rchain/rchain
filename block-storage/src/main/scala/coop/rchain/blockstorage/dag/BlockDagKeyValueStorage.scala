@@ -15,6 +15,7 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{BlockMessage, DeployChain, StateMetadata}
+import coop.rchain.casper.v2.core.DependencyGraph
 import coop.rchain.casper.v2.core.Validation.Slashing
 import coop.rchain.casper.v2.stcasper.Validation.DummyOffence
 import coop.rchain.metrics.Metrics.Source
@@ -59,7 +60,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      if (st.dagSet.contains(blockHash)) memoize(h => blockMetadataIndex.get(h))(blockHash)
+      if (st.dagSet.contains(blockHash)) memoize(blockMetadataIndex.get)(blockHash)
       else none[BlockMetadata].pure[F]
 
     def contains(blockHash: BlockHash): F[Boolean] =
@@ -210,7 +211,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def doInsert: F[Unit] = {
-      val blockMetadata      = BlockMetadata.fromBlock(block, invalid, blockStateMetadata)
+      val metadata           = BlockMetadata.fromBlock(block, invalid, blockStateMetadata)
       val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
 
       for {
@@ -224,6 +225,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
               .whenA(blockHashIsInvalid)
 
         _ <- logEmptySender.whenA(senderIsEmpty)
+
+        // Fill parents
+        parents <- DependencyGraph.computeParents[F, BlockHash](
+                    metadata.justifications.map(_.latestBlockHash),
+                    blockMetadataIndex.getUnsafe(_).map(_.justifications.map(_.latestBlockHash))
+                  )
+        blockMetadata = metadata.copy(parents = parents)
 
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)

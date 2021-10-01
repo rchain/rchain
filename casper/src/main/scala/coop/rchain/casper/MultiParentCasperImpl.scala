@@ -8,13 +8,14 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.BlockStatus.invalidMessageScope
-import coop.rchain.casper.MultiParentCasperImpl.finalizedStateCache
+import coop.rchain.casper.MultiParentCasperImpl.lastFinalizedStateCache
 import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.computeMessageScope
 import coop.rchain.casper.deploychainsetcasper._
 import coop.rchain.casper.merging.{BlockIndexer, DeployChainMerger}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.v2.core.Casper._
 import coop.rchain.crypto.signatures.Signed
@@ -98,7 +99,7 @@ class MultiParentCasperImpl[F[_]
   def getRuntimeManager: F[RuntimeManager[F]] = Sync[F].delay(RuntimeManager[F])
 
   // Todo make this input pure BlockDagState
-  override def getSnapshot(targetMessageOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = {
+  override def getSnapshot(targetMessageOpt: Option[BlockMessage]): F[CasperSnapshot] = {
     import DeployChainSetCasper._
     import cats.instances.list._
     import coop.rchain.blockstorage.syntax._
@@ -111,46 +112,16 @@ class MultiParentCasperImpl[F[_]
         .fromOption[F](targetMessageOpt.map(_.justifications.map(_.latestBlockHash)))
         .getOrElseF(dag.latestMessageHashes.map(_.values))
         .flatMap(_.toList.traverse(dag.lookupUnsafe))
-      latestMessages <- getLatestMessagesMetas
+      latestMessages                <- getLatestMessagesMetas
+      r                             <- Stopwatch.duration(computeMessageScope(latestMessages.toSet, dag))
+      (messageScope, messageScopeT) = r
       // some technical information
       maxBlockNum   = latestMessages.map(_.blockNum).max
       maxSeqNums    = latestMessages.map(m => (m.sender -> m.seqNum)).toMap
       invalidBlocks <- dag.invalidBlocksMap
       // scope of the message
-      r                             <- Stopwatch.duration(computeMessageScope(latestMessages.toSet, dag))
-      (messageScope, messageScopeT) = r
-      finalizationState             = dag.finalizationState
-      deploysInScope = messageScope.conflictScope.v.flatMap(
-        _.stateMetadata.proposed.flatMap(_.deploys)
-      )
-      mergeFringe = mergeFinalizationFringe(
-        messageScope.finalizationFringe.v,
-        dag,
-        finalizationState.rejected
-      )(RuntimeManager[F])
-      finalizedState <- OptionT
-                         .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
-                         .getOrElseF(mergeFringe)
-      conflictSet = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
-      conflictResolution <- DeployChainSetConflictResolver[F](
-                             DeployChainMerger.getDeployChainIndex[F]
-                           ).resolve(conflictSet)
-      r <- Stopwatch.duration(
-            DeployChainMerger.merge(finalizedState, conflictResolution.acceptedSet)(
-              RuntimeManager[F]
-            )
-          )
 
-      ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
-      _ <- Log[F].info(
-            s"Message scope (${messageScope.conflictScope.v.size} messages) computed in $messageScopeT, " +
-              s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
-          )
-      // Todo read these from state
-      deployLifespan = 50
-      casperVersion  = 0L
     } yield CasperSnapshot(
-      dag,
       messageScope,
       conflictResolution,
       finalState.toByteString,
@@ -168,7 +139,7 @@ class MultiParentCasperImpl[F[_]
 
   override def validate(
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[Either[BlockError, ValidBlock]] = {
     val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
@@ -204,24 +175,6 @@ class MultiParentCasperImpl[F[_]
 //        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    val blockPreState  = b.body.state.preStateHash
-    val blockPostState = b.body.state.postStateHash
-    val blockSender    = b.sender.toByteArray
-    val indexBlock = for {
-      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
-
-      index <- BlockIndexer(
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                blockPreState.toBlake2b256Hash,
-                blockPostState.toBlake2b256Hash,
-                RuntimeManager[F].getHistoryRepo,
-                mergeableChs
-              )
-      _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
-    } yield ()
-
     val validationProcessDiag = for {
       // Create block and measure duration
       r                    <- Stopwatch.duration(validationProcess.value)
@@ -230,7 +183,8 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <* indexBlock
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock(b)
             }
             .getOrElse(().pure[F])
     } yield valResult
@@ -240,7 +194,7 @@ class MultiParentCasperImpl[F[_]
 
   override def handleValidBlock(
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[BlockDagRepresentation[F]] =
     for {
       // Todo indxing here just to know proposd deploy chains, it is duplicate with validation, remove
@@ -261,8 +215,8 @@ class MultiParentCasperImpl[F[_]
 
       stateMeta = StateMetadata(
         index.keys.toList,
-        s.conflictResolution.acceptedSet.toList,
-        s.conflictResolution.rejectedSet.toList
+        s.conflictScopeResolution.acceptedSet.toList,
+        s.conflictScopeResolution.rejectedSet.toList
       )
       r <- BlockDagStorage[F].insert(b, invalid = false, stateMeta)
     } yield r
@@ -270,7 +224,7 @@ class MultiParentCasperImpl[F[_]
   override def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot
   ): F[BlockDagRepresentation[F]] = {
     // TODO: Slash block for status except InvalidUnslashableBlock
     def handleInvalidBlockEffect(
@@ -299,8 +253,8 @@ class MultiParentCasperImpl[F[_]
 
         stateMeta = StateMetadata(
           index.keys.toList,
-          s.conflictResolution.acceptedSet.toList,
-          s.conflictResolution.rejectedSet.toList
+          s.conflictScopeResolution.acceptedSet.toList,
+          s.conflictScopeResolution.rejectedSet.toList
         )
 
         // TODO should be nice to have this transition of a block from casper buffer to dag storage atomic
@@ -360,9 +314,6 @@ class MultiParentCasperImpl[F[_]
 }
 
 object MultiParentCasperImpl {
-
-  /** Cache for merged state of finalization fringe. */
-  val finalizedStateCache = TrieMap.empty[Set[BlockMetadata], Blake2b256Hash]
 
   // TODO: Extract hardcoded deployLifespan from shard config
   // Size of deploy safety range.

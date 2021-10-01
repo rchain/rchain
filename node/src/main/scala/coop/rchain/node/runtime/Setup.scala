@@ -137,8 +137,12 @@ object Setup {
           exporter           <- historyRepo.exporter
           importer           <- historyRepo.importer
           rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
-          blockStateManager  = BlockStateManagerImpl(blockStore, blockDagStorage)
-          rnodeStateManager  = RNodeStateManagerImpl(rspaceStateManager, blockStateManager)
+          blockStateManager = BlockStateManagerImpl(
+            blockStore,
+            blockDagStorage,
+            casperBufferStorage
+          )
+          rnodeStateManager = RNodeStateManagerImpl(rspaceStateManager, blockStateManager)
         } yield (rnodeStateManager, rspaceStateManager)
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
@@ -146,7 +150,10 @@ object Setup {
       // Ref holding the latest view on the network and messages
       initValidatedView <- blockDagStorage.getRepresentation.map(_.getPureState)
       initBufferSt      <- casperBufferStorage.toMap
-      blockDagStateRef  <- Ref.of[F, BlockDagState](BlockDagState(initBufferSt, initValidatedView))
+      // TODO for some reason on one testing run has hwere both in validaed dagset and in casper buffer as requested.
+      blockDagStateRef <- Ref.of[F, BlockDagState](BlockDagState(initBufferSt.filterNot {
+                           case (h, _) => initValidatedView.dagSet.contains(h)
+                         }, initValidatedView))
 
       // Block processing and validation
       inboundBlocksQueue    <- Queue.unbounded[F, BlockMessage]
@@ -295,7 +302,8 @@ object Setup {
         )
       }
       adminWebApi = {
-        implicit val ec = (engineCell)
+        implicit val ec  = engineCell
+        implicit val rnm = rnodeStateManager
         new AdminWebApiImpl[F](
           triggerProposeFOpt,
           proposerStateRefOpt

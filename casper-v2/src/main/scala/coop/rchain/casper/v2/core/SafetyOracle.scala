@@ -28,9 +28,13 @@ object SafetyOracle {
     val targets               = agreements.map(_.target)
     val multipleTargetsErrMsg = s"Multiple targets when computing fault tolerance."
     require(targets.size == 1, multipleTargetsErrMsg)
-    val targetBondsMap = bondsMap(targets.head)
-    val stakeAgreed = agreements.toList.map {
-      case Agreement(source, _) => targetBondsMap.getOrElse(sender(source), 0L)
+    val target         = targets.head
+    val targetBondsMap = bondsMap(target)
+    val selfBond       = targetBondsMap.getOrElse(sender(target), 0L)
+    require(selfBond > 0, "Message creator is not bonded in its bonds map")
+    val stakeAgreed = selfBond + agreements.toList.collect {
+      case Agreement(source, _) if (sender(target) != sender(source)) =>
+        targetBondsMap.getOrElse(sender(source), 0L)
     }.sum
     // TODO clique oracle should be adjusted, for now if 67% agree => finalized
     // CliqueOracle.normalizedFaultTolerance(agreements.head.target.block, dag)

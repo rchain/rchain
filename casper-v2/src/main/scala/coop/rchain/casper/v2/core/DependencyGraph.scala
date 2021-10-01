@@ -1,4 +1,6 @@
 package coop.rchain.casper.v2.core
+import cats.Monad
+import cats.syntax.all._
 
 trait DependencyGraph[F[_], M, S] {
 
@@ -8,6 +10,15 @@ trait DependencyGraph[F[_], M, S] {
     */
   def justifications(message: M): F[List[M]]
 
+  /**
+    * Parents are subset o justifications through which all other justifications are visible.
+    * This is optimisation for graph traversal to visit one justification only once.
+    * Otherwise overhead on traversal might be significant.
+    * This is similar to parents, but without ranking and sorting.
+    * As parents should be stored to not compute each time, this is on a trait.
+    */
+  def parents(message: M): F[List[M]]
+
   /** Sender of a message. */
   def sender(message: M): S
 
@@ -16,6 +27,19 @@ trait DependencyGraph[F[_], M, S] {
 }
 
 object DependencyGraph {
+
+  /**
+    * Derive parents from justification.
+    * */
+  def computeParents[F[_]: Monad, M](
+      targetJustifications: List[M],
+      justifications: M => F[List[M]]
+  ): F[List[M]] =
+    targetJustifications
+      .foldLeftM(targetJustifications.toSet) {
+        case (acc, j) => justifications(j).map(jsLvl2 => acc -- jsLvl2)
+      }
+      .map(_.toList)
 
   /**
     * Given set of messages S, the message that either ancestor or descendant for all messages in S.
@@ -34,7 +58,7 @@ object DependencyGraph {
     * @param descendants - subset of S containing messages which are descendants of the base
     */
   final case class CommonMessage[M](message: M, ancestors: Set[M], descendants: Set[M]) {
-    require((ancestors intersect descendants).isEmpty, "Wrong highest common message.")
+    require((ancestors intersect descendants).isEmpty, "Wrong common message.")
   }
 
   val noCommonMsg = "Unable to find common message."

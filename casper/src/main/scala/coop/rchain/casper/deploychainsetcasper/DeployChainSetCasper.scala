@@ -47,9 +47,11 @@ object DeployChainSetCasper {
       dag: BlockDagRepresentation[F]
   ) extends DependencyGraph[F, BlockMetadata, Validator] {
     override def justifications(message: BlockMetadata): F[List[BlockMetadata]] =
-      message.justifications.map(_.latestBlockHash).traverse(dag.lookupUnsafe(_))
+      message.justifications.map(_.latestBlockHash).traverse(dag.lookupUnsafe)
     override def sender(message: BlockMetadata): Validator = message.sender
     override def seqNum(message: BlockMetadata): Int       = message.seqNum
+    override def parents(message: BlockMetadata): F[List[BlockMetadata]] =
+      message.parents.traverse(dag.lookupUnsafe)
   }
 
   final case class BlockMetadataSafetyOracle[F[_]: Sync]()
@@ -100,7 +102,7 @@ object DeployChainSetCasper {
                             .compile
                             .to(Set)
           base <- dag.lookupUnsafe(genesis)
-        } yield MessageScope(FinalizationFringe(Set(base)), ConflictScope(conflictScope))
+        } yield MessageScope(FinalizationFringe(Set(base)), ConflictScope(conflictScope - base))
     }
   }
 
@@ -108,11 +110,13 @@ object DeployChainSetCasper {
   def mergeFinalizationFringe[F[_]: Concurrent: BlockStore: Log: Metrics](
       fringe: Set[BlockMetadata],
       dag: BlockDagRepresentation[F],
-      finalizedRejections: Set[DeployChain]
+      finalizedRejections: Set[DeployChain],
+      fillMergingIndex: List[BlockHash] => F[Unit]
   )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] =
     for {
       r                <- BlockMetadataDag(dag).mergeScope(fringe)
       (base, mergeSet) = r
+      _                <- fillMergingIndex(mergeSet.map(_.blockHash).toList)
       acceptedSet      = mergeSet.flatMap(_.stateMetadata.proposed) diff finalizedRejections
       // compute approved state
       r <- Stopwatch.duration(

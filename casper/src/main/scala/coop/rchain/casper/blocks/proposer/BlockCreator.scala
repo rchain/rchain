@@ -56,10 +56,7 @@ object BlockCreator {
           )
           // this is required to prevent resending the same deploy several times by validator
           validUnique = valid.filterNot(
-            d =>
-              s.deploysInScope.contains(d.sig) ||
-                s.finalizationState.accepted.exists(_.deploys.contains(d.sig)) ||
-                s.finalizationState.rejected.exists(_.deploys.contains(d.sig))
+            d => s.deploysInScope.contains(d.sig)
           )
         } yield validUnique
 

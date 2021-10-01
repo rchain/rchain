@@ -43,7 +43,13 @@ final case class BlockDagState(
     ValidatedResult(state.BlockDagState(newStatuses, newSt), newReady.keySet)
   }
 
-  def wantedSet: Iterable[BlockHash] = buffer.collect { case (m, Requested) => m }
+  def wantedSet: Iterable[BlockHash] = {
+    val pendingDeps = buffer
+      .collect { case (_, AwaitingDependencies(d)) => d }
+      .flatten
+      .toSet
+    pendingDeps -- buffer.keySet
+  }
 
   def received(t: BlockHash): Boolean =
     buffer.exists { case (m, s) => m == t && s != Requested } || validated(t)
