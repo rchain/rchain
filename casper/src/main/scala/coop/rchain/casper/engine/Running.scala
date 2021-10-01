@@ -118,24 +118,8 @@ object Running {
   def handleHasBlockMessage[F[_]: Monad: BlockRetriever: Log](
       peer: PeerNode,
       hb: HasBlock
-  )(
-      ignoreMessageF: BlockHash => F[Boolean]
-  ): F[Unit] = {
-    val h = hb.hash
-    def logIgnore = Log[F].debug(
-      s"Ignoring ${PrettyPrinter.buildString(h)} HasBlockMessage"
-    )
-    val logProcess = Log[F].debug(
-      s"Incoming HasBlockMessage ${PrettyPrinter.buildString(h)} from ${peer.endpoint.host}"
-    )
-    val processHash =
-      BlockRetriever[F].admitHash(h, peer.some, BlockRetriever.HasBlockMessageReceived)
-
-    ignoreMessageF(h).ifM(
-      logIgnore,
-      logProcess >> processHash.void
-    )
-  }
+  ): F[Unit] =
+    BlockRetriever[F].admitHash(hb.hash, peer.some, BlockRetriever.HasBlockMessageReceived).void
 
   /**
     * Peer asks for particular block
@@ -283,7 +267,7 @@ class Running[F[_]
       handleHasBlockRequest(peer, hbr) { h =>
         blockDagStateRef.get.map(_.validated.dagSet.contains(h))
       }
-    case hb: HasBlock => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+    case hb: HasBlock => handleHasBlockMessage(peer, hb)
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer)(
         blockDagStateRef.get.map(_.validated.latestMessagesMap.values)
