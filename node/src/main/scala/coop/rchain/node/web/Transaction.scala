@@ -264,11 +264,16 @@ object Transaction {
       transferUnforgeable: Par
   ): TransactionAPIImpl[F] = TransactionAPIImpl(blockReportAPI, transferUnforgeable)
 
+  def store[F[_]: Concurrent](
+      kvm: KeyValueStoreManager[F]
+  ): F[KeyValueTypedStore[F, String, TransactionResponse]] =
+    kvm.database("transaction", utf8, SCodec.transactionResponseCodec)
+
   def cacheTransactionAPI[F[_]: Concurrent](
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =
-    kvm.database("transaction", utf8, SCodec.transactionResponseCodec).map { s =>
+    store(kvm).map { s =>
       CacheTransactionAPI(
         transactionAPI,
         s
