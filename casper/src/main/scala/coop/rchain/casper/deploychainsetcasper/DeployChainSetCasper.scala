@@ -108,11 +108,13 @@ object DeployChainSetCasper {
   def mergeFinalizationFringe[F[_]: Concurrent: BlockStore: Log: Metrics](
       fringe: Set[BlockMetadata],
       dag: BlockDagRepresentation[F],
-      finalizedRejections: Set[DeployChain]
+      finalizedRejections: Set[DeployChain],
+      fillMergingIndex: List[BlockHash] => F[Unit]
   )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] =
     for {
       r                <- BlockMetadataDag(dag).mergeScope(fringe)
       (base, mergeSet) = r
+      _                <- fillMergingIndex(mergeSet.map(_.blockHash).toList)
       acceptedSet      = mergeSet.flatMap(_.stateMetadata.proposed) diff finalizedRejections
       // compute approved state
       r <- Stopwatch.duration(
