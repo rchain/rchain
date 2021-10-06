@@ -43,7 +43,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.store.{InMemoryStoreManager, LmdbDirStoreManager}
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -88,10 +87,9 @@ object Setup {
       else Span.noop[F]
 
       // RNode key-value store manager / manages LMDB databases
-//      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
-//      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
-//      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
-      rnodeStoreManager = InMemoryStoreManager()
+      oldRSpacePath          = conf.storage.dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
+      legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
+      rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
 
       // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
       oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
