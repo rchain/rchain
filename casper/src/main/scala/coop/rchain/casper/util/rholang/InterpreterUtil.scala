@@ -97,7 +97,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
+  def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
