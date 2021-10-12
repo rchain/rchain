@@ -16,13 +16,8 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.v2.core.Casper.{
-  ConflictScope,
-  FinalizationFringe,
-  LatestMessages,
-  MessageScope
-}
-import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
+import coop.rchain.v2.casper.Casper.{ConflictScope, Finalize, LatestMessages, MessageScope}
+import coop.rchain.v2.casper.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.catscontrib.ski.kp2
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -85,14 +80,14 @@ trait MultiParentCasper[F[_]] extends Casper[F] {
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
-  def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
+  def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F]       = instance
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure)
 }
 
 /**
-  * Casper snapshot contains prepared data for validation/proposing. It is pure and does not have access to any effects.
-  */
+ * Casper snapshot contains prepared data for validation/proposing. It is pure and does not have access to any effects.
+ */
 final case class CasperSnapshot(
     networkState: NetworkSnapshot,
     conflictScopeResolution: ConflictResolution[DeployChain],
@@ -134,7 +129,9 @@ sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: BlockStore: BlockDagStorage: Span: EventPublisher: DeployStorage: BlockRetriever](
+  def hashSetCasper[F[
+      _
+  ]: Sync: Metrics: Concurrent: CommUtil: Log: Time: BlockStore: BlockDagStorage: Span: EventPublisher: DeployStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
       shard: String,
       faultToleranceThreshold: Float

@@ -7,7 +7,7 @@ import coop.rchain.casper.util.comm.CommUtilSyntax
 import coop.rchain.casper.util.rholang.RuntimeManagerSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.casper.v2.core.syntax.{CasperSyntax, SafetyOracleSyntax}
+import coop.rchain.v2.casper.syntax.{CasperSyntax, SafetyOracleSyntax}
 
 package object casper {
   type TopoSort             = Vector[Vector[BlockHash]]

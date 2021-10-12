@@ -17,7 +17,7 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
-import coop.rchain.casper.v2.core.Casper._
+import coop.rchain.v2.casper.Casper._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._

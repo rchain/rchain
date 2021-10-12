@@ -27,9 +27,9 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
     bufferStorage: CasperBufferStorage[F]
 ) extends MessageReceiver[F, BlockHash, BlockDagState] {
 
-  override def checkIgnore(
+  override def checkReject(
       m: BlockHash
-  ): EitherT[F, MessageReceiver.ReceiveReject, BlockHash] = {
+  ): EitherT[F, MessageReceiver.RejectReason, BlockHash] = {
     val signatureIsValidF = Validate.blockSignature(block(m))
     for {
       dagState <- EitherT.liftF(blockDagState.get)
@@ -46,7 +46,7 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
     } yield r
   }
 
-  override def diagRejected(r: MessageReceiver.ReceiveReject): F[Unit] =
+  override def rejectedEffect(r: MessageReceiver.RejectReason): F[Unit] =
     Log[F].debug(s"Message rejected :$r")
 
   override def store(message: BlockHash): F[Unit] = BlockStore[F].put(block(message))

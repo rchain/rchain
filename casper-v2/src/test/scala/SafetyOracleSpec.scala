@@ -1,7 +1,8 @@
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.casper.v2.core.syntax.all._
-import coop.rchain.casper.v2.core.{DependencyGraph, SafetyOracle}
+import coop.rchain.v2.casper.syntax.all._
+import coop.rchain.casper.v2.core.SafetyOracle
+import coop.rchain.v2.casper.{DependencyGraph, SafetyOracle}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

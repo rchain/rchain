@@ -13,7 +13,7 @@ import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.v2.core.Validation.Offence
+import coop.rchain.casper.v2.validation.Validation.Offence
 import coop.rchain.casper.v2.processing.MessageValidator
 import coop.rchain.casper.v2.processing.MessageValidator.ValidationResult
 import coop.rchain.casper.{

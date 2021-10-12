@@ -1,8 +1,7 @@
 package coop.rchain.casper
 
 import coop.rchain.casper.InvalidBlock._
-import coop.rchain.casper.v2.stcasper.Validation
-import coop.rchain.casper.v2.core.Validation.Offence
+import coop.rchain.casper.v2.validation.Validation.Offence
 
 sealed trait BlockStatus
 object BlockStatus {
@@ -93,7 +92,7 @@ object InvalidBlock {
   // For now we won't eagerly slash equivocations that we can just ignore,
   // as we aren't forced to add it to our view as a dependency.
   // TODO: The above will become a DOS vector if we don't fix.
-  case object IgnorableEquivocation extends InvalidBlock
+  case object IgnorableEquivocation  extends InvalidBlock
 
   case object InvalidFormat    extends InvalidBlock
   case object InvalidSignature extends InvalidBlock

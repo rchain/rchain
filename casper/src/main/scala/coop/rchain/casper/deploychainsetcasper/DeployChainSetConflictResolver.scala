@@ -6,8 +6,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.deploychainsetcasper.DeployChainSetConflictResolver.DeployChainWithIndex
 import coop.rchain.casper.merging.DeployChainIndex
 import coop.rchain.casper.protocol.DeployChain
-import coop.rchain.casper.v2.stcasper.ConflictsResolver
-import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
+import coop.rchain.v2.casper.stcasper.ConflictsResolver
+import coop.rchain.v2.casper.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.rspace.merger.MergingLogic
 import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.shared.{Log, Stopwatch}

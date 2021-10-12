@@ -15,9 +15,8 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{BlockMessage, DeployChain, StateMetadata}
-import coop.rchain.casper.v2.core.DependencyGraph
-import coop.rchain.casper.v2.core.Validation.Slashing
-import coop.rchain.casper.v2.stcasper.Validation.DummyOffence
+import coop.rchain.casper.v2.validation.Validation.Slashing
+import .DummyOffence
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -27,6 +26,7 @@ import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validat
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import coop.rchain.v2.casper.DependencyGraph
 
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     lock: Semaphore[F],
@@ -47,15 +47,14 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         f: BlockHash => F[Option[BlockMetadata]]
     ): BlockHash => F[Option[BlockMetadata]] = { key =>
       for {
-        newD <- Deferred[F, Option[BlockMetadata]]
-        r <- memoSt.modify(
-              st =>
-                st.get(key)
-                  .map(v => (st, (v, false)))
-                  .getOrElse((st.updated(key, newD), (newD, true)))
-            )
+        newD      <- Deferred[F, Option[BlockMetadata]]
+        r         <- memoSt.modify(st =>
+                       st.get(key)
+                         .map(v => (st, (v, false)))
+                         .getOrElse((st.updated(key, newD), (newD, true)))
+                     )
         (d, empty) = r
-        v          <- f(key).flatMap(d.complete).whenA(empty).flatMap(_ => d.get)
+        v         <- f(key).flatMap(d.complete).whenA(empty).flatMap(_ => d.get)
       } yield v
     }
 
@@ -88,7 +87,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestBlockNumber: F[Long] = getMaxHeight.pure[F]
 
     def isFinalized(blockHash: BlockHash): F[Boolean] = false.pure[F]
-    def deployStatus(deployId: DeployId): F[Boolean] =
+    def deployStatus(deployId: DeployId): F[Boolean]  =
       st.finalizationState.accepted.flatMap(_.deploys).contains(deployId).pure[F]
 
     def topoSort(
@@ -133,7 +132,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     ): F[Unit] = {
       val updatedEquivocationDetectedBlockHashes =
         record.equivocationDetectedBlockHashes + blockHash
-      val newRecord =
+      val newRecord                              =
         record.copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
       equivocationTrackerIndex.add(newRecord)
     }
@@ -145,11 +144,11 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       dagSet         <- blockMetadataIndex.dagSet
       childMap       <- blockMetadataIndex.childMapData
       heightMap      <- blockMetadataIndex.heightMap
-      invalidBlocks <- invalidBlocksIndex.toMap
-                        .map(_.toSeq.map(_._2).toSet)
-                        .map(_.map(meta => Slashing(meta.blockHash, DummyOffence)))
-      acceptedSet = Set.empty[DeployChain] // TODO
-      rejectedSet = Set.empty[DeployChain]
+      invalidBlocks  <- invalidBlocksIndex.toMap
+                          .map(_.toSeq.map(_._2).toSet)
+                          .map(_.map(meta => Slashing(meta.blockHash, DummyOffence)))
+      acceptedSet     = Set.empty[DeployChain] // TODO
+      rejectedSet     = Set.empty[DeployChain]
     } yield KeyValueDagRepresentation(
       BlockDagRepresentationState(
         dagSet,
@@ -188,7 +187,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     // - assumes block sender is not valid hash
     def shouldAddAsLatest: F[Boolean] =
       latestMessagesIndex
-      // Try get sender's latest message
+        // Try get sender's latest message
         .get(block.sender)
         // Get metadata from index
         .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
@@ -220,17 +219,17 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // TODO: should we have special error type for block hash error also?
         //  Should this be checked before calling insert? Is DAG storage responsible for that?
         _ <- new Exception(
-              s"Block hash (${PrettyPrinter.buildString(block.blockHash)}) is not correct length."
-            ).raiseError[F, Unit]
-              .whenA(blockHashIsInvalid)
+               s"Block hash (${PrettyPrinter.buildString(block.blockHash)}) is not correct length."
+             ).raiseError[F, Unit]
+               .whenA(blockHashIsInvalid)
 
         _ <- logEmptySender.whenA(senderIsEmpty)
 
         // Fill parents
-        parents <- DependencyGraph.computeParents[F, BlockHash](
-                    metadata.justifications.map(_.latestBlockHash),
-                    blockMetadataIndex.getUnsafe(_).map(_.justifications.map(_.latestBlockHash))
-                  )
+        parents      <- DependencyGraph.computeParents[F, BlockHash](
+                          metadata.justifications.map(_.latestBlockHash),
+                          blockMetadataIndex.getUnsafe(_).map(_.justifications.map(_.latestBlockHash))
+                        )
         blockMetadata = metadata.copy(parents = parents)
 
         // Add block metadata
@@ -238,18 +237,18 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
         // Add deploys to deploy index storage
         deployHashes = deployData(block).map(_.sig).toList
-        _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
+        _           <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
 
         // Update invalid index
-        _ <- invalidBlocksIndex
-              .put(blockMetadata.blockHash, blockMetadata)
-              .whenA(invalid)
+        _                          <- invalidBlocksIndex
+                                        .put(blockMetadata.blockHash, blockMetadata)
+                                        .whenA(invalid)
 
         // Resolve if block should be added as the latest message for the block sender
-        emptyLM = Map.empty[Validator, BlockHash].pure[F]
-        newLatestFromSender <- if (!senderIsEmpty)
-                                shouldAddAsLatest.ifM(Map(sendersNewLM).pure[F], emptyLM)
-                              else emptyLM
+        emptyLM                     = Map.empty[Validator, BlockHash].pure[F]
+        newLatestFromSender        <- if (!senderIsEmpty)
+                                        shouldAddAsLatest.ifM(Map(sendersNewLM).pure[F], emptyLM)
+                                      else emptyLM
 
         // Add/update validators latest messages
         newLatestFromNewValidators <- newLatestMessages
@@ -292,38 +291,38 @@ object BlockDagKeyValueStorage {
     implicit val kvm_ = kvm
     for {
       // Block metadata map
-      blockMetadataDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
-                          "block-metadata",
-                          codecBlockHash,
-                          codecBlockMetadata
-                        )
-      blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
+      blockMetadataDb          <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
+                                    "block-metadata",
+                                    codecBlockHash,
+                                    codecBlockMetadata
+                                  )
+      blockMetadataStore       <- BlockMetadataStore[F](blockMetadataDb)
       // Equivocation tracker map
-      equivocationTrackerDb <- KeyValueStoreManager[F]
-                                .database[(Validator, SequenceNumber), Set[BlockHash]](
-                                  "equivocation-tracker",
-                                  codecValidator ~ codecSeqNum,
-                                  codecBlockHashSet
-                                )
+      equivocationTrackerDb    <- KeyValueStoreManager[F]
+                                    .database[(Validator, SequenceNumber), Set[BlockHash]](
+                                      "equivocation-tracker",
+                                      codecValidator ~ codecSeqNum,
+                                      codecBlockHashSet
+                                    )
       equivocationTrackerIndex <- EquivocationTrackerStore[F](equivocationTrackerDb)
       // Latest messages map
-      latestMessagesDb <- KeyValueStoreManager[F].database[Validator, BlockHash](
-                           "latest-messages",
-                           codecValidator,
-                           codecBlockHash
-                         )
+      latestMessagesDb         <- KeyValueStoreManager[F].database[Validator, BlockHash](
+                                    "latest-messages",
+                                    codecValidator,
+                                    codecBlockHash
+                                  )
       // Invalid blocks map
-      invalidBlocksDb <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
-                          "invalid-blocks",
-                          codecBlockHash,
-                          codecBlockMetadata
-                        )
+      invalidBlocksDb          <- KeyValueStoreManager[F].database[BlockHash, BlockMetadata](
+                                    "invalid-blocks",
+                                    codecBlockHash,
+                                    codecBlockMetadata
+                                  )
       // Deploy map
-      deployIndexDb <- KeyValueStoreManager[F].database[DeployId, BlockHash](
-                        "deploy-index",
-                        codecDeployId,
-                        codecBlockHash
-                      )
+      deployIndexDb            <- KeyValueStoreManager[F].database[DeployId, BlockHash](
+                                    "deploy-index",
+                                    codecDeployId,
+                                    codecBlockHash
+                                  )
 
     } yield DagStores(
       blockMetadataStore,

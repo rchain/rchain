@@ -2,7 +2,7 @@ package coop.rchain.blockstorage.dag.state
 
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.casper.protocol.DeployChain
-import coop.rchain.casper.v2.core.Validation.Slashing
+import coop.rchain.casper.v2.validation.Validation.Slashing
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 

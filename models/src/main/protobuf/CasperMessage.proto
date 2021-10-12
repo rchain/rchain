@@ -98,6 +98,8 @@ message BlockMessageProto {
   string                      sigAlgorithm   = 8; // name of the algorithm used to sign
   string                      shardId        = 9; // identifier of the shard where the block was created
   bytes                       extraBytes     = 10;
+  StateMetadata stateMetadata                = 11;
+  repeated bytes              parents        = 12 [(scalapb.field).collection_type="collection.immutable.List"];
 }
 
 message BlockHashMessageProto {
