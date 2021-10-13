@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.{Applicative, Monad}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import EngineCell._
 import cats.effect.concurrent.Ref
@@ -124,7 +124,7 @@ object Engine {
 
   // format: off
   def transitionToInitializing[F[_]
-    /* Execution */   : Concurrent: Time
+    /* Execution */   : Concurrent: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager

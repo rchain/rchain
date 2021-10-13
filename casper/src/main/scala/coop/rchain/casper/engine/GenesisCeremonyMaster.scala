@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.Applicative
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -47,7 +47,7 @@ class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RP
 object GenesisCeremonyMaster {
   import Engine._
   def waitingForApprovedBlockLoop[F[_]
-    /* Execution */   : Concurrent: Time
+    /* Execution */   : Concurrent: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
