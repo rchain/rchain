@@ -24,8 +24,11 @@ object AdminWebApiRoutes {
     implicit val stringEncoder = jsonEncoderOf[F, String]
 
     HttpRoutes.of[F] {
-      case POST -> Root / "propose" =>
+      case GET -> Root / "propose" =>
         adminWebApi.propose.handle
+
+      case GET -> Root / "cbuf" =>
+        adminWebApi.cbuf.handle
     }
   }
 }

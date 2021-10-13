@@ -9,7 +9,7 @@ import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
-import coop.rchain.casper.{ProposeFunction, SafetyOracle}
+import coop.rchain.casper.ProposeFunction
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
@@ -24,7 +24,7 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
+  def apply[F[_]: Monixable: Concurrent: Log: BlockStore: Span: EngineCell](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
@@ -112,7 +112,8 @@ object DeployGrpcServiceV1 {
                   depth,
                   apiMaxBlocksLimit,
                   startBlockNumber,
-                  (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+                  (ts, finalizedFringe, base) =>
+                    GraphzGenerator.dagAsCluster[F, Effect](ts, finalizedFringe, base, config),
                   serialize
                 )
                 .map(_.getOrElse(List.empty[String]))

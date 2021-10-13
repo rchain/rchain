@@ -58,10 +58,7 @@ case class TestNode[F[_]: Timer](
     genesis: BlockMessage,
     validatorIdOpt: Option[ValidatorIdentity],
     logicalTime: LogicalTime[F],
-    synchronyConstraintThreshold: Double,
     dataDir: Path,
-    maxNumberOfParents: Int = Estimator.UnlimitedParents,
-    maxParentDepth: Option[Int] = Int.MaxValue.some,
     shardId: String = "root",
     finalizationRate: Int = 1,
     isReadOnly: Boolean = false,
@@ -85,10 +82,6 @@ case class TestNode[F[_]: Timer](
     rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
     logEffect: LogStub[F],
     requestedBlocksEffect: RequestedBlocks[F],
-    syncConstraintCheckerEffect: SynchronyConstraintChecker[F],
-    lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
-    estimatorEffect: Estimator[F],
-    safetyOracleEffect: SafetyOracle[F],
     timeEffect: Time[F],
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Cell[F, Connections],
@@ -103,28 +96,24 @@ case class TestNode[F[_]: Timer](
   val defaultTimeout: FiniteDuration = FiniteDuration(1000, MILLISECONDS)
   val apiMaxBlocksLimit              = 50
 
-  implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
-  implicit val validatorId: Option[ValidatorIdentity]         = validatorIdOpt
-  implicit val logEff: LogStub[F]                             = logEffect
-  implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
-  implicit val blockStore: BlockStore[F]                      = blockStoreEffect
-  implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
-  implicit val ds: DeployStorage[F]                           = deployStorageEffect
-  implicit val cu: CommUtil[F]                                = commUtilEffect
-  implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
-  implicit val m: Metrics[F]                                  = metricEffect
-  implicit val s: Span[F]                                     = spanEffect
-  implicit val cbs: CasperBufferStorage[F]                    = casperBufferStorageEffect
-  implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
-  implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
-  implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
-  implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
-  implicit val e: Estimator[F]                                = estimatorEffect
-  implicit val t: Time[F]                                     = timeEffect
-  implicit val transportLayerEff: TransportLayerTestImpl[F]   = transportLayerEffect
-  implicit val connectionsCell: Cell[F, Connections]          = connectionsCellEffect
-  implicit val rp: RPConfAsk[F]                               = rpConfAskEffect
-  implicit val ep: EventPublisher[F]                          = eventPublisherEffect
+  implicit val requestedBlocks: RequestedBlocks[F]           = requestedBlocksEffect
+  implicit val validatorId: Option[ValidatorIdentity]        = validatorIdOpt
+  implicit val logEff: LogStub[F]                            = logEffect
+  implicit val blockStore: BlockStore[F]                     = blockStoreEffect
+  implicit val blockDagStorage: BlockDagStorage[F]           = blockDagStorageEffect
+  implicit val ds: DeployStorage[F]                          = deployStorageEffect
+  implicit val cu: CommUtil[F]                               = commUtilEffect
+  implicit val br: BlockRetriever[F]                         = blockRetrieverEffect
+  implicit val m: Metrics[F]                                 = metricEffect
+  implicit val s: Span[F]                                    = spanEffect
+  implicit val cbs: CasperBufferStorage[F]                   = casperBufferStorageEffect
+  implicit val runtimeManager: RuntimeManager[F]             = runtimeManagerEffect
+  implicit val rhoHistoryRepository: RhoHistoryRepository[F] = rhoHistoryRepositoryEffect
+  implicit val t: Time[F]                                    = timeEffect
+  implicit val transportLayerEff: TransportLayerTestImpl[F]  = transportLayerEffect
+  implicit val connectionsCell: Cell[F, Connections]         = connectionsCellEffect
+  implicit val rp: RPConfAsk[F]                              = rpConfAskEffect
+  implicit val ep: EventPublisher[F]                         = eventPublisherEffect
 
   val approvedBlock =
     ApprovedBlock(
@@ -140,9 +129,9 @@ case class TestNode[F[_]: Timer](
     shardName = shardId,
     parentShardId = "",
     finalizationRate = finalizationRate,
-    maxNumberOfParents = maxNumberOfParents,
-    maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),
-    synchronyConstraintThreshold = synchronyConstraintThreshold.toFloat,
+    maxNumberOfParents = Int.MaxValue,
+    maxParentDepth = Int.MaxValue,
+    synchronyConstraintThreshold = 0,
     heightConstraintThreshold = Long.MaxValue,
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
@@ -245,7 +234,7 @@ case class TestNode[F[_]: Timer](
       createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
-                case _ =>
+                case e =>
                   concurrentF.raiseError[BlockMessage](
                     new Throwable(s"failed creating block: ${e}")
                   )
@@ -400,7 +389,6 @@ object TestNode {
       genesis: GenesisContext,
       networkSize: Int,
       synchronyConstraintThreshold: Double = 0d,
-      maxNumberOfParents: Int = Estimator.UnlimitedParents,
       maxParentDepth: Option[Int] = None,
       withReadOnlySize: Int = 0
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
@@ -411,9 +399,6 @@ object TestNode {
       genesis.validatorSks.take(networkSize + withReadOnlySize).toVector,
       genesis.genesisBlock,
       genesis.storageDirectory,
-      synchronyConstraintThreshold,
-      maxNumberOfParents,
-      maxParentDepth,
       withReadOnlySize
     )
   }
@@ -422,9 +407,6 @@ object TestNode {
       sks: IndexedSeq[PrivateKey],
       genesis: BlockMessage,
       storageMatrixPath: Path,
-      synchronyConstraintThreshold: Double,
-      maxNumberOfParents: Int,
-      maxParentDepth: Option[Int],
       withReadOnlySize: Int
   )(implicit s: Scheduler): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n           = sks.length
@@ -448,9 +430,6 @@ object TestNode {
               sk,
               storageMatrixPath,
               logicalTime,
-              synchronyConstraintThreshold,
-              maxNumberOfParents,
-              maxParentDepth,
               isReadOnly
             )
         }
@@ -486,9 +465,6 @@ object TestNode {
       sk: PrivateKey,
       storageDir: Path,
       logicalTime: LogicalTime[F],
-      synchronyConstraintThreshold: Double,
-      maxNumberOfParents: Int,
-      maxParentDepth: Option[Int],
       isReadOnly: Boolean
   )(implicit s: Scheduler): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
@@ -508,21 +484,16 @@ object TestNode {
       runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore, mStore))
 
       node <- Resource.liftF({
-               implicit val bs                         = blockStore
-               implicit val bds                        = blockDagStorage
-               implicit val ds                         = deployStorage
-               implicit val cbs                        = casperBufferStorage
-               implicit val rm                         = runtimeManager
-               implicit val rhr                        = runtimeManager.getHistoryRepo
-               implicit val logEff                     = new LogStub[F](Log.log[F])
-               implicit val timeEff                    = logicalTime
-               implicit val connectionsCell            = Cell.unsafe[F, Connections](Connect.Connections.empty)
-               implicit val transportLayerEff          = tle
-               implicit val cliqueOracleEffect         = SafetyOracle.cliqueOracle[F]
-               implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
-               implicit val lastFinalizedHeightConstraintChecker =
-                 LastFinalizedHeightConstraintChecker[F]
-               implicit val estimator             = Estimator[F](maxNumberOfParents, maxParentDepth)
+               implicit val bs                    = blockStore
+               implicit val bds                   = blockDagStorage
+               implicit val ds                    = deployStorage
+               implicit val cbs                   = casperBufferStorage
+               implicit val rm                    = runtimeManager
+               implicit val rhr                   = runtimeManager.getHistoryRepo
+               implicit val logEff                = new LogStub[F](Log.log[F])
+               implicit val timeEff               = logicalTime
+               implicit val connectionsCell       = Cell.unsafe[F, Connections](Connect.Connections.empty)
+               implicit val transportLayerEff     = tle
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
                implicit val eventBus              = EventPublisher.noop[F]
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
@@ -589,10 +560,7 @@ object TestNode {
                    genesis,
                    validatorId,
                    logicalTime,
-                   synchronyConstraintThreshold,
                    newStorageDir,
-                   maxNumberOfParents,
-                   maxParentDepth,
                    isReadOnly = isReadOnly,
                    triggerProposeFOpt = triggerProposeFOpt,
                    blockProcessorQueue = blockProcessorQueue,
@@ -609,10 +577,6 @@ object TestNode {
                    timeEffect = timeEff,
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
-                   safetyOracleEffect = cliqueOracleEffect,
-                   syncConstraintCheckerEffect = synchronyConstraintChecker,
-                   lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
-                   estimatorEffect = estimator,
                    rpConfAskEffect = rpConfAsk,
                    eventPublisherEffect = eventBus,
                    commUtilEffect = commUtil,

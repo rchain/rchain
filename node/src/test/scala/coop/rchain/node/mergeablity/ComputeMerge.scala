@@ -6,7 +6,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
-import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
+import coop.rchain.casper.merging.{BlockIndexer, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -90,7 +90,7 @@ trait ComputeMerge {
                   .whenA(rightDeploys.exists(_.isFailed))
             rightCheckpoint @ _ <- runtime.createCheckpoint
 
-            leftIndex <- BlockIndex(
+            leftIndex <- BlockIndexer(
                           ByteString.copyFromUtf8("l"),
                           leftDeploys,
                           List.empty,
@@ -99,7 +99,7 @@ trait ComputeMerge {
                           historyRepo,
                           leftMergeChs
                         )
-            rightIndex <- BlockIndex(
+            rightIndex <- BlockIndexer(
                            ByteString.copyFromUtf8("r"),
                            rightDeploys,
                            List.empty,
@@ -108,7 +108,7 @@ trait ComputeMerge {
                            historyRepo,
                            rightMergeChs
                          )
-            baseIndex <- BlockIndex(
+            baseIndex <- BlockIndexer(
                           ByteString.EMPTY,
                           List.empty,
                           List.empty,

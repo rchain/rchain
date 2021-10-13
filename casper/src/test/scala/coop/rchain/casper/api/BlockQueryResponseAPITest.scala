@@ -64,7 +64,7 @@ class BlockQueryResponseAPITest
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = SafetyOracle.MIN_FAULT_TOLERANCE
+  val faultTolerance = -1
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 

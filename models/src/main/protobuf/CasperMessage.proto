@@ -98,6 +98,8 @@ message BlockMessageProto {
   string                      sigAlgorithm   = 8; // name of the algorithm used to sign
   string                      shardId        = 9; // identifier of the shard where the block was created
   bytes                       extraBytes     = 10;
+  StateMetadata stateMetadata                = 11;
+  repeated bytes              parents        = 12 [(scalapb.field).collection_type="collection.immutable.List"];
 }
 
 message BlockHashMessageProto {
@@ -106,22 +108,31 @@ message BlockHashMessageProto {
   bytes  blockCreator = 2;
 }
 
+message DeployChain {
+  repeated bytes deploys       = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+}
+
+message StateMetadata {
+  repeated DeployChain proposed         = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated DeployChain acceptedSet      = 3 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated DeployChain rejectedSet      = 4 [(scalapb.field).collection_type="collection.immutable.List"];
+}
+
 message BlockMetadataInternal {
   // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
   // bonds.
   option (scalapb.message).type = "coop.rchain.models.BlockMetadata";
 
   bytes blockHash                       = 1;
-  repeated bytes parents                = 2 [(scalapb.field).collection_type="collection.immutable.List"];
+  bytes postStateHash                   = 2;
   bytes sender                          = 3;
   repeated JustificationProto justifications = 4 [(scalapb.field).collection_type="collection.immutable.List"];
-  repeated BondProto bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
-  int64 blockNum                        = 6;
-  int32 seqNum                          = 7;
-  bool invalid                          = 8; // whether the block was marked as invalid
-  bool directlyFinalized                = 9; // whether the block has been last finalized block (LFB)
-  bool finalized                        = 10;// whether the block is finalized
-  bytes postStateHash                    = 11;// whether the block is finalized
+  repeated bytes parents                = 5 [(scalapb.field).collection_type="collection.immutable.List"];
+  repeated BondProto bonds              = 6 [(scalapb.field).collection_type="collection.immutable.List"];
+  int64 blockNum                        = 7;
+  int32 seqNum                          = 8;
+  bool invalid                          = 9; // whether the block was marked as invalid
+  StateMetadata stateMetadata           = 10;
 }
 
 message HeaderProto {

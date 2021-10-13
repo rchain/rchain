@@ -3,6 +3,7 @@ package coop.rchain.casper.engine
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
@@ -67,7 +68,8 @@ object ApproveBlockProtocol {
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
-      blockNumber: Long
+      blockNumber: Long,
+      sender: ByteString
   ): F[ApproveBlockProtocol[F]] =
     for {
       now       <- Time[F].currentMillis
@@ -90,6 +92,7 @@ object ApproveBlockProtocol {
                        createGenesisBlock(
                          implicitly[RuntimeManager[F]],
                          Genesis(
+                           sender = sender,
                            shardId = shardId,
                            timestamp = timestamp,
                            proofOfStake = ProofOfStake(

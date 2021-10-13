@@ -1,5 +1,8 @@
 package coop.rchain.casper
 
+import coop.rchain.casper.InvalidBlock._
+import coop.rchain.casper.v2.validation.Validation.Offence
+
 sealed trait BlockStatus
 object BlockStatus {
   def valid: ValidBlock                    = ValidBlock.Valid
@@ -25,6 +28,7 @@ object BlockStatus {
   def neglectedInvalidBlock: BlockError    = InvalidBlock.NeglectedInvalidBlock
   def neglectedEquivocation: BlockError    = InvalidBlock.NeglectedEquivocation
   def invalidTransaction: BlockError       = InvalidBlock.InvalidTransaction
+  def invalidMessageScope: BlockError      = InvalidBlock.InvalidMessageScope
   def invalidBondsCache: BlockError        = InvalidBlock.InvalidBondsCache
   def invalidBlockHash: BlockError         = InvalidBlock.InvalidBlockHash
   def containsExpiredDeploy: BlockError    = InvalidBlock.ContainsExpiredDeploy
@@ -37,6 +41,33 @@ object BlockStatus {
       case _: InvalidBlock => true
       case _               => false
     }
+
+  def toOffence(blockError: BlockError): Offence = blockError match {
+    case InvalidFormat           => Validation.invalidFormat
+    case InvalidSignature        => Validation.invalidSignature
+    case InvalidSender           => Validation.invalidSender
+    case InvalidVersion          => Validation.invalidVersion
+    case InvalidTimestamp        => Validation.invalidTimestamp
+    case DeployNotSigned         => Validation.deployNotSigned
+    case InvalidBlockNumber      => Validation.invalidBlockNumber
+    case InvalidRepeatDeploy     => Validation.invalidRepeatDeploy
+    case InvalidParents          => Validation.invalidParents
+    case InvalidFollows          => Validation.invalidFollows
+    case InvalidSequenceNumber   => Validation.invalidSequenceNumber
+    case InvalidShardId          => Validation.invalidShardId
+    case JustificationRegression => Validation.justificationRegression
+    case NeglectedInvalidBlock   => Validation.neglectedInvalidBlock
+    case NeglectedEquivocation   => Validation.neglectedEquivocation
+    case InvalidTransaction      => Validation.invalidTransaction
+    case InvalidMessageScope     => Validation.invalidMessageScope
+    case InvalidBondsCache       => Validation.invalidBondsCache
+    case InvalidBlockHash        => Validation.invalidBlockHash
+    case InvalidRejectedDeploy   => Validation.invalidRejectedDeploy
+    case ContainsExpiredDeploy   => Validation.containsExpiredDeploy
+    case ContainsFutureDeploy    => Validation.containsFutureDeploy
+    case NotOfInterest           => Validation.notOfInterest
+    case _                       => Validation.notOfInterest // Todo make exhaustive
+  }
 }
 
 sealed trait ValidBlock extends BlockStatus
@@ -61,7 +92,7 @@ object InvalidBlock {
   // For now we won't eagerly slash equivocations that we can just ignore,
   // as we aren't forced to add it to our view as a dependency.
   // TODO: The above will become a DOS vector if we don't fix.
-  case object IgnorableEquivocation extends InvalidBlock
+  case object IgnorableEquivocation  extends InvalidBlock
 
   case object InvalidFormat    extends InvalidBlock
   case object InvalidSignature extends InvalidBlock
@@ -80,6 +111,7 @@ object InvalidBlock {
   case object NeglectedInvalidBlock   extends InvalidBlock
   case object NeglectedEquivocation   extends InvalidBlock
   case object InvalidTransaction      extends InvalidBlock
+  case object InvalidMessageScope     extends InvalidBlock
   case object InvalidBondsCache       extends InvalidBlock
   case object InvalidBlockHash        extends InvalidBlock
   case object InvalidRejectedDeploy   extends InvalidBlock

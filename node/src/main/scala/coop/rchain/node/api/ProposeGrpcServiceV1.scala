@@ -18,12 +18,7 @@ import coop.rchain.casper.protocol.{
   ServiceError
 }
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper.{
-  LastFinalizedHeightConstraintChecker,
-  ProposeFunction,
-  SafetyOracle,
-  SynchronyConstraintChecker
-}
+import coop.rchain.casper.{ProposeFunction}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.StacksafeMessage
@@ -36,7 +31,7 @@ import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: BlockStore: SafetyOracle: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Metrics: Span](
+  def apply[F[_]: Monixable: Concurrent: BlockStore: EngineCell: Log: Metrics: Span](
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
   )(

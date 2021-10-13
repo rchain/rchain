@@ -1,30 +1,31 @@
 package coop.rchain.casper
 
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import cats.{Applicative, Monad, Show}
+import cats.{Applicative, Show}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.engine.{BlockRetriever, Running}
+import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.merging.DeployChainIndex
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.state.NetworkStateMerged
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
+import coop.rchain.v2.casper.Casper.{ConflictScope, Finalize, LatestMessages, MessageScope}
+import coop.rchain.v2.casper.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.catscontrib.ski.kp2
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
-import coop.rchain.shared.syntax._
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
@@ -50,93 +51,52 @@ object DeployError {
 
 trait Casper[F[_]] {
   def getSnapshot(targetBlockOpt: Option[BlockMessage] = None): F[CasperSnapshot[F]]
-  def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
-  def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
-  def getApprovedBlock: F[BlockMessage]
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
 
-  def validate(b: BlockMessage, s: CasperSnapshot[F]): F[Either[BlockError, ValidBlock]]
-  def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]]
+  def validate(
+      b: BlockMessage,
+      s: CasperSnapshot[F]
+  ): F[Either[BlockError, ValidBlock]]
+  def handleValidBlock(block: BlockMessage, s: CasperSnapshot[F]): F[BlockDagRepresentation[F]]
   def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
-      dag: BlockDagRepresentation[F]
+      s: CasperSnapshot[F]
   ): F[BlockDagRepresentation[F]]
-  def getDependencyFreeFromBuffer: F[List[BlockMessage]]
-}
-
-object Casper {
-
-  /**
-    * Casper messages serve only two purposes:
-    * 1. offering state transitions for validation by the network, and
-    * 2. participating in past state transition finalization.
-    * Therefore message producing makes sense and should be allowed only if it is justified by these reasons.
-    *
-    * Given said above here are rules for detecting if propose is justified:
-    * 1. State transition
-    *    a) there is a user deploy to be included in a block, or
-    *    b) parents have different post state, so merge block should be issued.
-    *    Both of these rules can be validated, so offence an be detected.
-    * 2. Finalization (reaching acquiescence)
-    *    There are non finalized messages which do not share post state with some finalized message.
-    *    This rule also can be validated and offence detected.
-    *    TODO this can be narrowed down to "if sender already propagated its weight down to all states known"
-    */
-  def shouldPropose[F[_]: Sync](
-      s: CasperSnapshot[F],
-      deploysWaiting: F[Set[Signed[DeployData]]]
-  ): F[Boolean] = {
-    val hasParentsToMerge = (s.parents.map(_.body.state.postStateHash).distinct.size > 1).pure[F]
-    val hasDeploysToOffer = deploysWaiting.map(_ -- s.deploysInScope).map(_.nonEmpty)
-    val needToSlash       = bondedOffenders(s).map(_.nonEmpty)
-    val noAcquiescence    = s.dag.reachedAcquiescence.not
-    hasDeploysToOffer ||^ hasParentsToMerge ||^ needToSlash ||^ noAcquiescence
-  }
-
-  // Validators that should be slashed because of invalid block, but still active in this state
-  def bondedOffenders[F[_]: Sync](s: CasperSnapshot[F]): F[Iterator[(Validator, BlockHash)]] =
-    s.dag.invalidLatestMessages.map(_.toIterator.filter {
-      case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
-    })
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[BlockDagRepresentation[F]]
-  def fetchDependencies: F[Unit]
   // This is the weight of faults that have been accumulated so far.
   // We want the clique oracle to give us a fault tolerance that is greater than
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
+  def latestScope: F[MessageScope[BlockMetadata]]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 
 object MultiParentCasper extends MultiParentCasperInstances {
-  def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F] = instance
+  def apply[F[_]](implicit instance: MultiParentCasper[F]): MultiParentCasper[F]       = instance
   def ignoreDoppelgangerCheck[F[_]: Applicative]: (BlockMessage, Validator) => F[Unit] =
     kp2(().pure)
 }
 
 /**
-  * Casper snapshot is a state that is changing in discrete manner with each new block added.
-  * This class represents full information about the state. It is required for creating new blocks
-  * as well as for validating blocks.
-  */
-final case class CasperSnapshot[F[_]](
-    dag: BlockDagRepresentation[F],
-    lastFinalizedBlock: BlockHash,
-    parents: List[BlockMessage],
-    justifications: Set[Justification],
-    invalidBlocks: Map[Validator, BlockHash],
-    deploysInScope: Set[Signed[DeployData]],
+ * Casper snapshot contains prepared data for validation/proposing. It is pure and does not have access to any effects.
+ */
+final case class CasperSnapshot(
+    networkState: NetworkSnapshot,
+    conflictScopeResolution: ConflictResolution[DeployChain],
+    snapshotState: StateHash,
     maxBlockNum: Long,
     maxSeqNums: Map[Validator, Int],
-    onChainState: OnChainCasperState
+    deployLifespan: Int,
+    shardNam: String,
+    casperVersion: Int
 )
 
 final case class OnChainCasperState(
@@ -169,18 +129,16 @@ sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: SafetyOracle: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
+  def hashSetCasper[F[
+      _
+  ]: Sync: Metrics: Concurrent: CommUtil: Log: Time: BlockStore: BlockDagStorage: Span: EventPublisher: DeployStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
-      casperShardConf: CasperShardConf,
-      approvedBlock: BlockMessage
+      shard: String,
+      faultToleranceThreshold: Float
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
-    for {
-      _ <- ().pure
-    } yield {
-      new MultiParentCasperImpl(
-        validatorId,
-        casperShardConf,
-        approvedBlock
-      )
-    }
+    new MultiParentCasperImpl(
+      validatorId,
+      faultToleranceThreshold,
+      shard
+    ).asInstanceOf[MultiParentCasper[F]].pure[F]
 }

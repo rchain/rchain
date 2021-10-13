@@ -2,52 +2,51 @@ package coop.rchain.models
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
+import coop.rchain.models.BlockHash.BlockHash
 import scalapb.TypeMapper
 
 final case class BlockMetadata(
     blockHash: ByteString,
     postStateHash: ByteString,
-    parents: List[ByteString],
     sender: ByteString,
     justifications: List[Justification],
+    parents: List[BlockHash],
     weightMap: Map[ByteString, Long],
     blockNum: Long,
     seqNum: Int,
     invalid: Boolean,
-    directlyFinalized: Boolean,
-    finalized: Boolean
+    stateMetadata: StateMetadata
 ) {
   def toByteString = BlockMetadata.typeMapper.toBase(this).toByteString
 }
 
 object BlockMetadata {
+
   implicit val typeMapper = TypeMapper[BlockMetadataInternal, BlockMetadata] { internal =>
     BlockMetadata(
       internal.blockHash,
       internal.postStateHash,
-      internal.parents,
       internal.sender,
       internal.justifications.map(Justification.from),
+      internal.parents,
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
       internal.invalid,
-      internal.directlyFinalized,
-      internal.finalized
+      internal.stateMetadata.get
     )
   } { metadata =>
     BlockMetadataInternal(
       metadata.blockHash,
-      metadata.parents,
+      metadata.postStateHash,
       metadata.sender,
       metadata.justifications.map(Justification.toProto),
+      metadata.parents,
       metadata.weightMap.map { case (validator, stake) => BondProto(validator, stake) }.toList,
       metadata.blockNum,
       metadata.seqNum,
       metadata.invalid,
-      metadata.directlyFinalized,
-      metadata.finalized,
-      metadata.postStateHash
+      Some(metadata.stateMetadata)
     )
   }
 
@@ -73,21 +72,18 @@ object BlockMetadata {
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
-      directlyFinalized: Boolean = false,
-      finalized: Boolean = false
+      stateMetadata: StateMetadata
   ): BlockMetadata =
     BlockMetadata(
       b.blockHash,
       b.body.state.postStateHash,
-      b.header.parentsHashList,
       b.sender,
       b.justifications,
+      List(), // This is computed and filled when inserting to storage
       weightMap(b.body.state),
       b.body.state.blockNumber,
       b.seqNum,
       invalid,
-      // this value is not used anywhere down the call pipeline, so its safe to set it to false
-      directlyFinalized,
-      finalized
+      stateMetadata
     )
 }

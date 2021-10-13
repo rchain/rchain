@@ -34,7 +34,8 @@ object GraphzGenerator {
 
   def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Monad: GraphSerializer](
       topoSort: Vector[Vector[BlockHash]],
-      lastFinalizedBlockHash: String,
+      finalizedFringe: Set[String],
+      base: String,
       config: GraphConfig
   ): F[G[Graphz[G]]] =
     for {
@@ -59,7 +60,7 @@ object GraphzGenerator {
               ancestor =>
                 g.node(
                   ancestor,
-                  style = styleFor(ancestor, lastFinalizedBlockHash),
+                  style = styleFor(ancestor, finalizedFringe, base),
                   shape = Box
                 )
             )
@@ -67,7 +68,7 @@ object GraphzGenerator {
         _ <- validatorsList.traverse {
               case (id, blocks) =>
                 allAncestors.traverse(ancestor => {
-                  val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
+                  val nodes = nodesForTs(id, firstTs, blocks, finalizedFringe, base).keys.toList
                   nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
                 })
             }
@@ -75,7 +76,7 @@ object GraphzGenerator {
         _ <- validatorsList.traverse {
               case (id, blocks) =>
                 g.subgraph(
-                  validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
+                  validatorCluster(id, blocks, timeseries, finalizedFringe, base)
                 )
             }
         // draw parent dependencies
@@ -100,7 +101,9 @@ object GraphzGenerator {
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)
-        val parents = b.header.parentsHashList.toList
+        val parents = b.justifications
+          .map(_.latestBlockHash)
+          .toList
           .map(PrettyPrinter.buildString)
         val justifications = b.justifications
           .map(_.latestBlockHash)
@@ -168,13 +171,14 @@ object GraphzGenerator {
       validatorId: String,
       ts: Long,
       blocks: ValidatorsBlocks,
-      lastFinalizedBlockHash: String
+      finalizedFringe: Set[String],
+      base: String
   ): Map[String, Option[GraphStyle]] =
     blocks.get(ts) match {
       case Some(tsBlocks) =>
         (tsBlocks.map {
           case ValidatorBlock(blockHash, _, _) =>
-            (blockHash -> styleFor(blockHash, lastFinalizedBlockHash))
+            (blockHash -> styleFor(blockHash, finalizedFringe, base))
         }).toMap
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
@@ -183,11 +187,12 @@ object GraphzGenerator {
       id: String,
       blocks: ValidatorsBlocks,
       timeseries: List[Long],
-      lastFinalizedBlockHash: String
+      finalizedFringe: Set[String],
+      base: String
   ): G[Graphz[G]] =
     for {
       g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
-      nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, lastFinalizedBlockHash))
+      nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, finalizedFringe, base))
       _ <- nodes.traverse(
             ns =>
               ns.toList.traverse {
@@ -206,7 +211,7 @@ object GraphzGenerator {
       _ <- g.close
     } yield g
 
-  private def styleFor(blockHash: String, lastFinalizedBlockHash: String): Option[GraphStyle] =
-    if (blockHash == lastFinalizedBlockHash) Some(Filled) else None
+  private def styleFor(blockHash: String, fringe: Set[String], base: String): Option[GraphStyle] =
+    if (fringe.contains(blockHash) || blockHash == base) Some(Filled) else None
 
 }

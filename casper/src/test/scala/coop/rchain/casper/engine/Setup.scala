@@ -4,9 +4,8 @@ import cats._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.contracts.Validator
@@ -122,16 +121,7 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val safetyOracle = new SafetyOracle[Task] {
-      override def normalizedFaultTolerance(
-          blockDag: BlockDagRepresentation[Task],
-          estimateBlockHash: BlockHash
-      ): Task[Float] = Task.pure(1.0f)
-    }
-    implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
-    implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
-    implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
-    implicit val blockRetriever                 = BlockRetriever.of[Task]
+    implicit val blockRetriever = BlockRetriever.of[Task]
 
     implicit val casperBuffer = CasperBufferKeyValueStorage
       .create[Task](spaceKVManager)
