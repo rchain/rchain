@@ -323,7 +323,7 @@ object HistoryInstances {
                   .emits(
                     partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
                   )
-                  .parJoin(1)
+                  .parJoinUnbounded
                   .compile
                   .toList
         modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
