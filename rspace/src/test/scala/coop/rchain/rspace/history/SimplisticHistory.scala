@@ -307,7 +307,7 @@ final case class SimplisticHistory[F[_]: Sync](
   }
 
   def read(key: ByteVector): F[Option[ByteVector]] =
-    find(key.toArray).flatMap {
+    find(key.toArray.toList).flatMap {
       case (trie, _) =>
         trie match {
           case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]

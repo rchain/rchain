@@ -26,12 +26,14 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 //  val typeHistory: String = "RadixHistory"
 //  val typeHistory: String = "RadixHistory3"
 //  val typeHistory: String = "RadixHistory4InMemo"
-  val typeHistory: String = "RadixHistory4InLMDB"
+//  val typeHistory: String = "RadixHistory4InLMDB"
+//  val typeHistory: String = "RadixHistory5InMemo"
+  val typeHistory: String = "RadixHistory5InLMDB"
 //  val typeHistory: String = "MergingHistoryInMemo"
 //  val typeHistory: String = "MergingHistoryInLMDB"
 
-  val readTest: Boolean = false
-//  val readTest: Boolean = true
+//  val readTest: Boolean = false
+  val readTest: Boolean = true
 
 //  val deleteCorrectnesTest: Boolean = false
   val deleteCorrectnesTest: Boolean = true
@@ -52,6 +54,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
       // Generate pairs
       (if (smallTest)
          List(
+           S("gen-0.3", 300),
+           S("gen-1", 1000),
            S("gen-10", 10000),
            S("gen-20", 20000),
            S("gen-30", 30000)
@@ -71,7 +75,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
          )).traverse {
         case S(_, genCount) =>
           def k(s: String) = {
-            val prefix = (0 to 31 - (s.size / 2)).map(_ => "11").mkString
+            val prefix = (0 to 31 - (s.length / 2)).map(_ => "11").mkString
             Base16.unsafeDecode(prefix + s)
           }
 
@@ -169,11 +173,17 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 val store = TrieMap[ByteVector, ByteVector]()
                 RadixHistory3(v, store)
               case "RadixHistory4InMemo" =>
-                val store = new RadixStore(InMemoryKeyValueStore[F], false)
+                val store = new RadixStore(InMemoryKeyValueStore[F])
                 RadixHistory4(v, store)
               case "RadixHistory4InLMDB" =>
-                val store = new RadixStore(lmdbHistoryStore, false)
+                val store = new RadixStore(lmdbHistoryStore)
                 RadixHistory4(v, store)
+              case "RadixHistory5InMemo" =>
+                val store = new RadixStore(InMemoryKeyValueStore[F])
+                RadixHistory5(v, store)
+              case "RadixHistory5InLMDB" =>
+                val store = new RadixStore(lmdbHistoryStore)
+                RadixHistory5(v, store)
               case "MergingHistoryInMemo" =>
                 val store = HistoryStoreInstances.historyStore(InMemoryKeyValueStore[F])
                 MergingHistory(v, CachingHistoryStore(store))
@@ -197,7 +207,9 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
             _ <- {
               for {
                 _ <- readAll //warm up
+                _ <- historySave.process(Nil) //clear cache
                 _ <- msTime(readAll)
+                _ <- historySave.process(Nil) //clear cache
                 _ <- shortLog(" ")
               } yield ()
             }.whenA(readTest)
@@ -219,15 +231,13 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           } yield result
 
           for {
-            res          <- saveHistory
-            (_, newRoot) = res
+            res <- saveHistory
           } yield ()
       }
 
     val setup: F[Unit] =
       for {
-        _ <- log(s"Type History: $typeHistory")
-        _ <- log(s"")
+        _ <- log(typeHistory)
         _ <- log(
               if (readTest) s"[Num record] [insert(ms)] [read(ms)] [delete(ms)]"
               else s"[Num record] [insert(ms)] [delete(ms)]"

@@ -3,14 +3,14 @@ package coop.rchain.node
 import cats.Id
 import coop.rchain.catscontrib.effect.implicits.concurrentId
 import coop.rchain.rspace.history.RadixStore
-import coop.rchain.rspace.history.RadixTree4._
+import coop.rchain.rspace.history.RadixTree5._
 import coop.rchain.store.InMemoryKeyValueStore
 import org.scalatest.FlatSpec
 import scodec.bits.ByteVector
 
 import scala.language.higherKinds
 
-class RadixTreeSpec4 extends FlatSpec {
+class RadixTreeSpec5 extends FlatSpec {
 
   val store = new RadixStore(InMemoryKeyValueStore[Id])
 
@@ -18,16 +18,16 @@ class RadixTreeSpec4 extends FlatSpec {
 
   implicit class TreeBinOps[F[_]](rootNode: Vector[Child]) {
     def binUpdate(radixKey: String, radixValue: ByteVector)(
-        impl: RadixTree4Impl[F]
+        impl: RadixTree5Impl[F]
     ): F[Node] =
       impl.update(rootNode, sToBv(radixKey), radixValue)
 
-    def binDelete(radixKey: String)(impl: RadixTree4Impl[F]): F[Node] =
+    def binDelete(radixKey: String)(impl: RadixTree5Impl[F]): F[Node] =
       impl.delete(rootNode, sToBv(radixKey))
   }
 
   it should "test update and delete" in {
-    val impl1 = new RadixTree4Impl(store)
+    val impl1 = new RadixTree5Impl(store)
 
     val initialTree1 = emptyNode
       .binUpdate("11111101", ByteVector(0xaa, 0xaa))(impl1)
@@ -39,6 +39,8 @@ class RadixTreeSpec4 extends FlatSpec {
       .binUpdate("33333302", ByteVector(0xdd, 0xdd))(impl1)
       .binUpdate("11110001", ByteVector(0xff, 0xff, 0xff))(impl1)
 
+    impl1.commit
+
     println("")
     println(s"initial1:")
     impl1.print(initialTree1)
@@ -46,7 +48,7 @@ class RadixTreeSpec4 extends FlatSpec {
     println(s"updatedTree1. Pasting (33333302, 0xdddd), (11110001, 0xffffff):")
     impl1.print(updatedTree)
 
-    val impl2 = new RadixTree4Impl(store)
+    val impl2 = new RadixTree5Impl(store)
 
     val initialTree2 = emptyNode
       .binUpdate("33333302", ByteVector(0xdd, 0xdd))(impl2)
@@ -59,6 +61,8 @@ class RadixTreeSpec4 extends FlatSpec {
     val cutTree = initialTree2
       .binDelete("33333302")(impl2)
       .binDelete("11110001")(impl2)
+
+    impl2.commit
 
     println("")
     println(s"initialTree2:")
@@ -75,7 +79,7 @@ class RadixTreeSpec4 extends FlatSpec {
   }
 
   it should "test read" in {
-    val impl = new RadixTree4Impl(store)
+    val impl = new RadixTree5Impl(store)
     val initialTree = emptyNode
       .binUpdate("11111101", ByteVector(0xaa, 0xaa))(impl)
       .binUpdate("11111102", ByteVector(0xbb))(impl)
@@ -110,7 +114,7 @@ class RadixTreeSpec4 extends FlatSpec {
   }
 
   it should "test serialization" in {
-    val impl = new RadixTree4Impl(store)
+    val impl = new RadixTree5Impl(store)
     val t0   = emptyNode
     val t1   = impl.update(t0, sToBv("011111"), ByteVector(0x55, 0x55, 0x55))
     val t2   = impl.update(t1, sToBv("012222"), ByteVector(0x66, 0x66, 0x66))

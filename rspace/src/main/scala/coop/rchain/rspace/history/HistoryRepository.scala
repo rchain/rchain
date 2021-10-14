@@ -5,7 +5,7 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.instances.RadixHistory4
+import coop.rchain.rspace.history.instances.RadixHistory5
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -77,8 +77,8 @@ object HistoryRepositoryInstances {
 //      history      = HistoryInstances.merging(currentRoot, historyStore)
 //      history = RadixHistory3(currentRoot, TrieMap[ByteVector, ByteVector])
 
-      historyStore = new RadixStore(historyKeyValueStore, false)
-      history      = RadixHistory4(currentRoot, historyStore)
+      historyStore = new RadixStore(historyKeyValueStore)
+      history      = RadixHistory5(currentRoot, historyStore)
 
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
