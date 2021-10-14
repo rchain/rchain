@@ -1,9 +1,8 @@
 package coop.rchain.v2.casper
-import cats.effect.Sync
 import coop.rchain.v2.casper.syntax.all._
-import fs2.Stream
+import fs2.{Pure, Stream}
 
-trait SafetyOracle[F[_], M, S] {
+trait SafetyOracle[M, S] {
 
   /**
    * Whether source can propagate agreement on a target.
@@ -57,11 +56,11 @@ object SafetyOracle {
    * Messages can be repeating, but with growing fault tolerance.
    * Stream preserves the notion of distance from agreeing messages.
    */
-  def faultTolerances[F[_]: Sync, M, S](
+  def faultTolerances[M, S](
       agreeingMessages: Set[M],
-      so: SafetyOracle[F, M, S],
-      dg: DependencyGraph[F, M, S]
-  )(implicit ordering: Ordering[M]): Stream[F, List[(M, Float)]] = {
+      so: SafetyOracle[M, S],
+      dg: DependencyGraph[M, S]
+  )(implicit ordering: Ordering[M]): Stream[Pure, List[(M, Float)]] = {
     import so._
     dg.messagesView(agreeingMessages)
       .mapAccumulate(Map.empty[M, Set[Agreement[M]]]) { (acc, chunk) =>

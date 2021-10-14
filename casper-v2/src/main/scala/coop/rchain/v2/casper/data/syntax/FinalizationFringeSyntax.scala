@@ -8,6 +8,10 @@ trait FinalizationFringeSyntax {
 }
 
 final class FinalizationFringeOps[M](val f: FinalizationFringe[M]) extends AnyVal {
-  def checkLazyMessage[S](latestMessages: LatestMessages[M, S], sender: M => S, seqNum: M => Long) =
-    f.v.toIterator.map()
+  def checkLazyMessage[S](
+      latestMessages: LatestMessages[M, S],
+      sender: M => S,
+      seqNum: M => Long
+  ): Boolean =
+    ???
 }

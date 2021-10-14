@@ -1,4 +1,5 @@
 package coop.rchain.v2.casperclient
+import coop.rchain.v2.casper.data.CasperScope
 
 /**
  * Validator of Casper messages.

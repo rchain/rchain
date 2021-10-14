@@ -1,21 +1,20 @@
 package coop.rchain.v2.casper
 import cats.Monad
-import cats.effect.Sync
-import coop.rchain.v2.casper.syntax.all._
 import cats.syntax.all._
 import coop.rchain.shared.syntax.zipStreamList
-import fs2.{Chunk, Stream}
+import coop.rchain.v2.casper.syntax.all._
+import fs2.{Chunk, Pure, Stream}
 
 /**
  * Casper dependency graph.
  */
-trait DependencyGraph[F[_], M, S] {
+trait DependencyGraph[M, S] {
 
   /**
    * Each message is justified by set of other messages.
    * List used here to omit conversion as this set is supposed to be traversed.
    */
-  def justifications(message: M): F[List[M]]
+  def justifications(message: M): Set[M]
 
   /**
    * Parents are subset of justifications through which all other justifications are visible.
@@ -24,7 +23,7 @@ trait DependencyGraph[F[_], M, S] {
    * This is similar to parents, but without ranking and sorting.
    * As parents should be stored to not compute each time, this is on a trait.
    */
-  def parents(message: M): F[List[M]]
+  def parents(message: M): Set[M]
 
   /**
    * Sender of a message.
@@ -57,27 +56,27 @@ object DependencyGraph {
    * Messages of the same topological order are sorted by identity.
    * Not flattened to keep the notion of distance.
    */
-  def messageView[F[_], M, S](
+  def messageView[M, S](
       message: M,
-      dg: DependencyGraph[F, M, S]
-  )(implicit a: Sync[F], ordering: Ordering[M]): Stream[F, List[M]] =
-    Stream
-      .unfoldLoopEval(List(message)) { lvl =>
-        lvl
-          .flatTraverse(s => dg.parents(s))
-          // Sort output to keep function pure
-          .map(_.distinct.sorted)
-          .map(next => (lvl, next.nonEmpty.guard[Option].as(next)))
-      }
+      dg: DependencyGraph[M, S]
+  )(implicit ordering: Ordering[M]): Stream[Pure, List[M]] =
+    Stream.unfoldLoop(List(message)) { lvl =>
+      val next = lvl
+        .flatMap(s => dg.parents(s))
+        // Sort output to keep function pure
+        .distinct
+        .sorted
+      (lvl, next.nonEmpty.guard[Option].as(next))
+    }
 
   /**
    * Combined stream of views of the messages.
    * Per message streams are zipped, to preserve topological sorting.
    */
-  def messagesView[F[_], M, S](
+  def messagesView[M, S](
       messages: Set[M],
-      dg: DependencyGraph[F, M, S]
-  )(implicit sync: Sync[F], ordering: Ordering[M]): Stream[F, Chunk[(M, List[M])]] = {
+      dg: DependencyGraph[M, S]
+  )(implicit ordering: Ordering[M]): Stream[Pure, Chunk[(M, List[M])]] = {
     // Sort output to keep function pure
     val sorted = messages.toList.sorted
     zipStreamList(sorted.map(m => messageView(m, dg).map((m, _)).zipWithIndex))
@@ -86,13 +85,23 @@ object DependencyGraph {
   }
 
   /**
-   * Given set of messages S, the message that either ancestor or descendant for all messages in S.
+   * Given set of messages S (target set), the message that either ancestor or descendant for all messages in S.
    * The following picture shows common message for the set of messages (1,2,3,4).
    *
    *    1   2   3
    *      \  \  |
    *        \ \ |
    *          CM
+   *             \
+   *              \
+   *               4
+   *
+   * One of targets can me CM as well
+   *
+   *     1   2
+   *      \  \
+   *        \ \
+   *            3 <- (CM)
    *             \
    *              \
    *               4
@@ -105,33 +114,29 @@ object DependencyGraph {
     require((ancestors intersect descendants).isEmpty, "Wrong common message.")
   }
 
-  case object NoCommonMessage extends Exception("Unable to find common message.")
-
   /**
    * Find the highest message common to @targets according to @dg.
    */
   def highestCommonMessage[F[_], M, S](
       targets: Set[M],
-      dg: DependencyGraph[F, M, S]
-  )(implicit sync: Sync[F], ordering: Ordering[M]): F[Option[CommonMessage[M]]] = {
+      dg: DependencyGraph[M, S]
+  )(implicit ordering: Ordering[M]): Option[CommonMessage[M]] = {
     import dg._
     val latestSeqNums      = targets.map(m => sender(m) -> seqNum(m)).toMap
     val initConnectionsMap = Map.empty[M, Set[M]]
     dg.messagesView(targets)
       .flatMap(chunk => Stream.emits(chunk.toList.flatMap { case (s, t) => t.map((s, _)) }))
-      .evalMapAccumulate(initConnectionsMap) { case (acc, (visitor, target)) =>
+      .mapAccumulate(initConnectionsMap) { case (acc, (visitor, target)) =>
         val newVisitors    = acc.getOrElse(target, Set.empty[M]) + visitor
         val newAcc         = acc.updated(target, newVisitors)
         // Messages that did not reach target through justifications yet
         val yetNotVisitors = targets -- newVisitors
         // If target has yetNotVisitors in justification - result is reached
-        justifications(target)
-          .map { js =>
-            (yetNotVisitors -- js).isEmpty
-              .guard[Option]
-              .as(CommonMessage(target, js.toSet, newVisitors - target))
-          }
-          .map(v => (newAcc, v))
+        val js             = justifications(target)
+        val v              = (yetNotVisitors -- js).isEmpty
+          .guard[Option]
+          .as(CommonMessage(target, js.toSet, newVisitors - target))
+        (newAcc, v)
       }
       .map { case (_, v) => v }
       .zipWithIndex
@@ -147,4 +152,44 @@ object DependencyGraph {
       .compile
       .last
   }
+
+  /**
+   * Scope required to merge set of messages (target set).
+   *
+   * To merge set of messages, the highest [[CommonMessage]] should found and used as a base for merge.
+   * The highest means that it should be closest to target set and provide minimal merge set.
+   * All messages down from target set that are not seen by the base are the merge set.
+   *
+   * @param commonMessage The highest [[CommonMessage]].
+   * @param mergeSet      Set of messages in merge scope.
+   * @tparam M            Type of the message.
+   */
+  case class MergeScope[M](
+      commonMessage: CommonMessage[M],
+      mergeSet: Set[M]
+  )
+
+  /**
+   * Scope required to merge multiple messages.
+   *
+   * If scope cannot be constructed, None is returned.
+   *
+   * @param targetSet Messages to merge.
+   * @param ordering
+   * @return (Optional) [[MergeScope]] for targetSet.
+   */
+  def mergeScope[M, S](
+      targetSet: Set[M],
+      dg: DependencyGraph[M, S]
+  )(implicit ordering: Ordering[M]): Option[MergeScope[M]] =
+    highestCommonMessage(targetSet, dg)
+      .map { case hcm @ CommonMessage(base, _, unseenPart) =>
+        val perSenderMsgStreams = unseenPart.toList.map { fringeMessage =>
+          Stream(fringeMessage) ++
+            dg.selfJustificationChain(fringeMessage)
+              .takeWhile(m => !(m == base || dg.justifications(base).contains(m)))
+        }
+        val mergeSet            = Stream.emits(perSenderMsgStreams).flatten.compile.to(Set)
+        MergeScope(hcm, mergeSet)
+      }
 }
