@@ -44,15 +44,17 @@ object MergingLogic {
       *
       * Produce is considered destroyed in COMM if it is not persistent and been consumed without peek.
       * Consume is considered destroyed in COMM when it is not persistent.
+      *
+      * If produces/consumes are mergeable in both indices, they are not considered as conflicts.
       */
     val racesForSameIOEvent = {
-      val consumeRaces = {
-        (a.consumesProduced intersect b.consumesProduced -- a.consumesMergeable -- b.consumesMergeable).toIterator
-          .filterNot(_.persistent)
-      }
-      val produceRaces =
-        (a.producesConsumed intersect b.producesConsumed -- a.producesMergeable -- b.producesMergeable).toIterator
-          .filterNot(_.persistent)
+      val sharedConsumes    = a.consumesProduced intersect b.consumesProduced
+      val mergeableConsumes = a.consumesMergeable intersect b.consumesMergeable
+      val consumeRaces      = (sharedConsumes diff mergeableConsumes).toIterator.filterNot(_.persistent)
+
+      val sharedProduces    = a.producesConsumed intersect b.producesConsumed
+      val mergeableProduces = a.producesMergeable intersect b.producesMergeable
+      val produceRaces      = (sharedProduces diff mergeableProduces).toIterator.filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }
