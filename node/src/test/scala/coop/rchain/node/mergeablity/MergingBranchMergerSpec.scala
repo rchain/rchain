@@ -140,6 +140,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               setPreStateHash = preStateHash.some,
               setPostStateHash = s._1.some,
               setDeploys = s._2.some,
+              setSysDeploys = s._3.some,
               setBlockNumber = blockNum.some,
               setSeqNumber = seqNum.some,
               setValidator = ByteString.copyFrom(validatorPk.bytes).some,
@@ -432,10 +433,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                                               sender.toByteArray,
                                               seqNum
                                             )
-                            // TODO: Something is wrong with the number of deploys/sysDeploys when block is created
-                            numberChsDataTruncate = numberChsData.take(
-                              b.body.deploys.size + b.body.systemDeploys.size
-                            )
 
                             blockIndex <- BlockIndex(
                                            b.blockHash,
@@ -444,7 +441,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                                            preStateHash.toBlake2b256Hash,
                                            postStateHash.toBlake2b256Hash,
                                            runtimeManager.getHistoryRepo,
-                                           numberChsDataTruncate
+                                           numberChsData
                                          ).map(b.blockHash -> _)
                           } yield blockIndex
                         }
