@@ -191,7 +191,7 @@ class MergeNumberChannelSpec extends FlatSpec {
             numberChs: NumberChannelsDiff
         ) =>
           numberChs.get(hash).traverse {
-            RholangMergingLogic.calculateNumberChannelMerge(hash, changes, baseGetData)
+            RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
           }
 
         // Create store actions / uses handler for number channels

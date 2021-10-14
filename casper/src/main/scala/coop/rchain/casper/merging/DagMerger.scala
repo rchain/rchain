@@ -59,7 +59,7 @@ object DagMerger {
           numberChs: NumberChannelsDiff
       ) =>
         numberChs.get(hash).traverse {
-          RholangMergingLogic.calculateNumberChannelMerge(hash, changes, baseGetData)
+          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
         }
 
       computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {

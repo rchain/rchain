@@ -82,15 +82,16 @@ object RholangMergingLogic {
     * Merge number channel value from multiple changes and base state.
     *
     * @param channelHash Channel hash
-    * @param changes Channel changes
-    * @param getBaseData Base state value reader
     * @param diff Difference from base state
+    * @param changes Channel changes to calculate new random generator
+    * @param getBaseData Base state value reader
     */
   def calculateNumberChannelMerge[F[_]: Monad](
       channelHash: Blake2b256Hash,
+      diff: Long,
       changes: ChannelChange[ByteVector],
       getBaseData: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
-  )(diff: Long): F[HotStoreTrieAction] =
+  ): F[HotStoreTrieAction] =
     for {
       // Read initial value of number channel from base state
       initValOpt <- convertToReadNumber(getBaseData).apply(channelHash)
