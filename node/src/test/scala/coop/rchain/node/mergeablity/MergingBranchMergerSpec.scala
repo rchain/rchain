@@ -4,7 +4,8 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.casper.merging.{BlockIndex, DagMerger}
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.merging.{BlockIndexer, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
@@ -434,7 +435,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                                               seqNum
                                             )
 
-                            blockIndex <- BlockIndex(
+                            blockIndex <- BlockIndexer(
                                            b.blockHash,
                                            b.body.deploys,
                                            b.body.systemDeploys,

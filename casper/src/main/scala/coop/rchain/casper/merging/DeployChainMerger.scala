@@ -3,6 +3,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.protocol.DeployChain
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
@@ -16,7 +17,8 @@ import scala.collection.concurrent.TrieMap
 object DeployChainMerger {
 
   // Todo persist cache.
-  val indexCache = TrieMap.empty[DeployChain, DeployChainIndex]
+  val indexCache    = TrieMap.empty[DeployChain, DeployChainIndex]
+  val blocksIndexed = TrieMap.empty[BlockHash, Unit]
 
   def getDeployChainIndex[F[_]: Sync](v: DeployChain): F[DeployChainIndex] = {
     val errMsg = s"No merging index available. Is block indexing enabled on block replay?"
@@ -45,7 +47,7 @@ object DeployChainMerger {
           numberChs: NumberChannelsDiff
       ) =>
         numberChs.get(hash).traverse {
-          RholangMergingLogic.calculateNumberChannelMerge(hash, changes, baseGetData)
+          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
         }
       computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
         StateChangeMerger.computeTrieActions(

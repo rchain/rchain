@@ -4,9 +4,10 @@ import cats.Parallel
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
@@ -19,10 +20,8 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
-import fs2.concurrent.Queue
 
 trait CasperLaunch[F[_]] {
   def launch(): F[Unit]
@@ -36,16 +35,15 @@ object CasperLaunch {
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
+      blockDagStateRef: Ref[F, BlockDagState],
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      processBlockInRunning: BlockMessage => F[Unit]
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
       val casperShardConf = CasperShardConf(
@@ -98,66 +96,29 @@ object CasperLaunch {
           disableStateExporter: Boolean
       ): F[Unit] = {
         def askPeersForForkChoiceTips = CommUtil[F].sendForkChoiceTipRequest
-        def sendBufferPendantsToCasper(casper: Casper[F]) =
-          for {
-            pendants <- CasperBufferStorage[F].getPendants
-            // pendantsReceived are either
-            // 1. blocks that were received while catching up but not end up in casper buffer, e.g. node were restarted
-            // or
-            // 2. blocks which dependencies are in DAG, so they can be added to DAG
-            // In both scenarios the way to proceed is to send them to Casper
-            pendantsStored <- pendants.toList.filterA(BlockStore[F].contains)
-            _ <- Log[F].info(
-                  s"Checking pendant hashes: ${pendantsStored.size} items in CasperBuffer."
-                )
-            _ <- pendantsStored
-                // we just need to send blocks to Casper. Nothing to do with results of block processing here,
-                // so ignoring them
-                  .traverse_(
-                    hash =>
-                      for {
-                        block <- BlockStore[F].get(hash).map(_.get)
-                        _ <- Log[F].info(
-                              s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
-                                s"is available in BlockStore, sending to Casper."
-                            )
-                        dc <- casper.dagContains(hash)
-                        _ <- Log[F]
-                              .error(
-                                s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
-                                  s"is available in DAG, database is supposedly in inconsistent state."
-                              )
-                              .whenA(dc)
-                        _ <- BlockRetriever[F].ackReceive(hash)
-                        _ <- blockProcessingQueue.enqueue1((casper, block))
-                      } yield ()
-                  )
-          } yield ()
 
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          ab          = approvedBlock.candidate.block
           casper <- MultiParentCasper
                      .hashSetCasper[F](
                        validatorId,
-                       casperShardConf,
-                       ab
+                       casperShardConf.shardName,
+                       casperShardConf.faultToleranceThreshold
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
-            _ <- sendBufferPendantsToCasper(casper)
             // try to propose (async way) if proposer is defined
-            _ <- proposeFOpt.traverse(p => p(casper, true))
+            _ <- proposeFOpt.traverse(p => p(true))
           } yield ()
           _ <- Engine
                 .transitionToRunning[F](
-                  blockProcessingQueue,
-                  blocksInProcessing,
                   casper,
+                  blockDagStateRef,
                   approvedBlock,
                   validatorId,
                   init,
-                  disableStateExporter
+                  disableStateExporter,
+                  processBlockInRunning
                 )
         } yield ()
       }
@@ -186,11 +147,11 @@ object CasperLaunch {
                 )(Sync[F])
           _ <- EngineCell[F].set(
                 new GenesisValidator(
-                  blockProcessingQueue,
-                  blocksInProcessing,
+                  blockDagStateRef,
                   casperShardConf,
                   validatorId.get,
-                  bap
+                  bap,
+                  processBlockInRunning
                 )
               )
         } yield ()
@@ -214,17 +175,18 @@ object CasperLaunch {
                     conf.genesisCeremony.requiredSignatures,
                     conf.genesisCeremony.approveDuration,
                     conf.genesisCeremony.approveInterval,
-                    conf.genesisBlockData.genesisBlockNumber
+                    conf.genesisBlockData.genesisBlockNumber,
+                    ByteString.copyFrom(validatorId.get.publicKey.bytes)
                   )
           // TODO track fiber
           _ <- Concurrent[F].start(
                 GenesisCeremonyMaster
                   .waitingForApprovedBlockLoop[F](
-                    blockProcessingQueue,
-                    blocksInProcessing,
+                    blockDagStateRef,
                     casperShardConf,
                     validatorId,
-                    disableStateExporter
+                    disableStateExporter,
+                    processBlockInRunning
                   )
               )
           _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
@@ -237,15 +199,15 @@ object CasperLaunch {
         for {
           validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           _ <- Engine.transitionToInitializing(
-                blockProcessingQueue,
-                blocksInProcessing,
+                blockDagStateRef,
                 casperShardConf,
                 validatorId,
                 // TODO peer should be able to request approved blocks on different heights
                 // from genesis to the most recent one (default)
                 CommUtil[F].requestApprovedBlock(trimState),
                 trimState,
-                disableStateExporter
+                disableStateExporter,
+                processBlockInRunning
               )
         } yield ()
 

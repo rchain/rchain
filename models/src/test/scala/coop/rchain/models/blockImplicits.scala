@@ -163,7 +163,6 @@ object blockImplicits {
       block = BlockMessage(
         blockHash = ByteString.EMPTY,
         header = Header(
-          parentsHashList = parentsHashList.toList,
           timestamp = timestamp,
           version = version
         ),
@@ -199,8 +198,7 @@ object blockImplicits {
             b            <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
             parents      <- Gen.someOf(blocks)
             parentHashes = parents.map(_.blockHash).toList
-            newBlock     = b.copy(header = b.header.copy(parentsHashList = parentHashes))
-          } yield newBlock :: blocks
+          } yield b :: blocks
       }
     }
 

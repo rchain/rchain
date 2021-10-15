@@ -29,7 +29,7 @@ object CasperBufferKeyValueStorage {
       kvm: KeyValueStoreManager[F]
   ): F[KeyValueTypedStore[F, BlockHash, MessageStatus]] =
     kvm.database[BlockHash, MessageStatus](
-      "casper-buffer",
+      "parents-map",
       codecBlockHash,
       codecMessageStatus
     )

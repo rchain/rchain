@@ -83,7 +83,7 @@ class MergingCases extends FlatSpec with Matchers {
 
           idxs <- processedDeploysWithMergeable.traverse {
                    case (d, mergeChs) =>
-                     BlockIndex.createEventLogIndex(
+                     BlockIndexer.createEventLogIndex(
                        d.deployLog,
                        runtimeManager.getHistoryRepo,
                        baseState.toBlake2b256Hash,

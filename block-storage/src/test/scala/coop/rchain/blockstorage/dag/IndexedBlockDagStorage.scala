@@ -69,12 +69,6 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       underlying.accessEquivocationsTracker(f)
     )
 
-  def recordDirectlyFinalized(
-      blockHash: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit] =
-    underlying.recordDirectlyFinalized(blockHash, finalizationEffect)
-
   def lookupById(id: Int): F[Option[BlockMessage]] =
     idToBlocksRef.get.map(_.get(id.toLong))
 

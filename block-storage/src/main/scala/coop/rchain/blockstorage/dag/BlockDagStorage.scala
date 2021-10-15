@@ -2,7 +2,9 @@ package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
+import coop.rchain.casper.protocol.{BlockMessage, StateMetadata}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
@@ -12,13 +14,9 @@ trait BlockDagStorage[F[_]] {
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      approved: Boolean = false
+      blockStateMetadata: StateMetadata
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def recordDirectlyFinalized(
-      direct: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit]
 }
 
 object BlockDagStorage {
@@ -41,15 +39,10 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
-  // DAG representation has to have finalized block, or it does not make sense
-  def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
-  def nonFinalizedSet: Set[BlockHash]
-  def truncate(
-      latestMessages: Map[Validator, BlockHash],
-      findLfb: Map[Validator, BlockHash] => F[BlockHash]
-  ): F[BlockDagRepresentation[F]]
-  def reachedAcquiescence: F[Boolean]
+  def genesis: F[BlockHash]
+  def finalizationState: BlockDagFinalizationState
+  def getPureState: BlockDagRepresentationState
 }
 
 trait EquivocationsTracker[F[_]] {

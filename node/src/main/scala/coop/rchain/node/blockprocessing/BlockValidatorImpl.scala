@@ -21,6 +21,7 @@ import coop.rchain.casper.{
   CasperConf,
   InvalidBlock,
   MultiParentCasperImpl,
+  PrettyPrinter,
   ValidatorIdentity
 }
 import coop.rchain.metrics.{Metrics, Span}
@@ -95,13 +96,16 @@ object BlockValidatorImpl {
       // Adjust this to modify behaviour of validation
       validationQueue <- Queue.unbounded[F, BlockHash]
       stream          = validationQueue.dequeueChunk(1)
-      append          = h => validationQueue.enqueue1(h)
+      append          = validationQueue.enqueue1 _
       // Send to validation blocks that are in pending validation status
       // (e.g. node has been restarted in the middle of validation)
       // Note: validation will be started when stream is started
       dagState          <- blockDagStateRef.get
       pendingValidation = dagState.buffer.collect { case (h, ValidationInProgress) => h }
       _                 <- pendingValidation.toList.traverse(append)
+      _ <- Log[F].info(
+            s"Pending blocks added to validation queue: ${PrettyPrinter.buildString(pendingValidation.toList)}."
+          )
     } yield BlockValidatorImpl(stream, append, blockDagStateRef, casperShardConf, bufferStore)
   }
 

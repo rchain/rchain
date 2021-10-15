@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.data.{EitherT, OptionT}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -56,7 +57,31 @@ class MultiParentCasperImpl[F[_]
 
   // TODO this does not make sense, now implemented to make other parts of the code happy
   override def lastFinalizedBlock: F[BlockMessage] =
-    ???
+    BlockMessage(
+      blockHash = ByteString.EMPTY,
+      header = Header(
+        timestamp = 0L,
+        version = version
+      ),
+      body = Body(
+        state = RChainState(
+          preStateHash = ByteString.EMPTY,
+          // only this matters
+          postStateHash = MultiParentCasperImpl.lastFinalizedState(()).toByteString,
+          bonds = List(),
+          blockNumber = -1
+        ),
+        deploys = List(),
+        systemDeploys = List(),
+        rejectedDeploys = List()
+      ),
+      justifications = List(),
+      sender = ByteString.EMPTY,
+      seqNum = -1,
+      sig = ByteString.EMPTY,
+      sigAlgorithm = "",
+      shardId = ""
+    ).pure
 
   override def latestScope: F[MessageScope[BlockMetadata]] =
     for {
@@ -119,18 +144,32 @@ class MultiParentCasperImpl[F[_]
       // scope of the message
       r                             <- Stopwatch.duration(computeMessageScope(latestMessages.toSet, dag))
       (messageScope, messageScopeT) = r
-      finalizationState             = dag.finalizationState
+
+      indicesMissing = messageScope.conflictScope.v
+        .map(_.blockHash)
+        .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
+      _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock))
+
+      finalizationState = dag.finalizationState
       deploysInScope = messageScope.conflictScope.v.flatMap(
         _.stateMetadata.proposed.flatMap(_.deploys)
       )
       mergeFringe = mergeFinalizationFringe(
         messageScope.finalizationFringe.v,
         dag,
-        finalizationState.rejected
+        finalizationState.rejected,
+        hashes =>
+          hashes.traverse { h =>
+            BlockStore[F]
+              .getUnsafe(h)
+              .flatMap(indexBlock)
+              .unlessA(DeployChainMerger.blocksIndexed.contains(h))
+          }.void
       )(RuntimeManager[F])
       finalizedState <- OptionT
                          .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
                          .getOrElseF(mergeFringe)
+      _           = MultiParentCasperImpl.lastFinalizedState.update((), finalizedState)
       conflictSet = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
       conflictResolution <- DeployChainSetConflictResolver[F](
                              DeployChainMerger.getDeployChainIndex[F]
@@ -164,6 +203,30 @@ class MultiParentCasperImpl[F[_]
       shardName,
       casperVersion
     )
+  }
+
+  def indexBlock(b: BlockMessage): F[Unit] = {
+    val blockPreState  = b.body.state.preStateHash
+    val blockPostState = b.body.state.postStateHash
+    val blockSender    = b.sender.toByteArray
+    for {
+      mergeableChs <- RuntimeManager[F].loadMergeableChannels(
+                       blockPostState,
+                       if (b.seqNum == 0) Array() else blockSender,
+                       b.seqNum
+                     )
+      index <- BlockIndexer(
+                b.blockHash,
+                b.body.deploys,
+                b.body.systemDeploys,
+                blockPreState.toBlake2b256Hash,
+                blockPostState.toBlake2b256Hash,
+                RuntimeManager[F].getHistoryRepo,
+                mergeableChs
+              )
+      _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
+      _ = DeployChainMerger.blocksIndexed.putIfAbsent(b.blockHash, ())
+    } yield ()
   }
 
   override def validate(
@@ -204,24 +267,6 @@ class MultiParentCasperImpl[F[_]
 //        _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    val blockPreState  = b.body.state.preStateHash
-    val blockPostState = b.body.state.postStateHash
-    val blockSender    = b.sender.toByteArray
-    val indexBlock = for {
-      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
-
-      index <- BlockIndexer(
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                blockPreState.toBlake2b256Hash,
-                blockPostState.toBlake2b256Hash,
-                RuntimeManager[F].getHistoryRepo,
-                mergeableChs
-              )
-      _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
-    } yield ()
-
     val validationProcessDiag = for {
       // Create block and measure duration
       r                    <- Stopwatch.duration(validationProcess.value)
@@ -230,7 +275,8 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <* indexBlock
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock(b)
             }
             .getOrElse(().pure[F])
     } yield valResult
@@ -360,6 +406,8 @@ class MultiParentCasperImpl[F[_]
 }
 
 object MultiParentCasperImpl {
+
+  val lastFinalizedState = TrieMap.empty[Unit, Blake2b256Hash]
 
   /** Cache for merged state of finalization fringe. */
   val finalizedStateCache = TrieMap.empty[Set[BlockMetadata], Blake2b256Hash]
