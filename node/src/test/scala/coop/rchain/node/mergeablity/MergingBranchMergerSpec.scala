@@ -4,9 +4,9 @@ import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
+import coop.rchain.casper.syntax.casperSyntaxRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
@@ -18,6 +18,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.util.RevAddress
@@ -60,7 +61,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
        |          for (@(true, vault) <- vaultCh; key <- revVaultKeyCh) {
        |            new resultCh in {
        |              stdout!("TX from ${payer} to ${payee} succeed.")|
-       |              @vault!("transfer", to, amount, *key, *resultCh) 
+       |              @vault!("transfer", to, amount, *key, *resultCh)
        |            }
        |          }
        |        }
@@ -139,6 +140,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
               setPreStateHash = preStateHash.some,
               setPostStateHash = s._1.some,
               setDeploys = s._2.some,
+              setSysDeploys = s._3.some,
               setBlockNumber = blockNum.some,
               setSeqNumber = seqNum.some,
               setValidator = ByteString.copyFrom(validatorPk.bytes).some,
@@ -398,7 +400,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
         implicit val rm: RuntimeManager[Task] = runtimeManager
         implicit val concurrent               = Concurrent[Task]
         implicit val metrics                  = new Metrics.MetricsNOP
-        import coop.rchain.models.blockImplicits._
 
         // simulates 0.99 sync threshold
         def mkLayer(
@@ -421,17 +422,29 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
             // merge children blocks
             indices <- (baseBlock +: mergingBlocks)
-                        .traverse(
-                          b =>
-                            BlockIndex(
-                              b.blockHash,
-                              b.body.deploys,
-                              b.body.systemDeploys,
-                              Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                              Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                              runtimeManager.getHistoryRepo
-                            ).map((b.blockHash -> _))
-                        )
+                        .traverse { b =>
+                          val preStateHash  = b.body.state.preStateHash
+                          val postStateHash = b.body.state.postStateHash
+                          val seqNum        = b.seqNum
+                          val sender        = b.sender
+                          for {
+                            numberChsData <- runtimeManager.loadMergeableChannels(
+                                              postStateHash,
+                                              sender.toByteArray,
+                                              seqNum
+                                            )
+
+                            blockIndex <- BlockIndex(
+                                           b.blockHash,
+                                           b.body.deploys,
+                                           b.body.systemDeploys,
+                                           preStateHash.toBlake2b256Hash,
+                                           postStateHash.toBlake2b256Hash,
+                                           runtimeManager.getHistoryRepo,
+                                           numberChsData
+                                         ).map(b.blockHash -> _)
+                          } yield blockIndex
+                        }
                         .map(_.toMap)
             dag <- dagStore.getRepresentation
             v <- DagMerger.merge[Task](
@@ -444,7 +457,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
                 )
             (postState, rejectedDeploys) = v
             mergedState                  = ByteString.copyFrom(postState.bytes.toArray)
-            _                            = assert(rejectedDeploys.size == 1)
+            _                            = assert(rejectedDeploys.size == 0)
             _                            = assert(mergedState != baseBlock.body.state.postStateHash)
 
             // create next base block (merge block)

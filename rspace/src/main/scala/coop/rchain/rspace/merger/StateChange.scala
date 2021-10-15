@@ -5,8 +5,12 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
-import coop.rchain.rspace.history.HistoryReaderBinary
+import coop.rchain.rspace.history.{ColdStoreInstances, DataLeaf, HistoryReaderBinary}
+import coop.rchain.rspace.internal.Datum
 import coop.rchain.rspace.merger.MergingLogic._
+import coop.rchain.rspace.serializers.ScodecSerialize
+import coop.rchain.rspace.serializers.ScodecSerialize.{serializeToCodecDatumMemo, RichAttempt}
+import coop.rchain.rspace.trace.Produce
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import fs2.Stream
@@ -54,8 +58,7 @@ object StateChange {
 
       computeProduceChanges = producesAffected(eventLogIndex)
         .map { _.channelsHash }
-        .map { produceChannel =>
-          val historyPointer = produceChannel
+        .map { historyPointer =>
           computeValueChange(
             historyPointer,
             preStateReader.getData(_).map(_.map(_.raw)),
@@ -122,11 +125,7 @@ object StateChange {
       // compute all changes
       allChanges = (computeProduceChanges ++ computeConsumeChanges ++ computeJoinsMap)
         .map(Stream.eval)
-      _ <- fs2.Stream
-            .fromIterator(allChanges.iterator)
-            .parJoinProcBounded
-            .compile
-            .drain
+      _              <- fs2.Stream.fromIterator(allChanges.iterator).parJoinProcBounded.compile.drain
       produceChanges <- datumsDiffRef.get
       _ <- new Exception("State change compute logic error: empty channel change for produce.")
             .raiseError[F, StateChange]
@@ -148,11 +147,8 @@ object StateChange {
 
   def empty: StateChange = StateChange(Map.empty, Map.empty, Map.empty)
   def combine(x: StateChange, y: StateChange): StateChange = {
-    def sumMaps[A, B: Monoid](map1: Map[A, B], map2: Map[A, B]): Map[A, B] = map1 ++ map2.map {
-      case (k, v) => k -> (v combine map1.getOrElse(k, Monoid[B].empty))
-    }
-    val newDC = sumMaps(x.datumsChanges, y.datumsChanges)
-    val newKC = sumMaps(x.kontChanges, y.kontChanges)
+    val newDC = x.datumsChanges |+| y.datumsChanges
+    val newKC = x.kontChanges |+| y.kontChanges
     val newJ  = x.consumeChannelsToJoinSerializedMap ++ y.consumeChannelsToJoinSerializedMap
     StateChange(newDC, newKC, newJ)
   }

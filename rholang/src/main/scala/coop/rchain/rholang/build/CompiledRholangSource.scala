@@ -7,6 +7,7 @@ import shapeless.HNil
 
 import scala.io.Source
 
+/** TODO: Currently all calls to this class use empty environment. See [[NormalizerEnv]]. */
 abstract class CompiledRholangSource[Env](val code: String, val normalizerEnv: NormalizerEnv[Env])(
     implicit ev: ToEnvMap[Env]
 ) {

@@ -43,6 +43,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -154,9 +155,11 @@ object Setup {
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        // Use channels map only in block-merging (multi parents)
-        val useChannelsMap = conf.casper.maxNumberOfParents > 1
-        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
+        for {
+          rStores    <- rnodeStoreManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rm         <- RuntimeManager.createWithHistory[F](rStores, mergeStore)
+        } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory
 
@@ -165,7 +168,7 @@ object Setup {
         implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }

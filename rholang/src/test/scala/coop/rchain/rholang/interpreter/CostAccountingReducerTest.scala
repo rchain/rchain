@@ -91,7 +91,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     }
     implicit val rand        = Blake2b512Random(128)
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val (_, chargingReducer) = RholangAndScalaDispatcher.create(iSpace, Map.empty, Map.empty)
+    val (_, chargingReducer) = RholangAndScalaDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test                 = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
@@ -124,21 +124,11 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
 
       lazy val (_, reducer) =
-        RholangAndScalaDispatcher
-          .create[Task](
-            pureRSpace,
-            Map.empty,
-            Map.empty
-          )
+        RholangAndScalaDispatcher(pureRSpace, Map.empty, Map.empty)
 
       def plainSendCost(p: Par): Cost = {
-        val storageCost = accounting.storageCostProduce(
-          channel,
-          ListParWithRandom(Seq(p))
-        )
-        val substitutionCost = Cost(Chargeable[Par].cost(channel)) + Cost(
-          Chargeable[Par].cost(p)
-        )
+        val storageCost      = accounting.storageCostProduce(channel, ListParWithRandom(Seq(p)))
+        val substitutionCost = Cost(Chargeable[Par].cost(channel)) + Cost(Chargeable[Par].cost(p))
         substitutionCost + storageCost + SEND_EVAL_COST
       }
       val sendACost = plainSendCost(a)
@@ -154,13 +144,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     }
 
     def data(p: Par, rand: Blake2b512Random) = Row(
-      List(
-        Datum.create(
-          channel,
-          ListParWithRandom(Seq(p), rand),
-          false
-        )
-      ),
+      List(Datum.create(channel, ListParWithRandom(Seq(p), rand), false)),
       List()
     )
 

@@ -29,7 +29,7 @@ class ContractCall[F[_]: Concurrent: Span](
     space: RhoTuplespace[F],
     dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation]
 ) {
-  type Producer = (Seq[Par], Par) => F[Unit]
+  type Producer[M[_]] = (Seq[Par], Par) => M[Unit]
 
   // TODO: pass _cost[F] as an implicit parameter
   private def produce(
@@ -50,7 +50,7 @@ class ContractCall[F[_]: Concurrent: Span](
           }
     } yield ()
 
-  def unapply(contractArgs: Seq[ListParWithRandom]): Option[(Producer, Seq[Par])] =
+  def unapply(contractArgs: Seq[ListParWithRandom]): Option[(Producer[F], Seq[Par])] =
     contractArgs match {
       case Seq(
           ListParWithRandom(

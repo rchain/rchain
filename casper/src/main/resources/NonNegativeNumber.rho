@@ -19,12 +19,12 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore){
+          for(@v <- @("__MERGEABLE__", *valueStore)){
             if (v + x >= v) {
-              valueStore!(v + x) | success!(true)
+              @("__MERGEABLE__", *valueStore)!(v + x) | success!(true)
             } else {
               //overflow
-              valueStore!(v) | success!(false)
+              @("__MERGEABLE__", *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -33,11 +33,11 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore) {
+          for(@v <- @("__MERGEABLE__", *valueStore)) {
             if (x <= v) {
-              valueStore!(v - x) | success!(true)
+              @("__MERGEABLE__", *valueStore)!(v - x) | success!(true)
             } else {
-              valueStore!(v) | success!(false)
+              @("__MERGEABLE__", *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -45,21 +45,21 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         }
       } |
       contract this(@"value", return) = {
-        for(@v <- valueStore) {
-          valueStore!(v) | return!(v)
+        for(@v <- @("__MERGEABLE__", *valueStore)) {
+          @("__MERGEABLE__", *valueStore)!(v) | return!(v)
         }
       } |
       return!(bundle+{*this}) |
       match init { //Initial balance is zero if given is negative on non-integer
         Int => {
-          if (init >= 0) { valueStore!(init)  }
-          else           { valueStore!(0) }
+          if (init >= 0) { @("__MERGEABLE__", *valueStore)!(init)  }
+          else           { @("__MERGEABLE__", *valueStore)!(0) }
         }
-         _ => { valueStore!(0) }
+         _ => { @("__MERGEABLE__", *valueStore)!(0) }
       }
     }
   } |
-  
+
   rs!(
     "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),
     (9223372036854775807, bundle+{*NonNegativeNumber}),
@@ -67,5 +67,3 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
     *uriOut
   )
 }
-  
-  

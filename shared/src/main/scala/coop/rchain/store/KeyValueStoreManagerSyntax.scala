@@ -1,13 +1,12 @@
 package coop.rchain.store
 
-import cats.Functor
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.shared.syntax._
 import scodec.Codec
 
 trait KeyValueStoreManagerSyntax {
-  implicit final def sharedSyntaxKeyValueStoreManager[F[_]: Sync: Functor](
+  implicit final def sharedSyntaxKeyValueStoreManager[F[_]: Sync](
       manager: KeyValueStoreManager[F]
   ): KeyValueStoreManagerOps[F] = new KeyValueStoreManagerOps[F](manager)
 }

@@ -1,10 +1,11 @@
-package coop.rchain.casper.merging
+package coop.rchain.casper
 
+import coop.rchain.casper.merging.DeployChainIndex
 import coop.rchain.rspace.merger.MergingLogic.computeRejectionOptions
 import coop.rchain.shared.Stopwatch
 import org.scalatest.FlatSpec
 
-class MergingBenchmark extends FlatSpec {
+class MergingBenchmarkSpec extends FlatSpec {
   "rejections option benchmark" should "for DeplyChainIndex" in {
     def conflictsMap[A](conflictingPairs: Set[List[A]]): Map[A, Set[A]] =
       conflictingPairs.foldLeft(Map.empty[A, Set[A]]) {

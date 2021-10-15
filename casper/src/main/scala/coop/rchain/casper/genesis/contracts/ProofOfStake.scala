@@ -1,10 +1,8 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangTemplate
-import coop.rchain.models.rholang.implicits._
 
 // TODO: Eliminate validators argument if unnecessary.
 // TODO: eliminate the default for epochLength. Now it is used in order to minimise the impact of adding this parameter
@@ -18,13 +16,7 @@ final case class ProofOfStake(
     numberOfActiveValidators: Int
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
-      NormalizerEnv.withDeployerId(
-        PublicKey(
-          Base16.unsafeDecode(
-            "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f"
-          )
-        )
-      ),
+      NormalizerEnv.Empty,
       "minimumBond"              -> minimumBond,
       "maximumBond"              -> maximumBond,
       "initialBonds"             -> ProofOfStake.initialBonds(validators),

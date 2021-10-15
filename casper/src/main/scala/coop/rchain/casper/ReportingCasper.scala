@@ -151,7 +151,7 @@ object ReportingCasper {
           sysRes <- systemDeploys.toList.traverse { term =>
                      Log[F].info(s"Replay system deploy ${term.systemDeploy}") *>
                        runtime
-                         .replaySystemDeployE(blockData)(term)
+                         .replayBlockSystemDeploy(blockData)(term)
                          .semiflatMap(_ => runtime.getReport)
                          .getOrElse(Seq.empty)
                          .map(SystemDeployReportResult(term.systemDeploy, _))
@@ -168,8 +168,16 @@ class ReportingRuntime[F[_]: Sync: Span](
     override val space: RhoReportingRspace[F],
     override val cost: _cost[F],
     override val blockDataRef: Ref[F, BlockData],
-    override val invalidBlocksParam: InvalidBlocks[F]
-) extends ReplayRhoRuntimeImpl[F](reducer, space, cost, blockDataRef, invalidBlocksParam) {
+    override val invalidBlocksParam: InvalidBlocks[F],
+    override val mergeChs: Ref[F, Set[Par]]
+) extends ReplayRhoRuntimeImpl[F](
+      reducer,
+      space,
+      cost,
+      blockDataRef,
+      invalidBlocksParam,
+      mergeChs
+    ) {
   def getReport: F[Seq[Seq[ReportingEvent]]] = space.getReport
 }
 
@@ -193,13 +201,14 @@ object ReportingRuntime {
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[ReportingRuntime[F]] =
     for {
-      cost <- CostAccounting.emptyCost[F]
+      cost     <- CostAccounting.emptyCost[F]
+      mergeChs <- Ref.of(Set[Par]())
       rhoEnv <- {
         implicit val c = cost
-        createRhoEnv(reporting, extraSystemProcesses)
+        createRhoEnv(reporting, mergeChs, extraSystemProcesses)
       }
       (reducer, blockRef, invalidBlocks) = rhoEnv
-      runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks)
+      runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks, mergeChs)
       _                                  <- bootstrapRegistry(runtime)
     } yield runtime
 }

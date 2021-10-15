@@ -1,17 +1,13 @@
 package coop.rchain.rholang.interpreter
 
-import cats._
-import cats.arrow.FunctionK
-import cats.data._
-import cats.effect._
-import cats.effect.implicits._
-import cats.implicits._
+import cats.data.StateT
+import cats.effect.Sync
 import cats.mtl._
-import cats.mtl.implicits._
+import cats.syntax.all._
+import cats.{~>, Monad}
 import coop.rchain.catscontrib.MonadError_
 import coop.rchain.models.Par
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.{InterpreterError, OutOfPhlogistonsError}
 
 import scala.collection.immutable.Stream
 

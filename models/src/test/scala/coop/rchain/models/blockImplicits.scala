@@ -127,6 +127,7 @@ object blockImplicits {
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[Justification]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
@@ -174,7 +175,7 @@ object blockImplicits {
             blockNumber = setBlockNumber.get
           ),
           deploys = deploys.toList,
-          systemDeploys = List.empty,
+          systemDeploys = setSysDeploys.toList.flatten,
           rejectedDeploys = List.empty
         ),
         justifications = justifications.toList,
@@ -221,6 +222,7 @@ object blockImplicits {
       setParentsHashList: Option[Seq[BlockHash]] = None,
       setJustifications: Option[Seq[Justification]] = None,
       setDeploys: Option[Seq[ProcessedDeploy]] = None,
+      setSysDeploys: Option[Seq[ProcessedSystemDeploy]] = None,
       setBonds: Option[Seq[Bond]] = None,
       setShardId: Option[String] = None,
       hashF: Option[BlockMessage => BlockHash] = None
@@ -236,6 +238,7 @@ object blockImplicits {
       setParentsHashList,
       setJustifications,
       setDeploys,
+      setSysDeploys,
       setBonds,
       setShardId,
       hashF

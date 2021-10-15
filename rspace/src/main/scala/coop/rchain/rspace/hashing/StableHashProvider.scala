@@ -15,10 +15,11 @@ object StableHashProvider {
   def hash[C](channel: C)(implicit serializeC: Serialize[C]): Blake2b256Hash =
     Blake2b256Hash.create(serializeC.encode(channel))
 
-  def hashSeq[C](channels: Seq[C])(implicit serializeC: Serialize[C]): Seq[Blake2b256Hash] = {
-    val encodedSeq = channels.map(serializeC.encode).sorted(util.ordByteVector)
-    encodedSeq.map(Blake2b256Hash.create).sortBy(_.bytes)(util.ordByteVector)
-  }
+  def hashSeq[C](channels: Seq[C])(implicit serializeC: Serialize[C]): Seq[Blake2b256Hash] =
+    channels
+      .map(serializeC.encode)
+      .map(Blake2b256Hash.create)
+      .sortBy(_.bytes)(util.ordByteVector)
 
   def hash[C](channels: Seq[C])(implicit serializeC: Serialize[C]): Blake2b256Hash =
 //    Blake2b256Hash.create(

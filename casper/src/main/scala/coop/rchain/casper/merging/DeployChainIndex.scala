@@ -5,7 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.{StateChange, _}
+import coop.rchain.rspace.merger._
 import coop.rchain.rspace.syntax._
 
 import java.util.Objects
@@ -48,6 +48,7 @@ object DeployChainIndex {
 
     val preStateReader  = historyRepository.getHistoryReader(preStateHash).readerBinary
     val postStateReader = historyRepository.getHistoryReader(postStateHash).readerBinary
+
     for {
       stateChanges <- StateChange[F, C, P, A, K](
                        preStateReader = preStateReader,

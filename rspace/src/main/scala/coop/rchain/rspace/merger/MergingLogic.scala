@@ -9,10 +9,26 @@ import scala.annotation.tailrec
 
 object MergingLogic {
 
+  /**
+    * Map used to represent mergeable (numeric) channels with intermediate values
+    */
+  type NumberChannelsEndVal = Map[Blake2b256Hash, Long]
+
+  type NumberChannelsDiff = Map[Blake2b256Hash, Long]
+
   /** If target depends on source. */
-  def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
+  def depends(target: EventLogIndex, source: EventLogIndex): Boolean = {
+    val producesSource = producesCreatedAndNotDestroyed(source) diff source.producesMergeable
+    val producesTarget = target.producesConsumed diff source.producesMergeable
+
+    val consumesSource = consumesCreatedAndNotDestroyed(source)
+    val consumesTarget = target.consumesProduced
+
+    val producesDepends = producesSource intersect producesTarget
+    val consumesDepends = consumesSource intersect consumesTarget
+
+    producesDepends.nonEmpty || consumesDepends.nonEmpty
+  }
 
   /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -28,12 +44,17 @@ object MergingLogic {
       *
       * Produce is considered destroyed in COMM if it is not persistent and been consumed without peek.
       * Consume is considered destroyed in COMM when it is not persistent.
+      *
+      * If produces/consumes are mergeable in both indices, they are not considered as conflicts.
       */
     val racesForSameIOEvent = {
-      val consumeRaces =
-        (a.consumesProduced intersect b.consumesProduced).toIterator.filterNot(_.persistent)
-      val produceRaces =
-        (a.producesConsumed intersect b.producesConsumed).toIterator.filterNot(_.persistent)
+      val sharedConsumes    = a.consumesProduced intersect b.consumesProduced
+      val mergeableConsumes = a.consumesMergeable intersect b.consumesMergeable
+      val consumeRaces      = (sharedConsumes diff mergeableConsumes).toIterator.filterNot(_.persistent)
+
+      val sharedProduces    = a.producesConsumed intersect b.producesConsumed
+      val mergeableProduces = a.producesMergeable intersect b.producesMergeable
+      val produceRaces      = (sharedProduces diff mergeableProduces).toIterator.filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }

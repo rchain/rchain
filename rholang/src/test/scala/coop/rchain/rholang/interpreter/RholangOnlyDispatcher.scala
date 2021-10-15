@@ -2,45 +2,45 @@ package coop.rchain.rholang.interpreter
 
 import cats.Parallel
 import cats.effect.Sync
-import cats.implicits._
-import cats.mtl.FunctorTell
+import cats.effect.concurrent.Ref
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.TaggedContinuation.TaggedCont.{Empty, ParBody, ScalaBodyRef}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.InterpreterError
 
 object RholangOnlyDispatcher {
 
-  def create[M[_], F[_]](tuplespace: RhoTuplespace[M], urnMap: Map[String, Par] = Map.empty)(
-      implicit
-      cost: _cost[M],
-      parallel: Parallel[M],
-      s: Sync[M]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[M]) = {
+  def apply[F[_]: Sync: Parallel: _cost](
+      tuplespace: RhoTuplespace[F],
+      urnMap: Map[String, Par],
+      mergeChs: Ref[F, Set[Par]]
+  ): (Dispatch[F, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[F]) = {
 
-    lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
+    lazy val dispatcher: Dispatch[F, ListParWithRandom, TaggedContinuation] =
       new RholangOnlyDispatcher
 
-    implicit lazy val reducer: DebruijnInterpreter[M] =
-      new DebruijnInterpreter[M](
-        tuplespace,
-        dispatcher,
-        urnMap
-      )
+    implicit lazy val reducer: DebruijnInterpreter[F] =
+      new DebruijnInterpreter[F](tuplespace, dispatcher, urnMap, mergeChs)
 
     (dispatcher, reducer)
+  }
+
+  def apply[F[_]: Sync: Parallel: _cost](
+      tuplespace: RhoTuplespace[F],
+      urnMap: Map[String, Par] = Map.empty
+  ): (Dispatch[F, ListParWithRandom, TaggedContinuation], DebruijnInterpreter[F]) = {
+    val initMergeChannelsRef = Ref.unsafe[F, Set[Par]](Set.empty)
+
+    apply(tuplespace, urnMap, initMergeChannelsRef)
   }
 }
 
 class RholangOnlyDispatcher[M[_]](implicit s: Sync[M], reducer: Reduce[M])
     extends Dispatch[M, ListParWithRandom, TaggedContinuation] {
 
-  def dispatch(
-      continuation: TaggedContinuation,
-      dataList: Seq[ListParWithRandom]
-  ): M[Unit] =
+  def dispatch(continuation: TaggedContinuation, dataList: Seq[ListParWithRandom]): M[Unit] =
     for {
       res <- continuation.taggedCont match {
               case ParBody(parWithRand) =>

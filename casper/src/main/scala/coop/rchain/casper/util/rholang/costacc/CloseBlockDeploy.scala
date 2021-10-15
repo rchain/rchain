@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
+import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
 import coop.rchain.rholang.interpreter.RhoType._
@@ -44,7 +44,7 @@ final case class CloseBlockDeploy(initialRand: Blake2b512Random) extends SystemD
 
   protected override def processResult(
       value: (Boolean, Either[String, Unit])
-  ): Either[SystemDeployFailure, Unit] = value match {
+  ): Either[SystemDeployUserError, Unit] = value match {
     case (true, _)               => Right(())
     case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))
     case _                       => Left(SystemDeployUserError("<no cause>"))
