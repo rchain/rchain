@@ -48,7 +48,7 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot: F[CasperSnapshot[F]]
+  def getSnapshot(targetBlockOpt: Option[BlockMessage] = None): F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -93,8 +93,6 @@ object MultiParentCasper extends MultiParentCasperInstances {
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
     lastFinalizedBlock: BlockHash,
-    lca: BlockHash,
-    tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
     invalidBlocks: Map[Validator, BlockHash],

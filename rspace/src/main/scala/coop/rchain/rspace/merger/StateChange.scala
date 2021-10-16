@@ -1,157 +1,160 @@
 package coop.rchain.rspace.merger
 
 import cats.Monoid
+import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
 import coop.rchain.rspace.history.HistoryReaderBinary
-import coop.rchain.rspace.merger.MergingLogic.{consumesAffected, producesAffected}
-import coop.rchain.rspace.serializers.ScodecSerialize.{JoinsB, WaitingContinuationB}
-import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.shared.Serialize
 import coop.rchain.shared.syntax._
 import fs2.Stream
 import scodec.bits.ByteVector
 
-/** Waiting continuation (WK) with channels of consume that put this WK. This class is used to compute joins changes. */
-final case class ConsumeChange(body: ByteVector, channels: Seq[Blake2b256Hash])
-
-/** We need this index to compute joins changes base on consume changes. This is because joins store not hashes of
-  * channels but channels themselves. So when we have channels from consumes (which are hashes of channels) -
-  * we are not able to reconstruct full join ByteVector */
-final case class JoinIndex(body: ByteVector, channels: Seq[Blake2b256Hash])
-
+/**
+  * Datum changes are referenced by channel, continuation changes are references by consume.
+  * In addition, map from consume channels to binary representation of a join in trie have to be maintained.
+  * This is because only hashes of channels are available in log event, and computing a join binary to be
+  * inserted or removed on merge requires channels before hashing.
+  */
 final case class StateChange(
-    datumChanges: Map[Blake2b256Hash, ChannelChange[ByteVector]],
-    kontChanges: Map[Blake2b256Hash, ChannelChange[ConsumeChange]],
-    joinsIndex: Set[JoinIndex]
+    datumsChanges: Map[Blake2b256Hash, ChannelChange[ByteVector]],
+    kontChanges: Map[Seq[Blake2b256Hash], ChannelChange[ByteVector]],
+    consumeChannelsToJoinSerializedMap: Map[Seq[Blake2b256Hash], ByteVector]
 )
 
 object StateChange {
 
-  private def computeValueChangeOnChannel[F[_]: Sync, T](
-      valuePointer: Blake2b256Hash,
-      getStartValue: Blake2b256Hash => F[Seq[T]],
-      getEndValue: Blake2b256Hash => F[Seq[T]]
-  ): F[ChannelChange[T]] =
+  private def computeValueChange[F[_]: Concurrent](
+      historyPointer: Blake2b256Hash,
+      startValue: Blake2b256Hash => F[Seq[ByteVector]],
+      endValue: Blake2b256Hash => F[Seq[ByteVector]]
+  ): F[ChannelChange[ByteVector]] =
     for {
-      startValue <- getStartValue(valuePointer)
-      endValue   <- getEndValue(valuePointer)
+      startValue <- startValue(historyPointer).map(_.toVector)
+      endValue   <- endValue(historyPointer).map(_.toVector)
       added      = endValue diff startValue
       deleted    = startValue diff endValue
-    } yield ChannelChange(added.toVector, deleted.toVector)
-
-  private def recordValueChange[F[_]: Concurrent, T](
-      valuePointer: Blake2b256Hash,
-      startValueReader: Blake2b256Hash => F[Seq[T]],
-      endValueReader: Blake2b256Hash => F[Seq[T]],
-      accumulator: Ref[F, Map[Blake2b256Hash, ChannelChange[T]]]
-  ): F[Unit] =
-    for {
-      r <- computeValueChangeOnChannel[F, T](
-            valuePointer,
-            h => startValueReader(h),
-            h => endValueReader(h)
-          )
-      _ <- accumulator.update(s => {
-            val curVal = s.getOrElse(valuePointer, ChannelChange.empty)
-            val newVal = curVal.copy(
-              added = curVal.added ++ r.added,
-              removed = curVal.removed ++ r.removed
-            )
-            s.updated(valuePointer, newVal)
-          })
-    } yield ()
+    } yield ChannelChange(added, deleted)
 
   def apply[F[_]: Concurrent, C, P, A, K](
       preStateReader: HistoryReaderBinary[F, C, P, A, K],
       postStateReader: HistoryReaderBinary[F, C, P, A, K],
       eventLogIndex: EventLogIndex,
-      channelsStore: ChannelStore[F, C],
       serializeC: Serialize[C]
   ): F[StateChange] =
     for {
-      // accumulators for data required to create history actions
-      // changes to produces, to consumes and cumulative list of joins
-      producesDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[ByteVector]]](Map.empty)
-      consumesDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[ConsumeChange]]](Map.empty)
-      joinsIndexRef   <- Ref.of[F, Set[JoinIndex]](Set.empty)
+      datumsDiffRef <- Ref.of[F, Map[Blake2b256Hash, ChannelChange[ByteVector]]](Map.empty)
+      kontsDiffRef  <- Ref.of[F, Map[Seq[Blake2b256Hash], ChannelChange[ByteVector]]](Map.empty)
 
-      // TODO remove when channels map is removed
-      producePointers <- channelsStore.getProduceMappings(producesAffected(eventLogIndex).toSeq)
-      consumePointers <- channelsStore.getConsumeMappings(consumesAffected(eventLogIndex).toSeq)
-      joinsPointers <- channelsStore.getJoinMapping(
-                        (eventLogIndex.consumesLinearAndPeeks ++ eventLogIndex.consumesPersistent ++ eventLogIndex.consumesProduced).toSeq
-                          .flatMap(_.channelsHashes)
-                      )
+      // Since event log only contains hashes of channels, so to know which join stored corresponds to channels,
+      // this index have to be maintained
+      joinsMapRef <- Ref.of[F, Map[Seq[Blake2b256Hash], ByteVector]](Map.empty)
 
-      // `distinct` required here to not compute change for the same hash several times
-      // as channel can be mentioned several times in event log
-      affectedDatumsValuePointers = producePointers.map(_.historyHash).distinct
-      affectedKontsValuePointers  = consumePointers.map(_.historyHash).distinct
-      involvedJoinsValuePointers  = joinsPointers.distinct
-
-      datumsChangesComputes = affectedDatumsValuePointers.map(
-        datumsPointer =>
-          Stream.eval(
-            recordValueChange(
-              datumsPointer,
-              pointer => preStateReader.getData(pointer).map(_.map(_.raw)),
-              pointer => postStateReader.getData(pointer).map(_.map(_.raw)),
-              producesDiffRef
-            )
-          )
-      )
-      kontsChangesComputes = {
-        val getKontChangeWithChannels = (k: WaitingContinuationB[P, K]) =>
-          ConsumeChange(k.raw, k.decoded.source.channelsHashes)
-        affectedKontsValuePointers.map(
-          kontsPointer =>
-            Stream.eval(
-              recordValueChange(
-                kontsPointer,
-                v => preStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
-                v => postStateReader.getContinuations(v).map(_.map(getKontChangeWithChannels)),
-                consumesDiffRef
+      computeProduceChanges = producesAffected(eventLogIndex)
+        .map { _.channelsHash }
+        .map { produceChannel =>
+          val historyPointer = produceChannel
+          computeValueChange(
+            historyPointer,
+            preStateReader.getData(_).map(_.map(_.raw)),
+            postStateReader.getData(_).map(_.map(_.raw))
+          ).flatMap { change =>
+            datumsDiffRef.update(s => {
+              val curVal = s.getOrElse(historyPointer, ChannelChange.empty)
+              val newVal = curVal.copy(
+                added = curVal.added ++ change.added,
+                removed = curVal.removed ++ change.removed
               )
-            )
-        )
+              s.updated(historyPointer, newVal)
+            })
+          }
+        }
+      channelsOfConsumesAffected = consumesAffected(eventLogIndex).map(_.channelsHashes)
+      computeConsumeChanges = channelsOfConsumesAffected
+        .map { consumeChannels =>
+          val historyPointer = StableHashProvider.hash(consumeChannels)
+          computeValueChange(
+            historyPointer,
+            preStateReader.getContinuations(_).map(_.map(_.raw)),
+            postStateReader.getContinuations(_).map(_.map(_.raw))
+          ).flatMap { change =>
+            kontsDiffRef.update(s => {
+              val curVal = s.getOrElse(consumeChannels, ChannelChange.empty)
+              val newVal = curVal.copy(
+                added = curVal.added ++ change.added,
+                removed = curVal.removed ++ change.removed
+              )
+              s.updated(consumeChannels, newVal)
+            })
+          }
+        }
+      // Find match between channels and serialized join.
+      // This step is required because event log contains only hashes of channels, not channels themselves,
+      // and to get join value actual channels are required.
+      computeJoinsMap = {
+        channelsOfConsumesAffected.map { consumeChannels =>
+          // the join of interest have to be available for each channel in consume,
+          // so its enough to process only one of channels
+          val historyPointer = consumeChannels.head
+          for {
+            pre  <- preStateReader.getJoins(historyPointer).map(_.toVector)
+            post <- postStateReader.getJoins(historyPointer).map(_.toVector)
+            // find join which match channels
+            errMsg = "Tuple space inconsistency found: channel of consume does not contain " +
+              "join record corresponding to the consume channels."
+            rawJoin <- (pre ++ post)
+                        .find { j =>
+                          val joinsChannels =
+                            j.decoded.toList.map(StableHashProvider.hash(_)(serializeC))
+                          // sorting is required because channels of a consume in event log and channels of a join in
+                          // history might not be ordered the same way
+                          consumeChannels.sorted == joinsChannels.sorted
+                        }
+                        .map(_.raw)
+                        .liftTo(new Exception(errMsg))
+            _ <- joinsMapRef.update(_.updated(consumeChannels, rawJoin))
+          } yield ()
+        }
       }
-      joinsIndexComputes = {
-        implicit val sc: Serialize[C] = serializeC
-        val getJoinMappingIndex = (j: JoinsB[C]) =>
-          JoinIndex(j.raw, j.decoded.toList.map(channel => StableHashProvider.hash(channel)))
-        involvedJoinsValuePointers.map(
-          joinsPointer =>
-            Stream.eval(for {
-              pre  <- preStateReader.getJoins(joinsPointer).map(_.map(getJoinMappingIndex))
-              post <- postStateReader.getJoins(joinsPointer).map(_.map(getJoinMappingIndex))
-              _    <- joinsIndexRef.update(_ ++ pre ++ post)
-            } yield ())
-        )
-      }
+
       // compute all changes
+      allChanges = (computeProduceChanges ++ computeConsumeChanges ++ computeJoinsMap)
+        .map(Stream.eval)
       _ <- fs2.Stream
-            .emits(datumsChangesComputes ++ kontsChangesComputes ++ joinsIndexComputes)
+            .fromIterator(allChanges.iterator)
             .parJoinProcBounded
             .compile
             .drain
-      produceChanges <- producesDiffRef.get
-      consumeChanges <- consumesDiffRef.get
-      joinsTouched   <- joinsIndexRef.get
-    } yield StateChange(produceChanges, consumeChanges, joinsTouched)
+      produceChanges <- datumsDiffRef.get
+      _ <- new Exception("State change compute logic error: empty channel change for produce.")
+            .raiseError[F, StateChange]
+            .whenA(
+              produceChanges
+                .map { case (_, ChannelChange(add, del)) => add.isEmpty && del.isEmpty }
+                .exists(_ == true)
+            )
+      consumeChanges <- kontsDiffRef.get
+      _ <- new Exception("State change compute logic error: empty channel change for consume.")
+            .raiseError[F, StateChange]
+            .whenA(
+              consumeChanges
+                .map { case (_, ChannelChange(add, del)) => add.isEmpty && del.isEmpty }
+                .exists(_ == true)
+            )
+      joinsMap <- joinsMapRef.get
+    } yield StateChange(produceChanges, consumeChanges, joinsMap)
 
-  def empty: StateChange = StateChange(Map.empty, Map.empty, Set.empty)
+  def empty: StateChange = StateChange(Map.empty, Map.empty, Map.empty)
   def combine(x: StateChange, y: StateChange): StateChange = {
     def sumMaps[A, B: Monoid](map1: Map[A, B], map2: Map[A, B]): Map[A, B] = map1 ++ map2.map {
       case (k, v) => k -> (v combine map1.getOrElse(k, Monoid[B].empty))
     }
-    val newDC = sumMaps(x.datumChanges, y.datumChanges)
+    val newDC = sumMaps(x.datumsChanges, y.datumsChanges)
     val newKC = sumMaps(x.kontChanges, y.kontChanges)
-    val newJI = x.joinsIndex ++ y.joinsIndex
-    StateChange(newDC, newKC, newJI)
+    val newJ  = x.consumeChannelsToJoinSerializedMap ++ y.consumeChannelsToJoinSerializedMap
+    StateChange(newDC, newKC, newJ)
   }
 
   implicit def monoid: Monoid[StateChange] =

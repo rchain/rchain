@@ -23,6 +23,7 @@ package object casper {
       with AllSyntaxComm
       with AllSyntaxBlockStorage
       with RhoRuntimeSyntax
+      with BlockDagRepresentationSyntax
 }
 
 // Casper syntax

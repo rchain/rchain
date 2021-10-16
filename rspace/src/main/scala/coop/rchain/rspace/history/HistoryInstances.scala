@@ -274,6 +274,9 @@ object HistoryInstances {
               case EmptyPointer      => Applicative[F].pure(None.asRight) // removed path
             }
 
+          // path has empty trie, last node deleted
+          case (_, EmptyTrie) => Applicative[F].pure(None.asRight)
+
           case _ => Sync[F].raiseError(MalformedTrieError)
         }
 

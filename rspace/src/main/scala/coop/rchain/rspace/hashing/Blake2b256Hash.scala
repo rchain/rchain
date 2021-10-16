@@ -102,9 +102,5 @@ object Blake2b256Hash {
     fixedSizeBytes(length.toLong, bytes).as[Blake2b256Hash]
 
   implicit val ordering: Ordering[Blake2b256Hash] =
-    (x: Blake2b256Hash, y: Blake2b256Hash) => {
-      x.bytes.toHex.compare(y.bytes.toHex)
-      // TODO: preparation for hard fork refactoring (direct use of Serialize[C])
-      // x.bytes.compare(y.bytes)
-    }
+    (x: Blake2b256Hash, y: Blake2b256Hash) => x.bytes.compare(y.bytes)
 }

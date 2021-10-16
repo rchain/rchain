@@ -27,10 +27,10 @@ object DagMerger {
       rejectionCostF: DeployChainIndex => Long
   ): F[(Blake2b256Hash, Seq[ByteString])] =
     for {
-      // all not finalized blocks (conflict set)
-      nonFinalisedBlocks <- dag.nonFinalizedBlocks
       // blocks that see last finalized state
       actualBlocks <- dag.descendants(lfb)
+      // all not finalized blocks (conflict set)
+      nonFinalisedBlocks = dag.nonFinalizedSet
       // blocks that does not see last finalized state
       lateBlocks = nonFinalisedBlocks diff actualBlocks
 
@@ -46,9 +46,7 @@ object DagMerger {
 
       computeTrieActions = (baseState: Blake2b256Hash, changes: StateChange) => {
         val baseReader = historyRepository.getHistoryReader(baseState).readerBinary
-        val joinsPointerForChannel = (channel: Blake2b256Hash) =>
-          historyRepository.getJoinMapping(Seq(channel)).map(_.head)
-        StateChangeMerger.computeTrieActions(changes, baseReader, joinsPointerForChannel)
+        StateChangeMerger.computeTrieActions(changes, baseReader)
       }
 
       applyTrieActions = (baseState: Blake2b256Hash, actions: Seq[HotStoreTrieAction]) =>

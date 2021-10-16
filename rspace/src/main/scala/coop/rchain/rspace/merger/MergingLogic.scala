@@ -1,7 +1,12 @@
 package coop.rchain.rspace.merger
 
+import cats.Parallel
+import cats.effect.{Concurrent, Sync}
+import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.shared.Stopwatch
+import fs2.Stream
 
 import scala.Function.tupled
 import scala.annotation.tailrec
@@ -9,9 +14,14 @@ import scala.annotation.tailrec
 object MergingLogic {
 
   /** If target depends on source. */
-  def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
+  def depends(target: EventLogIndex, source: EventLogIndex): Boolean = {
+    val dependentProduces = (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed)
+    val dependentConsumes = (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced)
+
+    // this should not be the case in real life, but to make function more robust
+    (dependentProduces diff (producesCreatedAndNotDestroyed(target))).nonEmpty ||
+    (dependentConsumes diff (consumesCreatedAndNotDestroyed(target))).nonEmpty
+  }
 
   /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -88,7 +98,7 @@ object MergingLogic {
   /** Produces that are affected by event log - locally created + external destroyed. */
   def producesAffected(e: EventLogIndex): Set[Produce] = {
     def externalProducesDestroyed(e: EventLogIndex): Set[Produce] =
-      e.producesConsumed diff producesCreated(e)
+      (e.producesConsumed diff producesCreated(e)).filterNot(_.persistent)
 
     producesCreatedAndNotDestroyed(e) ++ externalProducesDestroyed(e)
   }
@@ -96,7 +106,7 @@ object MergingLogic {
   /** Consumes that are affected by event log - locally created + external destroyed. */
   def consumesAffected(e: EventLogIndex): Set[Consume] = {
     def externalConsumesDestroyed(e: EventLogIndex): Set[Consume] =
-      e.consumesProduced diff consumesCreated(e)
+      (e.consumesProduced diff consumesCreated(e)).filterNot(_.persistent)
 
     consumesCreatedAndNotDestroyed(e) ++ externalConsumesDestroyed(e)
   }
@@ -146,24 +156,62 @@ object MergingLogic {
     gatherRelatedSets(computeRelationMap(items, relation))
 
   /** Given conflicts map, output possible rejection options. */
-  def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
-    @tailrec
-    def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
-      // stop if all new dependencies are already in set
-      val next = if (reject) (acc ++ newSet) else acc
-      val stop = if (reject) next == acc else false
-      if (stop)
-        acc
-      else {
-        val n = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
-        process(n, next, !reject)
-      }
+  def computeRejectionOptions[A](
+      conflictMap: Map[A, Set[A]]
+  ): Set[Set[A]] = {
+    // Set of rejection paths with corresponding remaining conflicts map
+    final case class RejectionOption(rejectedSoFar: Set[A], remainingConflictsMap: Map[A, Set[A]])
+
+    def gatherRejOptions(conflictsMap: Map[A, Set[A]]): Set[RejectionOption] =
+      conflictsMap.iterator.map {
+        case (_, toReject) =>
+          // reject conflicting with keep decision
+          val remainingConflictsMap =
+            conflictsMap
+              .filterKeys(!toReject.contains(_)) // remove rejected key
+              .mapValues(_ -- toReject)          // remove rejected amongst values
+              .filter { case (_, v) => v.nonEmpty } // remove keys that do not conflict with anything now
+          RejectionOption(toReject, remainingConflictsMap)
+      }.toSet
+
+    val conflictsOnlyMap = conflictMap.filter {
+      // only keys that have conflicts associated should be examined
+      case (_, conflicts) => conflicts.nonEmpty
     }
-    // each rejection option is defined by decision not to reject a key in rejection map
-    conflictMap
-    // only keys that have conflicts associated should be examined
-      .filter { case (_, conflicts) => conflicts.nonEmpty }
-      .keySet
-      .map(k => process(conflictMap(k), Set.empty, reject = true))
+    //     start with rejecting nothing and full conflicts map
+    val start = RejectionOption(Set.empty[A], conflictsOnlyMap)
+    Stream
+      .unfoldLoop(Set(start)) { rejections =>
+        val (out, next) = rejections
+          .flatMap {
+            case RejectionOption(rejectedAcc, remainingConflictsMap) =>
+              gatherRejOptions(remainingConflictsMap).map { v: RejectionOption =>
+                v.copy(rejectedSoFar = rejectedAcc ++ v.rejectedSoFar)
+              }
+          }
+          // emit rejection option that do not have more conflicts, pass others further into the loop
+          .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
+
+        (out.map(_.rejectedSoFar).toList, if (next.nonEmpty) Some(next) else None)
+      }
+      .flatMap(Stream.emits)
+      .toList
+      .toSet
+
+//    @tailrec
+//    def go(doneAcc: Set[RejectionOption], toDoAcc: Set[RejectionOption]): Set[Set[A]] = {
+//      val (done, next) = toDoAcc
+//        .flatMap {
+//          case RejectionOption(rejectedAcc, remainingConflictsMap) =>
+//            gatherRejOptions(remainingConflictsMap).map { v: RejectionOption =>
+//              v.copy(rejectedSoFar = rejectedAcc ++ v.rejectedSoFar)
+//            }
+//        }
+//        // emit rejection option that do not have more conflicts, pass others further into the loop
+//        .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
+//      if (next.isEmpty) done.map(_.rejectedSoFar)
+//      else go(doneAcc ++ done, next)
+//    }
+//    go(Set.empty[RejectionOption], gatherRejOptions(conflictsOnlyMap))
   }
 }

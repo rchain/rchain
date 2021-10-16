@@ -20,8 +20,10 @@ import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
+import fs2.Stream
 
 import scala.collection.immutable.SortedMap
 
@@ -62,6 +64,89 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
 
+    /**
+      * Truncate full DAG according to some view, defined by latest messages.
+      */
+    override def truncate(
+        targetLatestMessages: Map[Validator, BlockHash],
+        findLfb: Map[Validator, BlockHash] => F[BlockHash]
+    ): F[BlockDagRepresentation[F]] = {
+
+      val lmAll       = this.latestMessagesMap.values.toSet
+      val seenSenders = targetLatestMessages.keySet
+
+      for {
+        lfb         <- findLfb(targetLatestMessages)
+        lmFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
+        lmSeen      <- targetLatestMessages.values.toList.traverse(this.lookupUnsafe).map(_.toSet)
+
+        // for all known latest messages, collect all self justifications until first finalized message found
+        toAdjust = {
+          val seenSeqNums = lmSeen.map(m => (m.sender, m.seqNum)).toMap
+          val finSeqNums  = lmFinalized.map(m => (m.sender, m.seqNum)).toMap
+          val seen        = (m: BlockMetadata) => seenSeqNums.get(m.sender).exists(_ >= m.seqNum)
+          val finalized   = (m: BlockMetadata) => finSeqNums.get(m.sender).exists(_ >= m.seqNum)
+
+          Stream
+            .unfoldLoopEval(lmAll.toVector) { messages =>
+              for {
+                metas <- messages.traverse(this.lookupUnsafe).map(_.filterNot(finalized))
+                out   = metas.map(m => (m, !seen(m)))
+
+                parents = metas.flatMap(_.parents).distinct
+                next    = parents.nonEmpty.guard[Option].as(parents)
+              } yield (Stream.emits(out.toList), next)
+            }
+            .flatten
+            .fold((Map.empty[Long, Set[BlockHash]], Map.empty[Long, Set[BlockHash]], childMap)) {
+              case ((removeAcc, unfinalizeAcc, childMapAcc), (m, shouldRemove)) =>
+                val height = m.blockNum
+                if (shouldRemove)
+                  (
+                    removeAcc + (height -> (removeAcc.getOrElse(height, Set()) + m.blockHash)),
+                    unfinalizeAcc,
+                    // Remove from children map key for message, adjust keys for parents.
+                    // As some parent might be already removed by previous iterations, use filter.
+                    m.parents.filter(childMapAcc.contains).foldLeft(childMapAcc - m.blockHash) {
+                      case (a, p) => a + (p -> (a(p) - m.blockHash))
+                    }
+                  )
+                else
+                  (
+                    removeAcc,
+                    unfinalizeAcc + (height -> (unfinalizeAcc.getOrElse(height, Set()) + m.blockHash)),
+                    childMapAcc
+                  )
+            }
+            .compile
+            .lastOrError
+        }
+
+        r                                        <- toAdjust
+        (toRemove, toUnfinalize, newChildrenMap) = r
+        excessSet                                = toRemove.flatMap { case (_, hashes) => hashes }.toSet
+        nonFinalizedSet                          = toUnfinalize.flatMap { case (_, hashes) => hashes }.toSet
+
+        // new truncated values
+        truncatedDagSet     = this.dagSet diff excessSet
+        truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
+        truncatedHeightMap = toRemove.foldLeft(this.heightMap) {
+          case (acc, (height, hashes)) => acc.updated(height, acc(height) diff hashes)
+        }
+        truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
+
+        view = this.copy(
+          lastFinalizedBlockHash = lfb,
+          finalizedBlocksSet = truncatedFinalizesSet,
+          dagSet = truncatedDagSet,
+          childMap = newChildrenMap,
+          latestMessagesMap = targetLatestMessages,
+          heightMap = truncatedHeightMap,
+          invalidBlocksSet = truncatedInvalidSet
+        )
+      } yield view
+    }
+
     override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
 
     // latestBlockNumber, topoSort and lookupByDeployId are only used in BlockAPI.
@@ -98,6 +183,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       deployIndex.get(deployId)
+
+    override def nonFinalizedSet: Set[BlockHash] =
+      dagSet diff finalizedBlocksSet
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
@@ -256,9 +344,11 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       for {
         dag    <- representation
         errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _      <- dag.contains(directlyFinalizedHash).ifM(().pure, new Exception(errMsg).raiseError)
+        _ <- dag
+              .contains(directlyFinalizedHash)
+              .ifM(().pure, new Exception(errMsg).raiseError)
         // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(directlyFinalizedHash, dag.isFinalized(_).not)
+        indirectlyFinalized <- dag.ancestors(List(directlyFinalizedHash), dag.isFinalized(_).not)
         // invoke effects
         _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
         // persist finalization

@@ -534,6 +534,20 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(run)
 
+  val bench = new Subcommand("bench") {
+    descr("benchmark")
+    helpWidth(width)
+
+    val dataDir = opt[Path](
+      default = Some(Path.of("~/.rnode")),
+      name = "data-dir"
+    )
+    val validatorsNum = opt[Int](default = Some(5), name = "validators-num")
+    val usersNum      = opt[Int](default = Some(10), name = "users-num")
+    val maxTxPerBlock = opt[Int](default = Some(5), name = "max-block-tx")
+  }
+  addSubcommand(bench)
+
   val keygen = new Subcommand("keygen") {
     descr(
       "Generates a public/private key pair. Files created are: \n" +

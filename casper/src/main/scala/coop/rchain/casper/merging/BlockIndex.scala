@@ -2,7 +2,9 @@ package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.casper.protocol.ProcessedDeploy
+import coop.rchain.casper.merging.DeployIndex._
+import coop.rchain.casper.protocol.ProcessedSystemDeploy.Succeeded
+import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -22,19 +24,18 @@ object BlockIndex {
   val cache = TrieMap.empty[BlockHash, BlockIndex]
 
   def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
-      d: ProcessedDeploy,
+      events: List[Event],
       historyRepository: HistoryRepository[F, C, P, A, K],
       preStateHash: Blake2b256Hash
   ): F[EventLogIndex] = {
-    implicit val channelStore: HistoryRepository[F, C, P, A, K] = historyRepository
     val preStateReader =
       historyRepository.getHistoryReader(preStateHash)
     val produceExistsInPreState = (p: Produce) =>
-      preStateReader.getDataFromChannelHash(p.channelsHash).map(_.exists(_.source == p))
+      preStateReader.getData(p.channelsHash).map(_.exists(_.source == p))
     val produceTouchesPreStateJoin = (p: Produce) =>
-      preStateReader.getJoinsFromChannelHash(p.channelsHash).map(_.exists(_.size > 1))
+      preStateReader.getJoins(p.channelsHash).map(_.exists(_.size > 1))
     EventLogIndex.apply(
-      d.deployLog.map(EventConverter.toRspaceEvent),
+      events.map(EventConverter.toRspaceEvent),
       produceExistsInPreState,
       produceTouchesPreStateJoin
     )
@@ -42,28 +43,53 @@ object BlockIndex {
 
   def apply[F[_]: Concurrent, C, P, A, K](
       blockHash: BlockHash,
-      processedDeploys: List[ProcessedDeploy],
+      usrProcessedDeploys: List[ProcessedDeploy],
+      sysProcessedDeploys: List[ProcessedSystemDeploy],
       preStateHash: Blake2b256Hash,
       postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K]
   ): F[BlockIndex] =
     for {
-      deployIndices <- processedDeploys
-                        .filterNot(_.isFailed)
-                        .traverse { d =>
-                          DeployIndex(d, createEventLogIndex(_, historyRepository, preStateHash))
-                        }
+      usrDeployIndices <- usrProcessedDeploys.toVector
+                           .filterNot(_.isFailed)
+                           .traverse { d =>
+                             DeployIndex(
+                               d.deploy.sig,
+                               d.cost.cost,
+                               d.deployLog,
+                               createEventLogIndex(_, historyRepository, preStateHash)
+                             )
+                           }
+      sysDeploysData = sysProcessedDeploys.toVector
+        .collect {
+          case Succeeded(log, SlashSystemDeployData(_, _)) =>
+            (SYS_SLASH_DEPLOY_ID, SYS_SLASH_DEPLOY_COST, log)
+          case Succeeded(log, CloseBlockSystemDeployData) =>
+            (SYS_CLOSE_BLOCK_DEPLOY_ID, SYS_CLOSE_BLOCK_DEPLOY_COST, log)
+          case Succeeded(log, Empty) =>
+            (SYS_EMPTY_DEPLOY_ID, SYS_EMPTY_DEPLOY_COST, log)
+        }
+      sysDeployIndices <- sysDeploysData.traverse {
+                           case (sig, cost, log) =>
+                             DeployIndex(
+                               sig,
+                               cost,
+                               log,
+                               createEventLogIndex(_, historyRepository, preStateHash)
+                             )
+                         }
 
       /** Here deploys from a single block are examined. Atm deploys in block are executed sequentially,
         * so all conflicts are resolved according to order of sequential execution.
         * Therefore there won't be any conflicts between event logs. But there can be dependencies. */
       deployChains = computeRelatedSets[DeployIndex](
-        deployIndices.toSet,
+        (usrDeployIndices ++ sysDeployIndices).toSet,
         (l, r) => MergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
       index <- deployChains.toVector
                 .traverse(
                   DeployChainIndex(
+                    blockHash,
                     _,
                     preStateHash,
                     postStateHash,
