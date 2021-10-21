@@ -69,8 +69,6 @@ object TrieCompare {
       for {
         t1 <- hs.get(s1)
         t2 <- hs.get(s2)
-        _ = println(t1)
-        _ = println(t2)
         r = (t1, t2) match {
           case (EmptyTrie, EmptyTrie)          => List.empty[(TriePointer, TriePointer)].asLeft[(Trie, Trie)]
           case (l @ EmptyTrie, r @ Skip(_, _)) => (l, r).asRight[List[(TriePointer, TriePointer)]]
