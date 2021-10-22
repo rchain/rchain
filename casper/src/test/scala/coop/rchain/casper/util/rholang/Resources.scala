@@ -105,6 +105,8 @@ object Resources {
 
       override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
 
+      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
+
       override def topoSort(
           startBlockNumber: Long,
           maybeEndBlockNumber: Option[Long]
