@@ -37,31 +37,6 @@ class KeyValueBlockStore[F[_]: Sync](
     } yield block
   }
 
-  override def find(p: BlockHash => Boolean, n: Int): F[Seq[(BlockHash, BlockMessage)]] = {
-    import cats.instances.list._
-    for {
-      filteredIndex <- store.iterate { iterator =>
-                        iterator
-                          .map { case (k, v) => (ByteString.copyFrom(k), v) }
-                          .withFilter { case (key, _) => p(key) }
-                          // Decode value only for filtered elements
-                          .map { case (k, v) => (k, ByteVector(v)) }
-                          // Return only the first n results / stop iteration
-                          .take(n)
-                          .toList
-                      }
-
-      result <- filteredIndex.traverse {
-                 case (hash, bytes) =>
-                   // Convert bytes to proto object, it's fatal error if fails
-                   bytesToBlockProto(bytes.toArray) map
-                     BlockMessage.from flatMap
-                     (_.leftMap(errorBlock(hash)).liftTo[F]) map
-                     ((hash, _))
-               }
-    } yield result
-  }
-
   override def put(data: => (BlockHash, BlockMessage)): F[Unit] = Sync[F].defer {
     def toBuffer(b: BlockMessage) = blockProtoToBuffer(b.toProto)
     val (hash, block)             = data
