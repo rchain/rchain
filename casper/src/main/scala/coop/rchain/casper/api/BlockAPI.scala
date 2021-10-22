@@ -631,15 +631,20 @@ object BlockAPI {
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
-  private def findBlockFromStore[F[_]: Monad: BlockStore](
+  private def findBlockFromStore[F[_]: Monad: EngineCell: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
-    for {
-      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash), 1)
-    } yield findResult.headOption match {
-      case Some((_, block)) => Some(block)
-      case None             => none[BlockMessage]
-    }
+    EngineCell[F].read >>= (
+      _.withCasper[Option[BlockMessage]](
+        implicit casper =>
+          for {
+            dag          <- casper.blockDag
+            blockHashOpt <- dag.find(hash)
+            message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
+          } yield message,
+        none[BlockMessage].pure[F]
+      )
+    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
