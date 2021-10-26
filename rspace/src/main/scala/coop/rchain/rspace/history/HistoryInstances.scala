@@ -5,6 +5,7 @@ import cats.implicits._
 import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import scodec.bits.ByteVector
 
 import scala.Function.tupled
@@ -326,7 +327,7 @@ object HistoryInstances {
                   .emits(
                     partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
                   )
-                  .parJoin(1)
+                  .parJoinProcBounded
                   .compile
                   .toList
         modified         = roots.flatMap(tupled(extractSubtrieAtIndex))

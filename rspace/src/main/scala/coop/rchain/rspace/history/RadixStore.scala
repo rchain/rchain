@@ -14,7 +14,7 @@ class RadixStore[F[_]: Sync](store: KeyValueStore[F]) {
 
   def contains(keys: Seq[ByteVector]): F[Seq[Boolean]] = {
     val results = store.get(keys.map(_.toDirectByteBuffer), _ => ())
-    results.map(r => Seq(r.nonEmpty))
+    results.map(r => r.map(_.nonEmpty))
   }
 
   def put(kvPairs: Seq[(ByteVector, ByteVector)]): F[Unit] = {
