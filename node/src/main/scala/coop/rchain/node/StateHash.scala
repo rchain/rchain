@@ -6,6 +6,7 @@ import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax.syntaxBlockStore
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.crypto.codec.Base16
@@ -56,8 +57,19 @@ object StateHash {
                            runtimeManager
                          )
           _ <- replayResult match {
-                case Left(e)  => Task.raiseError(new Exception(s"Replay error ${e}."))
-                case Right(g) => log.info(s"replay succeeded ${g}")
+                case Left(e) => Task.raiseError(new Exception(s"Replay error ${e}."))
+                case Right(g) =>
+                  if (g == b.body.state.postStateHash)
+                    log.info("replay good!!")
+                  else
+                    Task.raiseError(
+                      new Exception(
+                        s"Replay block ${PrettyPrinter.buildStringNoLimit(b.blockHash)} with " +
+                          s"${PrettyPrinter.buildStringNoLimit(b.body.state.postStateHash)} " +
+                          s"got tuple space mismatch error with error hash ${PrettyPrinter
+                            .buildStringNoLimit(g)}"
+                      )
+                    )
               }
         } yield ()
       }
