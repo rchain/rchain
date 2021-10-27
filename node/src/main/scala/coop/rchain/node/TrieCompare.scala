@@ -106,7 +106,7 @@ object TrieCompare {
     }
     def is_(t: TriePointer) = t match {
       case EmptyPointer => true
-      case _ => false
+      case _            => false
     }
     (for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir, false)
@@ -125,7 +125,7 @@ object TrieCompare {
                 val empty = ns.filter(
                   a => is_(a._1) || is_(a._2)
                 )
-                val nonEmpty  = ns.filterNot(
+                val nonEmpty = ns.filterNot(
                   a => is_(a._1) || is_(a._2)
                 )
                 println(nonEmpty)
