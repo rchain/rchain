@@ -1,7 +1,7 @@
-package coop.rchain.crypto.codec
-import javax.xml.bind.DatatypeConverter
+package coop.rchain.shared
 
 import scala.util.Try
+import javax.xml.bind.DatatypeConverter
 
 object Base16 {
   def encode(input: Array[Byte]): String = bytes2hex(input, None)

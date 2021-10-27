@@ -6,9 +6,8 @@ import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedDeployProto}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Base16, Time}
 
 object ConstructDeploy {
 

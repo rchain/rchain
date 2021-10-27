@@ -7,7 +7,6 @@ import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.Logger
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics.Span
@@ -18,6 +17,7 @@ import coop.rchain.rholang.interpreter.registry.Registry
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.{ContResult, Result}
+import coop.rchain.shared.Base16
 
 import scala.util.Try
 

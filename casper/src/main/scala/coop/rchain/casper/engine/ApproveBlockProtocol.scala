@@ -12,11 +12,10 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 
 import java.nio.file.Path
 import scala.concurrent.duration._

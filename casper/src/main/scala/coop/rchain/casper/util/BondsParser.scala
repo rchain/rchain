@@ -3,9 +3,8 @@ package coop.rchain.casper.util
 import cats.effect.{Blocker, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import fs2.{io, text, Pipe, Stream}
 
 import java.nio.file.Path

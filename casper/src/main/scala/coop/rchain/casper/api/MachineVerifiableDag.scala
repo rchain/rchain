@@ -3,9 +3,11 @@ package coop.rchain.casper.api
 import coop.rchain.casper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.BlockHash.BlockHash
-import cats._, cats.data._, cats.implicits._
+import cats._
+import cats.data._
+import cats.implicits._
+import coop.rchain.shared.Base16
 
 final case class VerifiableEdge(from: String, to: String)
 

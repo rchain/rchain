@@ -2,9 +2,9 @@ package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
+import coop.rchain.shared.Base16
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf

@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
@@ -17,7 +16,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   GPrivateBody,
   GSysAuthTokenBody
 }
-import coop.rchain.shared.Printer
+import coop.rchain.shared.{Base16, Printer}
 import monix.eval.Coeval
 
 object PrettyPrinter {

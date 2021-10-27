@@ -2,7 +2,6 @@ package coop.rchain.rholang.interpreter
 
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random, Keccak256, Sha256}
 import coop.rchain.crypto.signatures.{Ed25519, Secp256k1}
 import coop.rchain.metrics
@@ -18,7 +17,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.FixedChannels
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.PathOps._
-import coop.rchain.shared.{Log, Serialize}
+import coop.rchain.shared.{Base16, Log, Serialize}
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

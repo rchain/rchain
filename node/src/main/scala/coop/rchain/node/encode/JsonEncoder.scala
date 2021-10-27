@@ -11,7 +11,7 @@ import coop.rchain.models.Var.{VarInstance, WildcardMsg}
 import coop.rchain.models._
 import io.circe.parser._
 import cats.syntax.all._
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 
 import scala.collection.immutable.BitSet
 import scodec.{Attempt, Err, Codec => SCodec}

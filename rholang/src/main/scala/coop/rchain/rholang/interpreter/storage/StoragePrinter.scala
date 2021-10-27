@@ -4,7 +4,6 @@ import cats.FlatMap
 import cats.effect.Concurrent
 import cats.implicits._
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models._
@@ -15,6 +14,7 @@ import coop.rchain.rholang.syntax._
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime}
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
 import coop.rchain.rspace.trace.{Consume, Produce}
+import coop.rchain.shared.Base16
 
 import scala.collection.SortedSet
 

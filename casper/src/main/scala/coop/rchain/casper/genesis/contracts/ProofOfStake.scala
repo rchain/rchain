@@ -1,10 +1,10 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangTemplate
 import coop.rchain.models.rholang.implicits._
+import coop.rchain.shared.Base16
 
 // TODO: Eliminate validators argument if unnecessary.
 // TODO: eliminate the default for epochLength. Now it is used in order to minimise the impact of adding this parameter

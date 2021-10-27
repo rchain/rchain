@@ -13,7 +13,6 @@ import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, R
 import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics
@@ -28,7 +27,7 @@ import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.scalatestcontrib.effectTest
-import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.{Base16, Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

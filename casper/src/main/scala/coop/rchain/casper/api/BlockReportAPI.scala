@@ -29,10 +29,9 @@ import coop.rchain.casper.protocol.{
   SystemDeployData,
   SystemDeployInfoWithEventData
 }
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap

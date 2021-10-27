@@ -2,7 +2,7 @@ package coop.rchain.models
 
 import cats.Show
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 
 trait ByteStringSyntax {
   implicit final def modelsSyntaxByteString(bs: ByteString): ByteStringOps =

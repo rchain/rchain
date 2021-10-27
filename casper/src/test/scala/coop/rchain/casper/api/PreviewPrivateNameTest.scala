@@ -2,9 +2,9 @@ package coop.rchain.casper.api
 
 import cats.Id
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
+import coop.rchain.shared.Base16
 import org.scalatest.{FlatSpec, Matchers}
 
 class PreviewPrivateNameTest extends FlatSpec with Matchers {

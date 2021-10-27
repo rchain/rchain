@@ -1,6 +1,6 @@
 package coop.rchain.node.configuration.commandline
 
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 import org.rogach.scallop.{ArgType, ValueConverter}
 
 object Base16Converter extends ValueConverter[Array[Byte]] {
