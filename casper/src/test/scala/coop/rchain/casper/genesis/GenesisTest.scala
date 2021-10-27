@@ -17,6 +17,7 @@ import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.PathOps.RichPath
 import coop.rchain.shared.{Base16, Time}
 import monix.eval.Task
@@ -173,7 +174,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+              case (v, i) => Bond(v.unsafeToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }
@@ -221,7 +222,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _       = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+              case (v, i) => Bond(v.unsafeToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }

@@ -30,6 +30,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 
 import java.nio.file.{Files, Path}
@@ -230,7 +231,7 @@ object TransactionBalances {
       runtimes <- RhoRuntime
                    .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
       (rhoRuntime, _)    = runtimes
-      targetBlockOpt     <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(targetBlockHash)))
+      targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeToByteString)
       targetBlock        = targetBlockOpt.get
       _                  <- log.info(s"Getting balance from $targetBlock")
       genesisVaultMap    <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
@@ -244,37 +245,20 @@ object TransactionBalances {
           transaction.transactionType match {
             case PreCharge(deployId) =>
               dagRepresantation
-                .lookupByDeployId(
-                  ByteString
-                    .copyFrom(Base16.unsafeDecode(deployId))
-                )
+                .lookupByDeployId(deployId.unsafeToByteString)
                 .map(_.get)
             case Refund(deployId) =>
               dagRepresantation
-                .lookupByDeployId(
-                  ByteString
-                    .copyFrom(Base16.unsafeDecode(deployId))
-                )
+                .lookupByDeployId(deployId.unsafeToByteString)
                 .map(_.get)
             case UserDeploy(deployId) =>
               dagRepresantation
-                .lookupByDeployId(
-                  ByteString
-                    .copyFrom(Base16.unsafeDecode(deployId))
-                )
+                .lookupByDeployId(deployId.unsafeToByteString)
                 .map(_.get)
             case CloseBlock(blockHash) =>
-              ByteString
-                .copyFrom(
-                  Base16.unsafeDecode(blockHash)
-                )
-                .pure[F]
+              blockHash.unsafeToByteString.pure[F]
             case SlashingDeploy(blockHash) =>
-              ByteString
-                .copyFrom(
-                  Base16.unsafeDecode(blockHash)
-                )
-                .pure[F]
+              blockHash.unsafeToByteString.pure[F]
           }
         allTransactions.toList.traverse { t =>
           for {

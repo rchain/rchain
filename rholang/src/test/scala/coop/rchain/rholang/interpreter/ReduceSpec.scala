@@ -15,6 +15,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -963,7 +964,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
+    val expectedResult: Par = Expr(GByteArray("deadbeef".unsafeToByteString))
     directResult should be(expectedResult)
   }
 
@@ -1439,15 +1440,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
-              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("beef")))
+              GByteArray("dead".unsafeToByteString),
+              GByteArray("beef".unsafeToByteString)
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(
-      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+      Seq(Expr(GByteArray("deadbeef".unsafeToByteString)))
     )
   }
 

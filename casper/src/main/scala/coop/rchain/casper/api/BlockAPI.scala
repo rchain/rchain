@@ -31,6 +31,7 @@ import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 
 import scala.collection.immutable
@@ -681,7 +682,7 @@ object BlockAPI {
         implicit casper =>
           for {
             dag            <- casper.blockDag
-            givenBlockHash = ProtoUtil.stringToByteString(hash)
+            givenBlockHash = hash.unsafeToByteString
             result         <- dag.isFinalized(givenBlockHash)
           } yield result.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)

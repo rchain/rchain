@@ -12,6 +12,7 @@ import coop.rchain.models._
 import io.circe.parser._
 import cats.syntax.all._
 import coop.rchain.shared.Base16
+import coop.rchain.shared.ByteStringOps.RichHexString
 
 import scala.collection.immutable.BitSet
 import scodec.{Attempt, Err, Codec => SCodec}
@@ -90,7 +91,7 @@ object JsonEncoder {
     Encoder.encodeUnit.contramap[Blake2b512Random](_ => ())
 
   implicit val decodeByteString: Decoder[ByteString] =
-    Decoder.decodeString.map[ByteString](s => ByteString.copyFrom(Base16.unsafeDecode(s)))
+    Decoder.decodeString.map[ByteString](s => s.unsafeToByteString)
   implicit val decodeBondInfo: Decoder[BondInfo] = deriveDecoder[BondInfo]
   implicit val decodeJustificationInfo: Decoder[JustificationInfo] =
     deriveDecoder[JustificationInfo]

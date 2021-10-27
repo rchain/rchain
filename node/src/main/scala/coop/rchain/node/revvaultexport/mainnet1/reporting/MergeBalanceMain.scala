@@ -12,6 +12,7 @@ import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuati
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -174,7 +175,7 @@ object MergeBalanceMain {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
       (rhoRuntime, _)            = runtimes
-      blockOpt                   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt                   <- blockStore.get(blockHash.unsafeToByteString)
       block                      = blockOpt.get
       postStateHash              = block.body.state.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {

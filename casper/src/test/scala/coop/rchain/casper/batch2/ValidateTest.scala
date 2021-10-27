@@ -26,6 +26,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Time}
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
@@ -160,7 +161,7 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
+        invalidKey   = "abcdef1234567890".unsafeToByteString
         block0       <- signedBlock(0).map(_.copy(sender = empty))
         block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
         block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))

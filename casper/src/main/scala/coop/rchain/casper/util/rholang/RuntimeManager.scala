@@ -19,6 +19,7 @@ import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.{RSpace, ReplayRSpace}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
@@ -203,9 +204,7 @@ object RuntimeManager {
     * the time. For some situations, we can just use the value directly for better performance.
     */
   val emptyStateHashFixed: StateHash =
-    ByteString.copyFrom(
-      Base16.unsafeDecode("6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250")
-    )
+    "6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250".unsafeToByteString
 
   def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
 

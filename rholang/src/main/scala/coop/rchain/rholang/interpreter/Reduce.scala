@@ -19,6 +19,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.util.unpackOptionWithPeek
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
@@ -847,7 +848,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             for {
               _ <- charge[M](hexToBytesCost(encoded))
               res <- Sync[M]
-                      .delay(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
+                      .delay(encoded.unsafeToByteString)
                       .handleErrorWith { ex =>
                         ReduceError(
                           s"Error: exception was thrown when decoding input string to hexadecimal: ${ex.getMessage}"

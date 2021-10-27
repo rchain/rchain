@@ -295,9 +295,6 @@ object ProtoUtil {
     )
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
-  def stringToByteString(string: String): ByteString =
-    ByteString.copyFrom(Base16.unsafeDecode(string))
-
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
     val hash: Array[Byte] = Blake2b256.hash(bytes)

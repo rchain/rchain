@@ -1,12 +1,12 @@
 package coop.rchain.casper.genesis.contracts
 
 import coop.rchain.casper.protocol.DeployData
-import coop.rchain.casper.util.ProtoUtil.stringToByteString
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Base16
+import coop.rchain.shared.ByteStringOps.RichHexString
 
 object StandardDeploys {
   private def toDeploy(
@@ -14,7 +14,7 @@ object StandardDeploys {
       privateKey: String,
       timestamp: Long
   ): Signed[DeployData] = {
-    val sk = PrivateKey(stringToByteString(privateKey))
+    val sk = PrivateKey(privateKey.unsafeToByteString)
     val deployData =
       DeployData(
         timestamp = timestamp,

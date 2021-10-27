@@ -13,6 +13,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 
 import java.nio.file.{Files, Path}
@@ -36,7 +37,7 @@ object StateBalances {
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockOpt          <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt          <- blockStore.get(blockHash.unsafeToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace

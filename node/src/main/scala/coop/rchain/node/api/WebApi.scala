@@ -19,6 +19,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBo
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.shared.ByteStringOps.RichHexString
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.state.StateManager
 import fs2.concurrent.Queue
@@ -77,7 +78,7 @@ object WebApi {
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
-          .previewPrivateNames[F](toByteString(r.deployer), r.timestamp, r.nameQty)
+          .previewPrivateNames[F](r.deployer.unsafeToByteString, r.timestamp, r.nameQty)
           .flatMap(_.liftToBlockApiErr)
           .map(_.map(toHex).toList)
       }
@@ -107,7 +108,7 @@ object WebApi {
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
-        .findDeploy[F](toByteString(deployId))
+        .findDeploy[F](deployId.unsafeToByteString)
         .flatMap(_.liftToBlockApiErr)
 
     def exploratoryDeploy(
@@ -248,8 +249,6 @@ object WebApi {
 
   private def toHex(bs: ByteString) = Base16.encode(bs.toByteArray)
 
-  private def toByteString(hexStr: String) = ByteString.copyFrom(Base16.unsafeDecode(hexStr))
-
   // RhoExpr from protobuf
 
   private def exprFromParProto(par: Par): Option[RhoExpr] = {
@@ -321,9 +320,9 @@ object WebApi {
   // RhoExpr to protobuf
 
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
-    case UnforgPrivate(name)  => GPrivateBody(GPrivate(toByteString(name)))
-    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(toByteString(name)))
-    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(toByteString(name)))
+    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeToByteString))
+    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeToByteString))
+    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeToByteString))
   }
 
   // Data request/response protobuf wrappers

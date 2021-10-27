@@ -24,6 +24,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 import coop.rchain.models.syntax._
+import coop.rchain.shared.ByteStringOps.RichHexString
 
 import scala.collection.immutable.HashMap
 
@@ -52,7 +53,7 @@ class BlockQueryResponseAPITest
 
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
-  val sender: ByteString = ProtoUtil.stringToByteString(senderString)
+  val sender: ByteString = senderString.unsafeToByteString
   val bondsValidator     = Bond(sender, 1)
 
   val secondBlock: BlockMessage =
