@@ -118,35 +118,14 @@ object InterpreterUtil {
         _         <- Span[F].mark("before-process-pre-state-hash")
         blockData = BlockData.fromBlock(block)
         isGenesis = block.header.parentsHashList.isEmpty
-        replayResultF = runtimeManager.replayComputeState(initialStateHash)(
-          internalDeploys,
-          internalSystemDeploys,
-          blockData,
-          invalidBlocks,
-          isGenesis
-        )
-        replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
-                         RetryPolicies.limitRetries(3), {
-                           case Right(stateHash) => stateHash == block.body.state.postStateHash
-                           case _                => false
-                         },
-                         (e, retryDetails) =>
-                           e match {
-                             case Right(stateHash) =>
-                               Log[F].error(
-                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} with " +
-                                   s"${PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash)} " +
-                                   s"got tuple space mismatch error with error hash ${PrettyPrinter
-                                     .buildStringNoLimit(stateHash)}, retries details: ${retryDetails}"
-                               )
-                             case Left(replayError) =>
-                               Log[F].error(
-                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} got " +
-                                   s"error ${replayError}, retries details: ${retryDetails}"
-                               )
-                           }
-                       )(replayResultF)
-      } yield replayResult
+        replayResultF <- runtimeManager.replayComputeState(initialStateHash)(
+                          internalDeploys,
+                          internalSystemDeploys,
+                          blockData,
+                          invalidBlocks,
+                          isGenesis
+                        )
+      } yield replayResultF
     }
 
   private def handleErrors[F[_]: Sync: Log](

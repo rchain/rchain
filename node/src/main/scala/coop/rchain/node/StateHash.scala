@@ -56,7 +56,7 @@ object StateHash {
                            runtimeManager
                          )
           _ <- replayResult match {
-                case Left(e)  => log.info(s"replay failed ${e}")
+                case Left(e)  => Task.raiseError(new Exception(s"Replay error ${e}."))
                 case Right(g) => log.info(s"replay succeeded ${g}")
               }
         } yield ()

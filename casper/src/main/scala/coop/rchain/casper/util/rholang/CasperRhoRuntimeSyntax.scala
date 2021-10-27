@@ -621,14 +621,17 @@ final class ReplayRhoRuntimeOps[F[_]: Sync: Span: Log](
                     } yield r
                 )
                 .flatTap(_ => EitherT.liftF(Span[F].mark("refund-started")))
-                .flatTap { succeeded =>
+                .flatMap { succeeded =>
                   replaySystemDeployInternal(
                     new RefundDeploy(
                       refundAmount,
                       SystemDeployUtil.generateRefundDeployRandomSeed(processedDeploy.deploy)
                     ),
                     None
-                  ).as(succeeded)
+                  ).map {
+                    case Left(_)  => false
+                    case Right(_) => true
+                  }
                 }
                 .flatTap(_ => EitherT.liftF(Span[F].mark("refund-done")))
             else EitherT.rightT(true)
