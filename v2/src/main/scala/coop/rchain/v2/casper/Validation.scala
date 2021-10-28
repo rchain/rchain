@@ -2,13 +2,12 @@ package coop.rchain.v2.casper
 
 import coop.rchain.v2.casper.data.FinalizationFringe
 import coop.rchain.v2.casper.stcasper.StateMessage
-import syntax.all._
+import coop.rchain.v2.casper.syntax.all._
 
 /**
  * Casper rules defining validity of a message.
  */
 object Validation {
-  trait MalformedMessageReason
 
   /**
    * Message should be well formed.
@@ -113,6 +112,8 @@ object Validation {
    */
   def invalidBondsCache[S](messageBonds: Map[S, Long], realBonds: Map[S, Long]): Boolean =
     messageBonds != realBonds
+
+  trait MalformedMessageReason
 }
 
 // TODO given creating messages only when there is a state change, validation of timestamp does not make sense. Remove at all?

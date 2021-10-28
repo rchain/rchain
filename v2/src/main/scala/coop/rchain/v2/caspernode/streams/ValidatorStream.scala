@@ -22,7 +22,7 @@ object ValidatorStream {
   def apply[F[_]: Concurrent, M, S](
       input: Stream[F, ValidationTarget[M]],
       appendToInput: ValidationTarget[M] => F[Unit],
-      validator: CasperValidator[F, M, S],
+      validate: (M, Boolean) => F[Offence],
       validationEffect: (M, Option[Slashing[M]]) => F[Unit],
       proposeF: F[Unit]
   ): Stream[F, Option[Slashing[M]]] =

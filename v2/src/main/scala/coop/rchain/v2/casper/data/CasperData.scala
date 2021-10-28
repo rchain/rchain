@@ -9,7 +9,7 @@ import coop.rchain.v2.casper.stcasper.StateMessage
  *
  * TODO bondsMap won't change much, so we can store the whole bonds maps in some table and have here only index.
  */
-case class CasperMessage[M, U, S](
+case class CasperData[M, S, U](
     justifications: Set[M],
     sender: S,
     seqNum: Int,

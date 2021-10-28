@@ -41,15 +41,13 @@ object DependencyGraph {
   /**
    * Derive parents from justification.
    */
-  def computeParents[F[_]: Monad, M](
-      targetJustifications: List[M],
-      justifications: M => F[List[M]]
-  ): F[List[M]] =
-    targetJustifications
-      .foldLeftM(targetJustifications.toSet) { case (acc, j) =>
-        justifications(j).map(jsLvl2 => acc -- jsLvl2)
-      }
-      .map(_.toList)
+  def computeParents[M](
+      targetJustifications: Set[M],
+      justifications: M => Set[M]
+  ): Set[M] =
+    targetJustifications.foldLeft(targetJustifications) { case (acc, j) =>
+      acc -- justifications(j)
+    }
 
   /**
    * Stream containing message + ancestors of the message (parents), topologically sorted.

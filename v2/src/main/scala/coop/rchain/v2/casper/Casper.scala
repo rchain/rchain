@@ -16,7 +16,7 @@ import coop.rchain.v2.casper.syntax.all._
 final case class Casper[M, S](
     dg: DependencyGraph[M, S],
     so: SafetyOracle[M, S],
-    maxComplexity: Long
+    maxComplexity: Long = Long.MaxValue
 ) {
 
   /**
@@ -56,7 +56,7 @@ object Casper {
       dg: DependencyGraph[M, S],
       so: SafetyOracle[M, S],
       faultToleranceThreshold: Float,
-      maxDepth: Long = Long.MaxValue
+      maxDepth: Long
   )(implicit ordering: Ordering[M]): Either[Map[S, M], CasperScope[M, S]] = {
     import dg._
 
