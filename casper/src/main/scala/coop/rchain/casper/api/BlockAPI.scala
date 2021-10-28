@@ -31,7 +31,7 @@ import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
 
 import scala.collection.immutable
@@ -512,9 +512,7 @@ object BlockAPI {
               .raiseError[F, ApiErr[BlockInfo]]
               .whenA(hash.length < 6)
         // Check if hash string is in Base16 encoding and convert to ByteString
-        hashByteString <- Base16
-                           .decode(hash)
-                           .map(ByteString.copyFrom)
+        hashByteString <- hash.hexToByteString
                            .liftTo[F](
                              BlockRetrievalError(
                                s"Input hash value is not valid hex string: $hash"
@@ -737,9 +735,9 @@ object BlockAPI {
                                          casper.lastFinalizedBlock.map(_.some)
                                        else
                                          for {
-                                           hashByteString <- Base16
-                                                              .decode(blockHash.getOrElse(""))
-                                                              .map(ByteString.copyFrom)
+                                           hashByteString <- blockHash
+                                                              .getOrElse("")
+                                                              .hexToByteString
                                                               .liftTo[F](
                                                                 BlockRetrievalError(
                                                                   s"Input hash value is not valid hex string: $blockHash"

@@ -19,6 +19,7 @@ import coop.rchain.monix.Monixable
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -255,8 +256,7 @@ object DeployGrpcServiceV1 {
 
       override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
         defer(
-          Base16
-            .decode(request.hash)
+          request.hash.decodeHex
             .fold(s"Request hash: ${request.hash} is not valid hex string".asLeft[Array[Byte]])(
               Right(_)
             )

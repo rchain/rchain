@@ -24,7 +24,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 import coop.rchain.models.syntax._
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 
 import scala.collection.immutable.HashMap
 

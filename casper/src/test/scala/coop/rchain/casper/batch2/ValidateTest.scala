@@ -26,7 +26,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Time}
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task

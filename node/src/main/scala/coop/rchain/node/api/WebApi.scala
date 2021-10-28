@@ -19,7 +19,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBo
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.state.StateManager
 import fs2.concurrent.Queue
@@ -231,11 +231,9 @@ object WebApi {
       sd: DeployRequest
   ): F[Signed[DeployData]] =
     for {
-      pkBytes <- Base16
-                  .decode(sd.deployer)
+      pkBytes <- sd.deployer.decodeHex
                   .liftToSigErr[F]("Public key is not valid base16 format.")
-      sigBytes <- Base16
-                   .decode(sd.signature)
+      sigBytes <- sd.signature.decodeHex
                    .liftToSigErr[F]("Signature is not valid base16 format.")
       sig    = ByteString.copyFrom(sigBytes)
       pk     = PublicKey(pkBytes)

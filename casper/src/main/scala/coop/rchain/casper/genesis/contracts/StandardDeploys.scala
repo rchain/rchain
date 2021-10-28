@@ -6,7 +6,7 @@ import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.accounting
 import coop.rchain.shared.Base16
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 
 object StandardDeploys {
   private def toDeploy(

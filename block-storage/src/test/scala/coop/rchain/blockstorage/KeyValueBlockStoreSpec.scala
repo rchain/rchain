@@ -67,7 +67,7 @@ class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDriven
   implicit val scheduler = monix.execution.Scheduler.global
 
   import KeyValueBlockStore._
-  import coop.rchain.shared.ByteStringOps._
+  import coop.rchain.models.syntax._
 
   val blockProtoToByteString = blockProtoToBytes _ andThen ByteString.copyFrom
 

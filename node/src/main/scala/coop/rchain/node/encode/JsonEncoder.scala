@@ -12,7 +12,7 @@ import coop.rchain.models._
 import io.circe.parser._
 import cats.syntax.all._
 import coop.rchain.shared.Base16
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 
 import scala.collection.immutable.BitSet
 import scodec.{Attempt, Err, Codec => SCodec}

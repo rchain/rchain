@@ -15,7 +15,7 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -1076,7 +1076,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "eval of bytesToHex" should "transform byte array to hex string (not the rholang term)" in {
     val splitRand    = rand.splitByte(0)
     val base16Repr   = "0123456789abcdef"
-    val testBytes    = ByteString.copyFrom(Base16.decode(base16Repr).get)
+    val testBytes    = base16Repr.unsafeToByteString
     val proc: Par    = GByteArray(testBytes)
     val toStringCall = EMethod("bytesToHex", proc, List[Par]())
     def wrapWithSend(p: Par): Par =

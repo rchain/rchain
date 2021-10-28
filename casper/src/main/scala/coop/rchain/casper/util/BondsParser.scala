@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.shared.{Base16, Log}
+import coop.rchain.models.syntax._
 import fs2.{io, text, Pipe, Stream}
 
 import java.nio.file.Path
@@ -36,8 +37,7 @@ object BondsParser {
 
           // Public key parser
           def publicKey(publicKeyStr: String) =
-            Base16
-              .decode(publicKeyStr)
+            publicKeyStr.decodeHex
               .map(PublicKey(_))
               .liftTo[F](new Exception(s"INVALID PUBLIC KEY: `$publicKeyStr`"))
 

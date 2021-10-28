@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
 import coop.rchain.shared.Base16
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf

@@ -10,7 +10,7 @@ import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
 import coop.rchain.shared.Base16
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 
 object RSpaceUtil {
 

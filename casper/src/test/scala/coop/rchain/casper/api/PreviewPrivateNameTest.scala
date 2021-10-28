@@ -5,7 +5,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.shared.Base16
-import coop.rchain.shared.ByteStringOps.RichHexString
+import coop.rchain.models.syntax._
 import org.scalatest.{FlatSpec, Matchers}
 
 class PreviewPrivateNameTest extends FlatSpec with Matchers {
