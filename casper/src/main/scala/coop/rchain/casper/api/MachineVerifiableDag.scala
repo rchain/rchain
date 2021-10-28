@@ -1,23 +1,14 @@
 package coop.rchain.casper.api
 
 import coop.rchain.casper._
-import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.syntax._
 import cats._
-import cats.data._
 import cats.implicits._
-import coop.rchain.shared.Base16
 
 final case class VerifiableEdge(from: String, to: String)
 
 object VerifiableEdge {
-
-  implicit def showBlockHash: Show[BlockHash] = new Show[BlockHash] {
-    def show(blockHash: BlockHash): String =
-      Base16.encode(blockHash.toByteArray)
-  }
-
   implicit def showVerifiableEdge: Show[VerifiableEdge] = new Show[VerifiableEdge] {
     def show(ve: VerifiableEdge): String = s"${ve.from} ${ve.to}"
   }

@@ -13,8 +13,7 @@ import coop.rchain.casper.protocol.{
   BlockMessageProto
 }
 import coop.rchain.models.blockImplicits.{blockElementGen, blockElementsGen}
-import coop.rchain.shared.ByteStringOps.RichByteString
-import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.models.syntax._
 import coop.rchain.store.KeyValueStore
 import monix.eval.Task
 import org.scalacheck.Arbitrary.arbitrary

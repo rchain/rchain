@@ -1,6 +1,7 @@
 package coop.rchain
 
 import coop.rchain.models.ByteStringSyntax
+import coop.rchain.models.ByteArraySyntax
 
 package object models {
   // Importing syntax object means using all extensions in the project
@@ -8,4 +9,4 @@ package object models {
 }
 
 // Models syntax
-trait AllSyntaxModels extends ByteStringSyntax
+trait AllSyntaxModels extends ByteStringSyntax with ByteArraySyntax
