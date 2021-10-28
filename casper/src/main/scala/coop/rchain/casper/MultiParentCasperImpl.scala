@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -31,7 +31,7 @@ import coop.rchain.shared._
 
 // format: off
 class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
