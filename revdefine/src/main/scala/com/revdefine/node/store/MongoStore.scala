@@ -162,7 +162,7 @@ final case class MongoStore[F[_]: Async: ContextShift](uri: String) {
     MongoPaginate[F, Transaction](
       transactionCollection,
       equal("transactionType._t", "UserDeploy"),
-      descending("timestamp"),
+      descending("blockNumber"),
       rowsPerPage,
       currentPage
     )
@@ -229,14 +229,14 @@ final case class MongoStore[F[_]: Async: ContextShift](uri: String) {
     currentPage
   )
 
-  def balance(address: String): F[Account] =
+  def balance(address: String): F[Option[Account]] =
     Async.fromFuture(
       Async[F].delay(
         accountCollection
           .find(
             equal("address", address)
           )
-          .head()
+          .headOption()
       )
     )
 

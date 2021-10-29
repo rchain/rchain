@@ -122,7 +122,7 @@ object DefineRoutes {
             )
           )
         )
-      case GET -> Root / "revaccount" / revAddress => Ok(mongo.balance(revAddress))
+      case GET -> Root / "revaccount" / revAddress => mongo.balance(revAddress).flatMap(_.fold(NotFound())(Ok(_)))
 
       case GET -> Root / "revaccounts" :? RowsPerPageParam(rowsPerPage) +& CurrentPageParam(
             currentPage
