@@ -242,6 +242,12 @@ lazy val revdefine = (project in file("revdefine"))
   .settings(commonSettings: _*)
   .enablePlugins(JavaAppPackaging, BuildInfoPlugin)
   .settings(
+    version := git.gitDescribedVersion.value.getOrElse({
+      val v = "0.0.0-unknown"
+      System.err.println("Could not get version from `git describe`.")
+      System.err.println("Using the fallback version: " + v)
+      v
+    }),
     name := "revdefine",
     organization := "com.revdefine",
     scalacOptions -= "-Ywarn-unused:locals",
@@ -256,7 +262,6 @@ lazy val revdefine = (project in file("revdefine"))
     mainClass in assembly := Some("com.revdefine.Main"),
     dockerBaseImage := "openjdk:11-jre-slim",
     packageName in Docker := "revdefine",
-    version in Docker := "0.1.0",
     dockerCommands := {
       val daemon = (daemonUser in Docker).value
       Seq(
