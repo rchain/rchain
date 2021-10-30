@@ -187,7 +187,12 @@ object Setup {
         implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
         implicit val br           = (blockRetriever)
         implicit val (rm, cu)     = (runtimeManager, commUtil)
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")), conf.casper)
+        Proposer[F](
+          validatorIdentity,
+          dummyDeployerKey.map((_, "Nil")),
+          conf.casper,
+          blockDagStateRef
+        )
       }
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(

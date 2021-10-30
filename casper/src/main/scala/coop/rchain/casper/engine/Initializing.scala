@@ -95,11 +95,13 @@ class Initializing[F[_]
             )
 
         // Record approved block in DAG
-        _ <- BlockDagStorage[F].insert(
-              block,
-              invalid = false,
-              StateMetadata(List(), List(), List())
-            )
+        dag <- BlockDagStorage[F].insert(
+                block,
+                invalid = false,
+                StateMetadata(List(), List(), List())
+              )
+        _ <- blockDagStateRef.update(_.ackValidated(block.blockHash, dag.getPureState).newState)
+        _ <- BlockRetriever[F].ackInCasper(block.blockHash)
 
         // Download approved state and all related blocks
         _ <- requestApprovedState(approvedBlock)

@@ -1,7 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Deferred
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -120,7 +120,8 @@ object Proposer {
   (
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None,
-      casperConf: CasperConf
+      casperConf: CasperConf,
+      blockDagStateRef: Ref[F, BlockDagState]
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
     val getCasperSnapshot = new MultiParentCasperImpl(
       validatorIdentity.some,
@@ -146,7 +147,10 @@ object Proposer {
           validatorIdentity.some,
           casperConf.faultToleranceThreshold,
           casperConf.shardName
-        ).handleValidBlock(b, s) >>
+        ).handleValidBlock(b, s).flatMap { dag =>
+          // update state of the node with new block validated
+          blockDagStateRef.update(_.ackValidated(b.blockHash, dag.getPureState).newState)
+        } >>
         // inform block retriever about block
         BlockRetriever[F].ackInCasper(b.blockHash) >>
         // broadcast hash to peers
