@@ -137,7 +137,7 @@ object RadixTree7 {
                 assert(noAssert, s"Missing node in database. ptr=$nodePtr")
                 emptyNode
               case Some(storeNode) =>
-                cacheR.put(nodePtr, storeNode)
+                cacheR.update(nodePtr, storeNode)
                 storeNode
             }
           case Some(v) => Sync[F].pure(v)
@@ -167,14 +167,13 @@ object RadixTree7 {
       val (hash, bytes) = hashNode(node)
       cacheR.get(hash.bytes) match { // collision alarm
         case Some(v) =>
-          if (v != node)
-            assert(
-              assertion = false,
-              s"collision in cache (record with key = ${hash.bytes} has already existed)"
-            )
-        case None => cacheR.put(hash.bytes, node)
+          assert(
+            v == node,
+            s"collision in cache (record with key = ${hash.bytes} has already existed)"
+          )
+        case None => cacheR.update(hash.bytes, node)
       }
-      cacheW.put(hash.bytes, bytes)
+      cacheW.update(hash.bytes, bytes)
       hash
     }
 
