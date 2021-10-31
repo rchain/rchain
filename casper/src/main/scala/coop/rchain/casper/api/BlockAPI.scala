@@ -10,6 +10,7 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
+import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.BlockMetadataDag
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
@@ -18,6 +19,7 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
+import coop.rchain.casper.v2.core.DependencyGraph
 import coop.rchain.casper.{ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.codec.Base16
@@ -378,6 +380,8 @@ object BlockAPI {
       visualizer: (Vector[Vector[BlockHash]], Set[String], String) => F[G[Graphz[G]]],
       serialize: G[Graphz[G]] => R
   ): F[ApiErr[R]] = {
+    import v2.core.syntax.all._
+    import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.metaOrd
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
       for {
@@ -392,7 +396,8 @@ object BlockAPI {
                       )
         scope  <- casper.latestScope
         fringe = scope.finalizationFringe.v.map(_.blockHash).map(PrettyPrinter.buildString)
-        graph  <- visualizer(topoSortDag, fringe, fringe.head)
+        base   <- BlockMetadataDag(dag).highestCommonMessage(scope.finalizationFringe.v).map(_.get)
+        graph  <- visualizer(topoSortDag, fringe, PrettyPrinter.buildString(base.message.blockHash))
       } yield serialize(graph).asRight[Error]
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
