@@ -212,7 +212,7 @@ object Setup {
 
       // Block processing stream. This is used only in Running Engine. Moving it out of Engine is difficult.
       blockProcessingStream = MessageProcessor(receiverImpl, retrieverImpl, validatorImpl).stream(
-        triggerProposeFOpt.traverse(_(true)).void
+        if (conf.autopropose) triggerProposeFOpt.traverse(_(true)).void else ().pure
       )
 
       // Engine dynamic reference
