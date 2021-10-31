@@ -327,30 +327,8 @@ class MultiParentCasperImpl[F[_]
         _ <- Log[F].warn(
               s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
             )
-        // Todo indxing here just to know proposd deploy chains, it is duplicate with validation, remove
-        mergeableChs <- RuntimeManager[F].loadMergeableChannels(
-                         block.body.state.postStateHash,
-                         block.sender.toByteArray,
-                         block.seqNum
-                       )
-        index <- BlockIndexer(
-                  block.blockHash,
-                  block.body.deploys,
-                  block.body.systemDeploys,
-                  block.body.state.preStateHash.toBlake2b256Hash,
-                  block.body.state.postStateHash.toBlake2b256Hash,
-                  RuntimeManager[F].getHistoryRepo,
-                  mergeableChs
-                )
 
-        stateMeta = StateMetadata(
-          index.keys.toList,
-          s.conflictResolution.acceptedSet.toList,
-          s.conflictResolution.rejectedSet.toList
-        )
-
-        // TODO should be nice to have this transition of a block from casper buffer to dag storage atomic
-        r <- BlockDagStorage[F].insert(block, invalid = true, stateMeta)
+        r <- BlockDagStorage[F].insert(block, invalid = true, StateMetadata(List(), List(), List()))
       } yield r
 
     status match {
