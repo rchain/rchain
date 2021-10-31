@@ -267,7 +267,7 @@ class Running[F[_]
       handleHasBlockRequest(peer, hbr) { h =>
         blockDagStateRef.get.map(_.validated.dagSet.contains(h))
       }
-    case hb: HasBlock => handleHasBlockMessage(peer, hb)
+    case hb: HasBlock => ignoreCasperMessage(hb.hash).ifM(().pure, handleHasBlockMessage(peer, hb))
     case _: ForkChoiceTipRequest.type =>
       handleForkChoiceTipRequest(peer)(
         blockDagStateRef.get.map(_.validated.latestMessagesMap.values)

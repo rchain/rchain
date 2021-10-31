@@ -26,15 +26,16 @@ final case class MessageProcessor[F[_], M, S](
   def stream(attemptPropose: F[Unit])(implicit c: Concurrent[F]): Stream[F, S] = {
     val pullIncoming = receiver.input
     // Check and store incoming messages concurrently
-      .parEvalMapProcBounded(receiver.checkIgnore(_).semiflatTap(receiver.store).value)
+      .parEvalMapProcBounded { m => // Todo not ack retrieved if sig is invalid
+        retriever.ackRetrieved(m) >> receiver.checkIgnore(m).semiflatTap(receiver.store).value
+      }
       // Invoke effect sequentially
       .evalMap {
         case Left(reason) => receiver.diagRejected(reason)
         case Right(m) =>
           receiver.receivedEffect(m).flatMap {
             case ReceiveResult(_, _, r) if r.nonEmpty => retriever.retrieve(r)
-            case ReceiveResult(_, p, _) =>
-              retriever.ackRetrieved(m) >> validator.appendToInput(m).whenA(p.isEmpty)
+            case ReceiveResult(_, p, _)               => validator.appendToInput(m).whenA(p.isEmpty)
           }
       }
 

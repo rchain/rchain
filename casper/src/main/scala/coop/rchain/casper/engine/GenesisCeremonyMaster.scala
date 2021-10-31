@@ -74,7 +74,12 @@ object GenesisCeremonyMaster {
                case Some(approvedBlock) =>
                  val ab = approvedBlock.candidate.block
                  for {
-                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
+                   _   <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
+                   dag <- BlockDagStorage[F].getRepresentation
+                   _ <- blockDagStateRef.update(
+                         _.ackValidated(ab.blockHash, dag.getPureState).newState
+                       )
+                   _ <- BlockRetriever[F].ackInCasper(ab.blockHash)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
