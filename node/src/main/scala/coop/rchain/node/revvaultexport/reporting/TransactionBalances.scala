@@ -54,6 +54,8 @@ object TransactionBalances {
   ) // 1111gW5kkGxHg7xDg6dRkZx2f7qxTizJzaCH9VEM1oJKWRvSX9Sk5
   val CoopVaultAddr = "11112q61nMYJKnJhQmqz7xKBNupyosG4Cy9rVupBPmpwcyT6s2SAoF"
 
+  final case class DeployNotFound(transaction: TransactionInfo) extends Exception
+
   sealed trait AccountType
   object NormalVault          extends AccountType
   object PerValidatorVault    extends AccountType
@@ -221,7 +223,6 @@ object TransactionBalances {
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockDagStorage   <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -246,15 +247,15 @@ object TransactionBalances {
             case PreCharge(deployId) =>
               dagRepresantation
                 .lookupByDeployId(deployId.unsafeToByteString)
-                .map(_.get)
+                .flatMap(_.liftTo(DeployNotFound(transaction)))
             case Refund(deployId) =>
               dagRepresantation
                 .lookupByDeployId(deployId.unsafeToByteString)
-                .map(_.get)
+                .flatMap(_.liftTo(DeployNotFound(transaction)))
             case UserDeploy(deployId) =>
               dagRepresantation
                 .lookupByDeployId(deployId.unsafeToByteString)
-                .map(_.get)
+                .flatMap(_.liftTo(DeployNotFound(transaction)))
             case CloseBlock(blockHash) =>
               blockHash.unsafeToByteString.pure[F]
             case SlashingDeploy(blockHash) =>
@@ -264,8 +265,10 @@ object TransactionBalances {
           for {
             blockHash    <- findTransaction(t)
             blockMetaOpt <- dagRepresantation.lookup(blockHash)
-            blockMeta    = blockMetaOpt.get
-            isFinalized  <- dagRepresantation.isFinalized(blockHash)
+            blockMeta <- blockMetaOpt.liftTo(
+                          new Exception(s"Block ${blockHash.base16String} not found in dag")
+                        )
+            isFinalized <- dagRepresantation.isFinalized(blockHash)
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized)
         }
       }
