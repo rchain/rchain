@@ -119,7 +119,7 @@ object BlockAPI {
                     // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
                     //  Fix to use structured result with transport errors/codes.
                     // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
-                    val blockHashHex = block.blockHash.base16String
+                    val blockHashHex = block.blockHash.toHexString
                     logSucess(s"Success! Block $blockHashHex created and added.")
                 }
           } yield r,
@@ -143,7 +143,7 @@ object BlockAPI {
                          )
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }
@@ -156,7 +156,7 @@ object BlockAPI {
                 result <- resultDef.get
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }

@@ -266,7 +266,7 @@ object TransactionBalances {
             blockHash    <- findTransaction(t)
             blockMetaOpt <- dagRepresantation.lookup(blockHash)
             blockMeta <- blockMetaOpt.liftTo(
-                          new Exception(s"Block ${blockHash.base16String} not found in dag")
+                          new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
             isFinalized <- dagRepresantation.isFinalized(blockHash)
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized)

@@ -77,7 +77,7 @@ class BlockQueryResponseAPITest
         effects                                  <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = secondBlock.blockHash.base16String
+        hash                                     = secondBlock.blockHash.toHexString
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
@@ -93,11 +93,11 @@ class BlockQueryResponseAPITest
             )
             blockInfo.blockInfo match {
               case Some(b) =>
-                b.blockHash should be(secondBlock.blockHash.base16String)
-                b.sender should be(secondBlock.sender.base16String)
+                b.blockHash should be(secondBlock.blockHash.toHexString)
+                b.sender should be(secondBlock.sender.toHexString)
                 b.blockSize should be(secondBlock.toProto.serializedSize.toString)
                 b.seqNum should be(secondBlock.toProto.seqNum)
-                b.sig should be(secondBlock.sig.base16String)
+                b.sig should be(secondBlock.sig.toHexString)
                 b.sigAlgorithm should be(secondBlock.sigAlgorithm)
                 b.shardId should be(secondBlock.toProto.shardId)
                 b.extraBytes should be(secondBlock.toProto.extraBytes)
@@ -105,14 +105,14 @@ class BlockQueryResponseAPITest
                 b.timestamp should be(secondBlock.header.timestamp)
                 b.headerExtraBytes should be(secondBlock.header.extraBytes)
                 b.parentsHashList should be(
-                  secondBlock.header.parentsHashList.map(_.base16String)
+                  secondBlock.header.parentsHashList.map(_.toHexString)
                 )
                 b.blockNumber should be(secondBlock.body.state.blockNumber)
                 b.preStateHash should be(
-                  secondBlock.body.state.preStateHash.base16String
+                  secondBlock.body.state.preStateHash.toHexString
                 )
                 b.postStateHash should be(
-                  secondBlock.body.state.postStateHash.base16String
+                  secondBlock.body.state.postStateHash.toHexString
                 )
                 b.bodyExtraBytes should be(secondBlock.body.extraBytes)
                 b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
@@ -215,11 +215,11 @@ class BlockQueryResponseAPITest
                              )
         _ = inside(blockQueryResponse) {
           case Right(blockInfo) =>
-            blockInfo.blockHash should be(secondBlock.toProto.blockHash.base16String)
-            blockInfo.sender should be(secondBlock.toProto.sender.base16String)
+            blockInfo.blockHash should be(secondBlock.toProto.blockHash.toHexString)
+            blockInfo.sender should be(secondBlock.toProto.sender.toHexString)
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
             blockInfo.seqNum should be(secondBlock.toProto.seqNum)
-            blockInfo.sig should be(secondBlock.sig.base16String)
+            blockInfo.sig should be(secondBlock.sig.toHexString)
             blockInfo.sigAlgorithm should be(secondBlock.sigAlgorithm)
             blockInfo.shardId should be(secondBlock.toProto.shardId)
             blockInfo.extraBytes should be(secondBlock.toProto.extraBytes)
@@ -227,14 +227,14 @@ class BlockQueryResponseAPITest
             blockInfo.timestamp should be(secondBlock.header.timestamp)
             blockInfo.headerExtraBytes should be(secondBlock.header.extraBytes)
             blockInfo.parentsHashList should be(
-              secondBlock.header.parentsHashList.map(_.base16String)
+              secondBlock.header.parentsHashList.map(_.toHexString)
             )
             blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
             blockInfo.preStateHash should be(
-              secondBlock.body.state.preStateHash.base16String
+              secondBlock.body.state.preStateHash.toHexString
             )
             blockInfo.postStateHash should be(
-              secondBlock.body.state.postStateHash.base16String
+              secondBlock.body.state.postStateHash.toHexString
             )
             blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
             blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
