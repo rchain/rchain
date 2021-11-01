@@ -205,9 +205,7 @@ object Setup {
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
         val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey =
-          if (dummyDeployerKeyOpt.isEmpty) None
-          else PrivateKey(dummyDeployerKeyOpt.get.unsafeDecodeHex).some
+        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
