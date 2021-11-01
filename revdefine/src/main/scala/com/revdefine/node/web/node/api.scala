@@ -9,7 +9,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.Par
 import coop.rchain.shared.Log
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 
 object api {
   final case class API[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
@@ -80,6 +80,9 @@ object api {
         .compile
         .to(Map)
     }
-    oldDeployIdMap.map(api.create[F])
+
+    val DeployIDMap =
+      if (Files.exists(oldDeployId)) oldDeployIdMap else Map.empty[String, String].pure
+    DeployIDMap.map(api.create[F])
   }
 }
