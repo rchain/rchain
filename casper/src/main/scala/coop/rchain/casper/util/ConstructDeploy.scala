@@ -1,7 +1,7 @@
 package coop.rchain.casper.util
 
 import coop.rchain.models.PCost
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Functor, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedDeployProto}

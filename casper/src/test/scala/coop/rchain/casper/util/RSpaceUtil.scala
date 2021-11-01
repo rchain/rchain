@@ -2,7 +2,7 @@ package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.models.{Expr, GPrivate, Par}

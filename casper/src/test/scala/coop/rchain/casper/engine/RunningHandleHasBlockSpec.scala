@@ -30,7 +30,7 @@ import coop.rchain.metrics.Metrics
 import monix.eval.Task
 import org.scalatest._
 import monix.execution.Scheduler.Implicits.global
-import cats.implicits._
+import cats.syntax.all._
 
 class RunningHandleHasBlockSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 

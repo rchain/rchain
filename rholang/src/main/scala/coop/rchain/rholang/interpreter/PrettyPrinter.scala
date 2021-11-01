@@ -9,7 +9,7 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.GUnforgeable.UnfInstance.{
   GDeployIdBody,
   GDeployerIdBody,

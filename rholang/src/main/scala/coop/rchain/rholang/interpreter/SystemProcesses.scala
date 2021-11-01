@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter
 
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import com.typesafe.scalalogging.Logger
 import coop.rchain.casper.protocol.BlockMessage

@@ -5,7 +5,7 @@ import cats.arrow.FunctionK
 import cats.data._
 import cats.effect._
 import cats.effect.implicits._
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl._
 import cats.mtl.implicits._
 import coop.rchain.catscontrib.MonadError_

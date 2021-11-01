@@ -2,7 +2,7 @@ package coop.rchain.shared
 
 import org.scalatest._
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 import coop.rchain.catscontrib._, Catscontrib._, TaskContrib._
 import monix.eval.{MVar, Task}
 import monix.execution.Scheduler

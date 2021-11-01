@@ -7,7 +7,7 @@ import coop.rchain.rholang.interpreter.{ContractCall}
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 
 object CasperInvalidBlocksContract {
-  import cats.implicits._
+  import cats.syntax.all._
 
   def set[F[_]: Concurrent: Span](
       ctx: ProcessContext[F]

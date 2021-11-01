@@ -6,7 +6,7 @@ import scala.util._
 import cats.{Functor, Id, Monad}
 import cats.data.EitherT
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.ListenAtName._
 import coop.rchain.catscontrib.ski._

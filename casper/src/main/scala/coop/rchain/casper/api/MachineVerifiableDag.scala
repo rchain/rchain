@@ -4,7 +4,7 @@ import coop.rchain.casper._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 final case class VerifiableEdge(from: String, to: String)
 

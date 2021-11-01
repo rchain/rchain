@@ -5,7 +5,7 @@ import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.models.BlockHash.BlockHash
 
 import coop.rchain.models.syntax._
-import cats._, cats.implicits._
+import cats._, cats.syntax.all._
 import org.scalatest.{FunSpec, Matchers}
 
 class MachineVerifiableDagSpec extends FunSpec with Matchers {

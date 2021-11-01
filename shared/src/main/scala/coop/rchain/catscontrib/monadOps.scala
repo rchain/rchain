@@ -1,7 +1,7 @@
 package coop.rchain.catscontrib
 
 import ski._
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 
 final class MonadOps[F[_], A](val self: F[A])(implicit val F: Monad[F]) {
   def liftM[G[_[_], _]](implicit G: MonadTrans[G]): G[F, A] = G.liftM(self)

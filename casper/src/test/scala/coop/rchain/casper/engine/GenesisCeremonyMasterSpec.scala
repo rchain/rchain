@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import cats._
 import cats.data._
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.Ref
 import coop.rchain.casper._

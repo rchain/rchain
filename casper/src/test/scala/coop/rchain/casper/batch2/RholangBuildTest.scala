@@ -1,6 +1,6 @@
 package coop.rchain.casper.batch2
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._

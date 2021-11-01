@@ -2,7 +2,7 @@ package coop.rchain.metrics
 
 import cats._
 import cats.data.ReaderT
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {

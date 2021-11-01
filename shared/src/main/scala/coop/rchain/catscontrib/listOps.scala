@@ -1,6 +1,6 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 import scala.math.Ordering
 
 object ListContrib {
