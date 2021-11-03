@@ -20,7 +20,7 @@ object BlockIndexer {
     override def compare(x: DeployChain, y: DeployChain): Int = ???
   }
 
-  private def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
+  def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
       events: List[Event],
       historyRepository: HistoryRepository[F, C, P, A, K],
       preStateHash: Blake2b256Hash,

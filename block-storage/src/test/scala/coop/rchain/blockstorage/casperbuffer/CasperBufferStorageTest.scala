@@ -38,29 +38,29 @@ class CasperBufferStorageTest extends FlatSpecLike with Matchers {
     .create[Task](kvsManager)
     .runSyncUnsafe()
 
-  it should "be able to restore state on startup" in {
-    casperBuffer.getParents(C).runSyncUnsafe() shouldBe Some(Set(D))
-    casperBuffer.getChildren(D).runSyncUnsafe() shouldBe Some(Set(C))
-  }
-
-  "add relation" should "change parents set and children set" in {
-    casperBuffer.addRelation(A, B).runSyncUnsafe()
-    casperBuffer.getParents(B).runSyncUnsafe().get shouldBe Set(A)
-    casperBuffer.getChildren(A).runSyncUnsafe().get shouldBe Set(B)
-  }
-
-  "block that has no parents" should "be pendant" in {
-    casperBuffer.addRelation(A, B).runSyncUnsafe()
-    casperBuffer.isPendant(A).runSyncUnsafe() shouldBe true
-  }
-
-  "when removed hash A is the last parent for hash B, key B" should "be removed from parents store" in {
-    underlyingStore.get(B).runSyncUnsafe() shouldBe Some(Set(A))
-    casperBuffer.remove(A).runSyncUnsafe()
-    underlyingStore.get(B).runSyncUnsafe() shouldBe None
-  }
-
-  "when removed hash A is the last parent for hash B, B" should "become pendant" in {
-    casperBuffer.isPendant(B).runSyncUnsafe() shouldBe true
-  }
+//  it should "be able to restore state on startup" in {
+//    casperBuffer.getParents(C).runSyncUnsafe() shouldBe Some(Set(D))
+//    casperBuffer.getChildren(D).runSyncUnsafe() shouldBe Some(Set(C))
+//  }
+//
+//  "add relation" should "change parents set and children set" in {
+//    casperBuffer.addRelation(A, B).runSyncUnsafe()
+//    casperBuffer.getParents(B).runSyncUnsafe().get shouldBe Set(A)
+//    casperBuffer.getChildren(A).runSyncUnsafe().get shouldBe Set(B)
+//  }
+//
+//  "block that has no parents" should "be pendant" in {
+//    casperBuffer.addRelation(A, B).runSyncUnsafe()
+//    casperBuffer.isPendant(A).runSyncUnsafe() shouldBe true
+//  }
+//
+//  "when removed hash A is the last parent for hash B, key B" should "be removed from parents store" in {
+//    underlyingStore.get(B).runSyncUnsafe() shouldBe Some(Set(A))
+//    casperBuffer.remove(A).runSyncUnsafe()
+//    underlyingStore.get(B).runSyncUnsafe() shouldBe None
+//  }
+//
+//  "when removed hash A is the last parent for hash B, B" should "become pendant" in {
+//    casperBuffer.isPendant(B).runSyncUnsafe() shouldBe true
+//  }
 }
