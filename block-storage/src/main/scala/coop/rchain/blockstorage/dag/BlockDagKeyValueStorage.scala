@@ -77,7 +77,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       finalizedBlocksSet.contains(blockHash).pure[F]
 
     override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
-      dagSet.find(hash => Base16.encode(hash.toByteArray).startsWith(truncatedHash))
+      val truncatedByteString = ByteString.copyFrom(Base16.unsafeDecode(truncatedHash))
+      dagSet.find(hash => hash.startsWith(truncatedByteString))
     }
 
     def topoSort(
