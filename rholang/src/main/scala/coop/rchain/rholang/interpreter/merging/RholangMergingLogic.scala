@@ -100,8 +100,8 @@ object RholangMergingLogic {
       initNum = initValOpt getOrElse 0L
       newVal  = initNum + diff
 
-      // Calculate merged random generator
-      newRnd = if (changes.added.size == 1) {
+      // Calculate merged random generator (use only unique changes as input)
+      newRnd = if (changes.added.toSet.size == 1) {
         // Single branch, just use available random generator
         decodeRnd(changes.added.head)
       } else {
