@@ -964,7 +964,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray("deadbeef".unsafeToByteString))
+    val expectedResult: Par = Expr(GByteArray("deadbeef".unsafeHexToByteString))
     directResult should be(expectedResult)
   }
 
@@ -1076,7 +1076,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "eval of bytesToHex" should "transform byte array to hex string (not the rholang term)" in {
     val splitRand    = rand.splitByte(0)
     val base16Repr   = "0123456789abcdef"
-    val testBytes    = base16Repr.unsafeToByteString
+    val testBytes    = base16Repr.unsafeHexToByteString
     val proc: Par    = GByteArray(testBytes)
     val toStringCall = EMethod("bytesToHex", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
@@ -1440,15 +1440,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray("dead".unsafeToByteString),
-              GByteArray("beef".unsafeToByteString)
+              GByteArray("dead".unsafeHexToByteString),
+              GByteArray("beef".unsafeHexToByteString)
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(
-      Seq(Expr(GByteArray("deadbeef".unsafeToByteString)))
+      Seq(Expr(GByteArray("deadbeef".unsafeHexToByteString)))
     )
   }
 

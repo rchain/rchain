@@ -91,7 +91,7 @@ object JsonEncoder {
     Encoder.encodeUnit.contramap[Blake2b512Random](_ => ())
 
   implicit val decodeByteString: Decoder[ByteString] =
-    Decoder.decodeString.map[ByteString](s => s.unsafeToByteString)
+    Decoder.decodeString.map[ByteString](s => s.unsafeHexToByteString)
   implicit val decodeBondInfo: Decoder[BondInfo] = deriveDecoder[BondInfo]
   implicit val decodeJustificationInfo: Decoder[JustificationInfo] =
     deriveDecoder[JustificationInfo]

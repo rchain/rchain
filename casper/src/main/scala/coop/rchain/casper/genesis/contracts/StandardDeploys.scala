@@ -14,7 +14,7 @@ object StandardDeploys {
       privateKey: String,
       timestamp: Long
   ): Signed[DeployData] = {
-    val sk = PrivateKey(privateKey.unsafeToByteString)
+    val sk = PrivateKey(privateKey.unsafeHexToByteString)
     val deployData =
       DeployData(
         timestamp = timestamp,

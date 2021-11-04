@@ -78,7 +78,7 @@ object WebApi {
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
-          .previewPrivateNames[F](r.deployer.unsafeToByteString, r.timestamp, r.nameQty)
+          .previewPrivateNames[F](r.deployer.unsafeHexToByteString, r.timestamp, r.nameQty)
           .flatMap(_.liftToBlockApiErr)
           .map(_.map(toHex).toList)
       }
@@ -108,7 +108,7 @@ object WebApi {
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
-        .findDeploy[F](deployId.unsafeToByteString)
+        .findDeploy[F](deployId.unsafeHexToByteString)
         .flatMap(_.liftToBlockApiErr)
 
     def exploratoryDeploy(
@@ -318,9 +318,9 @@ object WebApi {
   // RhoExpr to protobuf
 
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
-    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeToByteString))
-    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeToByteString))
-    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeToByteString))
+    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeHexToByteString))
+    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeHexToByteString))
+    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
   }
 
   // Data request/response protobuf wrappers

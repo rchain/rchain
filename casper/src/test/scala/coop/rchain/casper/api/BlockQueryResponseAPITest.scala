@@ -53,7 +53,7 @@ class BlockQueryResponseAPITest
 
   val senderString: String =
     "3456789101112131415161718192345678910111213141516171819261718192113456789101112131415161718192345678910111213141516171819261718192"
-  val sender: ByteString = senderString.unsafeToByteString
+  val sender: ByteString = senderString.unsafeHexToByteString
   val bondsValidator     = Bond(sender, 1)
 
   val secondBlock: BlockMessage =

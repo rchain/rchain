@@ -59,7 +59,7 @@ object StateBalanceMain {
   // The way to get this Unforgeable name needs reporting casper to get all the concrete comm events.
   // Anyway, as long as RevVault.rho and genesis doesn't change, this value would be fixed.
   val genesisVaultMapPar: Par = GPrivate(
-    "2dea7213bab34c96d4d3271f9b9dcb0b50a242de7de2177da615d9de23106afd".unsafeToByteString
+    "2dea7213bab34c96d4d3271f9b9dcb0b50a242de7de2177da615d9de23106afd".unsafeHexToByteString
   )
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))

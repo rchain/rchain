@@ -25,7 +25,7 @@ object RSpaceUtil {
   def getDataAtPrivateChannel[F[_]: FlatMap](block: BlockMessage, channel: String)(
       implicit runtimeManager: RuntimeManager[F]
   ) = {
-    val name = channel.unsafeToByteString
+    val name = channel.unsafeHexToByteString
     getDataAt[F](ProtoUtil.postStateHash(block), GPrivate().withId(name))
   }
 

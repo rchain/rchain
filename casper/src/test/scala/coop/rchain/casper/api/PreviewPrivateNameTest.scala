@@ -13,7 +13,7 @@ class PreviewPrivateNameTest extends FlatSpec with Matchers {
 
   def previewId(pkHex: String, timestamp: Long, nth: Int = 0): String = {
     val preview = BlockAPI.previewPrivateNames[Id](
-      pkHex.unsafeToByteString,
+      pkHex.unsafeHexToByteString,
       timestamp,
       nth + 1
     )

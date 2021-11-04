@@ -680,7 +680,7 @@ object BlockAPI {
         implicit casper =>
           for {
             dag            <- casper.blockDag
-            givenBlockHash = hash.unsafeToByteString
+            givenBlockHash = hash.unsafeHexToByteString
             result         <- dag.isFinalized(givenBlockHash)
           } yield result.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)

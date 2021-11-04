@@ -174,7 +174,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeToByteString, i.toLong)
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }
@@ -222,7 +222,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _       = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(v.unsafeToByteString, i.toLong)
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }

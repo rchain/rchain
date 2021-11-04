@@ -232,7 +232,7 @@ object TransactionBalances {
       runtimes <- RhoRuntime
                    .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
       (rhoRuntime, _)    = runtimes
-      targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeToByteString)
+      targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeHexToByteString)
       targetBlock        = targetBlockOpt.get
       _                  <- log.info(s"Getting balance from $targetBlock")
       genesisVaultMap    <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
@@ -246,20 +246,20 @@ object TransactionBalances {
           transaction.transactionType match {
             case PreCharge(deployId) =>
               dagRepresantation
-                .lookupByDeployId(deployId.unsafeToByteString)
+                .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case Refund(deployId) =>
               dagRepresantation
-                .lookupByDeployId(deployId.unsafeToByteString)
+                .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case UserDeploy(deployId) =>
               dagRepresantation
-                .lookupByDeployId(deployId.unsafeToByteString)
+                .lookupByDeployId(deployId.unsafeHexToByteString)
                 .flatMap(_.liftTo(DeployNotFound(transaction)))
             case CloseBlock(blockHash) =>
-              blockHash.unsafeToByteString.pure[F]
+              blockHash.unsafeHexToByteString.pure[F]
             case SlashingDeploy(blockHash) =>
-              blockHash.unsafeToByteString.pure[F]
+              blockHash.unsafeHexToByteString.pure[F]
           }
         allTransactions.toList.traverse { t =>
           for {

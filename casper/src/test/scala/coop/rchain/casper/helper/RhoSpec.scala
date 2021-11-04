@@ -190,7 +190,7 @@ class RhoSpec(
 
   private val rhoSpecDeploy: Signed[DeployData] = {
     val sk = PrivateKey(
-      "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6".unsafeToByteString
+      "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6".unsafeHexToByteString
     )
 
     Signed(

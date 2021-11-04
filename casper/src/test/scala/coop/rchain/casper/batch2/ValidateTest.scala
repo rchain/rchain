@@ -161,7 +161,7 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = "abcdef1234567890".unsafeToByteString
+        invalidKey   = "abcdef1234567890".unsafeHexToByteString
         block0       <- signedBlock(0).map(_.copy(sender = empty))
         block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
         block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))

@@ -848,7 +848,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             for {
               _ <- charge[M](hexToBytesCost(encoded))
               res <- Sync[M]
-                      .delay(encoded.unsafeToByteString)
+                      .delay(encoded.unsafeHexToByteString)
                       .handleErrorWith { ex =>
                         ReduceError(
                           s"Error: exception was thrown when decoding input string to hexadecimal: ${ex.getMessage}"

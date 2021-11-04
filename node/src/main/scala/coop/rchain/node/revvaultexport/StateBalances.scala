@@ -37,7 +37,7 @@ object StateBalances {
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockOpt          <- blockStore.get(blockHash.unsafeToByteString)
+      blockOpt          <- blockStore.get(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
