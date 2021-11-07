@@ -1,7 +1,7 @@
 package coop.rchain.node.blockprocessing
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage.CasperBufferStorage
@@ -31,6 +31,7 @@ import coop.rchain.shared.{EventPublisher, Log, Time}
 import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 import fs2.Stream
+import MultiParentCasperImpl._
 
 // format: off
 final case class BlockValidatorImpl[F[_] 
@@ -55,25 +56,34 @@ final case class BlockValidatorImpl[F[_]
       casperConf.shardName
     )
     for {
-      _                <- Log[F].info(s"Validating ${message.show}.")
+      _                <- Log[F].info(s"Validating ${message.show.take(10)}.")
       block            <- BlockStore[F].getUnsafe(message)
       snapshot         <- casper.getSnapshot(block.some) // Todo create snapshot from latest in blockDagStatRef
       validationResult <- casper.validate(block, snapshot)
       offenceOpt       = validationResult.swap.toOption.map(BlockStatus.toOffence)
-      _                <- Log[F].info(s"Validating ${message.show}. Done. Invoking Effects.")
+      _                <- Log[F].info(s"Validating ${message.show.take(10)}. Done. Invoking Effects.")
       // Todo implement precise offence storage + make pure state output changes for storage, not vice versa
       newRepr <- validationResult match {
                   case Left(v: InvalidBlock) => casper.handleInvalidBlock(block, v, snapshot)
                   case _                     => casper.handleValidBlock(block, snapshot)
                 }
-      _ <- offenceOpt.traverse(o => Log[F].info(s"Validating ${message.show}. Done. Invalid: ${o}"))
+      _ <- offenceOpt.traverse(
+            o => Log[F].info(s"Validating ${message.show.take(10)}. Done. Invalid: ${o}")
+          )
+      // Todo This should be in the same lock that BlockDagStorage.insert is using
       r <- blockDagStatRef.modify { st =>
             val ValidatedResult(newSt, unlockedChildren) =
               st.ackValidated(message, newRepr.getPureState)
             (newSt, ValidationResult(newSt, unlockedChildren))
           }
+      _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
       _ <- bufferStorage.delete(message)
-      _ <- Log[F].info(s"Validating ${message.show}. Done. Invoking Effects. Done.")
+      _ <- Log[F].info(
+            s"Validating ${message.show.take(100)}. Done. Invoking Effects. Done. Unlocked: [${r.dependentUnlocked
+              .map(_.show.take(10))
+              .mkString("; ")}]."
+          )
+      _ <- updateLatestScope(newRepr)
     } yield r
   }
   override def appendToInput(message: BlockHash): F[Unit] = append(message)

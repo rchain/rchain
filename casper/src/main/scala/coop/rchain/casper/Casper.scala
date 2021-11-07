@@ -57,7 +57,11 @@ trait Casper[F[_]] {
       b: BlockMessage,
       s: CasperSnapshot[F]
   ): F[Either[BlockError, ValidBlock]]
-  def handleValidBlock(block: BlockMessage, s: CasperSnapshot[F]): F[BlockDagRepresentation[F]]
+  def handleValidBlock(
+      block: BlockMessage,
+      s: CasperSnapshot[F],
+      updateLatestScope: Boolean = true
+  ): F[BlockDagRepresentation[F]]
   def handleInvalidBlock(
       block: BlockMessage,
       status: InvalidBlock,
@@ -84,7 +88,6 @@ trait MultiParentCasper[F[_]] extends Casper[F] {
   // this initial fault weight combined with our fault tolerance threshold t.
   def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
-  def latestScope: F[MessageScope[BlockMetadata]]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
 

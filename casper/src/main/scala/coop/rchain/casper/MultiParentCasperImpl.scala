@@ -9,8 +9,11 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.BlockStatus.invalidMessageScope
-import coop.rchain.casper.MultiParentCasperImpl.finalizedStateCache
-import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.computeMessageScope
+import coop.rchain.casper.MultiParentCasperImpl._
+import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.{
+  computeMessageScope,
+  mergeFinalizationFringe
+}
 import coop.rchain.casper.deploychainsetcasper._
 import coop.rchain.casper.merging.{BlockIndexer, DeployChainMerger}
 import coop.rchain.casper.protocol._
@@ -67,7 +70,7 @@ class MultiParentCasperImpl[F[_]
         state = RChainState(
           preStateHash = ByteString.EMPTY,
           // only this matters
-          postStateHash = MultiParentCasperImpl.lastFinalizedState(()).toByteString,
+          postStateHash = MultiParentCasperImpl.latestScope(())._1.toByteString,
           bonds = List(),
           blockNumber = -1
         ),
@@ -82,13 +85,6 @@ class MultiParentCasperImpl[F[_]
       sigAlgorithm = "",
       shardId = ""
     ).pure
-
-  override def latestScope: F[MessageScope[BlockMetadata]] =
-    for {
-      dag   <- blockDag
-      lms   <- dag.latestMessages.map(_.values.toSet)
-      scope <- computeMessageScope(lms, dag)
-    } yield scope
 
   def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
 
@@ -124,53 +120,23 @@ class MultiParentCasperImpl[F[_]
 
   // Todo make this input pure BlockDagState
   override def getSnapshot(targetMessageOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = {
-    import DeployChainSetCasper._
     import cats.instances.list._
     import coop.rchain.blockstorage.syntax._
 
     for {
       // the most recent view on the DAG, includes everything node seen so far
-      dag <- BlockDagStorage[F].getRepresentation
+      dag               <- BlockDagStorage[F].getRepresentation
+      finalizationState = dag.finalizationState
       // justifications define the scope of the message (whether it is about to be created or validated)
       getLatestMessagesMetas = OptionT
         .fromOption[F](targetMessageOpt.map(_.justifications.map(_.latestBlockHash)))
         .getOrElseF(dag.latestMessageHashes.map(_.values))
         .flatMap(_.toList.traverse(dag.lookupUnsafe))
       latestMessages <- getLatestMessagesMetas
-      // some technical information
-      maxBlockNum   = latestMessages.map(_.blockNum).max
-      maxSeqNums    = latestMessages.map(m => (m.sender -> m.seqNum)).toMap
-      invalidBlocks <- dag.invalidBlocksMap
-      // scope of the message
-      r                             <- Stopwatch.duration(computeMessageScope(latestMessages.toSet, dag))
-      (messageScope, messageScopeT) = r
-
-      indicesMissing = messageScope.conflictScope.v
-        .map(_.blockHash)
-        .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
-      _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock))
-
-      finalizationState = dag.finalizationState
-      deploysInScope = messageScope.conflictScope.v.flatMap(
-        _.stateMetadata.proposed.flatMap(_.deploys)
-      )
-      mergeFringe = mergeFinalizationFringe(
-        messageScope.finalizationFringe.v,
-        dag,
-        finalizationState.rejected,
-        hashes =>
-          hashes.traverse { h =>
-            BlockStore[F]
-              .getUnsafe(h)
-              .flatMap(indexBlock)
-              .unlessA(DeployChainMerger.blocksIndexed.contains(h))
-          }.void
-      )(RuntimeManager[F])
-      finalizedState <- OptionT
-                         .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
-                         .getOrElseF(mergeFringe)
-      _           = MultiParentCasperImpl.lastFinalizedState.update((), finalizedState)
-      conflictSet = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
+      // compute / reconstruct the scope of the message
+      r                                             <- computeScope(latestMessages.toSet, dag)
+      (messageScope, messageScopeT, finalizedState) = r
+      conflictSet                                   = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
       conflictResolution <- DeployChainSetConflictResolver[F](
                              DeployChainMerger.getDeployChainIndex[F]
                            ).resolve(conflictSet)
@@ -179,12 +145,19 @@ class MultiParentCasperImpl[F[_]
               RuntimeManager[F]
             )
           )
-
       ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
       _ <- Log[F].info(
             s"Message scope (${messageScope.conflictScope.v.size} messages) computed in $messageScopeT, " +
               s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
           )
+
+      // some technical information
+      maxBlockNum   = latestMessages.map(_.blockNum).max
+      maxSeqNums    = latestMessages.map(m => (m.sender -> m.seqNum)).toMap
+      invalidBlocks <- dag.invalidBlocksMap
+      deploysInScope = messageScope.conflictScope.v.flatMap(
+        _.stateMetadata.proposed.flatMap(_.deploys)
+      )
       // Todo read these from state
       deployLifespan = 50
       casperVersion  = 0L
@@ -203,30 +176,6 @@ class MultiParentCasperImpl[F[_]
       shardName,
       casperVersion
     )
-  }
-
-  def indexBlock(b: BlockMessage): F[Unit] = {
-    val blockPreState  = b.body.state.preStateHash
-    val blockPostState = b.body.state.postStateHash
-    val blockSender    = b.sender.toByteArray
-    for {
-      mergeableChs <- RuntimeManager[F].loadMergeableChannels(
-                       blockPostState,
-                       if (b.seqNum == 0) Array() else blockSender,
-                       b.seqNum
-                     )
-      index <- BlockIndexer(
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                blockPreState.toBlake2b256Hash,
-                blockPostState.toBlake2b256Hash,
-                RuntimeManager[F].getHistoryRepo,
-                mergeableChs
-              )
-      _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
-      _ = DeployChainMerger.blocksIndexed.putIfAbsent(b.blockHash, ())
-    } yield ()
   }
 
   override def validate(
@@ -286,7 +235,8 @@ class MultiParentCasperImpl[F[_]
 
   override def handleValidBlock(
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot[F],
+      updateLatestScope: Boolean
   ): F[BlockDagRepresentation[F]] =
     for {
       // Todo indxing here just to know proposd deploy chains, it is duplicate with validation, remove
@@ -385,7 +335,7 @@ class MultiParentCasperImpl[F[_]
 
 object MultiParentCasperImpl {
 
-  val lastFinalizedState = TrieMap.empty[Unit, Blake2b256Hash]
+  val latestScope = TrieMap.empty[Unit, (Blake2b256Hash, MessageScope[BlockMetadata])]
 
   /** Cache for merged state of finalization fringe. */
   val finalizedStateCache = TrieMap.empty[Set[BlockMetadata], Blake2b256Hash]
@@ -430,4 +380,82 @@ object MultiParentCasperImpl {
     val seqNum  = block.seqNum
     (blockHash, justificationHashes, deployIds, creator, seqNum)
   }
+
+  def indexBlock[F[_]: Concurrent: RuntimeManager](b: BlockMessage): F[Unit] = {
+    val blockPreState  = b.body.state.preStateHash
+    val blockPostState = b.body.state.postStateHash
+    val blockSender    = b.sender.toByteArray
+    for {
+      mergeableChs <- RuntimeManager[F].loadMergeableChannels(
+                       blockPostState,
+                       if (b.seqNum == 0) Array() else blockSender,
+                       b.seqNum
+                     )
+      index <- BlockIndexer(
+                b.blockHash,
+                b.body.deploys,
+                b.body.systemDeploys,
+                blockPreState.toBlake2b256Hash,
+                blockPostState.toBlake2b256Hash,
+                RuntimeManager[F].getHistoryRepo,
+                mergeableChs
+              )
+      _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
+      _ = DeployChainMerger.blocksIndexed.putIfAbsent(b.blockHash, ())
+    } yield ()
+  }
+
+  def computeScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics](
+      latestMessages: Set[BlockMetadata],
+      dag: BlockDagRepresentation[F]
+  ): F[(MessageScope[BlockMetadata], String, Blake2b256Hash)] =
+    for {
+      // scope of the message
+      r                             <- Stopwatch.duration(computeMessageScope(latestMessages, dag))
+      (messageScope, messageScopeT) = r
+
+      indicesMissing = messageScope.conflictScope.v
+        .map(_.blockHash)
+        .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
+      _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock[F]))
+
+      finalizationState = dag.finalizationState
+      mergeFringe = mergeFinalizationFringe(
+        messageScope.finalizationFringe.v,
+        dag,
+        finalizationState.rejected,
+        hashes =>
+          hashes.traverse { h =>
+            BlockStore[F]
+              .getUnsafe(h)
+              .flatMap(indexBlock[F])
+              .unlessA(DeployChainMerger.blocksIndexed.contains(h))
+          }.void
+      )(RuntimeManager[F])
+      finalizedState <- OptionT
+                         .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
+                         .getOrElseF(
+                           mergeFringe.map { v =>
+                             val _ = MultiParentCasperImpl.finalizedStateCache
+                               .update(messageScope.finalizationFringe.v, v)
+                             v
+                           }
+                         )
+    } yield (messageScope, messageScopeT, finalizedState)
+
+  def updateLatestScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics](
+      dag: BlockDagRepresentation[F]
+  ) =
+    for {
+      lms                        <- dag.latestMessages.map(_.values)
+      v                          <- computeScope(lms.toSet, dag)
+      (scope, _, finalizedState) = v
+      _ = MultiParentCasperImpl.finalizedStateCache
+        .update(scope.finalizationFringe.v, finalizedState)
+      // Update finalized state
+      _ = MultiParentCasperImpl.latestScope.update((), (finalizedState, scope))
+      _ <- Log[F].info(
+            s"scope updated to latest messages ${PrettyPrinter.buildString(lms.map(_.blockHash).toList)}"
+          )
+    } yield ()
 }

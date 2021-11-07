@@ -115,7 +115,7 @@ object BlockCreator {
           SystemDeployUtil
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
-        deploys = userDeploys ++ dummyDeploys
+        deploys = if (userDeploys.isEmpty) dummyDeploys else userDeploys
 
         now           <- Time[F].currentMillis
         invalidBlocks = s.invalidBlocks
@@ -155,6 +155,9 @@ object BlockCreator {
         // blockHash to hashed-with-signature blockHash
         signedBlock = validatorIdentity.signBlock(unsignedBlock)
         _           <- Span[F].mark("block-signed")
+
+        // TODO this is tempt solution to remove deploys from deploy storage once they put in a block
+        _ <- DeployStorage[F].remove(userDeploys.toList)
       } yield BlockCreatorResult.created(signedBlock)
 
       for {

@@ -8,7 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage.CasperBufferStorage
 import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.dag.state.BlockDagState.AckReceivedResult
-import coop.rchain.casper.Validate
+import coop.rchain.casper.{PrettyPrinter, Validate}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.{Metrics, Span}
@@ -70,7 +70,9 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
       // clean blocks map buffer to not leak memory
       .flatTap { r =>
         block.remove(message).pure >> Log[F].info(
-          s"receivedEffect toReq:${r.dependenciesToRetrieve} pending: ${r.dependenciesPending}"
+          s"receivedEffect toReq:${PrettyPrinter
+            .buildString(r.dependenciesToRetrieve)} pending: ${PrettyPrinter
+            .buildString(r.dependenciesPending)}"
         )
       }
 }

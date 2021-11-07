@@ -8,6 +8,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.MultiParentCasperImpl.computeScope
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.syntax._
@@ -147,9 +148,8 @@ object Proposer {
           validatorIdentity.some,
           casperConf.faultToleranceThreshold,
           casperConf.shardName
-        ).handleValidBlock(b, s).flatMap { dag =>
-          // update state of the node with new block validated
-          blockDagStateRef.update(_.ackValidated(b.blockHash, dag.getPureState).newState)
+        ).handleValidBlock(b, s, false).flatMap { dag =>
+          MultiParentCasperImpl.updateLatestScope(dag)
         } >>
         // inform block retriever about block
         BlockRetriever[F].ackInCasper(b.blockHash) >>

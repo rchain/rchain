@@ -10,6 +10,8 @@ object PrettyPrinter {
 
   def buildStringNoLimit(b: Array[Byte]): String = Base16.encode(b)
   def buildStringNoLimit(b: ByteString): String  = Base16.encode(b.toByteArray)
+  def buildStringNoLimit(bs: Iterable[ByteString]): String =
+    bs.map(PrettyPrinter.buildStringNoLimit).mkString("[", " ", "]")
 
   def buildString(t: CasperMessage, short: Boolean = false): String =
     t match {

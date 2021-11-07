@@ -394,10 +394,9 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        scope  <- casper.latestScope
-        fringe = scope.finalizationFringe.v.map(_.blockHash).map(PrettyPrinter.buildString)
-        base   <- BlockMetadataDag(dag).highestCommonMessage(scope.finalizationFringe.v).map(_.get)
-        graph  <- visualizer(topoSortDag, fringe, PrettyPrinter.buildString(base.message.blockHash))
+        (lfs, scope) = MultiParentCasperImpl.latestScope(())
+        fringe       = scope.finalizationFringe.v.map(_.blockHash).map(PrettyPrinter.buildString)
+        graph        <- visualizer(topoSortDag, fringe, fringe.head)
       } yield serialize(graph).asRight[Error]
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
@@ -528,11 +527,12 @@ object BlockAPI {
     )
   }
 
-  private def getBlockInfo[A, F[_]: Monad: BlockStore](
+  private def getBlockInfo[A, F[_]: Sync: BlockStore](
       block: BlockMessage,
       constructor: (
           BlockMessage,
-          Float
+          Float,
+          StateMetadata
       ) => A
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
@@ -543,24 +543,25 @@ object BlockAPI {
       normalizedFaultTolerance = -1
       initialFault             <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance           = normalizedFaultTolerance - initialFault
-
-      blockInfo = constructor(block, faultTolerance)
+      stateMetadata            <- dag.lookupUnsafe(block.blockHash).map(_.stateMetadata)
+      blockInfo                = constructor(block, faultTolerance, stateMetadata)
     } yield blockInfo
 
-  private def getFullBlockInfo[F[_]: Monad: BlockStore](
+  private def getFullBlockInfo[F[_]: Sync: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
     getBlockInfo[BlockInfo, F](block, constructBlockInfo)
-  def getLightBlockInfo[F[_]: Monad: BlockStore](
+  def getLightBlockInfo[F[_]: Sync: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
     getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
 
   private def constructBlockInfo(
       block: BlockMessage,
-      faultTolerance: Float
+      faultTolerance: Float,
+      stateMetadata: StateMetadata
   ): BlockInfo = {
-    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
+    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance, stateMetadata)
     val deploys        = block.body.deploys.map(_.toDeployInfo)
     BlockInfo(
       blockInfo = Some(lightBlockInfo),
@@ -570,8 +571,19 @@ object BlockAPI {
 
   private def constructLightBlockInfo(
       block: BlockMessage,
-      faultTolerance: Float
-  ): LightBlockInfo =
+      faultTolerance: Float,
+      stateMetadata: StateMetadata
+  ): LightBlockInfo = {
+    val stateMetadataStr =
+      s"""| proposed: ${stateMetadata.proposed.map(v => PrettyPrinter.buildStringNoLimit(v.deploys))}
+          | accepted: ${stateMetadata.acceptedSet.map(
+           v => PrettyPrinter.buildStringNoLimit(v.deploys)
+         )}
+          | rejected: ${stateMetadata.rejectedSet.map(
+           v => PrettyPrinter.buildStringNoLimit(v.deploys)
+         )}
+           |""".stripMargin
+
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       sender = PrettyPrinter.buildStringNoLimit(block.sender),
@@ -594,8 +606,10 @@ object BlockAPI {
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
       rejectedDeploys = block.body.rejectedDeploys.map(
         r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
-      )
+      ),
+      stateMetadata = stateMetadataStr
     )
+  }
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
@@ -620,7 +634,7 @@ object BlockAPI {
     ids.asRight[String].pure[F]
   }
 
-  def lastFinalizedBlock[F[_]: Monad: EngineCell: BlockStore: Log]: F[ApiErr[BlockInfo]] = {
+  def lastFinalizedBlock[F[_]: Sync: EngineCell: BlockStore: Log]: F[ApiErr[BlockInfo]] = {
     val errorMessage = "Could not get last finalized block, casper instance was not available yet."
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[BlockInfo]](

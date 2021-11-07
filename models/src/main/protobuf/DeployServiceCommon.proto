@@ -140,6 +140,8 @@ message LightBlockInfo {
 
   repeated JustificationInfo justifications = 20;
   repeated RejectedDeployInfo rejectedDeploys = 21;
+
+  string stateMetadata = 22;
 }
 
 message RejectedDeployInfo{

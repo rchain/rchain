@@ -80,7 +80,8 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
       rejection = optimalRejection(rejectionOptions, minCostRejectionF)
       _ <- Log[F].info(
             s"Conflicts resolved (conflict set size ${conflictSet.size}). branches computed in $branchesTime, " +
-              s"conflictsMap in $conflictsMapTime, rejection options in $rejOptionsTime."
+              s"conflictsMap in $conflictsMapTime (${conflictMap.values
+                .count(_.nonEmpty)} conflicting DCs), rejection options (${rejectionOptions.size}) in $rejOptionsTime. Best rejection: ${rejection.size} DC."
           )
     } yield ConflictResolution(
       conflictSet -- rejection.flatMap(_.map(_.deployChain)),

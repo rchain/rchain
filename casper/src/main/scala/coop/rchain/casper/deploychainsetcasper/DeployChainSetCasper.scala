@@ -94,7 +94,10 @@ object DeployChainSetCasper {
             ._2
             .head
           conflictScope <- Stream
-                            .emits(latestMessages.toList.map(metaDag.selfJustificationChain))
+                            .emits(
+                              latestMessages.toList
+                                .map(lm => Stream(lm) ++ metaDag.selfJustificationChain(lm))
+                            )
                             .covary[F]
                             .flatten
                             .compile

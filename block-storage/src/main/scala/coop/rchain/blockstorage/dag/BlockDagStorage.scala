@@ -1,5 +1,6 @@
 package coop.rchain.blockstorage.dag
 
+import cats.Applicative
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
@@ -8,6 +9,7 @@ import coop.rchain.casper.protocol.{BlockMessage, StateMetadata}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
+import cats.syntax.all._
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]

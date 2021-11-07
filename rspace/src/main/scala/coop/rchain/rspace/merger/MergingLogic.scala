@@ -56,6 +56,12 @@ object MergingLogic {
       val mergeableProduces = a.producesMergeable intersect b.producesMergeable
       val produceRaces      = (sharedProduces diff mergeableProduces).toIterator.filterNot(_.persistent)
 
+//      if (consumeRaces.nonEmpty || produceRaces.nonEmpty) {
+//        println(s"mergeableConsumes $mergeableConsumes")
+//        println(s"mergeableProduces $mergeableProduces")
+//        println(s"consumeRaces ${consumeRaces.toList}")
+//        println(s"produceRaces ${produceRaces.toList}")
+//      }
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }
 

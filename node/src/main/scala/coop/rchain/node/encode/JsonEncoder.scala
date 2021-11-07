@@ -2,7 +2,14 @@ package coop.rchain.node.encode
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{BondInfo, JustificationInfo, LightBlockInfo, RejectedDeployInfo}
+import coop.rchain.casper.protocol.{
+  BondInfo,
+  DeployChain,
+  JustificationInfo,
+  LightBlockInfo,
+  RejectedDeployInfo,
+  StateMetadata
+}
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Expr.ExprInstance
@@ -10,7 +17,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance
 import coop.rchain.models.Var.{VarInstance, WildcardMsg}
 import coop.rchain.models._
 
-import scala.collection.immutable.{BitSet}
+import scala.collection.immutable.BitSet
 
 object JsonEncoder {
   import io.circe._
@@ -24,6 +31,12 @@ object JsonEncoder {
     deriveEncoder[JustificationInfo]
   implicit val encodeRejectedDeployInfo: Encoder[RejectedDeployInfo] =
     deriveEncoder[RejectedDeployInfo]
+  implicit val encodeStateMetadata: Encoder[StateMetadata] =
+    Encoder.encodeString.contramap[StateMetadata](s => s"""
+         | proposed: ${s.proposed.map(v => PrettyPrinter.buildString(v.deploys)).mkString(" | ")}
+         | accepted: ${s.acceptedSet.map(v => PrettyPrinter.buildString(v.deploys)).mkString(" | ")}
+         | rejected: ${s.rejectedSet.map(v => PrettyPrinter.buildString(v.deploys)).mkString(" | ")}
+         |""".stripMargin)
   implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
   implicit val encodePar: Encoder[Par]                       = deriveEncoder[Par]
   implicit val encodeSend: Encoder[Send]                     = deriveEncoder[Send]
