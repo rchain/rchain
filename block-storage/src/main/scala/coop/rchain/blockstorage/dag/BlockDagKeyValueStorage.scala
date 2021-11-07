@@ -13,6 +13,7 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -74,6 +75,11 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def isFinalized(blockHash: BlockHash): F[Boolean] =
       finalizedBlocksSet.contains(blockHash).pure[F]
+
+    override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
+      val truncatedByteString = ByteString.copyFrom(Base16.unsafeDecode(truncatedHash))
+      dagSet.find(hash => hash.startsWith(truncatedByteString))
+    }
 
     def topoSort(
         startBlockNumber: Long,
