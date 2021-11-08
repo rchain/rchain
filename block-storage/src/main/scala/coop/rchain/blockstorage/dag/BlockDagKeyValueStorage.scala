@@ -13,7 +13,6 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -21,6 +20,7 @@ import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
@@ -77,7 +77,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       finalizedBlocksSet.contains(blockHash).pure[F]
 
     override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
-      val truncatedByteString = ByteString.copyFrom(Base16.unsafeDecode(truncatedHash))
+      val truncatedByteString = truncatedHash.unsafeHexToByteString
       dagSet.find(hash => hash.startsWith(truncatedByteString))
     }
 
