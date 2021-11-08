@@ -4,9 +4,12 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.deploychainsetcasper.DeployChainSetConflictResolver
+import coop.rchain.casper.protocol.DeployChain
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.Resources
+import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
@@ -112,7 +115,7 @@ class MergeNumberChannelSpec extends FlatSpec {
             evLogIndices <- logSeq.zip(numChanDiffs).zip(terms).traverse {
                              case ((cp, numberChanDiff), (_, cost, sig)) =>
                                for {
-                                 evLogIndex <- BlockIndex.createEventLogIndex(
+                                 evLogIndex <- BlockIndexer.createEventLogIndex(
                                                 cp.log
                                                   .map(EventConverter.toCasperEvent)
                                                   .toList,
@@ -159,66 +162,77 @@ class MergeNumberChannelSpec extends FlatSpec {
           (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
         )
 
-        // Calculate deploy chains / deploy dependency
+        //        // Calculate deploy chains / deploy dependency
+        //
+        //        leftDeployChains <- leftDeployIndices.toList.traverse(
+        //                             DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
+        //                           )
+        //        rightDeployChains <- rightDeployIndices.toList.traverse(
+        //                              DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
+        //                            )
+        //
+        //        _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
+        //        _ = println(s"DEPLOY_CHAINS RIGHT: ${rightDeployChains.size}")
 
-        leftDeployChains <- leftDeployIndices.toList.traverse(
-                             DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
-                           )
-        rightDeployChains <- rightDeployIndices.toList.traverse(
-                              DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
-                            )
+        //        // Detect rejections / number channel overflow/negative
+        //
+        //        branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
+        //          MergingLogic.areConflicting(
+        //            as.map(_.eventLogIndex).toList.combineAll,
+        //            bs.map(_.eventLogIndex).toList.combineAll
+        //          )
+        //
+        //        // Base state reader
+        //        baseReader       = rm.getHistoryRepo.getHistoryReader(baseCp.root)
+        //        baseReaderBinary = baseReader.readerBinary
+        //        baseGetData      = baseReader.getData _
+        //
+        //        // Merging handler for number channels
+        //        overrideTrieAction = (
+        //            hash: Blake2b256Hash,
+        //            changes: ChannelChange[ByteVector],
+        //            numberChs: NumberChannelsDiff
+        //        ) =>
+        //          numberChs.get(hash).traverse {
+        //            RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+        //          }
+        //
+        //        // Create store actions / uses handler for number channels
+        //        computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
+        //          StateChangeMerger
+        //            .computeTrieActions(changes, baseReaderBinary, mergeableChs, overrideTrieAction)
+        //        }
+        //
+        //        applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
+        //          rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
 
-        _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
-        _ = println(s"DEPLOY_CHAINS RIGHT: ${rightDeployChains.size}")
+        // Populate deploy chain index
+        leftDeployChains <- leftDeployIndices.toList.traverse { d =>
+                             DeployChainIndex(d, baseCp.root, leftPostState, historyRepo)
+                               .map(dci => DeployChain(d.map(x => x.deployId).toList) -> dci)
+                           }
+        rightDeployChains <- rightDeployIndices.toList.traverse { d =>
+                              DeployChainIndex(d, baseCp.root, rightPostState, historyRepo)
+                                .map(dci => DeployChain(d.map(x => x.deployId).toList) -> dci)
+                            }
 
-        // Detect rejections / number channel overflow/negative
+        deployChainCache   = (leftDeployChains ++ rightDeployChains).toMap
+        deployChainIndices = deployChainCache.keySet
+        _                  = deployChainCache.map { case (d, idx) => DeployChainMerger.indexCache.update(d, idx) }
 
-        branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-          MergingLogic.areConflicting(
-            as.map(_.eventLogIndex).toList.combineAll,
-            bs.map(_.eventLogIndex).toList.combineAll
-          )
+        // Conflicts resolution
 
-        // Base state reader
-        baseReader       = rm.getHistoryRepo.getHistoryReader(baseCp.root)
-        baseReaderBinary = baseReader.readerBinary
-        baseGetData      = baseReader.getData _
+        conflictResolver = DeployChainSetConflictResolver[F](x => deployChainCache(x).pure[F])
+        resolution       <- conflictResolver.resolve(deployChainIndices)
 
-        // Merging handler for number channels
-        overrideTrieAction = (
-            hash: Blake2b256Hash,
-            changes: ChannelChange[ByteVector],
-            numberChs: NumberChannelsDiff
-        ) =>
-          numberChs.get(hash).traverse {
-            RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
-          }
+        ConflictResolution(accepted, rejected) = resolution
+        _                                      = rejected shouldBe empty
 
-        // Create store actions / uses handler for number channels
-        computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
-          StateChangeMerger
-            .computeTrieActions(changes, baseReaderBinary, mergeableChs, overrideTrieAction)
-        }
+        // Merging
 
-        applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
-          rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
+        r <- DeployChainMerger.merge[F](baseCp.root, mergeSet = accepted)(rm)
 
-        r <- ConflictSetMerger.merge[F, DeployChainIndex](
-              actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet,
-              lateSet = Set(),
-              depends = (target, source) =>
-                MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
-              conflicts = branchesAreConflicting,
-              cost = DagMerger.costOptimalRejectionAlg,
-              stateChanges = r => r.stateChanges.pure,
-              mergeableChannels = _.eventLogIndex.numberChannelsData,
-              computeTrieActions = computeTrieActions,
-              applyTrieActions = applyTrieActions
-            )
-
-        (finalHash, rejected) = r
-
-        _ = rejected shouldBe empty
+        (finalHash, _, _, _) = r
 
         // Read merged value
 
