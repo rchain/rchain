@@ -15,6 +15,7 @@ import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{BlockMessage, DeployChain, StateMetadata}
+import coop.rchain.casper.v2.core.Casper
 import coop.rchain.casper.v2.core.Validation.Slashing
 import coop.rchain.casper.v2.stcasper.Validation.DummyOffence
 import coop.rchain.metrics.Metrics.Source
@@ -33,7 +34,9 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
     invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-    equivocationTrackerIndex: EquivocationTrackerStore[F]
+    equivocationTrackerIndex: EquivocationTrackerStore[F],
+    acceptedIndex: KeyValueTypedStore[F, DeployChain, Unit],
+    rejectedIndex: KeyValueTypedStore[F, DeployChain, Unit]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
@@ -87,8 +90,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def latestBlockNumber: F[Long] = getMaxHeight.pure[F]
 
     def isFinalized(blockHash: BlockHash): F[Boolean] = false.pure[F]
-    def deployStatus(deployId: DeployId): F[Boolean] =
-      st.finalizationState.accepted.flatMap(_.deploys).contains(deployId).pure[F]
 
     def topoSort(
         startBlockNumber: Long,
@@ -147,8 +148,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       invalidBlocks <- invalidBlocksIndex.toMap
                         .map(_.toSeq.map(_._2).toSet)
                         .map(_.map(meta => Slashing(meta.blockHash, DummyOffence)))
-      acceptedSet = Set.empty[DeployChain] // TODO
-      rejectedSet = Set.empty[DeployChain]
+      acceptedSet <- acceptedIndex.toMap.map(_.keySet)
+      rejectedSet <- rejectedIndex.toMap.map(_.keySet)
     } yield KeyValueDagRepresentation(
       BlockDagRepresentationState(
         dagSet,
@@ -162,6 +163,14 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
+
+  override def updateFinalization(fringe: Casper.FinalizationFringe[BlockMetadata]): F[Unit] =
+    rejectedIndex.putIfAbsent(
+      fringe.v.flatMap(_.stateMetadata.rejectedSet).map((_, ())).toList
+    ) <*
+      acceptedIndex.putIfAbsent(
+        fringe.v.flatMap(_.stateMetadata.acceptedSet).map((_, ())).toList
+      )
 
   def insert(
       block: BlockMessage,
@@ -277,7 +286,9 @@ object BlockDagKeyValueStorage {
       equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
+      accepted: KeyValueTypedStore[F, DeployChain, Unit],
+      rejected: KeyValueTypedStore[F, DeployChain, Unit]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -316,7 +327,16 @@ object BlockDagKeyValueStorage {
                         codecDeployId,
                         codecBlockHash
                       )
-
+      rejectedIndexDb <- KeyValueStoreManager[F].database[DeployChain, Unit](
+                          "rejected-index",
+                          codecDeployChain,
+                          scodec.codecs.ignore(0)
+                        )
+      acceptedIndexDb <- KeyValueStoreManager[F].database[DeployChain, Unit](
+                          "accepted-index",
+                          codecDeployChain,
+                          scodec.codecs.ignore(0)
+                        )
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
@@ -324,7 +344,9 @@ object BlockDagKeyValueStorage {
       equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb
+      deployIndexDb,
+      acceptedIndexDb,
+      rejectedIndexDb
     )
   }
 
@@ -338,6 +360,8 @@ object BlockDagKeyValueStorage {
       stores.metadata,
       stores.deploys,
       stores.invalidBlocks,
-      stores.equivocations
+      stores.equivocations,
+      stores.accepted,
+      stores.rejected
     )
 }

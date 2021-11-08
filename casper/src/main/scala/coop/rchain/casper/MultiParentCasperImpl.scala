@@ -443,13 +443,14 @@ object MultiParentCasperImpl {
                          )
     } yield (messageScope, messageScopeT, finalizedState)
 
-  def updateLatestScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics](
+  def updateLatestScope[F[_]: Concurrent: BlockDagStorage: RuntimeManager: BlockStore: Log: Metrics](
       dag: BlockDagRepresentation[F]
   ) =
     for {
       lms                        <- dag.latestMessages.map(_.values)
       v                          <- computeScope(lms.toSet, dag)
       (scope, _, finalizedState) = v
+      _                          <- BlockDagStorage[F].updateFinalization(scope.finalizationFringe)
       _ = MultiParentCasperImpl.finalizedStateCache
         .update(scope.finalizationFringe.v, finalizedState)
       // Update finalized state

@@ -80,6 +80,8 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
 
       // Save to mergeable channels store
       _ <- rm.getMergeableStore.put(keyEncoded, deployChannels)
+//      _ = println(postStateHash)
+//      _ = println(deployChannels.map(_.channels.map(_.hash)))
     } yield ()
 
   /**

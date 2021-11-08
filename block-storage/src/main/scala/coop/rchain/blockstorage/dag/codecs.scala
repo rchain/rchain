@@ -1,7 +1,8 @@
 package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.casper.protocol.{DeployChain, DeployData, DeployDataProto}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
@@ -17,6 +18,9 @@ object codecs {
     )
 
   val codecDeployId = xmapToByteString(variableSizeBytes(uint8, bytes))
+
+  val codecDeployChain =
+    listOfN(int32, codecDeployId).xmap[DeployChain](l => DeployChain(l), dc => dc.deploys)
 
   val codecBlockHash = xmapToByteString(bytes(BlockHash.Length))
 

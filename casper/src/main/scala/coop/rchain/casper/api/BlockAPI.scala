@@ -543,7 +543,8 @@ object BlockAPI {
       normalizedFaultTolerance = -1
       initialFault             <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance           = normalizedFaultTolerance - initialFault
-      stateMetadata            <- dag.lookupUnsafe(block.blockHash).map(_.stateMetadata)
+      stateMetadataOpt         <- dag.lookup(block.blockHash).map(_.map(_.stateMetadata))
+      stateMetadata            = stateMetadataOpt.getOrElse(StateMetadata(List(), List(), List()))
       blockInfo                = constructor(block, faultTolerance, stateMetadata)
     } yield blockInfo
 

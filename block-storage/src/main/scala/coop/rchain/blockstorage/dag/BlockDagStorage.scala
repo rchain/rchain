@@ -10,6 +10,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import cats.syntax.all._
+import coop.rchain.casper.v2.core.Casper.FinalizationFringe
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
@@ -19,6 +20,7 @@ trait BlockDagStorage[F[_]] {
       blockStateMetadata: StateMetadata
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
+  def updateFinalization(fringe: FinalizationFringe[BlockMetadata]): F[Unit]
 }
 
 object BlockDagStorage {
