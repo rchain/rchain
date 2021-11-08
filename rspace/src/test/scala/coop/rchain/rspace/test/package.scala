@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}

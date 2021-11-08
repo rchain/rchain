@@ -8,10 +8,10 @@ import com.google.protobuf.{ByteString, CodedInputStream}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.ByteStringOps.RichByteString
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.shared.Compression
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import net.jpountz.lz4.{LZ4CompressorWithLength, LZ4DecompressorWithLength}
 import scodec.bits.ByteVector

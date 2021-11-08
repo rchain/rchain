@@ -1,8 +1,8 @@
 package coop.rchain.rspace.hashing
 
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.shared.Base16
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}

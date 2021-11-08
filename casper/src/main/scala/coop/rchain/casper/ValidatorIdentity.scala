@@ -9,10 +9,10 @@ import cats.syntax.option._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{BlockMessage, Signature}
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
-import coop.rchain.shared.{EnvVars, Log, LogSource}
+import coop.rchain.shared.{Base16, EnvVars, Log, LogSource}
+import coop.rchain.models.syntax._
 
 final case class ValidatorIdentity(
     publicKey: PublicKey,
@@ -66,7 +66,7 @@ object ValidatorIdentity {
     )
 
   def fromHex(privKeyHex: String): Option[ValidatorIdentity] =
-    Base16.decode(privKeyHex).map(PrivateKey(_)).map(ValidatorIdentity(_))
+    privKeyHex.decodeHex.map(PrivateKey(_)).map(ValidatorIdentity(_))
 
   def fromPrivateKeyWithLogging[F[_]: Applicative: Log](
       privKey: Option[String]

@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{GPrivate, Validator}
+import coop.rchain.shared.Base16
 
 final case class RevAddress(address: Address) {
 

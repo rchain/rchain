@@ -10,7 +10,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
   * Warning: This should under no circumstances be available in production
   */
 object SysAuthTokenContract {
-  import cats.implicits._
+  import cats.syntax.all._
 
   def get[F[_]: Concurrent: Span](
       ctx: ProcessContext[F]

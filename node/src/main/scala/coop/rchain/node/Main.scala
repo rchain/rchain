@@ -8,7 +8,6 @@ import cats.syntax.all._
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.monix.Monixable
@@ -18,7 +17,7 @@ import coop.rchain.node.effects._
 import coop.rchain.node.runtime.NodeRuntime
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory

@@ -2,9 +2,9 @@ package coop.rchain.casper
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
-import coop.rchain.crypto.codec._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.Base16
 
 object PrettyPrinter {
 

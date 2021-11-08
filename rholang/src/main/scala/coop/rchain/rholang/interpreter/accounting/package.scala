@@ -4,7 +4,7 @@ import cats._
 import cats.data._
 import cats.effect.Sync
 import cats.effect.concurrent.Semaphore
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl._
 
 import coop.rchain.catscontrib.ski.kp

@@ -4,6 +4,7 @@ import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
+import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -25,7 +26,6 @@ import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
@@ -43,7 +43,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -205,9 +205,7 @@ object Setup {
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
         val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey =
-          if (dummyDeployerKeyOpt.isEmpty) None
-          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))

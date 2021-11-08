@@ -7,13 +7,12 @@ import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParamet
 import coop.rchain.casper.util.rholang.Resources._
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.Expr.ExprInstance.GBool
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{GDeployerId, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global

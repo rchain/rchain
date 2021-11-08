@@ -2,7 +2,7 @@ package coop.rchain.casper.genesis.contracts
 
 import cats.FlatMap
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Par
 import coop.rchain.rholang.build.CompiledRholangSource

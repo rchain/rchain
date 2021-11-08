@@ -1,7 +1,7 @@
 package coop.rchain.rholang.interpreter.util
 
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 import org.scalatest._
 
 class RevAddressSpec extends FlatSpec with Matchers {

@@ -133,6 +133,7 @@ lazy val shared = (project in file("shared"))
       catsLawsTest,
       catsLawsTestkitTest,
       enumeratum,
+      jaxb
     )
   )
 
@@ -212,7 +213,6 @@ lazy val crypto = (project in file("crypto"))
       bouncyProvCastle,
       scalacheck,
       kalium,
-      jaxb,
       secp256k1Java,
       scodecBits
     ),

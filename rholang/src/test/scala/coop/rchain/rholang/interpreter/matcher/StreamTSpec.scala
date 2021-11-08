@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect.laws.discipline.{BracketTests, SyncTests}
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests

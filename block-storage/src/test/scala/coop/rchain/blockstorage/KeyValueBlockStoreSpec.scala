@@ -13,8 +13,7 @@ import coop.rchain.casper.protocol.{
   BlockMessageProto
 }
 import coop.rchain.models.blockImplicits.{blockElementGen, blockElementsGen}
-import coop.rchain.shared.ByteStringOps.RichByteString
-import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.models.syntax._
 import coop.rchain.store.KeyValueStore
 import monix.eval.Task
 import org.scalacheck.Arbitrary.arbitrary
@@ -68,7 +67,7 @@ class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDriven
   implicit val scheduler = monix.execution.Scheduler.global
 
   import KeyValueBlockStore._
-  import coop.rchain.shared.ByteStringOps._
+  import coop.rchain.models.syntax._
 
   val blockProtoToByteString = blockProtoToBytes _ andThen ByteString.copyFrom
 
