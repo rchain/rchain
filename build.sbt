@@ -132,7 +132,7 @@ lazy val shared = (project in file("shared"))
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest,
-      enumeratum,
+      enumeratum
     )
   )
 
@@ -355,7 +355,8 @@ lazy val node = (project in file("node"))
     },
     /* Debian */
     debianPackageDependencies in Debian ++= Seq(
-      "openjdk-11-jre-headless",
+      "default-jre-headless | java11-runtime-headless | java12-runtime-headless | java13-runtime-headless | " +
+        "java14-runtime-headless | java15-runtime-headless",
       "openssl(>= 1.0.2g) | openssl(>= 1.1.1h)", //ubuntu & debian
       "bash (>= 2.05a-11)"
     ),
@@ -377,7 +378,7 @@ lazy val node = (project in file("node"))
        * https://access.redhat.com/articles/1299013
        * Red Hat will skip Java SE 9 and 10, and ship an OpenJDK distribution based on Java SE 11.
        */
-      "java-1.8.0-openjdk-headless >= 1.8.0.171",
+      "java >= 1.8.0.171",
       //"openssl >= 1.0.2k | openssl >= 1.1.0h", //centos & fedora but requires rpm 4.13 for boolean
       "openssl"
     )
