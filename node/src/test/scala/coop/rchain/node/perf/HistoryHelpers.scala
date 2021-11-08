@@ -35,7 +35,7 @@ trait HistoryHelpers[F[_]] {
   val legacySource: Boolean = false
 
   def log(msg: String)      = Sync[F].delay(println(msg))
-  def shortLog(msg: String) = Sync[F].delay(print(msg))
+  def shortLog(msg: String) = Sync[F].delay(print(msg + ", "))
 
   val concurrency = Runtime.getRuntime.availableProcessors()
 
@@ -49,8 +49,11 @@ trait HistoryHelpers[F[_]] {
   def time[A](msg: String)(block: F[A]) =
     Stopwatch.time(log)(msg)(block)
 
-  def msTime[A](block: F[A]) =
+  def msTime[A](block: F[A]): F[A] =
     Stopwatch.msTime(shortLog)(block)
+
+  def nsTime[A](block: F[A]): F[(A, Long)] =
+    Stopwatch.nsTimeToLong(block)
 
   def hash(hex: String) = Blake2b256Hash.fromHex(hex)
 

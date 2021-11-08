@@ -24,4 +24,5 @@ class RadixStore[F[_]: Sync](store: KeyValueStore[F]) {
 
   def delete(keys: Seq[ByteVector]): F[Int] =
     store.delete(keys.map(_.toDirectByteBuffer))
+
 }

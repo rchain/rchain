@@ -1,5 +1,4 @@
 package coop.rchain.node.perf
-
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
@@ -10,304 +9,494 @@ import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, Merging
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
 import coop.rchain.shared.Log
-import coop.rchain.store.{InMemoryKeyValueStore, LmdbStoreManager}
+import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
-import scodec.bits.ByteVector
 
 import java.io.File
 import java.math.BigInteger
-import java.nio.file.{Path, Paths}
-import scala.collection.concurrent.TrieMap
+import java.nio.file.Paths
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
-
-import coop.rchain.rspace.history.instances.RadixHistory7
-
 class HistoryGenKeySpec extends FlatSpec with Matchers {
 
-  //Experiment options
-//  val typeHistory: String = "RadixHistory"
-//  val typeHistory: String = "RadixHistory3"
-//  val typ eHistory: String = "RadixHistory4InMemo"
-//  val typeHistory: String = "RadixHistory4InLMDB"
-//  val typeHistory: String = "RadixHistory5InMemo"
-//  val typeHistory: String = "RadixHistory5InLMDB"
-//  val typeHistory: String = "RadixHistory6InMemo"
-//  val typeHistory: String = "RadixHistory6InLMDB"
-//  val typeHistory: String = "RadixHistory7InMemo"
-  val typeHistory: String = "RadixHistory7InLMDB"
-//  val typeHistory: String = "MergingHistoryInMemo"
-//  val typeHistory: String = "MergingHistoryInLMDB"
+  object Settings {
+//    val typeHistory: String = "MergingHistory"
+//    val typeHistory: String = "RadixHistory7"
+//    val typeHistory: String = "RadixHistory8"
+//    val typeHistory: String = "RadixHistory9"
+//    val typeHistory: String = "RadixHistory10"
+//    val typeHistory: String = "RadixHistory11"
+//    val typeHistory: String = "RadixHistory12"
+    val typeHistory: String = "RadixHistory13"
 
-//  val readTest: Boolean = false
-  val readTest: Boolean = true
+    val typeStore: String = "lmdb"
+//    val typeStore: String = "inMemo"
 
-//  val deleteCorrectnesTest: Boolean = false
-  val deleteCorrectnesTest: Boolean = true
+//    val calcSize: Boolean = false
+    val calcSize: Boolean = true
 
-  val smallTest: Boolean = false
-//  val smallTest: Boolean = true
+//    val deleteTest: Boolean = false
+    val deleteTest: Boolean = true
 
-  class TestCase[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+    val random: Boolean = false
+//    val random: Boolean = true
+
+//    val averageStatistic: Boolean = true
+    val averageStatistic: Boolean = false
+
+    val averageNum: Int    = 5
+    val averageWarmUp: Int = 10
+
+    val flagSize: Boolean = calcSize && (typeStore == "inMemo")
+
+    val taskCur: List[ExpT] = tasksLarge0
+  }
+
+  case class ExpT(initNum: Int, insReadDelNum: Int)
+
+  val tasksSmall: List[ExpT] = List(ExpT(1, 200000))
+
+  val tasksMedium0: List[ExpT] = List(
+    ExpT(1, 300),
+    ExpT(1, 1000),
+    ExpT(1, 5000),
+    ExpT(1, 10000),
+    ExpT(1, 30000)
+  )
+
+  val tasksMedium1: List[ExpT] = List(
+    ExpT(1, 5000),
+    ExpT(300, 5000),
+    ExpT(1000, 5000),
+    ExpT(5000, 5000),
+    ExpT(10000, 5000),
+    ExpT(30000, 5000)
+  )
+
+  val tasksLarge0: List[ExpT] = List(
+    ExpT(1, 10000),
+    ExpT(1, 50000),
+    ExpT(1, 100000),
+    ExpT(1, 200000),
+    ExpT(1, 300000),
+    ExpT(1, 400000),
+    ExpT(1, 500000)
+//    ExpT(1, 600000)
+//    ExpT(1, 700000),
+//    ExpT(1, 800000),
+//    ExpT(1, 900000),
+//    ExpT(1, 1000000)
+  )
+
+  val tasksLarge1: List[ExpT] = List(
+//    ExpT(100000, 100000),
+//    ExpT(200000, 100000),
+//    ExpT(300000, 100000),
+//    ExpT(400000, 100000),
+//    ExpT(500000, 100000),
+//    ExpT(600000, 100000),
+//    ExpT(700000, 100000),
+//    ExpT(800000, 100000),
+//    ExpT(900000, 100000),
+    ExpT(1000000, 100000)
+  )
+
+  def deleteFile(path: String): Boolean = new File(path).delete()
+
+  sealed trait CreateHistory[F[_]] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]]
+  }
+
+  def storeLMDB[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+      path: String
+  ): F[KeyValueStore[F]] =
+    for {
+      lmdbHistoryManager <- LmdbStoreManager(Paths.get(path), 8L * 1024 * 1024 * 1024)
+      lmdbHistoryStore   <- lmdbHistoryManager.store("db")
+      _                  <- Sync[F].delay(deleteFile(path + "/data.mdb"))
+      _                  <- Sync[F].delay(deleteFile(path + "/lock.mdb"))
+    } yield lmdbHistoryStore
+
+  sealed trait HistoryType[F[_]] { val history: History[F] }
+  case class HistoryWithoutFunc[F[_]](history: History[F]) extends HistoryType[F]
+  case class HistoryWithFunc[F[_]](
+      history: History[F],
+      sizeBytes: () => Long,
+      numRecords: () => Int
+  ) extends HistoryType[F]
+
+  case class createMergingHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = HistoryStoreInstances.historyStore(inMemoStore)
+          for { history <- MergingHistory(root, CachingHistoryStore(store)).pure } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store <- storeLMDB(lmdbPath)
+            history <- MergingHistory(
+                        root,
+                        CachingHistoryStore(HistoryStoreInstances.historyStore(store))
+                      ).pure
+          } yield HistoryWithoutFunc(history)
+
+      }
+  }
+
+  case class createRadixHistory7[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore(inMemoStore)
+          for { history <- RadixHistory7(root, store).pure } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory7(root, new RadixStore(store)).pure
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory8[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore(inMemoStore)
+          for { history <- RadixHistory8(root, store).pure } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory8(root, new RadixStore(store)).pure
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory9[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore2(inMemoStore)
+          for { history <- RadixHistory9(root, store).pure } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory9(root, new RadixStore2(store)).pure
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory10[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore3(inMemoStore)
+          for { history <- RadixHistory10[F](root, store) } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory10[F](root, new RadixStore3(store))
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory11[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore3(inMemoStore)
+          for { history <- RadixHistory11[F](root, store) } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory11[F](root, new RadixStore3(store))
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory12[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore4(inMemoStore)
+          for { history <- RadixHistory12[F](root, store) } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory12[F](root, new RadixStore4(store))
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  case class createRadixHistory13[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          inMemoStore.clear()
+          val store = new RadixStore5(inMemoStore)
+          for { history <- RadixHistory13[F](root, store) } yield HistoryWithFunc(
+            history,
+            inMemoStore.sizeBytes,
+            inMemoStore.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB(lmdbPath)
+            history <- RadixHistory13[F](root, new RadixStore5(store))
+          } yield HistoryWithoutFunc(history)
+      }
+  }
+
+  class Experiment[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       implicit ectx: ExecutionContext
   ) extends HistoryHelpers[F] {
 
     override def init: Deps =
       (ectx, Concurrent[F], ContextShift[F], Parallel[F], Log[F], Metrics[F], Span[F])
 
-    case class S(name: String, genCount: Int)
-
-    def setup1: F[List[Unit]] =
-      // Generate pairs
-      (if (smallTest)
-         List(
-//           S("gen-0.01", 10)
-           S("gen-0.01", 10),
-           S("gen-0.3", 300),
-           S("gen-1", 1000),
-           S("gen-10", 10000),
-           S("gen-20", 20000),
-           S("gen-30", 30000)
-         )
-       else
-         List(
-//           S("gen-350k", 500000)
-           S("gen-50k", 50000),
-           S("gen-100k", 100000),
-           S("gen-150k", 150000),
-           S("gen-200k", 200000),
-           S("gen-250k", 250000),
-           S("gen-300k", 300000),
-           S("gen-350k", 350000),
-           S("gen-400k", 400000),
-           S("gen-450k", 450000),
-           S("gen-500k", 500000)
-         )).traverse {
-        case S(_, genCount) =>
-          def k(s: String) = {
-            val prefix = (0 to 31 - (s.length / 2)).map(_ => "11").mkString
-            Base16.unsafeDecode(prefix + s)
-          }
-//          def k_null(s: String) = {
-//            val prefix = (0 to 31 - (s.length / 2)).map(_ => "00").mkString
-//            Base16.unsafeDecode(prefix + s)
-//          }
-
-          val v = Blake2b256Hash.fromByteArray(k("99"))
-//          val v_null = Blake2b256Hash.fromByteArray(k_null("00"))
-
-          val step = 3
-          def genTasks = {
-            val k      = step // step
-            val genMax = genCount * k
-            (0 until genMax by k).iterator.map { i =>
-              val bytes = BigInteger.valueOf(i.toLong).toByteArray
-              Blake2b256Hash.create(bytes)
-            }
-          }
-
-          def genInitTasks = {
-            val k      = step // step
-            val genMax = genCount * k
-            (1 until genMax by k).iterator.map { i =>
-              val bytes = BigInteger.valueOf(i.toLong).toByteArray
-              Blake2b256Hash.create(bytes)
-            }
-          }
-
-          def deleteFile(path: String) =
-            new File(path).delete()
-
-          def genInsertTasks(tasks: List[Blake2b256Hash]) =
-            tasks.map { t =>
-              InsertAction(t.bytes.toArray.toList, t)
-            }
-
-          def genReadTasks(tasks: List[Blake2b256Hash]) =
-            tasks.map { t =>
-              t.bytes
-            }
-
-          def readAndVerify(tasks: List[ByteVector], h: History[F]) =
-            tasks.traverse { t =>
-              h.read(t).map { leafValue =>
-                {
-                  assert(leafValue.contains(t), "Test read not passed")
-                  leafValue
-                }
-              }
-            }
-
-          def genDeleteTasks(tasks: List[Blake2b256Hash]) =
-            tasks.map { t =>
-              DeleteAction(t.bytes.toArray.toList)
-            }
-
-          def saveGroups(tasks: List[List[Blake2b256Hash]], h: History[F]): F[History[F]] =
-            tasks match {
-              case List() =>
-                h.pure[F]
-              case next +: tail =>
-                for {
-                  insertTasks <- Sync[F].delay(genInsertTasks(next))
-                  hh          <- h.process(insertTasks)
-                  r           <- saveGroups(tail, hh)
-                } yield r
-            }
-
-          def readGroups(tasks: List[List[Blake2b256Hash]], h: History[F]): F[History[F]] =
-            tasks match {
-              case List() =>
-                h.pure[F]
-              case next +: tail =>
-                for {
-                  readTasks <- Sync[F].delay(genReadTasks(next))
-                  _         <- readAndVerify(readTasks, h)
-                  r         <- readGroups(tail, h)
-                } yield r
-            }
-
-          def deleteGroups(tasks: List[List[Blake2b256Hash]], h: History[F]): F[History[F]] =
-            tasks match {
-              case List() =>
-                h.pure[F]
-              case next +: tail =>
-                for {
-                  deleteTasks <- Sync[F].delay(genDeleteTasks(next))
-                  hh          <- h.process(deleteTasks)
-                  r           <- deleteGroups(tail, hh)
-                } yield r
-            }
-
-          // Save all with history process
-
-          //          val dataDir = Paths.get("~/temp")
-          val dataDirLMDBmain       = Paths.get("/git/temp")
-          val dataDirLMDBwarmUp     = Paths.get("/git/temp2")
-          val storeNameLMDB: String = "db"
-
-          def createHistory(dataDirLMDB: Path): F[History[F]] =
-            for {
-
-              lmdbHistoryManager <- LmdbStoreManager(
-                                     dataDirLMDB,
-                                     8L * 1024 * 1024 * 1024
-                                   )
-              lmdbHistoryStore <- lmdbHistoryManager.store(storeNameLMDB)
-
-              history = typeHistory match {
-                case "RadixHistory" =>
-                  val store = TrieMap[ByteVector, ByteVector]()
-                  RadixHistory(v, store)
-                case "RadixHistory3" =>
-                  val store = TrieMap[ByteVector, ByteVector]()
-                  RadixHistory3(v, store)
-                case "RadixHistory4InMemo" =>
-                  val store = new RadixStore(InMemoryKeyValueStore[F])
-                  RadixHistory4(v, store)
-                case "RadixHistory4InLMDB" =>
-                  val store = new RadixStore(lmdbHistoryStore)
-                  RadixHistory4(v, store)
-                case "RadixHistory5InMemo" =>
-                  val store = new RadixStore(InMemoryKeyValueStore[F])
-                  RadixHistory5(v, store)
-                case "RadixHistory5InLMDB" =>
-                  deleteFile(dataDirLMDB + "/data.mdb")
-                  deleteFile(dataDirLMDB + "/lock.mdb")
-                  val store = new RadixStore(lmdbHistoryStore)
-                  RadixHistory5(v, store)
-                case "RadixHistory6InMemo" =>
-                  val store = new RadixStore(InMemoryKeyValueStore[F])
-                  RadixHistory6(v, store)
-                case "RadixHistory6InLMDB" =>
-                  deleteFile(dataDirLMDB + "/data.mdb")
-                  deleteFile(dataDirLMDB + "/lock.mdb")
-                  val store = new RadixStore(lmdbHistoryStore)
-                  RadixHistory6(v, store)
-                case "RadixHistory7InMemo" =>
-                  val store = new RadixStore(InMemoryKeyValueStore[F])
-                  RadixHistory7(v, store)
-                case "RadixHistory7InLMDB" =>
-                  deleteFile(dataDirLMDB + "/data.mdb")
-                  deleteFile(dataDirLMDB + "/lock.mdb")
-                  val store = new RadixStore(lmdbHistoryStore)
-                  RadixHistory7(v, store)
-                case "MergingHistoryInMemo" =>
-                  val store = HistoryStoreInstances.historyStore(InMemoryKeyValueStore[F])
-                  MergingHistory(v, CachingHistoryStore(store))
-                case "MergingHistoryInLMDB" =>
-                  deleteFile(dataDirLMDB + "/data.mdb")
-                  deleteFile(dataDirLMDB + "/lock.mdb")
-                  val store = HistoryStoreInstances.historyStore(lmdbHistoryStore)
-                  MergingHistory(v, CachingHistoryStore(store))
-              }
-            } yield history
-
-//          def sToBArr(str: String): List[Byte] = ByteVector.fromHex(str).get.toArray.toList
-
-          val saveHistory = for {
-            initTasks <- Sync[F].delay(genInitTasks.toList)
-            tasks     <- Sync[F].delay(genTasks.toList)
-
-            _           <- shortLog(s"${tasks.size} ")
-            sizeInGroup = 100000000
-
-            historySaveW <- createHistory(dataDirLMDBwarmUp) //for warm up
-            historySave  <- createHistory(dataDirLMDBmain)
-
-            initilalHistoryW <- saveGroups(initTasks.grouped(sizeInGroup).toList, historySaveW)
-            initilalHistory  <- saveGroups(initTasks.grouped(sizeInGroup).toList, historySave)
-
-            saveAllW = saveGroups(tasks.grouped(sizeInGroup).toList, initilalHistoryW)
-            saveAll  = saveGroups(tasks.grouped(sizeInGroup).toList, initilalHistory)
-
-            saveHistoryW <- (saveAllW)
-            saveHistory  <- msTime(saveAll)
-
-            _ <- shortLog(" ")
-
-            readAllW = readGroups(tasks.grouped(sizeInGroup).toList, saveHistoryW)
-            readAll  = readGroups(tasks.grouped(sizeInGroup).toList, saveHistory)
-            _ <- {
-              for {
-                _ <- (readAllW)
-                _ <- msTime(readAll)
-                _ <- shortLog(" ")
-              } yield ()
-            }.whenA(readTest)
-
-            deleteAllW = deleteGroups(tasks.grouped(sizeInGroup).toList, saveHistoryW)
-            deleteAll  = deleteGroups(tasks.grouped(sizeInGroup).toList, saveHistory)
-
-            deleteHistoryW <- (deleteAllW)
-            deleteHistory  <- msTime(deleteAll)
-
-            _ <- shortLog("\n")
-
-            _ <- Sync[F]
-                  .delay(
-                    assert(initilalHistory.root == deleteHistory.root, "Test delete not passed")
-                  )
-                  .whenA(deleteCorrectnesTest)
-            // Results
-            result = (tasks, deleteHistory.root)
-
-          } yield result
-
-          for {
-            _ <- saveHistory
-          } yield ()
+    def getHistory(root: Blake2b256Hash, path: String): F[HistoryType[F]] =
+      Settings.typeHistory match {
+        case "MergingHistory" => createMergingHistory[F].create(root, path)
+        case "RadixHistory7"  => createRadixHistory7[F].create(root, path)
+        case "RadixHistory8"  => createRadixHistory8[F].create(root, path)
+        case "RadixHistory9"  => createRadixHistory9[F].create(root, path)
+        case "RadixHistory10" => createRadixHistory10[F].create(root, path)
+        case "RadixHistory11" => createRadixHistory11[F].create(root, path)
+        case "RadixHistory12" => createRadixHistory12[F].create(root, path)
+        case "RadixHistory13" => createRadixHistory13[F].create(root, path)
       }
 
-    val setup: F[Unit] =
+    def fill32Bytes(s: String): Array[Byte] = {
+      val prefix = (0 to 31 - (s.length / 2)).map(_ => "11").mkString
+      Base16.unsafeDecode(prefix + s)
+    }
+
+    val v0: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("00"))
+    val v1: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("01"))
+    val v2: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("02"))
+
+    def simpleExperiment: F[Unit] =
       for {
-        _ <- log(typeHistory)
-        _ <- log(
-              if (readTest) s"[Num record] [insert(ms)] [read(ms)] [delete(ms)]"
-              else s"[Num record] [insert(ms)] [delete(ms)]"
-            )
-        _ <- setup1
+        historyInit <- getHistory(v0, "/git/temp")
+        history1    <- historyInit.history.process(InsertAction(v1.bytes.toArray, v1) :: Nil)
+        v1NewOpt    <- history1.read(v1.bytes)
+        _           <- assert(v1NewOpt.get == v1.bytes, "error").pure
+        history2    <- history1.process(InsertAction(v2.bytes.toArray, v2) :: Nil)
+        v2NewOpt    <- history2.read(v2.bytes)
+        _           <- assert(v2NewOpt.get == v2.bytes, "error").pure
+        history3    <- history2.process(DeleteAction(v2.bytes.toArray) :: Nil)
+        _           <- assert(history3.root == history1.root, "error").pure
       } yield ()
+
+    def experiment(numInit: Int, numInsReadDel: Int): F[Unit] = {
+
+      val step = 3
+
+      def genInitTasks = {
+        val k      = step // step
+        val genMax = numInit * k
+        val r      = scala.util.Random
+        (1 until genMax by k).iterator.map { i =>
+          val value: Long = if (Settings.random) r.nextLong() else i.toLong
+          val bytes       = BigInteger.valueOf(value).toByteArray
+          Blake2b256Hash.create(bytes)
+        }
+      }
+
+      def genTasks = {
+        val k      = step // step
+        val genMax = numInsReadDel * k
+        val r      = scala.util.Random
+        (0 until genMax by k).iterator.map { i =>
+          val value: Long = if (Settings.random) r.nextLong() else i.toLong
+          val bytes       = BigInteger.valueOf(value).toByteArray
+          Blake2b256Hash.create(bytes)
+        }
+      }
+
+      def readAndVerify(h: History[F], tasks: List[Blake2b256Hash]) =
+        tasks.traverse { t =>
+          h.read(t.bytes).map(readVal => assert(readVal.contains(t.bytes), "Test read not passed"))
+        }
+
+      def calcSizeBytesAndNumRecords(h: HistoryType[F]): Option[(Long, Int)] =
+        if (Settings.flagSize) h match {
+          case HistoryWithFunc(_, sizeBytes, numRecords) => (sizeBytes(), numRecords()).some
+          case HistoryWithoutFunc(_)                     => (0L, 0).some
+        } else none
+
+      val result =
+        (0 until (Settings.averageNum + Settings.averageWarmUp)).toList
+          .foldM((0L, 0L, 0L, (0L, 0), (0L, 0), (0L, 0))) {
+            case (initData, i) =>
+              def statistic(
+                  timeI: Long,
+                  timeR: Long,
+                  timeD: Long,
+                  sizeInit: (Long, Int),
+                  sizeI: (Long, Int),
+                  sizeD: (Long, Int)
+              ): Unit = {
+                def iI(v: Int)   = "%10d) ".format(v)
+                def num(v: Int)  = "%10d ".format(v)
+                def sec(v: Long) = "%10.3f ".format(v.toDouble / 1000)
+                def MB(v: (Long, Int)) =
+                  "[%10.3f  %10d]".format(v._1.toDouble / (1024 * 1024), v._2)
+
+                val strSize = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
+
+                val str = iI(i) + num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) +
+                  sec(timeD) + strSize
+                println(str)
+              }
+
+              val initHashes        = genInitTasks.toList
+              val initInsertActions = initHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
+
+              val insReadDelHashes = genTasks.toList
+              val insertActions    = insReadDelHashes.map(x => InsertAction(x.bytes.toArray.toList, x))
+              val deleteActions    = insReadDelHashes.map(x => DeleteAction(x.bytes.toArray.toList))
+
+              for {
+                historyInitW <- getHistory(v0, "/git/temp2")
+                historyInit  <- getHistory(v0, "/git/temp")
+
+                history1W <- historyInitW.history.process(initInsertActions)
+                history1  <- historyInit.history.process(initInsertActions)
+
+                size0 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+
+                history2W         <- history1W.process(insertActions)
+                temp              <- nsTime(history1.process(insertActions))
+                (history2, time0) = temp
+
+                size1 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+
+                _          <- readAndVerify(history2W, insReadDelHashes)
+                temp       <- nsTime(readAndVerify(history2, insReadDelHashes))
+                (_, time1) = temp
+
+                _                 <- history2W.process(deleteActions)
+                temp              <- nsTime(history2.process(deleteActions))
+                (history3, time2) = temp
+
+                size2 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+
+                _ <- Sync[F]
+                      .delay(assert(history3.root == history1.root, "Test delete not passed"))
+                      .whenA(Settings.deleteTest)
+
+                _ = if (Settings.averageStatistic)
+                  statistic(
+                    time0,
+                    time1,
+                    time2,
+                    size0.getOrElse((0L, 0)),
+                    size1.getOrElse((0L, 0)),
+                    size2.getOrElse((0L, 0))
+                  )
+                (timeI, timeR, timeD, sizeInit, sizeI, sizeD) = initData
+              } yield
+                if (i < Settings.averageWarmUp) (timeI, timeR, timeD, sizeInit, sizeI, sizeD)
+                else
+                  (
+                    timeI + time0,
+                    timeR + time1,
+                    timeD + time2,
+                    (
+                      sizeInit._1 + size0.getOrElse(0L, 0)._1,
+                      sizeInit._2 + size0.getOrElse(0L, 0)._2
+                    ),
+                    (sizeI._1 + size1.getOrElse(0L, 0)._1, sizeI._2 + size1.getOrElse(0L, 0)._2),
+                    (sizeD._1 + size2.getOrElse(0L, 0)._1, sizeD._2 + size2.getOrElse(0L, 0)._2)
+                  )
+
+          }
+
+      result.map { x =>
+        def num(v: Int)  = "%10d, ".format(v)
+        def sec(v: Long) = "%10.3f, ".format(v.toDouble / (1000 * Settings.averageNum))
+        def MB(v: (Long, Int)) =
+          "%10.3f,  %10.0f,".format(
+            v._1.toDouble / (1024 * 1024 * Settings.averageNum),
+            v._2.toDouble / Settings.averageNum
+          )
+
+        val (timeI, timeR, timeD, sizeInit, sizeI, sizeD) = x
+        val strSize                                       = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
+        val str                                           = num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) + sec(timeD) + strSize
+        println(str)
+      }
+    }
+
+    def fS(v: String): String = "%10s, ".format(v)
+    val test: F[Unit] = {
+      for {
+        _ <- println(Settings.typeHistory).pure
+
+        strSize = if (Settings.flagSize)
+          fS("[sizeInit(MB)") + fS("numInit]") + fS("[sizeI(MB)") +
+            fS("numI]") + fS("[sizeD(MB)") + fS("numD]")
+        else ""
+        str = fS("numInit") + fS("numIRD") + fS("timeI(sec)") + fS("timeR(sec)") + fS(
+          "timeD(sec)"
+        ) + strSize
+        _ <- println(str).pure
+
+        _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
+      } yield ()
+    }
+
   }
 
   it should "execute with monix" in {
@@ -318,7 +507,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     implicit val met: Metrics.MetricsNOP[Task] = new Metrics.MetricsNOP[Task]()
     implicit val spn: NoopSpan[Task]           = new NoopSpan[Task]()
 
-    val t = new TestCase[Task]
-    t.setup.runSyncUnsafe()
+    val t = new Experiment[Task]
+    t.test.runSyncUnsafe()
   }
 }

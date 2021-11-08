@@ -1,25 +1,19 @@
 package coop.rchain.blockstorage
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import cats.instances.tuple._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{
-  ApprovedBlock,
-  ApprovedBlockCandidate,
-  BlockMessage,
-  BlockMessageProto
-}
+import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate, BlockMessage}
 import coop.rchain.models.blockImplicits.{blockElementGen, blockElementsGen}
 import coop.rchain.shared.ByteStringOps.RichByteString
-import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.store.KeyValueStore
 import monix.eval.Task
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FlatSpec, Matchers}
+
+import java.nio.ByteBuffer
 
 class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
@@ -68,7 +62,6 @@ class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDriven
   implicit val scheduler = monix.execution.Scheduler.global
 
   import KeyValueBlockStore._
-  import coop.rchain.shared.ByteStringOps._
 
   val blockProtoToByteString = blockProtoToBytes _ andThen ByteString.copyFrom
 
