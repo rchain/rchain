@@ -54,10 +54,6 @@ final case class TransationOptions(arguments: Seq[String]) extends ScallopConf(a
     descr = "Genesis bonds path.",
     required = true
   )
-  val transactionDir = opt[Path](
-    descr = "Transaction server lmdb path.",
-    required = true
-  )
 
   verify()
 
@@ -65,19 +61,17 @@ final case class TransationOptions(arguments: Seq[String]) extends ScallopConf(a
 object TransactionBalanceMain {
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   def main(args: Array[String]): Unit = {
-    val options        = TransationOptions(args)
-    val dataDir        = options.dataDir()
-    val blockHash      = options.blockHash()
-    val walletPath     = options.walletPath()
-    val bondsPath      = options.bondPath()
-    val transactionDir = options.transactionDir()
-    val outputDir      = options.outputDir()
+    val options    = TransationOptions(args)
+    val dataDir    = options.dataDir()
+    val blockHash  = options.blockHash()
+    val walletPath = options.walletPath()
+    val bondsPath  = options.bondPath()
+    val outputDir  = options.outputDir()
     if (!Files.exists(outputDir)) {
       Files.createDirectory(outputDir)
     }
 
     val transactionBalancesFile = outputDir.resolve("transactionBalances.csv")
-    val transferHistory         = outputDir.resolve("transfer")
 
     implicit val tc = Concurrent[Task]
 
@@ -86,22 +80,9 @@ object TransactionBalanceMain {
                  dataDir,
                  walletPath,
                  bondsPath,
-                 transactionDir,
                  blockHash
                )
-      (transactionBalances, transfer) = result
-      _ = {
-        transfer.toList.foreach {
-          case (addr, transfers) => {
-            val historyFile = transferHistory.resolve(s"${addr}.csv")
-            val bw          = new PrintWriter(historyFile.toFile)
-            transfers.toList.foreach(
-              t => bw.write(s"${t.toAddr},${t.fromAddr},${t.amount},${t.blockNumber}\n")
-            )
-            bw.close()
-          }
-        }
-      }
+      transactionBalances = result
       _ = {
         val file = transactionBalancesFile.toFile
         val bw   = new PrintWriter(file)

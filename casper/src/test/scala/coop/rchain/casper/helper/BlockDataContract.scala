@@ -8,7 +8,7 @@ import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 import coop.rchain.rholang.interpreter.SystemProcesses.ProcessContext
 
 object BlockDataContract {
-  import cats.implicits._
+  import cats.syntax.all._
 
   def set[F[_]: Concurrent: Span](
       ctx: ProcessContext[F]

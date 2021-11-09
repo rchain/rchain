@@ -13,8 +13,7 @@ import coop.rchain.casper.protocol.{
   BlockMessageProto
 }
 import coop.rchain.models.blockImplicits.{blockElementGen, blockElementsGen}
-import coop.rchain.shared.ByteStringOps.RichByteString
-import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.models.syntax._
 import coop.rchain.store.KeyValueStore
 import monix.eval.Task
 import org.scalacheck.Arbitrary.arbitrary
@@ -68,7 +67,7 @@ class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDriven
   implicit val scheduler = monix.execution.Scheduler.global
 
   import KeyValueBlockStore._
-  import coop.rchain.shared.ByteStringOps._
+  import coop.rchain.models.syntax._
 
   val blockProtoToByteString = blockProtoToBytes _ andThen ByteString.copyFrom
 
@@ -138,56 +137,6 @@ class KeyValueBlockStoreSpec extends FlatSpec with Matchers with GeneratorDriven
 
       // Result should be testing block
       kv.inputPut shouldBe Seq(blockBytes)
-    }
-  }
-
-  it should "iterate over data in underlying key-value store" in {
-    forAll(blockElementsGen, sizeRange(25)) { blocks =>
-      def toBufferKV(block: BlockMessage) = {
-        val key   = block.blockHash
-        val value = ByteString.copyFrom(blockProtoToBytes(block.toProto))
-        (key, (value, block))
-      }
-
-      // Testing state
-      val blocksBytesMap: Map[ByteString, (ByteString, BlockMessage)] = blocks.map(toBufferKV).toMap
-      val bytesMap: Map[ByteString, ByteString]                       = blocksBytesMap.map(_.map(_._1))
-      val blocksMap: Map[ByteString, BlockMessage]                    = blocksBytesMap.map(_.map(_._2))
-
-      // Underlying key-value store
-      val kv = new KV[Task](none, bytesMap)
-
-      // Block store under testing
-      val bs = new KeyValueBlockStore(kv, notImplementedKV)
-
-      if (blocks.nonEmpty) {
-        // Pick one key to search for
-        val searchKey = blocksMap.head._1
-
-        // Find block with that key
-        val result = bs.find(_ == searchKey).runSyncUnsafe()
-
-        // Result should be key/block pair
-        result shouldBe Seq((searchKey, blocksMap(searchKey)))
-
-        // Find no blocks for non existing key
-        val resultEmpty = bs.find(_ == ByteString.EMPTY).runSyncUnsafe()
-
-        // Result should be empty
-        resultEmpty shouldBe Seq.empty
-
-        // Find multiple blocks
-        val resultMulti = bs.find(blocksBytesMap.keySet(_)).runSyncUnsafe()
-
-        // Result should be all testing blocks
-        resultMulti.toSet shouldBe blocksMap.toSet
-      } else {
-        // Find no blocks for empty store
-        val result = bs.find(_ == ByteString.EMPTY).runSyncUnsafe()
-
-        // Result should be empty
-        result shouldBe Seq.empty
-      }
     }
   }
 

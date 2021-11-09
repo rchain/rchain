@@ -1,6 +1,7 @@
 package coop.rchain.crypto.encryption
 
 import coop.rchain.crypto.codec._
+import coop.rchain.shared.Base16
 import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 
 class Curve25519Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {

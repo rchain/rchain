@@ -1,12 +1,11 @@
 package coop.rchain.rholang.interpreter.util
 
 import java.util.Arrays
-
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Keccak256}
 import coop.rchain.models.GPrivate
 import coop.rchain.rholang.interpreter.util.codec.Base58
+import coop.rchain.shared.Base16
 
 final case class Address(prefix: Array[Byte], keyHash: Array[Byte], checksum: Array[Byte]) {
 

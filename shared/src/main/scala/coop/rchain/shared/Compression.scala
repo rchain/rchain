@@ -1,6 +1,6 @@
 package coop.rchain.shared
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 import net.jpountz.lz4._
 import scala.util.Try
 

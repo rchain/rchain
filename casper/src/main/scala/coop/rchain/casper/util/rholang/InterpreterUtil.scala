@@ -26,6 +26,7 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
+import retry._
 
 import scala.collection.Seq
 
@@ -49,7 +50,7 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
       block: BlockMessage,
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
@@ -98,7 +99,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore](
+  private def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -119,13 +120,34 @@ object InterpreterUtil {
         _         <- Span[F].mark("before-process-pre-state-hash")
         blockData = BlockData.fromBlock(block)
         isGenesis = block.header.parentsHashList.isEmpty
-        replayResult <- runtimeManager.replayComputeState(initialStateHash)(
-                         internalDeploys,
-                         internalSystemDeploys,
-                         blockData,
-                         invalidBlocks,
-                         isGenesis
-                       )
+        replayResultF = runtimeManager.replayComputeState(initialStateHash)(
+          internalDeploys,
+          internalSystemDeploys,
+          blockData,
+          invalidBlocks,
+          isGenesis
+        )
+        replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
+                         RetryPolicies.limitRetries(3), {
+                           case Right(stateHash) => stateHash == block.body.state.postStateHash
+                           case _                => false
+                         },
+                         (e, retryDetails) =>
+                           e match {
+                             case Right(stateHash) =>
+                               Log[F].error(
+                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} with " +
+                                   s"${PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash)} " +
+                                   s"got tuple space mismatch error with error hash ${PrettyPrinter
+                                     .buildStringNoLimit(stateHash)}, retries details: ${retryDetails}"
+                               )
+                             case Left(replayError) =>
+                               Log[F].error(
+                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} got " +
+                                   s"error ${replayError}, retries details: ${retryDetails}"
+                               )
+                           }
+                       )(replayResultF)
       } yield replayResult
     }
 

@@ -2,7 +2,7 @@ package coop.rchain.casper.engine
 
 import cats.Parallel
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -32,7 +32,7 @@ object CasperLaunch {
 
   // format: off
   def of[F[_]
-    /* Execution */   : Concurrent: Parallel: ContextShift: Time
+    /* Execution */   : Concurrent: Parallel: ContextShift: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager

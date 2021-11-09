@@ -1,7 +1,7 @@
 package coop.rchain.shared
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 
 import scala.concurrent.SyncVar
 

@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 import cats._
 import cats.effect.Timer
 import cats.effect.concurrent.MVar2
-import cats.implicits._
+import cats.syntax.all._
 
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._

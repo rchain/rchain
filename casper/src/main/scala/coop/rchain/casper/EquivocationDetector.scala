@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import cats.effect.Sync
 import cats.{Applicative, Monad}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
 import coop.rchain.blockstorage.BlockStore

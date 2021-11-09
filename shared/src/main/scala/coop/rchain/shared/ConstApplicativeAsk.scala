@@ -1,6 +1,6 @@
 package coop.rchain.shared
 
-import cats._, cats.data._, cats.implicits._, cats.mtl._
+import cats._, cats.data._, cats.syntax.all._, cats.mtl._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 
 class ConstApplicativeAsk[F[_]: Applicative, E](e: E) extends ApplicativeAsk[F, E] {

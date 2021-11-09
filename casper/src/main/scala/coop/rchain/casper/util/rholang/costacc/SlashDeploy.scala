@@ -33,7 +33,7 @@ final case class SlashDeploy(
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected override val normalizerEnv = new NormalizerEnv(
-    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkSysAuthToken :: mkReturnChannel :: HNil
+    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.toHexString)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =

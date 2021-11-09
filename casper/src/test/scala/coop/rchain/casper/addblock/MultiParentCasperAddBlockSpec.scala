@@ -14,11 +14,11 @@ import coop.rchain.casper.util.rholang.RegistrySigGen
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.comm.rp.ProtocolHelper.packet
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}

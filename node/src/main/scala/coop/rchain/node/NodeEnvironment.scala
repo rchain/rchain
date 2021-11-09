@@ -2,17 +2,15 @@ package coop.rchain.node
 
 import java.io.File
 import java.security.cert.X509Certificate
-
 import scala.util._
 import cats._
 import cats.data._
 import cats.effect.Sync
 import cats.implicits._
 import coop.rchain.comm._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.CertificateHelper
 import coop.rchain.node.configuration.NodeConf
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler
 
