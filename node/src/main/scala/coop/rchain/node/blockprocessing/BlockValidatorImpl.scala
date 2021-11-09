@@ -81,6 +81,7 @@ final case class BlockValidatorImpl[F[_]
                 }
             _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
             _ <- bufferStorage.delete(message)
+            _ <- updateLatestScope(newRepr)
           } yield (newRepr, r))
       (newRepr, r) = v
       _ <- Log[F].info(
@@ -88,7 +89,6 @@ final case class BlockValidatorImpl[F[_]
               .map(_.show.take(10))
               .mkString("; ")}]."
           )
-      _ <- updateLatestScope(newRepr)
     } yield r
   }
   override def appendToInput(message: BlockHash): F[Unit] = append(message)

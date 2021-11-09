@@ -139,7 +139,8 @@ object DeployChainSetCasper {
       ) = r
       _ <- Log[F].info(
             s"Finalization fringe merged in $mergeTime: ${acceptedSet.size} DC merged, " +
-              s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime."
+              s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime. " +
+              s"State $finalizedState, base ${base.message.blockHash.show.take(10)}."
           )
     } yield finalizedState
   }

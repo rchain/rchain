@@ -146,10 +146,11 @@ class MultiParentCasperImpl[F[_]
             )
           )
       ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
-      _ <- Log[F].info(
-            s"Message scope (${messageScope.conflictScope.v.size} messages) computed in $messageScopeT, " +
-              s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
-          )
+      snapshotTargetStr                                                           = targetMessageOpt.map(_.blockHash.show.take(10)).getOrElse("propose")
+      logStr = s"Message scope computed for $snapshotTargetStr ($messageScopeT). " +
+        s"Finalized state: $finalState, conflict scope: ${messageScope.conflictScope.v.size} messages, " +
+        s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
+      _ <- Log[F].info(logStr)
 
       // some technical information
       maxBlockNum   = latestMessages.map(_.blockNum).max
