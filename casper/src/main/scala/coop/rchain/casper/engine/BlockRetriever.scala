@@ -48,9 +48,6 @@ trait BlockRetriever[F[_]] {
 
   /** Acknowledge Casper added block */
   def ackInCasper(hash: BlockHash): F[Unit]
-
-  /** If block is received and waiting for Casper to add it */
-  def isReceived(hash: BlockHash): F[Boolean]
 }
 
 object BlockRetriever {
@@ -260,7 +257,7 @@ object BlockRetriever {
               }
         } yield ()
 
-      override def isReceived(hash: BlockHash): F[Boolean] =
+      private def isReceived(hash: BlockHash): F[Boolean] =
         RequestedBlocks.get(hash).map(x => x.nonEmpty && x.get.received)
 
       override def requestAll(
