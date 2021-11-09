@@ -113,9 +113,11 @@ object DeployChainSetCasper {
       dag: BlockDagRepresentation[F],
       finalizedRejections: Set[DeployChain],
       fillMergingIndex: List[BlockHash] => F[Unit]
-  )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] =
+  )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] = {
+    val rejected = fringe.flatMap(_.stateMetadata.rejectedSet)
+    val virgin   = (m: BlockMetadata) => (m.stateMetadata.proposed.toSet intersect rejected).isEmpty
     for {
-      r                <- BlockMetadataDag(dag).mergeScope(fringe)
+      r                <- BlockMetadataDag(dag).mergeScope(fringe, virgin)
       (base, mergeSet) = r
       _                <- fillMergingIndex(mergeSet.map(_.blockHash).toList)
       acceptedSet      = mergeSet.flatMap(_.stateMetadata.proposed) diff finalizedRejections
@@ -140,4 +142,5 @@ object DeployChainSetCasper {
               s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime."
           )
     } yield finalizedState
+  }
 }

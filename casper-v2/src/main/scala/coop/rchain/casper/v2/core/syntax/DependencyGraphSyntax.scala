@@ -56,7 +56,8 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
   }
 
   def highestCommonMessage(
-      messages: Set[M]
+      messages: Set[M],
+      requirement: M => Boolean = _ => true
   )(implicit sync: Sync[F], ordering: Ordering[M]): F[Option[CommonMessage[M]]] = {
     val latestSeqNums =
       messages.map(m => sender(m) -> seqNum(m)).toMap
@@ -72,7 +73,7 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
           // If target has yetNotVisitors in justification - result is reached
           justifications(target)
             .map { js =>
-              (yetNotVisitors -- js).isEmpty
+              ((yetNotVisitors -- js).isEmpty && requirement(target))
                 .guard[Option]
                 .as(CommonMessage(target, js.toSet, newVisitors - target))
             }
@@ -98,11 +99,11 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
   /**
     * @return Scope required to merge multiple messages.
     */
-  def mergeScope(messages: Set[M])(
+  def mergeScope(messages: Set[M], requirement: M => Boolean = _ => true)(
       implicit sync: Sync[F],
       ordering: Ordering[M]
   ): F[(CommonMessage[M], Set[M])] =
-    highestCommonMessage(messages)
+    highestCommonMessage(messages, requirement)
       .flatMap(_.liftTo[F](NoCommonMessage))
       .flatMap {
         case hcm @ CommonMessage(base, _, unseenPart) =>
