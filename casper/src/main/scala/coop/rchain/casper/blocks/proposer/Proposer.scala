@@ -1,7 +1,7 @@
 package coop.rchain.casper.blocks.proposer
 
 import cats.effect.Concurrent
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
@@ -122,7 +122,8 @@ object Proposer {
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None,
       casperConf: CasperConf,
-      blockDagStateRef: Ref[F, BlockDagState]
+      blockDagStateRef: Ref[F, BlockDagState],
+      blockDagUpdateLock: Semaphore[F]
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
     val getCasperSnapshot = new MultiParentCasperImpl(
       validatorIdentity.some,
@@ -143,16 +144,19 @@ object Proposer {
     val proposeEffect = (b: BlockMessage, s: CasperSnapshot[F]) =>
       // store block
       BlockStore[F].put(b) >>
-        // save changes to Casper
-        new MultiParentCasperImpl(
-          validatorIdentity.some,
-          casperConf.faultToleranceThreshold,
-          casperConf.shardName
-        ).handleValidBlock(b, s, false).flatMap { dag =>
-          MultiParentCasperImpl.updateLatestScope(dag)
-        } >>
-        // inform block retriever about block
-        BlockRetriever[F].ackInCasper(b.blockHash) >>
+        blockDagUpdateLock.withPermit(
+          // save changes to Casper
+          new MultiParentCasperImpl(
+            validatorIdentity.some,
+            casperConf.faultToleranceThreshold,
+            casperConf.shardName
+          ).handleValidBlock(b, s, false).flatMap { dag =>
+            blockDagStateRef.update(_.ackValidated(b.blockHash, dag.getPureState).newState) >>
+              MultiParentCasperImpl.updateLatestScope(dag)
+          } >>
+            // inform block retriever about block
+            BlockRetriever[F].ackInCasper(b.blockHash)
+        ) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event

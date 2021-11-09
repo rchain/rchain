@@ -2,7 +2,7 @@ package coop.rchain.node.blockprocessing
 
 import cats.data.EitherT
 import cats.effect.Concurrent
-import cats.effect.concurrent.Ref
+import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage.CasperBufferStorage
@@ -24,7 +24,8 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
     override val input: Stream[F, BlockHash],
     block: TrieMap[BlockHash, BlockMessage], // this servers as a buffer to address full message
     blockDagState: Ref[F, BlockDagState],
-    bufferStorage: CasperBufferStorage[F]
+    bufferStorage: CasperBufferStorage[F],
+    blockDagUpdateLock: Semaphore[F]
 ) extends MessageReceiver[F, BlockHash, BlockDagState] {
 
   override def checkIgnore(
@@ -54,27 +55,29 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
   override def receivedEffect(
       message: BlockHash
   ): F[ReceiveResult[BlockHash, BlockDagState]] =
-    blockDagState
-      .modify { state =>
-        val AckReceivedResult(newState, changes, dependenciesPending, dependenciesToRequest) =
-          state.ackReceived(
-            message,
-            block(message).justifications.map(_.latestBlockHash).toSet
+    blockDagUpdateLock.withPermit(
+      blockDagState
+        .modify { state =>
+          val AckReceivedResult(newState, changes, dependenciesPending, dependenciesToRequest) =
+            state.ackReceived(
+              message,
+              block(message).justifications.map(_.latestBlockHash).toSet
+            )
+          (
+            newState,
+            (changes, ReceiveResult(newState, dependenciesPending, dependenciesToRequest))
           )
-        (
-          newState,
-          (changes, ReceiveResult(newState, dependenciesPending, dependenciesToRequest))
-        )
-      }
-      .flatMap { case (changes, r) => bufferStorage.put(changes.toSeq).as(r) }
-      // clean blocks map buffer to not leak memory
-      .flatTap { r =>
-        block.remove(message).pure >> Log[F].info(
-          s"receivedEffect toReq:${PrettyPrinter
-            .buildString(r.dependenciesToRetrieve)} pending: ${PrettyPrinter
-            .buildString(r.dependenciesPending)}"
-        )
-      }
+        }
+        .flatMap { case (changes, r) => bufferStorage.put(changes.toSeq).as(r) }
+        // clean blocks map buffer to not leak memory
+        .flatTap { r =>
+          block.remove(message).pure >> Log[F].info(
+            s"receivedEffect toReq:${PrettyPrinter
+              .buildString(r.dependenciesToRetrieve)} pending: ${PrettyPrinter
+              .buildString(r.dependenciesPending)}"
+          )
+        }
+    )
 }
 
 object BlockReceiverImpl {
@@ -84,7 +87,8 @@ object BlockReceiverImpl {
       input: Stream[F, BlockMessage],
       blockDagState: Ref[F, BlockDagState],
       bufferStorage: CasperBufferStorage[F],
-      blockStore: BlockStore[F]
+      blockStore: BlockStore[F],
+      blockDagUpdateLock: Semaphore[F]
   ): MessageReceiver[F, BlockHash, BlockDagState] = {
     // This is make implementation meet trait, to work on BlockHash not full message
     val buffer      = TrieMap.empty[BlockHash, BlockMessage]
@@ -95,6 +99,6 @@ object BlockReceiverImpl {
         buffer.update(b.blockHash, b)
         b.blockHash
       }
-    BlockReceiverImpl[F](s, buffer, blockDagState, bufferStorage)
+    BlockReceiverImpl[F](s, buffer, blockDagState, bufferStorage, blockDagUpdateLock)
   }
 }

@@ -45,7 +45,8 @@ final case class BlockValidatorImpl[F[_]
     append: BlockHash => F[Unit],
     blockDagStatRef: Ref[F, BlockDagState],
     casperConf: CasperConf,
-    bufferStorage: CasperBufferStorage[F]
+    bufferStorage: CasperBufferStorage[F],
+    blockDagUpdateLock: Semaphore[F]
 ) extends MessageValidator[F, BlockHash, BlockDagState] {
 
   override def validate(message: BlockHash): F[ValidationResult[BlockHash, BlockDagState]] = {
@@ -62,22 +63,26 @@ final case class BlockValidatorImpl[F[_]
       validationResult <- casper.validate(block, snapshot)
       offenceOpt       = validationResult.swap.toOption.map(BlockStatus.toOffence)
       _                <- Log[F].info(s"Validating ${message.show.take(10)}. Done. Invoking Effects.")
-      // Todo implement precise offence storage + make pure state output changes for storage, not vice versa
-      newRepr <- validationResult match {
-                  case Left(v: InvalidBlock) => casper.handleInvalidBlock(block, v, snapshot)
-                  case _                     => casper.handleValidBlock(block, snapshot)
+      v <- blockDagUpdateLock.withPermit(for {
+            // Todo implement precise offence storage + make pure state output changes for storage, not vice versa
+            newRepr <- validationResult match {
+                        case Left(v: InvalidBlock) =>
+                          casper.handleInvalidBlock(block, v, snapshot)
+                        case _ => casper.handleValidBlock(block, snapshot)
+                      }
+            _ <- offenceOpt.traverse(
+                  o => Log[F].info(s"Validating ${message.show.take(10)}. Done. Invalid: ${o}")
+                )
+            // Todo This should be in the same lock that BlockDagStorage.insert is using
+            r <- blockDagStatRef.modify { st =>
+                  val ValidatedResult(newSt, unlockedChildren) =
+                    st.ackValidated(message, newRepr.getPureState)
+                  (newSt, ValidationResult(newSt, unlockedChildren))
                 }
-      _ <- offenceOpt.traverse(
-            o => Log[F].info(s"Validating ${message.show.take(10)}. Done. Invalid: ${o}")
-          )
-      // Todo This should be in the same lock that BlockDagStorage.insert is using
-      r <- blockDagStatRef.modify { st =>
-            val ValidatedResult(newSt, unlockedChildren) =
-              st.ackValidated(message, newRepr.getPureState)
-            (newSt, ValidationResult(newSt, unlockedChildren))
-          }
-      _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
-      _ <- bufferStorage.delete(message)
+            _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
+            _ <- bufferStorage.delete(message)
+          } yield (newRepr, r))
+      (newRepr, r) = v
       _ <- Log[F].info(
             s"Validating ${message.show.take(100)}. Done. Invoking Effects. Done. Unlocked: [${r.dependentUnlocked
               .map(_.show.take(10))
@@ -98,7 +103,8 @@ object BlockValidatorImpl {
       dagStore: BlockDagStorage[F],
       bufferStore: CasperBufferStorage[F],
       deployStore: DeployStorage[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      blockDagUpdateLock: Semaphore[F]
   ): F[MessageValidator[F, BlockHash, BlockDagState]] = {
     implicit val (bs, bds, rm, ds) =
       (blockStore, dagStore, runtimeManager, deployStore)
@@ -116,7 +122,14 @@ object BlockValidatorImpl {
       _ <- Log[F].info(
             s"Pending blocks added to validation queue: ${PrettyPrinter.buildString(pendingValidation.toList)}."
           )
-    } yield BlockValidatorImpl(stream, append, blockDagStateRef, casperShardConf, bufferStore)
+    } yield BlockValidatorImpl(
+      stream,
+      append,
+      blockDagStateRef,
+      casperShardConf,
+      bufferStore,
+      blockDagUpdateLock
+    )
   }
 
 }

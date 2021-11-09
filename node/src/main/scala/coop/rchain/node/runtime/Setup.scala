@@ -1,7 +1,7 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
@@ -152,12 +152,14 @@ object Setup {
       inboundBlocksQueue    <- Queue.unbounded[F, BlockMessage]
       inboundBlocksStream   = inboundBlocksQueue.dequeueChunk(1)
       processBlockInRunning = inboundBlocksQueue.enqueue1 _
+      blockDagUpdateLock    <- Semaphore(1)
       receiverImpl = {
         BlockReceiverImpl[F](
           inboundBlocksStream,
           blockDagStateRef,
           casperBufferStorage,
-          blockStore
+          blockStore,
+          blockDagUpdateLock
         )
       }
 
@@ -168,7 +170,8 @@ object Setup {
                         blockDagStorage,
                         casperBufferStorage,
                         deployStorage,
-                        runtimeManager
+                        runtimeManager,
+                        blockDagUpdateLock
                       )
       retrieverImpl = BlockRetrieverImpl(blockRetriever)
       _ <- blockDagStateRef.get
@@ -191,7 +194,8 @@ object Setup {
           validatorIdentity,
           dummyDeployerKey.map((_, "Nil")),
           conf.casper,
-          blockDagStateRef
+          blockDagStateRef,
+          blockDagUpdateLock
         )
       }
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
