@@ -1,12 +1,14 @@
 package coop.rchain.casper.api
 
-import cats.Monad
+import cats.{Applicative, Monad}
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
@@ -653,6 +655,23 @@ object BlockAPI {
       hash: String
   ): F[ApiErr[Boolean]] =
     "Finalization is on per deploy basis".asLeft[Boolean].pure[F]
+
+  def finalizationState[F[_]: Monad: EngineCell: Log]: F[ApiErr[String]] = {
+    val errorMessage =
+      "Could not check finalizationState, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[String]](
+        implicit casper =>
+          casper.blockDag.map { r =>
+            val fs    = r.finalizationState
+            val acStr = fs.accepted.flatMap(_.deploys.map(_.show)).mkString(";")
+            val rjStr = fs.rejected.flatMap(_.deploys.map(_.show)).mkString(";")
+            s"Accepted: $acStr \n Rejected: $rjStr".asRight[Error]
+          },
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
 
   def bondStatus[F[_]: Monad: EngineCell: Log](
       publicKey: ByteString

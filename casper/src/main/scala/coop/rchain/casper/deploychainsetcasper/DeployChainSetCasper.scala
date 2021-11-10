@@ -50,6 +50,9 @@ object DeployChainSetCasper {
       message.justifications.map(_.latestBlockHash).traverse(dag.lookupUnsafe(_))
     override def sender(message: BlockMetadata): Validator = message.sender
     override def seqNum(message: BlockMetadata): Int       = message.seqNum
+    override def parents(
+        message: BlockMetadata
+    ): F[List[BlockMetadata]] = message.parents.traverse(dag.lookupUnsafe)
   }
 
   final case class BlockMetadataSafetyOracle[F[_]: Sync]()
@@ -138,7 +141,9 @@ object DeployChainSetCasper {
         mergeTime
       ) = r
       _ <- Log[F].info(
-            s"Finalization fringe merged in $mergeTime: ${acceptedSet.size} DC merged, " +
+            s"Finalization fringe ${fringe.toList.sorted
+              .map(_.blockHash.show.take(10))} merged in $mergeTime: ${acceptedSet.size} DC merged " +
+              s"(${acceptedSet.toList.flatMap(_.deploys).sorted.map(_.show.take(10))}), " +
               s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime. " +
               s"State $finalizedState, base ${base.message.blockHash.show.take(10)}."
           )

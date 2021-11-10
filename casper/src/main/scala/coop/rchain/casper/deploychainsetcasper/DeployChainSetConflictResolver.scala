@@ -50,7 +50,10 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
       .getOrElse(Set.empty[Set[DeployChainWithIndex]])
   }
 
-  def resolve(conflictSet: Set[DeployChain]): F[ConflictResolution[DeployChain]] = {
+  def resolve(
+      conflictSet: Set[DeployChain],
+      selfJustificationRejections: ConflictResolution[DeployChain]
+  ): F[ConflictResolution[DeployChain]] = {
     implicit val log = Log.log
     for {
       withIndex <- conflictSet.toList.traverse(cs => index(cs).map(DeployChainWithIndex(cs, _)))
@@ -72,21 +75,60 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
         )
       )
 
+      forceAccept = selfJustificationRejections.acceptedSet
+      forceReject = selfJustificationRejections.rejectedSet
+      (forcedRejectedMap, remainderMap) = conflictMap.partition {
+        case (k, c) =>
+          (forceReject intersect k.map(_.deployChain)).nonEmpty || ((c.flatMap(_.map(_.deployChain)) intersect forceAccept).nonEmpty)
+      }
+      forcedRejections = forcedRejectedMap.keySet
+      // remove force rejects
+      remainderMapCleared = remainderMap.mapValues(_ -- forcedRejections)
+
       // TODO reject only units that are conflicting + dependent, its not necessary to reject the whole branch
       // rejection options that leave only non conflicting branches */
-      (rejectionOptions, rejOptionsTime) = Stopwatch.profile(
-        computeRejectionOptions(conflictMap)
+      (rejectionOptions, rejOptionsTime) = Stopwatch.profile {
+        computeRejectionOptions(remainderMapCleared)
+      }
+
+      // rejection option have to reject all enforced
+      validRejectionOptions = rejectionOptions.filter { rO =>
+        val rejections = (forcedRejections ++ rO).flatMap(_.map(_.deployChain))
+        (forceReject diff rejections).isEmpty
+      }
+
+      _ = println(s"forceAccept = $forceAccept")
+      _ = println(s"forceReject = $forceReject")
+      _ = println(s"forcedRejections = ${forcedRejections.map(_.map(_.deployChain))}")
+      _ = println(s"conflictMap = ${conflictMap
+        .map { case (k, v) => (k.map(_.deployChain), v.map(_.map(_.deployChain))) }}")
+      _ = println(s"forcedRejectedMap = ${forcedRejectedMap
+        .map { case (k, v) => (k.map(_.deployChain), v.map(_.map(_.deployChain))) }}")
+      _ = println(s"remainderMapCleared = ${remainderMapCleared
+        .map { case (k, v) => (k.map(_.deployChain), v.map(_.map(_.deployChain))) }}")
+      _ = println(s"rejectionOptions = ${rejectionOptions.map(_.map(_.map(_.deployChain)))}")
+      _ = println(
+        s"validRejectionOptions = ${validRejectionOptions.map(_.map(_.map(_.deployChain)))}"
       )
-      rejection = optimalRejection(rejectionOptions, minCostRejectionF)
+
+      _ = assert(
+        if (rejectionOptions.nonEmpty) validRejectionOptions.nonEmpty else true,
+        "Cannot resolve conflict with self justification."
+      )
+      rejection = optimalRejection(validRejectionOptions, minCostRejectionF)
+
+      finalRejected = (forcedRejections ++ rejection).flatMap(_.map(_.deployChain))
+      finalAccepted = conflictSet -- finalRejected
+
+      _ = assert((finalAccepted intersect forceReject).isEmpty, "accepting force rejects")
+      _ = assert((finalRejected intersect forceAccept).isEmpty, "rejecting force accepts")
+
       _ <- Log[F].info(
             s"Conflicts resolved (conflict set size ${conflictSet.size}). branches computed in $branchesTime, " +
               s"conflictsMap in $conflictsMapTime (${conflictMap.values
-                .count(_.nonEmpty)} conflicting DCs), rejection options (${rejectionOptions.size}) in $rejOptionsTime. Best rejection: ${rejection.size} DC."
+                .count(_.nonEmpty)} conflicting DCs), rejection options (${rejectionOptions.size}) in $rejOptionsTime. Best rejection: ${finalRejected.size} DC."
           )
-    } yield ConflictResolution(
-      conflictSet -- rejection.flatMap(_.map(_.deployChain)),
-      rejection.flatMap(_.map(_.deployChain))
-    )
+    } yield ConflictResolution(finalAccepted, finalRejected)
   }
 }
 

@@ -26,8 +26,8 @@ object StateMessage {
     * Whether two messages are conflicting. Please use syntax instead.
     */
   def conflicts[U](l: StateMessage[U], r: StateMessage[U]): Boolean =
-    (l.merged.rejectedSet intersect r.proposed).nonEmpty ||
-      (l.merged.rejectedSet intersect r.merged.acceptedSet).nonEmpty ||
-      (r.merged.rejectedSet intersect l.proposed).nonEmpty ||
+    //(l.merged.rejectedSet intersect r.proposed).nonEmpty ||
+    (l.merged.rejectedSet intersect r.merged.acceptedSet).nonEmpty ||
+      //(r.merged.rejectedSet intersect l.proposed).nonEmpty ||
       (r.merged.rejectedSet intersect l.merged.acceptedSet).nonEmpty
 }

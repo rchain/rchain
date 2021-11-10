@@ -9,6 +9,7 @@ final case class BlockMetadata(
     postStateHash: ByteString,
     sender: ByteString,
     justifications: List[Justification],
+    parents: List[ByteString],
     weightMap: Map[ByteString, Long],
     blockNum: Long,
     seqNum: Int,
@@ -26,6 +27,7 @@ object BlockMetadata {
       internal.postStateHash,
       internal.sender,
       internal.justifications.map(Justification.from),
+      internal.parents.toList,
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
@@ -42,7 +44,8 @@ object BlockMetadata {
       metadata.blockNum,
       metadata.seqNum,
       metadata.invalid,
-      Some(metadata.stateMetadata)
+      Some(metadata.stateMetadata),
+      metadata.parents
     )
   }
 
@@ -68,13 +71,15 @@ object BlockMetadata {
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
-      stateMetadata: StateMetadata
+      stateMetadata: StateMetadata,
+      parents: List[ByteString]
   ): BlockMetadata =
     BlockMetadata(
       b.blockHash,
       b.body.state.postStateHash,
       b.sender,
       b.justifications,
+      parents = parents,
       weightMap(b.body.state),
       b.body.state.blockNumber,
       b.seqNum,

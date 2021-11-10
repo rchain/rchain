@@ -8,6 +8,8 @@ trait DependencyGraph[F[_], M, S] {
     */
   def justifications(message: M): F[List[M]]
 
+  def parents(message: M): F[List[M]]
+
   /** Sender of a message. */
   def sender(message: M): S
 

@@ -54,6 +54,8 @@ trait WebApi[F[_]] {
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
   def isFinalized(hash: String): F[Boolean]
+
+  def finalizedState: F[String]
 }
 
 object WebApi {
@@ -130,6 +132,8 @@ object WebApi {
 
     def isFinalized(hash: String): F[Boolean] =
       BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+
+    def finalizedState: F[String] = BlockAPI.finalizationState.flatMap(_.liftToBlockApiErr)
   }
 
   // Rholang terms interesting for translation to JSON

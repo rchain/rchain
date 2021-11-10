@@ -160,6 +160,9 @@ object WebApiRoutes {
 
       case GET -> Root / "is-finalized" / hash =>
         webApi.isFinalized(hash).handle
+
+      case GET -> Root / "finalized-state" =>
+        webApi.finalizedState.handle
     }
   }
 

@@ -49,6 +49,22 @@ class Proposer[F[_]: Concurrent: Log: Span](
     validator: ValidatorIdentity
 ) {
 
+  private def checkSyncConstr(s: CasperSnapshot[F]): Boolean = {
+    val selfJ = s.latestMessages
+      .find {
+        case (v, _) => v.toByteArray sameElements validator.publicKey.bytes
+      }
+      .map(_._2)
+
+    val prevJs  = selfJ.map(_.justifications.map(_.latestBlockHash)).getOrElse(List())
+    val newMsgs = s.latestMessages.values.map(_.blockHash).toSet -- prevJs
+    //    -- selfJ
+//      .map(m => Set(m.blockHash))
+//      .getOrElse(Set())
+    val syncV = (newMsgs.size.toFloat / prevJs.size)
+    syncV > 0.67
+  }
+
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
   private def doPropose(
@@ -56,7 +72,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
   ): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
-        b <- createBlock(s, validator)
+        syncOK <- checkSyncConstr(s).pure[F]
+        b      <- if (syncOK) createBlock(s, validator) else NotEnoughNewBlock.pure[F]
         r <- b match {
               case Created(b) =>
                 validateBlock(s, b).flatMap {
@@ -70,6 +87,10 @@ class Proposer[F[_]: Concurrent: Log: Span](
                       )
                     )
                 }
+              case NotEnoughNewBlock =>
+                Log[F]
+                  .info(s"Not enough new blocks, cancel propose.")
+                  .as((ProposeResult.notEnoughBlocks, none[BlockMessage]))
             }
       } yield r
     }

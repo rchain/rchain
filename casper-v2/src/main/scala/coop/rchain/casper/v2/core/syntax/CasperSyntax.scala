@@ -53,14 +53,14 @@ final class CasperOps[F[_], M, S](val c: Casper[F, M, S]) extends AnyVal {
         case ((fringeAcc, _), idx) =>
           val fringeComplete = fringeAcc.keySet == allSenders
           val fringeIsHighest =
-            fringeAcc.valuesIterator.forall(m => idx >= latestSeqNums(sender(m)) - seqNum(m))
+            fringeAcc.valuesIterator.forall(m => idx - 1 > latestSeqNums(sender(m)) - seqNum(m))
           fringeComplete && fringeIsHighest
       }
       // Clear non finalized set accumulator from messages below the fringe
       .map {
         case ((fringe, visited), _) =>
           val nonFinalizedSet = visited.flatMap {
-            case (sender, messages) => messages.filter(nf => seqNum(nf) > seqNum(fringe(sender)))
+            case (sender, messages) => messages.filter(nf => seqNum(nf) >= seqNum(fringe(sender)))
           }
           MessageScope(
             FinalizationFringe(fringe.values.toSet),

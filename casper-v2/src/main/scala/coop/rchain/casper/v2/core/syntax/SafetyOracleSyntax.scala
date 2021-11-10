@@ -1,10 +1,13 @@
 package coop.rchain.casper.v2.core.syntax
 
 import cats.effect.Sync
+import cats.syntax.all._
 import coop.rchain.casper.v2.core.SafetyOracle._
 import coop.rchain.casper.v2.core._
 import coop.rchain.casper.v2.core.syntax.all._
 import fs2.Stream
+
+import scala.collection.mutable
 
 trait SafetyOracleSyntax {
   implicit final def safetyOracleSyntax[F[_], M, S](
@@ -23,12 +26,16 @@ final class SafetyOracleOps[F[_], M, S](val o: SafetyOracle[F, M, S]) extends An
   def faultTolerances(
       agreeingMessages: Set[M],
       dag: DependencyGraph[F, M, S]
-  )(implicit sync: Sync[F], ordering: Ordering[M]): Stream[F, List[(M, Float)]] =
+  )(implicit sync: Sync[F], ordering: Ordering[M]): Stream[F, List[(M, Float)]] = {
+    val visited = mutable.TreeMap.empty[M, List[M]]
     dag
-      .messagesView(agreeingMessages)
+      .messagesView(agreeingMessages)(
+        m => dag.justifications(m).map(_ diff visited.getOrElse(m, List()))
+      )
       .mapAccumulate(Map.empty[M, Set[Agreement[M]]]) { (acc, chunk) =>
         val newAcc = chunk.foldLeft(acc) {
           case (lvlAcc, (visitor, targets)) =>
+            visited.update(visitor, targets)
             targets.foldLeft(lvlAcc) { (visitorAcc, target) =>
               if (compatible(visitor, target)) {
                 visitorAcc.updated(
@@ -46,4 +53,5 @@ final class SafetyOracleOps[F[_], M, S](val o: SafetyOracle[F, M, S]) extends An
         (newAcc, out)
       }
       .map { case (_, v) => v.toList.sortBy { case (m, _) => m } }
+  }
 }

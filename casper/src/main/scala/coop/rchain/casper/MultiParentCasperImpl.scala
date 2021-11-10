@@ -138,9 +138,41 @@ class MultiParentCasperImpl[F[_]
       r                                             <- computeScope(latestMessages.toSet, dag)
       (messageScope, messageScopeT, finalizedState) = r
       conflictSet                                   = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
+      selfJustification <- OptionT
+                            .fromOption[F](
+                              targetMessageOpt
+                                .map { m =>
+                                  m.justifications
+                                    .find(_.validator == m.sender)
+                                    .map(_.latestBlockHash)
+                                    .getOrElse(ByteString.EMPTY)
+                                }
+                            )
+                            .getOrElseF(
+                              dag.latestMessages
+                                .map(
+                                  _(ByteString.copyFrom(validatorId.get.publicKey.bytes)).blockHash
+                                )
+                            )
+      finalizedAccepted = dag.finalizationState.accepted
+      finalizedRejected = dag.finalizationState.rejected
+      conflictResToEnforceOpt <- dag
+                                  .lookup(selfJustification)
+                                  .map(_.map { selfParent =>
+                                    // Conflict resolution should be obeyed by finalization and previous self decision
+                                    ConflictResolution(
+                                      (selfParent.stateMetadata.acceptedSet.toSet
+                                        .intersect(conflictSet) diff finalizedRejected ++ finalizedAccepted)
+                                        .intersect(conflictSet),
+                                      (selfParent.stateMetadata.rejectedSet.toSet
+                                        .intersect(conflictSet) diff finalizedAccepted ++ finalizedRejected)
+                                        .intersect(conflictSet)
+                                    )
+                                  })
+      conflictResToEnforce = conflictResToEnforceOpt.getOrElse(ConflictResolution(Set(), Set()))
       conflictResolution <- DeployChainSetConflictResolver[F](
                              DeployChainMerger.getDeployChainIndex[F]
-                           ).resolve(conflictSet)
+                           ).resolve(conflictSet, conflictResToEnforce)
       r <- Stopwatch.duration(
             DeployChainMerger.merge(finalizedState, conflictResolution.acceptedSet)(
               RuntimeManager[F]
@@ -149,8 +181,10 @@ class MultiParentCasperImpl[F[_]
       ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
       snapshotTargetStr                                                           = targetMessageOpt.map(_.blockHash.show.take(10)).getOrElse("propose")
       logStr = s"Message scope computed for $snapshotTargetStr ($messageScopeT). " +
-        s"Finalized state: $finalizedState, conflict scope: ${messageScope.conflictScope.v.size} messages, " +
-        s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
+        s"Fringe: ${messageScope.finalizationFringe.v.map(_.blockHash).toList.sorted.map(_.show(10))}, " +
+        s"Finalized state: $finalizedState, Conflict scope: ${messageScope.conflictScope.v.size} messages, " +
+        s"RJ/ACC: (${conflictResolution.rejectedSet.size}(${conflictResolution.rejectedSet})/${conflictResolution.acceptedSet.size}), finalState: $finalState, " +
+        s"Merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
       _ <- Log[F].info(logStr)
 
       // some technical information

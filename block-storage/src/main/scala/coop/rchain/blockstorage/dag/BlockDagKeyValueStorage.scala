@@ -164,13 +164,28 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
   def getRepresentation: F[BlockDagRepresentation[F]] =
     lock.withPermit(representation)
 
-  override def updateFinalization(fringe: Casper.FinalizationFringe[BlockMetadata]): F[Unit] =
-    rejectedIndex.putIfAbsent(
-      fringe.v.flatMap(_.stateMetadata.rejectedSet).map((_, ())).toList
-    ) <*
+  override def updateFinalization(fringe: Casper.FinalizationFringe[BlockMetadata]): F[Unit] = {
+    import coop.rchain.models.syntax._
+    Log[F].info(s"updateFinalization ${fringe.v.map(_.blockHash.show.take(10))} start") >>
+      rejectedIndex.toMap
+        .flatMap(
+          rI => acceptedIndex.toMap.map(aI => aI.keySet intersect rI.keySet)
+        )
+        .flatMap(
+          intersection =>
+            new Exception(
+              s"${intersection.flatMap(_.deploys).map(_.show)} both rejected and accepted"
+            ).raiseError[F, Unit]
+              .whenA(intersection.nonEmpty)
+        ) >>
+      rejectedIndex.putIfAbsent(
+        fringe.v.flatMap(_.stateMetadata.rejectedSet).map((_, ())).toList
+      ) <*
       acceptedIndex.putIfAbsent(
         fringe.v.flatMap(_.stateMetadata.acceptedSet).map((_, ())).toList
-      )
+      ) >>
+      Log[F].info(s"updateFinalization ${fringe.v.map(_.blockHash.show.take(10))} end")
+  }
 
   def insert(
       block: BlockMessage,
@@ -219,9 +234,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def doInsert: F[Unit] = {
-      val blockMetadata      = BlockMetadata.fromBlock(block, invalid, blockStateMetadata)
       val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
-
       for {
         // Basic validation of input hash values
         _ <- BlockSenderIsMalformed(block).raiseError[F, Unit].whenA(senderHasInvalidFormat)
@@ -233,6 +246,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
               .whenA(blockHashIsInvalid)
 
         _ <- logEmptySender.whenA(senderIsEmpty)
+
+        initMeta = BlockMetadata.fromBlock(block, invalid, blockStateMetadata, List())
+        js       = initMeta.justifications.map(_.latestBlockHash)
+        jsLvl2 <- js
+                   .traverse(blockMetadataIndex.getUnsafe)
+                   .map(_.flatMap(_.justifications.map(_.latestBlockHash)))
+        blockMetadata = initMeta.copy(parents = js diff jsLvl2)
 
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)

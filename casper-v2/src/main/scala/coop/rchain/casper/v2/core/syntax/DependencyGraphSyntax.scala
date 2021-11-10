@@ -23,15 +23,28 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
     *         Can contain duplicates, as the same message can be seen through multiple paths.
     *         Not flattened to keep the notion of distance.
     */
-  def messageView(message: M)(implicit a: Sync[F], ordering: Ordering[M]): Stream[F, List[M]] =
+  def toposortView(
+      message: M
+  )(relation: M => F[List[M]])(implicit a: Sync[F], ordering: Ordering[M]): Stream[F, List[M]] =
     Stream
       .unfoldLoopEval(List(message)) { lvl =>
         lvl
-          .flatTraverse(s => justifications(s))
+          .flatTraverse(s => relation(s))
           // Sort output to keep function pure
           .map(_.distinct.sorted)
           .map(next => (lvl, next.nonEmpty.guard[Option].as(next)))
       }
+
+  /**
+    * @return Stream containing message + ancestors of the message (justifications), topologically sorted.
+    *         Messages of the same topological order are sorted by identity.
+    *         Can contain duplicates, as the same message can be seen through multiple paths.
+    *         Not flattened to keep the notion of distance.
+    */
+  def messageView(
+      message: M
+  )(relation: M => F[List[M]])(implicit a: Sync[F], ordering: Ordering[M]): Stream[F, List[M]] =
+    toposortView(message)(relation)
 
   /**
     * @return Combined stream of views of the messages.
@@ -39,10 +52,12 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
     */
   def messagesView(
       messages: Set[M]
+  )(
+      relation: M => F[List[M]]
   )(implicit sync: Sync[F], ordering: Ordering[M]): Stream[F, Chunk[(M, List[M])]] = {
     // Sort output to keep function pure
     val sorted = messages.toList.sorted
-    zipStreamList(sorted.map(m => messageView(m).map((m, _)).zipWithIndex))
+    zipStreamList(sorted.map(m => messageView(m)(relation).map((m, _)).zipWithIndex))
       .groupAdjacentBy { case (_, idx) => idx }
       .map { case (_, chunk) => chunk.map { case (v, _) => v } }
   }
@@ -62,7 +77,7 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
     val latestSeqNums =
       messages.map(m => sender(m) -> seqNum(m)).toMap
     val initConnectionsMap = Map.empty[M, Set[M]]
-    messagesView(messages)
+    messagesView(messages)(c.parents)
       .flatMap(chunk => Stream.emits(chunk.toList.flatMap { case (s, t) => t.map((s, _)) }))
       .evalMapAccumulate(initConnectionsMap) {
         case (acc, (visitor, target)) =>
@@ -110,7 +125,7 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
           justifications(base)
             .flatMap { baseJustifications =>
               val streams = unseenPart.toList.map { fringeMessage =>
-                Stream(fringeMessage) ++ selfJustificationChain(fringeMessage)
+                selfJustificationChain(fringeMessage)
                   .takeWhile(m => !(m == base || baseJustifications.contains(m)))
               }
               Stream
