@@ -112,29 +112,26 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       fromHistoryStore <- getContFromHistoryStore(channels)
       r <- hotStoreState.modify[(Boolean, Boolean)](state => {
-            val curVal      = state.continuations.getOrElse(channels, fromHistoryStore)
-            val isInstalled = state.installedContinuations.contains(channels)
+            val curVal       = state.continuations.getOrElse(channels, fromHistoryStore)
+            val installedCon = state.installedContinuations.get(channels)
+            val isInstalled  = installedCon.nonEmpty
 
             val removingInstalled = (isInstalled && index == 0)
-            val outOfBounds       = !curVal.isDefinedAt(index)
+            val removedIndex      = if (isInstalled) index - 1 else index
+            val outOfBounds       = !curVal.isDefinedAt(removedIndex)
 
             if (removingInstalled || outOfBounds)
-              (state, (removingInstalled, outOfBounds))
+              (
+                state.copy(continuations = state.continuations.updated(channels, curVal)),
+                (removingInstalled, outOfBounds)
+              )
             else {
-              val newVal = removeIndex(curVal, index)
-              // TODO Logic behind this isInstalled check is uncertain
-              if (isInstalled)
-                (
-                  state.copy(continuations = state.continuations.updated(channels, newVal.tail)),
-                  (false, false)
-                )
-              else
-                (
-                  state.copy(continuations = state.continuations.updated(channels, newVal)),
-                  (false, false)
-                )
+              val newVal = removeIndex(curVal, removedIndex)
+              (
+                state.copy(continuations = state.continuations.updated(channels, newVal)),
+                (false, false)
+              )
             }
-
           })
       (removingInstalled, invalidIndex) = r
       _ <- Sync[F]
@@ -195,7 +192,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               val outOfBounds = !curVal.isDefinedAt(index)
 
               if (outOfBounds)
-                (state, outOfBounds)
+                (state.copy(data = state.data.updated(channel, curVal)), outOfBounds)
               else {
                 val updated = removeIndex(curVal, index)
                 (state.copy(data = state.data.updated(channel, updated)), false)
@@ -290,7 +287,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                   (state, state.installedContinuations.get(join) ++: continuations)
               })._2
 
-              val index       = state.joins(channel).indexOf(join)
+              val index       = state.joins.getOrElse(channel, Seq.empty).indexOf(join)
               val outOfBounds = !curJoins.isDefinedAt(index)
 
               // TODO should attimpting to remove join with non empty contnuation lead to error as well?
@@ -298,20 +295,20 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
               if (doRemove) {
                 if (outOfBounds)
-                  (state, true)
+                  (state.copy(joins = state.joins.updated(channel, curJoins)), true)
                 else {
-                  val newVal = removeIndex(state.joins(channel), index)
+                  val newVal = removeIndex(state.joins.getOrElse(channel, Seq.empty), index)
                   (state.copy(joins = state.joins.updated(channel, newVal)), false)
                 }
-              } else (state, false)
+              } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
             })
-      _ <- Sync[F]
-            .raiseError(
-              new IndexOutOfBoundsException(
-                s"Index out of bounds when removing join"
-              )
-            )
-            .whenA(err)
+//      _ <- Sync[F]
+//            .raiseError(
+//              new IndexOutOfBoundsException(
+//                s"Index out of bounds when removing join"
+//              )
+//            )
+//            .whenA(err)
 
     } yield ()
 

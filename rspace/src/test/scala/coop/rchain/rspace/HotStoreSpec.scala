@@ -4,11 +4,13 @@ import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.rspace.examples.StringExamples._
+import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
+import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.shared.GeneratorUtils._
 import coop.rchain.shared.Language._
 import monix.eval.Task
@@ -267,7 +269,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             cache <- state.get
             _ <- checkRemovalWorksOrFailsOnError(
                   res,
-                  cache.continuations(channels),
+                  cache.continuations.getOrElse(channels, Seq.empty),
                   historyContinuations,
                   index
                 )
@@ -461,7 +463,12 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _     <- history.putData(channel, historyData)
             res   <- hotStore.removeDatum(channel, index).attempt
             cache <- state.get
-            _     <- checkRemovalWorksOrFailsOnError(res, cache.data(channel), historyData, index)
+            _ <- checkRemovalWorksOrFailsOnError(
+                  res,
+                  cache.data.getOrElse(channel, Seq.empty),
+                  historyData,
+                  index
+                )
           } yield ()
         }
       }
@@ -1267,15 +1274,13 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, HotStoreState[C, P, A, 
   override def getJoins(channel: C): F[Seq[Seq[C]]] =
     R.get.map(_.joins.get(channel).toSeq.flatten)
   def putJoins(channel: C, joins: Seq[Seq[C]]): F[Unit] = R.modify { prev =>
-    ignore(prev.joins.updated(channel, joins))
-    (prev, ())
+    (prev.copy(joins = prev.joins.updated(channel, joins)), ())
   }
 
   override def getData(channel: C): F[Seq[Datum[A]]] =
     R.get.map(_.data.get(channel).toSeq.flatten)
   def putData(channel: C, data: Seq[Datum[A]]): F[Unit] = R.modify { prev =>
-    ignore(prev.data.updated(channel, data))
-    (prev, ())
+    (prev.copy(data = prev.data.updated(channel, data)), ())
   }
 
   override def getContinuations(
@@ -1286,8 +1291,7 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, HotStoreState[C, P, A, 
       channels: Seq[C],
       continuations: Seq[WaitingContinuation[P, K]]
   ): F[Unit] = R.modify { prev =>
-    ignore(prev.continuations.updated(channels, continuations))
-    (prev, ())
+    (prev.copy(continuations = prev.continuations.updated(channels, continuations)), ())
   }
 
   // Not used in testing (instead defaults are implemented: getData, getContinuations, getJoins)
