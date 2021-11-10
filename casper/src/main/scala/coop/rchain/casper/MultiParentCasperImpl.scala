@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -34,7 +34,7 @@ import coop.rchain.shared.syntax._
 
 // format: off
 class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
@@ -138,7 +138,7 @@ class MultiParentCasperImpl[F[_]
 
     def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
       BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
-        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.base16String))
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
 
     implicit val ms = CasperMetricsSource
 
@@ -516,15 +516,15 @@ object MultiParentCasperImpl {
 
   private def blockEvent(block: BlockMessage) = {
 
-    val blockHash = block.blockHash.base16String
+    val blockHash = block.blockHash.toHexString
     val parentHashes =
-      block.header.parentsHashList.map(_.base16String)
+      block.header.parentsHashList.map(_.toHexString)
     val justificationHashes =
       block.justifications.toList
-        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.base16String
+    val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }

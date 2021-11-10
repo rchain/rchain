@@ -7,11 +7,11 @@ import org.scalacheck.Gen
 import scala.concurrent.duration._
 import monix.execution.Scheduler.Implicits.global
 import TestData._
-import coop.rchain.crypto.codec.Base16
 import History.KeyPath
 import scodec.bits.ByteVector
 import cats.implicits._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Base16
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random

@@ -11,9 +11,10 @@ import coop.rchain.rholang.interpreter._
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.matcher.{run => runMatcher}
+
+import org.scalatest._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest._
 
 class MatcherMonadSpec extends FlatSpec with Matchers {
   implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]

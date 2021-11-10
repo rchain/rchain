@@ -1,6 +1,6 @@
 package coop.rchain.casper.batch2
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
@@ -8,10 +8,9 @@ import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.RSpaceUtil._
 import coop.rchain.casper.util.rholang.RegistrySigGen
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.rholang.interpreter.util.RevAddress
-import coop.rchain.shared.RChainScheduler
+import coop.rchain.shared.{Base16, RChainScheduler}
 import coop.rchain.shared.scalatestcontrib._
 import org.scalatest.{FlatSpec, Matchers}
 

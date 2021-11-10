@@ -6,7 +6,7 @@ import java.net.{InetAddress, URL}
 import scala.util.Try
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import cats.Applicative
 
 import coop.rchain.catscontrib.ski.kp

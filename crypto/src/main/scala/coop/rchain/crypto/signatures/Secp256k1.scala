@@ -5,17 +5,16 @@ import java.nio.file.Path
 import java.security.KeyPairGenerator
 import java.security.interfaces.ECPrivateKey
 import java.security.spec.ECGenParameterSpec
-
 import cats.effect.Sync
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.syntax.applicativeError._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.SecureRandomUtil
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import org.bitcoin._
 import com.google.common.base.Strings
+import coop.rchain.shared.Base16
 import org.bouncycastle.asn1.DLSequence
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.openssl.bc.BcPEMDecryptorProvider

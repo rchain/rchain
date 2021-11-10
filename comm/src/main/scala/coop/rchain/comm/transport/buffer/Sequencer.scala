@@ -2,7 +2,7 @@ package coop.rchain.comm.transport.buffer
 
 import scala.concurrent.Future
 
-import cats.implicits._
+import cats.syntax.all._
 
 import monix.catnap.Semaphore
 import monix.eval.Task

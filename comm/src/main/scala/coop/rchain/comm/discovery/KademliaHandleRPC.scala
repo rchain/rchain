@@ -1,6 +1,6 @@
 package coop.rchain.comm.discovery
 
-import cats.implicits._
+import cats.syntax.all._
 import cats.Monad
 
 import coop.rchain.comm.PeerNode
