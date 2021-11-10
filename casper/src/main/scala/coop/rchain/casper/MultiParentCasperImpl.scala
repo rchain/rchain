@@ -21,6 +21,7 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.v2.core.Casper._
+import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
@@ -148,7 +149,7 @@ class MultiParentCasperImpl[F[_]
       ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
       snapshotTargetStr                                                           = targetMessageOpt.map(_.blockHash.show.take(10)).getOrElse("propose")
       logStr = s"Message scope computed for $snapshotTargetStr ($messageScopeT). " +
-        s"Finalized state: $finalState, conflict scope: ${messageScope.conflictScope.v.size} messages, " +
+        s"Finalized state: $finalizedState, conflict scope: ${messageScope.conflictScope.v.size} messages, " +
         s"merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
       _ <- Log[F].info(logStr)
 
@@ -406,7 +407,7 @@ object MultiParentCasperImpl {
     } yield ()
   }
 
-  def computeScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics](
+  def computeScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics: BlockDagStorage](
       latestMessages: Set[BlockMetadata],
       dag: BlockDagRepresentation[F]
   ): F[(MessageScope[BlockMetadata], String, Blake2b256Hash)] =
@@ -415,12 +416,19 @@ object MultiParentCasperImpl {
       r                             <- Stopwatch.duration(computeMessageScope(latestMessages, dag))
       (messageScope, messageScopeT) = r
 
+      // this is a dirty hack to resolve concurrency issue. After block is validated, this `updateLatestScope` is called
+      // to update the scope. But BlockDagStorage.insert is called already. So the next block received can be sent for
+      // validation, while scope is not updated, and what is important, finalized state is not updated. So
+      // finalizationState can be outdated to the state of the message validated. So here when we find the scope
+      // of message validated, we update local finalization state as well.
+      _                 <- BlockDagStorage[F].updateFinalization(messageScope.finalizationFringe)
+      finalizationState <- BlockDagStorage[F].getRepresentation.map(_.finalizationState)
+
       indicesMissing = messageScope.conflictScope.v
         .map(_.blockHash)
         .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
       _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock[F]))
 
-      finalizationState = dag.finalizationState
       mergeFringe = mergeFinalizationFringe(
         messageScope.finalizationFringe.v,
         dag,
