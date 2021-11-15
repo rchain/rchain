@@ -86,10 +86,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // then find all the matching hashes and choose one that matches the full truncatedHash string
         val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
         dagSet
-          .filter(hash => hash.startsWith(truncatedByteString))
-          .find(
-            hash => Base16.encode(hash.toByteArray).startsWith(truncatedHash)
-          )
+          .filter(_.startsWith(truncatedByteString))
+          .find(_.toHexString.startsWith(truncatedHash))
       }
     }
 
