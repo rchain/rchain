@@ -287,7 +287,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                   (state, state.installedContinuations.get(join) ++: continuations)
               })._2
 
-              val index       = state.joins.getOrElse(channel, Seq.empty).indexOf(join)
+              val index       = curJoins.indexOf(join)
               val outOfBounds = !curJoins.isDefinedAt(index)
 
               // TODO should attimpting to remove join with non empty contnuation lead to error as well?
@@ -297,7 +297,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                 if (outOfBounds)
                   (state.copy(joins = state.joins.updated(channel, curJoins)), true)
                 else {
-                  val newVal = removeIndex(state.joins.getOrElse(channel, Seq.empty), index)
+                  val newVal = removeIndex(curJoins, index)
                   (state.copy(joins = state.joins.updated(channel, newVal)), false)
                 }
               } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
