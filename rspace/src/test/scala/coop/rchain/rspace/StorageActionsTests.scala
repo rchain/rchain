@@ -1132,58 +1132,58 @@ trait StorageActionsTests[F[_]]
     } yield ()
   }
 
-//  "revertToSoftCheckpoint" should "revert the state of the store to the given checkpoint" in fixture {
-//    (_, storeAtom, space) =>
-//      val channel      = "ch1"
-//      val channels     = List(channel)
-//      val patterns     = List(Wildcard)
-//      val continuation = new StringsCaptor
-//
-//      for {
-//        // create an initial soft checkpoint
-//        s1 <- space.createSoftCheckpoint()
-//        // do an operation
-//        _ <- space.consume(channels, patterns, continuation, persist = false)
-//        changes <- storeAtom
-//                    .get()
-//                    .changes()
-//                    .map(
-//                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
-//                    )
-//        // the operation should be on the list of changes
-//        _ = changes should not be empty
-//        _ <- space.revertToSoftCheckpoint(s1)
-//        changes <- storeAtom
-//                    .get()
-//                    .changes()
-//                    .map(
-//                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
-//                    )
-//        // after reverting to the initial soft checkpoint the operation is no longer present in the hot store
-//        _ = changes shouldBe empty
-//      } yield ()
-//  }
+  "revertToSoftCheckpoint" should "revert the state of the store to the given checkpoint" in fixture {
+    (_, storeAtom, space) =>
+      val channel      = "ch1"
+      val channels     = List(channel)
+      val patterns     = List(Wildcard)
+      val continuation = new StringsCaptor
 
-//  it should "inject the event log" in fixture { (_, storeAtom, space) =>
-//    val channel      = "ch1"
-//    val channels     = List(channel)
-//    val patterns     = List(Wildcard)
-//    val continuation = new StringsCaptor
-//
-//    for {
-//      // do an operation
-//      _ <- space.consume(channels, patterns, continuation, persist = false)
-//      // create a soft checkpoint
-//      s1 <- space.createSoftCheckpoint()
-//      // do some other operation
-//      _  <- space.consume(channels, patterns, continuation, persist = true)
-//      s2 <- space.createSoftCheckpoint()
-//      _  = s2.log should not be s1.log
-//      _  <- space.revertToSoftCheckpoint(s1)
-//      s3 <- space.createSoftCheckpoint()
-//      _  = s3.log shouldBe s1.log
-//    } yield ()
-//  }
+      for {
+        // create an initial soft checkpoint
+        s1 <- space.createSoftCheckpoint()
+        // do an operation
+        _ <- space.consume(channels, patterns, continuation, persist = false)
+        changes <- storeAtom
+                    .get()
+                    .changes()
+                    .map(
+                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                    )
+        // the operation should be on the list of changes
+        _ = changes should not be empty
+        _ <- space.revertToSoftCheckpoint(s1)
+        changes <- storeAtom
+                    .get()
+                    .changes()
+                    .map(
+                      collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
+                    )
+        // after reverting to the initial soft checkpoint the operation is no longer present in the hot store
+        _ = changes shouldBe empty
+      } yield ()
+  }
+
+  it should "inject the event log" in fixture { (_, storeAtom, space) =>
+    val channel      = "ch1"
+    val channels     = List(channel)
+    val patterns     = List(Wildcard)
+    val continuation = new StringsCaptor
+
+    for {
+      // do an operation
+      _ <- space.consume(channels, patterns, continuation, persist = false)
+      // create a soft checkpoint
+      s1 <- space.createSoftCheckpoint()
+      // do some other operation
+      _  <- space.consume(channels, patterns, continuation, persist = true)
+      s2 <- space.createSoftCheckpoint()
+      _  = s2.log should not be s1.log
+      _  <- space.revertToSoftCheckpoint(s1)
+      s3 <- space.createSoftCheckpoint()
+      _  = s3.log shouldBe s1.log
+    } yield ()
+  }
 }
 
 class InMemoryHotStoreStorageActionsTests
