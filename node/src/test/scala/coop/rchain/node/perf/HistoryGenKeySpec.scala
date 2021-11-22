@@ -150,7 +150,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
       }
   }
 
-  case class createRadixHistory7[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class createRadixHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
       Settings.typeStore match {
@@ -158,7 +158,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           val inMemoStore = InMemoryKeyValueStore[F]
           inMemoStore.clear()
           val store = new RadixStore(inMemoStore)
-          for { history <- RadixHistory7(root, store).pure } yield HistoryWithFunc(
+          for { history <- RadixHistory[F](root, store) } yield HistoryWithFunc(
             history,
             inMemoStore.sizeBytes,
             inMemoStore.numRecords
@@ -166,133 +166,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         case "lmdb" =>
           for {
             store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory7(root, new RadixStore(store)).pure
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory8[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore(inMemoStore)
-          for { history <- RadixHistory8(root, store).pure } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory8(root, new RadixStore(store)).pure
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory9[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore2(inMemoStore)
-          for { history <- RadixHistory9(root, store).pure } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory9(root, new RadixStore2(store)).pure
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory10[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore3(inMemoStore)
-          for { history <- RadixHistory10[F](root, store) } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory10[F](root, new RadixStore3(store))
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory11[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore3(inMemoStore)
-          for { history <- RadixHistory11[F](root, store) } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory11[F](root, new RadixStore3(store))
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory12[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore4(inMemoStore)
-          for { history <- RadixHistory12[F](root, store) } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory12[F](root, new RadixStore4(store))
-          } yield HistoryWithoutFunc(history)
-      }
-  }
-
-  case class createRadixHistory13[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
-      extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
-      Settings.typeStore match {
-        case "inMemo" =>
-          val inMemoStore = InMemoryKeyValueStore[F]
-          inMemoStore.clear()
-          val store = new RadixStore5(inMemoStore)
-          for { history <- RadixHistory13[F](root, store) } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
-          )
-        case "lmdb" =>
-          for {
-            store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory13[F](root, new RadixStore5(store))
+            history <- RadixHistory[F](root, new RadixStore(store))
           } yield HistoryWithoutFunc(history)
       }
   }
@@ -307,13 +181,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     def getHistory(root: Blake2b256Hash, path: String): F[HistoryType[F]] =
       Settings.typeHistory match {
         case "MergingHistory" => createMergingHistory[F].create(root, path)
-        case "RadixHistory7"  => createRadixHistory7[F].create(root, path)
-        case "RadixHistory8"  => createRadixHistory8[F].create(root, path)
-        case "RadixHistory9"  => createRadixHistory9[F].create(root, path)
-        case "RadixHistory10" => createRadixHistory10[F].create(root, path)
-        case "RadixHistory11" => createRadixHistory11[F].create(root, path)
-        case "RadixHistory12" => createRadixHistory12[F].create(root, path)
-        case "RadixHistory13" => createRadixHistory13[F].create(root, path)
+        case "RadixHistory13" => createRadixHistory[F].create(root, path)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {
