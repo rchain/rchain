@@ -250,7 +250,10 @@ object WebApi {
   // RhoExpr from protobuf
 
   private def exprFromParProto(par: Par): Option[RhoExpr] = {
-    val exprs = par.exprs.flatMap(exprFromExprProto) ++ par.unforgeables.flatMap(unforgFromProto)
+    val exprs =
+      par.exprs.flatMap(exprFromExprProto) ++
+        par.unforgeables.flatMap(unforgFromProto) ++
+        par.bundles.flatMap(exprFromBundleProto)
     // Implements semantic of Par with Unit: P | Nil ==> P
     if (exprs.size == 1) exprs.head.some
     else if (exprs.isEmpty) none
@@ -311,6 +314,8 @@ object WebApi {
     else if (un.unfInstance.isGDeployerIdBody)
       mkUnforgExpr(UnforgDeployer, un.unfInstance.gDeployerIdBody.get.publicKey).some
     else none
+
+  private def exprFromBundleProto(b: Bundle): Option[RhoExpr] = exprFromParProto(b.body)
 
   private def mkUnforgExpr(f: String => RhoUnforg, bs: ByteString): ExprUnforg =
     ExprUnforg(f(toHex(bs)))
