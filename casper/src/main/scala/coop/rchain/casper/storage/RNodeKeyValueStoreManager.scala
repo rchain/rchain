@@ -52,6 +52,7 @@ object RNodeKeyValueStoreManager {
       (Db("last-finalized-block"), dagStorageEnvConfig),
       (Db("rejected-index"), dagStorageEnvConfig),
       (Db("accepted-index"), dagStorageEnvConfig),
+      (Db("finalized-fringes"), dagStorageEnvConfig),
       // Runtime mergeable store (cache of mergeable channels for block-merge)
       (Db("mergeable-channel-cache"), dagStorageEnvConfig),
       // Deploy storage

@@ -12,7 +12,9 @@ import coop.rchain.casper.BlockStatus.invalidMessageScope
 import coop.rchain.casper.MultiParentCasperImpl._
 import coop.rchain.casper.deploychainsetcasper.DeployChainSetCasper.{
   computeMessageScope,
-  mergeFinalizationFringe
+  BlockMetadataCasper,
+  BlockMetadataDag,
+  BlockMetadataSafetyOracle
 }
 import coop.rchain.casper.deploychainsetcasper._
 import coop.rchain.casper.merging.{BlockIndexer, DeployChainMerger}
@@ -26,6 +28,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -61,31 +64,34 @@ class MultiParentCasperImpl[F[_]
 
   // TODO this does not make sense, now implemented to make other parts of the code happy
   override def lastFinalizedBlock: F[BlockMessage] =
-    BlockMessage(
-      blockHash = ByteString.EMPTY,
-      header = Header(
-        timestamp = 0L,
-        version = version
-      ),
-      body = Body(
-        state = RChainState(
-          preStateHash = ByteString.EMPTY,
-          // only this matters
-          postStateHash = MultiParentCasperImpl.latestScope(())._1.toByteString,
-          bonds = List(),
-          blockNumber = -1
-        ),
-        deploys = List(),
-        systemDeploys = List(),
-        rejectedDeploys = List()
-      ),
-      justifications = List(),
-      sender = ByteString.EMPTY,
-      seqNum = -1,
-      sig = ByteString.EMPTY,
-      sigAlgorithm = "",
-      shardId = ""
-    ).pure
+    blockDag.map(
+      dag =>
+        BlockMessage(
+          blockHash = ByteString.EMPTY,
+          header = Header(
+            timestamp = 0L,
+            version = version
+          ),
+          body = Body(
+            state = RChainState(
+              preStateHash = ByteString.EMPTY,
+              // only this matters
+              postStateHash = dag.finalizationFringes.head.state,
+              bonds = List(),
+              blockNumber = -1
+            ),
+            deploys = List(),
+            systemDeploys = List(),
+            rejectedDeploys = List()
+          ),
+          justifications = List(),
+          sender = ByteString.EMPTY,
+          seqNum = -1,
+          sig = ByteString.EMPTY,
+          sigAlgorithm = "",
+          shardId = ""
+        )
+    )
 
   def dagContains(hash: BlockHash): F[Boolean] = blockDag.flatMap(_.contains(hash))
 
@@ -124,86 +130,68 @@ class MultiParentCasperImpl[F[_]
     import cats.instances.list._
     import coop.rchain.blockstorage.syntax._
 
+    def getLatestMessagesMetas(dag: BlockDagRepresentation[F]): F[Map[Validator, BlockMetadata]] =
+      OptionT
+        .fromOption[F](
+          targetMessageOpt
+            .map(_.justifications.map { case Justification(s, h) => (s, h) }.toMap)
+        )
+        .getOrElseF(dag.latestMessageHashes)
+        .flatMap(_.toList.traverse { case (s, h) => dag.lookupUnsafe(h).map((s, _)) }.map(_.toMap))
+
     for {
       // the most recent view on the DAG, includes everything node seen so far
-      dag               <- BlockDagStorage[F].getRepresentation
-      finalizationState = dag.finalizationState
+      dag <- BlockDagStorage[F].getRepresentation
       // justifications define the scope of the message (whether it is about to be created or validated)
-      getLatestMessagesMetas = OptionT
-        .fromOption[F](targetMessageOpt.map(_.justifications.map(_.latestBlockHash)))
-        .getOrElseF(dag.latestMessageHashes.map(_.values))
-        .flatMap(_.toList.traverse(dag.lookupUnsafe))
-      latestMessages <- getLatestMessagesMetas
-      // compute / reconstruct the scope of the message
-      r                                             <- computeScope(latestMessages.toSet, dag)
-      (messageScope, messageScopeT, finalizedState) = r
-      conflictSet                                   = messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
-      selfJustification <- OptionT
-                            .fromOption[F](
-                              targetMessageOpt
-                                .map { m =>
-                                  m.justifications
-                                    .find(_.validator == m.sender)
-                                    .map(_.latestBlockHash)
-                                    .getOrElse(ByteString.EMPTY)
-                                }
-                            )
-                            .getOrElseF(
-                              dag.latestMessages
-                                .map(
-                                  _(ByteString.copyFrom(validatorId.get.publicKey.bytes)).blockHash
-                                )
-                            )
-      finalizedAccepted = dag.finalizationState.accepted
-      finalizedRejected = dag.finalizationState.rejected
-      conflictResToEnforceOpt <- dag
-                                  .lookup(selfJustification)
-                                  .map(_.map { selfParent =>
-                                    // Conflict resolution should be obeyed by finalization and previous self decision
-                                    ConflictResolution(
-                                      (selfParent.stateMetadata.acceptedSet.toSet
-                                        .intersect(conflictSet) diff finalizedRejected ++ finalizedAccepted)
-                                        .intersect(conflictSet),
-                                      (selfParent.stateMetadata.rejectedSet.toSet
-                                        .intersect(conflictSet) diff finalizedAccepted ++ finalizedRejected)
-                                        .intersect(conflictSet)
-                                    )
-                                  })
-      conflictResToEnforce = conflictResToEnforceOpt.getOrElse(ConflictResolution(Set(), Set()))
-      conflictResolution <- DeployChainSetConflictResolver[F](
-                             DeployChainMerger.getDeployChainIndex[F]
-                           ).resolve(conflictSet, conflictResToEnforce)
+      latestMessages <- getLatestMessagesMetas(dag)
+      // find supermajority fringe
+      r                                                 <- Stopwatch.duration(computeMessageScope(latestMessages.values.toSet, dag))
+      (MessageScope(supermajorityFringe, _), timeScope) = r
       r <- Stopwatch.duration(
-            DeployChainMerger.merge(finalizedState, conflictResolution.acceptedSet)(
-              RuntimeManager[F]
-            )
+            if (dag.finalizationFringes.size <= 1)
+              dag.finalizationFringes.head.pure[F]
+            else
+              dag.finalizationFringes
+                .findM { fringe =>
+                  for {
+                    fringeMetas <- fringe.finalizationFringe
+                                    .flatMap(_._2)
+                                    .traverse(
+                                      dag.lookupUnsafe(_)
+                                    )
+                    suitable = !supermajorityFringe
+                      .flatMap(smm => fringeMetas.map((_, smm)))
+                      .exists {
+                        case (mCandidate, mSupermajority) =>
+                          (mCandidate.sender == mSupermajority._1) && (mCandidate.seqNum > mSupermajority._2.head.seqNum)
+                      }
+                  } yield suitable
+                }
+                .flatMap { rOpt =>
+                  rOpt.liftTo(
+                    new Exception(
+                      s"No fringe found in local database with supermajority against latest messages."
+                    )
+                  )
+                }
           )
-      ((finalState, trieActionsNum, trieActionsTime, postStateTime), mergeStateT) = r
-      snapshotTargetStr                                                           = targetMessageOpt.map(_.blockHash.show.take(10)).getOrElse("propose")
-      logStr = s"Message scope computed for $snapshotTargetStr ($messageScopeT). " +
-        s"Fringe: ${messageScope.finalizationFringe.v.map(_.blockHash).toList.sorted.map(_.show(10))}, " +
-        s"Finalized state: $finalizedState, Conflict scope: ${messageScope.conflictScope.v.size} messages, " +
-        s"RJ/ACC: (${conflictResolution.rejectedSet.size}(${conflictResolution.rejectedSet})/${conflictResolution.acceptedSet.size}), finalState: $finalState, " +
-        s"Merged in $mergeStateT ($trieActionsNum trie actions computed in $trieActionsTime, applied in $postStateTime)."
-      _ <- Log[F].info(logStr)
+      (finalizationFringe, time) = r
+      _ <- Log[F].info(
+            s"Message scope computed in ${timeScope}. Finalization fringe found in $time (from ${dag.finalizationFringes.size})"
+          )
 
       // some technical information
-      maxBlockNum   = latestMessages.map(_.blockNum).max
-      maxSeqNums    = latestMessages.map(m => (m.sender -> m.seqNum)).toMap
-      invalidBlocks <- dag.invalidBlocksMap
-      deploysInScope = messageScope.conflictScope.v.flatMap(
-        _.stateMetadata.proposed.flatMap(_.deploys)
-      )
+      maxBlockNum    = latestMessages.values.map(_.blockNum).max
+      maxSeqNums     = latestMessages.values.map(m => (m.sender -> m.seqNum)).toMap
+      invalidBlocks  <- dag.invalidBlocksMap
+      deploysInScope = Set.empty[DeployId]
       // Todo read these from state
       deployLifespan = 50
       casperVersion  = 0L
     } yield CasperSnapshot(
       dag,
-      messageScope,
-      conflictResolution,
-      finalState.toByteString,
-      finalizationState,
-      latestMessages.map(m => m.sender -> m).toMap,
+      finalizationFringe,
+      latestMessages,
       invalidBlocks,
       deploysInScope,
       maxBlockNum,
@@ -221,7 +209,7 @@ class MultiParentCasperImpl[F[_]
     val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
         _ <- EitherT.fromEither(
-              if (b.body.state.preStateHash == s.state)
+              if (b.body.state.preStateHash == s.finalizedFringe.state)
                 ValidBlock.asRight[BlockError]
               else invalidMessageScope.asLeft[ValidBlock]
             )
@@ -260,8 +248,9 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
-                indexBlock(b)
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <* {
+                indexBlock(b) >> Log[F].info(s"Block indexed: $blockInfo")
+              }
             }
             .getOrElse(().pure[F])
     } yield valResult
@@ -271,33 +260,82 @@ class MultiParentCasperImpl[F[_]
 
   override def handleValidBlock(
       b: BlockMessage,
-      s: CasperSnapshot[F],
-      updateLatestScope: Boolean
-  ): F[BlockDagRepresentation[F]] =
-    for {
-      // Todo indxing here just to know proposd deploy chains, it is duplicate with validation, remove
-      mergeableChs <- RuntimeManager[F].loadMergeableChannels(
-                       b.body.state.postStateHash,
-                       b.sender.toByteArray,
-                       b.seqNum
-                     )
-      index <- BlockIndexer(
-                b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
-                b.body.state.preStateHash.toBlake2b256Hash,
-                b.body.state.postStateHash.toBlake2b256Hash,
-                RuntimeManager[F].getHistoryRepo,
-                mergeableChs
-              )
+      s: CasperSnapshot[F]
+  ): F[BlockDagRepresentation[F]] = {
 
-      stateMeta = StateMetadata(
-        index.keys.toList,
-        s.conflictResolution.acceptedSet.toList,
-        s.conflictResolution.rejectedSet.toList
-      )
-      r <- BlockDagStorage[F].insert(b, invalid = false, stateMeta)
+    def mergeF(
+        state: StateHash,
+        mergeScope: Set[(BlockMetadata, Set[BlockMetadata])]
+    ): F[(ConflictResolution[DeployChain], StateHash)] = {
+
+      val conflictResolver = for {
+        genesis <- s.dag.genesis
+        indicesMissing <- Sync[F].delay(
+                           mergeScope
+                             .flatMap(x => x._2 + x._1)
+                             .map(_.blockHash)
+                             .filterNot(_ == genesis)
+                             .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
+                         )
+        _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock[F]))
+        r = DeployChainSetConflictResolver[F](x => DeployChainMerger.indexCache(x).pure[F])
+      } yield r
+
+      for {
+        _        <- Log[F].info(s"Merging FF")
+        resolver <- conflictResolver
+        genesis  <- s.dag.genesis
+        clearedMergeScope <- mergeScope.toMap
+                            // hack as no mergeable chans for genesis
+                              .mapValues(_.filterNot(_.blockHash == genesis))
+                              .toList
+                              .traverse {
+                                case (c, f) =>
+                                  resolver
+                                    .clean(
+                                      DeployChainMerger.blocksIndexed(c.blockHash),
+                                      f.flatMap(x => DeployChainMerger.blocksIndexed(x.blockHash))
+                                    )
+                                    .map((c, _))
+                              }
+        resolution <- resolver.resolve(
+                       clearedMergeScope
+                         .flatMap(
+                           v => DeployChainMerger.blocksIndexed(v._1.blockHash)
+                         )
+                         .toSet,
+                       ConflictResolution(Set(), clearedMergeScope.flatMap(_._2).toSet)
+                     )
+
+        r <- Stopwatch.duration(
+              DeployChainMerger.merge(
+                Blake2b256Hash.fromByteString(state),
+                resolution.acceptedSet
+              )(RuntimeManager[F])
+            )
+        (
+          (
+            finalizedState,
+            actionsNum,
+            trieActionComputeTime,
+            stateComputedTime
+          ),
+          mergeTime
+        ) = r
+        _ <- Log[F].info(
+              s"Finalization fringe merged in $mergeTime: ${resolution.acceptedSet.size} DC merged " +
+                s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime. "
+            )
+      } yield (resolution, finalizedState.toByteString)
+    }
+
+    for {
+      // Todo index only valid block
+      //_ <- indexBlock(b)
+      _ <- Log[F].info(s"Inserting block ${b.blockHash.show}")
+      r <- BlockDagStorage[F].insert(b, invalid = false, (mergeF _).some)
     } yield r
+  }
 
   override def handleInvalidBlock(
       block: BlockMessage,
@@ -314,7 +352,7 @@ class MultiParentCasperImpl[F[_]
               s"Recording invalid block ${PrettyPrinter.buildString(block.blockHash)} for ${status.toString}."
             )
 
-        r <- BlockDagStorage[F].insert(block, invalid = true, StateMetadata(List(), List(), List()))
+        r <- BlockDagStorage[F].insert(block, invalid = true)
       } yield r
 
     status match {
@@ -370,11 +408,6 @@ class MultiParentCasperImpl[F[_]
 }
 
 object MultiParentCasperImpl {
-
-  val latestScope = TrieMap.empty[Unit, (Blake2b256Hash, MessageScope[BlockMetadata])]
-
-  /** Cache for merged state of finalization fringe. */
-  val finalizedStateCache = TrieMap.empty[Set[BlockMetadata], Blake2b256Hash]
 
   // TODO: Extract hardcoded deployLifespan from shard config
   // Size of deploy safety range.
@@ -437,69 +470,44 @@ object MultiParentCasperImpl {
                 mergeableChs
               )
       _ = index.map { case (k, v) => DeployChainMerger.indexCache.putIfAbsent(k, v) }
-      _ = DeployChainMerger.blocksIndexed.putIfAbsent(b.blockHash, ())
+      _ = DeployChainMerger.blocksIndexed.putIfAbsent(b.blockHash, index.keySet)
     } yield ()
   }
 
-  def computeScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics: BlockDagStorage](
-      latestMessages: Set[BlockMetadata],
-      dag: BlockDagRepresentation[F]
-  ): F[(MessageScope[BlockMetadata], String, Blake2b256Hash)] =
-    for {
-      // scope of the message
-      r                             <- Stopwatch.duration(computeMessageScope(latestMessages, dag))
-      (messageScope, messageScopeT) = r
-
-      // this is a dirty hack to resolve concurrency issue. After block is validated, this `updateLatestScope` is called
-      // to update the scope. But BlockDagStorage.insert is called already. So the next block received can be sent for
-      // validation, while scope is not updated, and what is important, finalized state is not updated. So
-      // finalizationState can be outdated to the state of the message validated. So here when we find the scope
-      // of message validated, we update local finalization state as well.
-      _                 <- BlockDagStorage[F].updateFinalization(messageScope.finalizationFringe)
-      finalizationState <- BlockDagStorage[F].getRepresentation.map(_.finalizationState)
-
-      indicesMissing = messageScope.conflictScope.v
-        .map(_.blockHash)
-        .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
-      _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock[F]))
-
-      mergeFringe = mergeFinalizationFringe(
-        messageScope.finalizationFringe.v,
-        dag,
-        finalizationState.rejected,
-        hashes =>
-          hashes.traverse { h =>
-            BlockStore[F]
-              .getUnsafe(h)
-              .flatMap(indexBlock[F])
-              .unlessA(DeployChainMerger.blocksIndexed.contains(h))
-          }.void
-      )(RuntimeManager[F])
-      finalizedState <- OptionT
-                         .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
-                         .getOrElseF(
-                           mergeFringe.map { v =>
-                             val _ = MultiParentCasperImpl.finalizedStateCache
-                               .update(messageScope.finalizationFringe.v, v)
-                             v
-                           }
-                         )
-    } yield (messageScope, messageScopeT, finalizedState)
-
-  def updateLatestScope[F[_]: Concurrent: BlockDagStorage: RuntimeManager: BlockStore: Log: Metrics](
-      dag: BlockDagRepresentation[F]
-  ) =
-    for {
-      lms                        <- dag.latestMessages.map(_.values)
-      v                          <- computeScope(lms.toSet, dag)
-      (scope, _, finalizedState) = v
-      _                          <- BlockDagStorage[F].updateFinalization(scope.finalizationFringe)
-      _ = MultiParentCasperImpl.finalizedStateCache
-        .update(scope.finalizationFringe.v, finalizedState)
-      // Update finalized state
-      _ = MultiParentCasperImpl.latestScope.update((), (finalizedState, scope))
-      _ <- Log[F].info(
-            s"scope updated to latest messages ${PrettyPrinter.buildString(lms.map(_.blockHash).toList)}"
-          )
-    } yield ()
+//  def computeScope[F[_]: Concurrent: RuntimeManager: BlockStore: Log: Metrics: BlockDagStorage](
+//      latestMessages: Set[BlockMetadata],
+//      dag: BlockDagRepresentation[F]
+//  ): F[(MessageScope[BlockMetadata], String, Blake2b256Hash)] =
+//    for {
+//      // scope of the message
+//      r                             <- Stopwatch.duration(computeMessageScope(latestMessages, dag))
+//      (messageScope, messageScopeT) = r
+//
+//      indicesMissing = messageScope.conflictScope.v
+//        .map(_.blockHash)
+//        .filter(!DeployChainMerger.blocksIndexed.keySet.contains(_))
+//      _ <- indicesMissing.toList.traverse(BlockStore[F].getUnsafe(_).flatMap(indexBlock[F]))
+//
+//      mergeFringe = mergeFinalizationFringe(
+//        messageScope.finalizationFringe.v,
+//        dag,
+//        finalizationState.rejected,
+//        hashes =>
+//          hashes.traverse { h =>
+//            BlockStore[F]
+//              .getUnsafe(h)
+//              .flatMap(indexBlock[F])
+//              .unlessA(DeployChainMerger.blocksIndexed.contains(h))
+//          }.void
+//      )(RuntimeManager[F])
+//      finalizedState <- OptionT
+//                         .fromOption[F](finalizedStateCache.get(messageScope.finalizationFringe.v))
+//                         .getOrElseF(
+//                           mergeFringe.map { v =>
+//                             val _ = MultiParentCasperImpl.finalizedStateCache
+//                               .update(messageScope.finalizationFringe.v, v)
+//                             v
+//                           }
+//                         )
+//    } yield (messageScope, messageScopeT, finalizedState)
 }

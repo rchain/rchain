@@ -10,6 +10,8 @@ trait DependencyGraph[F[_], M, S] {
 
   def parents(message: M): F[List[M]]
 
+  def children(message: M): F[List[M]]
+
   /** Sender of a message. */
   def sender(message: M): S
 
@@ -18,6 +20,8 @@ trait DependencyGraph[F[_], M, S] {
 }
 
 object DependencyGraph {
+
+  type LatestMessages[S, M] = List[(S, Set[M])]
 
   /**
     * Given set of messages S, the message that either ancestor or descendant for all messages in S.

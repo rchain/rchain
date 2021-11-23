@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Show}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.{DagFringe, DeployId}
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
@@ -59,8 +59,7 @@ trait Casper[F[_]] {
   ): F[Either[BlockError, ValidBlock]]
   def handleValidBlock(
       block: BlockMessage,
-      s: CasperSnapshot[F],
-      updateLatestScope: Boolean = true
+      s: CasperSnapshot[F]
   ): F[BlockDagRepresentation[F]]
   def handleInvalidBlock(
       block: BlockMessage,
@@ -104,10 +103,7 @@ object MultiParentCasper extends MultiParentCasperInstances {
   */
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
-    messageScope: MessageScope[BlockMetadata],
-    conflictResolution: ConflictResolution[DeployChain],
-    state: StateHash,
-    finalizationState: BlockDagFinalizationState,
+    finalizedFringe: DagFringe,
     latestMessages: Map[Validator, BlockMetadata],
     invalidBlocks: Map[Validator, BlockHash],
     deploysInScope: Set[DeployId],

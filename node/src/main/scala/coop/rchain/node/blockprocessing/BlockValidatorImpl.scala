@@ -83,7 +83,6 @@ final case class BlockValidatorImpl[F[_]
             _ <- bufferStorage.delete(message)
           } yield (newRepr, r))
       (newRepr, r) = v
-      _            <- updateLatestScope(newRepr)
       _ <- Log[F].info(
             s"Validating ${message.show.take(100)}. Done. Invoking Effects. Done. Unlocked: [${r.dependentUnlocked
               .map(_.show.take(10))

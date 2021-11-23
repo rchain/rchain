@@ -1,4 +1,5 @@
 package coop.rchain.casper.v2.core
+import coop.rchain.casper.v2.core.DependencyGraph.LatestMessages
 
 trait Casper[F[_], M, S] {
 
@@ -14,7 +15,7 @@ trait Casper[F[_], M, S] {
 object Casper {
 
   /** Highest finalized messages from all known senders. Defines finalized state of the network. */
-  final case class FinalizationFringe[M](v: Set[M])
+  type FinalizationFringe[S, M] = LatestMessages[S, M]
 
   /** All messages above the finalization fringe. */
   final case class ConflictScope[M](v: Set[M])
@@ -26,8 +27,8 @@ object Casper {
     * @param conflictScope       [[ConflictScope]]
     * @tparam M                  Type of the message.
     */
-  final case class MessageScope[M](
-      finalizationFringe: FinalizationFringe[M],
+  final case class MessageScope[S, M](
+      finalizationFringe: FinalizationFringe[S, M],
       conflictScope: ConflictScope[M]
   )
 

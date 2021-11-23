@@ -13,8 +13,7 @@ final case class BlockMetadata(
     weightMap: Map[ByteString, Long],
     blockNum: Long,
     seqNum: Int,
-    invalid: Boolean,
-    stateMetadata: StateMetadata
+    invalid: Boolean
 ) {
   def toByteString = BlockMetadata.typeMapper.toBase(this).toByteString
 }
@@ -31,8 +30,7 @@ object BlockMetadata {
       internal.bonds.map(b => b.validator -> b.stake).toMap,
       internal.blockNum,
       internal.seqNum,
-      internal.invalid,
-      internal.stateMetadata.get
+      internal.invalid
     )
   } { metadata =>
     BlockMetadataInternal(
@@ -44,7 +42,6 @@ object BlockMetadata {
       metadata.blockNum,
       metadata.seqNum,
       metadata.invalid,
-      Some(metadata.stateMetadata),
       metadata.parents
     )
   }
@@ -71,7 +68,6 @@ object BlockMetadata {
   def fromBlock(
       b: BlockMessage,
       invalid: Boolean,
-      stateMetadata: StateMetadata,
       parents: List[ByteString]
   ): BlockMetadata =
     BlockMetadata(
@@ -83,7 +79,6 @@ object BlockMetadata {
       weightMap(b.body.state),
       b.body.state.blockNumber,
       b.seqNum,
-      invalid,
-      stateMetadata
+      invalid
     )
 }

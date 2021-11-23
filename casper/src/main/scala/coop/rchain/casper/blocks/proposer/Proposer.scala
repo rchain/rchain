@@ -48,22 +48,40 @@ class Proposer[F[_]: Concurrent: Log: Span](
     proposeEffect: (BlockMessage, CasperSnapshot[F]) => F[Unit],
     validator: ValidatorIdentity
 ) {
+  import coop.rchain.models.syntax._
 
-  private def checkSyncConstr(s: CasperSnapshot[F]): Boolean = {
-    val selfJ = s.latestMessages
-      .find {
-        case (v, _) => v.toByteArray sameElements validator.publicKey.bytes
-      }
-      .map(_._2)
+  private def checkSyncConstr(s: CasperSnapshot[F]): F[Boolean] =
+    for {
+      fms <- s.finalizedFringe.finalizationFringe.toList.traverse {
+              case (v, h) =>
+                h.toList.traverse(s.dag.lookupUnsafe).map(_.map(_.seqNum).max).map((v, _))
+            }
+      lms       = s.latestMessages.map { case (v, m) => (v, m.seqNum) }
+      _         <- Log[F].info(s"${fms.map(_._1.show)}")
+      _         <- Log[F].info(s"${lms.map(_._1.show)}")
+      distances = fms.map { case (v, h) => (v, lms(v) - h) }.sortBy { case (_, d) => d }.reverse
+      // if you are in 1/2 of fastest - you are rabbit
+      rabbits = distances.take(distances.size / 2)
+      turtles = distances.drop(distances.size / 2)
+      slowDown = rabbits
+        .find(_._1.toByteArray sameElements validator.publicKey.bytes)
+        .exists { case (_, v) => v > turtles.head._2 }
+      _ <- Log[F].info(s"unfin distances: ${distances.map(_._2)}")
+//    val selfJ = s.latestMessages
+//      .find {
+//        case (v, _) => v.toByteArray sameElements validator.publicKey.bytes
+//      }
+//      .map(_._2)
+//
+//    val prevJs  = selfJ.map(_.justifications.map(_.latestBlockHash)).getOrElse(List())
+//    val newMsgs = s.latestMessages.values.map(_.blockHash).toSet -- prevJs
+//    //    -- selfJ
+////      .map(m => Set(m.blockHash))
+////      .getOrElse(Set())
+//    val syncV = (newMsgs.size.toFloat / prevJs.size)
+//    syncV > 0.67
 
-    val prevJs  = selfJ.map(_.justifications.map(_.latestBlockHash)).getOrElse(List())
-    val newMsgs = s.latestMessages.values.map(_.blockHash).toSet -- prevJs
-    //    -- selfJ
-//      .map(m => Set(m.blockHash))
-//      .getOrElse(Set())
-    val syncV = (newMsgs.size.toFloat / prevJs.size)
-    syncV > 0.67
-  }
+    } yield !slowDown
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
@@ -72,7 +90,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
   ): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
-        syncOK <- checkSyncConstr(s).pure[F]
+        syncOK <- checkSyncConstr(s)
         b      <- if (syncOK) createBlock(s, validator) else NotEnoughNewBlock.pure[F]
         r <- b match {
               case Created(b) =>
@@ -171,13 +189,12 @@ object Proposer {
                       validatorIdentity.some,
                       casperConf.faultToleranceThreshold,
                       casperConf.shardName
-                    ).handleValidBlock(b, s, false)
+                    ).handleValidBlock(b, s)
               _ <- blockDagStateRef.update(_.ackValidated(b.blockHash, dag.getPureState).newState)
               _ <- BlockRetriever[F].ackInCasper(b.blockHash)
             } yield dag
             // inform block retriever about block
-          )
-          .flatMap(dag => MultiParentCasperImpl.updateLatestScope(dag)) >>
+          ) >>
         // broadcast hash to peers
         CommUtil[F].sendBlockHash(b.blockHash, b.sender) >>
         // Publish event

@@ -18,7 +18,7 @@ object DeployChainMerger {
 
   // Todo persist cache.
   val indexCache    = TrieMap.empty[DeployChain, DeployChainIndex]
-  val blocksIndexed = TrieMap.empty[BlockHash, Unit]
+  val blocksIndexed = TrieMap.empty[BlockHash, Set[DeployChain]]
 
   def getDeployChainIndex[F[_]: Sync](v: DeployChain): F[DeployChainIndex] = {
     val errMsg = s"No merging index available. Is block indexing enabled on block replay?"

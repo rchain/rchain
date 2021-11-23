@@ -70,6 +70,14 @@ final class DependencyGraphOps[F[_], M, S](val c: DependencyGraph[F, M, S]) exte
     Stream.unfoldEval(message)(justifications(_).map(_.find(sender(_) == s).map(v => (v, v))))
   }
 
+  /**
+    * @return Stream of self descendants.
+    */
+  def selfDescendantsChain(message: M)(implicit a: Sync[F]): Stream[F, M] = {
+    val s = sender(message)
+    Stream.unfoldEval(message)(children(_).map(_.find(sender(_) == s).map(v => (v, v))))
+  }
+
   def highestCommonMessage(
       messages: Set[M],
       requirement: M => Boolean = _ => true

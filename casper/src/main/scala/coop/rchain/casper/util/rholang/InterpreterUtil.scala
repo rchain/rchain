@@ -47,24 +47,14 @@ object InterpreterUtil {
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
-    val rejectedDeployIds    = s.conflictResolution.rejectedSet.flatMap(_.deploys)
-    if (incomingPreStateHash != s.state) {
+    if (incomingPreStateHash != s.finalizedFringe.state) {
       //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
       Log[F]
         .warn(
-          s"Computed pre-state hash ${PrettyPrinter.buildString(s.state)} does not equal block's pre-state hash ${PrettyPrinter
+          s"Computed pre-state hash ${PrettyPrinter.buildString(s.finalizedFringe.state)} does not equal block's pre-state hash ${PrettyPrinter
             .buildString(incomingPreStateHash)}"
         )
         .as(none[StateHash].asRight[BlockError])
-    } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
-      Log[F]
-        .warn(
-          s"Computed rejected deploys " +
-            s"${rejectedDeployIds.toList.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
-            s"block's rejected deploy " +
-            s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
-        )
-        .as(InvalidRejectedDeploy.asLeft)
     } else {
       for {
         replayResult <- replayBlock(
@@ -76,7 +66,6 @@ object InterpreterUtil {
         result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
       } yield result
     }
-
   }
 
   private def replayBlock[F[_]: Sync: Log: BlockStore](

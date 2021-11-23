@@ -65,8 +65,7 @@ object Engine {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
       _ <- BlockDagStorage[F].insert(
             genesis,
-            invalid = false,
-            StateMetadata(List(), List(), List())
+            invalid = false
           )
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()

@@ -50,9 +50,20 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
       .getOrElse(Set.empty[Set[DeployChainWithIndex]])
   }
 
+  def clean(conflictSet: Set[DeployChain], finalizedSet: Set[DeployChain]): F[Set[DeployChain]] = {
+
+    implicit val log = Log.log
+    for {
+      csi <- conflictSet.toList.traverse(cs => index(cs).map(DeployChainWithIndex(cs, _)))
+      fsi <- finalizedSet.toList.traverse(cs => index(cs).map(DeployChainWithIndex(cs, _)))
+      r   = csi.filter(c => fsi.exists(f => areConflicting(Set(f), Set(c))))
+      _   <- Log[F].info(s"${r.size} conflicts wth finalized scope found")
+    } yield r.map(_.deployChain).toSet
+  }
+
   def resolve(
       conflictSet: Set[DeployChain],
-      selfJustificationRejections: ConflictResolution[DeployChain]
+      toEnforce: ConflictResolution[DeployChain]
   ): F[ConflictResolution[DeployChain]] = {
     implicit val log = Log.log
     for {
@@ -75,8 +86,8 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
         )
       )
 
-      forceAccept = selfJustificationRejections.acceptedSet
-      forceReject = selfJustificationRejections.rejectedSet
+      forceAccept = toEnforce.acceptedSet
+      forceReject = toEnforce.rejectedSet
       (forcedRejectedMap, remainderMap) = conflictMap.partition {
         case (k, c) =>
           (forceReject intersect k.map(_.deployChain)).nonEmpty || ((c.flatMap(_.map(_.deployChain)) intersect forceAccept).nonEmpty)

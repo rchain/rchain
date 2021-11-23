@@ -1,10 +1,12 @@
 package coop.rchain.blockstorage.dag.state
 
+import coop.rchain.blockstorage.dag.BlockDagStorage.DagFringe
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.casper.protocol.DeployChain
 import coop.rchain.casper.v2.core.Validation.Slashing
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.block.StateHash.StateHash
 
 import scala.collection.immutable.{Set, SortedMap}
 
@@ -15,7 +17,8 @@ final case class BlockDagRepresentationState(
     childrenMap: Map[BlockHash, Set[BlockHash]],
     heightMap: SortedMap[Long, Set[BlockHash]],
     invalidBlocksSet: Set[Slashing[BlockHash]],
-    finalizationState: BlockDagFinalizationState
+    finalizationState: BlockDagFinalizationState,
+    latestFringes: List[DagFringe]
 )
 
 object BlockDagRepresentationState {

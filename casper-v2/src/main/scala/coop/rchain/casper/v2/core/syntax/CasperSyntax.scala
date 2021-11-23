@@ -1,5 +1,6 @@
 package coop.rchain.casper.v2.core.syntax
 
+import cats.Show
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.casper.v2.core.Casper._
@@ -14,12 +15,102 @@ trait CasperSyntax {
 final class CasperOps[F[_], M, S](val c: Casper[F, M, S]) extends AnyVal {
   import c._
 
+  /**
+    * Update finalization.
+    * @return List of new finalization fringes found + conflict scope that should be merged into current finalized state.
+    */
+  def finalise(
+      latestMessages: List[(S, M)],
+      dag: DependencyGraph[F, M, S],
+      safetyOracle: SafetyOracle[F, M, S],
+      currLatestFringe: FinalizationFringe[S, M]
+  )(
+      implicit sync: Sync[F],
+      ordering: Ordering[M],
+      show: Show[M]
+  ): F[Vector[FinalizationFringe[S, M]]] = {
+    // Slice is complete when all messages in a slice have enough stake (are below supermajority fringe)
+    def fringeIsComplete(fringe: FinalizationFringe[S, M], supermajorityFringe: Set[M]): Boolean =
+      !fringe.flatMap(_._2).exists { m =>
+        supermajorityFringe.exists(
+          smm => dag.sender(smm) == dag.sender(m) && dag.seqNum(smm) < dag.seqNum(m)
+        )
+      }
+
+    def nextFringe(ff: FinalizationFringe[S, M]): F[FinalizationFringe[S, M]] =
+      ff.toList
+        .traverse {
+          case (s, msgs) =>
+            for {
+              newMsgs <- msgs.toList
+                          .flatTraverse(
+                            m => dag.children(m).map(_.filter(dag.sender(_) == s))
+                          )
+                          // this is required for genesis case
+                          .map(
+                            _.toSet
+                              .groupBy(dag.seqNum)
+                              .toList
+                              .sortBy(_._1)
+                              .map(_._2)
+                              .headOption
+                              .getOrElse(Set())
+                          )
+              // no messages that have justifications above current FF allowed
+              filtered <- newMsgs.toList.filterA { m =>
+                           for {
+                             js <- dag.justifications(m)
+                             tooNew = js.exists { j =>
+                               dag.seqNum(j) > ff
+                                 .find { case (s, _) => s == dag.sender(j) }
+                                 .get
+                                 .map(_.map(dag.seqNum).min)
+                                 ._2
+                             }
+                           } yield !tooNew
+                         }
+              r = if (filtered.nonEmpty) filtered.toSet else msgs
+            } yield (s, r)
+        }
+
+    Sync[F].handleErrorWith(
+      for {
+        // find supermajority fringe
+        r                                    <- messageScope(latestMessages, dag, safetyOracle)
+        MessageScope(supermajorityFringe, _) = r
+        // traverse up from current finalization fringe
+        newFringes <- fs2.Stream
+                       .unfoldEval(currLatestFringe) {
+                         cur =>
+                           nextFringe(cur).map {
+                             next =>
+                               // TODO handle eqs
+                               assert(
+                                 next.map(_._2).forall(_.size == 1),
+                                 s"multiple messages from same sender in ffringe. Should be fine if equivocations are handled but they are not now. " +
+                                   s"${cur.map(_._2.map(_.show))} -> ${next.map(_._2.map(_.show))}"
+                               )
+                               (cur != next &&
+                                 fringeIsComplete(next, supermajorityFringe.flatMap(_._2).toSet))
+                                 .guard[Option]
+                                 .as(next, next)
+                           }
+                       }
+                       .compile
+                       .to(Vector)
+      } yield newFringes
+    ) {
+      case NoFinalizationFringe => Vector.empty[FinalizationFringe[S, M]].pure[F]
+    }
+  }
+
   def messageScope(
-      latestMessages: Set[M],
+      lms: List[(S, M)],
       dag: DependencyGraph[F, M, S],
       safetyOracle: SafetyOracle[F, M, S]
-  )(implicit sync: Sync[F], ordering: Ordering[M]): F[MessageScope[M]] = {
+  )(implicit sync: Sync[F], ordering: Ordering[M]): F[MessageScope[S, M]] = {
     import dag._
+    val latestMessages = lms.map(_._2).toSet
 
     val allSenders    = latestMessages.map(sender)
     val latestSeqNums = latestMessages.map(m => sender(m) -> seqNum(m)).toMap
@@ -63,7 +154,7 @@ final class CasperOps[F[_], M, S](val c: Casper[F, M, S]) extends AnyVal {
             case (sender, messages) => messages.filter(nf => seqNum(nf) >= seqNum(fringe(sender)))
           }
           MessageScope(
-            FinalizationFringe(fringe.values.toSet),
+            fringe.values.toList.map(m => (dag.sender(m), Set(m))),
             ConflictScope(nonFinalizedSet.toSet)
           )
       }

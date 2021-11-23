@@ -7,7 +7,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.{DagFringe, DeployId}
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
@@ -392,13 +392,10 @@ object BlockAPI {
         // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
         startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
                         else Sync[F].delay(startBlockNumber.toLong)
-        topoSortDag <- dag.topoSort(
-                        startBlockNum - depth,
-                        Some(startBlockNum)
-                      )
-        (lfs, scope) = MultiParentCasperImpl.latestScope(())
-        fringe       = scope.finalizationFringe.v.map(_.blockHash).map(PrettyPrinter.buildString)
-        graph        <- visualizer(topoSortDag, fringe, fringe.head)
+        topoSortDag          <- dag.topoSort(startBlockNum - depth, Some(startBlockNum))
+        DagFringe(blocks, _) = dag.finalizationFringes.head
+        fringe               = blocks.flatMap(_._2).map(PrettyPrinter.buildString).toSet
+        graph                <- visualizer(topoSortDag, fringe, fringe.head)
       } yield serialize(graph).asRight[Error]
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
@@ -533,8 +530,7 @@ object BlockAPI {
       block: BlockMessage,
       constructor: (
           BlockMessage,
-          Float,
-          StateMetadata
+          Float
       ) => A
   )(implicit casper: MultiParentCasper[F]): F[A] =
     for {
@@ -545,9 +541,7 @@ object BlockAPI {
       normalizedFaultTolerance = -1
       initialFault             <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance           = normalizedFaultTolerance - initialFault
-      stateMetadataOpt         <- dag.lookup(block.blockHash).map(_.map(_.stateMetadata))
-      stateMetadata            = stateMetadataOpt.getOrElse(StateMetadata(List(), List(), List()))
-      blockInfo                = constructor(block, faultTolerance, stateMetadata)
+      blockInfo                = constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Sync: BlockStore](
@@ -561,10 +555,9 @@ object BlockAPI {
 
   private def constructBlockInfo(
       block: BlockMessage,
-      faultTolerance: Float,
-      stateMetadata: StateMetadata
+      faultTolerance: Float
   ): BlockInfo = {
-    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance, stateMetadata)
+    val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
     val deploys        = block.body.deploys.map(_.toDeployInfo)
     BlockInfo(
       blockInfo = Some(lightBlockInfo),
@@ -574,19 +567,8 @@ object BlockAPI {
 
   private def constructLightBlockInfo(
       block: BlockMessage,
-      faultTolerance: Float,
-      stateMetadata: StateMetadata
-  ): LightBlockInfo = {
-    val stateMetadataStr =
-      s"""| proposed: ${stateMetadata.proposed.map(v => PrettyPrinter.buildStringNoLimit(v.deploys))}
-          | accepted: ${stateMetadata.acceptedSet.map(
-           v => PrettyPrinter.buildStringNoLimit(v.deploys)
-         )}
-          | rejected: ${stateMetadata.rejectedSet.map(
-           v => PrettyPrinter.buildStringNoLimit(v.deploys)
-         )}
-           |""".stripMargin
-
+      faultTolerance: Float
+  ): LightBlockInfo =
     LightBlockInfo(
       blockHash = PrettyPrinter.buildStringNoLimit(block.blockHash),
       sender = PrettyPrinter.buildStringNoLimit(block.sender),
@@ -609,10 +591,8 @@ object BlockAPI {
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
       rejectedDeploys = block.body.rejectedDeploys.map(
         r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
-      ),
-      stateMetadata = stateMetadataStr
+      )
     )
-  }
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
@@ -666,7 +646,10 @@ object BlockAPI {
             val fs    = r.finalizationState
             val acStr = fs.accepted.flatMap(_.deploys.map(_.show)).mkString(";")
             val rjStr = fs.rejected.flatMap(_.deploys.map(_.show)).mkString(";")
-            s"Accepted: $acStr \n Rejected: $rjStr".asRight[Error]
+            s"Fringe: ${PrettyPrinter.buildString(
+              r.finalizationFringes.head.finalizationFringe.flatMap(_._2)
+            )} \n Accepted: $acStr \n Rejected: $rjStr"
+              .asRight[Error]
           },
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )

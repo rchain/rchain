@@ -129,8 +129,7 @@ message BlockMetadataInternal {
   int64 blockNum                        = 6;
   int32 seqNum                          = 7;
   bool invalid                          = 8; // whether the block was marked as invalid
-  StateMetadata stateMetadata           = 9;
-  repeated bytes parents = 10; // map of all validators to latest blocks based on current view
+  repeated bytes parents = 9; // map of all validators to latest blocks based on current view
 }
 
 message HeaderProto {

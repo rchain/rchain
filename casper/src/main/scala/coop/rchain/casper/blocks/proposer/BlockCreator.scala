@@ -15,6 +15,7 @@ import coop.rchain.casper.{Casper, CasperSnapshot, PrettyPrinter, ValidatorIdent
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.DeployId
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, Stopwatch, Time}
@@ -56,12 +57,9 @@ object BlockCreator {
           )
           // this is required to prevent resending the same deploy several times by validator
           validUnique = valid.filterNot(
-            d =>
-              s.deploysInScope.contains(d.sig) ||
-                s.finalizationState.accepted.exists(_.deploys.contains(d.sig)) ||
-                s.finalizationState.rejected.exists(_.deploys.contains(d.sig))
+            d => s.deploysInScope.contains(d.sig)
           )
-        } yield validUnique
+        } yield validUnique.take(1)
 
       def prepareSlashingDeploys(
           seqNum: Int,
@@ -102,10 +100,9 @@ object BlockCreator {
       }
 
       val createBlockProcess = for {
-        _                  <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
-        preStateHash       = s.state
-        rejectionCondition = s.conflictResolution.rejectedSet
-        activeValidators   <- runtimeManager.getActiveValidators(preStateHash)
+        _                <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
+        preStateHash     = s.finalizedFringe.state
+        activeValidators <- runtimeManager.getActiveValidators(preStateHash)
 
         userDeploys     <- prepareUserDeploys(nextBlockNum)
         dummyDeploys    = prepareDummyDeploy(nextBlockNum)
@@ -144,7 +141,7 @@ object BlockCreator {
           preStateHash,
           postStateHash,
           processedDeploys,
-          rejectionCondition.toList.flatMap(_.deploys),
+          List.empty[ByteString],
           processedSystemDeploys,
           newBonds,
           shardId,

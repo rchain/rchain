@@ -97,8 +97,7 @@ class Initializing[F[_]
         // Record approved block in DAG
         dag <- BlockDagStorage[F].insert(
                 block,
-                invalid = false,
-                StateMetadata(List(), List(), List())
+                invalid = false
               )
         _ <- blockDagStateRef.update(_.ackValidated(block.blockHash, dag.getPureState).newState)
         _ <- BlockRetriever[F].ackInCasper(block.blockHash)
@@ -216,8 +215,7 @@ class Initializing[F[_]
         s"Adding ${PrettyPrinter.buildString(block, short = true)}, invalid = $isInvalid."
       ) <* BlockDagStorage[F].insert(
         block,
-        invalid = isInvalid,
-        StateMetadata(List(), List(), List())
+        invalid = isInvalid
       )
 
     for {

@@ -30,16 +30,6 @@ import fs2.Stream
 
 object DeployChainSetCasper {
 
-  /** Representation of BlockMetadata as a state message*/
-  def metaAsState(meta: BlockMetadata): StateMessage[DeployChain] = new StateMessage[DeployChain] {
-    override def proposed = meta.stateMetadata.proposed.toSet
-    override def merged: ConflictResolution[DeployChain] =
-      ConflictResolution(
-        meta.stateMetadata.acceptedSet.toSet,
-        meta.stateMetadata.rejectedSet.toSet
-      )
-  }
-
   implicit val metaOrd: Ordering[BlockMetadata] = Ordering.by[BlockMetadata, BlockHash](_.blockHash)
 
   /** Implementations of Casper traits for BlockDagRepresentation */
@@ -53,13 +43,16 @@ object DeployChainSetCasper {
     override def parents(
         message: BlockMetadata
     ): F[List[BlockMetadata]] = message.parents.traverse(dag.lookupUnsafe)
+    override def children(
+        message: BlockMetadata
+    ): F[List[BlockMetadata]] =
+      dag.children(message.blockHash).flatMap(_.getOrElse(Set()).toList.traverse(dag.lookupUnsafe))
   }
 
   final case class BlockMetadataSafetyOracle[F[_]: Sync]()
       extends SafetyOracle[F, BlockMetadata, Validator] {
-    override def compatible(source: BlockMetadata, target: BlockMetadata): Boolean =
-      !metaAsState(source).conflicts(metaAsState(target))
-    override def bondsMap(message: BlockMetadata): Map[Validator, Long] = message.weightMap
+    override def compatible(source: BlockMetadata, target: BlockMetadata): Boolean = true
+    override def bondsMap(message: BlockMetadata): Map[Validator, Long]            = message.weightMap
   }
 
   final case class BlockMetadataCasper[F[_]: Sync](
@@ -71,13 +64,15 @@ object DeployChainSetCasper {
   def computeMessageScope[F[_]: Sync](
       latestMessages: Set[BlockMetadata],
       dag: BlockDagRepresentation[F]
-  ): F[MessageScope[BlockMetadata]] = {
+  ): F[MessageScope[Validator, BlockMetadata]] = {
     val casperMaxDepth = 100L
     val metaDag        = BlockMetadataDag(dag)
     val safetyOracle   = BlockMetadataSafetyOracle()
     val casper         = BlockMetadataCasper(faultToleranceThreshold = -1, maxDepth = casperMaxDepth)
 
-    Sync[F].handleErrorWith(casper.messageScope(latestMessages, metaDag, safetyOracle)) {
+    Sync[F].handleErrorWith(
+      casper.messageScope(latestMessages.map(m => (m.sender, m)).toList, metaDag, safetyOracle)
+    ) {
       case NoFinalizationFringe =>
         for {
           maxHeight <- dag.getPureState.heightMap.lastOption
@@ -106,47 +101,50 @@ object DeployChainSetCasper {
                             .compile
                             .to(Set)
           base <- dag.lookupUnsafe(genesis)
-        } yield MessageScope(FinalizationFringe(Set(base)), ConflictScope(conflictScope - base))
+        } yield MessageScope(
+          List((base.sender, Set(base))),
+          ConflictScope(conflictScope - base)
+        )
     }
   }
 
-  /** Merge finalization fringe into single finalized state.  */
-  def mergeFinalizationFringe[F[_]: Concurrent: BlockStore: Log: Metrics](
-      fringe: Set[BlockMetadata],
-      dag: BlockDagRepresentation[F],
-      finalizedRejections: Set[DeployChain],
-      fillMergingIndex: List[BlockHash] => F[Unit]
-  )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] = {
-    val rejected = fringe.flatMap(_.stateMetadata.rejectedSet)
-    val virgin   = (m: BlockMetadata) => (m.stateMetadata.proposed.toSet intersect rejected).isEmpty
-    for {
-      r                <- BlockMetadataDag(dag).mergeScope(fringe, virgin)
-      (base, mergeSet) = r
-      _                <- fillMergingIndex(mergeSet.map(_.blockHash).toList)
-      acceptedSet      = mergeSet.flatMap(_.stateMetadata.proposed) diff finalizedRejections
-      // compute approved state
-      r <- Stopwatch.duration(
-            DeployChainMerger.merge(
-              Blake2b256Hash.fromByteString(base.message.postStateHash),
-              acceptedSet
-            )(runtimeManager)
-          )
-      (
-        (
-          finalizedState,
-          actionsNum,
-          trieActionComputeTime,
-          stateComputedTime
-        ),
-        mergeTime
-      ) = r
-      _ <- Log[F].info(
-            s"Finalization fringe ${fringe.toList.sorted
-              .map(_.blockHash.show.take(10))} merged in $mergeTime: ${acceptedSet.size} DC merged " +
-              s"(${acceptedSet.toList.flatMap(_.deploys).sorted.map(_.show.take(10))}), " +
-              s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime. " +
-              s"State $finalizedState, base ${base.message.blockHash.show.take(10)}."
-          )
-    } yield finalizedState
-  }
+//  /** Merge finalization fringe into single finalized state.  */
+//  def mergeFinalizationFringe[F[_]: Concurrent: BlockStore: Log: Metrics](
+//      fringe: Set[BlockMetadata],
+//      dag: BlockDagRepresentation[F],
+//      finalizedRejections: Set[DeployChain],
+//      fillMergingIndex: List[BlockHash] => F[Unit]
+//  )(runtimeManager: RuntimeManager[F]): F[Blake2b256Hash] = {
+//    val rejected = fringe.flatMap(_.stateMetadata.rejectedSet)
+//    val virgin   = (m: BlockMetadata) => (m.stateMetadata.proposed.toSet intersect rejected).isEmpty
+//    for {
+//      r                <- BlockMetadataDag(dag).mergeScope(fringe, virgin)
+//      (base, mergeSet) = r
+//      _                <- fillMergingIndex(mergeSet.map(_.blockHash).toList)
+//      acceptedSet      = mergeSet.flatMap(_.stateMetadata.proposed) diff finalizedRejections
+//      // compute approved state
+//      r <- Stopwatch.duration(
+//            DeployChainMerger.merge(
+//              Blake2b256Hash.fromByteString(base.message.postStateHash),
+//              acceptedSet
+//            )(runtimeManager)
+//          )
+//      (
+//        (
+//          finalizedState,
+//          actionsNum,
+//          trieActionComputeTime,
+//          stateComputedTime
+//        ),
+//        mergeTime
+//      ) = r
+//      _ <- Log[F].info(
+//            s"Finalization fringe ${fringe.toList.sorted
+//              .map(_.blockHash.show.take(10))} merged in $mergeTime: ${acceptedSet.size} DC merged " +
+//              s"(${acceptedSet.toList.flatMap(_.deploys).sorted.map(_.show.take(10))}), " +
+//              s"${actionsNum} trie actions computed in $trieActionComputeTime, applied in $stateComputedTime. " +
+//              s"State $finalizedState, base ${base.message.blockHash.show.take(10)}."
+//          )
+//    } yield finalizedState
+//  }
 }

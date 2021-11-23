@@ -2,29 +2,40 @@ package coop.rchain.blockstorage.dag
 
 import cats.Applicative
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.{DagFringe, DeployId}
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
-import coop.rchain.casper.protocol.{BlockMessage, StateMetadata}
+import coop.rchain.casper.protocol.{BlockMessage, DeployChain, StateMetadata}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import cats.syntax.all._
 import coop.rchain.casper.v2.core.Casper.FinalizationFringe
+import coop.rchain.casper.v2.stcasper.ConflictsResolver.ConflictResolution
+import coop.rchain.models.block.StateHash.StateHash
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      blockStateMetadata: StateMetadata
+      // processing the event of finding new fringe requires more then just DAG store
+      mergeFOpt: Option[
+        (
+            StateHash,
+            Set[(BlockMetadata, Set[BlockMetadata])] // block to merge + finalized scope unseen from this block
+        ) => F[(ConflictResolution[DeployChain], StateHash)]
+      ] = None
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def updateFinalization(fringe: FinalizationFringe[BlockMetadata]): F[Unit]
 }
 
 object BlockDagStorage {
   type DeployId = ByteString
+  final case class DagFringe(
+      finalizationFringe: FinalizationFringe[Validator, BlockHash],
+      state: StateHash
+  )
 
   def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
@@ -47,6 +58,7 @@ trait BlockDagRepresentation[F[_]] {
   def genesis: F[BlockHash]
   def finalizationState: BlockDagFinalizationState
   def getPureState: BlockDagRepresentationState
+  def finalizationFringes: List[DagFringe]
 }
 
 trait EquivocationsTracker[F[_]] {

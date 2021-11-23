@@ -173,9 +173,8 @@ object Validate {
     import cats.instances.option._
 
     val deployKeySet = block.body.deploys.map(_.deploy.sig).toSet
-    val inMergeScope = s.messageScope.conflictScope.v.flatMap(_.stateMetadata.proposed)
-    val finalized    = Set.empty[DeployChain]
-    val duplicates   = deployKeySet intersect (inMergeScope ++ finalized).flatMap(_.deploys)
+    val inMergeScope = s.deploysInScope
+    val duplicates   = deployKeySet intersect inMergeScope
 
     duplicates.nonEmpty
       .guard[Option]
