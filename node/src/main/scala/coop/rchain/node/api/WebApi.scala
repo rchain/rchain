@@ -18,7 +18,9 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
-import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse, VersionInfo}
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.state.StateManager
@@ -61,11 +63,12 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
+  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
-      triggerProposeF: Option[ProposeFunction[F]]
+      triggerProposeF: Option[ProposeFunction[F]],
+      networkId: String
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -122,10 +125,22 @@ object WebApi {
         .map(toExploratoryResponse)
 
     def status: F[ApiStatus] =
-      ApiStatus(
-        version = 1,
-        message = "OK"
-      ).pure
+      for {
+        versionInfo <- Sync[F].delay(VersionInfo.get)
+        address     <- RPConfAsk[F].ask
+        blocks      <- getBlocks(depth = 1)
+        shardId     = blocks.headOption.getOrElse(LightBlockInfo()).shardId
+        peers       <- ConnectionsCell[F].read
+        nodes       <- NodeDiscovery[F].peers
+      } yield ApiStatus(
+        versionNumber = 1,
+        versionInfo,
+        address.local.toAddress,
+        networkId,
+        shardId,
+        peers.length,
+        nodes.length
+      )
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
       BlockAPI
@@ -213,8 +228,13 @@ object WebApi {
   )
 
   final case class ApiStatus(
-      version: Int,
-      message: String
+      versionNumber: Int,
+      versionInfo: String,
+      address: String,
+      networkId: String,
+      shardId: String,
+      peers: Int,
+      nodes: Int
   )
 
   // Exception thrown by BlockAPI

@@ -22,6 +22,7 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
@@ -50,7 +51,7 @@ import monix.execution.Scheduler
 import java.nio.file.Files
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
@@ -311,12 +312,15 @@ object Setup {
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
+        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
+
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
           cacheTransactionAPI,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]]
+          else none[ProposeFunction[F]],
+          conf.protocolServer.networkId
         )
       }
       adminWebApi = {
