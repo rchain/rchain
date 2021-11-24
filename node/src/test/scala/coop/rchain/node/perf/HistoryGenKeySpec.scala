@@ -21,13 +21,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   object Settings {
 //    val typeHistory: String = "MergingHistory"
-//    val typeHistory: String = "RadixHistory7"
-//    val typeHistory: String = "RadixHistory8"
-//    val typeHistory: String = "RadixHistory9"
-//    val typeHistory: String = "RadixHistory10"
-//    val typeHistory: String = "RadixHistory11"
-//    val typeHistory: String = "RadixHistory12"
-    val typeHistory: String = "RadixHistory13"
+    val typeHistory: String = "RadixHistory"
 
     val typeStore: String = "lmdb"
 //    val typeStore: String = "inMemo"
@@ -49,12 +43,12 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
     val flagSize: Boolean = calcSize && (typeStore == "inMemo")
 
-    val taskCur: List[ExpT] = tasksLarge0
+    val taskCur: List[ExpT] = tasksSmall
   }
 
   case class ExpT(initNum: Int, insReadDelNum: Int)
 
-  val tasksSmall: List[ExpT] = List(ExpT(1, 200000))
+  val tasksSmall: List[ExpT] = List(ExpT(1, 20000))
 
   val tasksMedium0: List[ExpT] = List(
     ExpT(1, 300),
@@ -158,15 +152,17 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           val inMemoStore = InMemoryKeyValueStore[F]
           inMemoStore.clear()
           val store = new RadixStore(inMemoStore)
-          for { history <- RadixHistory[F](root, store) } yield HistoryWithFunc(
-            history,
-            inMemoStore.sizeBytes,
-            inMemoStore.numRecords
+          Sync[F].pure(
+            HistoryWithFunc(
+              RadixHistory[F](root, store),
+              inMemoStore.sizeBytes,
+              inMemoStore.numRecords
+            )
           )
         case "lmdb" =>
           for {
             store   <- storeLMDB(lmdbPath)
-            history <- RadixHistory[F](root, new RadixStore(store))
+            history = RadixHistory[F](root, new RadixStore(store))
           } yield HistoryWithoutFunc(history)
       }
   }
@@ -181,7 +177,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     def getHistory(root: Blake2b256Hash, path: String): F[HistoryType[F]] =
       Settings.typeHistory match {
         case "MergingHistory" => createMergingHistory[F].create(root, path)
-        case "RadixHistory13" => createRadixHistory[F].create(root, path)
+        case "RadixHistory"   => createRadixHistory[F].create(root, path)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {

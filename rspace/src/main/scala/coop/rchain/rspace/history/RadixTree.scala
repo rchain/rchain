@@ -68,7 +68,8 @@ object RadixTree {
 
             case Leaf(leafPrefix, value, varLength) =>
               val sizePrefix = leafPrefix.size.toInt
-              val sizeValue  = value.size.toInt
+              assert(sizePrefix <= 31, "error during deserialization (size of prefix more than 31)")
+              val sizeValue = value.size.toInt
               val sizeLength = if (varLength) {
                 assert(
                   value.size <= 255,
@@ -82,7 +83,7 @@ object RadixTree {
                 )
                 0
               }
-              loopSize(index + 1, size + 2 + sizePrefix + +sizeLength + sizeValue)
+              loopSize(index + 1, size + 2 + sizePrefix + sizeLength + sizeValue)
 
             case NodePtr(ptrPrefix, ptr) =>
               val sizePrefix = ptrPrefix.size.toInt
@@ -144,7 +145,7 @@ object RadixTree {
 
     def decode(arr: Array[Byte]): Node = {
       val maxSize = arr.length
-      @tailrec //todo it's need?
+      @tailrec
       def loop(idx0: Int, node: Node): Node =
         if (idx0 == maxSize) node
         else {
@@ -252,7 +253,13 @@ object RadixTree {
       * Load and decode serializing data from KVDB.
       */
     private def loadNodeFromStore(nodePtr: ByteVector): F[Option[Node]] =
-      store.get(Seq(nodePtr)).map(_.head.map(v => codecs.decode(v)))
+      for {
+        nodeOpt <- store.get(Seq(nodePtr))
+        r = nodeOpt.head match {
+          case None       => None
+          case Some(node) => Some(codecs.decode(node))
+        }
+      } yield r
 
     /**
       * Cache for storing read and decoded nodes.
@@ -269,21 +276,23 @@ object RadixTree {
       */
     def loadNode(nodePtr: ByteVector, noAssert: Boolean = false): F[Node] =
       for {
-        maybeCacheValue <- Sync[F].delay(cacheR.get(nodePtr))
-        cacheValue = maybeCacheValue match {
-          case None =>
-            loadNodeFromStore(nodePtr).map {
-              case None =>
-                assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}")
-                emptyNode
-              case Some(storeNode) =>
-                cacheR.update(nodePtr, storeNode)
-                storeNode
-            }
-          case Some(v) => Sync[F].pure(v)
-        }
-        result <- cacheValue
-      } yield result
+        cacheNodeOpt <- Sync[F].delay(cacheR.get(nodePtr))
+        res <- cacheNodeOpt match {
+                case None =>
+                  for {
+                    storeNodeOpt <- loadNodeFromStore(nodePtr)
+                    r = storeNodeOpt match {
+                      case None =>
+                        assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}")
+                        emptyNode
+                      case Some(storeNode) =>
+                        cacheR.update(nodePtr, storeNode)
+                        storeNode
+                    }
+                  } yield r
+                case Some(cacheNode) => Sync[F].pure(cacheNode)
+              }
+      } yield res
 
     /**
       * Clear [[cacheR]] (cache for storing read nodes).

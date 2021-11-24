@@ -14,15 +14,61 @@ import scala.language.higherKinds
 /**
   * History implementation with radix tree
   */
+final case class RadixHistory[F[_]: Sync: Parallel](
+    currentRoot: Blake2b256Hash,
+    store: RadixStore[F]
+) extends History[F] {
+  val impl               = new RadixTreeImpl[F](store)
+  val rootNodeF: F[Node] = impl.loadNode(currentRoot.bytes, noAssert = true)
+
+  override def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = ???
+
+  override def root: Blake2b256Hash = currentRoot
+
+  override def reset(root: Blake2b256Hash): History[F] = this.copy(root, store)
+
+  override def read(key: ByteVector): F[Option[ByteVector]] =
+    for {
+      rootNode <- rootNodeF
+      data     <- impl.read(rootNode, key)
+    } yield data
+
+  override def process(actions: List[HistoryAction]): F[History[F]] =
+    for {
+      _ <- Sync[F].ensure(actions.pure[F])(
+            new RuntimeException("Cannot process duplicate actions on one key")
+          )(hasNoDuplicates)
+
+      rootNode       <- rootNodeF
+      newRootNodeOpt <- impl.makeActions(rootNode, actions)
+      newRootHash <- newRootNodeOpt match {
+                      case Some(newRootNode) =>
+                        val hash = impl.saveNode(newRootNode)
+                        impl.commit().map(_ => hash.some)
+                      case None => none.pure
+                    }
+      _ <- Sync[F].delay(impl.clearWriteCache())
+      _ <- Sync[F].delay(impl.clearReadCache())
+    } yield
+      if (newRootHash.isDefined)
+        this.copy(Blake2b256Hash.fromByteArray(newRootHash.get.toArray), store)
+      else this
+
+  private def hasNoDuplicates(actions: List[HistoryAction]) =
+    actions.map(_.key).toSet.size == actions.size
+}
+
+//todo for future
+/*
 object RadixHistory {
   def apply[F[_]: Sync: Parallel](
-      rootHash: Blake2b256Hash,
+      root: Blake2b256Hash,
       store: RadixStore[F]
   ): F[RadixHistory[F]] =
     for {
-      impl     <- Sync[F].delay(new RadixTreeImpl[F](store))
-      rootNode <- impl.loadNode(rootHash.bytes, noAssert = true)
-    } yield RadixHistory(rootHash, rootNode, impl, store)
+      impl <- Sync[F].delay(new RadixTreeImpl[F](store))
+      node <- impl.loadNode(root.bytes, noAssert = true)
+    } yield RadixHistory(root, node, impl, store)
 }
 
 final case class RadixHistory[F[_]: Sync: Parallel](
@@ -36,8 +82,11 @@ final case class RadixHistory[F[_]: Sync: Parallel](
 
   override def root: Blake2b256Hash = rootHash
 
-  override def reset(root: Blake2b256Hash): History[F] =
-    this.copy(rootHash, rootNode, impl, store)
+  override def reset(root: Blake2b256Hash): F[History[F]] =
+    for {
+      impl <- Sync[F].delay(new RadixTreeImpl[F](store))
+      node <- impl.loadNode(root.bytes, noAssert = true)
+    } yield this.copy(root, node, impl, store)
 
   override def read(key: ByteVector): F[Option[ByteVector]] =
     impl.read(rootNode, key)
@@ -70,3 +119,5 @@ final case class RadixHistory[F[_]: Sync: Parallel](
   private def hasNoDuplicates(actions: List[HistoryAction]) =
     actions.map(_.key).toSet.size == actions.size
 }
+
+ */

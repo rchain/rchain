@@ -74,7 +74,7 @@ object HistoryRepositoryInstances {
       currentRoot <- rootsRepository.currentRoot()
       // History store
       historyStore = new RadixStore[F](historyKeyValueStore)
-      history      <- RadixHistory(currentRoot, historyStore)
+      history      = RadixHistory(currentRoot, historyStore)
 
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
