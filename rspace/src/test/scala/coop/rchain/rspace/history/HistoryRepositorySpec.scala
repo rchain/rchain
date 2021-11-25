@@ -40,10 +40,11 @@ class HistoryRepositorySpec
     val testDatum = datum(1)
     val data      = InsertData[String, String](testChannelDataPrefix, testDatum :: Nil)
     for {
-      nextRepo <- repo.checkpoint(data :: Nil)
-      data     <- nextRepo.getHistoryReader(nextRepo.root).base.getData(testChannelDataPrefix)
-      fetched  = data.head
-      _        = fetched shouldBe testDatum
+      nextRepo      <- repo.checkpoint(data :: Nil)
+      historyReader <- nextRepo.getHistoryReader(nextRepo.root)
+      data          <- historyReader.base.getData(testChannelDataPrefix)
+      fetched       = data.head
+      _             = fetched shouldBe testDatum
     } yield ()
   }
 
@@ -64,7 +65,8 @@ class HistoryRepositorySpec
 
       for {
         nextRepo            <- repo.checkpoint(data :: joins :: continuations :: Nil)
-        reader              = nextRepo.getHistoryReader(nextRepo.root).base
+        historyReader       <- nextRepo.getHistoryReader(nextRepo.root)
+        reader              = historyReader.base
         fetchedData         <- reader.getData(channel)
         fetchedContinuation <- reader.getContinuations(channel :: Nil)
         fetchedJoins        <- reader.getJoins(channel)
@@ -92,10 +94,11 @@ class HistoryRepositorySpec
     val deleteElements: Vector[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
 
     for {
-      nextRepo    <- repo.checkpoint(elems.toList)
-      nextReader  = nextRepo.getHistoryReader(nextRepo.root).base
-      fetchedData <- data.traverse(d => nextReader.getData(d.channel))
-      _           = fetchedData shouldBe data.map(_.data)
+      nextRepo      <- repo.checkpoint(elems.toList)
+      historyReader <- nextRepo.getHistoryReader(nextRepo.root)
+      nextReader    = historyReader.base
+      fetchedData   <- data.traverse(d => nextReader.getData(d.channel))
+      _             = fetchedData shouldBe data.map(_.data)
 
       fetchedContinuations <- conts.traverse(d => nextReader.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
@@ -106,7 +109,8 @@ class HistoryRepositorySpec
       _             = allJoins should contain theSameElementsAs expectedJoins
 
       deletedRepo   <- nextRepo.checkpoint(deleteElements.toList)
-      deletedReader = deletedRepo.getHistoryReader(deletedRepo.root).base
+      historyReader <- deletedRepo.getHistoryReader(deletedRepo.root)
+      deletedReader = historyReader.base
 
       fetchedData <- data.traverse(d => nextReader.getData(d.channel))
       _           = fetchedData shouldBe data.map(_.data)

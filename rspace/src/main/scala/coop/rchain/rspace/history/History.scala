@@ -33,7 +33,7 @@ trait History[F[_]] {
   /**
     * Returns History with specified with root pointer
     */
-  def reset(root: Blake2b256Hash): History[F]
+  def reset(root: Blake2b256Hash): F[History[F]]
 }
 
 object History {
