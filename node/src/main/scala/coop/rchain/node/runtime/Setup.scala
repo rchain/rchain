@@ -267,6 +267,7 @@ object Setup {
       apiServers = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)         = (rpConfAsk, rpConnections)
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -275,7 +276,8 @@ object Setup {
           conf.devMode,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
-          blockReportAPI
+          blockReportAPI,
+          conf.protocolServer.networkId
         )
       }
       reportingRoutes = {
