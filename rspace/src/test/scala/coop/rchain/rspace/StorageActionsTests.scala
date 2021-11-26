@@ -1067,11 +1067,11 @@ trait StorageActionsTests[F[_]]
         // create a soft checkpoint
         s <- space.createSoftCheckpoint()
         // assert that the snapshot contains the continuation
-        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        _ = s.cacheSnapshot.continuations.values should contain only expectedContinuation
         // consume again
         _ <- space.consume(channels, patterns, continuation, persist = false)
         // assert that the snapshot contains only the first continuation
-        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        _ = s.cacheSnapshot.continuations.values should contain only expectedContinuation
       } yield ()
   }
 
@@ -1097,13 +1097,13 @@ trait StorageActionsTests[F[_]]
       // create a soft checkpoint
       s1 <- space.createSoftCheckpoint()
       // assert that the snapshot contains the continuation
-      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      _ = s1.cacheSnapshot.continuations.values should contain only Seq(expectedContinuation)
       // produce thus removing the continuation
       _  <- space.produce(channel, datum, persist = false)
       s2 <- space.createSoftCheckpoint()
       // assert that the first snapshot still contains the first continuation
-      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
-      _ = s2.cacheSnapshot.cache.continuations(channels) shouldBe empty
+      _ = s1.cacheSnapshot.continuations.values should contain only Seq(expectedContinuation)
+      _ = s2.cacheSnapshot.continuations(channels) shouldBe empty
     } yield ()
   }
 

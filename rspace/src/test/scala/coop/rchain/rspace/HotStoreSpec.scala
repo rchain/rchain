@@ -1241,7 +1241,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture(cache) { store =>
         for {
           snapshot <- store.snapshot()
-        } yield (snapshot.cache shouldBe cache)
+        } yield (snapshot shouldBe cache)
       }
   }
 
@@ -1257,8 +1257,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _        <- store.putContinuation(channels, continuation1)
             snapshot <- store.snapshot()
             _        <- store.putContinuation(channels, continuation2)
-            _        = snapshot.cache.continuations(channels) should contain(continuation1)
-          } yield (snapshot.cache.continuations(channels) should not contain (continuation2))
+            _        = snapshot.continuations(channels) should contain(continuation1)
+          } yield (snapshot.continuations(channels) should not contain (continuation2))
         }
       }
   }
@@ -1275,7 +1275,7 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _        <- store.installContinuation(channels, continuation1)
             snapshot <- store.snapshot()
             _        <- store.installContinuation(channels, continuation2)
-          } yield (snapshot.cache.installedContinuations(channels) shouldBe (continuation1))
+          } yield (snapshot.installedContinuations(channels) shouldBe (continuation1))
         }
       }
   }
@@ -1292,8 +1292,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _        <- store.putDatum(channel, data1)
             snapshot <- store.snapshot()
             _        <- store.putDatum(channel, data2)
-            _        = snapshot.cache.data(channel) should contain(data1)
-          } yield (snapshot.cache.data(channel) should not contain (data2))
+            _        = snapshot.data(channel) should contain(data1)
+          } yield (snapshot.data(channel) should not contain (data2))
         }
       }
   }
@@ -1310,8 +1310,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _        <- store.putJoin(channel, join1)
             snapshot <- store.snapshot()
             _        <- store.putJoin(channel, join2)
-            _        = snapshot.cache.joins(channel) should contain(join1)
-          } yield (snapshot.cache.joins(channel) should not contain (join2))
+            _        = snapshot.joins(channel) should contain(join1)
+          } yield (snapshot.joins(channel) should not contain (join2))
         }
       }
   }
@@ -1328,8 +1328,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             _        <- store.installJoin(channel, join1)
             snapshot <- store.snapshot()
             _        <- store.installJoin(channel, join2)
-            _        = snapshot.cache.installedJoins(channel) should contain(join1)
-          } yield (snapshot.cache.installedJoins(channel) should not contain (join2))
+            _        = snapshot.installedJoins(channel) should contain(join1)
+          } yield (snapshot.installedJoins(channel) should not contain (join2))
         }
       }
   }

@@ -7,7 +7,6 @@ import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 
-final case class Snapshot[C, P, A, K](private[rspace] val cache: HotStoreState[C, P, A, K])
 import scala.collection.immutable.Map
 
 trait HotStore[F[_], C, P, A, K] {
@@ -27,7 +26,7 @@ trait HotStore[F[_], C, P, A, K] {
 
   def changes(): F[Seq[HotStoreAction]]
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
-  def snapshot(): F[Snapshot[C, P, A, K]]
+  def snapshot(): F[HotStoreState[C, P, A, K]]
 }
 
 final case class HotStoreState[C, P, A, K](
@@ -36,18 +35,7 @@ final case class HotStoreState[C, P, A, K](
     data: Map[C, Seq[Datum[A]]],
     joins: Map[C, Seq[Seq[C]]],
     installedJoins: Map[C, Seq[Seq[C]]]
-) {
-  def snapshot(): Snapshot[C, P, A, K] =
-    Snapshot(
-      this.copy(
-        continuations = this.continuations,
-        installedContinuations = this.installedContinuations,
-        data = this.data,
-        joins = this.joins,
-        installedJoins = this.installedJoins
-      )
-    )
-}
+)
 
 object HotStoreState {
   def apply[C, P, A, K](): HotStoreState[C, P, A, K] =
@@ -73,7 +61,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     historyReaderBase: HistoryReaderBase[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
-  def snapshot(): F[Snapshot[C, P, A, K]] = hotStoreState.get.map(_.snapshot())
+  def snapshot(): F[HotStoreState[C, P, A, K]] = hotStoreState.get
 
   // Continuations
 
