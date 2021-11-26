@@ -1,15 +1,11 @@
 package coop.rchain.rspace
 
-import cats._
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import coop.rchain.rspace.history.HistoryReaderBase
-import coop.rchain.shared.Language._
 import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
-import coop.rchain.shared.Serialize._
-import scodec.Codec
 
 final case class Snapshot[C, P, A, K](private[rspace] val cache: HotStoreState[C, P, A, K])
 import scala.collection.immutable.Map
