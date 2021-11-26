@@ -31,13 +31,11 @@ trait HotStore[F[_], C, P, A, K] {
 }
 
 final case class HotStoreState[C, P, A, K](
-    continuations: Map[Seq[C], Seq[WaitingContinuation[P, K]]] =
-      Map.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
-    installedContinuations: Map[Seq[C], WaitingContinuation[P, K]] =
-      Map.empty[Seq[C], WaitingContinuation[P, K]],
-    data: Map[C, Seq[Datum[A]]] = Map.empty[C, Seq[Datum[A]]],
-    joins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]],
-    installedJoins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]]
+    continuations: Map[Seq[C], Seq[WaitingContinuation[P, K]]],
+    installedContinuations: Map[Seq[C], WaitingContinuation[P, K]],
+    data: Map[C, Seq[Datum[A]]],
+    joins: Map[C, Seq[Seq[C]]],
+    installedJoins: Map[C, Seq[Seq[C]]]
 ) {
   def snapshot(): Snapshot[C, P, A, K] =
     Snapshot(
@@ -48,6 +46,17 @@ final case class HotStoreState[C, P, A, K](
         joins = this.joins,
         installedJoins = this.installedJoins
       )
+    )
+}
+
+object HotStoreState {
+  def apply[C, P, A, K](): HotStoreState[C, P, A, K] =
+    HotStoreState[C, P, A, K](
+      Map.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
+      Map.empty[Seq[C], WaitingContinuation[P, K]],
+      Map.empty[C, Seq[Datum[A]]],
+      Map.empty[C, Seq[Seq[C]]],
+      Map.empty[C, Seq[Seq[C]]]
     )
 }
 

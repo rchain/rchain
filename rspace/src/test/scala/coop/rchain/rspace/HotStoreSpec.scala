@@ -116,7 +116,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                       HotStoreState(
                         continuations = Map(
                           channels -> cachedContinuations
-                        )
+                        ),
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -146,7 +150,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                       HotStoreState(
                         continuations = Map(
                           channels -> cachedContinuations
-                        )
+                        ),
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -200,7 +208,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                       HotStoreState(
                         continuations = Map(
                           channels -> cachedContinuations
-                        )
+                        ),
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -233,7 +245,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                         HotStoreState(
                           continuations = Map(
                             channels -> cachedContinuations
-                          )
+                          ),
+                          installedContinuations = Map.empty,
+                          data = Map.empty,
+                          joins = Map.empty,
+                          installedJoins = Map.empty
                         ),
                         ()
                       )
@@ -295,7 +311,11 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                       HotStoreState(
                         continuations = Map(
                           channels -> cachedContinuations
-                        )
+                        ),
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -332,7 +352,10 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                         ),
                         installedContinuations = Map(
                           channels -> installedContinuation
-                        )
+                        ),
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -387,9 +410,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
                         data = Map(
                           channel -> cachedData
-                        )
+                        ),
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -436,9 +463,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
                         data = Map(
                           channel -> cachedData
-                        )
+                        ),
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -489,9 +520,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
                         data = Map(
                           channel -> cachedData
-                        )
+                        ),
+                        joins = Map.empty,
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -533,9 +568,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
                         joins = Map(
                           channel -> cachedJoins
-                        )
+                        ),
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -585,9 +624,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     _ =>
                       (
                         HotStoreState(
+                          continuations = Map.empty,
+                          installedContinuations = Map.empty,
+                          data = Map.empty,
                           joins = Map(
                             channel -> cachedJoins
-                          )
+                          ),
+                          installedJoins = Map.empty
                         ),
                         ()
                       )
@@ -616,9 +659,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
                         joins = Map(
                           channel -> cachedJoins
-                        )
+                        ),
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -651,9 +698,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     _ =>
                       (
                         HotStoreState(
+                          continuations = Map.empty,
+                          installedContinuations = Map.empty,
+                          data = Map.empty,
                           joins = Map(
                             channel -> cachedJoins
-                          )
+                          ),
+                          installedJoins = Map.empty
                         ),
                         ()
                       )
@@ -691,9 +742,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
                         joins = Map(
                           channel -> cachedJoins
-                        )
+                        ),
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -753,9 +808,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     _ =>
                       (
                         HotStoreState(
+                          continuations = Map.empty,
+                          installedContinuations = Map.empty,
+                          data = Map.empty,
                           joins = Map(
                             channel -> cachedJoins
-                          )
+                          ),
+                          installedJoins = Map.empty
                         ),
                         ()
                       )
@@ -783,6 +842,9 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                     _ =>
                       (
                         HotStoreState(
+                          continuations = Map.empty,
+                          installedContinuations = Map.empty,
+                          data = Map.empty,
                           joins = Map(
                             channel -> cachedJoins
                           ),
@@ -831,9 +893,13 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                   _ =>
                     (
                       HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
                         joins = Map(
                           channel -> cachedJoins
-                        )
+                        ),
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
@@ -879,7 +945,8 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
                         ),
                         joins = Map(
                           channel -> joins
-                        )
+                        ),
+                        installedJoins = Map.empty
                       ),
                       ()
                     )
