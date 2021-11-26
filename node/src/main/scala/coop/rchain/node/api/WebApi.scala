@@ -126,15 +126,14 @@ object WebApi {
 
     def status: F[ApiStatus] =
       for {
-        versionInfo <- Sync[F].delay(VersionInfo.get)
-        address     <- RPConfAsk[F].ask
-        blocks      <- getBlocks(depth = 1)
-        shardId     = blocks.headOption.getOrElse(LightBlockInfo()).shardId
-        peers       <- ConnectionsCell[F].read
-        nodes       <- NodeDiscovery[F].peers
+        address <- RPConfAsk[F].ask
+        blocks  <- getBlocks(depth = 1)
+        shardId = blocks.headOption.getOrElse(LightBlockInfo()).shardId
+        peers   <- ConnectionsCell[F].read
+        nodes   <- NodeDiscovery[F].peers
       } yield ApiStatus(
         versionNumber = 1,
-        versionInfo,
+        VersionInfo.get,
         address.local.toAddress,
         networkId,
         shardId,
