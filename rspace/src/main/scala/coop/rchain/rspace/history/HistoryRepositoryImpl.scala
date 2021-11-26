@@ -254,13 +254,15 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def getHistoryReader(
       stateHash: Blake2b256Hash
   ): F[HistoryReader[F, Blake2b256Hash, C, P, A, K]] =
-    for {
-      targetHistory <- history.reset(root = stateHash)
-    } yield new RSpaceHistoryReaderImpl(targetHistory, leafStore)(
-      Concurrent[F],
-      serializeC,
-      serializeP,
-      serializeA,
-      serializeK
-    )
+    history
+      .reset(root = stateHash)
+      .map(
+        new RSpaceHistoryReaderImpl(_, leafStore)(
+          Concurrent[F],
+          serializeC,
+          serializeP,
+          serializeA,
+          serializeK
+        )
+      )
 }
