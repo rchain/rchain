@@ -557,8 +557,10 @@ object HistoryInstances {
       (start, key, TriePath.empty).tailRecM(traverse)
     }
 
-    override def reset(root: Blake2b256Hash): History[F] =
-      this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
+    override def reset(root: Blake2b256Hash): F[History[F]] =
+      Sync[F].delay(
+        this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
+      )
 
   }
 
