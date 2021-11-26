@@ -60,9 +60,8 @@ private final case class HistoryStoreCache[F[_], C, P, A, K](
 private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     hotStoreState: Ref[F, HotStoreState[C, P, A, K]],
     // this is what is inside history store, lazily populated. Starting data for HotStoreState
-    historyStoreCache: Ref[F, HistoryStoreCache[F, C, P, A, K]]
-)(
-    implicit HR: HistoryReaderBase[F, C, P, A, K]
+    historyStoreCache: Ref[F, HistoryStoreCache[F, C, P, A, K]],
+    historyReaderBase: HistoryReaderBase[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
   def snapshot(): F[Snapshot[C, P, A, K]] = hotStoreState.get.map(_.snapshot())
@@ -351,7 +350,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               }
             })
       (deferred, isComplete) = r
-      _                      <- (HR.getContinuations(channels) >>= deferred.complete).whenA(!isComplete)
+      _                      <- (historyReaderBase.getContinuations(channels) >>= deferred.complete).whenA(!isComplete)
       contInHistoryStore     <- deferred.get
     } yield contInHistoryStore
 
@@ -366,7 +365,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               }
             })
       (deferred, isComplete) = r
-      _                      <- (HR.getData(channel) >>= deferred.complete).whenA(!isComplete)
+      _                      <- (historyReaderBase.getData(channel) >>= deferred.complete).whenA(!isComplete)
       dataInHistoryStore     <- deferred.get
     } yield dataInHistoryStore
 
@@ -381,7 +380,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               }
             })
       (deferred, isComplete) = r
-      _                      <- (HR.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
+      _                      <- (historyReaderBase.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
       joinsInHistoryStore    <- deferred.get
     } yield joinsInHistoryStore
 }
@@ -390,15 +389,13 @@ object HotStore {
 
   def inMem[F[_]: Concurrent, C, P, A, K](
       hotStoreStateRef: Ref[F, HotStoreState[C, P, A, K]],
-      HR: HistoryReaderBase[F, C, P, A, K]
-  ): F[HotStore[F, C, P, A, K]] = {
-    implicit val h = HR
+      historyReaderBase: HistoryReaderBase[F, C, P, A, K]
+  ): F[HotStore[F, C, P, A, K]] =
     Ref
       .of[F, HistoryStoreCache[F, C, P, A, K]](
         HistoryStoreCache(Map.empty, Map.empty, Map.empty)
       )
-      .map(new InMemHotStore[F, C, P, A, K](hotStoreStateRef, _))
-  }
+      .map(new InMemHotStore[F, C, P, A, K](hotStoreStateRef, _, historyReaderBase))
 
   def from[F[_]: Concurrent, C, P, A, K](
       cache: HotStoreState[C, P, A, K],
