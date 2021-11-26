@@ -254,33 +254,10 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       contsInHistoryStore <- getContFromHistoryStore(join)
       err <- hotStoreState.modify[Boolean](state => {
 
-              val curJoins = (state.joins.get(channel) match {
-                // update with what is in historyStore and return the same
-                case None =>
-                  (
-                    state.copy(
-                      joins = state.joins.updated(channel, joinsInHistoryStore)
-                    ),
-                    joinsInHistoryStore
-                  )
-                // just return what is in hot store already
-                case Some(joins) =>
-                  (state, joins)
-              })._2
+              val curJoins = state.joins.getOrElse(channel, joinsInHistoryStore)
 
-              val curConts = (state.continuations.get(join) match {
-                // update with what is in historyStore and return the same
-                case None =>
-                  (
-                    state.copy(
-                      continuations = state.continuations.updated(join, contsInHistoryStore)
-                    ),
-                    state.installedContinuations.get(join) ++: contsInHistoryStore
-                  )
-                // just return what is in hot store already
-                case Some(continuations) =>
-                  (state, state.installedContinuations.get(join) ++: continuations)
-              })._2
+              val curConts = state.installedContinuations
+                .get(join) ++: state.continuations.getOrElse(join, contsInHistoryStore)
 
               val index       = curJoins.indexOf(join)
               val outOfBounds = !curJoins.isDefinedAt(index)
