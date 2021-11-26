@@ -262,7 +262,8 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               val index       = curJoins.indexOf(join)
               val outOfBounds = !curJoins.isDefinedAt(index)
 
-              // TODO should attimpting to remove join with non empty contnuation lead to error as well?
+              // Remove join is called when continuation is removed, so it can be called when
+              // continuations are present in which case we just want to skip removal.
               val doRemove = curConts.isEmpty
 
               if (doRemove) {
@@ -274,14 +275,6 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                 }
               } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
             })
-//      _ <- Sync[F]
-//            .raiseError(
-//              new IndexOutOfBoundsException(
-//                s"Index out of bounds when removing join"
-//              )
-//            )
-//            .whenA(err)
-
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
