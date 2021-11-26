@@ -9,6 +9,8 @@ import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.{DeployGrpcServiceV1, ProposeGrpcServiceV1, ReplGrpcService}
@@ -24,14 +26,15 @@ final case class APIServers(
 )
 
 object APIServers {
-  def build[F[_]: Monixable](
+  def build[F[_]: Monixable: RPConfAsk: ConnectionsCell: NodeDiscovery](
       runtime: RhoRuntime[F],
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       apiMaxBlocksLimit: Int,
       devMode: Boolean,
       proposeFOpt: Option[ProposeFunction[F]],
-      blockReportAPI: BlockReportAPI[F]
+      blockReportAPI: BlockReportAPI[F],
+      networkId: String
   )(
       implicit
       blockStore: BlockStore[F],
@@ -51,7 +54,8 @@ object APIServers {
         apiMaxBlocksLimit,
         blockReportAPI,
         proposeFOpt,
-        devMode
+        devMode,
+        networkId
       )
     val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
     APIServers(repl, propose, deploy)

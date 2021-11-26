@@ -220,3 +220,14 @@ message BlockEventInfo{
   repeated SystemDeployInfoWithEventData systemDeploys = 3;
   bytes postStateHash = 4;
 }
+
+message Status {
+  int32 versionNumber = 1;
+  string versionInfo  = 2;
+  string address      = 3;
+  string networkId    = 4;
+  string shardId      = 5;
+  int32 peers         = 6;
+  int32 nodes         = 7;
+}
+
