@@ -305,7 +305,7 @@ object DeployGrpcServiceV1 {
           peers   <- ConnectionsCell[F].read
           nodes   <- NodeDiscovery[F].peers
           status = Status(
-            versionNumber = 1,
+            version = 1,
             VersionInfo.get,
             address.local.toAddress,
             networkId,

@@ -132,7 +132,7 @@ object WebApi {
         peers   <- ConnectionsCell[F].read
         nodes   <- NodeDiscovery[F].peers
       } yield ApiStatus(
-        versionNumber = 1,
+        version = 1,
         VersionInfo.get,
         address.local.toAddress,
         networkId,
@@ -227,7 +227,7 @@ object WebApi {
   )
 
   final case class ApiStatus(
-      versionNumber: Int,
+      version: Int,
       versionInfo: String,
       address: String,
       networkId: String,

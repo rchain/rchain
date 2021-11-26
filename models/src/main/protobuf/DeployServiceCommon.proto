@@ -222,7 +222,7 @@ message BlockEventInfo{
 }
 
 message Status {
-  int32 versionNumber = 1;
+  int32 version = 1;
   string versionInfo  = 2;
   string address      = 3;
   string networkId    = 4;
