@@ -297,7 +297,7 @@ object DeployGrpcServiceV1 {
           .flatMap(Observable.fromIterable)
 
       def status(request: com.google.protobuf.empty.Empty): Task[StatusResponse] =
-        Monixable.apply.toTask(for {
+        (for {
           address <- RPConfAsk[F].ask
           peers   <- ConnectionsCell[F].read
           nodes   <- NodeDiscovery[F].peers
@@ -311,6 +311,6 @@ object DeployGrpcServiceV1 {
             nodes.length
           )
           response = StatusResponse().withStatus(status)
-        } yield response)
+        } yield response).toTask
     }
 }
