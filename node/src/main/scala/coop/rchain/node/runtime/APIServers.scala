@@ -34,7 +34,8 @@ object APIServers {
       devMode: Boolean,
       proposeFOpt: Option[ProposeFunction[F]],
       blockReportAPI: BlockReportAPI[F],
-      networkId: String
+      networkId: String,
+      shardId: String
   )(
       implicit
       blockStore: BlockStore[F],
@@ -55,7 +56,8 @@ object APIServers {
         blockReportAPI,
         proposeFOpt,
         devMode,
-        networkId
+        networkId,
+        shardId
       )
     val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
     APIServers(repl, propose, deploy)
