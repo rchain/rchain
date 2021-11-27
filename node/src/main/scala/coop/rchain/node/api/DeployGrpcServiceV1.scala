@@ -22,7 +22,6 @@ import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
 import coop.rchain.models.syntax._
-import coop.rchain.node.web.VersionInfo
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
@@ -305,8 +304,8 @@ object DeployGrpcServiceV1 {
           peers   <- ConnectionsCell[F].read
           nodes   <- NodeDiscovery[F].peers
           status = Status(
-            version = 1,
-            VersionInfo.get,
+            version =
+              Some(VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get)),
             address.local.toAddress,
             networkId,
             shardId,

@@ -222,12 +222,15 @@ message BlockEventInfo{
 }
 
 message Status {
-  int32 version = 1;
-  string versionInfo  = 2;
-  string address      = 3;
-  string networkId    = 4;
-  string shardId      = 5;
-  int32 peers         = 6;
-  int32 nodes         = 7;
+  VersionInfo version = 1;
+  string address      = 2;
+  string networkId    = 3;
+  string shardId      = 4;
+  int32 peers         = 5;
+  int32 nodes         = 6;
 }
 
+message VersionInfo {
+  string api  = 1;
+  string node = 2;
+}

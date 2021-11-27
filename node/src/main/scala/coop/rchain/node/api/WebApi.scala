@@ -18,7 +18,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
-import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse, VersionInfo}
+import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.models.syntax._
@@ -132,8 +132,7 @@ object WebApi {
         peers   <- ConnectionsCell[F].read
         nodes   <- NodeDiscovery[F].peers
       } yield ApiStatus(
-        version = 1,
-        VersionInfo.get,
+        version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
         address.local.toAddress,
         networkId,
         shardId,
@@ -227,14 +226,15 @@ object WebApi {
   )
 
   final case class ApiStatus(
-      version: Int,
-      versionInfo: String,
+      version: VersionInfo,
       address: String,
       networkId: String,
       shardId: String,
       peers: Int,
       nodes: Int
   )
+
+  final case class VersionInfo(api: String, node: String)
 
   // Exception thrown by BlockAPI
   final class BlockApiException(message: String) extends Exception(message)

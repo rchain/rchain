@@ -12,15 +12,22 @@ class HttpRequestException(Exception):
        self.status_code = status_code
        self.content = content
 
+
+@dataclass
+class VersionInfo:
+    api: str
+    node: str
+
+
 @dataclass
 class ApiStatus:
-    version: int
-    version_info: str
+    version: VersionInfo
     address: str
     network_id: str
     shard_id: str
     peers: int
     nodes: int
+
 
 @dataclass
 class PrepareResponse:
@@ -51,8 +58,9 @@ class HttpClient():
         _check_reponse(rep)
         message = rep.json()
         return ApiStatus(
-            version=message['version'],
-            version_info=message['versionInfo'],
+            version=VersionInfo(
+                api=message['version']['api'],
+                node=message['version']['node']),
             address=message['address'],
             network_id=message['networkId'],
             shard_id=message['shardId'],
