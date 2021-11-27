@@ -33,7 +33,8 @@ object DeployGrpcServiceV1 {
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
       devMode: Boolean = false,
-      networkId: String
+      networkId: String,
+      shardId: String
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -298,9 +299,6 @@ object DeployGrpcServiceV1 {
       def status(request: com.google.protobuf.empty.Empty): Task[StatusResponse] =
         Monixable.apply.toTask(for {
           address <- RPConfAsk[F].ask
-          apiErr  <- BlockAPI.getBlocks(1, 1)
-          blocks  = apiErr.right.getOrElse(List[LightBlockInfo]())
-          shardId = blocks.headOption.getOrElse(LightBlockInfo()).shardId
           peers   <- ConnectionsCell[F].read
           nodes   <- NodeDiscovery[F].peers
           status = Status(

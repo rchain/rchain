@@ -277,7 +277,8 @@ object Setup {
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
           blockReportAPI,
-          conf.protocolServer.networkId
+          conf.protocolServer.networkId,
+          conf.casper.shardName
         )
       }
       reportingRoutes = {
