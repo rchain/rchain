@@ -18,7 +18,7 @@ class RadixTreeSpec extends FlatSpec {
   /*
   def sToBv(str: String): ByteVector = ByteVector.fromHex(str).get
 
-  implicit class TreeBinOps[F[_]](rootNode: Vector[Child]) {
+  implicit class TreeBinOps[F[_]](rootNode: Vector[Item]) {
     def binUpdate(radixKey: String, radixValue: ByteVector)(
         impl: RadixTreeImpl[F]
     ): F[Node] =
@@ -148,15 +148,15 @@ class RadixTreeSpec extends FlatSpec {
         (0 until (averageNum + averageWarmUp)).toList
           .foldLeft((0L, 0L, 0L)) {
             case ((timeEncode, timeDecode, timeCompare), i) =>
-              val nodes = (0 until num).map { _ =>
+              val nodes = (0 until num).map { numNode =>
                 emptyNode
                   .updated(
-                    (i + 5) % 256,
-                    Leaf(ByteVector(bytes(i % 32)), ByteVector(bytes(32)), varLength = false)
+                    numNode % 256,
+                    Leaf(ByteVector(bytes(numNode % 128)), ByteVector(bytes(32)))
                   )
                   .updated(
-                    (i + 3) % 256,
-                    NodePtr(ByteVector(bytes((i + 3) % 32)), ByteVector(bytes(32).toArray))
+                    (numNode + 3) % 256,
+                    NodePtr(ByteVector(bytes((numNode + 3) % 128)), ByteVector(bytes(32)))
                   )
               }
 
@@ -220,7 +220,7 @@ class RadixTreeSpec extends FlatSpec {
     val strTitle              = fS("num") + fS("timeEnc(sec)") + fS("timeDec(sec)") + fS("timeCompare(sec)")
     println(strTitle)
 
-    val tasks: List[Int] = List(10000)
+    val tasks: List[Int] = List(100000)
     tasks.traverse(x => experiment(x).pure)
   }
 }

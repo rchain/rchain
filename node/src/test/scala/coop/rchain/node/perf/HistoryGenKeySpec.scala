@@ -6,11 +6,12 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
-import coop.rchain.rspace.history._
+import coop.rchain.rspace.history.{InsertAction, _}
 import coop.rchain.rspace.history.instances._
 import coop.rchain.shared.Log
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
+import scodec.bits.ByteVector
 
 import java.io.File
 import java.math.BigInteger
@@ -43,7 +44,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
     val flagSize: Boolean = calcSize && (typeStore == "inMemo")
 
-    val taskCur: List[ExpT] = tasksSmall
+    val taskCur: List[ExpT] = tasksLarge0
   }
 
   case class ExpT(initNum: Int, insReadDelNum: Int)
@@ -188,8 +189,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     val v0: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("00"))
     val v1: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("01"))
     val v2: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("02"))
+    val v3: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("03"))
+    val v4: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("04"))
+    val v5: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("05"))
 
-    def simpleExperiment: F[Unit] =
+    def simpleExperiment(): F[Unit] =
       for {
         historyInit <- getHistory(v0, "/git/temp")
         history1    <- historyInit.history.process(InsertAction(v1.bytes.toArray, v1) :: Nil)
@@ -200,6 +204,59 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         _           <- assert(v2NewOpt.get == v2.bytes, "error").pure
         history3    <- history2.process(DeleteAction(v2.bytes.toArray) :: Nil)
         _           <- assert(history3.root == history1.root, "error").pure
+
+      } yield ()
+
+    def strToSeq(s: String): Seq[Byte] =
+      Base16.unsafeDecode(s)
+
+    def simpleExperimentWithSubTree(): F[Unit] =
+      for {
+        historyInit          <- getHistory(v0, "/git/temp")
+        prefix0: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x00.toByte, 0x00.toByte)
+        prefix1: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x01.toByte, 0x00.toByte)
+        prefix2: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x01.toByte)
+        prefix3: Array[Byte] = Array(0x02.toByte)
+        prefix4: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x04.toByte, 0x04.toByte)
+        prefix5: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x05.toByte)
+//        prefix5: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x04.toByte) //error case
+
+        history1 <- historyInit.history.process(
+                     InsertAction(prefix0, v0)
+                       :: InsertAction(prefix1, v1)
+                       :: InsertAction(prefix2, v2)
+                       :: InsertAction(prefix3, v3)
+                       :: Nil
+                   )
+
+        v0NewOpt <- history1.read(ByteVector(prefix0))
+        v1NewOpt <- history1.read(ByteVector(prefix1))
+        v2NewOpt <- history1.read(ByteVector(prefix2))
+        v3NewOpt <- history1.read(ByteVector(prefix3))
+        _ <- assert(
+              (v0NewOpt.get == v0.bytes) && (v1NewOpt.get == v1.bytes) && (v2NewOpt.get == v2.bytes) && (v3NewOpt.get == v3.bytes),
+              "error1"
+            ).pure
+
+        history2 <- history1.process(
+                     InsertAction(prefix4, v4)
+                       :: InsertAction(prefix5, v5)
+                       :: Nil
+                   )
+        v4NewOpt <- history2.read(ByteVector(prefix4))
+        v5NewOpt <- history2.read(ByteVector(prefix5))
+        _ <- assert(
+              (v4NewOpt.get == v4.bytes) && (v5NewOpt.get == v5.bytes),
+              "error2"
+            ).pure
+
+        history3 <- history2.process(
+                     DeleteAction(prefix4)
+                       :: DeleteAction(prefix5)
+                       :: Nil
+                   )
+        _ <- assert(history3.root == history1.root, "error3").pure
+
       } yield ()
 
     def experiment(numInit: Int, numInsReadDel: Int): F[Unit] = {
@@ -357,6 +414,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         ) + strSize
         _ <- println(str).pure
 
+//        _ <- simpleExperiment()
+//        _ <- simpleExperimentWithSubTree()
         _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
       } yield ()
     }
