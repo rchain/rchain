@@ -109,8 +109,15 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             val isInstalled  = installedCon.nonEmpty
 
             val removingInstalled = (isInstalled && index == 0)
-            val removedIndex      = if (isInstalled) index - 1 else index
-            val outOfBounds       = !curVal.isDefinedAt(removedIndex)
+            // why -1 here
+            // from users who use `HotStore` trait perspective
+            // the users need to call getContinuations first to retrieve the continuation of the channels
+            // then find which index of the continuation users want to remove
+            // while getContinuations would return results like `Vector(installedContinuation, normalcontinuations, ...)`
+            // The first one would be always `installedContinuation` if it exist which need the
+            // index to -1 to exclude installedContinuation
+            val removedIndex = if (isInstalled) index - 1 else index
+            val outOfBounds  = !curVal.isDefinedAt(removedIndex)
 
             if (removingInstalled || outOfBounds)
               (
