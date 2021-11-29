@@ -13,12 +13,12 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Calling next should produce initial set
     val (st1, ids1) = st.getNext(resend = false)
 
-    ids1 shouldBe Seq(10)
+    ids1 shouldBe Set(10)
 
     // Calling next again should NOT return new items
     val (st2, ids2) = st1.getNext(resend = false)
 
-    ids2 shouldBe Seq()
+    ids2 shouldBe Set()
 
     st1 shouldBe st2
   }
@@ -32,7 +32,7 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Calling next should return new items
     val (_, ids2) = st2.getNext(resend = false)
 
-    ids2 shouldBe Seq(10, 9, 8)
+    ids2 shouldBe Set(10, 9, 8)
   }
 
   "getNext" should "return requested items on resend" in {
@@ -41,12 +41,12 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Calling next should return new items
     val (st1, ids1) = st.getNext(resend = false)
 
-    ids1 shouldBe Seq(10)
+    ids1 shouldBe Set(10)
 
     // Calling next with resend should return already requested
     val (_, ids2) = st1.getNext(resend = true)
 
-    ids2 shouldBe Seq(10)
+    ids2 shouldBe Set(10)
   }
 
   "received" should "return true for requested and false for unknown" in {
@@ -83,7 +83,7 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Mark next as requested
     val (st3, ids2) = st2.getNext(resend = false)
 
-    ids2 shouldBe Seq(11)
+    ids2 shouldBe Set(11)
 
     // Received higher height should be accepted
     val (st4, ReceiveInfo(requested3, _, _)) = st3.received(11, 50)
@@ -108,7 +108,7 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Before all latest received, next should be empty
     val (st3, ids1) = st2.getNext(resend = false)
 
-    ids1 shouldBe Seq.empty
+    ids1 shouldBe Set()
 
     // Received latest item (the last one)
     val (st4, receiveInfo1) = st3.received(11, 110)
@@ -118,7 +118,7 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // After the last of latest received, the rest of items should be requested
     val (_, ids4) = st4.getNext(resend = false)
 
-    ids4 shouldBe Seq(12)
+    ids4 shouldBe Set(12)
   }
 
   "done" should "make state finished" in {
@@ -145,12 +145,12 @@ class LfsBlockRequesterStateSpec extends FlatSpec with Matchers with GeneratorDr
     // Calling next should produce initial set
     val (st1, ids1) = st.getNext(resend = false)
 
-    ids1 shouldBe Seq(10)
+    ids1 shouldBe Set(10)
 
     // Calling next again should NOT return new items
     val (st2, ids2) = st1.getNext(resend = false)
 
-    ids2 shouldBe Seq()
+    ids2 shouldBe Set()
 
     // It should not be finished until all items are Done
     st2.isFinished shouldBe false

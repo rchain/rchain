@@ -1,9 +1,9 @@
 package coop.rchain.rspace.history
 
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import coop.rchain.rspace.serializers.ScodecSerialize.{RichAttempt, _}
+import coop.rchain.shared.Base16
 import scodec.bits.{BitVector, ByteVector}
 
 /**
@@ -33,7 +33,7 @@ trait History[F[_]] {
   /**
     * Returns History with specified with root pointer
     */
-  def reset(root: Blake2b256Hash): History[F]
+  def reset(root: Blake2b256Hash): F[History[F]]
 }
 
 object History {

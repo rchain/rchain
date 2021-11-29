@@ -14,9 +14,10 @@ import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.NormalizerEnv
-import coop.rchain.rholang.Resources.mkRuntimeAt
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
+import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -140,15 +141,14 @@ class RhoSpec(
       val genesis = GenesisBuilder.buildGenesis(genesisParameters)
 
       val runtimeResource = copyStorage[Task](genesis.storageDirectory)
-        .map(_.storageDir)
         .evalMap(mkTestRNodeStoreManager[Task])
+        .evalMap(_.rSpaceStores)
         .evalMap(
-          mkRuntimeAt[Task](
+          RhoRuntime.createRuntime(
             _,
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )
-        .map(_._1)
 
       runtimeResource.use { runtime =>
         for {
@@ -190,9 +190,7 @@ class RhoSpec(
 
   private val rhoSpecDeploy: Signed[DeployData] = {
     val sk = PrivateKey(
-      ProtoUtil.stringToByteString(
-        "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6"
-      )
+      "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6".unsafeHexToByteString
     )
 
     Signed(

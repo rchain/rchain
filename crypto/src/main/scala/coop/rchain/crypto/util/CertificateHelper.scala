@@ -7,9 +7,8 @@ import java.security.cert._
 import java.security.interfaces.{ECPrivateKey, ECPublicKey}
 import java.security.spec._
 import java.util.Base64
-
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Keccak256
+import coop.rchain.shared.Base16
 import org.bouncycastle.asn1.{
   ASN1Encodable,
   ASN1InputStream,

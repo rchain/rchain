@@ -1,5 +1,6 @@
 package coop.rchain.crypto.codec
 
+import coop.rchain.shared.Base16
 import org.scalacheck.Shrink
 import org.scalatest._
 import prop._

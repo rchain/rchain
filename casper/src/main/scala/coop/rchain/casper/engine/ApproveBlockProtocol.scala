@@ -1,30 +1,23 @@
 package coop.rchain.casper.engine
 
-import java.nio.file.Path
-
-import cats.FlatMap
-import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
-import cats.implicits._
-import coop.rchain.blockstorage.util.io.IOError.RaiseIOError
+import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.syntax.all._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
-import coop.rchain.comm.transport
-import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 
+import java.nio.file.Path
 import scala.concurrent.duration._
 
 /**
@@ -58,7 +51,7 @@ object ApproveBlockProtocol {
       sigsF
     )
 
-  def of[F[_]: Sync: Concurrent: RaiseIOError: CommUtil: Log: EventLog: Time: Metrics: RuntimeManager: LastApprovedBlock](
+  def of[F[_]: Concurrent: ContextShift: CommUtil: Log: EventLog: Time: Metrics: RuntimeManager: LastApprovedBlock](
       bondsPath: String,
       autogenShardSize: Int,
       genesisPath: Path,

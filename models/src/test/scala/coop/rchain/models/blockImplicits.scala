@@ -3,13 +3,13 @@ package coop.rchain.models
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.{signatures, PrivateKey, PublicKey}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash
 import coop.rchain.models.block.StateHash.StateHash
+import coop.rchain.shared.Base16
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Gen.listOfN
@@ -35,7 +35,7 @@ object blockImplicits {
   val bondGen: Gen[Bond] = for {
     byteArray <- listOfN(Validator.Length, arbitrary[Byte])
     validator = ByteString.copyFrom(byteArray.toArray)
-    stake     <- arbitrary[Long]
+    stake     <- Gen.chooseNum(1L, 1024L)
   } yield Bond(validator, stake)
 
   val justificationGen: Gen[Justification] = for {

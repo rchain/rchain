@@ -8,10 +8,10 @@ import com.google.protobuf.{ByteString, CodedInputStream}
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.ByteStringOps.RichByteString
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.shared.Compression
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.store.{KeyValueStore, KeyValueStoreManager}
 import net.jpountz.lz4.{LZ4CompressorWithLength, LZ4DecompressorWithLength}
 import scodec.bits.ByteVector
@@ -35,31 +35,6 @@ class KeyValueBlockStore[F[_]: Sync](
       proto <- bytes.map(_.toArray).traverse(bytesToBlockProto[F])
       block <- proto.traverse(BlockMessage.from(_).leftMap(errorBlock(blockHash)).liftTo[F])
     } yield block
-  }
-
-  override def find(p: BlockHash => Boolean, n: Int): F[Seq[(BlockHash, BlockMessage)]] = {
-    import cats.instances.list._
-    for {
-      filteredIndex <- store.iterate { iterator =>
-                        iterator
-                          .map { case (k, v) => (ByteString.copyFrom(k), v) }
-                          .withFilter { case (key, _) => p(key) }
-                          // Decode value only for filtered elements
-                          .map { case (k, v) => (k, ByteVector(v)) }
-                          // Return only the first n results / stop iteration
-                          .take(n)
-                          .toList
-                      }
-
-      result <- filteredIndex.traverse {
-                 case (hash, bytes) =>
-                   // Convert bytes to proto object, it's fatal error if fails
-                   bytesToBlockProto(bytes.toArray) map
-                     BlockMessage.from flatMap
-                     (_.leftMap(errorBlock(hash)).liftTo[F]) map
-                     ((hash, _))
-               }
-    } yield result
   }
 
   override def put(data: => (BlockHash, BlockMessage)): F[Unit] = Sync[F].defer {
@@ -93,13 +68,6 @@ class KeyValueBlockStore[F[_]: Sync](
     val keyBuffer                  = ByteVector(approvedBlockKey).toDirectByteBuffer
     storeApprovedBlock.put1(keyBuffer, block, toBuffer)
   }
-
-  // Resource management is done in KV manager
-  override def close(): F[Unit] = ().pure[F]
-
-  // Not used
-  override def checkpoint(): F[Unit] = ???
-  override def clear(): F[Unit]      = ???
 }
 
 object KeyValueBlockStore {

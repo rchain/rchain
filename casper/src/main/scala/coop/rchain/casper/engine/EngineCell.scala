@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 import cats.effect._
 import coop.rchain.shared.Cell
 

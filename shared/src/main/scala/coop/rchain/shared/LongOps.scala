@@ -1,7 +1,7 @@
 package coop.rchain.shared
 import java.lang.Long.numberOfLeadingZeros
 import java.util.Locale
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 object LongOps {
 
   implicit class RichLong(value: Long) {

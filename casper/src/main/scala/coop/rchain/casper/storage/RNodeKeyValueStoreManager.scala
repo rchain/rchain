@@ -27,11 +27,13 @@ object RNodeKeyValueStoreManager {
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)
   // Blocks
-  private val blockStorageEnvConfig = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
-  private val dagStorageEnvConfig   = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
+  private val blockStorageEnvConfig  = LmdbEnvConfig(name = "blockstorage", maxEnvSize = 1 * tb)
+  private val dagStorageEnvConfig    = LmdbEnvConfig(name = "dagstorage", maxEnvSize = 100 * gb)
+  private val deployStorageEnvConfig = LmdbEnvConfig(name = "deploystorage", maxEnvSize = 1 * gb)
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val transactionEnvConfig  = LmdbEnvConfig(name = "transaction")
 
   // Legacy RSpace paths
   val legacyRSpacePathPrefix = "rspace/casper/v2"
@@ -52,6 +54,8 @@ object RNodeKeyValueStoreManager {
       (Db("invalid-blocks"), dagStorageEnvConfig),
       (Db("deploy-index"), dagStorageEnvConfig),
       (Db("last-finalized-block"), dagStorageEnvConfig),
+      // Deploy storage
+      (Db("deploy_storage"), deployStorageEnvConfig),
       // Reporting (trace) cache
       (Db("reporting-cache"), reportingEnvConfig),
       // CasperBuffer
@@ -59,7 +63,9 @@ object RNodeKeyValueStoreManager {
       // Rholang evaluator store
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),
-      (Db("eval-cold"), evalColdEnvConfig)
+      (Db("eval-cold"), evalColdEnvConfig),
+      // transaction store
+      (Db("transaction"), transactionEnvConfig)
     ) ++ (
       // RSpace
       if (!legacyRSpacePaths) {

@@ -12,14 +12,15 @@ import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
-import coop.rchain.shared.Log
+import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.state.StateManager
 import fs2.concurrent.Queue
 
@@ -54,6 +55,8 @@ trait WebApi[F[_]] {
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
   def isFinalized(hash: String): F[Boolean]
+
+  def getTransaction(hash: String): F[TransactionResponse]
 }
 
 object WebApi {
@@ -61,6 +64,7 @@ object WebApi {
   class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
+      cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]]
   ) extends WebApi[F] {
     import WebApiSyntax._
@@ -74,7 +78,7 @@ object WebApi {
 
       val previewNames = req.fold(List[String]().pure) { r =>
         BlockAPI
-          .previewPrivateNames[F](toByteString(r.deployer), r.timestamp, r.nameQty)
+          .previewPrivateNames[F](r.deployer.unsafeHexToByteString, r.timestamp, r.nameQty)
           .flatMap(_.liftToBlockApiErr)
           .map(_.map(toHex).toList)
       }
@@ -104,7 +108,7 @@ object WebApi {
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
-        .findDeploy[F](toByteString(deployId))
+        .findDeploy[F](deployId.unsafeHexToByteString)
         .flatMap(_.liftToBlockApiErr)
 
     def exploratoryDeploy(
@@ -130,6 +134,9 @@ object WebApi {
 
     def isFinalized(hash: String): F[Boolean] =
       BlockAPI.isFinalized(hash).flatMap(_.liftToBlockApiErr)
+
+    def getTransaction(hash: String): F[TransactionResponse] =
+      cacheTransactionAPI.getTransaction(hash)
   }
 
   // Rholang terms interesting for translation to JSON
@@ -224,11 +231,9 @@ object WebApi {
       sd: DeployRequest
   ): F[Signed[DeployData]] =
     for {
-      pkBytes <- Base16
-                  .decode(sd.deployer)
+      pkBytes <- sd.deployer.decodeHex
                   .liftToSigErr[F]("Public key is not valid base16 format.")
-      sigBytes <- Base16
-                   .decode(sd.signature)
+      sigBytes <- sd.signature.decodeHex
                    .liftToSigErr[F]("Signature is not valid base16 format.")
       sig    = ByteString.copyFrom(sigBytes)
       pk     = PublicKey(pkBytes)
@@ -242,12 +247,13 @@ object WebApi {
 
   private def toHex(bs: ByteString) = Base16.encode(bs.toByteArray)
 
-  private def toByteString(hexStr: String) = ByteString.copyFrom(Base16.unsafeDecode(hexStr))
-
   // RhoExpr from protobuf
 
   private def exprFromParProto(par: Par): Option[RhoExpr] = {
-    val exprs = par.exprs.flatMap(exprFromExprProto) ++ par.unforgeables.flatMap(unforgFromProto)
+    val exprs =
+      par.exprs.flatMap(exprFromExprProto) ++
+        par.unforgeables.flatMap(unforgFromProto) ++
+        par.bundles.flatMap(exprFromBundleProto)
     // Implements semantic of Par with Unit: P | Nil ==> P
     if (exprs.size == 1) exprs.head.some
     else if (exprs.isEmpty) none
@@ -309,15 +315,17 @@ object WebApi {
       mkUnforgExpr(UnforgDeployer, un.unfInstance.gDeployerIdBody.get.publicKey).some
     else none
 
+  private def exprFromBundleProto(b: Bundle): Option[RhoExpr] = exprFromParProto(b.body)
+
   private def mkUnforgExpr(f: String => RhoUnforg, bs: ByteString): ExprUnforg =
     ExprUnforg(f(toHex(bs)))
 
   // RhoExpr to protobuf
 
   private def unforgToUnforgProto(unforg: RhoUnforg): GUnforgeable.UnfInstance = unforg match {
-    case UnforgPrivate(name)  => GPrivateBody(GPrivate(toByteString(name)))
-    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(toByteString(name)))
-    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(toByteString(name)))
+    case UnforgPrivate(name)  => GPrivateBody(GPrivate(name.unsafeHexToByteString))
+    case UnforgDeploy(name)   => GDeployIdBody(GDeployId(name.unsafeHexToByteString))
+    case UnforgDeployer(name) => GDeployerIdBody(GDeployerId(name.unsafeHexToByteString))
   }
 
   // Data request/response protobuf wrappers

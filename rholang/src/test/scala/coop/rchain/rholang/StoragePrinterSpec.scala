@@ -2,14 +2,13 @@ package coop.rchain.rholang
 
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}

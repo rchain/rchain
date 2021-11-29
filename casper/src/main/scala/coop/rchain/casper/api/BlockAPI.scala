@@ -3,7 +3,7 @@ package coop.rchain.casper.api
 import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -20,7 +20,6 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
@@ -32,7 +31,8 @@ import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.Log
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 
 import scala.collection.immutable
 
@@ -119,7 +119,7 @@ object BlockAPI {
                     // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
                     //  Fix to use structured result with transport errors/codes.
                     // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
-                    val blockHashHex = block.blockHash.base16String
+                    val blockHashHex = block.blockHash.toHexString
                     logSucess(s"Success! Block $blockHashHex created and added.")
                 }
           } yield r,
@@ -143,7 +143,7 @@ object BlockAPI {
                          )
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }
@@ -156,7 +156,7 @@ object BlockAPI {
                 result <- resultDef.get
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }
@@ -512,9 +512,7 @@ object BlockAPI {
               .raiseError[F, ApiErr[BlockInfo]]
               .whenA(hash.length < 6)
         // Check if hash string is in Base16 encoding and convert to ByteString
-        hashByteString <- Base16
-                           .decode(hash)
-                           .map(ByteString.copyFrom)
+        hashByteString <- hash.hexToByteString
                            .liftTo[F](
                              BlockRetrievalError(
                                s"Input hash value is not valid hex string: $hash"
@@ -631,15 +629,20 @@ object BlockAPI {
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
-  private def findBlockFromStore[F[_]: Monad: BlockStore](
+  private def findBlockFromStore[F[_]: Monad: EngineCell: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
-    for {
-      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash), 1)
-    } yield findResult.headOption match {
-      case Some((_, block)) => Some(block)
-      case None             => none[BlockMessage]
-    }
+    EngineCell[F].read >>= (
+      _.withCasper[Option[BlockMessage]](
+        implicit casper =>
+          for {
+            dag          <- casper.blockDag
+            blockHashOpt <- dag.find(hash)
+            message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
+          } yield message,
+        none[BlockMessage].pure[F]
+      )
+    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
@@ -677,7 +680,7 @@ object BlockAPI {
         implicit casper =>
           for {
             dag            <- casper.blockDag
-            givenBlockHash = ProtoUtil.stringToByteString(hash)
+            givenBlockHash = hash.unsafeHexToByteString
             result         <- dag.isFinalized(givenBlockHash)
           } yield result.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
@@ -732,9 +735,9 @@ object BlockAPI {
                                          casper.lastFinalizedBlock.map(_.some)
                                        else
                                          for {
-                                           hashByteString <- Base16
-                                                              .decode(blockHash.getOrElse(""))
-                                                              .map(ByteString.copyFrom)
+                                           hashByteString <- blockHash
+                                                              .getOrElse("")
+                                                              .hexToByteString
                                                               .liftTo[F](
                                                                 BlockRetrievalError(
                                                                   s"Input hash value is not valid hex string: $blockHash"

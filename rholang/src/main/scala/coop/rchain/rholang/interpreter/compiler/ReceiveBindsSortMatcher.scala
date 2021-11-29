@@ -3,7 +3,7 @@ package coop.rchain.rholang.interpreter.compiler
 import cats.effect.Sync
 import coop.rchain.models.rholang.sorter.ReceiveSortMatcher.sortBind
 import coop.rchain.models.{Par, ReceiveBind, Var}
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.rholang.sorter._
 import coop.rchain.models.rholang.implicits._
 

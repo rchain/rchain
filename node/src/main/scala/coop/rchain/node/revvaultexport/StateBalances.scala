@@ -7,14 +7,14 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared.Log
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.ExecutionContext
@@ -37,16 +37,16 @@ object StateBalances {
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockOpt          <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt          <- blockStore.get(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                    store
                  )
-      (rSpacePlay, rSpaceReplay, _) = spaces
-      runtimes                      <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty)
-      (rhoRuntime, _)               = runtimes
+      (rSpacePlay, rSpaceReplay) = spaces
+      runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty)
+      (rhoRuntime, _)            = runtimes
       _ <- rhoRuntime.reset(
             Blake2b256Hash.fromByteString(block.body.state.postStateHash)
           )

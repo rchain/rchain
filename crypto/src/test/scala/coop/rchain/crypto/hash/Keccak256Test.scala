@@ -1,6 +1,6 @@
 package coop.rchain.crypto.hash
 
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 
 class Keccak256Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {

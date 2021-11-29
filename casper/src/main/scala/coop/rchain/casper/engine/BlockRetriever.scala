@@ -198,7 +198,7 @@ object BlockRetriever {
           _ <- result.status match {
                 case NewSourcePeerAddedToRequest =>
                   Log[F]
-                    .info(
+                    .debug(
                       s"Adding ${peer.get.endpoint.host} to waiting list of ${PrettyPrinter
                         .buildString(hash)} request. " +
                         s"Reason: $admitHashReason"

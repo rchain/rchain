@@ -70,10 +70,9 @@ object RholangCLI {
     val kvm = mkRSpaceStoreManager[Task](conf.dataDir(), conf.mapSize()).runSyncUnsafe()
 
     val runtime = (for {
-      store           <- kvm.rSpaceStores
-      sarAndHR        <- RhoRuntime.createRuntimes[Task](store)
-      (runtime, _, _) = sarAndHR
-    } yield (runtime)).unsafeRunSync
+      store   <- kvm.rSpaceStores
+      runtime <- RhoRuntime.createRuntime[Task](store)
+    } yield runtime).unsafeRunSync
 
     val problems = try {
       if (conf.files.supplied) {

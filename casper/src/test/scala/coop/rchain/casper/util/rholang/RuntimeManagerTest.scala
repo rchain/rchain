@@ -6,32 +6,29 @@ import cats.{Functor, Id}
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy}
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.syntax._
-import coop.rchain.rspace.syntax._
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.SystemDeployReplayResult.{ReplayFailed, ReplaySucceeded}
 import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.effect.implicits._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rholang.interpreter
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
-import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, RhoRuntime}
+import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared.scalatestcontrib.effectTest
-import coop.rchain.shared.{Log, Time}
-import coop.rchain.{metrics, rholang}
+import coop.rchain.shared.{Base16, Log, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
@@ -52,19 +49,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     Resources
       .copyStorage[Task](genesisContext.storageDirectory)
-      .map(_.storageDir)
       .evalMap(Resources.mkTestRNodeStoreManager[Task])
       .evalMap(Resources.mkRuntimeManagerAt[Task])
-
-  val runtimeAndManager: Resource[Task, (interpreter.RhoRuntime[Task], RuntimeManager[Task])] =
-    for {
-      dirs                         <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-      kvm                          <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dirs.storageDir))
-      rspaceStore                  <- Resource.liftF(kvm.rSpaceStores)
-      runtimes                     <- Resource.liftF(RhoRuntime.createRuntimes[Task](rspaceStore))
-      (runtime, replayRuntime, hr) = runtimes
-      rm                           <- Resource.liftF(RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, hr))
-    } yield (runtime, rm)
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
@@ -130,54 +116,50 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       playSystemDeploy: S,
       replaySystemDeploy: S
   )(resultAssertion: S#Result => Boolean): Task[StateHash] =
-    runtimeManager.withRuntime(
-      runtime =>
-        for {
-          _ <- runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
-          r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
-                case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
-                  assert(resultAssertion(playResult))
-                  runtimeManager.withReplayRuntime(
-                    runtime =>
-                      for {
-                        _ <- runtime.setBlockData(
-                              BlockData(0, 0, genesisContext.validatorPks.head, 0)
-                            )
-                        r <- runtime
-                              .replaySystemDeploy(startState)(
-                                replaySystemDeploy,
-                                processedSystemDeploy
+    for {
+      runtime <- runtimeManager.spawnRuntime
+      _       <- runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
+      r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
+            case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
+              assert(resultAssertion(playResult))
+              for {
+                runtimeReplay <- runtimeManager.spawnReplayRuntime
+                _ <- runtimeReplay.setBlockData(
+                      BlockData(0, 0, genesisContext.validatorPks.head, 0)
+                    )
+                r <- runtimeReplay
+                      .replaySystemDeploy(startState)(
+                        replaySystemDeploy,
+                        processedSystemDeploy
+                      )
+                      .attempt
+                      .map {
+                        case Right(Right(systemDeployReplayResult)) =>
+                          systemDeployReplayResult match {
+                            case ReplaySucceeded(finalReplayStateHash, replayResult) =>
+                              assert(finalPlayStateHash == finalReplayStateHash)
+                              assert(playResult == replayResult)
+                              finalReplayStateHash
+                            case ReplayFailed(systemDeployError) =>
+                              fail(
+                                s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
                               )
-                              .attempt
-                              .map {
-                                case Right(Right(systemDeployReplayResult)) =>
-                                  systemDeployReplayResult match {
-                                    case ReplaySucceeded(finalReplayStateHash, replayResult) =>
-                                      assert(finalPlayStateHash == finalReplayStateHash)
-                                      assert(playResult == replayResult)
-                                      finalReplayStateHash
-                                    case ReplayFailed(systemDeployError) =>
-                                      fail(
-                                        s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
-                                      )
-                                  }
-                                case Right(Left(replayFailure)) =>
-                                  fail(s"Unexpected replay failure: $replayFailure")
-                                case Left(throwable) =>
-                                  fail(
-                                    s"Unexpected system error during replay: ${throwable.getMessage}"
-                                  )
-                              }
-                      } yield r
-                  )
+                          }
+                        case Right(Left(replayFailure)) =>
+                          fail(s"Unexpected replay failure: $replayFailure")
+                        case Left(throwable) =>
+                          fail(
+                            s"Unexpected system error during replay: ${throwable.getMessage}"
+                          )
+                      }
+              } yield r
 
-                case Right(PlayFailed(Failed(_, errorMsg))) =>
-                  fail(s"Unexpected user error during play: $errorMsg")
-                case Left(throwable) =>
-                  fail(s"Unexpected system error during play: ${throwable.getMessage}")
-              }
-        } yield r
-    )
+            case Right(PlayFailed(Failed(_, errorMsg))) =>
+              fail(s"Unexpected user error during play: $errorMsg")
+            case Left(throwable) =>
+              fail(s"Unexpected system error during play: ${throwable.getMessage}")
+          }
+    } yield r
 
   "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
@@ -372,14 +354,15 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "charge for parsing and execution" in effectTest {
     val correctRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
 
-    runtimeAndManager
+    runtimeManagerResource
       .use {
-        case (runtime, runtimeManager) => {
+        case runtimeManager => {
           implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           val initialPhlo                     = Cost.UNSAFE_MAX
           for {
             deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
 
+            runtime       <- runtimeManager.spawnRuntime
             _             <- runtime.cost.set(initialPhlo)
             term          <- Compiler[Task].sourceToADT(deploy.data.term)
             _             <- runtime.inj(term)

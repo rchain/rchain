@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
@@ -83,7 +83,7 @@ class InterpreterUtilTest
   ): F[
     Either[
       Throwable,
-      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+      (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ByteString], Seq[ProcessedSystemDeploy])
     ]
   ] =
     Time[F].currentMillis >>= (
@@ -161,7 +161,8 @@ class InterpreterUtilTest
     }
   }
 
-  it should "merge histories in case of multiple parents" in effectTest {
+  //TODO reenable when merging of REV balances is done
+  it should "merge histories in case of multiple parents" ignore effectTest {
 
     val b1Deploys = Vector(
       "@5!(5)",
@@ -181,8 +182,8 @@ class InterpreterUtilTest
     /*
      * DAG Looks like this:
      *
-     *           b3
-     *          /  \
+     *        b3
+     *        |   \
      *        b1    b2
      *         \    /
      *         genesis

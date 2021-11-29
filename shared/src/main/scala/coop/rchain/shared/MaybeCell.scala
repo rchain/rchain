@@ -1,7 +1,7 @@
 package coop.rchain.shared
 import cats.effect.Sync
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 
 trait MaybeCell[F[_], A] {
   def get: F[Option[A]]

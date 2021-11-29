@@ -3,7 +3,6 @@ package coop.rchain.rholang.interpreter
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.Connective.ConnectiveInstance._
@@ -16,7 +15,8 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage._
 import coop.rchain.rspace.internal.{Datum, Row, WaitingContinuation}
-import coop.rchain.shared.Serialize
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.prop.TableDrivenPropertyChecks._
@@ -964,7 +964,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         implicit val env = Env.makeEnv[Par](Expr(GString("deadbeef")))
         Await.result(reducer.evalExprToPar(hexToBytesCall).runToFuture, 3.seconds)
     }
-    val expectedResult: Par = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef"))))
+    val expectedResult: Par = Expr(GByteArray("deadbeef".unsafeHexToByteString))
     directResult should be(expectedResult)
   }
 
@@ -1076,7 +1076,7 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
   "eval of bytesToHex" should "transform byte array to hex string (not the rholang term)" in {
     val splitRand    = rand.splitByte(0)
     val base16Repr   = "0123456789abcdef"
-    val testBytes    = ByteString.copyFrom(Base16.decode(base16Repr).get)
+    val testBytes    = base16Repr.unsafeHexToByteString
     val proc: Par    = GByteArray(testBytes)
     val toStringCall = EMethod("bytesToHex", proc, List[Par]())
     def wrapWithSend(p: Par): Par =
@@ -1440,15 +1440,15 @@ class ReduceSpec extends FlatSpec with Matchers with AppendedClues with Persiste
         val inspectTask = reducer.evalExpr(
           EPlusPlusBody(
             EPlusPlus(
-              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("dead"))),
-              GByteArray(ByteString.copyFrom(Base16.unsafeDecode("beef")))
+              GByteArray("dead".unsafeHexToByteString),
+              GByteArray("beef".unsafeHexToByteString)
             )
           )
         )
         Await.result(inspectTask.runToFuture, 3.seconds)
     }
     result.exprs should be(
-      Seq(Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("deadbeef")))))
+      Seq(Expr(GByteArray("deadbeef".unsafeHexToByteString)))
     )
   }
 

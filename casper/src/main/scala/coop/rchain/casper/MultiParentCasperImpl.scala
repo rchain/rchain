@@ -1,16 +1,16 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
-import coop.rchain.casper.blocks.merger.MergingVertex
 import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.finality.Finalizer
+import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil._
@@ -20,20 +20,22 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.Catscontrib.ToBooleanF
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
+import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord, NormalizerEnv}
+import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared._
 
 // format: off
 class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator
-  /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage
+  /* Casper */      : Estimator: SafetyOracle
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     validatorId: Option[ValidatorIdentity],
@@ -108,20 +110,43 @@ class MultiParentCasperImpl[F[_]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock).map(_.tips)
 
-  def lastFinalizedBlock: F[BlockMessage] =
+  def lastFinalizedBlock: F[BlockMessage] = {
+
+    def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
+      finalizedSet.toList.traverse { h =>
+        for {
+          block          <- BlockStore[F].getUnsafe(h)
+          deploys        = block.body.deploys.map(_.deploy)
+          deploysRemoved <- DeployStorage[F].remove(deploys)
+          _ <- Log[F].info(
+                s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
+                  .buildString(finalizedSet)}."
+              )
+          _ <- BlockIndex.cache.remove(h).pure
+        } yield ()
+      }.void
+
+    def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
+      BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
+
+    implicit val ms = CasperMetricsSource
+
     for {
-      dag                    <- blockDag
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
-      updatedLastFinalizedBlockHash <- LastFinalizedBlockCalculator[F]
-                                        .run(dag, lastFinalizedBlockHash)
-      _ <- LastFinalizedStorage[F].put(updatedLastFinalizedBlockHash)
-      _ <- EventPublisher[F]
-            .publish(
-              RChainEvent.blockFinalised(updatedLastFinalizedBlockHash.base16String)
-            )
-            .whenA(lastFinalizedBlockHash != updatedLastFinalizedBlockHash)
-      blockMessage <- BlockStore[F].getUnsafe(updatedLastFinalizedBlockHash)
+      dag                      <- blockDag
+      lastFinalizedBlockHash   = dag.lastFinalizedBlock
+      lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
+      work = Finalizer
+        .run[F](
+          dag,
+          casperShardConf.faultToleranceThreshold,
+          lastFinalizedBlockHeight,
+          newLfbFoundEffect
+        )
+      newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
+      blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
     } yield blockMessage
+  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -230,7 +255,7 @@ class MultiParentCasperImpl[F[_]
         } yield result
       }
       invalidBlocks <- dag.invalidBlocksMap
-      lfb           <- LastFinalizedStorage[F].getOrElse(approvedBlock.blockHash)
+      lfb           = dag.lastFinalizedBlock
     } yield CasperSnapshot(
       dag,
       lfb,
@@ -280,18 +305,16 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    // if merging is enabled - populate block index cache while validating block
-    val populateBlockIndexCache =
-      if (casperShardConf.maxNumberOfParents > 1)
-        RuntimeManager[F].getBlockIndexCache.get(
-          MergingVertex(
-            b.blockHash,
-            ProtoUtil.postStateHash(b),
-            ProtoUtil.preStateHash(b),
-            ProtoUtil.deploys(b).toSet
-          )
-        )
-      else ().pure[F]
+    val indexBlock = for {
+      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+                b.blockHash,
+                b.body.deploys,
+                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
+                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
+                RuntimeManager[F].getHistoryRepo
+              )
+      _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
+    } yield ()
 
     val validationProcessDiag = for {
       // Create block and measure duration
@@ -301,13 +324,13 @@ class MultiParentCasperImpl[F[_]
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
               val deployCount = b.body.deploys.size
-              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]")
+              Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
+                indexBlock.whenA(casperShardConf.maxNumberOfParents > 1)
             }
             .getOrElse(().pure[F])
     } yield valResult
 
-    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *>
-      populateBlockIndexCache *> validationProcessDiag
+    Log[F].info(s"Validating block ${PrettyPrinter.buildString(b, short = true)}.") *> validationProcessDiag
   }
 
   override def handleValidBlock(block: BlockMessage): F[BlockDagRepresentation[F]] =
@@ -422,15 +445,15 @@ object MultiParentCasperImpl {
 
   private def blockEvent(block: BlockMessage) = {
 
-    val blockHash = block.blockHash.base16String
+    val blockHash = block.blockHash.toHexString
     val parentHashes =
-      block.header.parentsHashList.map(_.base16String)
+      block.header.parentsHashList.map(_.toHexString)
     val justificationHashes =
       block.justifications.toList
-        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.base16String
+    val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }

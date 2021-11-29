@@ -7,15 +7,13 @@ import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
-import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.util.comm._
-import coop.rchain.casper.{ReportingCasper, engine, _}
+import coop.rchain.casper.{engine, _}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -26,13 +24,13 @@ import coop.rchain.comm.transport._
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.monix.Monixable
-import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
-import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
+import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
+import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
@@ -42,7 +40,6 @@ import fs2.concurrent.Queue
 import kamon._
 import monix.execution.Scheduler
 
-import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 
 @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
@@ -60,12 +57,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
   private[this] val grpcScheduler =
     Scheduler.cached("grpc-io", 4, 64, reporter = UncaughtExceptionLogger)
   implicit private val logSource: LogSource = LogSource(this.getClass)
-
-  /** Configuration */
-  private val dataDir                  = nodeConf.storage.dataDir
-  private val blockstorePath           = dataDir.resolve("blockstore")
-  private val deployStoragePath        = dataDir.resolve("deploystorage")
-  private val lastFinalizedStoragePath = dataDir.resolve("last-finalized-block")
 
   /**
     * Main node entry. It will:
@@ -150,15 +141,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       _             <- initPeer.fold(().pure[F])(p => kademliaStore.updateLastSeen(p))
       nodeDiscovery = effects.nodeDiscovery(id)(Sync[F], kademliaStore, kademliaRPC)
 
-      /**
-        * We need to come up with a consistent way with folder creation. Some layers create folder on their own
-        * (if not available), others (like blockstore) relay on the structure being created for them (and will fail
-        * if it does not exist). For now this small fix should suffice, but we should unify this.
-        */
-      _ <- mkDirs(dataDir)
-
-      deployStorageConfig = LMDBDeployStorage.Config(storagePath = deployStoragePath, mapSize = gb)
-
       eventBus <- RchainEvents[F]
 
       result <- {
@@ -171,10 +153,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           commUtil,
           blockRetriever,
           nodeConf,
-          blockstorePath,
-          lastFinalizedStoragePath,
-          eventBus,
-          deployStorageConfig
+          eventBus
         )
       }
       (
@@ -242,10 +221,6 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       nodeConf.protocolClient.batchMaxConnections,
       ClearConnectionsConf(nodeConf.peersDiscovery.heartbeatBatchSize)
     )
-
-  // TODO this should use existing algebra
-  private def mkDirs(path: Path): F[Unit] =
-    Sync[F].delay(Files.createDirectories(path))
 
   private def nodeProgram(
       apiServers: APIServers,
@@ -408,21 +383,18 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
 
   def addShutdownHook(
       servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
+      runtimeCleanup: Cleanup[F]
   ): F[Unit] =
-    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup, blockStore))).void
+    Sync[F].delay(sys.addShutdownHook(clearResources(servers, runtimeCleanup))).void
 
   def clearResources(
       servers: ServersInstances[F],
-      runtimeCleanup: Cleanup[F],
-      blockStore: BlockStore[F]
+      runtimeCleanup: Cleanup[F]
   ): Unit = {
     val shutdown = for {
       _ <- Sync[F].delay(Kamon.stopAllReporters())
       _ <- runtimeCleanup.close()
       _ <- Log[F].info("Bringing BlockStore down ...")
-      _ <- blockStore.close()
       _ <- Log[F].info("Goodbye.")
     } yield ()
 
@@ -537,7 +509,6 @@ object NodeRuntime {
   }
 
   def cleanup[F[_]: Sync: Log](
-      deployStorageCleanup: F[Unit],
       casperStoreManager: KeyValueStoreManager[F]
   ): Cleanup[F] =
     new Cleanup[F] {
@@ -545,8 +516,6 @@ object NodeRuntime {
         for {
           _ <- Log[F].info("Shutting down Casper store manager ...")
           _ <- casperStoreManager.shutdown
-          _ <- Log[F].info("Shutting down deploy storage ...")
-          _ <- deployStorageCleanup
         } yield ()
     }
 }

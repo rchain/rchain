@@ -27,7 +27,8 @@ class RunningSpec extends WordSpec with BeforeAndAfterEach with Matchers {
     transportLayer.reset()
 
   "Running state" should {
-    val genesis                = GenesisBuilder.createGenesis()
+    val genesis = GenesisBuilder.createGenesis()
+    blockDagStorage.insert(genesis, false, approved = true).runSyncUnsafe()
     val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
     val approvedBlock: ApprovedBlock = ApprovedBlock(
       candidate = approvedBlockCandidate,
