@@ -6,13 +6,10 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.rspace.examples.StringExamples.{StringsCaptor, _}
 import coop.rchain.rspace.examples.StringExamples.implicits._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryReaderBase
 import coop.rchain.rspace.internal._
 import coop.rchain.rspace.test.ArbitraryInstances._
-import coop.rchain.rspace.trace.{Consume, Produce}
 import coop.rchain.shared.GeneratorUtils._
-import coop.rchain.shared.Language._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen}
@@ -21,7 +18,6 @@ import org.scalatest.prop._
 import scodec.bits.ByteVector
 
 import scala.collection.SortedSet
-import scala.collection.concurrent.{Map, TrieMap}
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -47,21 +43,16 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       for {
 
         continuations <- Arbitrary
-                          .arbitrary[TrieMap[Seq[String], Seq[
+                          .arbitrary[Map[Seq[String], Seq[
                             WaitingContinuation[Pattern, StringsCaptor]
                           ]]]
-                          .map(_.toMap)
         installedContinuations <- Arbitrary
                                    .arbitrary[
-                                     TrieMap[
-                                       Seq[String],
-                                       WaitingContinuation[Pattern, StringsCaptor]
-                                     ]
+                                     Map[Seq[String], WaitingContinuation[Pattern, StringsCaptor]]
                                    ]
-                                   .map(_.toMap)
-        data           <- Arbitrary.arbitrary[TrieMap[String, Seq[Datum[String]]]].map(_.toMap)
-        joins          <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]].map(_.toMap)
-        installedJoins <- Arbitrary.arbitrary[TrieMap[String, Seq[Seq[String]]]].map(_.toMap)
+        data           <- Arbitrary.arbitrary[Map[String, Seq[Datum[String]]]]
+        joins          <- Arbitrary.arbitrary[Map[String, Seq[Seq[String]]]]
+        installedJoins <- Arbitrary.arbitrary[Map[String, Seq[Seq[String]]]]
       } yield HotStoreState(
         continuations,
         installedContinuations,
