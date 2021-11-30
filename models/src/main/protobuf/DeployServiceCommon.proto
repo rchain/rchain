@@ -222,7 +222,7 @@ message BlockEventInfo{
 }
 
 message Status {
-  VersionInfo version = 1;
+  VersionInfo version = 1 [(scalapb.field).no_box = true];
   string address      = 2;
   string networkId    = 3;
   string shardId      = 4;
