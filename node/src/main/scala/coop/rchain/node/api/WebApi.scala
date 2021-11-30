@@ -68,7 +68,8 @@ object WebApi {
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
-      networkId: String
+      networkId: String,
+      shardId: String
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -127,8 +128,6 @@ object WebApi {
     def status: F[ApiStatus] =
       for {
         address <- RPConfAsk[F].ask
-        blocks  <- getBlocks(depth = 1)
-        shardId = blocks.headOption.getOrElse(LightBlockInfo()).shardId
         peers   <- ConnectionsCell[F].read
         nodes   <- NodeDiscovery[F].peers
       } yield ApiStatus(
