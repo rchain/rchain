@@ -535,7 +535,33 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
     )
 
   def getDataPar(channel: Par): F[Seq[Par]] =
-    runtime.getData(channel).map(_.flatMap(_.a.pars))
+    for {
+//      d1  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"1 data on chan ${channel} on root ${runtime.root} is ${d1}")
+//      d2  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"2 data on chan ${channel} on root ${runtime.root} is ${d2}")
+//      d3  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"3 data on chan ${channel} on root ${runtime.root} is ${d3}")
+//      d4  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"4 data on chan ${channel} on root ${runtime.root} is ${d4}")
+//      d5  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"5 data on chan ${channel} on root ${runtime.root} is ${d5}")
+//      d6  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"6 data on chan ${channel} on root ${runtime.root} is ${d6}")
+//      d7  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"7 data on chan ${channel} on root ${runtime.root} is ${d7}")
+//      d8  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"8 data on chan ${channel} on root ${runtime.root} is ${d8}")
+//      d9  <- runtime.getData(channel)
+//      _   <- Log[F].info(s"9 data on chan ${channel} on root ${runtime.root} is ${d9}")
+//      d10 <- runtime.getData(channel)
+//      _   <- Log[F].info(s"10 data on chan ${channel} on root ${runtime.root} is ${d10}")
+//      d11 <- runtime.getData(channel)
+//      _   <- Log[F].info(s"11 data on chan ${channel} on root ${runtime.root} is ${d11}")
+//      d12 <- runtime.getData(channel)
+//      _   <- Log[F].info(s"12 data on chan ${channel} on root ${runtime.root} is ${d12}")
+      r <- runtime.getData(channel).map(_.flatMap(_.a.pars))
+    } yield r
 
   def getContinuationPar(channels: Seq[Par]): F[Seq[(Seq[BindPattern], Par)]] =
     runtime

@@ -91,6 +91,8 @@ trait RhoRuntime[F[_]] extends HasCost[F] {
     */
   def reset(root: Blake2b256Hash): F[Unit]
 
+  def root: Blake2b256Hash
+
   /**
     * Consume the result in the rspace.
     *
@@ -182,6 +184,12 @@ class RhoRuntimeImpl[F[_]: Sync: Span](
   }
 
   override def reset(root: Blake2b256Hash): F[Unit] = space.reset(root)
+
+  override def root: Blake2b256Hash =
+    space
+      .asInstanceOf[RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]]
+      .historyRepo
+      .root
 
   override def createCheckpoint: F[Checkpoint] = Span[F].withMarks("create-checkpoint") {
     space.createCheckpoint()
