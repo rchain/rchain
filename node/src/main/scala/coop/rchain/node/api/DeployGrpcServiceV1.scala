@@ -302,8 +302,7 @@ object DeployGrpcServiceV1 {
           peers   <- ConnectionsCell[F].read
           nodes   <- NodeDiscovery[F].peers
           status = Status(
-            version =
-              Some(VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get)),
+            version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
             address.local.toAddress,
             networkId,
             shardId,
