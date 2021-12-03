@@ -133,8 +133,9 @@ class Initializing[F[_]
 
       _ <- Log[F]
             .info(
-              s"Bootstrap's node shard name '${approvedBlock.candidate.block.shardId}' " +
-                s"doesn't equals to current node shard name '${casperShardConf.shardName}'."
+              s"Connected to the wrong shard. Approved block received from bootstrap is in shard " +
+                s"'${approvedBlock.candidate.block.shardId}' but expected is '${casperShardConf.shardName}'. " +
+                s"Check configuration option shard-name."
             )
             .whenA(!shardNameIsValid)
 
