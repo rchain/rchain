@@ -49,7 +49,7 @@ message Disconnect {
 }
 
 message Protocol {
-    Header header                                                 = 1;
+    Header header                                                 = 1 [(scalapb.field).no_box = true];
     oneof message {
         Heartbeat                   heartbeat                     = 2;
         ProtocolHandshake           protocol_handshake            = 3;
