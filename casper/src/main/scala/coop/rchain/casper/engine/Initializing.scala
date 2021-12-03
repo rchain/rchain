@@ -89,6 +89,7 @@ class Initializing[F[_]
       disableStateExporter: Boolean
   ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
+    val shardNameIsValid  = approvedBlock.candidate.block.shardId == casperShardConf.shardName
 
     def handleApprovedBlock = {
       val block = approvedBlock.candidate.block
@@ -124,7 +125,7 @@ class Initializing[F[_]
     for {
       // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
       // Might be Validate.approvedBlock is enough but have to check
-      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
+      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock) &&^ shardNameIsValid.pure
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 
