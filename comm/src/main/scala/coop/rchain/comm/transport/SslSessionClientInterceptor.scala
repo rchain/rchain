@@ -53,7 +53,7 @@ class SslSessionClientCallInterceptor[ReqT, RespT](next: ClientCall[ReqT, RespT]
 
     override def onMessage(message: RespT): Unit =
       message match {
-        case TLResponse(Payload.Ack(Ack(Some(RHeader(sender, nid))))) =>
+        case TLResponse(Payload.Ack(Ack(RHeader(sender, nid)))) =>
           if (nid == networkID) {
             val sslSession: Option[SSLSession] = Option(
               self.getAttributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION)

@@ -154,7 +154,7 @@ object GrpcTransportReceiver {
 
       private def ack(src: PeerNode): TLResponse =
         TLResponse(
-          TLResponse.Payload.Ack(Ack(Some(ProtocolHelper.header(src, networkId))))
+          TLResponse.Payload.Ack(Ack(ProtocolHelper.header(src, networkId)))
         )
     }
 
