@@ -131,6 +131,13 @@ class Initializing[F[_]
 
       _ <- Log[F].info("Invalid LastFinalizedBlock received; refusing to add.").whenA(!isValid)
 
+      _ <- Log[F]
+            .info(
+              s"Bootstrap's node shard name '${approvedBlock.candidate.block.shardId}' " +
+                s"doesn't equals to current node shard name '${casperShardConf.shardName}'."
+            )
+            .whenA(!shardNameIsValid)
+
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
                 case true if isValid  => (false, true)
