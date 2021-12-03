@@ -94,7 +94,7 @@ object GrpcTransportReceiver {
             for {
               _                <- Metrics[F].incrementCounter("packets.received")
               self             <- RPConfAsk[F].reader(_.local)
-              peer             = PeerNode.from(p.header.get.sender.get)
+              peer             = PeerNode.from(p.header.get.sender)
               packetDroppedMsg = s"Packet dropped, ${peer.endpoint.host} packet queue overflown."
               targetBuffer     <- getBuffers(peer).map(_._1)
               r <- if (targetBuffer.pushNext(Send(p)))

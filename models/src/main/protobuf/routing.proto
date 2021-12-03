@@ -22,7 +22,7 @@ message Node {
 }
 
 message Header {
-  Node   sender         = 1;
+  Node   sender         = 1 [(scalapb.field).no_box = true];
   string networkId      = 2;
 }
 

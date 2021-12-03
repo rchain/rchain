@@ -40,7 +40,7 @@ class SslSessionServerInterceptor(networkID: String) extends ServerInterceptor {
 
     override def onMessage(message: ReqT): Unit =
       message match {
-        case TLRequest(Some(Protocol(Some(RHeader(Some(sender), nid)), msg))) =>
+        case TLRequest(Some(Protocol(Some(RHeader(sender, nid)), msg))) =>
           if (nid == networkID) {
             if (log.isTraceEnabled) {
               val peerNode = ProtocolHelper.toPeerNode(sender)

@@ -28,8 +28,7 @@ object ProtocolHelper {
   def sender(proto: Protocol): Option[PeerNode] =
     for {
       h <- proto.header
-      s <- h.sender
-    } yield toPeerNode(s)
+    } yield toPeerNode(h.sender)
 
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
