@@ -89,6 +89,9 @@ class Initializing[F[_]
       disableStateExporter: Boolean
   ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
+    val receivedShard     = approvedBlock.candidate.block.shardId
+    val expectedShard     = casperShardConf.shardName
+    val shardNameIsValid  = receivedShard == expectedShard
 
     def handleApprovedBlock = {
       val block = approvedBlock.candidate.block
@@ -124,11 +127,19 @@ class Initializing[F[_]
     for {
       // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
       // Might be Validate.approvedBlock is enough but have to check
-      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
+      isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
+                  Validate.approvedBlock[F](approvedBlock)
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 
       _ <- Log[F].info("Invalid LastFinalizedBlock received; refusing to add.").whenA(!isValid)
+
+      _ <- Log[F]
+            .info(
+              s"Connected to the wrong shard. Approved block received from bootstrap is in shard " +
+                s"'${receivedShard}' but expected is '${expectedShard}'. Check configuration option shard-name."
+            )
+            .whenA(!shardNameIsValid)
 
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
