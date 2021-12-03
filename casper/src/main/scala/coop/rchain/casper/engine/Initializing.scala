@@ -127,7 +127,9 @@ class Initializing[F[_]
     for {
       // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
       // Might be Validate.approvedBlock is enough but have to check
-      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock) &&^ shardNameIsValid.pure
+      isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^ Validate.approvedBlock[F](
+                  approvedBlock
+                )
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 
