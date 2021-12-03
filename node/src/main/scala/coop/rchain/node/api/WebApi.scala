@@ -19,6 +19,8 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBo
 import coop.rchain.models._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
 import coop.rchain.state.StateManager
@@ -61,11 +63,13 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
+  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
-      triggerProposeF: Option[ProposeFunction[F]]
+      triggerProposeF: Option[ProposeFunction[F]],
+      networkId: String,
+      shardId: String
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -122,10 +126,18 @@ object WebApi {
         .map(toExploratoryResponse)
 
     def status: F[ApiStatus] =
-      ApiStatus(
-        version = 1,
-        message = "OK"
-      ).pure
+      for {
+        address <- RPConfAsk[F].ask
+        peers   <- ConnectionsCell[F].read
+        nodes   <- NodeDiscovery[F].peers
+      } yield ApiStatus(
+        version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
+        address.local.toAddress,
+        networkId,
+        shardId,
+        peers.length,
+        nodes.length
+      )
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
       BlockAPI
@@ -213,9 +225,15 @@ object WebApi {
   )
 
   final case class ApiStatus(
-      version: Int,
-      message: String
+      version: VersionInfo,
+      address: String,
+      networkId: String,
+      shardId: String,
+      peers: Int,
+      nodes: Int
   )
+
+  final case class VersionInfo(api: String, node: String)
 
   // Exception thrown by BlockAPI
   final class BlockApiException(message: String) extends Exception(message)

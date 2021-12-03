@@ -147,6 +147,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val tr = transport
         implicit val ti = time
         implicit val me = metrics
+        implicit val nd = nodeDiscovery
         Setup.setupNodeProgram[F](
           rpConnections,
           rpConfAsk,
