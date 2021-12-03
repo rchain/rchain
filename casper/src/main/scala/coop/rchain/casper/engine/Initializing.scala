@@ -89,7 +89,9 @@ class Initializing[F[_]
       disableStateExporter: Boolean
   ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
-    val shardNameIsValid  = approvedBlock.candidate.block.shardId == casperShardConf.shardName
+    val receivedShard     = approvedBlock.candidate.block.shardId
+    val expectedShard     = casperShardConf.shardName
+    val shardNameIsValid  = receivedShard == expectedShard
 
     def handleApprovedBlock = {
       val block = approvedBlock.candidate.block
@@ -134,8 +136,7 @@ class Initializing[F[_]
       _ <- Log[F]
             .info(
               s"Connected to the wrong shard. Approved block received from bootstrap is in shard " +
-                s"'${approvedBlock.candidate.block.shardId}' but expected is '${casperShardConf.shardName}'. " +
-                s"Check configuration option shard-name."
+                s"'${receivedShard}' but expected is '${expectedShard}'. Check configuration option shard-name."
             )
             .whenA(!shardNameIsValid)
 
