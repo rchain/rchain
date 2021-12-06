@@ -338,6 +338,8 @@ lazy val node = (project in file("node"))
         ExecCmd("CMD", "run")
       )
     },
+    // Replace unsupported character `+`
+    version in Docker := { version.value.replace("+", "__") },
     mappings in Docker ++= {
       val base = (defaultLinuxInstallLocation in Docker).value
       directory((baseDirectory in rholang).value / "examples")
