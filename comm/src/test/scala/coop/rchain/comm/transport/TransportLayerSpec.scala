@@ -33,7 +33,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           protocolDispatcher.received should have length 1
           val (_, protocol2)   = protocolDispatcher.received.head
           val sender: PeerNode = ProtocolHelper.sender(protocol2)
-          sender shouldBe 'defined
           sender shouldEqual result.localNode
           protocol2.message shouldBe 'heartbeat
         }
@@ -55,8 +54,6 @@ abstract class TransportLayerSpec[F[_]: Monad: cats.effect.Timer, E <: Environme
           val Seq((r1, p1), (r2, p2)) = protocolDispatcher.received
           val sender1: PeerNode       = ProtocolHelper.sender(p1)
           val sender2: PeerNode       = ProtocolHelper.sender(p2)
-          sender1 shouldBe 'defined
-          sender2 shouldBe 'defined
           sender1 shouldEqual result.localNode
           sender2 shouldEqual result.localNode
           p1.message shouldBe 'heartbeat
