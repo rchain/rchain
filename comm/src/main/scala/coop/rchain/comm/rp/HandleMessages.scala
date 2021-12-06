@@ -24,12 +24,7 @@ object HandleMessages {
 
   def handle[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: PacketHandler: ConnectionsCell: RPConfAsk](
       protocol: Protocol
-  ): F[CommunicationResponse] =
-    ProtocolHelper.sender(protocol) match {
-      case None =>
-        Log[F].error(s"Sender not present, DROPPING $protocol").as(notHandled(senderNotAvailable))
-      case Some(sender) => handle_[F](protocol, sender)
-    }
+  ): F[CommunicationResponse] = handle_[F](protocol, ProtocolHelper.sender(protocol))
 
   private def handle_[F[_]: Monad: Sync: Log: Time: Metrics: TransportLayer: PacketHandler: ConnectionsCell: RPConfAsk](
       proto: Protocol,
