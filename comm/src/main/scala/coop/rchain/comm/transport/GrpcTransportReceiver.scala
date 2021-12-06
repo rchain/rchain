@@ -87,26 +87,20 @@ object GrpcTransportReceiver {
         } yield c
       }
 
-      def send(request: TLRequest): Task[TLResponse] = {
-        val result = request.protocol match {
-          case None => internalServerError("Bad TLRequest received").pure[F]
-          case Some(p) =>
-            for {
-              _                <- Metrics[F].incrementCounter("packets.received")
-              self             <- RPConfAsk[F].reader(_.local)
-              peer             = PeerNode.from(p.header.sender)
-              packetDroppedMsg = s"Packet dropped, ${peer.endpoint.host} packet queue overflown."
-              targetBuffer     <- getBuffers(peer).map(_._1)
-              r <- if (targetBuffer.pushNext(Send(p)))
-                    Metrics[F].incrementCounter("packets.enqueued") >>
-                      ack(self).pure[F]
-                  else
-                    Metrics[F].incrementCounter("packets.dropped") >>
-                      internalServerError(packetDroppedMsg).pure[F]
-            } yield r
-        }
-        result.toTask
-      }
+      def send(request: TLRequest): Task[TLResponse] =
+        (for {
+          _                <- Metrics[F].incrementCounter("packets.received")
+          self             <- RPConfAsk[F].reader(_.local)
+          peer             = PeerNode.from(request.protocol.header.sender)
+          packetDroppedMsg = s"Packet dropped, ${peer.endpoint.host} packet queue overflown."
+          targetBuffer     <- getBuffers(peer).map(_._1)
+          r <- if (targetBuffer.pushNext(Send(request.protocol)))
+                Metrics[F].incrementCounter("packets.enqueued") >>
+                  ack(self).pure[F]
+              else
+                Metrics[F].incrementCounter("packets.dropped") >>
+                  internalServerError(packetDroppedMsg).pure[F]
+        } yield r).toTask
 
       def stream(observable: Observable[Chunk]): Task[TLResponse] = {
         import StreamHandler._

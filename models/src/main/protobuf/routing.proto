@@ -65,7 +65,7 @@ service TransportLayer {
 }
 
 message TLRequest {
-  Protocol protocol = 1;
+  Protocol protocol = 1 [(scalapb.field).no_box = true];
 }
 
 message InternalServerError {
