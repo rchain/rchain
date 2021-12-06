@@ -359,12 +359,15 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       val history = historyRepositoryAtom.get()
       for {
         historyReader <- history.getHistoryReader(history.root)
-        hotStore      <- HotStore.from(checkpoint.cacheSnapshot.cache, historyReader.base)
-        _             = storeAtom.set(hotStore)
-        _             = eventLog.take()
-        _             = eventLog.put(checkpoint.log)
-        _             = produceCounter.take()
-        _             = produceCounter.put(checkpoint.produceCounter)
+        hotStore <- HotStore.from(
+                     checkpoint.cacheSnapshot,
+                     historyReader.base
+                   )
+        _ = storeAtom.set(hotStore)
+        _ = eventLog.take()
+        _ = eventLog.put(checkpoint.log)
+        _ = produceCounter.take()
+        _ = produceCounter.put(checkpoint.produceCounter)
       } yield ()
     }
 
