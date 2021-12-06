@@ -12,6 +12,8 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.casper.{ProposeFunction, SafetyOracle}
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
@@ -26,11 +28,13 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
+  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
-      devMode: Boolean = false
+      devMode: Boolean = false,
+      networkId: String,
+      shardId: String
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -291,5 +295,21 @@ object DeployGrpcServiceV1 {
             }
           )
           .flatMap(Observable.fromIterable)
+
+      def status(request: com.google.protobuf.empty.Empty): Task[StatusResponse] =
+        (for {
+          address <- RPConfAsk[F].ask
+          peers   <- ConnectionsCell[F].read
+          nodes   <- NodeDiscovery[F].peers
+          status = Status(
+            version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
+            address.local.toAddress,
+            networkId,
+            shardId,
+            peers.length,
+            nodes.length
+          )
+          response = StatusResponse().withStatus(status)
+        } yield response).toTask
     }
 }

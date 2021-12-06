@@ -29,6 +29,7 @@ trait DeployService[F[_]] {
   def lastFinalizedBlock: F[Either[Seq[String], String]]
   def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
   def bondStatus(q: BondStatusQuery): F[Either[Seq[String], String]]
+  def status: F[Either[Seq[String], String]]
 }
 
 object DeployService {
@@ -179,6 +180,15 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
         )
       )
   }
+
+  def status: F[Either[Seq[String], String]] =
+    stub
+      .status(com.google.protobuf.empty.Empty())
+      .fromTask
+      .toEitherF(
+        _.message.error,
+        _.message.status.map(_.toProtoString)
+      )
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))
   override def close(): Unit = {
