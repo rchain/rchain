@@ -84,7 +84,7 @@ message TLResponse {
 }
 
 message ChunkHeader {
-  Node   sender             = 1;
+  Node   sender             = 1 [(scalapb.field).no_box = true];
   string typeId             = 2;
   bool   compressed         = 3;
   int32  contentLength      = 4;
