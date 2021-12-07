@@ -1,6 +1,6 @@
 package coop.rchain.casper
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rspace.{ReportingRspace, ReportingTransformer}
 import coop.rchain.casper.protocol.{

@@ -3,6 +3,8 @@ package coop.rchain.rspace
 import cats.Functor
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import cats.effect._
+import cats.effect.concurrent.{Ref, Semaphore}
 import com.typesafe.scalalogging.Logger
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
@@ -1286,19 +1288,21 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                             history,
                             channels
                           )
-      cache <- Ref.of[Task, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      store = {
-        val hr = historyRepository.getHistoryReader(historyRepository.root).base
-        AtomicAny(HotStore.inMem[Task, C, P, A, K](cache, hr))
+      cache         <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      historyReader <- historyRepository.getHistoryReader(historyRepository.root)
+      store <- {
+        val hr = historyReader.base
+        HotStore.inMem[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
       }
+
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
         store
       )
-      historyCache <- Ref.of[Task, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      replayStore = {
-        val hr = historyRepository.getHistoryReader(historyRepository.root).base
-        AtomicAny(HotStore.inMem[Task, C, P, A, K](historyCache, hr))
+      historyCache <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      replayStore <- {
+        val hr = historyReader.base
+        HotStore.inMem[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,

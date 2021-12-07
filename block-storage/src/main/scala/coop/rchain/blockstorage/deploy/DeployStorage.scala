@@ -6,9 +6,9 @@ import coop.rchain.crypto.signatures.Signed
 trait DeployStorage[F[_]] {
   def add(deploys: List[Signed[DeployData]]): F[Unit]
   def remove(deploys: List[Signed[DeployData]]): F[Int]
-  def getUnfinalized: F[Set[Signed[DeployData]]]
+  def readAll: F[Set[Signed[DeployData]]]
 }
 
 object DeployStorage {
-  def apply[F[_]](implicit ev: DeployStorage[F]): DeployStorage[F] = ev
+  def apply[F[_]](implicit F: DeployStorage[F]): F.type = F
 }

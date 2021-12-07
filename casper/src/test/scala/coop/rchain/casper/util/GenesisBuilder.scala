@@ -6,16 +6,14 @@ import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2}
+import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2, _}
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
@@ -39,8 +37,8 @@ object GenesisBuilder {
       bondsFunction: Iterable[PublicKey] => Map[PublicKey, Long] = createBonds,
       validatorsNum: Int = 4
   ): GenesisParameters = buildGenesisParameters(
-    defaultValidatorKeyPairs,
-    bondsFunction(defaultValidatorPks)
+    defaultValidatorKeyPairs.take(validatorsNum),
+    bondsFunction(defaultValidatorPks.take(validatorsNum))
   )
 
   def buildGenesisParametersWithRandom(
@@ -49,7 +47,7 @@ object GenesisBuilder {
   ): GenesisParameters = {
     // 4 default fixed validators, others are random generated
     val randomValidatorKeyPairs = (5 to validatorsNum).map(_ => Secp256k1.newKeyPair)
-    val (_, randomValidatorPks) = defaultValidatorKeyPairs.unzip
+    val (_, randomValidatorPks) = randomValidatorKeyPairs.unzip
     buildGenesisParameters(
       defaultValidatorKeyPairs ++ randomValidatorKeyPairs,
       bondsFunction(defaultValidatorPks ++ randomValidatorPks)
@@ -116,7 +114,7 @@ object GenesisBuilder {
   ): GenesisContext =
     genesisCache.synchronized {
       cacheAccesses += 1
-      val parameters = buildGenesisParameters(validatorsNum = validatorsNum)
+      val parameters = buildGenesisParametersWithRandom(validatorsNum = validatorsNum)
       genesisCache.getOrElseUpdate(
         parameters,
         doBuildGenesis(parameters)
@@ -142,16 +140,14 @@ object GenesisBuilder {
     implicit val scheduler = monix.execution.Scheduler.Implicits.global
 
     (for {
-      kvsManager                   <- mkTestRNodeStoreManager[Task](storageDirectory)
-      store                        <- kvsManager.rSpaceStores
-      runtimes                     <- RhoRuntime.createRuntimes(store)
-      (runtime, replayRuntime, hr) = runtimes
-      runtimeManager               <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, hr)
-      genesis                      <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      blockStore                   <- KeyValueBlockStore[Task](kvsManager)
-      _                            <- blockStore.put(genesis.blockHash, genesis)
-      blockDagStorage              <- BlockDagKeyValueStorage.create[Task](kvsManager)
-      _                            <- blockDagStorage.insert(genesis, invalid = false)
+      kvsManager      <- mkTestRNodeStoreManager[Task](storageDirectory)
+      store           <- kvsManager.rSpaceStores
+      runtimeManager  <- RuntimeManager(store)
+      genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
+      blockStore      <- KeyValueBlockStore[Task](kvsManager)
+      _               <- blockStore.put(genesis.blockHash, genesis)
+      blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
+      _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)
     } yield GenesisContext(genesis, validavalidatorKeyPairs, genesisVaults, storageDirectory)).unsafeRunSync
   }
 

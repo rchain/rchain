@@ -68,7 +68,7 @@ object Genesis {
     )
 
     runtimeManager
-      .computeGenesis(blessedTerms, timestamp)
+      .computeGenesis(blessedTerms, timestamp, genesis.blockNumber)
       .map {
         case (startHash, stateHash, processedDeploys) =>
           createProcessedDeploy(genesis, startHash, stateHash, processedDeploys)

@@ -76,14 +76,15 @@ class RhoTrieTraverserTest extends FlatSpec {
                            )
           _             <- runtime.reset(check2.root)
           trieMapHandle = trieMapHandleR(0)
-          maps          <- RhoTrieTraverser.traverseTrie(2, trieMapHandle, runtime)
+          maps          <- RhoTrieTraverser.traverseTrie(trieDepth, trieMapHandle, runtime)
           goodMap = RhoTrieTraverser.vecParMapToMap(
             maps,
             p => p.exprs(0).getGByteArray,
             p => p.exprs(0).getGInt
           )
           _ = insertKeyValues.map(k => {
-            val key = RhoTrieTraverser.keccakKey(k._1).exprs(0).getGByteArray.substring(2, 32)
+            val key =
+              RhoTrieTraverser.keccakKey(k._1).exprs(0).getGByteArray.substring(trieDepth, 32)
             assert(goodMap.get(key).get == k._2.toLong)
           })
         } yield ()

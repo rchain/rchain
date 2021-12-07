@@ -2,7 +2,7 @@ package coop.rchain.scodec
 
 import scodec.{Attempt, Codec, Err}
 
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 
 package object codecs {
 

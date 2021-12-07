@@ -82,7 +82,7 @@ class MaximumBipartiteMatchSpec extends FlatSpec with Matchers {
   }
 
   it should "retain effects caused by the matchFunction" in {
-    import cats.implicits._
+    import cats.syntax.all._
 
     val effectfulMf: (String, Int) => Writer[List[Edge], Option[Edge]] =
       (x, y) => Writer.tell(List(x -> y)).map(_ => mf(x, y))

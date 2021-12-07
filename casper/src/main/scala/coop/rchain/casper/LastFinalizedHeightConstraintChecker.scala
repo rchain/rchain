@@ -4,7 +4,6 @@ import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.blocks.proposer.{
   CheckProposeConstraintsResult,
   TooFarAheadOfLastFinalized
@@ -13,7 +12,7 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.shared.Log
 
-final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorage: Log] {
+final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log] {
   def check(
       s: CasperSnapshot[F],
       // TODO having genesis is a weird way to check, remove
@@ -22,10 +21,10 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
   ): F[CheckProposeConstraintsResult] = {
     val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
     val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
+    val lastFinalizedBlockHash    = s.dag.lastFinalizedBlock
     for {
-      lastFinalizedBlockHash <- LastFinalizedStorage[F].getOrElse(genesis.blockHash)
-      lastFinalizedBlock     <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
-      latestMessageOpt       <- s.dag.latestMessage(validator)
+      lastFinalizedBlock <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
+      latestMessageOpt   <- s.dag.latestMessage(validator)
       result <- latestMessageOpt match {
                  case Some(latestMessage) =>
                    val latestFinalizedHeight = lastFinalizedBlock.blockNum
@@ -47,7 +46,6 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: LastFinalizedStorag
 }
 
 object LastFinalizedHeightConstraintChecker {
-  def apply[F[_]: Sync: LastFinalizedStorage: BlockStore: Log]
-      : LastFinalizedHeightConstraintChecker[F] =
+  def apply[F[_]: Sync: BlockStore: Log]: LastFinalizedHeightConstraintChecker[F] =
     new LastFinalizedHeightConstraintChecker[F]
 }

@@ -2,7 +2,7 @@ package coop.rchain.graphz
 
 import cats._
 import cats.data._
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl.implicits._
 
 import org.scalatest._

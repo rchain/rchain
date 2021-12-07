@@ -21,9 +21,9 @@ def test_make_wallets_file_lines() -> None:
     output = make_wallets_file_lines(wallets_map)
 
     assert output == [
-        '26218db6e5a2eed1901f72cea58fda7ef1f602c6,40,0',
-        '42c828c183163cb50f6ad5207a10899b59aae91c,45,0',
-        '2a11fd494610330f3b522562f7204670f8928133,26,0',
+        '111125MFSfZan5xv4zYqfeoJdbKtPmdhs3rE1SZA1VKQoCZ2j4HZXn,40,0',
+        '11112p4N2mcrBm5rfLVrMFJ87rQjk1b4CdooKi7pkSbipw2VMDM6WG,45,0',
+        '11112DLVVFkm7mU1cW4BJtXabXPMZungbywdoi8zGfPGoCD2UKr4pJ,26,0',
     ]
 
 

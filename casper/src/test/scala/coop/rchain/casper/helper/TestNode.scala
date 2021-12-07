@@ -1,26 +1,15 @@
 package coop.rchain.casper.helper
 
-import java.net.URLEncoder
-import java.nio.file.Path
-import cats.{Monad, Parallel}
 import cats.data.State
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
-import cats.implicits._
-import cats.syntax.all.none
+import cats.syntax.all._
+import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
-import coop.rchain.rspace.syntax._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.{
-  BlockDagKeyValueStorage,
-  BlockDagRepresentation,
-  BlockDagStorage
-}
-import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage.Config
-import coop.rchain.blockstorage.deploy.{DeployStorage, LMDBDeployStorage}
-import coop.rchain.blockstorage.finality.{LastFinalizedKeyValueStorage, LastFinalizedStorage}
+import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
+import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
@@ -33,7 +22,6 @@ import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
-import coop.rchain.casper.util.rholang.Resources.StoragePaths
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper.{Casper, ValidBlock, _}
 import coop.rchain.catscontrib.ski._
@@ -49,28 +37,29 @@ import coop.rchain.graphz.{Graphz, StringSerializer}
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.Resources.mkTempDir
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import fs2.{Pipe, Stream}
 import fs2.concurrent.Queue
+import fs2.{Pipe, Stream}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.Assertions
 
+import java.net.URLEncoder
+import java.nio.file.Path
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-class TestNode[F[_]: Timer](
+case class TestNode[F[_]: Timer](
     name: String,
-    val local: PeerNode,
+    local: PeerNode,
     tle: TransportLayerTestImpl[F],
     tls: TransportLayerServerTestImpl[F],
-    val genesis: BlockMessage,
+    genesis: BlockMessage,
     validatorIdOpt: Option[ValidatorIdentity],
     logicalTime: LogicalTime[F],
     synchronyConstraintThreshold: Double,
-    val dataPath: StoragePaths,
+    dataDir: Path,
     maxNumberOfParents: Int = Estimator.UnlimitedParents,
     maxParentDepth: Option[Int] = Int.MaxValue.some,
     shardId: String = "root",
@@ -86,7 +75,6 @@ class TestNode[F[_]: Timer](
     ],
     blockStoreEffect: BlockStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
-    lastFinalizedStorageEffect: LastFinalizedStorage[F],
     deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
     blockRetrieverEffect: BlockRetriever[F],
@@ -97,7 +85,6 @@ class TestNode[F[_]: Timer](
     rhoHistoryRepositoryEffect: RhoHistoryRepository[F],
     logEffect: LogStub[F],
     requestedBlocksEffect: RequestedBlocks[F],
-    lastFinalizedBlockCalculatorEffect: LastFinalizedBlockCalculator[F],
     syncConstraintCheckerEffect: SynchronyConstraintChecker[F],
     lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
     estimatorEffect: Estimator[F],
@@ -122,7 +109,6 @@ class TestNode[F[_]: Timer](
   implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
-  implicit val lfs: LastFinalizedStorage[F]                   = lastFinalizedStorageEffect
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
   implicit val br: BlockRetriever[F]                          = blockRetrieverEffect
@@ -131,7 +117,6 @@ class TestNode[F[_]: Timer](
   implicit val cbs: CasperBufferStorage[F]                    = casperBufferStorageEffect
   implicit val runtimeManager: RuntimeManager[F]              = runtimeManagerEffect
   implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
-  implicit val lfbc: LastFinalizedBlockCalculator[F]          = lastFinalizedBlockCalculatorEffect
   implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
   implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
   implicit val e: Estimator[F]                                = estimatorEffect
@@ -151,23 +136,23 @@ class TestNode[F[_]: Timer](
   val postGenesisStateHash = ProtoUtil.postStateHash(genesis)
 
   val shardConf = CasperShardConf(
-    -1,
-    shardId,
-    "",
-    finalizationRate,
-    maxNumberOfParents,
-    maxParentDepth.getOrElse(Int.MaxValue),
-    synchronyConstraintThreshold.toFloat,
-    Long.MaxValue,
+    faultToleranceThreshold = 0,
+    shardName = shardId,
+    parentShardId = "",
+    finalizationRate = finalizationRate,
+    maxNumberOfParents = maxNumberOfParents,
+    maxParentDepth = maxParentDepth.getOrElse(Int.MaxValue),
+    synchronyConstraintThreshold = synchronyConstraintThreshold.toFloat,
+    heightConstraintThreshold = Long.MaxValue,
     // Validators will try to put deploy in a block only for next `deployLifespan` blocks.
     // Required to enable protection from re-submitting duplicate deploys
-    50,
-    1,
-    1,
-    0,
-    Long.MaxValue,
-    10000,
-    20000
+    deployLifespan = 50,
+    casperVersion = 1,
+    configVersion = 1,
+    bondMinimum = 0,
+    bondMaximum = Long.MaxValue,
+    epochLength = 10000,
+    quarantineLength = 20000
   )
 
   implicit val casperEff = new MultiParentCasperImpl[F](
@@ -222,8 +207,13 @@ class TestNode[F[_]: Timer](
 
   def propagateBlock(deployDatums: Signed[DeployData]*)(nodes: TestNode[F]*): F[BlockMessage] =
     for {
-      block <- addBlock(deployDatums: _*)
-      _ <- nodes.toList.traverse_ { node =>
+      _       <- Log[F].debug((s"\n$name creating block"))
+      block   <- addBlock(deployDatums: _*)
+      targets = nodes diff Seq(this)
+      _ <- Log[F].debug(
+            s"${name} ! [${PrettyPrinter.buildString(block, true)}] => ${targets.map(_.name).mkString(" ; ")}"
+          )
+      _ <- (targets).toList.traverse_ { node =>
             node.processBlock(block)
           }
     } yield block
@@ -494,7 +484,7 @@ object TestNode {
       currentPeerNode: PeerNode,
       genesis: BlockMessage,
       sk: PrivateKey,
-      storageMatrixPath: Path,
+      storageDir: Path,
       logicalTime: LogicalTime[F],
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
@@ -507,35 +497,28 @@ object TestNode {
     implicit val metricEff = new Metrics.MetricsNOP[F]
     implicit val spanEff   = new NoopSpan[F]
     for {
-      paths                             <- Resources.copyStorage[F](storageMatrixPath)
-      kvm                               <- Resource.liftF(Resources.mkTestRNodeStoreManager(paths.storageDir))
-      blockStore                        <- Resource.liftF(KeyValueBlockStore(kvm))
-      blockDagStorage                   <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStoreConfig                 = Config(paths.deployStorageDir, 1024L * 1024L * 1024L)
-      deployStorage                     <- LMDBDeployStorage.make[F](deployStoreConfig)
-      casperBufferStorage               <- Resource.liftF(Resources.mkCasperBufferStorage[F](kvm))
-      rspaceStore                       <- Resource.liftF(kvm.rSpaceStores)
-      runtimes                          <- Resource.liftF(RhoRuntime.createRuntimes(rspaceStore, true, Seq.empty))
-      (runtime, replayRuntime, history) = runtimes
-      runtimeManager                    <- Resource.liftF(RuntimeManager.fromRuntimes(runtime, replayRuntime, history))
-      lastFinalizedBlockDb              <- Resource.liftF(kvm.store("last-finalized-block"))
-      lastFinalizedStorage              = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
+      newStorageDir       <- Resources.copyStorage[F](storageDir)
+      kvm                 <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore          <- Resource.liftF(KeyValueBlockStore(kvm))
+      blockDagStorage     <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
+      deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
+      casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
+      rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
+      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore))
 
       node <- Resource.liftF({
-               implicit val bs                           = blockStore
-               implicit val bds                          = blockDagStorage
-               implicit val ds                           = deployStorage
-               implicit val cbs                          = casperBufferStorage
-               implicit val rm                           = runtimeManager
-               implicit val rhr                          = history
-               implicit val logEff                       = new LogStub[F](Log.log[F])
-               implicit val timeEff                      = logicalTime
-               implicit val connectionsCell              = Cell.unsafe[F, Connections](Connect.Connections.empty)
-               implicit val transportLayerEff            = tle
-               implicit val cliqueOracleEffect           = SafetyOracle.cliqueOracle[F]
-               implicit val lastFinalizedBlockCalculator = LastFinalizedBlockCalculator[F](0f)
-               implicit val synchronyConstraintChecker   = SynchronyConstraintChecker[F]
-               implicit val lfs                          = lastFinalizedStorage
+               implicit val bs                         = blockStore
+               implicit val bds                        = blockDagStorage
+               implicit val ds                         = deployStorage
+               implicit val cbs                        = casperBufferStorage
+               implicit val rm                         = runtimeManager
+               implicit val rhr                        = runtimeManager.getHistoryRepo
+               implicit val logEff                     = new LogStub[F](Log.log[F])
+               implicit val timeEff                    = logicalTime
+               implicit val connectionsCell            = Cell.unsafe[F, Connections](Connect.Connections.empty)
+               implicit val transportLayerEff          = tle
+               implicit val cliqueOracleEffect         = SafetyOracle.cliqueOracle[F]
+               implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
                implicit val lastFinalizedHeightConstraintChecker =
                  LastFinalizedHeightConstraintChecker[F]
                implicit val estimator             = Estimator[F](maxNumberOfParents, maxParentDepth)
@@ -606,7 +589,7 @@ object TestNode {
                    validatorId,
                    logicalTime,
                    synchronyConstraintThreshold,
-                   paths,
+                   newStorageDir,
                    maxNumberOfParents,
                    maxParentDepth,
                    isReadOnly = isReadOnly,
@@ -626,9 +609,7 @@ object TestNode {
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
                    safetyOracleEffect = cliqueOracleEffect,
-                   lastFinalizedBlockCalculatorEffect = lastFinalizedBlockCalculator,
                    syncConstraintCheckerEffect = synchronyConstraintChecker,
-                   lastFinalizedStorageEffect = lfs,
                    lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
                    estimatorEffect = estimator,
                    rpConfAskEffect = rpConfAsk,

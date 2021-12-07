@@ -1,7 +1,7 @@
 package coop.rchain.p2p.effects
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.catscontrib._
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.{CommError, PeerNode}

@@ -2,7 +2,6 @@ package coop.rchain.casper.util.rholang
 
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.DeployDataProto
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.{Blake2b256, Blake2b512Random}
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -11,6 +10,7 @@ import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.{Bundle, ETuple, GPrivate, Par}
 import coop.rchain.rholang.interpreter.PrettyPrinter
 import coop.rchain.rholang.interpreter.registry.Registry
+import coop.rchain.shared.Base16
 
 /**
   * A signed insertion into the RChain registry.

@@ -1,17 +1,16 @@
 package coop.rchain.casper.util
 
 import com.google.protobuf.ByteString
-
 import cats._
-import cats.implicits._
-
+import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{Expr, GPrivate, Par}
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.{PrettyPrinter => RholangPrettyPrinter}
+import coop.rchain.shared.Base16
+import coop.rchain.models.syntax._
 
 object RSpaceUtil {
 
@@ -26,10 +25,7 @@ object RSpaceUtil {
   def getDataAtPrivateChannel[F[_]: FlatMap](block: BlockMessage, channel: String)(
       implicit runtimeManager: RuntimeManager[F]
   ) = {
-    val name = ByteString.copyFrom(
-      Base16
-        .unsafeDecode(channel)
-    )
+    val name = channel.unsafeHexToByteString
     getDataAt[F](ProtoUtil.postStateHash(block), GPrivate().withId(name))
   }
 

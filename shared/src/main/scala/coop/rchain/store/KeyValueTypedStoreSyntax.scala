@@ -1,6 +1,6 @@
 package coop.rchain.store
 
-import cats.Functor
+import cats.{Functor, Show}
 import cats.effect.Sync
 import cats.syntax.all._
 
@@ -14,7 +14,20 @@ final class KeyValueTypedStoreOps[F[_], K, V](
     // KeyValueTypedStore extensions / syntax
     private val store: KeyValueTypedStore[F, K, V]
 ) extends AnyVal {
+  def errKVStoreExpectValue(hash: String) =
+    s"Error when unsafe reading from KeyValueStore: value for key ${hash} not found."
+
   def get(key: K)(implicit f: Functor[F]): F[Option[V]] = store.get(Seq(key)).map(_.head)
+
+  def getUnsafeBatch(keys: Seq[K])(implicit f: Sync[F], show: Show[K]): F[List[V]] =
+    store
+      .get(keys)
+      .flatMap(_.zip(keys).toList.traverse {
+        case (vOpt, key) => vOpt.liftTo[F](new Exception(errKVStoreExpectValue(key.show)))
+      })
+
+  def getUnsafe(key: K)(implicit f: Sync[F], show: Show[K]): F[V] =
+    get(key).flatMap(_.liftTo[F](new Exception(errKVStoreExpectValue(key.show))))
 
   def put(key: K, value: V): F[Unit] = store.put(Seq((key, value)))
 

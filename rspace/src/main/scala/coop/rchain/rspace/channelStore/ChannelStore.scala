@@ -19,7 +19,9 @@ final case class ContinuationHash(hash: Blake2b256Hash) extends ChannelHash
 
 trait ChannelStore[F[_], C] {
   def putChannelHash(channel: C): F[Unit]
+  def putChannelHashes(channels: Seq[C]): F[Unit]
   def putContinuationHash(channels: Seq[C]): F[Unit]
+  def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit]
   def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]]
 
   def continuationKey(channels: Seq[Blake2b256Hash]): Blake2b256Hash =

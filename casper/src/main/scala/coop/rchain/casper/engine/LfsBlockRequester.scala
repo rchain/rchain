@@ -49,8 +49,14 @@ object LfsBlockRequester {
     // Get next keys not already requested or
     //  in case of resend together with Requested.
     // Returns updated state with requested keys.
-    def getNext(resend: Boolean): (ST[Key], Seq[Key]) = {
-      val requested = d
+    def getNext(resend: Boolean): (ST[Key], Set[Key]) = {
+      val requests = {
+        // Check is latest are requested
+        if (latest.isEmpty) d
+        // Add latest to Init if not already
+        else d ++ (latest -- d.keySet).map((_, Init))
+      }
+      val newRequests = requests
         .filter {
           case (key, status) =>
             // Select initialized or re-request if resending
@@ -64,17 +70,23 @@ object LfsBlockRequester {
             }
         }
         .mapValues(_ => Requested)
-      this.copy(d ++ requested) -> requested.keysIterator.toSeq
+      this.copy(d ++ newRequests) -> newRequests.keySet
     }
 
     // Confirm key is Received if it was Requested.
     // Returns updated state with the flags if Requested and last latest received.
-    def received(k: Key, height: Long): (ST[Key], ReceiveInfo) = {
+    def received(
+        k: Key,
+        height: Long,
+        latestReplacement: Option[Key] = None
+    ): (ST[Key], ReceiveInfo) = {
       val isReq = d.get(k).contains(Requested)
       if (isReq) {
         // Remove message from the set of latest messages (if exists)
-        val newLatest    = latest - k
-        val isLatest     = latest != newLatest
+        val adjLatest = latest - k
+        val isLatest  = latest != adjLatest
+        // Add replacement message if supplied
+        val newLatest    = latestReplacement.map(adjLatest + _).getOrElse(adjLatest)
         val isLastLatest = isLatest && newLatest.isEmpty
         // Save in height map
         val heightKeys   = heightMap.getOrElse(height, Set())
@@ -155,7 +167,7 @@ object LfsBlockRequester {
     // - for approved state to be complete it is required to have block from each of them
     val latestMessages = block.justifications.map(_.latestBlockHash).toSet
 
-    val initialHashes = latestMessages + block.blockHash
+    val initialHashes = Set(block.blockHash)
 
     def createStream(
         st: Ref[F, ST[BlockHash]],
@@ -163,11 +175,11 @@ object LfsBlockRequester {
         responseHashQueue: Queue[F, BlockHash]
     ): Stream[F, ST[BlockHash]] = {
 
-      def broadcastStreams(ids: Seq[BlockHash]): Stream[Pure, Stream[F, Unit]] = {
+      def broadcastStreams(ids: Set[BlockHash]): Stream[F, Stream[F, Unit]] = {
         // Create broadcast requests to peers
         val broadcastRequests = ids.map(requestForBlock andThen Stream.eval)
         // Create stream of requests
-        Stream.emits(broadcastRequests)
+        Stream.fromIterator(broadcastRequests.iterator)
       }
 
       def processBlock(block: BlockMessage): F[Unit] =
@@ -192,7 +204,15 @@ object LfsBlockRequester {
         val blockNumber = ProtoUtil.blockNumber(block)
         for {
           // Mark block as received and calculate minimum height (if latest)
-          receivedResult <- st.modify(_.received(block.blockHash, blockNumber))
+          receivedResult <- st.modify(st => {
+                             // if message received is latest as per approved block - add its self justification
+                             // to target latest messages that has to be pulled
+                             val lmReplacement =
+                               if (latestMessages.contains(block.blockHash))
+                                 ProtoUtil.creatorJustification(block).map(_.latestBlockHash)
+                               else None
+                             st.received(block.blockHash, blockNumber, lmReplacement)
+                           })
           // Result if block is received and if last latest is received
           ReceiveInfo(isReceived, isReceivedLatest, isLastLatest) = receivedResult
 
@@ -237,34 +257,41 @@ object LfsBlockRequester {
           _ <- st.update(_.done(block.blockHash))
         } yield ()
 
-      import cats.instances.list._
+      /**
+        * Reads current state for next blocks and send the requests.
+        *
+        * @param resend should re-request already requested blocks
+        */
+      def requestNext(resend: Boolean) =
+        for {
+          // Check if stream is finished (no more requests)
+          isEnd <- st.get.map(_.isFinished)
+
+          // Take next set of items to request (w/o duplicates)
+          hashes <- st.modify(_.getNext(resend))
+
+          // Check existing blocks
+          existingHashes <- hashes.toList.filterA(containsBlock)
+
+          // Enqueue hashes of exiting blocks
+          _ <- responseHashQueue
+                .enqueue(Stream.emits(existingHashes))
+                .compile
+                .drain
+                .whenA(existingHashes.nonEmpty)
+
+          // Missing blocks not already in the block store
+          missingBlocks = hashes -- existingHashes
+
+          // Send all requests in parallel for missing blocks
+          _ <- broadcastStreams(missingBlocks).parJoinUnbounded.compile.drain
+                .whenA(!isEnd && missingBlocks.nonEmpty)
+        } yield ()
 
       /**
         * Request stream is pulling new block hashes ready for broadcast requests.
         */
-      val requestStream = for {
-        // Request queue is a trigger when to check the state
-        resend <- requestQueue.dequeue
-
-        // Check if stream is finished (no more requests)
-        isEnd <- Stream.eval(st.get.map(_.isFinished))
-
-        // Take next set of items to request (w/o duplicates)
-        hashes <- Stream.eval(st.modify(_.getNext(resend)))
-
-        // Check existing blocks
-        existingHashes <- Stream.eval(hashes.toList.filterA(containsBlock))
-
-        // Enqueue hashes of exiting blocks
-        _ <- responseHashQueue.enqueue(Stream.emits(existingHashes)).whenA(existingHashes.nonEmpty)
-
-        // Missing blocks not already in the block store
-        missingBlocks = hashes.diff(existingHashes)
-
-        // Send all requests in parallel for missing blocks (using `last` to drain the stream)
-        _ <- broadcastStreams(missingBlocks).parJoinUnbounded.last
-              .whenA(!isEnd && missingBlocks.nonEmpty)
-      } yield resend
+      val requestStream = requestQueue.dequeueChunk(maxSize = 1).evalTap(requestNext)
 
       /**
         * Response stream is handling incoming block messages. Responses can be processed in parallel.
@@ -305,7 +332,7 @@ object LfsBlockRequester {
       st <- Ref.of[F, ST[BlockHash]](
              ST(
                initialHashes,
-               latest = initialHashes,
+               latest = latestMessages,
                lowerBound = initialMinimumHeight
              )
            )

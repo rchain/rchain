@@ -5,18 +5,16 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.rspace._
+import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.hashing.ChannelHash.{
   hashContinuationsChannels,
   hashDataChannel,
   hashJoinsChannel
 }
-import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
-import coop.rchain.rspace.merger.StateMerger
-import coop.rchain.rspace.merger.instances.DiffStateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
 import coop.rchain.shared.syntax._
@@ -47,6 +45,12 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def putContinuationHash(channels: Seq[C]): F[Unit] =
     channelHashesStore.putContinuationHash(channels)
+
+  override def putChannelHashes(channels: Seq[C]): F[Unit] =
+    channelHashesStore.putChannelHashes(channels)
+
+  override def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit] =
+    channelHashesStore.putContinuationHashes(conts)
 
   type CacheAction = Blake2b256Hash => F[Unit]
   type ColdAction  = (Blake2b256Hash, Option[PersistedData])
@@ -88,21 +92,22 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         s"${key.toHex};delete-join;0"
     }.toList
 
-  private def storeChannelHash(action: HotStoreAction) =
-    action match {
-      case i: InsertData[C, A] =>
-        channelHashesStore.putChannelHash(i.channel)
-      case i: InsertContinuations[C, P, K] =>
-        channelHashesStore.putContinuationHash(i.channels)
-      case i: InsertJoins[C] =>
-        channelHashesStore.putChannelHash(i.channel)
-      case d: DeleteData[C] =>
-        channelHashesStore.putChannelHash(d.channel)
-      case d: DeleteContinuations[C] =>
-        channelHashesStore.putContinuationHash(d.channels)
-      case d: DeleteJoins[C] =>
-        channelHashesStore.putChannelHash(d.channel)
+  private def storeChannels(action: List[HotStoreAction]) = {
+    val insertChans = action.collect {
+      case i: InsertData[C, A] => i.channel
+      case i: InsertJoins[C]   => i.channel
+      case d: DeleteData[C]    => d.channel
+      case d: DeleteJoins[C]   => d.channel
     }
+    val insertConts = action.collect {
+      case i: InsertContinuations[C, P, K] => i.channels
+      case d: DeleteContinuations[C]       => d.channels
+    }
+    for {
+      _ <- channelHashesStore.putContinuationHashes(insertConts)
+      _ <- channelHashesStore.putChannelHashes(insertChans)
+    } yield ()
+  }
 
   private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
@@ -124,6 +129,30 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
         )
       case i: TrieInsertJoins[C] =>
         val data      = encodeJoins(i.joins)(serializeC)
+        val joinsLeaf = JoinsLeaf(data)
+        val joinsHash = Blake2b256Hash.create(data)
+        (
+          (joinsHash, Some(joinsLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
+        )
+      case i: TrieInsertBinaryProduce =>
+        val data     = encodeDatumsBinary(i.data)
+        val dataLeaf = DataLeaf(data)
+        val dataHash = Blake2b256Hash.create(data)
+        (
+          (dataHash, Some(dataLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, dataHash)
+        )
+      case i: TrieInsertBinaryConsume =>
+        val data              = encodeContinuationsBinary(i.continuations)
+        val continuationsLeaf = ContinuationsLeaf(data)
+        val continuationsHash = Blake2b256Hash.create(data)
+        (
+          (continuationsHash, Some(continuationsLeaf)),
+          InsertAction(i.hash.bytes.toSeq.toList, continuationsHash)
+        )
+      case i: TrieInsertBinaryJoins =>
+        val data      = encodeJoinsBinary(i.joins)
         val joinsLeaf = JoinsLeaf(data)
         val joinsHash = Blake2b256Hash.create(data)
         (
@@ -199,13 +228,9 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     val trieActions = actions.par.map(transform).toList
-    // store channels mapping
-    val storeChannels = Stream
-      .emits(actions.map(a => Stream.eval(storeChannelHash(a).map(_.asLeft[History[F]]))))
-      .parJoinProcBounded
     for {
       r <- doCheckpoint(trieActions)
-      _ <- storeChannels.compile.drain
+      _ <- storeChannels(actions)
       _ <- measure(actions)
     } yield r
   }
@@ -213,28 +238,31 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
-      next = history.reset(root = root)
+      next <- history.reset(root = root)
     } yield this.copy[F, C, P, A, K](currentHistory = next)
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
 
   override def importer: F[RSpaceImporter[F]] = Sync[F].delay(rspaceImporter)
 
-  override def stateMerger: StateMerger[F] =
-    DiffStateMerger[F, C, P, A, K](historyRepo = this, serializeC)
-
   override def history: History[F] = currentHistory
 
   override def root: Blake2b256Hash = currentHistory.root
 
+  override def getSerializeC: Serialize[C] = serializeC
+
   override def getHistoryReader(
       stateHash: Blake2b256Hash
-  ): HistoryReader[F, Blake2b256Hash, C, P, A, K] =
-    new RSpaceHistoryReaderImpl(history.reset(root = stateHash), leafStore)(
-      Concurrent[F],
-      serializeC,
-      serializeP,
-      serializeA,
-      serializeK
-    )
+  ): F[HistoryReader[F, Blake2b256Hash, C, P, A, K]] =
+    history
+      .reset(root = stateHash)
+      .map(
+        new RSpaceHistoryReaderImpl(_, leafStore)(
+          Concurrent[F],
+          serializeC,
+          serializeP,
+          serializeA,
+          serializeK
+        )
+      )
 }

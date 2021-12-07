@@ -25,6 +25,14 @@ object Stopwatch {
       m  = Duration.fromNanos(t1 - t0)
     } yield (a, showTime(m))
 
+  def profile[A](block: => A): (A, String) = {
+    val t0 = System.nanoTime
+    val a  = block
+    val t1 = System.nanoTime
+    val m  = Duration.fromNanos(t1 - t0)
+    (a, showTime(m))
+  }
+
   def showTime(d: FiniteDuration): String = {
     val ns   = 1d
     val ms   = 1e6 * ns

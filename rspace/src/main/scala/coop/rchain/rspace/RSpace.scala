@@ -11,13 +11,11 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.internal.{ConsumeCandidate, Datum, ProduceCandidate, WaitingContinuation}
 import coop.rchain.rspace.trace._
-import coop.rchain.rspace.syntax._
 import coop.rchain.shared.SyncVarOps._
 import coop.rchain.shared.{Log, Serialize}
 import coop.rchain.store.KeyValueStore
 import monix.execution.atomic.AtomicAny
 
-import java.lang
 import scala.collection.SortedSet
 import scala.concurrent.ExecutionContext
 
@@ -34,8 +32,6 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
     scheduler: ExecutionContext
 ) extends RSpaceOps[F, C, P, A, K](historyRepository, storeAtom)
     with ISpace[F, C, P, A, K] {
-
-  def store: HotStore[F, C, P, A, K] = storeAtom.get()
 
   protected[this] override val logger: Logger = Logger[this.type]
 
@@ -224,30 +220,34 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }
-      _   = historyRepositoryAtom.set(nextHistory)
-      _   <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
-      log = eventLog.take()
-      _   = eventLog.put(Seq.empty)
-      _   = produceCounter.take()
-      _   = produceCounter.put(Map.empty.withDefaultValue(0))
-      _   <- restoreInstalls()
+      _             = historyRepositoryAtom.set(nextHistory)
+      log           = eventLog.take()
+      _             = eventLog.put(Seq.empty)
+      _             = produceCounter.take()
+      _             = produceCounter.put(Map.empty.withDefaultValue(0))
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      _             <- createNewHotStore(historyReader)
+      _             <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
   }
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
-    val historyRep = historyRepositoryAtom.get()
     for {
-      nextHistory <- historyRep.reset(historyRep.history.root)
-      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).base)
-      r           = new RSpace[F, C, P, A, K](nextHistory, AtomicAny(hotStore))
-      _           <- r.restoreInstalls()
-    } yield r
+      historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
+      nextHistory   <- historyRepo.reset(historyRepo.history.root)
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      hotStore      <- HotStore.empty(historyReader.base)
+      rSpace        <- RSpace(nextHistory, hotStore)
+      _             <- rSpace.restoreInstalls()
+    } yield rSpace
   }
 }
 
 object RSpace {
-  val parallelism = lang.Runtime.getRuntime.availableProcessors() * 2
 
+  /**
+    * Maps (key-value stores) used to create [[RSpace]] or [[ReplayRSpace]].
+    */
   final case class RSpaceStore[F[_]](
       history: KeyValueStore[F],
       roots: KeyValueStore[F],
@@ -255,7 +255,10 @@ object RSpace {
       channels: KeyValueStore[F]
   )
 
-  def createPlay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+  /**
+    * Creates [[RSpace]] from [[HistoryRepository]] and [[HotStore]].
+    */
+  def apply[F[_]: Concurrent: ContextShift: Span: Metrics: Log, C, P, A, K](
       historyRepository: HistoryRepository[F, C, P, A, K],
       store: HotStore[F, C, P, A, K]
   )(
@@ -266,50 +269,12 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A],
       scheduler: ExecutionContext
-  ): F[ISpace[F, C, P, A, K]] =
+  ): F[RSpace[F, C, P, A, K]] =
     Sync[F].delay(new RSpace[F, C, P, A, K](historyRepository, AtomicAny(store)))
 
-  def createReplay[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
-      historyRepository: HistoryRepository[F, C, P, A, K],
-      store: HotStore[F, C, P, A, K]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
-  ): F[IReplaySpace[F, C, P, A, K]] = {
-    val space: IReplaySpace[F, C, P, A, K] =
-      new ReplayRSpace[F, C, P, A, K](historyRepository, AtomicAny(store))
-    space.pure[F]
-  }
-
-  def createWithReplay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
-      store: RSpaceStore[F]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      m: Match[F, P, A],
-      scheduler: ExecutionContext
-  ): F[(ISpace[F, C, P, A, K], IReplaySpace[F, C, P, A, K], HistoryRepository[F, C, P, A, K])] =
-    for {
-      setup                  <- setUp[F, C, P, A, K](store)
-      (historyReader, store) = setup
-      space                  = new RSpace[F, C, P, A, K](historyReader, AtomicAny(store))
-      replayStore <- HotStore.empty(
-                      historyReader.getHistoryReader(historyReader.root).base
-                    )
-      replay = new ReplayRSpace[F, C, P, A, K](
-        historyReader,
-        AtomicAny(replayStore)
-      )
-    } yield (space, replay, historyReader)
-
+  /**
+    * Creates [[RSpace]] from [[KeyValueStore]]'s,
+    */
   def create[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
       store: RSpaceStore[F]
   )(
@@ -320,17 +285,41 @@ object RSpace {
       sk: Serialize[K],
       m: Match[F, P, A],
       scheduler: ExecutionContext
-  ): F[ISpace[F, C, P, A, K]] =
+  ): F[RSpace[F, C, P, A, K]] =
     for {
-      setup                  <- setUp[F, C, P, A, K](store)
+      setup                  <- createHistoryRepo[F, C, P, A, K](store)
       (historyReader, store) = setup
-      space = new RSpace[F, C, P, A, K](
-        historyReader,
-        AtomicAny(store)
-      )
+      space                  <- RSpace(historyReader, store)
     } yield space
 
-  def setUp[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](store: RSpaceStore[F])(
+  /**
+    * Creates [[RSpace]] and [[ReplayRSpace]] from [[KeyValueStore]]'s.
+    */
+  def createWithReplay[F[_]: Concurrent: Parallel: ContextShift: Span: Metrics: Log, C, P, A, K](
+      store: RSpaceStore[F]
+  )(
+      implicit sc: Serialize[C],
+      sp: Serialize[P],
+      sa: Serialize[A],
+      sk: Serialize[K],
+      m: Match[F, P, A],
+      scheduler: ExecutionContext
+  ): F[(RSpace[F, C, P, A, K], ReplayRSpace[F, C, P, A, K])] =
+    for {
+      setup                <- createHistoryRepo[F, C, P, A, K](store)
+      (historyRepo, store) = setup
+      // Play
+      space <- RSpace(historyRepo, store)
+      // Replay
+      historyReader <- historyRepo.getHistoryReader(historyRepo.root)
+      replayStore   <- HotStore.empty(historyReader.base)
+      replay        <- ReplayRSpace(historyRepo, replayStore)
+    } yield (space, replay)
+
+  /**
+    * Creates [[HistoryRepository]] and [[HotStore]].
+    */
+  def createHistoryRepo[F[_]: Concurrent: Parallel: Log: Span, C, P, A, K](store: RSpaceStore[F])(
       implicit
       sc: Serialize[C],
       sp: Serialize[P],
@@ -346,7 +335,8 @@ object RSpace {
                       store.cold,
                       store.channels
                     )
-      store <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).base)
-    } yield (historyRepo, store)
+      historyReader <- historyRepo.getHistoryReader(historyRepo.root)
+      hotStore      <- HotStore.empty(historyReader.base)
+    } yield (historyRepo, hotStore)
   }
 }

@@ -14,12 +14,11 @@ import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Log, Stopwatch, Time}
+import coop.rchain.shared.{Base16, Log, Stopwatch, Time}
 
 object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
@@ -50,7 +49,7 @@ object BlockCreator {
 
       def prepareUserDeploys(blockNumber: Long): F[Set[Signed[DeployData]]] =
         for {
-          unfinalized         <- DeployStorage[F].getUnfinalized
+          unfinalized         <- DeployStorage[F].readAll
           earliestBlockNumber = blockNumber - s.onChainState.shardConf.deployLifespan
           valid = unfinalized.filter(
             d =>
@@ -137,6 +136,7 @@ object BlockCreator {
                 _             <- Span[F].mark("before-packing-block")
                 shardId       = s.onChainState.shardConf.shardName
                 casperVersion = s.onChainState.shardConf.casperVersion
+                // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(
                   blockData,
                   parents.map(_.blockHash),
@@ -150,7 +150,9 @@ object BlockCreator {
                   shardId,
                   casperVersion
                 )
-                _           <- Span[F].mark("block-created")
+                _ <- Span[F].mark("block-created")
+                // signedBlock add signature and replace hashed-without-signature
+                // blockHash to hashed-with-signature blockHash
                 signedBlock = validatorIdentity.signBlock(unsignedBlock)
                 _           <- Span[F].mark("block-signed")
               } yield BlockCreatorResult.created(signedBlock)
@@ -179,7 +181,7 @@ object BlockCreator {
       preStateHash: StateHash,
       postStateHash: StateHash,
       deploys: Seq[ProcessedDeploy],
-      rejectedDeploys: Seq[ProcessedDeploy],
+      rejectedDeploys: Seq[ByteString],
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
@@ -190,7 +192,7 @@ object BlockCreator {
       Body(
         state,
         deploys.toList,
-        rejectedDeploys.map(r => RejectedDeploy(r.deploy.sig)).toList,
+        rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)

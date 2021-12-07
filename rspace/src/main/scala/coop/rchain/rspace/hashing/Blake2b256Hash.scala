@@ -1,8 +1,8 @@
 package coop.rchain.rspace.hashing
 
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
+import coop.rchain.shared.Base16
 import scodec.bits.{BitVector, ByteVector}
 import scodec.codecs._
 import scodec.{Attempt, Codec, DecodeResult, Err, SizeBound}
@@ -62,6 +62,13 @@ object Blake2b256Hash {
 
   def fromHex(string: String): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Base16.unsafeDecode(string)))
+
+  def fromHexEither(string: String): Either[String, Blake2b256Hash] =
+    Base16
+      .decode(string)
+      .fold[Either[String, Blake2b256Hash]](Left(s"Invalid hex string $string"))(
+        b => Right(new Blake2b256Hash(ByteVector(b)))
+      )
 
   def fromByteArray(bytes: Array[Byte]): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(bytes))

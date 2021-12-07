@@ -18,25 +18,16 @@ import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
-import coop.rchain.casper.{
-  CasperShardConf,
-  CasperSnapshot,
-  InvalidBlock,
-  OnChainCasperState,
-  ValidBlock,
-  Validate,
-  ValidatorIdentity
-}
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper._
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.Time
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Time}
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -170,7 +161,7 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
+        invalidKey   = "abcdef1234567890".unsafeHexToByteString
         block0       <- signedBlock(0).map(_.copy(sender = empty))
         block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
         block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))
@@ -313,7 +304,7 @@ class ValidateTest
             setBlockNumber = n.some,
             setTimestamp = timestamp.some,
             setParentsHashList = parentHashes.some,
-            hashF = (ProtoUtil.hashUnsignedBlock _).some
+            hashF = (ProtoUtil.hashBlock _).some
           )
 
           _ <- blockStore.put(block.blockHash, block)
@@ -598,7 +589,7 @@ class ValidateTest
         )
         _ <- Validate.blockSummary[Task](
               signedBlock,
-              getRandomBlock(hashF = (ProtoUtil.hashUnsignedBlock _).some),
+              getRandomBlock(hashF = (ProtoUtil.hashBlock _).some),
               mkCasperSnapshot(dag),
               "root",
               Int.MaxValue
@@ -719,7 +710,7 @@ class ValidateTest
         blockWithJustificationRegression = getRandomBlock(
           setValidator = v1.some,
           setJustifications = justificationsWithRegression.some,
-          hashF = (ProtoUtil.hashUnsignedBlock _).some
+          hashF = (ProtoUtil.hashBlock _).some
         )
         dag <- blockDagStorage.getRepresentation
         _ <- Validate.justificationRegressions[Task](
@@ -769,12 +760,11 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
-        kvm                               <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store                             <- kvm.rSpaceStores
-        runtimes                          <- RhoRuntime.createRuntimes[Task](store)
-        (runtime, replayRuntime, history) = runtimes
-        runtimeManager                    <- RuntimeManager.fromRuntimes[Task](runtime, replayRuntime, history)
-        dag                               <- blockDagStorage.getRepresentation
+        _              <- blockDagStorage.insert(genesis, false, approved = true)
+        kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
+        store          <- kvm.rSpaceStores
+        runtimeManager <- RuntimeManager[Task](store)
+        dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
@@ -793,6 +783,7 @@ class ValidateTest
       val context  = buildGenesis()
       val (sk, pk) = context.validatorKeyPairs.head
       for {
+        _                <- blockDagStorage.insert(genesis, false, approved = true)
         dag              <- blockDagStorage.getRepresentation
         sender           = ByteString.copyFrom(pk.bytes)
         latestMessageOpt <- dag.latestMessage(sender)
@@ -819,6 +810,7 @@ class ValidateTest
       val (sk, pk) = context.validatorKeyPairs.head
       val sender   = ByteString.copyFrom(pk.bytes)
       for {
+        _                <- blockDagStorage.insert(genesis, false, approved = true)
         dag              <- blockDagStorage.getRepresentation
         latestMessageOpt <- dag.latestMessage(sender)
         seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1
@@ -836,6 +828,7 @@ class ValidateTest
     val (sk, pk) = context.validatorKeyPairs.head
     val sender   = ByteString.copyFrom(pk.bytes)
     for {
+      _                <- blockDagStorage.insert(genesis, false, approved = true)
       dag              <- blockDagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(sender)
       seqNum           = latestMessageOpt.fold(0)(_.seqNum) + 1

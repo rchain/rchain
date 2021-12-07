@@ -85,7 +85,7 @@ jobs:
 
       - name: Compile
         run: |
-          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true -Xmx2g -Xss2m"
+          export SBT_OPTS="$SBT_OPTS -Dsbt.task.timings=true -Xmx2500m -Xss2m"
           sbt update scalafmtCheckAll compile
 
       - name: Pack Working Tree

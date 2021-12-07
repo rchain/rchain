@@ -32,15 +32,11 @@ class VaultBalanceGetterTest extends FlatSpec {
       for {
         vaultPar <- node.runtimeManager
                      .playExploratoryDeploy(getVault, genesis.genesisBlock.body.state.postStateHash)
-        _ <- node.runtimeManager.withRuntime(
-              runtime =>
-                for {
-                  _       <- runtime.reset(genesisPostStateHash)
-                  balance <- VaultBalanceGetter.getBalanceFromVaultPar(vaultPar(0), runtime)
-                  // 9000000 is hard coded in genesis block generation
-                  _ = assert(balance.get == genesisInitialBalance)
-                } yield ()
-            )
+        runtime <- node.runtimeManager.spawnRuntime
+        _       <- runtime.reset(genesisPostStateHash)
+        balance <- VaultBalanceGetter.getBalanceFromVaultPar(vaultPar(0), runtime)
+        // 9000000 is hard coded in genesis block generation
+        _ = assert(balance.get == genesisInitialBalance)
       } yield ()
     }
     t.runSyncUnsafe()
@@ -51,20 +47,16 @@ class VaultBalanceGetterTest extends FlatSpec {
       val genesisPostStateHash =
         Blake2b256Hash.fromByteString(genesis.genesisBlock.body.state.postStateHash)
       for {
-        balances <- node.runtimeManager.withRuntime(
-                     runtime =>
-                       for {
-                         _                     <- runtime.reset(genesisPostStateHash)
-                         vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
-                         vaultChannel          = StateBalanceMain.genesisVaultMapPar
-                         result <- VaultBalanceGetter.getAllVaultBalance(
-                                    vaultTreeHashMapDepth,
-                                    vaultChannel,
-                                    runtime
-                                  )
-                         // 9000000 is hard coded in genesis block generation
-                       } yield result
+        runtime               <- node.runtimeManager.spawnRuntime
+        _                     <- runtime.reset(genesisPostStateHash)
+        vaultTreeHashMapDepth = StateBalanceMain.genesisVaultMapDepth
+        vaultChannel          = StateBalanceMain.genesisVaultMapPar
+        balances <- VaultBalanceGetter.getAllVaultBalance(
+                     vaultTreeHashMapDepth,
+                     vaultChannel,
+                     runtime
                    )
+        // 9000000 is hard coded in genesis block generation
         balancesMap = balances.toMap
         _ = genesis.genesisVaults
           .map { case (_, pub) => RevAddress.fromPublicKey(pub).get }

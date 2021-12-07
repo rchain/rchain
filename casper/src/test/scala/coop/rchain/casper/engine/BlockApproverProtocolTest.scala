@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
 import cats.Traverse
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.genesis.contracts.Vault
 import coop.rchain.casper.helper.TestNode

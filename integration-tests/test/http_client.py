@@ -12,10 +12,22 @@ class HttpRequestException(Exception):
        self.status_code = status_code
        self.content = content
 
+
+@dataclass
+class VersionInfo:
+    api: str
+    node: str
+
+
 @dataclass
 class ApiStatus:
-    version: int
-    message: str
+    version: VersionInfo
+    address: str
+    network_id: str
+    shard_id: str
+    peers: int
+    nodes: int
+
 
 @dataclass
 class PrepareResponse:
@@ -45,7 +57,15 @@ class HttpClient():
         rep = requests.get(status_url)
         _check_reponse(rep)
         message = rep.json()
-        return ApiStatus(version=message['version'], message=message['message'])
+        return ApiStatus(
+            version=VersionInfo(
+                api=message['version']['api'],
+                node=message['version']['node']),
+            address=message['address'],
+            network_id=message['networkId'],
+            shard_id=message['shardId'],
+            peers=message['peers'],
+            nodes=message['nodes'])
 
     def prepare_deploy(self, deployer: Optional[str] =None, timestamp: Optional[int] = None, name_qty: Optional[int] = None) -> PrepareResponse:
         prepare_deploy_url = self.url + '/prepare-deploy'

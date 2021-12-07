@@ -7,11 +7,12 @@ import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
+import coop.rchain.shared.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.PeerNode
@@ -23,6 +24,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
 import fs2.concurrent.Queue
 import coop.rchain.shared.{Log, Time}
+import fs2.Stream
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
@@ -58,19 +60,29 @@ object Running {
             casper => {
               for {
                 latestMessages <- casper.blockDag.flatMap(
-                                   _.latestMessageHashes.map(_.values.toList)
+                                   _.latestMessageHashes.map(_.values.toSet)
                                  )
-                tips            <- latestMessages.traverse(BlockStore[F].getUnsafe)
-                newestTimestamp = tips.map(_.header.timestamp).max
-                now             <- Time[F].currentMillis
-                expired         = (now - newestTimestamp) > delayThreshold.toMillis
+                now <- Time[F].currentMillis
+                hasRecentLatestMessage = Stream
+                  .fromIterator(latestMessages.iterator)
+                  .evalMap(BlockStore[F].getUnsafe)
+                  // filter only blocks that are recent
+                  .filter { b =>
+                    val blockTimestamp = b.header.timestamp
+                    (now - blockTimestamp) < delayThreshold.toMillis
+                  }
+                  .head
+                  .compile
+                  .last
+                  .map(_.isDefined)
+                stuck <- hasRecentLatestMessage.not
                 requestWithLog = Log[F].info(
                   "Requesting tips update as newest latest message " +
                     s"is more then ${delayThreshold.toString} old. " +
                     s"Might be network is faulty."
                 ) >> CommUtil[F].sendForkChoiceTipRequest
 
-                _ <- (requestWithLog).whenA(expired)
+                _ <- (requestWithLog).whenA(stuck)
               } yield ()
             },
             ().pure[F]
@@ -179,7 +191,7 @@ object Running {
       Log[F].info(
         s"Sending tips ${PrettyPrinter.buildString(tips)} to ${peer.endpoint.host}"
       )
-    val getTips = casper.blockDag.flatMap(_.latestMessageHashes.map(_.values.toList))
+    val getTips = casper.blockDag.flatMap(_.latestMessageHashes.map(_.values.toList.distinct))
     // TODO respond with all tips in a single message
     def respondToPeer(tip: BlockHash) = TransportLayer[F].sendToPeer(peer, HasBlockProto(tip))
 
@@ -239,7 +251,7 @@ class Running[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -272,10 +284,6 @@ class Running[F[_]
       )
     case b: BlockMessage =>
       for {
-        _ <- Log[F].debug(
-              s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                s"from ${peer.endpoint.host}"
-            )
         _ <- casper.getValidator.flatMap {
               case None => ().pure[F]
               case Some(id) =>
@@ -286,7 +294,16 @@ class Running[F[_]
                   )
                 )
             }
-        _ <- blockProcessingQueue.enqueue1(casper, b)
+        _ <- ignoreCasperMessage(b.blockHash).ifM(
+              Log[F].debug(
+                s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                  s"from ${peer.endpoint.host}"
+              ),
+              blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
+                s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                  s"from ${peer.endpoint.host}"
+              )
+            )
       } yield ()
 
     case br: BlockRequest => handleBlockRequest(peer, br)
@@ -298,13 +315,10 @@ class Running[F[_]
       handleForkChoiceTipRequest(peer)(casper)
     case abr: ApprovedBlockRequest =>
       for {
-        lfBlockHashOpt <- LastFinalizedStorage[F].get()
+        lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
-          lfBlockHash <- lfBlockHashOpt.liftTo[F](
-                          new Exception(s"Last finalized block hash not available.")
-                        )
           lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
 
           // Each approved block should be justified by validators signatures
@@ -318,7 +332,7 @@ class Running[F[_]
           )
         } yield lastApprovedBlock
 
-        approvedBlock <- if (abr.trimState && lfBlockHashOpt.isDefined)
+        approvedBlock <- if (abr.trimState)
                           // If Last Finalized State is requested return Last Finalized block as Approved block
                           lastFinalizedBlock
                         else

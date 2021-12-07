@@ -1,6 +1,5 @@
 package coop.rchain.rholang.interpreter
 
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance
@@ -10,14 +9,14 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models._
 import scalapb.GeneratedMessage
 import coop.rchain.shared.StringOps._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.models.GUnforgeable.UnfInstance.{
   GDeployIdBody,
   GDeployerIdBody,
   GPrivateBody,
   GSysAuthTokenBody
 }
-import coop.rchain.shared.Printer
+import coop.rchain.shared.{Base16, Printer}
 import monix.eval.Coeval
 
 object PrettyPrinter {

@@ -8,7 +8,6 @@ import cats.syntax.all._
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.util.KeyUtil
 import coop.rchain.monix.Monixable
@@ -18,7 +17,7 @@ import coop.rchain.node.effects._
 import coop.rchain.node.runtime.NodeRuntime
 import coop.rchain.node.web.VersionInfo
 import coop.rchain.shared.StringOps._
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.slf4j.LoggerFactory
@@ -91,7 +90,7 @@ object Main {
       confWithPorts   <- checkPorts[F](nodeConf)
       confWithDecrypt <- loadPrivateKeyFromFile[F](confWithPorts)
       _               <- Log[F].info(VersionInfo.get)
-      _               <- logConfiguration[F](confWithDecrypt, profile, configFile, options)
+      _               <- logConfiguration[F](confWithDecrypt, profile, configFile)
 
       // Create node runtime
       _ <- NodeRuntime.start[F](confWithDecrypt, kamonConf)
@@ -103,9 +102,8 @@ object Main {
     * @param options command line options
     * @param console console
     */
-  private def runCLI[F[_]: Monixable: Sync: Timer](options: commandline.Options)(
-      implicit
-      console: ConsoleIO[F]
+  private def runCLI[F[_]: Sync: Monixable: ConsoleIO: Timer](
+      options: commandline.Options
   ): F[Unit] = {
     // Clients for executing gRPC calls on remote RNode instance
     implicit val replServiceClient: GrpcReplClient[F] =
@@ -128,8 +126,6 @@ object Main {
       )
 
     implicit val time: Time[F] = effects.time
-
-    import cats.instances.option._
 
     val program = subcommand(options) match {
       case Eval(files, printUnmatchedSendsOnly) =>
@@ -173,6 +169,7 @@ object Main {
       case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[F]
       case IsFinalized(hash)     => DeployRuntime.isFinalized[F](hash)
       case BondStatus(publicKey) => DeployRuntime.bondStatus[F](publicKey)
+      case Status                => DeployRuntime.status[F]
       case _                     => Sync[F].delay(options.printHelp())
     }
 
@@ -217,6 +214,7 @@ object Main {
       case Some(options.bondStatus)           => BondStatus(options.bondStatus.validatorPublicKey())
       case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)           => ContAtName(options.contAtName.name())
+      case Some(options.status)               => Status
       case _                                  => Help
     }
 
@@ -406,8 +404,7 @@ object Main {
   private def logConfiguration[F[_]: Sync: Log](
       conf: NodeConf,
       profile: Profile,
-      configFile: Option[File],
-      options: commandline.Options
+      configFile: Option[File]
   ): F[Unit] =
     Log[F].info(s"Starting with profile ${profile.name}") *>
       (if (configFile.isEmpty) Log[F].warn("No configuration file found, using defaults")

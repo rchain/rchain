@@ -30,9 +30,8 @@ import coop.rchain.rholang.interpreter.{Reduce, ReplayRhoRuntimeImpl}
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.{RSpace, ReportingRspace, Match => RSpaceMatch}
+import coop.rchain.rspace.{ReportingRspace, Match => RSpaceMatch}
 import coop.rchain.shared.Log
-import monix.execution.atomic.AtomicAny
 
 import scala.concurrent.ExecutionContext
 
@@ -93,7 +92,7 @@ object ReportingCasper {
           block: BlockMessage
       ): F[ReplayResult] =
         for {
-          reportingRspace  <- ReportingRuntime.setupReportingRSpace(rspaceStore)
+          reportingRspace  <- ReportingRuntime.createReportingRSpace(rspaceStore)
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           // TODO approvedBlock is not equal to genesisBlock
@@ -178,29 +177,15 @@ object ReportingRuntime {
   implicit val RuntimeMetricsSource: Source =
     Metrics.Source(RholangMetricsSource, "reportingRuntime")
 
-  def setupReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
+  def createReportingRSpace[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       store: RSpaceStore[F]
   )(
       implicit scheduler: ExecutionContext
   ): F[RhoReportingRspace[F]] = {
-
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: RSpaceMatch[F, BindPattern, ListParWithRandom] = matchListPar[F]
 
-    for {
-      history                          <- RSpace.setUp[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
-      (historyRepository, replayStore) = history
-      reportingRspace = new ReportingRspace[
-        F,
-        Par,
-        BindPattern,
-        ListParWithRandom,
-        TaggedContinuation
-      ](
-        historyRepository,
-        AtomicAny(replayStore)
-      )
-    } yield reportingRspace
+    ReportingRspace.create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
   }
 
   def createReportingRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](

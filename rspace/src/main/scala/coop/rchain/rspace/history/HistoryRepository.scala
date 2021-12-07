@@ -7,8 +7,6 @@ import coop.rchain.metrics.Span
 import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.internal._
-import coop.rchain.rspace.merger.StateMerger
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -45,9 +43,9 @@ trait HistoryRepository[F[_], C, P, A, K] extends ChannelStore[F, C] {
 
   def importer: F[RSpaceImporter[F]]
 
-  def stateMerger: StateMerger[F]
+  def getHistoryReader(stateHash: Blake2b256Hash): F[HistoryReader[F, Blake2b256Hash, C, P, A, K]]
 
-  def getHistoryReader(stateHash: Blake2b256Hash): HistoryReader[F, Blake2b256Hash, C, P, A, K]
+  def getSerializeC: Serialize[C]
 
   def root: Blake2b256Hash
 }

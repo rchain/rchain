@@ -4,7 +4,7 @@ import cats._
 import cats.data._
 import cats.effect.Sync
 import cats.effect.concurrent.Semaphore
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl._
 
 import coop.rchain.catscontrib.ski.kp
@@ -51,6 +51,7 @@ package object accounting extends Costs {
       }
     ) >> error.ensure(cost.get)(OutOfPhlogistonsError)(_.value >= 0).void
 
+  // TODO: Remove global (dummy) implicit!
   implicit def noOpCostLog[M[_]: Applicative]: FunctorTell[M, Chain[Cost]] =
     new DefaultFunctorTell[M, Chain[Cost]] {
       override val functor: Functor[M]  = implicitly[Functor[M]]

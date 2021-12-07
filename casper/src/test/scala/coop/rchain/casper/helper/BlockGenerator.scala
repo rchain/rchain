@@ -2,7 +2,7 @@ package coop.rchain.casper.helper
 
 import cats._
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag._
