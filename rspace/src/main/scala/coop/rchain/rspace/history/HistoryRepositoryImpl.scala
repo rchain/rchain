@@ -206,7 +206,7 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   override def reset(root: Blake2b256Hash): F[HistoryRepository[F, C, P, A, K]] =
     for {
       _    <- rootsRepository.validateAndSetCurrentRoot(root)
-      next = history.reset(root = root)
+      next <- history.reset(root = root)
     } yield this.copy[F, C, P, A, K](currentHistory = next)
 
   override def exporter: F[RSpaceExporter[F]] = Sync[F].delay(rspaceExporter)
@@ -221,12 +221,16 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 
   override def getHistoryReader(
       stateHash: Blake2b256Hash
-  ): HistoryReader[F, Blake2b256Hash, C, P, A, K] =
-    new RSpaceHistoryReaderImpl(history.reset(root = stateHash), leafStore)(
-      Concurrent[F],
-      serializeC,
-      serializeP,
-      serializeA,
-      serializeK
-    )
+  ): F[HistoryReader[F, Blake2b256Hash, C, P, A, K]] =
+    history
+      .reset(root = stateHash)
+      .map(
+        new RSpaceHistoryReaderImpl(_, leafStore)(
+          Concurrent[F],
+          serializeC,
+          serializeP,
+          serializeA,
+          serializeK
+        )
+      )
 }

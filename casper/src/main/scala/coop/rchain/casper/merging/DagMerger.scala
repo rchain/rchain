@@ -48,27 +48,26 @@ object DagMerger {
             bs.map(_.eventLogIndex).toList.combineAll
           )
 
-      // Base state reader
-      baseReader       = historyRepository.getHistoryReader(lfbPostState)
-      baseReaderBinary = baseReader.readerBinary
-      baseGetData      = baseReader.getData _
-
-      overrideTrieAction = (
-          hash: Blake2b256Hash,
-          changes: ChannelChange[ByteVector],
-          numberChs: NumberChannelsDiff
-      ) =>
-        numberChs.get(hash).traverse {
-          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
-        }
-
       computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
-        StateChangeMerger.computeTrieActions(
-          changes,
-          baseReaderBinary,
-          mergeableChs,
-          overrideTrieAction
-        )
+        for {
+          historyReader <- historyRepository.getHistoryReader(lfbPostState)
+          baseReader    = historyReader.readerBinary
+          baseGetData   = baseReader.getData(_: Blake2b256Hash).map(_.map(_.decoded))
+          overrideTrieAction = (
+              hash: Blake2b256Hash,
+              changes: ChannelChange[ByteVector],
+              numberChs: NumberChannelsDiff
+          ) =>
+            numberChs.get(hash).traverse {
+              RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+            }
+          actions <- StateChangeMerger.computeTrieActions(
+                      changes,
+                      baseReader,
+                      mergeableChs,
+                      overrideTrieAction
+                    )
+        } yield actions
       }
 
       applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>

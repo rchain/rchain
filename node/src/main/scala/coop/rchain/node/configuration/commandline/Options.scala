@@ -766,5 +766,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
   }
   addSubcommand(bondStatus)
 
+  val status = new Subcommand("status") {
+    descr(
+      "Get RNode status information"
+    )
+    helpWidth(width)
+  }
+  addSubcommand(status)
+
   verify()
 }
