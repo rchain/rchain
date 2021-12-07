@@ -34,7 +34,6 @@ import coop.rchain.casper.util.rholang.costacc.{
 import coop.rchain.casper.util.{ConstructDeploy, EventConverter}
 import coop.rchain.casper.{CasperMetricsSource, PrettyPrinter}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
@@ -53,7 +52,7 @@ import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History.emptyRootHash
 import coop.rchain.rspace.trace
 import coop.rchain.rspace.util.ReplayException
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 
 trait RhoRuntimeSyntax {
   implicit final def syntaxRuntime[F[_]: Sync: Span: Log](
@@ -220,12 +219,13 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
-      blockTime: Long
+      blockTime: Long,
+      blockNumber: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
     Span[F].traceI("compute-genesis") {
       for {
         _ <- runtime.setBlockData(
-              BlockData(blockTime, 0, PublicKey(Array[Byte]()), 0)
+              BlockData(blockTime, blockNumber, PublicKey(Array[Byte]()), 0)
             )
         genesisPreStateHash <- emptyStateHash
         evalResult          <- processDeploys(genesisPreStateHash, terms, processDeploy)

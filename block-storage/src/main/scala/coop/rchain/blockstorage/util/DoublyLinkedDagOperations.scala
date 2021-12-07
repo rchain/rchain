@@ -3,7 +3,6 @@ package coop.rchain.blockstorage.util
 import coop.rchain.models.BlockHash.BlockHash
 
 import scala.collection.immutable.{HashMap, HashSet}
-import scala.collection.mutable
 
 trait DoublyLinkedDag[A] {
   val parentToChildAdjacencyList: Map[A, Set[A]]

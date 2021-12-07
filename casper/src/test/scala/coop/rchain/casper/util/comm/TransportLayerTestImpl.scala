@@ -2,7 +2,7 @@ package coop.rchain.casper.util.comm
 
 import cats.Monad
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl.MonadState
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.comm.CommError.CommErr

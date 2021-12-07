@@ -4,6 +4,7 @@ import cats.data.State
 import cats.effect.Concurrent
 import cats.mtl.implicits._
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
@@ -11,24 +12,29 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
 import coop.rchain.casper.{ProposeFunction, SafetyOracle}
 import coop.rchain.catscontrib.TaskContrib._
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.graphz._
 import coop.rchain.metrics.Span
 import coop.rchain.models.StacksafeMessage
 import coop.rchain.monix.Monixable
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.ThrowableOps._
 import coop.rchain.shared.syntax._
+import coop.rchain.models.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell](
+  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
-      devMode: Boolean = false
+      devMode: Boolean = false,
+      networkId: String,
+      shardId: String
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -254,7 +260,17 @@ object DeployGrpcServiceV1 {
 
       override def getEventByHash(request: ReportQuery): Task[EventInfoResponse] =
         defer(
-          blockReportAPI.blockReport(request.hash, request.forceReplay)
+          request.hash.decodeHex
+            .fold(s"Request hash: ${request.hash} is not valid hex string".asLeft[Array[Byte]])(
+              Right(_)
+            )
+            .flatTraverse(
+              hash =>
+                blockReportAPI.blockReport(
+                  ByteString.copyFrom(hash),
+                  request.forceReplay
+                )
+            )
         ) { r =>
           import EventInfoResponse.Message
           import EventInfoResponse.Message._
@@ -279,5 +295,21 @@ object DeployGrpcServiceV1 {
             }
           )
           .flatMap(Observable.fromIterable)
+
+      def status(request: com.google.protobuf.empty.Empty): Task[StatusResponse] =
+        (for {
+          address <- RPConfAsk[F].ask
+          peers   <- ConnectionsCell[F].read
+          nodes   <- NodeDiscovery[F].peers
+          status = Status(
+            version = VersionInfo(api = 1.toString, node = coop.rchain.node.web.VersionInfo.get),
+            address.local.toAddress,
+            networkId,
+            shardId,
+            peers.length,
+            nodes.length
+          )
+          response = StatusResponse().withStatus(status)
+        } yield response).toTask
     }
 }

@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
-import coop.rchain.blockstorage.deploy.InMemDeployStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
@@ -23,7 +23,6 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.RSpace
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -53,18 +52,16 @@ object Setup {
     val spaces = RSpace
       .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](store)
       .runSyncUnsafe()
-    val (rspace, replay, historyRepo) = spaces
-    val runtimes =
-      RhoRuntime.createRuntimes[Task](rspace, replay, true, Seq.empty).unsafeRunSync
+    val (rspace, replay) = spaces
+    val historyRepo      = rspace.historyRepo
 
-    val (runtime, replayRuntime) = runtimes
     val (exporter, importer) = {
       (historyRepo.exporter.unsafeRunSync, historyRepo.importer.unsafeRunSync)
     }
     implicit val rspaceStateManager = RSpaceStateManagerImpl(exporter, importer)
 
     implicit val runtimeManager =
-      RuntimeManager.fromRuntimes(runtime, replayRuntime, historyRepo).unsafeRunSync(scheduler)
+      RuntimeManager[Task](rspace, replay, historyRepo).unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap
@@ -113,18 +110,16 @@ object Setup {
       })
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val blockMap         = Ref.unsafe[Task, Map[BlockHash, BlockMessageProto]](Map.empty)
-    implicit val approvedBlockRef = Ref.unsafe[Task, Option[ApprovedBlock]](None)
-    implicit val blockStore       = InMemBlockStore.create[Task](blockMap, approvedBlockRef)
-    val kvm                       = InMemoryStoreManager[Task]()
+    val kvm = InMemoryStoreManager[Task]()
+    implicit val blockStore =
+      KeyValueBlockStore[Task](kvm).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val blockDagStorage = BlockDagKeyValueStorage
       .create(kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val lastFinalizedStorage = LastFinalizedMemoryStorage
       .make[Task]
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val deployStorage = InMemDeployStorage
-      .make[Task]
+    implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val safetyOracle = new SafetyOracle[Task] {
       override def normalizedFaultTolerance(
@@ -132,7 +127,6 @@ object Setup {
           estimateBlockHash: BlockHash
       ): Task[Float] = Task.pure(1.0f)
     }
-    implicit val lastFinalizedBlockCalculator   = LastFinalizedBlockCalculator[Task](0f)
     implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]

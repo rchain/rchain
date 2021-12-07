@@ -1,8 +1,8 @@
 package coop.rchain.casper.engine
 
 import cats.{Applicative, Monad}
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
+import cats.effect.{Concurrent, Sync, Timer}
 import EngineCell._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore
@@ -21,7 +21,6 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedStorage
 import coop.rchain.casper.state.RNodeStateManager
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
@@ -67,7 +66,7 @@ object Engine {
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
-      _ <- BlockDagStorage[F].insert(genesis, invalid = false)
+      _ <- BlockDagStorage[F].insert(genesis, invalid = false, approved = true)
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
@@ -90,7 +89,7 @@ object Engine {
     /* Execution */   : Concurrent: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell
-    /* Storage */     : BlockStore: LastFinalizedStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -125,12 +124,12 @@ object Engine {
 
   // format: off
   def transitionToInitializing[F[_]
-    /* Execution */   : Concurrent: Time
+    /* Execution */   : Concurrent: Time: Timer
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedBlockCalculator: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: LastFinalizedStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],

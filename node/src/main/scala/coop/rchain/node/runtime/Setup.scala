@@ -2,15 +2,15 @@ package coop.rchain.node.runtime
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
+import coop.rchain.models.syntax._
 import cats.syntax.all._
+import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
-import coop.rchain.blockstorage.deploy.LMDBDeployStorage
+import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
-import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.blockstorage.{BlockStore, FileLMDBIndexBlockStore, KeyValueBlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
@@ -22,48 +22,42 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
-import coop.rchain.lmdb.Context
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
+import coop.rchain.models.Par
 import coop.rchain.monix.Monixable
-import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
 import coop.rchain.node.configuration.NodeConf
-import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.diagnostics
-import coop.rchain.node.web.ReportingRoutes
+import coop.rchain.node.runtime.NodeRuntime._
+import coop.rchain.node.state.instances.RNodeStateManagerImpl
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
+import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared._
-import coop.rchain.store.LmdbDirStoreManager
+import coop.rchain.shared.{Base16, _}
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Files
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
       blockRetriever: BlockRetriever[F],
       conf: NodeConf,
-      blockstorePath: Path,
-      lastFinalizedPath: Path,
-      eventPublisher: EventPublisher[F],
-      deployStorageConfig: LMDBDeployStorage.Config
+      eventPublisher: EventPublisher[F]
   )(implicit mainScheduler: Scheduler): F[
     (
         PacketHandler[F],
@@ -99,22 +93,17 @@ object Setup {
       legacyRSpaceDirSupport <- Sync[F].delay(Files.exists(oldRSpacePath))
       rnodeStoreManager      <- RNodeKeyValueStoreManager(conf.storage.dataDir, legacyRSpaceDirSupport)
 
+      // TODO: Old BlockStore migration message, remove after couple of releases from v0.11.0.
+      oldBlockStoreExists = conf.storage.dataDir.resolve("blockstore/storage").toFile.exists
+      oldBlockStoreMsg    = s"""
+       |Old file-based block storage detected (blockstore/storage). To use this version of RNode please first do the migration.
+       |Migration should be done with RNode version v0.10.2. More info can be found in PR:
+       |https://github.com/rchain/rchain/pull/3342
+      """.stripMargin
+      _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
+
       // Block storage
-      blockStore <- {
-        // Check if old file based block store exists
-        val oldBlockStoreExists = blockstorePath.resolve("storage").toFile.exists
-        // TODO: remove file based block store in future releases
-        def oldStorage: F[BlockStore[F]] = {
-          val blockstoreEnv = Context.env(blockstorePath, LmdbDirStoreManager.tb)
-          for {
-            blockStore <- FileLMDBIndexBlockStore
-                           .create[F](blockstoreEnv, blockstorePath)
-                           .map(_.right.get) // TODO handle errors
-          } yield blockStore
-        }
-        // Start block storage
-        if (oldBlockStoreExists) oldStorage else KeyValueBlockStore(rnodeStoreManager)
-      }
+      blockStore <- KeyValueBlockStore(rnodeStoreManager)
 
       // Last finalized Block storage
       lastFinalizedStorage <- {
@@ -124,6 +113,13 @@ object Setup {
         } yield lastFinalizedStore
       }
 
+      // Migrate LastFinalizedStorage to BlockDagStorage
+      lfbMigration = Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") *>
+        lastFinalizedStorage.migrateLfb(rnodeStoreManager, blockStore)
+      // Check if LFB is already migrated
+      lfbRequireMigration <- lastFinalizedStorage.requireMigration
+      _                   <- lfbMigration.whenA(lfbRequireMigration)
+
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
@@ -131,22 +127,13 @@ object Setup {
       casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
 
       // Deploy storage
-      // TODO: Move deploy store to RNode store manager.
-      deployStorageAllocation               <- LMDBDeployStorage.make[F](deployStorageConfig).allocated
-      (deployStorage, deployStorageCleanup) = deployStorageAllocation
+      deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
       oracle = {
         implicit val sp = span
         SafetyOracle.cliqueOracle[F]
       }
 
-      lastFinalizedBlockCalculator = {
-        implicit val bs = blockStore
-        implicit val da = blockDagStorage
-        implicit val or = oracle
-        implicit val ds = deployStorage
-        LastFinalizedBlockCalculator[F](conf.casper.faultToleranceThreshold)
-      }
       estimator = {
         implicit val sp = span
         Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
@@ -157,59 +144,32 @@ object Setup {
       }
       lastFinalizedHeightConstraintChecker = {
         implicit val bs = blockStore
-        implicit val lf = lastFinalizedStorage
         LastFinalizedHeightConstraintChecker[F]
       }
-      // runtime for `rnode eval`
+
+      // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        for {
-          store    <- rnodeStoreManager.evalStores
-          runtimes <- RhoRuntime.createRuntimes[F](store)
-        } yield runtimes._1
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
       }
 
-      r <- {
+      // Runtime manager (play and replay runtimes)
+      runtimeManagerWithHistory <- {
         implicit val sp = span
-        import coop.rchain.rholang.interpreter.storage._
-        implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
         // Use channels map only in block-merging (multi parents)
         val useChannelsMap = conf.casper.maxNumberOfParents > 1
-        for {
-          store <- rnodeStoreManager.rSpaceStores(useChannelsMap)
-          spaces <- RSpace
-                     .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
-                       store
-                     )
-        } yield spaces
+        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
       }
-      rSpacePlay   = r._1
-      rSpaceReplay = r._2
-      historyRepo  = r._3
+      (runtimeManager, historyRepo) = runtimeManagerWithHistory
 
-      // runtimes for on-chain execution
-      onchainRuntimes <- {
-        implicit val sp = span
-        implicit val bs = blockStore
-        implicit val bd = blockDagStorage
-        for {
-          runtimes <- RhoRuntime
-                       .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
-          (rhoRuntime, replayRhoRuntime) = runtimes
-          reporter <- if (conf.apiServer.enableReporting) {
-                       import coop.rchain.rholang.interpreter.storage._
-                       for {
-                         // In reporting replay channels map is not needed
-                         store <- rnodeStoreManager.rSpaceStores(useChannelsMap = false)
-                       } yield ReportingCasper.rhoReporter(store)
-                     } else
-                       ReportingCasper.noop.pure[F]
-        } yield (rhoRuntime, replayRhoRuntime, reporter)
-      }
-      (playRuntime, replayRuntime, reportingRuntime) = onchainRuntimes
-      runtimeManager <- {
-        implicit val sp = span
-        RuntimeManager.fromRuntimes[F](playRuntime, replayRuntime, historyRepo)
+      // Reporting runtime
+      reportingRuntime <- {
+        implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
+        if (conf.apiServer.enableReporting) {
+          // In reporting replay channels map is not needed
+          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+        } else
+          ReportingCasper.noop.pure[F]
       }
 
       // RNodeStateManager
@@ -227,16 +187,12 @@ object Setup {
       // Engine dynamic reference
       engineCell          <- EngineCell.init[F]
       envVars             = EnvVars.envVars[F]
-      raiseIOError        = IOError.raiseIOErrorThroughSync[F]
       blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
-        implicit val bd = blockDagStorage
-        implicit val br = blockRetriever
-        implicit val cu = commUtil
-        implicit val bs = blockStore
-        implicit val cb = casperBufferStorage
+        implicit val (bs, bd)     = (blockStore, blockDagStorage)
+        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
         BlockProcessor[F]
       }
 
@@ -245,22 +201,12 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val rm         = runtimeManager
-        implicit val bs         = blockStore
-        implicit val lf         = lastFinalizedStorage
-        implicit val bd         = blockDagStorage
-        implicit val sc         = synchronyConstraintChecker
-        implicit val lfhscc     = lastFinalizedHeightConstraintChecker
-        implicit val sp         = span
-        implicit val e          = estimator
-        implicit val ds         = deployStorage
-        implicit val br         = blockRetriever
-        implicit val cu         = commUtil
-        implicit val eb         = eventPublisher
-        val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
-        val dummyDeployerKey =
-          if (dummyDeployerKeyOpt.isEmpty) None
-          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+        implicit val (bs, bd, ds)     = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, ep)         = (blockRetriever, eventPublisher)
+        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
+        val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
+        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
@@ -283,29 +229,12 @@ object Setup {
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
 
       casperLaunch = {
-        implicit val bs     = blockStore
-        implicit val bd     = blockDagStorage
-        implicit val lf     = lastFinalizedStorage
-        implicit val ec     = engineCell
-        implicit val ev     = envVars
-        implicit val re     = raiseIOError
-        implicit val br     = blockRetriever
-        implicit val rm     = runtimeManager
-        implicit val or     = oracle
-        implicit val lc     = lastFinalizedBlockCalculator
-        implicit val sp     = span
-        implicit val lb     = lab
-        implicit val rc     = rpConnections
-        implicit val ra     = rpConfAsk
-        implicit val eb     = eventPublisher
-        implicit val sc     = synchronyConstraintChecker
-        implicit val lfhscc = lastFinalizedHeightConstraintChecker
-        implicit val cu     = commUtil
-        implicit val es     = estimator
-        implicit val ds     = deployStorage
-        implicit val cbs    = casperBufferStorage
-        implicit val rsm    = rspaceStateManager
-
+        implicit val (bs, bd, ds)         = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
+        implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, es, or, cu)     = (runtimeManager, estimator, oracle, commUtil)
+        implicit val (rsm, sp)            = (rspaceStateManager, span)
         CasperLaunch.of[F](
           blockProcessorQueue,
           blockProcessorStateRef,
@@ -332,18 +261,13 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val ec = engineCell
-        implicit val bs = blockStore
-        implicit val or = oracle
+        implicit val (ec, bs, or) = (engineCell, blockStore, oracle)
         BlockReportAPI[F](reportingRuntime, reportingStore)
       }
       apiServers = {
-        implicit val bs = blockStore
-        implicit val ec = engineCell
-        implicit val or = oracle
-        implicit val sp = span
-        implicit val sc = synchronyConstraintChecker
-        implicit val lh = lastFinalizedHeightConstraintChecker
+        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
+        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)         = (rpConfAsk, rpConnections)
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -352,7 +276,9 @@ object Setup {
           conf.devMode,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
-          blockReportAPI
+          blockReportAPI,
+          conf.protocolServer.networkId,
+          conf.casper.shardName
         )
       }
       reportingRoutes = {
@@ -372,9 +298,7 @@ object Setup {
       // Broadcast fork choice tips request if current fork choice is more then `forkChoiceStaleThreshold` minutes old.
       // For why - look at updateForkChoiceTipsIfStuck method description.
       updateForkChoiceLoop = {
-        implicit val cu = commUtil
-        implicit val ec = engineCell
-        implicit val bs = blockStore
+        implicit val (ec, bs, cu) = (engineCell, blockStore, commUtil)
         for {
           _ <- Time[F].sleep(conf.casper.forkChoiceCheckIfStaleInterval)
           _ <- Running.updateForkChoiceTipsIfStuck(conf.casper.forkChoiceStaleThreshold)
@@ -382,26 +306,30 @@ object Setup {
       }
       engineInit = engineCell.read >>= (_.init)
       runtimeCleanup = NodeRuntime.cleanup(
-        deployStorageCleanup,
         rnodeStoreManager
       )
+      transactionAPI = Transaction[F](
+        blockReportAPI,
+        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+      )
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val ec = engineCell
-        implicit val sp = span
-        implicit val or = oracle
-        implicit val bs = blockStore
+        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
+        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
+
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
+          cacheTransactionAPI,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]]
+          else none[ProposeFunction[F]],
+          conf.protocolServer.networkId,
+          conf.casper.shardName
         )
       }
       adminWebApi = {
-        implicit val ec     = engineCell
-        implicit val sp     = span
-        implicit val sc     = synchronyConstraintChecker
-        implicit val lfhscc = lastFinalizedHeightConstraintChecker
+        implicit val (ec, sp) = (engineCell, span)
+        implicit val (sc, lh) = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         new AdminWebApiImpl[F](
           triggerProposeFOpt,
           proposerStateRefOpt

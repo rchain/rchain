@@ -33,6 +33,7 @@ object Dependencies {
   val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.3"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
   val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.5.0"
+  val fs2Io               = "co.fs2"                     %% "fs2-io"                    % "2.5.0"
   val guava               = "com.google.guava"            % "guava"                     % "30.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion

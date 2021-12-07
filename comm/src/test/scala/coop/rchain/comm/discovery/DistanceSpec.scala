@@ -1,13 +1,10 @@
 package coop.rchain.comm.discovery
 
 import java.util
-
 import cats.{catsInstancesForId => _, _}
-
 import coop.rchain.catscontrib.effect.implicits._
 import coop.rchain.comm._
-import coop.rchain.crypto.codec.Base16
-
+import coop.rchain.shared.Base16
 import org.scalatest._
 
 import scala.util.Random

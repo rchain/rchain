@@ -2,8 +2,7 @@ package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.protocol.{BlockMessage, BlockMessageProto}
-import coop.rchain.dag.DagReader
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
@@ -12,10 +11,14 @@ trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
       block: BlockMessage,
-      invalid: Boolean
+      invalid: Boolean,
+      approved: Boolean = false
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def addFinalizedBlockHash(blockHash: BlockHash): F[Unit]
+  def recordDirectlyFinalized(
+      direct: BlockHash,
+      finalizationEffect: Set[BlockHash] => F[Unit]
+  ): F[Unit]
 }
 
 object BlockDagStorage {
@@ -24,7 +27,8 @@ object BlockDagStorage {
   def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
 
-trait BlockDagRepresentation[F[_]] extends DagReader[F, BlockHash] {
+trait BlockDagRepresentation[F[_]] {
+  def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
@@ -37,7 +41,10 @@ trait BlockDagRepresentation[F[_]] extends DagReader[F, BlockHash] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
+  // DAG representation has to have finalized block, or it does not make sense
+  def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
+  def find(truncatedHash: String): F[Option[BlockHash]]
 }
 
 trait EquivocationsTracker[F[_]] {

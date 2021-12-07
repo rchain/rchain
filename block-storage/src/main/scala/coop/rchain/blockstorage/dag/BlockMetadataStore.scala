@@ -1,11 +1,10 @@
 package coop.rchain.blockstorage.dag
 
-import cats.Monad
+import cats.{Monad, Show}
 import cats.effect.Sync
 import cats.mtl.MonadState
 import cats.syntax.all._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.syntax._
@@ -17,8 +16,7 @@ import scala.collection.immutable.SortedMap
 
 object BlockMetadataStore {
   def apply[F[_]: Sync: Log](
-      blockMetadataStore: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      lastFinalizedBlock: Option[BlockHash]
+      blockMetadataStore: KeyValueTypedStore[F, BlockHash, BlockMetadata]
   ): F[BlockMetadataStore[F]] =
     for {
       _ <- Log[F].info("Building in-memory blockMetadataStore.")
@@ -28,7 +26,7 @@ object BlockMetadataStore {
                          (hash, blockMetadataToInfo(metaData()))
                      }
       _        <- Log[F].info("Reading data from blockMetadataStore done.")
-      dagState = recreateInMemoryState(blockInfoMap.toMap, lastFinalizedBlock)
+      dagState = recreateInMemoryState(blockInfoMap.toMap)
       _        <- Log[F].info("Successfully built in-memory blockMetadataStore.")
     } yield new BlockMetadataStore[F](
       blockMetadataStore,
@@ -41,11 +39,23 @@ object BlockMetadataStore {
       dagSet: Set[BlockHash],
       childMap: Map[BlockHash, Set[BlockHash]],
       heightMap: SortedMap[Long, Set[BlockHash]],
+      // In general - at least genesis should be LFB.
+      // But dagstate can be empty, as it is initialized before genesis is inserted.
+      // Also lots of tests do not have genesis properly initialised, so fixing all this is pain.
+      // So this is Option.
+      lastFinalizedBlock: Option[(BlockHash, Long)],
       finalizedBlockSet: Set[BlockHash]
   )
 
-  private def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
-    BlockInfo(blockMeta.blockHash, blockMeta.parents.toSet, blockMeta.blockNum, blockMeta.invalid)
+  def blockMetadataToInfo(blockMeta: BlockMetadata): BlockInfo =
+    BlockInfo(
+      blockMeta.blockHash,
+      blockMeta.parents.toSet,
+      blockMeta.blockNum,
+      blockMeta.invalid,
+      blockMeta.directlyFinalized,
+      blockMeta.finalized
+    )
 
   class BlockMetadataStore[F[_]: Monad](
       private val store: KeyValueTypedStore[F, BlockHash, BlockMetadata],
@@ -64,8 +74,41 @@ object BlockMetadataStore {
         _ <- store.put(block.blockHash, block)
       } yield ()
 
-    def addFinalizedBlock(finalizedBlockHash: BlockHash): F[Unit] =
-      dagState.modify(st => st.copy(finalizedBlockSet = st.finalizedBlockSet + finalizedBlockHash))
+    /** Record new last finalized lock. Directly finalized is the output of finalizer,
+      * indirectly finalized are new LFB ancestors. */
+    def recordFinalized(directly: BlockHash, indirectly: Set[BlockHash])(
+        implicit sync: Sync[F]
+    ): F[Unit] = {
+      implicit val s = new Show[BlockHash] {
+        override def show(t: BlockHash): String = PrettyPrinter.buildString(t)
+      }
+
+      for {
+        // read current values
+        curMetaForDF  <- store.getUnsafe(directly)
+        curMetasForIF <- store.getUnsafeBatch(indirectly.toList)
+        // new values to persist
+        newMetaForDF  = (directly, curMetaForDF.copy(finalized = true, directlyFinalized = true))
+        newMetasForIF = curMetasForIF.map(v => (v.blockHash, v.copy(finalized = true)))
+        // update in memory state
+        _ <- dagState.modify(
+              st => {
+                val newFinalizedSet = st.finalizedBlockSet ++ indirectly + directly
+
+                // update lastFinalizedBlock only when current one is lower
+                if (st.lastFinalizedBlock.exists { case (_, h) => h > curMetaForDF.blockNum })
+                  st.copy(finalizedBlockSet = newFinalizedSet)
+                else
+                  st.copy(
+                    finalizedBlockSet = newFinalizedSet,
+                    lastFinalizedBlock = (directly, curMetaForDF.blockNum).some
+                  )
+              }
+            )
+        // persist new values all at once
+        _ <- store.put(newMetaForDF +: newMetasForIF)
+      } yield ()
+    }
 
     def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get(hash)
 
@@ -93,6 +136,14 @@ object BlockMetadataStore {
     def heightMap: F[SortedMap[Long, Set[BlockHash]]] =
       dagState.get.map(_.heightMap)
 
+    def lastFinalizedBlock(implicit sync: Sync[F]): F[BlockHash] = {
+      val errMsg =
+        "DagState does not contain lastFinalizedBlock. Are you calling this on empty BlockDagStorage? Otherwise there is a bug."
+      dagState.get.flatMap(_.lastFinalizedBlock.liftTo[F](new Exception(errMsg)).map {
+        case (hash, _) => hash
+      })
+    }
+
     def finalizedBlockSet: F[Set[BlockHash]] = dagState.get.map(_.finalizedBlockSet)
   }
 
@@ -114,7 +165,22 @@ object BlockMetadataStore {
       state.heightMap.updated(block.blockNum, currSet + block.hash)
     } else state.heightMap
 
-    state.copy(dagSet = newDagSet, childMap = newChildMap, heightMap = newHeightMap)
+    val newLastFinalizedBlock =
+      if (block.isDirectlyFinalized &&
+          !state.lastFinalizedBlock.exists { case (_, height) => height > block.blockNum })
+        (block.hash, block.blockNum).some
+      else state.lastFinalizedBlock
+
+    val newFinalisedBlockSet =
+      if (block.isFinalized) state.finalizedBlockSet + block.hash else state.finalizedBlockSet
+
+    state.copy(
+      dagSet = newDagSet,
+      childMap = newChildMap,
+      heightMap = newHeightMap,
+      lastFinalizedBlock = newLastFinalizedBlock,
+      finalizedBlockSet = newFinalisedBlockSet
+    )
   }
 
   private def validateDagState(state: DagState): DagState = {
@@ -126,37 +192,32 @@ object BlockMetadataStore {
   }
 
   // Used to project part of the block metadata for in-memory initialization
-  private final case class BlockInfo(
+  final case class BlockInfo(
       hash: BlockHash,
       parents: Set[BlockHash],
       blockNum: Long,
-      isInvalid: Boolean
+      isInvalid: Boolean,
+      isDirectlyFinalized: Boolean,
+      isFinalized: Boolean
   )
 
   private def recreateInMemoryState(
-      blocksInfoMap: Map[BlockHash, BlockInfo],
-      lastFinalizedBlockHash: Option[BlockHash]
+      blocksInfoMap: Map[BlockHash, BlockInfo]
   ): DagState = {
-    val emptyState =
-      DagState(dagSet = Set(), childMap = Map(), heightMap = SortedMap(), finalizedBlockSet = Set())
+    val emptyState: DagState =
+      DagState(
+        dagSet = Set(),
+        childMap = Map(),
+        heightMap = SortedMap(),
+        lastFinalizedBlock = none[(BlockHash, Long)],
+        finalizedBlockSet = Set()
+      )
 
     // Add blocks to DAG state
     val dagState = blocksInfoMap.foldLeft(emptyState) {
       case (state, (_, block)) => addBlockToDagState(block)(state)
     }
 
-    // Calculate set of finalized blocks
-    val finalizedBlockSet = lastFinalizedBlockHash.fold(Set.empty[BlockHash])(lbh => {
-      DagOps
-        .bfTraverse(List(lbh))(
-          bh => blocksInfoMap.get(bh).map(_.parents.toList).getOrElse(List.empty)
-        )
-        .toSet
-    })
-
-    // Update DAG state with finalized blocks
-    val newDagState = dagState.copy(finalizedBlockSet = finalizedBlockSet)
-
-    validateDagState(newDagState)
+    validateDagState(dagState)
   }
 }

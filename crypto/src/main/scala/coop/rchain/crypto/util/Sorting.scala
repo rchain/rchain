@@ -1,7 +1,7 @@
 package coop.rchain.crypto.util
 
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 
 object Sorting {
 

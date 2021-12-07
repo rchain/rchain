@@ -1,6 +1,7 @@
 package coop.rchain.crypto.hash
 
 import coop.rchain.crypto.codec._
+import coop.rchain.shared.Base16
 import org.scalatest._
 import org.scalacheck.{Arbitrary, Gen, Prop}
 import org.scalatest.prop.{Checkers, Configuration}

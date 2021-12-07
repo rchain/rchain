@@ -29,10 +29,9 @@ import coop.rchain.casper.protocol.{
   SystemDeployData,
   SystemDeployInfoWithEventData
 }
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
@@ -70,11 +69,11 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
                )
     } yield result
 
-  def blockReport(hash: String, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
+  def blockReport(hash: BlockHash, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
     def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
       implicit val c = casper
       for {
-        maybeBlock <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
+        maybeBlock <- BlockStore[F].get(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
     }

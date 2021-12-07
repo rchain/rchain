@@ -1,33 +1,25 @@
 package coop.rchain.casper.genesis
 
-import cats.effect.Sync
+import cats.Parallel
+import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.util.io.IOError
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, ProtoUtil, VaultParser}
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
-import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.models.syntax._
 import coop.rchain.shared.PathOps.RichPath
-import org.scalatest.{BeforeAndAfterEach, EitherValues, FlatSpec, Matchers}
-import coop.rchain.blockstorage.util.io.IOError
-import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
-import coop.rchain.casper.genesis.Genesis.createGenesisBlock
-import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
-import coop.rchain.metrics
-import coop.rchain.metrics.{Metrics, NoopSpan, Span}
-import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Base16, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
@@ -95,7 +87,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   }
 
   "Genesis.fromInputFiles" should "generate random validators when no bonds file is given" in taskTest(
-    withGenResources {
+    withGenResources[Task] {
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
@@ -114,15 +106,16 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   )
 
   it should "tell when bonds file does not exist" in taskTest(
-    withGenResources {
+    withGenResources[Task] {
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
           log: LogStub[Task],
           time: LogicalTime[Task]
       ) =>
+        val nonExistingPath = storageLocation.resolve("not/a/real/file").toString
         for {
-          genesisAttempt <- fromInputFiles(maybeBondsPath = Some("not/a/real/file"))(
+          genesisAttempt <- fromInputFiles(maybeBondsPath = Some(nonExistingPath))(
                              runtimeManager,
                              genesisPath,
                              log,
@@ -133,7 +126,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   )
 
   it should "fail with error when bonds file cannot be parsed" in taskTest(
-    withGenResources {
+    withGenResources[Task] {
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
@@ -160,7 +153,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
   )
 
   it should "create a genesis block with the right bonds when a proper bonds file is given" in taskTest(
-    withGenResources {
+    withGenResources[Task] {
       (
           runtimeManager: RuntimeManager[Task],
           genesisPath: Path,
@@ -181,7 +174,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }
@@ -189,7 +182,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
 
   it should "create a valid genesis block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      withGenResources {
+      withGenResources[Task] {
         (
             runtimeManager: RuntimeManager[Task],
             genesisPath: Path,
@@ -199,6 +192,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           implicit val logEff = log
           for {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+            _       <- blockDagStorage.insert(genesis, false, approved = true)
             _       <- BlockStore[Task].put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
             maybePostGenesisStateHash <- InterpreterUtil
@@ -211,26 +205,28 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       }
   }
 
-  it should "detect an existing bonds file in the default location" in taskTest(withGenResources {
-    (
-        runtimeManager: RuntimeManager[Task],
-        genesisPath: Path,
-        log: LogStub[Task],
-        time: LogicalTime[Task]
-    ) =>
-      val bondsFile = genesisPath.resolve("bonds.txt").toString
-      printBonds(bondsFile)
+  it should "detect an existing bonds file in the default location" in taskTest(
+    withGenResources[Task] {
+      (
+          runtimeManager: RuntimeManager[Task],
+          genesisPath: Path,
+          log: LogStub[Task],
+          time: LogicalTime[Task]
+      ) =>
+        val bondsFile = genesisPath.resolve("bonds.txt").toString
+        printBonds(bondsFile)
 
-      for {
-        genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
-        bonds   = ProtoUtil.bonds(genesis)
-        _       = log.infos.length should be(3)
-        result = validators
-          .map {
-            case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
-          }
-      } yield result.forall(bonds.contains(_)) should be(true)
-  })
+        for {
+          genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
+          bonds   = ProtoUtil.bonds(genesis)
+          _       = log.infos.length should be(3)
+          result = validators
+            .map {
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
+            }
+        } yield result.forall(bonds.contains(_)) should be(true)
+    }
+  )
 
   it should "parse the wallets file and create corresponding RevVault-s" ignore {}
 
@@ -241,9 +237,6 @@ object GenesisTest {
   def genesisPath      = Files.createTempDirectory(s"casper-genesis-test-")
   val autogenShardSize = 5
   val rchainShardId    = "root"
-
-  implicit val raiseIOError = IOError.raiseIOErrorThroughSync[Task]
-  implicit val log          = new LogStub[Task]
 
   def fromInputFiles(
       maybeBondsPath: Option[String] = None,
@@ -293,46 +286,25 @@ object GenesisTest {
                      )
     } yield genesisBlock
 
-  def withRawGenResources(
-      body: (
-          RhoHistoryRepository[Task],
-          (RhoRuntime[Task], ReplayRhoRuntime[Task]),
-          Path,
-          LogicalTime[Task]
-      ) => Task[Unit]
-  ): Task[Unit] = {
-    val storePath                           = storageLocation
-    val gp                                  = genesisPath
-    implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
-    implicit val span: Span[Task]           = NoopSpan[Task]()
-    val time                                = new LogicalTime[Task]
+  def withGenResources[F[_]: Concurrent: ContextShift: Parallel](
+      body: (RuntimeManager[F], Path, LogStub[F], LogicalTime[F]) => F[Unit]
+  ): F[Unit] = {
+    val storePath                        = storageLocation
+    val gp                               = genesisPath
+    implicit val noopMetrics: Metrics[F] = new metrics.Metrics.MetricsNOP[F]
+    implicit val span: Span[F]           = NoopSpan[F]()
+    val time                             = new LogicalTime[F]
+    implicit val log                     = new LogStub[F]
 
     for {
-      kvsManager                   <- Resources.mkTestRNodeStoreManager[Task](storePath)
-      store                        <- kvsManager.rSpaceStores
-      spaces                       <- RhoRuntime.createRuntimes[Task](store)
-      (runtime, replayRuntime, hr) = spaces
-      result                       <- body(hr, (runtime, replayRuntime), genesisPath, time)
-      _                            <- Sync[Task].delay { storePath.recursivelyDelete() }
-      _                            <- Sync[Task].delay { gp.recursivelyDelete() }
+      kvsManager     <- Resources.mkTestRNodeStoreManager[F](storePath)
+      store          <- kvsManager.rSpaceStores
+      runtimeManager <- RuntimeManager[F](store)
+      result         <- body(runtimeManager, genesisPath, log, time)
+      _              <- Sync[F].delay { storePath.recursivelyDelete() }
+      _              <- Sync[F].delay { gp.recursivelyDelete() }
     } yield result
   }
-
-  def withGenResources(
-      body: (RuntimeManager[Task], Path, LogStub[Task], LogicalTime[Task]) => Task[Unit]
-  )(implicit metrics: Metrics[Task], span: Span[Task]): Task[Unit] =
-    withRawGenResources {
-      implicit val log = new LogStub[Task]
-      (
-          historyRepo: RhoHistoryRepository[Task],
-          runtimes: (RhoRuntime[Task], ReplayRhoRuntime[Task]),
-          genesisPath: Path,
-          time: LogicalTime[Task]
-      ) =>
-        RuntimeManager
-          .fromRuntimes(runtimes._1, runtimes._2, historyRepo)
-          .flatMap(body(_, genesisPath, log, time))
-    }
 
   def taskTest[R](f: Task[R]): R =
     f.runSyncUnsafe()

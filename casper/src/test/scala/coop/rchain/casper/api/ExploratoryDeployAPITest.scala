@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}

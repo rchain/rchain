@@ -4,7 +4,7 @@ import java.io.FileOutputStream
 
 import cats._
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import cats.mtl._
 
 trait GraphSerializer[F[_]] {

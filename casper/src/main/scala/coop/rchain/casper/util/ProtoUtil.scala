@@ -1,58 +1,29 @@
 package coop.rchain.casper.util
 
-import java.nio.charset.StandardCharsets
-
+import cats.Monad
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
-import cats.{Applicative, Monad}
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.{PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.casper.util.implicits._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.dag.DagOps
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
+import coop.rchain.shared.Base16
 
+import java.nio.charset.StandardCharsets
 import scala.collection.immutable
 import scala.collection.immutable.Map
 
 object ProtoUtil {
-
-  /*
-   * c is in the blockchain of b iff c == b or c is in the blockchain of the main parent of b
-   */
-  def isInMainChain[F[_]: Monad](
-      dag: BlockDagRepresentation[F],
-      candidateMetadata: BlockMetadata,
-      targetBlockHash: BlockHash
-  ): F[Boolean] = {
-    import coop.rchain.catscontrib.Catscontrib.ToBooleanF
-    import cats.instances.option._
-
-    (candidateMetadata.blockHash == targetBlockHash).pure[F] ||^
-      dag.lookup(targetBlockHash).flatMap {
-        case Some(targetBlock) =>
-          if (targetBlock.blockNum <= candidateMetadata.blockNum) {
-            false.pure[F]
-          } else {
-            val mainParentOpt = targetBlock.parents.headOption
-            mainParentOpt.traverse(isInMainChain(dag, candidateMetadata, _)).map(_.getOrElse(false))
-          }
-        case None =>
-          false.pure[F]
-      }
-  }
-
   def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
@@ -307,19 +278,12 @@ object ProtoUtil {
       extraBytes = ByteString.EMPTY
     )
 
-    val hash = hashUnsignedBlock(block)
+    val hash = hashBlock(block)
 
     block.copy(blockHash = hash)
   }
 
-  def hashUnsignedBlock(blockMessage: BlockMessage): BlockHash = {
-    val toHash = blockMessage.header.toProto.toByteArray +: blockMessage.justifications.map(
-      _.toProto.toByteArray
-    )
-    hashByteArrays(toHash: _*)
-  }
-
-  def hashSignedBlock(blockMessage: BlockMessage): BlockHash =
+  def hashBlock(blockMessage: BlockMessage): BlockHash =
     ProtoUtil.hashByteArrays(
       blockMessage.header.toProto.toByteArray,
       blockMessage.body.toProto.toByteArray,
@@ -330,9 +294,6 @@ object ProtoUtil {
       blockMessage.extraBytes.toByteArray
     )
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
-
-  def stringToByteString(string: String): ByteString =
-    ByteString.copyFrom(Base16.unsafeDecode(string))
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)

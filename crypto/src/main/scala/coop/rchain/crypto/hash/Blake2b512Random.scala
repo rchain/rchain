@@ -144,7 +144,7 @@ object Blake2b512Random {
     apply(init, 0, init.length)
 
   def merge(children: Seq[Blake2b512Random]): Blake2b512Random = {
-    import coop.rchain.crypto.codec.Base16
+    import coop.rchain.shared.Base16
     @tailrec
     def internalMerge(children: Vector[Blake2b512Random]): Blake2b512Random = {
       val squashedBuilder = Vector.newBuilder[Blake2b512Random]

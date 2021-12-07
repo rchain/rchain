@@ -34,12 +34,15 @@ class ChannelStoreOps[F[_], C](
               fs2.Stream
                 .eval(
                   channelStore.getChannelHash(h).flatMap {
-                    case Some(DataJoinHash(dataHash, _)) => ProduceMapping(dataHash, h).some.pure[F]
-                    case _                               => none[ProduceMapping].pure[F]
+                    case Some(DataJoinHash(dataHash, _)) => ProduceMapping(dataHash, h).pure[F]
+                    case _ =>
+                      Concurrent[F].raiseError[ProduceMapping](
+                        new Exception(
+                          s"hash $h not found in channel store when requesting produces"
+                        )
+                      )
                   }
                 )
-                .filter(_.isDefined)
-                .map(_.get)
           )
       )
       .parJoinProcBounded
@@ -62,16 +65,45 @@ class ChannelStoreOps[F[_], C](
                   for {
                     r <- channelStore.getChannelHash(contKey).flatMap {
                           case Some(ContinuationHash(consumeHash)) =>
-                            ConsumeMapping(consumeHash, channelHashes).some.pure[F]
-                          case _ => none[ConsumeMapping].pure[F]
+                            ConsumeMapping(consumeHash, channelHashes).pure[F]
+                          case _ =>
+                            Concurrent[F].raiseError[ConsumeMapping](
+                              new Exception(
+                                s"hash $contKey not found in channel store when requesting consumes"
+                              )
+                            )
                         }
 
                   } yield r
                 )
-                .filter(_.isDefined)
-                .map(_.get)
             }
           )
+      )
+      .parJoinProcBounded
+      .compile
+      .toVector
+
+  def getJoinMapping(
+      channels: Seq[Blake2b256Hash]
+  )(implicit c: Concurrent[F]): F[Vector[Blake2b256Hash]] =
+    fs2.Stream
+      .emits(
+        channels.map(
+          channel =>
+            fs2.Stream.eval(
+              channelStore
+                .getChannelHash(channel)
+                .flatMap {
+                  case Some(DataJoinHash(_, j)) => j.pure[F]
+                  case _ =>
+                    Concurrent[F].raiseError[Blake2b256Hash](
+                      new Exception(
+                        s"hash $channel not found in channel store when requesting join"
+                      )
+                    )
+                }
+            )
+        )
       )
       .parJoinProcBounded
       .compile

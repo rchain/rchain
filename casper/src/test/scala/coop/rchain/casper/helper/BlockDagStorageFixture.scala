@@ -2,12 +2,13 @@ package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.blockstorage.{KeyValueBlockStore, _}
 import coop.rchain.blockstorage.dag.{
   BlockDagKeyValueStorage,
   BlockDagStorage,
   IndexedBlockDagStorage
 }
+import coop.rchain.blockstorage.{KeyValueBlockStore, _}
+import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -18,9 +19,8 @@ import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler
 import org.scalatest.{BeforeAndAfter, Suite}
-import java.nio.file.{Files, Path}
 
-import coop.rchain.casper.storage.RNodeKeyValueStoreManager
+import java.nio.file.{Files, Path}
 
 trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
   val scheduler = Scheduler.fixedPool("block-dag-storage-fixture-scheduler", 4)
@@ -43,7 +43,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
 
     Resources
       .copyStorage[Task](context.storageDirectory)
-      .evalMap(r => create(r.storageDir))
+      .evalMap(create)
       .use(Function.uncurried(f).tupled)
       .unsafeRunSync
   }

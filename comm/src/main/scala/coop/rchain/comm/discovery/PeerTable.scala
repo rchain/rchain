@@ -3,7 +3,7 @@ package coop.rchain.comm.discovery
 import coop.rchain.comm.{CommError, PeerNode}, CommError._
 import scala.collection.mutable
 import scala.annotation.tailrec
-import cats._, cats.data._, cats.implicits._
+import cats._, cats.data._, cats.syntax.all._
 import coop.rchain.catscontrib._, Catscontrib._
 import cats.effect._
 

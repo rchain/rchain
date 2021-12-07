@@ -1,7 +1,7 @@
 package coop.rchain.shared
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 import scala.collection.immutable.{List, Set}
 

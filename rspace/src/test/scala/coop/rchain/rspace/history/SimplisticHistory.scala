@@ -306,7 +306,7 @@ final case class SimplisticHistory[F[_]: Sync](
     case (trie, path) => (trie, path.nodes)
   }
 
-  def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
+  def reset(root: Blake2b256Hash): F[History[F]] = Sync[F].delay(this.copy(root = root))
 
 }
 

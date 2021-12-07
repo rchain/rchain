@@ -15,10 +15,11 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis()
+  val genesisParams = buildGenesisParameters(validatorsNum = 3)
+  val genesis       = buildGenesis(genesisParams)
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](0, sec = ConstructDeploy.defaultSec2)
@@ -33,12 +34,22 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         block1 <- nodes(1).addBlock(deploys(1))
         _      <- TestNode.propagate(nodes)
 
+        _ <- nodes(0).blockDagStorage.getRepresentation
+              .flatMap(_.isFinalized(genesis.genesisBlock.blockHash)) shouldBeF true
+        _ <- nodes(0).blockDagStorage.getRepresentation
+              .flatMap(_.isFinalized(block0.blockHash)) shouldBeF false
+        _ <- nodes(0).blockDagStorage.getRepresentation
+              .flatMap(_.isFinalized(block1.blockHash)) shouldBeF false
+
         //multiparent block joining block0 and block1 since they do not conflict
         multiparentBlock <- nodes(0).propagateBlock(deploys(2))(nodes: _*)
 
+        _ = block0.header.parentsHashList shouldBe Seq(genesis.genesisBlock.blockHash)
+        _ = block1.header.parentsHashList shouldBe Seq(genesis.genesisBlock.blockHash)
         _ = multiparentBlock.header.parentsHashList.size shouldBe 2
         _ <- nodes(0).contains(multiparentBlock.blockHash) shouldBeF true
         _ <- nodes(1).contains(multiparentBlock.blockHash) shouldBeF true
+        _ = multiparentBlock.body.rejectedDeploys.size shouldBe 0
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 0).map(_ shouldBe Seq("0"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 1).map(_ shouldBe Seq("1"))
         _ <- getDataAtPublicChannel[Effect](multiparentBlock, 2).map(_ shouldBe Seq("2"))

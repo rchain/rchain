@@ -3,11 +3,10 @@ package coop.rchain.comm.transport
 import cats.effect.concurrent.{Deferred, MVar, Ref}
 import coop.rchain.comm._
 import coop.rchain.comm.rp.Connect.RPConfAsk
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.{CertificateHelper, CertificatePrinter}
 import coop.rchain.metrics.Metrics
 import coop.rchain.p2p.EffectsTestInstances._
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler
 
