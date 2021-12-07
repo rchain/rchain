@@ -4,6 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
 import coop.rchain.casper.deploychainsetcasper.DeployChainSetConflictResolver
 import coop.rchain.casper.protocol.DeployChain
 import coop.rchain.casper.syntax._

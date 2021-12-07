@@ -91,60 +91,60 @@ object Resources {
       .forEach(source => Files.copy(source, dest.resolve(src.relativize(source)), REPLACE_EXISTING))
   }
 
-  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot[F]] = {
-    val dummyRepresentation = new BlockDagRepresentation[F] {
-      override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] = ???
-
-      override def contains(blockHash: BlockHash): F[Boolean] = ???
-
-      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
-
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
-        Map.empty[Validator, BlockHash].pure[F]
-
-      override def invalidBlocks: F[Set[BlockMetadata]] = Set.empty[BlockMetadata].pure[F]
-
-      override def latestBlockNumber: F[Long] = ???
-
-      override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
-
-      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
-
-      override def topoSort(
-          startBlockNumber: Long,
-          maybeEndBlockNumber: Option[Long]
-      ): F[Vector[Vector[BlockHash]]] = ???
-
-      override def isFinalized(blockHash: BlockHash): F[Boolean] = ???
-
-      override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
-
-      override def lastFinalizedBlock: BlockHash = ???
-
-      override def nonFinalizedSet: Set[BlockHash] = ???
-
-      override def truncate(
-          latestMessages: Map[Validator, BlockHash],
-          findLfb: Map[Validator, BlockHash] => F[BlockHash]
-      ): F[BlockDagRepresentation[F]] = ???
-
-      override def reachedAcquiescence: F[Boolean] = false.pure[F]
-    }
-    CasperSnapshot[F](
-      dummyRepresentation,
-      ByteString.EMPTY,
-      List.empty,
-      Set.empty,
-      Map.empty,
-      Set.empty,
-      0,
-      Map.empty,
-      OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-        Map.empty,
-        Seq.empty
-      )
-    )
-  }.pure[F]
+//  def mkDummyCasperSnapshot[F[_]: Applicative]: F[CasperSnapshot[F]] = {
+//    val dummyRepresentation = new BlockDagRepresentation[F] {
+//      override def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] = ???
+//
+//      override def contains(blockHash: BlockHash): F[Boolean] = ???
+//
+//      override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
+//
+//      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
+//        Map.empty[Validator, BlockHash].pure[F]
+//
+//      override def invalidBlocks: F[Set[BlockMetadata]] = Set.empty[BlockMetadata].pure[F]
+//
+//      override def latestBlockNumber: F[Long] = ???
+//
+//      override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
+//
+//      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
+//
+//      override def topoSort(
+//          startBlockNumber: Long,
+//          maybeEndBlockNumber: Option[Long]
+//      ): F[Vector[Vector[BlockHash]]] = ???
+//
+//      override def isFinalized(blockHash: BlockHash): F[Boolean] = ???
+//
+//      override def children(vertex: BlockHash): F[Option[Set[BlockHash]]] = ???
+//
+//      override def lastFinalizedBlock: BlockHash = ???
+//
+//      override def nonFinalizedSet: Set[BlockHash] = ???
+//
+//      override def truncate(
+//          latestMessages: Map[Validator, BlockHash],
+//          findLfb: Map[Validator, BlockHash] => F[BlockHash]
+//      ): F[BlockDagRepresentation[F]] = ???
+//
+//      override def reachedAcquiescence: F[Boolean] = false.pure[F]
+//    }
+//    CasperSnapshot[F](
+//      dummyRepresentation,
+//      ByteString.EMPTY,
+//      List.empty,
+//      Set.empty,
+//      Map.empty,
+//      Set.empty,
+//      0,
+//      Map.empty,
+//      OnChainCasperState(
+//        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+//        Map.empty,
+//        Seq.empty
+//      )
+//    )
+//  }.pure[F]
 
 }

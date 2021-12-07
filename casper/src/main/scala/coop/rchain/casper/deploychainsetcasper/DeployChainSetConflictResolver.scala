@@ -63,7 +63,7 @@ final case class DeployChainSetConflictResolver[F[_]: Sync](
 
   def resolve(
       conflictSet: Set[DeployChain],
-      toEnforce: ConflictResolution[DeployChain]
+      toEnforce: ConflictResolution[DeployChain] = ConflictResolution(Set(), Set())
   ): F[ConflictResolution[DeployChain]] = {
     implicit val log = Log.log
     for {
