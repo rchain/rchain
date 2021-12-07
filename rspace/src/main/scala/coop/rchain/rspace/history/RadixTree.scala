@@ -1,6 +1,6 @@
 package coop.rchain.rspace.history
 
-import cats.Parallel
+import cats.{Monad, Parallel}
 import cats.effect.Sync
 import cats.syntax.all._
 import scodec.bits.ByteVector
@@ -192,6 +192,245 @@ object RadixTree {
 
   def byteToInt(b: Byte): Int = b & 0xff
 
+  /**
+    * Which element counts the skip&take counter?
+    */
+  sealed trait CountableItem
+  final case object calculateNodes extends CountableItem
+  final case object calculateLeafs extends CountableItem
+
+  /**
+    * Data for return
+    */
+  case class ExportData(
+      nodePrefixes: Seq[ByteVector],
+      nodeKVDBKeys: Seq[ByteVector],
+      nodeKVDBValues: Seq[Array[Byte]],
+      leafPrefixes: Seq[ByteVector],
+      LeafValues: Seq[ByteVector] // it's ptr for datastore
+  )
+
+  /**
+    * Which data is need to export?
+    */
+  case class ExportDataSettings(
+      exportNodePrefixes: Boolean,
+      exportNodeKVDBKeys: Boolean,
+      exportNodeKVDBValues: Boolean,
+      exportLeafPrefixes: Boolean,
+      exportLeafValues: Boolean
+  )
+
+  /**
+    * Sequential export algorithm
+    */
+  def sequentialExport[F[_]: Monad](
+      rootHash: ByteVector,
+      lastPrefix: ByteVector, //describes the path of root to last processed element (if empty - start from root)
+      skipSize: Int,          //how many elements to skip
+      takeSize: Int,          //how many elements to take
+      getNodeDataFromStore: ByteVector => F[Option[Array[Byte]]],
+      settings: ExportDataSettings,
+      countableItem: CountableItem = calculateNodes //don't used (will be use in the future)
+  ): F[(ExportData, ByteVector)] = {
+    val _ = countableItem //todo fixme
+    final case class NodeData(
+        prefix: ByteVector,         //a prefix that describes the path of root to node
+        decoded: Node,              //deserialized data (from parsing)
+        lastItemIndex: Option[Byte] //last processed item number
+    )
+    type Path = Vector[NodeData] //sequence used in recursions
+
+    /**
+      * Create path from root to lastPrefix node
+      */
+    final case class Params1(
+        nodeHash: ByteVector,   //hash of node for load
+        nodePrefix: ByteVector, //prefix of this node
+        restPrefix: ByteVector, //a prefix that describes the rest of the Path
+        path: Path              //return path
+    )
+    def createNodePath(
+        params: Params1
+    ): F[Either[Params1, Path]] =
+      params match {
+        case Params1(hash, nodePrefix, tempPrefix, path) =>
+          for {
+            nodeOpt <- getNodeDataFromStore(hash)
+            decoded = {
+              assert(nodeOpt.isDefined, s"Export error: Node with key ${hash.toHex} not found")
+              val node = nodeOpt.get
+              codecs.decode(node)
+            }
+            r = if (tempPrefix.isEmpty)
+              (NodeData(nodePrefix, decoded, None) +: path).asRight //happy end
+            else                                                    //go dipper
+              decoded(byteToInt(tempPrefix.head)) match {
+                case NodePtr(ptrPrefix, ptr) =>
+                  val (prefixCommon, prefixRest, ptrPrefixRest) =
+                    commonPrefix(tempPrefix.tail, ptrPrefix)
+                  assert(
+                    ptrPrefixRest.isEmpty,
+                    s"Export error: Node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found"
+                  )
+                  Params1(
+                    ptr,
+                    (nodePrefix :+ tempPrefix.head) ++ prefixCommon,
+                    prefixRest,
+                    NodeData(nodePrefix, decoded, Some(tempPrefix.head)) +: path
+                  ).asLeft
+                case _ =>
+                  assert(
+                    assertion = false,
+                    s"Export error: Node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found"
+                  )
+                  Vector().asRight //Not found
+              }
+          } yield r
+      }
+
+    /**
+      * Main loop
+      */
+    type Params2 = (
+        Path,       // path of node from current to root
+        (Int, Int), // Skip & take counter
+        ExportData  // Result of export
+    )
+    def loop(params: Params2): F[Either[Params2, (ExportData, ByteVector)]] = {
+      val (path, (skip, take), exportData) = params
+      val curNodeData                      = path.head
+      val curNodePrefix                    = curNodeData.prefix
+      val curNode                          = curNodeData.decoded
+
+      if ((skip, take) == (0, 0)) Monad[F].pure((exportData, curNodePrefix).asRight)
+      else {
+        @tailrec
+        def findNextNotEmptyItem(lastIndexOpt: Option[Byte]): Option[(Byte, Item)] = {
+          val curIndexOpt = lastIndexOpt match {
+            case None => Some(0.toByte)
+            case Some(index) =>
+              if (index == 0xFF.toByte) None
+              else Some((byteToInt(index) + 1).toByte)
+          }
+          curIndexOpt match {
+            case None => None
+            case Some(curIndex) =>
+              val curItem = curNode(byteToInt(curIndex))
+              curItem match {
+                case EmptyItem => findNextNotEmptyItem(Some(curIndex))
+                case Leaf(_, _) =>
+                  if (settings.exportLeafPrefixes || settings.exportLeafValues)
+                    Some(curIndex, curItem)
+                  else findNextNotEmptyItem(Some(curIndex))
+                case NodePtr(_, _) => Some(curIndex, curItem)
+              }
+          }
+        }
+        val nextNotEmptyItem = findNextNotEmptyItem(curNodeData.lastItemIndex)
+        nextNotEmptyItem match {
+          case None => Monad[F].pure((path.tail, (skip, take), exportData).asLeft)
+          case Some((itemIndex, item)) =>
+            val newCurNodeData = NodeData(curNodePrefix, curNode, Some(itemIndex))
+            val newPath        = newCurNodeData +: path.tail
+            item match {
+              case EmptyItem => Monad[F].pure((path, (skip, take), exportData).asLeft)
+              case Leaf(leafPrefix, leafValue) =>
+                if (skip > 0) Monad[F].pure((newPath, (skip - 1, take), exportData).asLeft)
+                else {
+                  val newLeafPrefixes =
+                    if (settings.exportLeafPrefixes) {
+                      val newLeafPrefix = (curNodePrefix :+ itemIndex) ++ leafPrefix
+                      exportData.leafPrefixes :+ newLeafPrefix
+                    } else Seq()
+                  val newLeafValues =
+                    if (settings.exportLeafValues) exportData.LeafValues :+ leafValue
+                    else Seq()
+                  val newExportData = ExportData(
+                    nodePrefixes = exportData.nodePrefixes,
+                    nodeKVDBKeys = exportData.nodeKVDBKeys,
+                    nodeKVDBValues = exportData.nodeKVDBValues,
+                    leafPrefixes = newLeafPrefixes,
+                    LeafValues = newLeafValues
+                  )
+                  Monad[F].pure((newPath, (skip, take), newExportData).asLeft)
+                }
+
+              case NodePtr(ptrPrefix, ptr) =>
+                for {
+                  childNodeOpt <- getNodeDataFromStore(ptr)
+                  childNodeKVDBValue = {
+                    assert(
+                      childNodeOpt.isDefined,
+                      s"Export error: Node with key ${ptr.toHex} not found"
+                    )
+                    childNodeOpt.get
+                  }
+                  childDecoded    = codecs.decode(childNodeKVDBValue)
+                  childNodePrefix = (curNodePrefix :+ itemIndex) ++ ptrPrefix
+                  childNodeData   = NodeData(childNodePrefix, childDecoded, None)
+                  childPath       = childNodeData +: newPath
+
+                  r = if (skip > 0) (childPath, (skip - 1, take), exportData).asLeft
+                  else {
+                    val newNodePrefixes =
+                      if (settings.exportNodePrefixes) exportData.nodePrefixes :+ childNodePrefix
+                      else Seq()
+                    val newNodeKVDBKeys =
+                      if (settings.exportNodeKVDBKeys) exportData.nodeKVDBKeys :+ ptr
+                      else Seq()
+                    val newNodeKVDBValues =
+                      if (settings.exportNodeKVDBValues)
+                        exportData.nodeKVDBValues :+ childNodeKVDBValue
+                      else Seq()
+                    val newExportData = ExportData(
+                      nodePrefixes = newNodePrefixes,
+                      nodeKVDBKeys = newNodeKVDBKeys,
+                      nodeKVDBValues = newNodeKVDBValues,
+                      leafPrefixes = exportData.leafPrefixes,
+                      LeafValues = exportData.LeafValues
+                    )
+                    (childPath, (skip, take - 1), newExportData).asLeft
+                  }
+                } yield r
+            }
+        }
+      }
+    }
+
+    val rootParams       = Params1(rootHash, ByteVector.empty, lastPrefix, Vector())
+    val emptyExportDataF = ExportData(Seq(), Seq(), Seq(), Seq(), Seq()).pure
+
+    //defining init data
+    val (initExportDataF, initSkipSize, initTakeSize) =
+      if (lastPrefix.isEmpty)                                        //start from root
+        if (skipSize > 0) (emptyExportDataF, skipSize - 1, takeSize) //skip root
+        else if (takeSize > 0) {
+          val rootExportData = for {
+            rootOpt <- getNodeDataFromStore(rootHash)
+            root = {
+              assert(
+                rootOpt.isDefined,
+                s"Export error: root node with key ${rootHash.toHex} not found"
+              )
+              rootOpt.get
+            }
+            newNodePrefixes   = if (settings.exportNodePrefixes) Seq(ByteVector.empty) else Seq()
+            newNodeKVDBKeys   = if (settings.exportNodeKVDBKeys) Seq(rootHash) else Seq()
+            newNodeKVDBValues = if (settings.exportNodeKVDBValues) Seq(root) else Seq()
+          } yield ExportData(newNodePrefixes, newNodeKVDBKeys, newNodeKVDBValues, Seq(), Seq())
+          (rootExportData, skipSize, takeSize - 1)    //take root
+        } else (emptyExportDataF, skipSize, takeSize) //(skip, size) == (0,0)
+      else (emptyExportDataF, skipSize, takeSize)     //start from next node after lastPrefix
+
+    for {
+      path                 <- rootParams.tailRecM(createNodePath)
+      initExportData       <- initExportDataF
+      startParams: Params2 = (path, (initSkipSize, initTakeSize), initExportData)
+      r                    <- startParams.tailRecM(loop)
+    } yield r
+  }
+
   class RadixTreeImpl[F[_]: Sync: Parallel](store: RadixStore[F]) {
 
     /**
@@ -306,7 +545,7 @@ object RadixTree {
       */
     final def read(startNode: Node, startPrefix: ByteVector): F[Option[ByteVector]] = {
       type Params = (Node, ByteVector)
-      def go(params: Params): F[Either[Params, Option[ByteVector]]] =
+      def loop(params: Params): F[Either[Params, Option[ByteVector]]] =
         params match {
           case (_, ByteVector.empty) => Sync[F].pure(None.asRight) //Not found
           case (curNode, prefix) =>
@@ -323,7 +562,7 @@ object RadixTree {
                 else Sync[F].pure(None.asRight)                                           //Not found
             }
         }
-      Sync[F].tailRecM(startNode, startPrefix)(go)
+      Sync[F].tailRecM(startNode, startPrefix)(loop)
     }
 
     /**
@@ -465,11 +704,14 @@ object RadixTree {
       * Return updated curNode. if no action was taken - return [[None]].
       */
     def makeActions(curNode: Node, curActions: List[HistoryAction]): F[Option[Node]] = {
-      assert(
-        !curActions.exists(_.key.isEmpty),
-        "The length of all prefixes in the subtree must be the same"
-      )
-      val groups = curActions.groupBy(_.key.head).toList
+      val groups = curActions
+        .groupBy(
+          _.key.headOption.getOrElse({
+            assert(assertion = false, "The length of all prefixes in the subtree must be the same")
+            0x00.toByte
+          })
+        )
+        .toList
       val newGroupItemsF = groups.map {
         case (groupIdx, groupActions) =>
           val index = byteToInt(groupIdx)
