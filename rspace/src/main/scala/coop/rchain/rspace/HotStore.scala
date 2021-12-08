@@ -68,7 +68,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def getContinuations(channels: Seq[C]): F[Seq[WaitingContinuation[P, K]]] =
     for {
       fromHistoryStore <- getContFromHistoryStore(channels)
-      result <- hotStoreState.modify[Seq[WaitingContinuation[P, K]]](state => {
+      result <- hotStoreState.modify[Seq[WaitingContinuation[P, K]]] { state =>
                  state.continuations.get(channels) match {
                    // update with what is in historyStore and return the same
                    case None =>
@@ -82,7 +82,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    case Some(continuations) =>
                      (state, state.installedContinuations.get(channels) ++: continuations)
                  }
-               })
+               }
     } yield result
 
   def putContinuation(channels: Seq[C], wc: WaitingContinuation[P, K]): F[Unit] =
@@ -103,7 +103,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def removeContinuation(channels: Seq[C], index: Int): F[Unit] =
     for {
       fromHistoryStore <- getContFromHistoryStore(channels)
-      r <- hotStoreState.modify[(Boolean, Boolean)](state => {
+      r <- hotStoreState.modify[(Boolean, Boolean)] { state =>
             val curVal       = state.continuations.getOrElse(channels, fromHistoryStore)
             val installedCon = state.installedContinuations.get(channels)
             val isInstalled  = installedCon.nonEmpty
@@ -131,7 +131,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                 (false, false)
               )
             }
-          })
+          }
       (removingInstalled, invalidIndex) = r
       _ <- Sync[F]
             .raiseError {
@@ -152,7 +152,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def getData(channel: C): F[Seq[Datum[A]]] =
     for {
       fromHistoryStore <- getDataFromHistoryStore(channel)
-      result <- hotStoreState.modify[Seq[Datum[A]]](state => {
+      result <- hotStoreState.modify[Seq[Datum[A]]] { state =>
                  state.data.get(channel) match {
                    // update with what is in historyStore and return the same
                    case None =>
@@ -165,7 +165,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    // just return what is in hot store already
                    case Some(data) => (state, data)
                  }
-               })
+               }
     } yield (result)
 
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
@@ -186,7 +186,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def removeDatum(channel: C, index: Int): F[Unit] =
     for {
       fromHistoryStore <- getDataFromHistoryStore(channel)
-      err <- hotStoreState.modify[Boolean](state => {
+      err <- hotStoreState.modify[Boolean] { state =>
               val curVal      = state.data.getOrElse(channel, fromHistoryStore)
               val outOfBounds = !curVal.isDefinedAt(index)
 
@@ -196,7 +196,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                 val updated = removeIndex(curVal, index)
                 (state.copy(data = state.data.updated(channel, updated)), false)
               }
-            })
+            }
       _ <- Sync[F]
             .raiseError(
               new IndexOutOfBoundsException(
@@ -211,7 +211,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
   def getJoins(channel: C): F[Seq[Seq[C]]] =
     for {
       fromHistoryStore <- getJoinsFromHistoryStore(channel)
-      result <- hotStoreState.modify[Seq[Seq[C]]](state => {
+      result <- hotStoreState.modify[Seq[Seq[C]]] { state =>
                  state.joins.get(channel) match {
                    // update with what is in historyStore and return the same
                    case None =>
@@ -225,7 +225,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    case Some(joins) =>
                      (state, state.installedJoins.getOrElse(channel, Seq.empty) ++: joins)
                  }
-               })
+               }
 
     } yield result
 
@@ -256,8 +256,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       joinsInHistoryStore <- getJoinsFromHistoryStore(channel)
       contsInHistoryStore <- getContFromHistoryStore(join)
-      err <- hotStoreState.modify[Boolean](state => {
-
+      err <- hotStoreState.modify[Boolean] { state =>
               val curJoins = state.joins.getOrElse(channel, joinsInHistoryStore)
 
               val curConts = state.installedContinuations
@@ -278,7 +277,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                   (state.copy(joins = state.joins.updated(channel, newVal)), false)
                 }
               } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
-            })
+            }
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
@@ -316,13 +315,13 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       d <- Deferred[F, Seq[WaitingContinuation[P, K]]]
       r <- historyStoreCache
-            .modify[(Deferred[F, Seq[WaitingContinuation[P, K]]], Boolean)](cache => {
+            .modify[(Deferred[F, Seq[WaitingContinuation[P, K]]], Boolean)] { cache =>
               cache.continuations.get(channels) match {
                 case Some(v) => (cache, (v, true))
                 case None =>
                   (cache.copy(continuations = cache.continuations + (channels -> d)), (d, false))
               }
-            })
+            }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getContinuations(channels) >>= deferred.complete).whenA(!isComplete)
       contInHistoryStore     <- deferred.get
@@ -332,12 +331,12 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       d <- Deferred[F, Seq[Datum[A]]]
       r <- historyStoreCache
-            .modify[(Deferred[F, Seq[Datum[A]]], Boolean)](cache => {
+            .modify[(Deferred[F, Seq[Datum[A]]], Boolean)] { cache =>
               cache.datums.get(channel) match {
                 case Some(v) => (cache, (v, true))
                 case None    => (cache.copy(datums = cache.datums + (channel -> d)), (d, false))
               }
-            })
+            }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getData(channel) >>= deferred.complete).whenA(!isComplete)
       dataInHistoryStore     <- deferred.get
@@ -347,12 +346,12 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       d <- Deferred[F, Seq[Seq[C]]]
       r <- historyStoreCache
-            .modify[(Deferred[F, Seq[Seq[C]]], Boolean)](cache => {
+            .modify[(Deferred[F, Seq[Seq[C]]], Boolean)] { cache =>
               cache.joins.get(channel) match {
                 case Some(v) => (cache, (v, true))
                 case None    => (cache.copy(joins = cache.joins + (channel -> d)), (d, false))
               }
-            })
+            }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
       joinsInHistoryStore    <- deferred.get

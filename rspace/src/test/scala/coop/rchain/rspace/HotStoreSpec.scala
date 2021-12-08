@@ -101,21 +101,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putContinuations(channels, historyContinuations)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> cachedContinuations
-                        ),
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> cachedContinuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             readContinuations <- hotStore.getContinuations(channels)
 
             cache <- state.get
@@ -135,21 +134,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> cachedContinuations
-                        ),
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> cachedContinuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             _     <- hotStore.installContinuation(channels, installedContinuation)
             res   <- hotStore.getContinuations(channels)
             cache <- state.get
@@ -193,21 +191,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putContinuations(channels, historyContinuations)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> cachedContinuations
-                        ),
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> cachedContinuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             _     <- hotStore.putContinuation(channels, insertedContinuation)
             cache <- state.get
             _ <- S.delay(
@@ -230,21 +227,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         fixture { (state, history, hotStore) =>
           {
             for {
-              _ <- state.modify(
-                    _ =>
-                      (
-                        HotStoreState(
-                          continuations = Map(
-                            channels -> cachedContinuations
-                          ),
-                          installedContinuations = Map.empty,
-                          data = Map.empty,
-                          joins = Map.empty,
-                          installedJoins = Map.empty
+              _ <- state.modify { _ =>
+                    (
+                      HotStoreState(
+                        continuations = Map(
+                          channels -> cachedContinuations
                         ),
-                        ()
-                      )
-                  )
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map.empty,
+                        installedJoins = Map.empty
+                      ),
+                      ()
+                    )
+                  }
               _     <- hotStore.installContinuation(channels, installedContinuation)
               _     <- hotStore.putContinuation(channels, insertedContinuation)
               cache <- state.get
@@ -296,21 +292,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putContinuations(channels, historyContinuations)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> cachedContinuations
-                        ),
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> cachedContinuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.get
             _ <- checkRemovalWorksOrFailsOnError(
@@ -334,23 +329,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> cachedContinuations
-                        ),
-                        installedContinuations = Map(
-                          channels -> installedContinuation
-                        ),
-                        data = Map.empty,
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> cachedContinuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map(
+                        channels -> installedContinuation
+                      ),
+                      data = Map.empty,
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             res   <- hotStore.removeContinuation(channels, index).attempt
             cache <- state.get
             _ <- if (index == 0)
@@ -397,21 +391,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putData(channel, historyData)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map(
-                          channel -> cachedData
-                        ),
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map(
+                        channel -> cachedData
                       ),
-                      ()
-                    )
-                )
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             readData <- hotStore.getData(channel)
             cache    <- state.get
             _        <- S.delay(cache.data(channel) shouldEqual cachedData)
@@ -450,21 +443,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putData(channel, historyData)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map(
-                          channel -> cachedData
-                        ),
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map(
+                        channel -> cachedData
                       ),
-                      ()
-                    )
-                )
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             _     <- hotStore.putDatum(channel, insertedData)
             cache <- state.get
             _     <- S.delay(cache.data(channel) shouldEqual insertedData +: cachedData)
@@ -507,21 +499,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putData(channel, historyData)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map(
-                          channel -> cachedData
-                        ),
-                        joins = Map.empty,
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map(
+                        channel -> cachedData
                       ),
-                      ()
-                    )
-                )
+                      joins = Map.empty,
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             res   <- hotStore.removeDatum(channel, index).attempt
             cache <- state.get
             _     <- checkRemovalWorksOrFailsOnError(res, cache.data(channel), cachedData, index)
@@ -555,21 +546,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         {
           for {
             _ <- history.putJoins(channel, historyJoins)
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map(
-                          channel -> cachedJoins
-                        ),
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map(
+                        channel -> cachedJoins
                       ),
-                      ()
-                    )
-                )
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             readJoins <- hotStore.getJoins(channel)
             cache     <- state.get
             _         <- S.delay(cache.joins(channel) shouldEqual cachedJoins)
@@ -611,21 +601,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
           {
             for {
               _ <- history.putJoins(channel, historyJoins)
-              _ <- state.modify(
-                    _ =>
-                      (
-                        HotStoreState(
-                          continuations = Map.empty,
-                          installedContinuations = Map.empty,
-                          data = Map.empty,
-                          joins = Map(
-                            channel -> cachedJoins
-                          ),
-                          installedJoins = Map.empty
+              _ <- state.modify { _ =>
+                    (
+                      HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map(
+                          channel -> cachedJoins
                         ),
-                        ()
-                      )
-                  )
+                        installedJoins = Map.empty
+                      ),
+                      ()
+                    )
+                  }
               _     <- hotStore.putJoin(channel, insertedJoin)
               cache <- state.get
               _ <- S.delay {
@@ -646,21 +635,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map(
-                          channel -> cachedJoins
-                        ),
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map(
+                        channel -> cachedJoins
                       ),
-                      ()
-                    )
-                )
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             _     <- hotStore.putJoin(channel, insertedJoin)
             cache <- state.get
             _ <- S.delay {
@@ -685,21 +673,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         fixture { (state, history, hotStore) =>
           {
             for {
-              _ <- state.modify(
-                    _ =>
-                      (
-                        HotStoreState(
-                          continuations = Map.empty,
-                          installedContinuations = Map.empty,
-                          data = Map.empty,
-                          joins = Map(
-                            channel -> cachedJoins
-                          ),
-                          installedJoins = Map.empty
+              _ <- state.modify { _ =>
+                    (
+                      HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map(
+                          channel -> cachedJoins
                         ),
-                        ()
-                      )
-                  )
+                        installedJoins = Map.empty
+                      ),
+                      ()
+                    )
+                  }
               _     <- hotStore.putJoin(channel, insertedJoin)
               _     <- hotStore.installJoin(channel, installedJoin)
               cache <- state.get
@@ -729,21 +716,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map(
-                          channel -> cachedJoins
-                        ),
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map(
+                        channel -> cachedJoins
                       ),
-                      ()
-                    )
-                )
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             _     <- hotStore.installJoin(channel, installedJoin)
             _     <- hotStore.installJoin(channel, installedJoin)
             cache <- state.get
@@ -795,21 +781,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
             for {
               _        <- history.putJoins(channel, historyJoins)
               toRemove = cachedJoins.get(index.toLong).getOrElse(join)
-              _ <- state.modify(
-                    _ =>
-                      (
-                        HotStoreState(
-                          continuations = Map.empty,
-                          installedContinuations = Map.empty,
-                          data = Map.empty,
-                          joins = Map(
-                            channel -> cachedJoins
-                          ),
-                          installedJoins = Map.empty
+              _ <- state.modify { _ =>
+                    (
+                      HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map(
+                          channel -> cachedJoins
                         ),
-                        ()
-                      )
-                  )
+                        installedJoins = Map.empty
+                      ),
+                      ()
+                    )
+                  }
               res   <- hotStore.removeJoin(channel, toRemove).attempt
               cache <- state.get
               _     <- checkRemovalWorksOrIgnoresErrors(res, cache.joins(channel), cachedJoins, index)
@@ -829,23 +814,22 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
         fixture { (state, history, hotStore) =>
           {
             for {
-              _ <- state.modify(
-                    _ =>
-                      (
-                        HotStoreState(
-                          continuations = Map.empty,
-                          installedContinuations = Map.empty,
-                          data = Map.empty,
-                          joins = Map(
-                            channel -> cachedJoins
-                          ),
-                          installedJoins = Map(
-                            channel -> installedJoins
-                          )
+              _ <- state.modify { _ =>
+                    (
+                      HotStoreState(
+                        continuations = Map.empty,
+                        installedContinuations = Map.empty,
+                        data = Map.empty,
+                        joins = Map(
+                          channel -> cachedJoins
                         ),
-                        ()
-                      )
-                  )
+                        installedJoins = Map(
+                          channel -> installedJoins
+                        )
+                      ),
+                      ()
+                    )
+                  }
               toRemove = Random.shuffle(installedJoins).head
               res      <- hotStore.removeJoin(channel, toRemove).attempt
               cache    <- state.get
@@ -880,21 +864,20 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, history, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map.empty,
-                        installedContinuations = Map.empty,
-                        data = Map.empty,
-                        joins = Map(
-                          channel -> cachedJoins
-                        ),
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map.empty,
+                      installedContinuations = Map.empty,
+                      data = Map.empty,
+                      joins = Map(
+                        channel -> cachedJoins
                       ),
-                      ()
-                    )
-                )
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             toRemove = Random.shuffle(cachedJoins).head
             _        <- hotStore.putContinuation(toRemove, continuation)
             res      <- hotStore.removeJoin(channel, toRemove).attempt
@@ -921,27 +904,26 @@ trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDriv
       fixture { (state, _, hotStore) =>
         {
           for {
-            _ <- state.modify(
-                  _ =>
-                    (
-                      HotStoreState(
-                        continuations = Map(
-                          channels -> continuations
-                        ),
-                        installedContinuations = Map(
-                          channels -> installedContinuation
-                        ),
-                        data = Map(
-                          channel -> data
-                        ),
-                        joins = Map(
-                          channel -> joins
-                        ),
-                        installedJoins = Map.empty
+            _ <- state.modify { _ =>
+                  (
+                    HotStoreState(
+                      continuations = Map(
+                        channels -> continuations
                       ),
-                      ()
-                    )
-                )
+                      installedContinuations = Map(
+                        channels -> installedContinuation
+                      ),
+                      data = Map(
+                        channel -> data
+                      ),
+                      joins = Map(
+                        channel -> joins
+                      ),
+                      installedJoins = Map.empty
+                    ),
+                    ()
+                  )
+                }
             res   <- hotStore.changes()
             cache <- state.get
             _ <- S.delay {
