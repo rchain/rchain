@@ -1359,9 +1359,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       ) => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](
-                       HotStoreState[String, Pattern, String, StringsCaptor]()
-                     )
+      historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
       history = {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
@@ -1375,9 +1373,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
       f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
   ) =
     (for {
-      historyState <- Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](
-                       HotStoreState[String, Pattern, String, StringsCaptor]()
-                     )
+      historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
       history = {
         implicit val hs = historyState
         new History[F, String, Pattern, String, StringsCaptor]
@@ -1393,6 +1389,6 @@ class RefHotStoreStatedInMemHotStoreSpec extends InMemHotStoreSpec {
   implicit override def C(
       cache: HotStoreState[String, Pattern, String, StringsCaptor]
   ): F[Ref[F, HotStoreState[String, Pattern, String, StringsCaptor]]] =
-    Ref.of[F, HotStoreState[String, Pattern, String, StringsCaptor]](cache)
+    Ref[F].of(cache)
 
 }
