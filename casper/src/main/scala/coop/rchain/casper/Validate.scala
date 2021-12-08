@@ -645,7 +645,7 @@ object Validate {
     */
   def phloPrice[F[_]: Log: Concurrent](
       b: BlockMessage,
-      minPhloPrice: Int
+      minPhloPrice: Long
   ): F[ValidBlockProcessing] =
     if (b.body.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
       BlockStatus.valid.asRight[BlockError].pure

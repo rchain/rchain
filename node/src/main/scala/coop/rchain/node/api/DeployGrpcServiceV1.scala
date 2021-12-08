@@ -35,7 +35,7 @@ object DeployGrpcServiceV1 {
       devMode: Boolean = false,
       networkId: String,
       shardId: String,
-      minPhloPrice: Int
+      minPhloPrice: Long
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -309,7 +309,7 @@ object DeployGrpcServiceV1 {
             shardId,
             peers.length,
             nodes.length,
-            minPhloPrice
+            minPhloPrice.toInt
           )
           response = StatusResponse().withStatus(status)
         } yield response).toTask

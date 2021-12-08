@@ -23,7 +23,7 @@ final case class CasperConf(
     roundRobinDispatcher: RoundRobinDispatcher,
     genesisBlockData: GenesisBlockData,
     genesisCeremony: GenesisCeremonyConf,
-    minPhloPrice: Int
+    minPhloPrice: Long
 )
 
 final case class GenesisBlockData(

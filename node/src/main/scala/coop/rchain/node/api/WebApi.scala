@@ -70,7 +70,7 @@ object WebApi {
       triggerProposeF: Option[ProposeFunction[F]],
       networkId: String,
       shardId: String,
-      minPhloPrice: Int
+      minPhloPrice: Long
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -233,7 +233,7 @@ object WebApi {
       shardId: String,
       peers: Int,
       nodes: Int,
-      minPhloPrice: Int
+      minPhloPrice: Long
   )
 
   final case class VersionInfo(api: String, node: String)

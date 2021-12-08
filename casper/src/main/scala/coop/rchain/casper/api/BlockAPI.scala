@@ -53,7 +53,7 @@ object BlockAPI {
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
       triggerPropose: Option[ProposeFunction[F]],
-      minPhloPrice: Int
+      minPhloPrice: Long
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =

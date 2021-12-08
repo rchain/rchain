@@ -36,7 +36,7 @@ object APIServers {
       blockReportAPI: BlockReportAPI[F],
       networkId: String,
       shardId: String,
-      minPhloPrice: Int
+      minPhloPrice: Long
   )(
       implicit
       blockStore: BlockStore[F],
