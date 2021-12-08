@@ -25,11 +25,7 @@ object ProtocolHelper {
       .withUdpPort(n.endpoint.udpPort)
       .withTcpPort(n.endpoint.tcpPort)
 
-  def sender(proto: Protocol): Option[PeerNode] =
-    for {
-      h <- proto.header
-      s <- h.sender
-    } yield toPeerNode(s)
+  def sender(proto: Protocol): PeerNode = toPeerNode(proto.header.sender)
 
   def toPeerNode(n: Node): PeerNode =
     PeerNode(NodeIdentifier(n.id.toByteArray), Endpoint(n.host.toStringUtf8, n.tcpPort, n.udpPort))
