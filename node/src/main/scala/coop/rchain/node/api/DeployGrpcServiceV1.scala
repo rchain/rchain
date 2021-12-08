@@ -34,7 +34,8 @@ object DeployGrpcServiceV1 {
       triggerProposeF: Option[ProposeFunction[F]],
       devMode: Boolean = false,
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Int
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -307,7 +308,8 @@ object DeployGrpcServiceV1 {
             networkId,
             shardId,
             peers.length,
-            nodes.length
+            nodes.length,
+            minPhloPrice
           )
           response = StatusResponse().withStatus(status)
         } yield response).toTask

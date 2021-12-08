@@ -278,7 +278,8 @@ object Setup {
           else none[ProposeFunction[F]],
           blockReportAPI,
           conf.protocolServer.networkId,
-          conf.casper.shardName
+          conf.casper.shardName,
+          conf.casper.minPhloPrice
         )
       }
       reportingRoutes = {
