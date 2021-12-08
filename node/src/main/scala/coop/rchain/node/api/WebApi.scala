@@ -69,7 +69,8 @@ object WebApi {
       cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Int
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -136,7 +137,8 @@ object WebApi {
         networkId,
         shardId,
         peers.length,
-        nodes.length
+        nodes.length,
+        minPhloPrice
       )
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
@@ -230,7 +232,8 @@ object WebApi {
       networkId: String,
       shardId: String,
       peers: Int,
-      nodes: Int
+      nodes: Int,
+      minPhloPrice: Int
   )
 
   final case class VersionInfo(api: String, node: String)
