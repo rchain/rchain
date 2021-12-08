@@ -87,7 +87,7 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, triggerProposeF)) { r =>
+              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice)) { r =>
                 import DeployResponse.Message
                 import DeployResponse.Message._
                 DeployResponse(r.fold[Message](Error, Result))

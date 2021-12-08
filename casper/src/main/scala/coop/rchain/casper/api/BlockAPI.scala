@@ -52,7 +52,8 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[ProposeFunction[F]]
+      triggerPropose: Option[ProposeFunction[F]],
+      minPhloPrice: Int
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -77,7 +78,6 @@ object BlockAPI {
     val forbiddenKeyCheck = forbiddenKeyError.whenA(isForbiddenKey)
 
     // Check if deploy has minimum phlo price
-    val minPhloPrice = 1
     val minPriceError = new RuntimeException(
       s"Phlo price is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]

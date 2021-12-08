@@ -93,7 +93,7 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, triggerProposeF))
+        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice))
         .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
