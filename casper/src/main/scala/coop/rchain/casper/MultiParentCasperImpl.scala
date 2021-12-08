@@ -300,6 +300,8 @@ class MultiParentCasperImpl[F[_]
               EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
         _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+        _      <- EitherT(Validate.phloPrice(b, casperShardConf.minPhloPrice))
+        _      <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
