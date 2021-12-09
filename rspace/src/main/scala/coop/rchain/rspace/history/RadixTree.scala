@@ -208,7 +208,7 @@ object RadixTree {
       nodeKVDBKeys: Seq[ByteVector],
       nodeKVDBValues: Seq[ByteVector],
       leafPrefixes: Seq[ByteVector],
-      LeafValues: Seq[ByteVector] // it's ptr for datastore
+      leafValues: Seq[ByteVector] // it's ptr for datastore
   )
 
   /**
@@ -351,14 +351,14 @@ object RadixTree {
                         exportData.leafPrefixes :+ newLeafPrefix
                       } else Seq()
                     val newLeafValues =
-                      if (settings.exportLeafValues) exportData.LeafValues :+ leafValue
+                      if (settings.exportLeafValues) exportData.leafValues :+ leafValue
                       else Seq()
                     val newExportData = ExportData(
                       nodePrefixes = exportData.nodePrefixes,
                       nodeKVDBKeys = exportData.nodeKVDBKeys,
                       nodeKVDBValues = exportData.nodeKVDBValues,
                       leafPrefixes = newLeafPrefixes,
-                      LeafValues = newLeafValues
+                      leafValues = newLeafValues
                     )
                     Monad[F].pure((newPath, (skip, take), newExportData).asLeft)
                   }
@@ -395,7 +395,7 @@ object RadixTree {
                         nodeKVDBKeys = newNodeKVDBKeys,
                         nodeKVDBValues = newNodeKVDBValues,
                         leafPrefixes = exportData.leafPrefixes,
-                        LeafValues = exportData.LeafValues
+                        leafValues = exportData.leafValues
                       )
                       (childPath, (skip, take - 1), newExportData).asLeft
                     }

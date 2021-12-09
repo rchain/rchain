@@ -40,8 +40,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 //    val averageStatistic: Boolean = true
     val averageStatistic: Boolean = false
 
-    val averageNum: Int    = 1
-    val averageWarmUp: Int = 1
+    val averageNum: Int    = 5
+    val averageWarmUp: Int = 3
 
     val flagSize: Boolean = calcSize && (typeStore == "inMemo")
 
@@ -58,7 +58,10 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     ExpT(1, 5000),
     ExpT(1, 10000),
     ExpT(1, 30000),
-    ExpT(1, 100000)
+    ExpT(1, 100000),
+    ExpT(1, 200000),
+    ExpT(1, 300000),
+    ExpT(1, 400000)
   )
 
   val tasksMedium1: List[ExpT] = List(
@@ -356,7 +359,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
             d1.nodeKVDBKeys ++ d2.nodeKVDBKeys,
             d1.nodeKVDBValues ++ d2.nodeKVDBValues,
             d1.leafPrefixes ++ d2.leafPrefixes,
-            d1.LeafValues ++ d2.LeafValues
+            d1.leafValues ++ d2.leafValues
           ),
           pr2
         )
@@ -429,6 +432,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
       def export(
           rootHash: Blake2b256Hash,
+          skipSize: Int,
           getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
       ): F[ExportData] = {
         import coop.rchain.rspace.history.RadixTree._
@@ -443,7 +447,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           sequentialExport[F](
             rootHash.bytes,
             None,
-            0,
+            skipSize,
             1000000,
             getNodeDataFromStore,
             exportSettings
@@ -468,14 +472,14 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
         val localStorage = (nodeKVDBKeys zip nodeKVDBValues).toMap
         for {
-          expDataForValid <- export(rootHash, localStorage.get(_).pure)
+          expDataForValid <- export(rootHash, 0, localStorage.get(_).pure)
           _               <- assert(expDataForValid == expData, "Error 2 of validation").pure
         } yield ()
       }
 
       val result =
         (0 until (Settings.averageNum + Settings.averageWarmUp)).toList
-          .foldM((0L, 0L, 0L, 0L, 0L, (0L, 0), (0L, 0), (0L, 0))) {
+          .foldM((0L, 0L, 0L, 0L, 0L, 0, (0L, 0), (0L, 0), (0L, 0))) {
             case (initData, i) =>
               def statistic(
                   timeI: Long,
@@ -483,6 +487,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                   timeD: Long,
                   timeExp: Long,
                   timeValid: Long,
+                  numNode: Int,
                   sizeInit: (Long, Int),
                   sizeI: (Long, Int),
                   sizeD: (Long, Int)
@@ -496,7 +501,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 val strSize = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
 
                 val str = iI(i) + num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) +
-                  sec(timeD) + sec(timeExp) + sec(timeValid) + strSize
+                  sec(timeD) + sec(timeExp) + sec(timeValid) + num(numNode) + strSize
                 println(str)
               }
 
@@ -526,11 +531,13 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 temp           <- nsTime(readAndVerify(history2, insReadDelHashes))
                 (_, timeRTemp) = temp
 
-                expDataW               <- export(history2W.root, historyInitW.getNodeDataFromStore)
-                temp                   <- nsTime(export(history2.root, historyInit.getNodeDataFromStore))
+                expDataW               <- export(history2W.root, 0, historyInitW.getNodeDataFromStore)
+                temp                   <- nsTime(export(history2.root, 0, historyInit.getNodeDataFromStore))
                 (expData, timeExpTemp) = temp
 
-                expDataW           <- validation(history2W.root, expDataW)
+                numNodeTemp = expData.nodeKVDBKeys.size
+
+                _                  <- validation(history2W.root, expDataW)
                 temp               <- nsTime(validation(history2.root, expData))
                 (_, timeValidTemp) = temp
 
@@ -551,14 +558,15 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                     timeDExp,
                     timeExpTemp,
                     timeValidTemp,
+                    numNodeTemp,
                     size0.getOrElse((0L, 0)),
                     size1.getOrElse((0L, 0)),
                     size2.getOrElse((0L, 0))
                   )
-                (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD) = initData
+                (timeI, timeR, timeD, timeExp, timeValid, numNode, sizeInit, sizeI, sizeD) = initData
               } yield
                 if (i < Settings.averageWarmUp)
-                  (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD)
+                  (timeI, timeR, timeD, timeExp, timeValid, numNode, sizeInit, sizeI, sizeD)
                 else
                   (
                     timeI + timeITemp,
@@ -566,6 +574,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                     timeD + timeDExp,
                     timeExp + timeExpTemp,
                     timeValid + timeValidTemp,
+                    numNode + numNodeTemp,
                     (
                       sizeInit._1 + size0.getOrElse(0L, 0)._1,
                       sizeInit._2 + size0.getOrElse(0L, 0)._2
@@ -576,19 +585,20 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           }
 
       result.map { x =>
-        def num(v: Int)  = "%10d, ".format(v)
-        def sec(v: Long) = "%10.3f, ".format(v.toDouble / (1000 * Settings.averageNum))
+        def num(v: Int)        = "%10d, ".format(v)
+        def numAverage(v: Int) = "%10d, ".format(v / Settings.averageNum)
+        def sec(v: Long)       = "%10.3f, ".format(v.toDouble / (1000 * Settings.averageNum))
         def MB(v: (Long, Int)) =
           "%10.3f,  %10.0f,".format(
             v._1.toDouble / (1024 * 1024 * Settings.averageNum),
             v._2.toDouble / Settings.averageNum
           )
 
-        val (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD) = x
-        val strSize                                                           = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
+        val (timeI, timeR, timeD, timeExp, timeValid, numNode, sizeInit, sizeI, sizeD) = x
+        val strSize                                                                    = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
         val str = num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) + sec(timeD) + sec(
           timeExp
-        ) + sec(timeValid) + strSize
+        ) + sec(timeValid) + numAverage(numNode) + strSize
         println(str)
       }
     }
@@ -604,7 +614,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         else ""
         str = fS("numInit") + fS("numIRD") + fS("timeI(sec)") + fS("timeR(sec)") + fS("timeD(sec)") + fS(
           "timeExp(sec)"
-        ) + fS("timeValid(sec)") + strSize
+        ) + fS("timeValid(sec)") + fS("numNode") + strSize
         _ <- println(str).pure
 
 //        _ <- simpleExperiment()
