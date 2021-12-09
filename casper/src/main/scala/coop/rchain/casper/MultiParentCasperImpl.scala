@@ -299,9 +299,13 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT(
               EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
-        _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
-        _      <- EitherT(Validate.phloPrice(b, casperShardConf.minPhloPrice))
-        _      <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+
+        // This validation is only to punish validator which accepted lower price deploys.
+        // And this can happen if not configured correctly.
+        // _      <- EitherT(Validate.phloPrice(b, casperShardConf.minPhloPrice))
+        // _      <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
