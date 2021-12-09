@@ -21,7 +21,7 @@ import scala.collection.SortedSet
 import scala.concurrent.duration._
 import scala.util.Random
 
-trait HotStoreSpec[F[_], M[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
+trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenPropertyChecks {
 
   implicit override val generatorDrivenConfig =
     PropertyCheckConfiguration(minSize = 0, sizeRange = 10, minSuccessful = 20)
@@ -1342,7 +1342,7 @@ class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, HotStoreState[C, P, A, 
   override def getJoinsProj[R](key: C): ((Seq[C], ByteVector) => R) => F[Seq[R]] = ???
 }
 
-trait InMemHotStoreSpec extends HotStoreSpec[Task, Task.Par] {
+trait InMemHotStoreSpec extends HotStoreSpec[Task] {
 
   protected type F[A] = Task[A]
   implicit override val S: Sync[F]        = implicitly[Concurrent[Task]]
