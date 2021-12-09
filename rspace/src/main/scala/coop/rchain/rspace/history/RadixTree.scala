@@ -410,12 +410,17 @@ object RadixTree {
       Params1(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
     val emptyExportDataF = ExportData(Seq(), Seq(), Seq(), Seq(), Seq()).pure
 
+    assert(
+      (skipSize, takeSize) != (0, 0),
+      s"Export error: invalid initial conditions (skipSize, takeSize)==(0,0)"
+    )
+
     //defining init data
     val (initExportDataF, initSkipSize, initTakeSize) =
       lastPrefix match {
         case None => //start from root
           if (skipSize > 0) (emptyExportDataF, skipSize - 1, takeSize) //skip root
-          else if (takeSize > 0) {
+          else {
             val rootExportData = for {
               rootOpt <- getNodeDataFromStore(rootHash)
               root = {
@@ -430,8 +435,7 @@ object RadixTree {
               newNodeKVDBValues = if (settings.exportNodeKVDBValues) Seq(root) else Seq()
             } yield ExportData(newNodePrefixes, newNodeKVDBKeys, newNodeKVDBValues, Seq(), Seq())
             (rootExportData, skipSize, takeSize - 1) //take root
-
-          } else (emptyExportDataF, skipSize, takeSize) //(skip, size) == (0,0)
+          }
         case Some(_) =>
           (emptyExportDataF, skipSize, takeSize) //start from next node after lastPrefix
       }

@@ -6,8 +6,9 @@ import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
-import coop.rchain.rspace.history.{InsertAction, _}
+import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history.instances._
+import coop.rchain.rspace.history._
 import coop.rchain.shared.Log
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
@@ -39,12 +40,12 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 //    val averageStatistic: Boolean = true
     val averageStatistic: Boolean = false
 
-    val averageNum: Int    = 5
-    val averageWarmUp: Int = 10
+    val averageNum: Int    = 1
+    val averageWarmUp: Int = 1
 
     val flagSize: Boolean = calcSize && (typeStore == "inMemo")
 
-    val taskCur: List[ExpT] = tasksLarge0
+    val taskCur: List[ExpT] = tasksMedium0
   }
 
   case class ExpT(initNum: Int, insReadDelNum: Int)
@@ -56,7 +57,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     ExpT(1, 1000),
     ExpT(1, 5000),
     ExpT(1, 10000),
-    ExpT(1, 30000)
+    ExpT(1, 30000),
+    ExpT(1, 100000)
   )
 
   val tasksMedium1: List[ExpT] = List(
@@ -69,13 +71,14 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
   )
 
   val tasksLarge0: List[ExpT] = List(
+    ExpT(1, 1000),
     ExpT(1, 10000),
     ExpT(1, 50000),
     ExpT(1, 100000),
-    ExpT(1, 200000),
-    ExpT(1, 300000),
-    ExpT(1, 400000),
-    ExpT(1, 500000)
+    ExpT(1, 200000)
+//    ExpT(1, 300000),
+//    ExpT(1, 400000),
+//    ExpT(1, 500000)
 //    ExpT(1, 600000)
 //    ExpT(1, 700000),
 //    ExpT(1, 800000),
@@ -112,10 +115,17 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
       _                  <- Sync[F].delay(deleteFile(path + "/lock.mdb"))
     } yield lmdbHistoryStore
 
-  sealed trait HistoryType[F[_]] { val history: History[F] }
-  case class HistoryWithoutFunc[F[_]](history: History[F]) extends HistoryType[F]
+  sealed trait HistoryType[F[_]] {
+    val history: History[F]
+    def getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+  }
+  case class HistoryWithoutFunc[F[_]](
+      history: History[F],
+      getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+  ) extends HistoryType[F]
   case class HistoryWithFunc[F[_]](
       history: History[F],
+      getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
       sizeBytes: () => Long,
       numRecords: () => Int
   ) extends HistoryType[F]
@@ -130,6 +140,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           val store = HistoryStoreInstances.historyStore(inMemoStore)
           for { history <- MergingHistory(root, CachingHistoryStore(store)).pure } yield HistoryWithFunc(
             history,
+            _ => Sync[F].pure(None),
             inMemoStore.sizeBytes,
             inMemoStore.numRecords
           )
@@ -140,7 +151,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                         root,
                         CachingHistoryStore(HistoryStoreInstances.historyStore(store))
                       ).pure
-          } yield HistoryWithoutFunc(history)
+          } yield HistoryWithoutFunc(history, _ => Sync[F].pure(None))
 
       }
   }
@@ -152,19 +163,21 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         case "inMemo" =>
           val inMemoStore = InMemoryKeyValueStore[F]
           inMemoStore.clear()
-          val store = new RadixStore(inMemoStore)
+          val radixStore = new RadixStore(inMemoStore)
           Sync[F].pure(
             HistoryWithFunc(
-              RadixHistory[F](root, store),
+              RadixHistory[F](root, radixStore),
+              radixStore.get1,
               inMemoStore.sizeBytes,
               inMemoStore.numRecords
             )
           )
         case "lmdb" =>
           for {
-            store   <- storeLMDB(lmdbPath)
-            history = RadixHistory[F](root, new RadixStore(store))
-          } yield HistoryWithoutFunc(history)
+            store      <- storeLMDB(lmdbPath)
+            radixStore = new RadixStore(store)
+            history    = RadixHistory[F](root, radixStore)
+          } yield HistoryWithoutFunc(history, radixStore.get1)
       }
   }
 
@@ -259,6 +272,124 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
       } yield ()
 
+    def exportExperiment(): F[Unit] = {
+      import coop.rchain.rspace.history.RadixTree._
+      val lmdbPath: String     = "/git/temp"
+      val root: Blake2b256Hash = v0
+      for {
+        store      <- storeLMDB(lmdbPath)
+        radixStore = new RadixStore(store)
+        history    = RadixHistory[F](root, radixStore)
+
+        prefix0: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x00.toByte, 0x00.toByte)
+        prefix1: Array[Byte] = Array(0x01.toByte, 0x01.toByte, 0x00.toByte, 0x00.toByte)
+        prefix2: Array[Byte] = Array(0x01.toByte, 0x01.toByte, 0x01.toByte, 0x00.toByte)
+        prefix3: Array[Byte] = Array(0x01.toByte, 0x02.toByte, 0x00.toByte, 0x00.toByte)
+        prefix4: Array[Byte] = Array(0x02.toByte, 0x01.toByte, 0x00.toByte, 0x00.toByte)
+        prefix5: Array[Byte] = Array(0x02.toByte, 0x02.toByte, 0x00.toByte, 0x00.toByte)
+
+        history1 <- history.process(
+                     InsertAction(prefix0, v0)
+                       :: InsertAction(prefix1, v1)
+                       :: InsertAction(prefix2, v2)
+                       :: InsertAction(prefix3, v3)
+                       :: InsertAction(prefix4, v4)
+                       :: InsertAction(prefix5, v5)
+                       :: Nil
+                   )
+
+        v0NewOpt <- history1.read(ByteVector(prefix0))
+        v1NewOpt <- history1.read(ByteVector(prefix1))
+        v2NewOpt <- history1.read(ByteVector(prefix2))
+        v3NewOpt <- history1.read(ByteVector(prefix3))
+        v4NewOpt <- history1.read(ByteVector(prefix4))
+        v5NewOpt <- history1.read(ByteVector(prefix5))
+        _ <- assert(
+              (v0NewOpt.get, v1NewOpt.get, v2NewOpt.get, v3NewOpt.get, v4NewOpt.get, v5NewOpt.get) ==
+                (v0.bytes, v1.bytes, v2.bytes, v3.bytes, v4.bytes, v5.bytes),
+              "error1"
+            ).pure
+
+        rootHash: ByteVector               = history1.root.bytes
+        initLastPrefix: Option[ByteVector] = None
+//        lastPrefix: Option[ByteVector] = Some(ByteVector(0x02.toByte))
+        settings = ExportDataSettings(
+          exportNodePrefixes = true,
+          exportNodeKVDBKeys = true,
+          exportNodeKVDBValues = true,
+          exportLeafPrefixes = true,
+          exportLeafValues = true
+        )
+
+        dataAll <- sequentialExport(
+                    rootHash,
+                    initLastPrefix,
+                    0,
+                    1000,
+                    radixStore.get1,
+                    settings
+                  )
+
+        data1 <- sequentialExport(
+                  rootHash,
+                  initLastPrefix,
+                  0,
+                  2,
+                  radixStore.get1,
+                  settings
+                )
+        (d1, pr1) = data1
+
+        data2 <- sequentialExport(
+                  rootHash,
+                  pr1,
+                  0,
+                  1000,
+                  radixStore.get1,
+                  settings
+                )
+        (d2, pr2) = data2
+
+        prefabData = (
+          ExportData(
+            d1.nodePrefixes ++ d2.nodePrefixes,
+            d1.nodeKVDBKeys ++ d2.nodeKVDBKeys,
+            d1.nodeKVDBValues ++ d2.nodeKVDBValues,
+            d1.leafPrefixes ++ d2.leafPrefixes,
+            d1.LeafValues ++ d2.LeafValues
+          ),
+          pr2
+        )
+
+        r = {
+          assert(prefabData == dataAll, "Error prefabrication")
+          ()
+        }
+
+        (
+          ExportData(_, nodeKVDBKeys, nodeKVDBValues, _, _),
+          lastPrefix
+        )            = prefabData
+        localStorage = (nodeKVDBKeys zip nodeKVDBValues).toMap
+
+        newData <- {
+          def newGet(key: ByteVector) = localStorage.get(key).pure
+          sequentialExport(
+            rootHash,
+            initLastPrefix,
+            0,
+            1000000,
+            newGet,
+            settings
+          )
+        }
+        r = {
+          assert(newData == dataAll, "Error of validation")
+          ()
+        }
+      } yield r
+    }
+
     def experiment(numInit: Int, numInsReadDel: Int): F[Unit] = {
 
       val step = 3
@@ -292,18 +423,66 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
       def calcSizeBytesAndNumRecords(h: HistoryType[F]): Option[(Long, Int)] =
         if (Settings.flagSize) h match {
-          case HistoryWithFunc(_, sizeBytes, numRecords) => (sizeBytes(), numRecords()).some
-          case HistoryWithoutFunc(_)                     => (0L, 0).some
+          case HistoryWithFunc(_, _, sizeBytes, numRecords) => (sizeBytes(), numRecords()).some
+          case HistoryWithoutFunc(_, _)                     => (0L, 0).some
         } else none
+
+      def export(
+          rootHash: Blake2b256Hash,
+          getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
+      ): F[ExportData] = {
+        import coop.rchain.rspace.history.RadixTree._
+        if (Settings.typeHistory == "RadixHistory") {
+          val exportSettings = ExportDataSettings(
+            exportNodePrefixes = false,
+            exportNodeKVDBKeys = true,
+            exportNodeKVDBValues = true,
+            exportLeafPrefixes = false,
+            exportLeafValues = true
+          )
+          sequentialExport[F](
+            rootHash.bytes,
+            None,
+            0,
+            1000000,
+            getNodeDataFromStore,
+            exportSettings
+          ).map(_._1)
+        } else
+          ExportData(Seq(), Seq(), Seq(), Seq(), Seq()).pure
+      }
+
+      def validation(
+          rootHash: Blake2b256Hash,
+          expData: ExportData
+      ): F[Unit] = {
+        import coop.rchain.rspace.history.RadixTree._
+
+        val ExportData(_, nodeKVDBKeys, nodeKVDBValues, _, _) = expData
+
+        val KeysForValid = nodeKVDBValues.map { bytes =>
+          import coop.rchain.crypto.hash.Blake2b256
+          ByteVector(Blake2b256.hash(bytes))
+        }
+        assert(KeysForValid == nodeKVDBKeys, "Error 1 of validation")
+
+        val localStorage = (nodeKVDBKeys zip nodeKVDBValues).toMap
+        for {
+          expDataForValid <- export(rootHash, localStorage.get(_).pure)
+          _               <- assert(expDataForValid == expData, "Error 2 of validation").pure
+        } yield ()
+      }
 
       val result =
         (0 until (Settings.averageNum + Settings.averageWarmUp)).toList
-          .foldM((0L, 0L, 0L, (0L, 0), (0L, 0), (0L, 0))) {
+          .foldM((0L, 0L, 0L, 0L, 0L, (0L, 0), (0L, 0), (0L, 0))) {
             case (initData, i) =>
               def statistic(
                   timeI: Long,
                   timeR: Long,
                   timeD: Long,
+                  timeExp: Long,
+                  timeValid: Long,
                   sizeInit: (Long, Int),
                   sizeI: (Long, Int),
                   sizeD: (Long, Int)
@@ -317,7 +496,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 val strSize = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
 
                 val str = iI(i) + num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) +
-                  sec(timeD) + strSize
+                  sec(timeD) + sec(timeExp) + sec(timeValid) + strSize
                 println(str)
               }
 
@@ -337,19 +516,27 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
                 size0 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
 
-                history2W         <- history1W.process(insertActions)
-                temp              <- nsTime(history1.process(insertActions))
-                (history2, time0) = temp
+                history2W             <- history1W.process(insertActions)
+                temp                  <- nsTime(history1.process(insertActions))
+                (history2, timeITemp) = temp
 
                 size1 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
 
-                _          <- readAndVerify(history2W, insReadDelHashes)
-                temp       <- nsTime(readAndVerify(history2, insReadDelHashes))
-                (_, time1) = temp
+                _              <- readAndVerify(history2W, insReadDelHashes)
+                temp           <- nsTime(readAndVerify(history2, insReadDelHashes))
+                (_, timeRTemp) = temp
 
-                _                 <- history2W.process(deleteActions)
-                temp              <- nsTime(history2.process(deleteActions))
-                (history3, time2) = temp
+                expDataW               <- export(history2W.root, historyInitW.getNodeDataFromStore)
+                temp                   <- nsTime(export(history2.root, historyInit.getNodeDataFromStore))
+                (expData, timeExpTemp) = temp
+
+                expDataW           <- validation(history2W.root, expDataW)
+                temp               <- nsTime(validation(history2.root, expData))
+                (_, timeValidTemp) = temp
+
+                _                    <- history2W.process(deleteActions)
+                temp                 <- nsTime(history2.process(deleteActions))
+                (history3, timeDExp) = temp
 
                 size2 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
 
@@ -359,21 +546,26 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
                 _ = if (Settings.averageStatistic)
                   statistic(
-                    time0,
-                    time1,
-                    time2,
+                    timeITemp,
+                    timeRTemp,
+                    timeDExp,
+                    timeExpTemp,
+                    timeValidTemp,
                     size0.getOrElse((0L, 0)),
                     size1.getOrElse((0L, 0)),
                     size2.getOrElse((0L, 0))
                   )
-                (timeI, timeR, timeD, sizeInit, sizeI, sizeD) = initData
+                (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD) = initData
               } yield
-                if (i < Settings.averageWarmUp) (timeI, timeR, timeD, sizeInit, sizeI, sizeD)
+                if (i < Settings.averageWarmUp)
+                  (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD)
                 else
                   (
-                    timeI + time0,
-                    timeR + time1,
-                    timeD + time2,
+                    timeI + timeITemp,
+                    timeR + timeRTemp,
+                    timeD + timeDExp,
+                    timeExp + timeExpTemp,
+                    timeValid + timeValidTemp,
                     (
                       sizeInit._1 + size0.getOrElse(0L, 0)._1,
                       sizeInit._2 + size0.getOrElse(0L, 0)._2
@@ -381,7 +573,6 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                     (sizeI._1 + size1.getOrElse(0L, 0)._1, sizeI._2 + size1.getOrElse(0L, 0)._2),
                     (sizeD._1 + size2.getOrElse(0L, 0)._1, sizeD._2 + size2.getOrElse(0L, 0)._2)
                   )
-
           }
 
       result.map { x =>
@@ -393,9 +584,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
             v._2.toDouble / Settings.averageNum
           )
 
-        val (timeI, timeR, timeD, sizeInit, sizeI, sizeD) = x
-        val strSize                                       = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
-        val str                                           = num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) + sec(timeD) + strSize
+        val (timeI, timeR, timeD, timeExp, timeValid, sizeInit, sizeI, sizeD) = x
+        val strSize                                                           = if (Settings.flagSize) MB(sizeInit) + MB(sizeI) + MB(sizeD) else ""
+        val str = num(numInit) + num(numInsReadDel) + sec(timeI) + sec(timeR) + sec(timeD) + sec(
+          timeExp
+        ) + sec(timeValid) + strSize
         println(str)
       }
     }
@@ -409,13 +602,14 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           fS("[sizeInit(MB)") + fS("numInit]") + fS("[sizeI(MB)") +
             fS("numI]") + fS("[sizeD(MB)") + fS("numD]")
         else ""
-        str = fS("numInit") + fS("numIRD") + fS("timeI(sec)") + fS("timeR(sec)") + fS(
-          "timeD(sec)"
-        ) + strSize
+        str = fS("numInit") + fS("numIRD") + fS("timeI(sec)") + fS("timeR(sec)") + fS("timeD(sec)") + fS(
+          "timeExp(sec)"
+        ) + fS("timeValid(sec)") + strSize
         _ <- println(str).pure
 
 //        _ <- simpleExperiment()
 //        _ <- simpleExperimentWithSubTree()
+//        _ <- exportExperiment()
         _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
       } yield ()
     }
