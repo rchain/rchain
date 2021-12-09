@@ -10,17 +10,20 @@ import scala.language.higherKinds
 
 class RadixStore[F[_]: Sync](store: KeyValueStore[F]) {
 
-  def get(keys: Seq[ByteVector]): F[Seq[Option[Array[Byte]]]] =
-    store.get[Array[Byte]](keys.map(copyBVToBuf), copyBufToArr)
+  def get(keys: Seq[ByteVector]): F[Seq[Option[ByteVector]]] =
+    store.get[ByteVector](keys.map(copyBVToBuf), copyBufToBV)
+
+  def get1(key: ByteVector): F[Option[ByteVector]] =
+    get(Seq(key)).map(_.head)
 
   def contains(keys: Seq[ByteVector]): F[Seq[Boolean]] = {
     val results = store.get(keys.map(copyBVToBuf), _ => ())
     results.map(r => r.map(_.nonEmpty))
   }
 
-  def put(kvPairs: Seq[(ByteVector, Array[Byte])]): F[Unit] = {
+  def put(kvPairs: Seq[(ByteVector, ByteVector)]): F[Unit] = {
     val pairs = kvPairs.map { case (k, v) => (copyBVToBuf(k), v) }
-    store.put[Array[Byte]](pairs, copyArrToBuf)
+    store.put[ByteVector](pairs, copyBVToBuf)
   }
 
   def delete(keys: Seq[ByteVector]): F[Int] =
@@ -32,14 +35,9 @@ class RadixStore[F[_]: Sync](store: KeyValueStore[F]) {
     newBuf.put(arr).rewind()
   }
 
-  private def copyBufToArr(buf: ByteBuffer): Array[Byte] = {
+  private def copyBufToBV(buf: ByteBuffer): ByteVector = {
     val arr = new Array[Byte](buf.rewind.remaining())
     val _   = buf.get(arr)
-    arr
-  }
-
-  private def copyArrToBuf(arr: Array[Byte]): ByteBuffer = {
-    val newBuf = ByteBuffer.allocateDirect(arr.length)
-    newBuf.put(arr).rewind()
+    ByteVector(arr)
   }
 }

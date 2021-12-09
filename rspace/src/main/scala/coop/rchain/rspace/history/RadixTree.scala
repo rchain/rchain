@@ -1,8 +1,8 @@
 package coop.rchain.rspace.history
 
-import cats.{Monad, Parallel}
 import cats.effect.Sync
 import cats.syntax.all._
+import cats.{Monad, Parallel}
 import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
@@ -51,7 +51,7 @@ object RadixTree {
   object codecs {
     private val defSize = 32
 
-    def encode(node: Node): Array[Byte] = {
+    def encode(node: Node): ByteVector = {
       //calculating size of buffer
       val sizeNode = node.size
 
@@ -115,10 +115,11 @@ object RadixTree {
               loopFill(numItem + 1, idxPtrStart + defSize)
           }
         }
-      loopFill(0, 0)
+      ByteVector(loopFill(0, 0))
     }
 
-    def decode(arr: Array[Byte]): Node = {
+    def decode(bv: ByteVector): Node = {
+      val arr     = bv.toArray
       val maxSize = arr.length
       @tailrec
       def loop(idx0: Int, node: Node): Node =
@@ -184,7 +185,7 @@ object RadixTree {
     * Hashing serial data.
     * Return Blake2b256 hash of input data
     */
-  def hashNode(node: Node): (ByteVector, Array[Byte]) = {
+  def hashNode(node: Node): (ByteVector, ByteVector) = {
     import coop.rchain.crypto.hash.Blake2b256
     val bytes = codecs.encode(node)
     (ByteVector(Blake2b256.hash(bytes)), bytes)
@@ -205,7 +206,7 @@ object RadixTree {
   case class ExportData(
       nodePrefixes: Seq[ByteVector],
       nodeKVDBKeys: Seq[ByteVector],
-      nodeKVDBValues: Seq[Array[Byte]],
+      nodeKVDBValues: Seq[ByteVector],
       leafPrefixes: Seq[ByteVector],
       LeafValues: Seq[ByteVector] // it's ptr for datastore
   )
@@ -231,7 +232,7 @@ object RadixTree {
       lastPrefix: Option[ByteVector], //describes the path of root to last processed element (if None - start from root)
       skipSize: Int,                  //how many elements to skip
       takeSize: Int,                  //how many elements to take
-      getNodeDataFromStore: ByteVector => F[Option[Array[Byte]]],
+      getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
       settings: ExportDataSettings,
       countableItem: CountableItem = calculateNodes //don't used (will be use in the future)
   ): F[(ExportData, Option[ByteVector])] = {
@@ -500,7 +501,7 @@ object RadixTree {
       * Where hash -  Blake2b256Hash of bytes,
       *       bytes - serializing data of nodes.
       */
-    private val cacheW: TrieMap[ByteVector, Array[Byte]] = TrieMap.empty
+    private val cacheW: TrieMap[ByteVector, ByteVector] = TrieMap.empty
 
     /**
       * Serializing and hashing one [[Node]].
@@ -532,8 +533,8 @@ object RadixTree {
         kvIfAbsent        = kvPairs zip ifAbsent
         kvExist           = kvIfAbsent.filter(_._2).map(_._1)
         valueExistInStore <- store.get(kvExist.map(_._1))
-        kvvExist          = kvExist zip valueExistInStore.map(_.getOrElse(Array.empty))
-        kvCollision       = kvvExist.filter(kvv => !(kvv._1._2 sameElements kvv._2)).map(_._1)
+        kvvExist          = kvExist zip valueExistInStore.map(_.getOrElse(ByteVector.empty))
+        kvCollision       = kvvExist.filter(kvv => !(kvv._1._2 == kvv._2)).map(_._1)
         kvAbsent = if (kvCollision.isEmpty) kvIfAbsent.filterNot(_._2).map(_._1)
         else {
           assert(
