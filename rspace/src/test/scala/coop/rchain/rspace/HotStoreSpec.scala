@@ -1308,7 +1308,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
   }
 }
 
-class History[F[_]: Sync, C, P, A, K](implicit R: Ref[F, HotStoreState[C, P, A, K]])
+class History[F[_]: Sync, C, P, A, K](R: Ref[F, HotStoreState[C, P, A, K]])
     extends HistoryReaderBase[F, C, P, A, K] {
 
   override def getJoins(channel: C): F[Seq[Seq[C]]] =
@@ -1361,8 +1361,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
     (for {
       historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
       history = {
-        implicit val hs = historyState
-        new History[F, String, Pattern, String, StringsCaptor]
+        new History[F, String, Pattern, String, StringsCaptor](historyState)
       }
       cache    <- C()
       hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
@@ -1375,8 +1374,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
     (for {
       historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
       history = {
-        implicit val hs = historyState
-        new History[F, String, Pattern, String, StringsCaptor]
+        new History[F, String, Pattern, String, StringsCaptor](historyState)
       }
       cache    <- C(cache)
       hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
