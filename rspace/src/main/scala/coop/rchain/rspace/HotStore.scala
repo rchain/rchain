@@ -38,14 +38,16 @@ final case class HotStoreState[C, P, A, K](
 )
 
 object HotStoreState {
-  def apply[C, P, A, K](): HotStoreState[C, P, A, K] =
-    HotStoreState[C, P, A, K](
-      Map.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
-      Map.empty[Seq[C], WaitingContinuation[P, K]],
-      Map.empty[C, Seq[Datum[A]]],
-      Map.empty[C, Seq[Seq[C]]],
-      Map.empty[C, Seq[Seq[C]]]
-    )
+  def apply[C, P, A, K](
+      continuations: Map[Seq[C], Seq[WaitingContinuation[P, K]]] =
+        Map.empty[Seq[C], Seq[WaitingContinuation[P, K]]],
+      installedContinuations: Map[Seq[C], WaitingContinuation[P, K]] =
+        Map.empty[Seq[C], WaitingContinuation[P, K]],
+      data: Map[C, Seq[Datum[A]]] = Map.empty[C, Seq[Datum[A]]],
+      joins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]],
+      installedJoins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]]
+  ): HotStoreState[C, P, A, K] =
+    HotStoreState[C, P, A, K](continuations, installedContinuations, data, joins, installedJoins)
 }
 
 private final case class HistoryStoreCache[F[_], C, P, A, K](
