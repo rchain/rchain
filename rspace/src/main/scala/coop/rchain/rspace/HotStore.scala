@@ -360,7 +360,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
 
 object HotStore {
 
-  def inMem[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Concurrent, C, P, A, K](
       hotStoreStateRef: Ref[F, HotStoreState[C, P, A, K]],
       historyReaderBase: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
@@ -370,18 +370,18 @@ object HotStore {
       )
       .map(new InMemHotStore[F, C, P, A, K](hotStoreStateRef, _, historyReaderBase))
 
-  def from[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Concurrent, C, P, A, K](
       cache: HotStoreState[C, P, A, K],
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
     for {
       cache <- Ref.of[F, HotStoreState[C, P, A, K]](cache)
-      store <- HotStore.inMem(cache, historyReader)
+      store <- HotStore(cache, historyReader)
     } yield store
 
-  def empty[F[_]: Concurrent, C, P, A, K](
+  def apply[F[_]: Concurrent, C, P, A, K](
       historyReader: HistoryReaderBase[F, C, P, A, K]
   ): F[HotStore[F, C, P, A, K]] =
-    from(HotStoreState(), historyReader)
+    apply(HotStoreState[C, P, A, K](), historyReader)
 
 }

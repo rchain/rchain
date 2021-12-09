@@ -1364,7 +1364,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
         new History[F, String, Pattern, String, StringsCaptor](historyState)
       }
       cache    <- C()
-      hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      hotStore <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res      <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
@@ -1377,7 +1377,7 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
         new History[F, String, Pattern, String, StringsCaptor](historyState)
       }
       cache    <- C(cache)
-      hotStore <- HotStore.inMem[F, String, Pattern, String, StringsCaptor](cache, history)
+      hotStore <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
       res      <- f(hotStore)
     } yield res).runSyncUnsafe(1.second)
 

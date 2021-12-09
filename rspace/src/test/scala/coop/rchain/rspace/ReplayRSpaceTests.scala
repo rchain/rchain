@@ -1292,7 +1292,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)
       store <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
       }
 
       space = new RSpace[Task, C, P, A, K](
@@ -1302,7 +1302,7 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
       historyCache <- Ref[Task].of(HotStoreState[C, P, A, K]())
       replayStore <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
