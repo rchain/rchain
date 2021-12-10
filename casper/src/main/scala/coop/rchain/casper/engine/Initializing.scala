@@ -265,7 +265,8 @@ class Initializing[F[_]
                  .hashSetCasper[F](
                    validatorId,
                    casperShardConf.shardName,
-                   casperShardConf.faultToleranceThreshold
+                   casperShardConf.faultToleranceThreshold,
+                   casperShardConf.minPhloPrice
                  )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](

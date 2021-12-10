@@ -58,7 +58,6 @@ object ProposeResult {
 
 trait BlockCreatorResult
 final case class Created(blockMessage: BlockMessage) extends BlockCreatorResult
-case object NotEnoughNewBlock                        extends BlockCreatorResult
 object BlockCreatorResult {
   def created(b: BlockMessage): BlockCreatorResult = Created(b)
 }

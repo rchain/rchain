@@ -1,18 +1,26 @@
 package coop.rchain.blockstorage.dag
 
-import cats.effect.concurrent.Semaphore
+import cats.Show
+import cats.data.OptionT
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage._
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
+import coop.rchain.blockstorage.dag.DeployChainSetCasper._
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
-import coop.rchain.blockstorage.dag.codecs._
+import coop.rchain.blockstorage.dag.codecs.{codecDeployChain, _}
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.casper.protocol.{BlockMessage, DeployChain}
+import coop.rchain.blockstorage.casper.Casper
+import coop.rchain.blockstorage.casper.Casper.FinalizationFringe
+import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -24,9 +32,9 @@ import coop.rchain.shared.syntax._
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import fs2.Stream
 
 import scala.collection.immutable.SortedMap
+import scala.collection.mutable
 
 final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     lock: Semaphore[F],
@@ -34,160 +42,55 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
     invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-    equivocationTrackerIndex: EquivocationTrackerStore[F]
+    equivocationTrackerIndex: EquivocationTrackerStore[F],
+    acceptedIndex: KeyValueTypedStore[F, DeployChain, Unit],
+    rejectedIndex: KeyValueTypedStore[F, DeployChain, Unit],
+    latestFringesStore: KeyValueTypedStore[F, Long, DagFringe]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
-  private case class KeyValueDagRepresentation(
-      dagSet: Set[BlockHash],
-      latestMessagesMap: Map[Validator, BlockHash],
-      childMap: Map[BlockHash, Set[BlockHash]],
-      heightMap: SortedMap[Long, Set[BlockHash]],
-      invalidBlocksSet: Set[BlockMetadata],
-      lastFinalizedBlockHash: BlockHash,
-      finalizedBlocksSet: Set[BlockHash],
-      // how many times particular valid state is met in DAG as postState for block
-      validStatesCounter: Map[StateHash, Int]
-  ) extends BlockDagRepresentation[F] {
+  val latestRepresentation = mutable.TreeMap.empty[Unit, BlockDagRepresentation[F]]
+
+  private case class KeyValueDagRepresentation(st: BlockDagRepresentationState)
+      extends BlockDagRepresentation[F] {
 
     def lookup(blockHash: BlockHash): F[Option[BlockMetadata]] =
-      if (dagSet.contains(blockHash)) blockMetadataIndex.get(blockHash)
+      if (st.dagSet.contains(blockHash)) blockMetadataIndex.get(blockHash)
       else none[BlockMetadata].pure[F]
 
     def contains(blockHash: BlockHash): F[Boolean] =
-      (blockHash.size == BlockHash.Length && dagSet.contains(blockHash)).pure[F]
+      (blockHash.size == BlockHash.Length && st.dagSet.contains(blockHash)).pure[F]
 
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
+      st.childrenMap.get(blockHash).pure[F]
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
-      latestMessagesMap.get(validator).pure[F]
+      st.latestMessagesMap.get(validator).pure[F]
 
-    def latestMessageHashes: F[Map[Validator, BlockHash]] = latestMessagesMap.pure[F]
+    def latestMessageHashes: F[Map[Validator, BlockHash]] = st.latestMessagesMap.pure[F]
 
-    def invalidBlocks: F[Set[BlockMetadata]] = invalidBlocksSet.pure[F]
-
-    /**
-      * Truncate full DAG according to some view, defined by latest messages.
-      */
-    override def truncate(
-        targetLatestMessages: Map[Validator, BlockHash],
-        findLfb: Map[Validator, BlockHash] => F[BlockHash]
-    ): F[BlockDagRepresentation[F]] = {
-
-      val lmAll       = this.latestMessagesMap.values.toSet
-      val seenSenders = targetLatestMessages.keySet
-
-      for {
-        lfb         <- findLfb(targetLatestMessages)
-        lmFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
-        lmSeen      <- targetLatestMessages.values.toList.traverse(this.lookupUnsafe).map(_.toSet)
-
-        // for all known latest messages, collect all self justifications until first finalized message found
-        toAdjust = {
-          val seenSeqNums = lmSeen.map(m => (m.sender, m.seqNum)).toMap
-          val finSeqNums  = lmFinalized.map(m => (m.sender, m.seqNum)).toMap
-          val seen        = (m: BlockMetadata) => seenSeqNums.get(m.sender).exists(_ >= m.seqNum)
-          val finalized   = (m: BlockMetadata) => finSeqNums.get(m.sender).exists(_ >= m.seqNum)
-
-          Stream
-            .unfoldLoopEval(lmAll.toVector) { messages =>
-              for {
-                metas <- messages.traverse(this.lookupUnsafe).map(_.filterNot(finalized))
-                out   = metas.map(m => (m, !seen(m)))
-
-                parents = metas.flatMap(_.parents).distinct
-                next    = parents.nonEmpty.guard[Option].as(parents)
-              } yield (Stream.emits(out.toList), next)
-            }
-            .flatten
-            .fold((Map.empty[Long, Set[BlockHash]], Map.empty[Long, Set[BlockHash]], childMap)) {
-              case ((removeAcc, unfinalizeAcc, childMapAcc), (m, shouldRemove)) =>
-                val height = m.blockNum
-                if (shouldRemove)
-                  (
-                    removeAcc + (height -> (removeAcc.getOrElse(height, Set()) + m.blockHash)),
-                    unfinalizeAcc,
-                    // Remove from children map key for message, adjust keys for parents.
-                    // As some parent might be already removed by previous iterations, use filter.
-                    m.parents.filter(childMapAcc.contains).foldLeft(childMapAcc - m.blockHash) {
-                      case (a, p) => a + (p -> (a(p) - m.blockHash))
-                    }
-                  )
-                else
-                  (
-                    removeAcc,
-                    unfinalizeAcc + (height -> (unfinalizeAcc.getOrElse(height, Set()) + m.blockHash)),
-                    childMapAcc
-                  )
-            }
-            .compile
-            .lastOrError
-        }
-
-        r                                        <- toAdjust
-        (toRemove, toUnfinalize, newChildrenMap) = r
-        excessSet                                = toRemove.flatMap { case (_, hashes) => hashes }.toSet
-        nonFinalizedSet                          = toUnfinalize.flatMap { case (_, hashes) => hashes }.toSet
-
-        // new truncated values
-        truncatedDagSet     = this.dagSet diff excessSet
-        truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
-        truncatedHeightMap = toRemove.foldLeft(this.heightMap) {
-          case (acc, (height, hashes)) => acc.updated(height, acc(height) diff hashes)
-        }
-        truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
-
-        excessStates <- excessSet.toList.traverse(
-                         this.lookupUnsafe(_).map(_.postStateHash)
-                       )
-        newValidStatesCounter = excessStates.foldLeft(validStatesCounter) {
-          case (acc, s) =>
-            assert(
-              acc.contains(s),
-              s"validStatesCounter does not have state from excess message when truncating DAG."
-            )
-            val curV = acc(s)
-            val newV = curV - 1
-            if (newV == 0) acc - s else acc.updated(s, curV - 1)
-        }
-
-        view = this.copy(
-          lastFinalizedBlockHash = lfb,
-          finalizedBlocksSet = truncatedFinalizesSet,
-          dagSet = truncatedDagSet,
-          childMap = newChildrenMap,
-          latestMessagesMap = targetLatestMessages,
-          heightMap = truncatedHeightMap,
-          invalidBlocksSet = truncatedInvalidSet,
-          validStatesCounter = newValidStatesCounter
-        )
-      } yield view
-    }
-
-    override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
+    def invalidBlocks: F[Set[BlockMetadata]] =
+      st.invalidBlocksSet.toList.traverse(this.lookupUnsafe).map(_.toSet)
 
     // latestBlockNumber, topoSort and lookupByDeployId are only used in BlockAPI.
     // Do they need to be part of the DAG current state or they can be moved to DAG storage directly?
 
-    private def getMaxHeight = if (heightMap.nonEmpty) heightMap.last._1 + 1L else 0L
+    private def getMaxHeight = if (st.heightMap.nonEmpty) st.heightMap.last._1 + 1L else 0L
 
-    def latestBlockNumber: F[Long] =
-      getMaxHeight.pure[F]
+    def latestBlockNumber: F[Long] = getMaxHeight.pure[F]
 
-    def isFinalized(blockHash: BlockHash): F[Boolean] =
-      finalizedBlocksSet.contains(blockHash).pure[F]
+    def isFinalized(blockHash: BlockHash): F[Boolean] = false.pure[F]
 
     override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
       if (truncatedHash.length % 2 == 0) {
         val truncatedByteString = truncatedHash.unsafeHexToByteString
-        dagSet.find(hash => hash.startsWith(truncatedByteString))
+        st.dagSet.find(hash => hash.startsWith(truncatedByteString))
       } else {
         // if truncatedHash is odd length string we cannot convert it to ByteString with 8 bit resolution
         // because each symbol has 4 bit resolution. Need to make a string of even length by removing the last symbol,
         // then find all the matching hashes and choose one that matches the full truncatedHash string
         val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
-        dagSet
+        st.dagSet
           .filter(_.startsWith(truncatedByteString))
           .find(_.toHexString.startsWith(truncatedHash))
       }
@@ -202,7 +105,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       val endNumber   = maybeEndBlockNumber.map(Math.min(maxNumber, _)).getOrElse(maxNumber)
       if (startNumber >= 0 && startNumber <= endNumber) {
         Sync[F].delay(
-          heightMap
+          st.heightMap
             .filterKeys(h => h >= startNumber && h <= endNumber)
             .map { case (_, v) => v.toVector }
             .toVector
@@ -217,24 +120,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       deployIndex.get(deployId)
 
-    override def nonFinalizedSet: Set[BlockHash] =
-      dagSet diff finalizedBlocksSet
+    def genesis: F[BlockHash] = st.heightMap.head._2.head.pure[F]
 
-    override def reachedAcquiescence: F[Boolean] =
-      for {
-        statesOfNotFinalizedBlocks <- nonFinalizedSet.toList.traverse(
-                                       this.lookupUnsafe(_).map(_.postStateHash)
-                                     )
-        // how many time each state is met across non finalized blocks
-        stateSeenInNonFinalizedCounter = statesOfNotFinalizedBlocks
-          .groupBy(identity)
-          .mapValues(_.size)
+    override def finalizationState: BlockDagFinalizationState = st.finalizationState
 
-        // if all occurrences of a state are in not finalized blocks - state is not finalized, no acquiescence
-        hasNotFinalizedState = stateSeenInNonFinalizedCounter.exists {
-          case (state, qty) => validStatesCounter(state) == qty
-        }
-      } yield !hasNotFinalizedState
+    override def getPureState: BlockDagRepresentationState = st
+
+    override def finalizationFringes: List[DagFringe] = st.latestFringes
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
@@ -258,33 +150,42 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
   private def representation: F[BlockDagRepresentation[F]] =
     for {
-      // Take current DAG state / view of the DAG
-      latestMessages     <- latestMessagesIndex.toMap
-      dagSet             <- blockMetadataIndex.dagSet
-      childMap           <- blockMetadataIndex.childMapData
-      heightMap          <- blockMetadataIndex.heightMap
-      invalidBlocks      <- invalidBlocksIndex.toMap.map(_.toSeq.map(_._2).toSet)
-      lastFinalizedBlock <- blockMetadataIndex.lastFinalizedBlock
-      finalizedBlocksSet <- blockMetadataIndex.finalizedBlockSet
-      validStatesCounter <- blockMetadataIndex.validStatesCounter
+      latestMessages <- latestMessagesIndex.toMap
+      dagSet         <- blockMetadataIndex.dagSet
+      childMap       <- blockMetadataIndex.childMapData
+      heightMap      <- blockMetadataIndex.heightMap
+      invalidBlocks  <- invalidBlocksIndex.toMap.map(_.keySet)
+      acceptedSet    <- acceptedIndex.toMap.map(_.keySet)
+      rejectedSet    <- rejectedIndex.toMap.map(_.keySet)
+      latestFringes <- latestFringesStore.toMap.map(
+                        _.toList.sortBy(_._1).reverse.map(_._2)
+                      )
     } yield KeyValueDagRepresentation(
-      dagSet,
-      latestMessages,
-      childMap,
-      heightMap,
-      invalidBlocks,
-      lastFinalizedBlock,
-      finalizedBlocksSet,
-      validStatesCounter
+      BlockDagRepresentationState(
+        dagSet,
+        latestMessages,
+        childMap,
+        heightMap,
+        invalidBlocks,
+        BlockDagFinalizationState(acceptedSet, rejectedSet),
+        latestFringes
+      )
     )
 
   def getRepresentation: F[BlockDagRepresentation[F]] =
-    lock.withPermit(representation)
+    lock.withPermit(OptionT.fromOption(latestRepresentation.get(())).getOrElseF(representation))
 
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      approved: Boolean
+      baseFringeNum: Long,
+      // processing the event of finding new fringe requires more then just DAG store
+      mergeFOpt: Option[
+        (
+            StateHash,
+            Set[(BlockMetadata, Set[BlockMetadata])] // block to merge + finalized scope unseen from this block
+        ) => F[(ConflictResolution[DeployChain], StateHash)]
+      ]
   ): F[BlockDagRepresentation[F]] = {
     import cats.instances.list._
     import cats.instances.option._
@@ -326,9 +227,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         newlyBondedUnseen <- newlyBondedSet.toList.filterA(latestMessagesIndex.contains(_).not)
       } yield newlyBondedUnseen.map((_, block.blockHash)).toMap
     }
-
     def doInsert: F[Unit] = {
-      val blockMetadata      = BlockMetadata.fromBlock(block, invalid)
+      val initMetadata       = BlockMetadata.fromBlock(block, invalid, baseFringeNum)
       val blockHashIsInvalid = !(block.blockHash.size == BlockHash.Length)
 
       for {
@@ -341,7 +241,13 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
             ).raiseError[F, Unit]
               .whenA(blockHashIsInvalid)
 
-        _ <- logEmptySender.whenA(senderIsEmpty)
+        _  <- logEmptySender.whenA(senderIsEmpty)
+        js = initMetadata.justifications.map(_.latestBlockHash)
+        jsLvl2 <- js
+                   .traverse(blockMetadataIndex.getUnsafe)
+                   .map(_.flatMap(_.justifications.map(_.latestBlockHash)))
+        // TODO parents are not used, consider removing
+        blockMetadata = initMetadata.copy(parents = js diff jsLvl2)
 
         // Add block metadata
         _ <- blockMetadataIndex.add(blockMetadata)
@@ -368,44 +274,139 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // Add latest messages to DB
         _ <- latestMessagesIndex.put(newLatestToAdd.toList)
 
-        // if block added as approved, record it as directly finalized.
-        _ <- blockMetadataIndex.recordFinalized(blockMetadata.blockHash, Set.empty).whenA(approved)
+      } yield ()
+    }
 
+    def updateFinalization(
+        newDag: BlockDagRepresentation[F]
+    ) = {
+      val casperMaxDepth = 100L
+      val metaDag        = BlockMetadataDag(newDag)
+      val safetyOracle   = BlockMetadataSafetyOracle()
+      val casper         = BlockMetadataCasper(faultToleranceThreshold = -1, maxDepth = casperMaxDepth)
+
+      implicit val show = new Show[BlockMetadata] {
+        def show(meta: BlockMetadata): String =
+          Base16.encode(meta.blockHash.toByteArray) + s" #${meta.seqNum}"
+      }
+
+      import coop.rchain.blockstorage.casper.syntax.all._
+      for {
+        _          <- Log[F].info(s"Updating finalization state.")
+        lms        <- newDag.latestMessages.map(_.values.map(v => (v.sender, v)))
+        allFringes <- latestFringesStore.toMap.map(_.toList.sortBy(_._1).reverse)
+        _ <- allFringes.headOption match {
+              // fringe exists - try update
+              case Some((latestIdx, DagFringe(latestFringe, lfs, _))) =>
+                for {
+                  _ <- Log[F].info(s"latestFringe idx $latestIdx")
+                  latestFringeMeta <- latestFringe.toList
+                                       .traverse {
+                                         case (s, hs) =>
+                                           hs.toList
+                                             .traverse(h => newDag.lookupUnsafe(h))
+                                             .map(v => (s, v.toSet))
+                                       }
+                  newFringesRecorded <- casper.finalise(
+                                         lms.toList,
+                                         metaDag,
+                                         safetyOracle,
+                                         latestFringeMeta
+                                       )
+                  _ <- mergeFOpt.traverse { merge =>
+                        (latestFringeMeta +: newFringesRecorded)
+                          .zip(newFringesRecorded)
+                          .foldLeftM[F, (StateHash, Long)]((lfs, latestIdx + 1)) {
+                            case ((prevLfs, nextIdx), (curFringe, nextFringe)) =>
+                              val curFringeBlocks = curFringe.flatMap(_._2).map(_.blockHash)
+                              val conflictSet = nextFringe
+                                .filter {
+                                  case (_, meta) =>
+                                    (curFringeBlocks.toSet intersect meta.map(_.blockHash)).isEmpty
+                                }
+                                .flatMap(_._2)
+                                .toSet
+                              for {
+                                v <- conflictSet.toList.traverse { m =>
+                                      val mFringe = allFringes
+                                        .find {
+                                          case (_, DagFringe(_, _, num)) => num == m.baseFringeNum
+                                        }
+                                        .map(_._2.finalizationFringe)
+
+                                      for {
+                                        stoppers <- mFringe
+                                                     .map(_.flatMap(_._2))
+                                                     .liftTo(
+                                                       new Exception(
+                                                         "no FF for message in DB when merging"
+                                                       )
+                                                     )
+                                        finSet <- curFringe
+                                                   .map(_._2)
+                                                   .traverse { m =>
+                                                     val stream = fs2.Stream
+                                                       .emits(m.toList)
+                                                       .covary[F] ++ metaDag
+                                                       .selfJustificationChain(m.head)
+                                                     stream
+                                                       .takeWhile(
+                                                         m => !stoppers.contains(m.blockHash)
+                                                       )
+                                                       .compile
+                                                       .toList
+                                                   }
+                                                   .map(_.flatten)
+                                      } yield (m, finSet.toSet)
+                                    }
+                                r <- merge(prevLfs, v.toSet)
+                                _ <- Log[F].info(
+                                      s"FF advanced to ${nextFringe.flatMap(_._2.map(_.seqNum)).mkString(";")}"
+                                    )
+                                (cr, sh) = r
+                                _ <- rejectedIndex
+                                      .putIfAbsent(cr.rejectedSet.map((_, ())).toList) >>
+                                      acceptedIndex.putIfAbsent(cr.acceptedSet.map((_, ())).toList)
+                                // record new fringes
+                                _ <- latestFringesStore.put(
+                                      nextIdx,
+                                      DagFringe(
+                                        nextFringe.map { case (s, m) => (s, m.map(_.blockHash)) },
+                                        sh,
+                                        nextIdx
+                                      )
+                                    )
+                              } yield (sh, nextIdx + 1)
+                          }
+                      }
+                } yield ()
+              // does not exist - record block as a fringe
+              case None => {
+                val f = DagFringe(
+                  block.body.state.bonds
+                    .map(_.validator)
+                    .map(v => (v, Set(block.blockHash))),
+                  block.body.state.postStateHash,
+                  0L
+                )
+                Log[F].info(s"latestFringesStore is empty. Inserting block as a fringe.") >>
+                  latestFringesStore.put(0L, f)
+              }
+            }
       } yield ()
     }
 
     lock.withPermit(
-      blockMetadataIndex
-        .contains(block.blockHash)
-        .ifM(logAlreadyStored, doInsert) >> representation
+      blockMetadataIndex.contains(block.blockHash).ifM(logAlreadyStored, doInsert) >>
+        representation.flatMap(updateFinalization) >> representation.map { r =>
+        latestRepresentation.update((), r)
+        r
+      }
     )
   }
 
   override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
     lock.withPermit(f(KeyValueStoreEquivocationsTracker))
-
-  /** Record that some hash is directly finalized (detected by finalizer and becomes LFB). */
-  def recordDirectlyFinalized(
-      directlyFinalizedHash: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit] =
-    // Lock here is a safeguard for persisting changes in BlockMetadataIndex which can happen concurrently when
-    // blocks are replayed in parallel
-    lock.withPermit(
-      for {
-        dag    <- representation
-        errMsg = s"Attempting to finalize nonexistent hash ${PrettyPrinter.buildString(directlyFinalizedHash)}."
-        _ <- dag
-              .contains(directlyFinalizedHash)
-              .ifM(().pure, new Exception(errMsg).raiseError)
-        // all non finalized ancestors should be finalized as well (indirectly)
-        indirectlyFinalized <- dag.ancestors(List(directlyFinalizedHash), dag.isFinalized(_).not)
-        // invoke effects
-        _ <- finalizationEffect(indirectlyFinalized + directlyFinalizedHash)
-        // persist finalization
-        _ <- blockMetadataIndex.recordFinalized(directlyFinalizedHash, indirectlyFinalized)
-      } yield ()
-    )
 }
 
 object BlockDagKeyValueStorage {
@@ -419,7 +420,10 @@ object BlockDagKeyValueStorage {
       equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      deploys: KeyValueTypedStore[F, DeployId, BlockHash]
+      deploys: KeyValueTypedStore[F, DeployId, BlockHash],
+      accepted: KeyValueTypedStore[F, DeployChain, Unit],
+      rejected: KeyValueTypedStore[F, DeployChain, Unit],
+      latestFringes: KeyValueTypedStore[F, Long, DagFringe]
   )
 
   private def createStores[F[_]: Concurrent: Log: Metrics](kvm: KeyValueStoreManager[F]) = {
@@ -458,7 +462,21 @@ object BlockDagKeyValueStorage {
                         codecDeployId,
                         codecBlockHash
                       )
-
+      rejectedIndexDb <- KeyValueStoreManager[F].database[DeployChain, Unit](
+                          "rejected-index",
+                          codecDeployChain,
+                          scodec.codecs.ignore(0)
+                        )
+      acceptedIndexDb <- KeyValueStoreManager[F].database[DeployChain, Unit](
+                          "accepted-index",
+                          codecDeployChain,
+                          scodec.codecs.ignore(0)
+                        )
+      latestFringesDB <- KeyValueStoreManager[F].database[Long, DagFringe](
+                          "finalized-fringes",
+                          scodec.codecs.vlong,
+                          codecDagFringe
+                        )
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
@@ -466,7 +484,10 @@ object BlockDagKeyValueStorage {
       equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
-      deployIndexDb
+      deployIndexDb,
+      acceptedIndexDb,
+      rejectedIndexDb,
+      latestFringesDB
     )
   }
 
@@ -480,6 +501,9 @@ object BlockDagKeyValueStorage {
       stores.metadata,
       stores.deploys,
       stores.invalidBlocks,
-      stores.equivocations
+      stores.equivocations,
+      stores.accepted,
+      stores.rejected,
+      stores.latestFringes
     )
 }

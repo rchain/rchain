@@ -84,7 +84,8 @@ object GenesisCeremonyMaster {
                               .hashSetCasper[F](
                                 validatorId,
                                 casperShardConf.shardName,
-                                casperShardConf.faultToleranceThreshold
+                                casperShardConf.faultToleranceThreshold,
+                                casperShardConf.minPhloPrice
                               )
                    _ <- Engine
                          .transitionToRunning[F](

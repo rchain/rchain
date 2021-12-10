@@ -146,7 +146,8 @@ object Proposer {
     val getCasperSnapshot = new MultiParentCasperImpl(
       validatorIdentity.some,
       casperConf.faultToleranceThreshold,
-      casperConf.shardName
+      casperConf.shardName,
+      casperConf.minPhloPrice
     ).getSnapshot()
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
@@ -156,7 +157,8 @@ object Proposer {
       new MultiParentCasperImpl(
         validatorIdentity.some,
         casperConf.faultToleranceThreshold,
-        casperConf.shardName
+        casperConf.shardName,
+        casperConf.minPhloPrice
       ).validate(b, s)
 
     val proposeEffect = (b: BlockMessage, s: CasperSnapshot[F]) =>
@@ -168,7 +170,8 @@ object Proposer {
               dag <- new MultiParentCasperImpl(
                       validatorIdentity.some,
                       casperConf.faultToleranceThreshold,
-                      casperConf.shardName
+                      casperConf.shardName,
+                      casperConf.minPhloPrice
                     ).handleValidBlock(b, s)
               _ <- blockDagStateRef.update(_.ackValidated(b.blockHash, dag.getPureState).newState)
               _ <- BlockRetriever[F].ackInCasper(b.blockHash)

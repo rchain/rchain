@@ -1,28 +1,43 @@
 package coop.rchain.blockstorage.dag
 
+import cats.Applicative
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
-import coop.rchain.casper.protocol.BlockMessage
+import coop.rchain.blockstorage.dag.BlockDagStorage.{DagFringe, DeployId}
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
+import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFinalizationState
+import coop.rchain.casper.protocol.{BlockMessage, DeployChain}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
+import cats.syntax.all._
+import coop.rchain.blockstorage.casper.Casper.FinalizationFringe
+import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
+import coop.rchain.models.block.StateHash.StateHash
 
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
       block: BlockMessage,
       invalid: Boolean,
-      approved: Boolean = false
+      baseFringeNum: Long,
+      // processing the event of finding new fringe requires more then just DAG store
+      mergeFOpt: Option[
+        (
+            StateHash,
+            Set[(BlockMetadata, Set[BlockMetadata])] // block to merge + finalized scope unseen from this block
+        ) => F[(ConflictResolution[DeployChain], StateHash)]
+      ] = None
   ): F[BlockDagRepresentation[F]]
   def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
-  def recordDirectlyFinalized(
-      direct: BlockHash,
-      finalizationEffect: Set[BlockHash] => F[Unit]
-  ): F[Unit]
 }
 
 object BlockDagStorage {
   type DeployId = ByteString
+  final case class DagFringe(
+      finalizationFringe: FinalizationFringe[Validator, BlockHash],
+      state: StateHash,
+      num: Long
+  )
 
   def apply[F[_]](implicit instance: BlockDagStorage[F]): BlockDagStorage[F] = instance
 }
@@ -41,16 +56,12 @@ trait BlockDagRepresentation[F[_]] {
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]
   ): F[Vector[Vector[BlockHash]]]
-  // DAG representation has to have finalized block, or it does not make sense
-  def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
   def find(truncatedHash: String): F[Option[BlockHash]]
-  def nonFinalizedSet: Set[BlockHash]
-  def truncate(
-      latestMessages: Map[Validator, BlockHash],
-      findLfb: Map[Validator, BlockHash] => F[BlockHash]
-  ): F[BlockDagRepresentation[F]]
-  def reachedAcquiescence: F[Boolean]
+  def genesis: F[BlockHash]
+  def finalizationState: BlockDagFinalizationState
+  def getPureState: BlockDagRepresentationState
+  def finalizationFringes: List[DagFringe]
 }
 
 trait EquivocationsTracker[F[_]] {

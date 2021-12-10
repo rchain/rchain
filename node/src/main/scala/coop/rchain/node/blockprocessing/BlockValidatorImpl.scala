@@ -44,7 +44,8 @@ final case class BlockValidatorImpl[F[_]
     val casper = new MultiParentCasperImpl[F](
       validatorId = none[ValidatorIdentity], // this does not matter
       casperConf.faultToleranceThreshold,
-      casperConf.shardName
+      casperConf.shardName,
+      casperConf.minPhloPrice
     )
     for {
       _                <- Log[F].info(s"Validating ${message.show.take(10)}.")

@@ -147,11 +147,13 @@ sealed abstract class MultiParentCasperInstances {
   def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: BlockStore: BlockDagStorage: Span: EventPublisher: DeployStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
       shard: String,
-      faultToleranceThreshold: Float
+      faultToleranceThreshold: Float,
+      minPhloPrice: Long
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     new MultiParentCasperImpl(
       validatorId,
       faultToleranceThreshold,
-      shard
+      shard,
+      minPhloPrice: Long
     ).asInstanceOf[MultiParentCasper[F]].pure[F]
 }

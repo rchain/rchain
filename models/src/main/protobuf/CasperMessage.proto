@@ -106,6 +106,9 @@ message BlockHashMessageProto {
   bytes  blockCreator = 2;
 }
 
+message DeployChain {
+  repeated bytes deploys       = 1 [(scalapb.field).collection_type="collection.immutable.List"];
+}
 message BlockMetadataInternal {
   // This message in mapped to a different Scala class because of protobuf's inability to create map<bytes, int64> for
   // bonds.
@@ -119,9 +122,8 @@ message BlockMetadataInternal {
   int64 blockNum                        = 6;
   int32 seqNum                          = 7;
   bool invalid                          = 8; // whether the block was marked as invalid
-  bool directlyFinalized                = 9; // whether the block has been last finalized block (LFB)
-  bool finalized                        = 10;// whether the block is finalized
   bytes postStateHash                    = 11;// whether the block is finalized
+  int64 baseFringeNum = 10;
 }
 
 message HeaderProto {

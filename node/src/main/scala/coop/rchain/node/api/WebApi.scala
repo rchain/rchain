@@ -5,6 +5,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage.DagFringe
 import coop.rchain.casper.{Casper, ProposeFunction, SafetyOracle}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
@@ -59,6 +60,10 @@ trait WebApi[F[_]] {
   def isFinalized(hash: String): F[Boolean]
 
   def getTransaction(hash: String): F[TransactionResponse]
+
+  def finalizedState: F[List[DagFringe]]
+
+  def findFinalizedState(hash: String): F[DagFringe]
 }
 
 object WebApi {
@@ -152,6 +157,11 @@ object WebApi {
 
     def getTransaction(hash: String): F[TransactionResponse] =
       cacheTransactionAPI.getTransaction(hash)
+    def finalizedState: F[List[DagFringe]] =
+      BlockAPI.finalizationState.flatMap(_.liftToBlockApiErr)
+
+    def findFinalizedState(state: String): F[DagFringe] =
+      BlockAPI.findFinalizationState(state).flatMap(_.liftToBlockApiErr)
   }
 
   // Rholang terms interesting for translation to JSON
@@ -238,6 +248,8 @@ object WebApi {
   )
 
   final case class VersionInfo(api: String, node: String)
+
+  type FrinalizedFringes = List[DagFringe]
 
   // Exception thrown by BlockAPI
   final class BlockApiException(message: String) extends Exception(message)

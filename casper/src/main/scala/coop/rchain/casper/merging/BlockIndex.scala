@@ -9,18 +9,16 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryRepository
-import coop.rchain.rspace.merger.MergingLogic.{computeRelatedSets, NumberChannelsDiff}
+import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.rspace.merger._
 import coop.rchain.rspace.trace.Produce
 
 import scala.collection.concurrent.TrieMap
 
-final case class BlockIndex(blockHash: BlockHash, deployChains: Vector[DeployChainIndex])
-
 object BlockIndex {
-
-  // TODO make proper storage for block indices
-  val cache = TrieMap.empty[BlockHash, BlockIndex]
+  implicit val ord = new Ordering[DeployChain] {
+    override def compare(x: DeployChain, y: DeployChain): Int = ???
+  }
 
   def createEventLogIndex[F[_]: Concurrent, C, P, A, K](
       events: List[Event],
@@ -50,7 +48,7 @@ object BlockIndex {
       postStateHash: Blake2b256Hash,
       historyRepository: HistoryRepository[F, C, P, A, K],
       mergeableChanData: Seq[NumberChannelsDiff]
-  ): F[BlockIndex] = {
+  ): F[Map[DeployChain, DeployChainIndex]] = {
     // Connect mergeable channels data with processed deploys by index
     val usrCount    = usrProcessedDeploys.size
     val sysCount    = sysProcessedDeploys.size
@@ -117,15 +115,16 @@ object BlockIndex {
         deployIndices.toSet,
         (l, r) => MergingLogic.depends(l.eventLogIndex, r.eventLogIndex)
       )
-      index <- deployChains.toVector
-                .traverse(
-                  DeployChainIndex(
-                    _,
-                    preStateHash,
-                    postStateHash,
-                    historyRepository
-                  )
-                )
-    } yield BlockIndex(blockHash, index)
+      r <- deployChains.toVector
+            .traverse { dc =>
+              DeployChainIndex(
+                dc,
+                preStateHash,
+                postStateHash,
+                historyRepository
+              ).map(idx => (DeployChain(dc.map(_.deployId).toList), idx))
+            }
+            .map(_.toMap)
+    } yield r
   }
 }

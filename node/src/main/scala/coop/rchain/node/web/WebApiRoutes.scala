@@ -4,6 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import cats.~>
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.BlockDagStorage.DagFringe
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.RejectedDeployInfo
 import coop.rchain.node.api.WebApi
@@ -99,6 +100,8 @@ object WebApiRoutes {
     implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
     implicit val explRespEncoder            = jsonEncoderOf[F, ExploratoryDeployResponse]
     implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
+    implicit val fringesEncoder             = jsonEncoderOf[F, FrinalizedFringes]
+    implicit val fringeEncoder              = jsonEncoderOf[F, DagFringe]
     // Decoders
     implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
     implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
@@ -166,6 +169,12 @@ object WebApiRoutes {
 
       case GET -> Root / "transactions" / hash =>
         webApi.getTransaction(hash).handle
+
+      case GET -> Root / "finalized-state" =>
+        webApi.finalizedState.handle
+
+      case GET -> Root / "find-finalized-state" / state =>
+        webApi.findFinalizedState(state).handle
     }
   }
 

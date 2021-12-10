@@ -104,7 +104,8 @@ object CasperLaunch {
                      .hashSetCasper[F](
                        validatorId,
                        casperShardConf.shardName,
-                       casperShardConf.faultToleranceThreshold
+                       casperShardConf.faultToleranceThreshold,
+                       casperShardConf.minPhloPrice
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
