@@ -48,15 +48,15 @@ in {
        @(_, ListOps)          <- listOpsCh;
        TreeHashMap            <- treeHashMapCh;
        @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
-    new posRevAddressCh, posAuthKeyCh, posVaultCh,
-        initialActiveCh, pendingRewardsMapCh
+    new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh, 
+        initialActiveCh, pendingRewardsMapCh, createUnfVault, moveInitialBondCh, posAuthKeyCh
     in {
       // Creates the auth key and Rev vault associated with the PoS contract.
       new posPkCh in {
-        @RevVault!("deployerAuthKey", *posId, *posAuthKeyCh) |
+        @RevVault!("deployerAuthKey", *posId, *posDeployerAuthKeyCh) |
         getUser!(*posId, *posPkCh) |
         for (@posPk <- posPkCh) {
-          revAddressOps!("fromPublicKey", posPk, *posRevAddressCh) |
+          revAddressOps!("fromPublicKey", posPk, *posDeployerRevAddressCh) |
           // Creates Coop multisig vault for slashed funds.
           // Either (false, errorMsg) or (true, (multiSigVault, revAddress, revVault)) are returned on coopVaultCh.
           @MultiSigRevVault!(
@@ -72,20 +72,59 @@ in {
           )
         }
       } |
-      for (@posRevAddress <- posRevAddressCh;
-           @posAuthKey    <- posAuthKeyCh) {
-        for (@(true, coopVault) <<- coopVaultCh) {
+      // create unforgeable name vault with the provided pub key
+      // ret: the return channel of the create
+      // pubKey: the pubkey which controll the unforgeable name
+      contract createUnfVault(ret, @pubkey) = {
+        new unf, unfAddrRet, createRetCh, pubKeyChainUnfVault, unfVaultHandle, stdout(`rho:io:stdout`) in {
+          revAddressOps!("fromUnforgeable", *unf, *unfAddrRet) |
+          for (@unfAddr <- unfAddrRet){
+            @RevVault!("findOrCreate", unfAddr, *createRetCh) |
+            for (@(true, vault) <- createRetCh){
+              contract unfVaultHandle(@"transfer", @targetAddress, @amount, deployerID, transferRet) = {
+                new deployerPubKeyBytesCh, DeployerIdOps(`rho:rchain:deployerId:ops`) in {
+                  DeployerIdOps!("pubKeyBytes", *deployerID, *deployerPubKeyBytesCh) |
+                  for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+                    if (deployerPubKeyBytes ==  pubkey.hexToBytes()){
+                      new unfAuthKeyCh in {
+                        @RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
+                        for (@unfAuthKey <- unfAuthKeyCh){
+                          @vault!("transfer", targetAddress, amount, unfAuthKey, *transferRet)
+                        }
+                      }
+                    } else {
+                      transferRet!((false, "You have not permission to transfer."))
+                    }
+                  }
+                }
+              } |
+              ret!((*unf, unfAddr, vault ,*unfVaultHandle))
+            }
+          }
+        }
+      }|
+      createUnfVault!(*posVaultCh, "$$posPubKey$$") |
+      for (@(posVaultUnf, posVaultAddr, posVault, humanControllHandle) <- posVaultCh){
+      @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+      for (@posDeployerRevAddress <- posDeployerRevAddressCh;
+           @posDeployerAuthKey    <- posDeployerAuthKeyCh;
+           @posAuthKey <- posAuthKeyCh)  {
+        for (@(true, (coopMultiVault, coopMultiVaultAddr, coopVaultHd)) <<- coopVaultCh) {
           // Creates PoS Rev vault with sum of initial bonds.
           new bondSumCh in {
             @ListOps!("fold", $$initialBonds$$.toList(), 0, *sumFromPair, *bondSumCh) |
             for (@bondSum <- bondSumCh) {
-              @RevVault!("createWithBalance", posRevAddress, bondSum, *posVaultCh)
+              @RevVault!("createWithBalance", posDeployerRevAddress, bondSum, *posDeployerVaultCh)|
+              for (@(true, posDeployerVault)  <- posDeployerVaultCh) {
+                // move all the fund from deployer addr to POS unforgeable vault
+                @posDeployerVault!("transfer", posVaultAddr, bondSum, posDeployerAuthKey, *moveInitialBondCh)
+              }
             }
           } |
           // Selects the initial active validators.
           pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
-          for (@(true, posVault)  <- posVaultCh;
-               @initialActive     <- initialActiveCh) {
+          for (@initialActive     <- initialActiveCh; 
+               @(true, _) <- moveInitialBondCh) {
             new stateCh, pendingRewardsInitializedCh in {
               // Initializes PoS state structure.
               stateCh!({
@@ -135,12 +174,12 @@ in {
               // Exposes Coop multisig vault on returnCh.
               contract PoS(@"getCoopVault", returnCh) = {
                 for (@(_, coopVault) <<- coopVaultCh) {
-                  returnCh!(coopVault)
+                  returnCh!((coopMultiVault, coopMultiVaultAddr, coopVaultHd))
                 }
               } |
               // Exposes initial PoS vault on returnCh.
               contract PoS(@"getInitialPosVault", returnCh) = {
-                returnCh!(posVault)
+                returnCh!((posVaultAddr, posVault))
               } |
               // Exposes epochLength parameter to PoSTest.
               contract PoS(@"getEpochLength", returnCh) = {
@@ -149,6 +188,10 @@ in {
               // Exposes quarantineLength parameter to PoSTest.
               contract PoS(@"getQuarantineLength", returnCh) = {
                 returnCh!($$quarantineLength$$)
+              } |
+              contract PoS(@"humanTransfer", @targetAddress, @amount, @deployerID, @transferRet) = {
+                // human transfer would just use this method
+                @humanControllHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
               // Public method allowing users to bond and become validators.
               contract PoS(@"bond", @deployerId, @amount, returnCh) = {
@@ -167,7 +210,7 @@ in {
                       resultCh!(state, (false, "Bond is greater than maximum!"))
                     } else {
                       // Transfers user's bond amount to the PoS vault.
-                      deposit!(deployerId, amount, posRevAddress, *depositCh) |
+                      deposit!(deployerId, amount, posVaultAddr, *depositCh) |
                       for (@depositResult <- depositCh) {
                         match depositResult {
                           // If deposit is successful, the user becomes a bonded validator.
@@ -220,7 +263,7 @@ in {
                     for (@isValid <- isValidTokenCh) {
                       if (isValid) {
                         new depositCh in {
-                          deposit!(deployerId, amount, posRevAddress, *depositCh) |
+                          deposit!(deployerId, amount, posVaultAddr, *depositCh) |
                           for (@depositResult <- depositCh){
                             match depositResult {
                               (true, _) => {
@@ -294,8 +337,6 @@ in {
                           for (@invalidBlocks        <- invalidBlocksCh;
                                @userPk               <- userCh;
                                @state, stateUpdateCh <- stateProcessCh) {
-                            match coopVault {
-                              (_, coopRevAddress, _) => {
                                 new toBeSlashed, valBondCh, valRewardCh in {
                                   // Flow of logic:
                                   // 0. check if blockHash is the hash of an invalid block
@@ -311,7 +352,7 @@ in {
                                       new transferDoneCh in {
                                         @posVault!(
                                           "transfer",
-                                          coopRevAddress,
+                                          coopMultiVaultAddr,
                                           valBond,
                                           posAuthKey,
                                           *transferDoneCh
@@ -342,8 +383,6 @@ in {
                                     }
                                   }
                                 }
-                              }
-                            }
                           }
                         }
                       } else {
@@ -486,7 +525,7 @@ in {
                         @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
                         for (@authKey <- unfAuthKeyCh) {
                           // Transfer funds from validator vault to the PoS vault.
-                          @vault!("transfer", posRevAddress, balance, authKey, *transferDoneCh) |
+                          @vault!("transfer", posVaultAddr, balance, authKey, *transferDoneCh) |
                           for (@(true, _) <- transferDoneCh) {
                             returnCh!(true)
                           }
@@ -624,7 +663,8 @@ in {
           }
         }
       }
-    } |
+    } 
+    }|
     // Registers signed write-only PoS contract bundle.
     rs!(
       "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),

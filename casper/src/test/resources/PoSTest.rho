@@ -47,7 +47,7 @@ match (
           @sysAuthToken  <- sysAuthTokenCh) {
         stdlog!("info", {"posRevAddress" : posRevAddress}) |
         @PoS!("getInitialPosVault", *posVaultCh) |
-        for (@posVault <- posVaultCh) {
+        for (@(posAddr, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
