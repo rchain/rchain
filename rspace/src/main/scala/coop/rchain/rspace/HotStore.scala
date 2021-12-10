@@ -47,7 +47,13 @@ object HotStoreState {
       joins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]],
       installedJoins: Map[C, Seq[Seq[C]]] = Map.empty[C, Seq[Seq[C]]]
   ): HotStoreState[C, P, A, K] =
-    HotStoreState[C, P, A, K](continuations, installedContinuations, data, joins, installedJoins)
+    new HotStoreState[C, P, A, K](
+      continuations,
+      installedContinuations,
+      data,
+      joins,
+      installedJoins
+    )
 }
 
 private final case class HistoryStoreCache[F[_], C, P, A, K](
