@@ -1,19 +1,20 @@
 package coop.rchain
 
-import coop.rchain.casper.BlockDagRepresentationSyntax
+import coop.rchain.blockstorage.dag.BlockDagRepresentationSyntax
 import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.rholang.{RuntimeReplaySyntax, RuntimeSyntax}
 import coop.rchain.casper.util.comm.CommUtilSyntax
 import coop.rchain.casper.util.rholang.RuntimeManagerSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.blockstorage.casper.syntax.{CasperSyntax, SafetyOracleSyntax}
 
 package object casper {
   type TopoSort             = Vector[Vector[BlockHash]]
   type BlockProcessing[A]   = Either[BlockError, A]
   type ValidBlockProcessing = BlockProcessing[ValidBlock]
 
-  type ProposeFunction[F[_]] = (Casper[F], Boolean) => F[ProposerResult]
+  type ProposeFunction[F[_]] = Boolean => F[ProposerResult]
 
   val CasperMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "casper")
 
@@ -30,3 +31,5 @@ trait AllSyntaxCasper
     with RuntimeSyntax
     with RuntimeReplaySyntax
     with RuntimeManagerSyntax
+    with SafetyOracleSyntax
+    with CasperSyntax
