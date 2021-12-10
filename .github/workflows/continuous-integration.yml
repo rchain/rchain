@@ -425,7 +425,9 @@ jobs:
           set -x
 
           image_name="$DOCKER_IMAGE_NAME$suffix"
-          img_version="$image_name:$VERSION$ci_run"
+          img_version_raw="$image_name:$VERSION$ci_run"
+          # Replace unsupported character `+`
+          img_version="${img_version_raw//[+]/__}"
           img_latest="$image_name:latest"
 
           # Release Docker image
