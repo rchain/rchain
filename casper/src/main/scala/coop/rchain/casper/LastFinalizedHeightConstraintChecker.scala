@@ -18,31 +18,33 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log] {
       // TODO having genesis is a weird way to check, remove
       genesis: BlockMessage,
       validatorIdentity: ValidatorIdentity
-  ): F[CheckProposeConstraintsResult] = {
-    val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-    val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
-    val lastFinalizedBlockHash    = s.dag.lastFinalizedBlock
-    for {
-      lastFinalizedBlock <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
-      latestMessageOpt   <- s.dag.latestMessage(validator)
-      result <- latestMessageOpt match {
-                 case Some(latestMessage) =>
-                   val latestFinalizedHeight = lastFinalizedBlock.blockNum
-                   val heightDifference      = latestMessage.blockNum - latestFinalizedHeight
-                   val result =
-                     if (heightDifference <= heightConstraintThreshold)
-                       CheckProposeConstraintsResult.success
-                     else TooFarAheadOfLastFinalized
-                   Log[F].info(
-                     s"Latest message is $heightDifference blocks ahead of the last finalized block"
-                   ) >> result.pure[F]
-                 case None =>
-                   Sync[F].raiseError[CheckProposeConstraintsResult](
-                     new IllegalStateException("Validator does not have a latest message")
-                   )
-               }
-    } yield result
-  }
+  ): F[CheckProposeConstraintsResult] =
+    CheckProposeConstraintsResult.success.pure[F]
+//      {
+//    val validator                 = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
+//    val heightConstraintThreshold = s.onChainState.shardConf.heightConstraintThreshold
+//    val lastFinalizedBlockHash    = s.dag.lastFinalizedBlock
+//    for {
+//      lastFinalizedBlock <- s.dag.lookupUnsafe(lastFinalizedBlockHash)
+//      latestMessageOpt   <- s.dag.latestMessage(validator)
+//      result <- latestMessageOpt match {
+//                 case Some(latestMessage) =>
+//                   val latestFinalizedHeight = lastFinalizedBlock.blockNum
+//                   val heightDifference      = latestMessage.blockNum - latestFinalizedHeight
+//                   val result =
+//                     if (heightDifference <= heightConstraintThreshold)
+//                       CheckProposeConstraintsResult.success
+//                     else TooFarAheadOfLastFinalized
+//                   Log[F].info(
+//                     s"Latest message is $heightDifference blocks ahead of the last finalized block"
+//                   ) >> result.pure[F]
+//                 case None =>
+//                   Sync[F].raiseError[CheckProposeConstraintsResult](
+//                     new IllegalStateException("Validator does not have a latest message")
+//                   )
+//               }
+//    } yield result
+//  }
 }
 
 object LastFinalizedHeightConstraintChecker {

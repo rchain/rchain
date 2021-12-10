@@ -24,35 +24,6 @@ import scala.collection.immutable
 import scala.collection.immutable.Map
 
 object ProtoUtil {
-  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
-      estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage],
-      depth: Int
-  ): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = parentHashes(estimate)
-    val maybeMainParentHash = parentsHashes.headOption
-    for {
-      mainChain <- maybeMainParentHash match {
-                    case Some(mainParentHash) =>
-                      for {
-                        updatedEstimate <- BlockStore[F].getUnsafe(mainParentHash)
-                        depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
-                        newDepth        = depth + depthDelta.toInt
-                        mainChain <- if (newDepth <= 0) {
-                                      (acc :+ estimate).pure
-                                    } else {
-                                      getMainChainUntilDepth(
-                                        updatedEstimate,
-                                        acc :+ estimate,
-                                        newDepth
-                                      )
-                                    }
-                      } yield mainChain
-                    case None => (acc :+ estimate).pure
-                  }
-    } yield mainChain
-  }
-
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications.find(_.validator == block.sender)
 
@@ -106,11 +77,6 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
-    import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
-  }
-
   def weightFromValidatorByDag[F[_]: Monad](
       dag: BlockDagRepresentation[F],
       blockHash: BlockHash,
@@ -131,43 +97,8 @@ object ProtoUtil {
     } yield result
   }
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
-      b: BlockMessage,
-      validator: ByteString
-  ): F[Long] =
-    for {
-      maybeMainParent <- mainParent(b)
-      weightFromValidator = maybeMainParent
-        .map(weightMap(_).getOrElse(validator, 0L))
-        .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
-    } yield weightFromValidator
-
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
-    weightFromValidator(b, b.sender)
-
   def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
-
-  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
-    import cats.instances.list._
-    parentHashes(b).traverse(BlockStore[F].getUnsafe)
-  }
-
-  def getParentsMetadata[F[_]: Sync](
-      b: BlockMetadata,
-      dag: BlockDagRepresentation[F]
-  ): F[List[BlockMetadata]] = {
-    import cats.instances.list._
-    b.parents.traverse(dag.lookupUnsafe)
-  }
-
-  def getParentMetadatasAboveBlockNumber[F[_]: Sync](
-      b: BlockMetadata,
-      blockNumber: Long,
-      dag: BlockDagRepresentation[F]
-  ): F[List[BlockMetadata]] =
-    getParentsMetadata(b, dag)
-      .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
     b.body.deploys
@@ -262,7 +193,8 @@ object ProtoUtil {
       header: Header,
       justifications: Seq[Justification],
       shardId: String,
-      seqNum: Int = 0
+      seqNum: Int = 0,
+      sender: ByteString = ByteString.EMPTY
   ): BlockMessage = {
     // TODO FIX-ME fields that can be empty SHOULD be optional
     val block = BlockMessage(
@@ -270,7 +202,7 @@ object ProtoUtil {
       header,
       body,
       justifications.toList,
-      sender = ByteString.EMPTY,
+      sender,
       seqNum = seqNum,
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
@@ -295,6 +227,9 @@ object ProtoUtil {
     )
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
 
+  def stringToByteString(string: String): ByteString =
+    ByteString.copyFrom(Base16.unsafeDecode(string))
+
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)
     val hash: Array[Byte] = Blake2b256.hash(bytes)
@@ -308,13 +243,8 @@ object ProtoUtil {
     DeployParameters(userId)
   }
 
-  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] = {
-    val missingParents = parentHashes(b).toSet
-    val missingJustifications = b.justifications
-      .map(_.latestBlockHash)
-      .toSet
-    (missingParents union missingJustifications).toList
-  }
+  def dependenciesHashesOf(b: BlockMessage): List[BlockHash] =
+    b.justifications.map(_.latestBlockHash)
 
   // Return hashes of all blocks that are yet to be seen by the passed in block
   def unseenBlockHashes[F[_]: Sync: BlockStore](

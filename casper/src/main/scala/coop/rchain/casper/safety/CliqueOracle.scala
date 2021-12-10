@@ -77,7 +77,7 @@ object CliqueOracle {
           .takeWhile(_.latestBlockHash != stopper)
         // if message is not in main chain with target - this is disagreement
         disagreements = lmBSelfJustifications.evalFilterNot { j =>
-          dag.isInMainChain(targetMsg, j.latestBlockHash)
+          false.pure[F] // dag.isInMainChain(targetMsg, j.latestBlockHash)
         }
         // its enough only one disagreement found to declare output false
         r <- disagreements.head.compile.last
@@ -139,11 +139,11 @@ object CliqueOracle {
 
     /** weight map containing only validators that agree on the the message */
     def agreeingWeightMapF(weightMap: WeightMap): F[WeightMap] = {
-      def agree(validator: V, message: M): F[Boolean] =
-        dag
-          .latestMessageHash(validator)
-          .flatMap(_.traverse(dag.isInMainChain(message, _)))
-          .map(_.getOrElse(false))
+      def agree(validator: V, message: M): F[Boolean] = true.pure[F]
+//        dag
+//          .latestMessageHash(validator)
+//          .flatMap(_.traverse(dag.isInMainChain(message, _)))
+//          .map(_.getOrElse(false))
 
       Stream
         .fromIterator(weightMap.toIterator)

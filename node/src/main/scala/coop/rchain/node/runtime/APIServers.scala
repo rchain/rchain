@@ -48,7 +48,6 @@ object APIServers {
       engineCell: EngineCell[F],
       logF: Log[F],
       synchronyConstraintChecker: SynchronyConstraintChecker[F],
-      lastFinalizedHeightConstraintChecker: LastFinalizedHeightConstraintChecker[F],
       mainScheduler: Scheduler
   ): APIServers = {
     val repl = ReplGrpcService(runtime, mainScheduler)

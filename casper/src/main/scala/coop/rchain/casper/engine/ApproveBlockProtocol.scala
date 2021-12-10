@@ -3,6 +3,7 @@ package coop.rchain.casper.engine
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
@@ -15,7 +16,7 @@ import coop.rchain.casper.{LastApprovedBlock, PrettyPrinter, Validate, _}
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared
-import coop.rchain.shared.{Base16, _}
+import coop.rchain.shared._
 
 import java.nio.file.Path
 import scala.concurrent.duration._
@@ -66,7 +67,8 @@ object ApproveBlockProtocol {
       requiredSigs: Int,
       duration: FiniteDuration,
       interval: FiniteDuration,
-      blockNumber: Long
+      blockNumber: Long,
+      sender: ByteString
   ): F[ApproveBlockProtocol[F]] =
     for {
       now       <- Time[F].currentMillis
@@ -89,6 +91,7 @@ object ApproveBlockProtocol {
                        createGenesisBlock(
                          implicitly[RuntimeManager[F]],
                          Genesis(
+                           sender = sender,
                            shardId = shardId,
                            timestamp = timestamp,
                            proofOfStake = ProofOfStake(

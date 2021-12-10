@@ -20,7 +20,7 @@ trait AdminWebApi[F[_]] {
 }
 
 object AdminWebApi {
-  class AdminWebApiImpl[F[_]: Concurrent: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Span: Metrics](
+  class AdminWebApiImpl[F[_]: Concurrent: EngineCell: SynchronyConstraintChecker: Log: Span: Metrics](
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
   ) extends AdminWebApi[F] {

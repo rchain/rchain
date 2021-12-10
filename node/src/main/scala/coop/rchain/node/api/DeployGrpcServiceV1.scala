@@ -120,7 +120,8 @@ object DeployGrpcServiceV1 {
                   depth,
                   apiMaxBlocksLimit,
                   startBlockNumber,
-                  (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+                  (ts, finalizedFringe, base) =>
+                    GraphzGenerator.dagAsCluster[F, Effect](ts, finalizedFringe, base, config),
                   serialize
                 )
                 .map(_.getOrElse(List.empty[String]))

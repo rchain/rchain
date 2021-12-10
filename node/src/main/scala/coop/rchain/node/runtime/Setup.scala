@@ -1,19 +1,20 @@
 package coop.rchain.node.runtime
 
 import cats.Parallel
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.{Deferred, Ref, Semaphore}
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
-import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.KeyValueBlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
+import coop.rchain.blockstorage.casperbuffer.{
+  CasperBufferKeyValueStorage,
+  FlatCasperBufferKeyValueStorage
+}
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
-import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.protocol.BlockMessage
@@ -23,29 +24,33 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPref
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.casper.processing.MessageProcessor
+import coop.rchain.casper.processing.MessageProcessor.MessageProcessingStream
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
+import coop.rchain.shared.Base16
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Par
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
 import coop.rchain.node.api.{AdminWebApi, WebApi}
+import coop.rchain.node.blockprocessing.{BlockReceiverImpl, BlockRetrieverImpl, BlockValidatorImpl}
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics
 import coop.rchain.node.runtime.NodeRuntime._
+import coop.rchain.node.instances.ProposerInstance
+import coop.rchain.node.instances.ProposerInstance.BlockProposeStream
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
-import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.web.{ReportingRoutes, Transaction}
+import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -100,26 +105,11 @@ object Setup {
       // Block storage
       blockStore <- KeyValueBlockStore(rnodeStoreManager)
 
-      // Last finalized Block storage
-      lastFinalizedStorage <- {
-        for {
-          lastFinalizedBlockDb <- rnodeStoreManager.store("last-finalized-block")
-          lastFinalizedStore   = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-        } yield lastFinalizedStore
-      }
-
-      // Migrate LastFinalizedStorage to BlockDagStorage
-      lfbMigration = Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") *>
-        lastFinalizedStorage.migrateLfb(rnodeStoreManager, blockStore)
-      // Check if LFB is already migrated
-      lfbRequireMigration <- lastFinalizedStorage.requireMigration
-      _                   <- lfbMigration.whenA(lfbRequireMigration)
-
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
 
       // Casper requesting blocks cache
-      casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
+      casperBufferStorage <- FlatCasperBufferKeyValueStorage.create[F](rnodeStoreManager)
 
       // Deploy storage
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
@@ -302,7 +292,7 @@ object Setup {
       }
       apiServers = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val sc               = synchronyConstraintChecker
         implicit val (ra, rp)         = (rpConfAsk, rpConnections)
         val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
 
@@ -327,10 +317,6 @@ object Setup {
       casperLoop = {
         implicit val br = blockRetriever
         for {
-          engine <- engineCell.read
-          // Fetch dependencies from CasperBuffer
-          _ <- engine.withCasper(_.fetchDependencies, ().pure[F])
-          // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
         } yield ()
@@ -372,7 +358,7 @@ object Setup {
       }
       adminWebApi = {
         implicit val (ec, sp) = (engineCell, span)
-        implicit val (sc, lh) = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val sc       = synchronyConstraintChecker
         new AdminWebApiImpl[F](
           triggerProposeFOpt,
           proposerStateRefOpt

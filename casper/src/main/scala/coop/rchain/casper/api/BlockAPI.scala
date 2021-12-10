@@ -6,7 +6,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.blockstorage.dag.BlockDagStorage.{DagFringe, DeployId}
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
@@ -68,7 +68,7 @@ object BlockAPI {
                 )
               )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(casper, true))
+        _ <- triggerPropose.traverse(_(true))
       } yield r
 
     // Check if node is read-only
@@ -116,7 +116,7 @@ object BlockAPI {
         casper =>
           for {
             // Trigger propose
-            proposerResult <- triggerProposeF(casper, isAsync)
+            proposerResult <- triggerProposeF(isAsync)
             r <- proposerResult match {
                   case ProposerEmpty =>
                     logDebug(s"Failure: another propose is in progress")
@@ -185,7 +185,7 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
       for {
-        mainChain           <- getMainChainFromTip[F](depth)
+        mainChain           <- List.empty[BlockMessage].pure[F] //getMainChainFromTip[F](depth)
         runtimeManager      <- casper.getRuntimeManager
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
         maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
@@ -222,7 +222,7 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
       for {
-        mainChain      <- getMainChainFromTip[F](depth)
+        mainChain      <- List.empty[BlockMessage].pure[F] //getMainChainFromTip[F](depth)
         runtimeManager <- casper.getRuntimeManager
         sortedListeningNames <- listeningNames.toList
                                  .traverse(parSortable.sortMatch[F](_).map(_.term))
@@ -248,17 +248,6 @@ object BlockAPI {
           .as(s"Error: $errorMessage".asLeft)
       ))
   }
-
-  private def getMainChainFromTip[F[_]: Sync: Log: SafetyOracle: BlockStore](depth: Int)(
-      implicit casper: MultiParentCasper[F]
-  ): F[IndexedSeq[BlockMessage]] =
-    for {
-      dag       <- casper.blockDag
-      tipHashes <- casper.estimator(dag)
-      tipHash   = tipHashes.head
-      tip       <- BlockStore[F].getUnsafe(tipHash)
-      mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
-    } yield mainChain
 
   private def getDataWithBlockInfo[F[_]: Log: SafetyOracle: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
@@ -396,9 +385,11 @@ object BlockAPI {
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
+      visualizer: (Vector[Vector[BlockHash]], Set[String], String) => F[G[Graphz[G]]],
       serialize: G[Graphz[G]] => R
   ): F[ApiErr[R]] = {
+    import coop.rchain.blockstorage.casper.syntax.all._
+
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
       for {
@@ -407,12 +398,10 @@ object BlockAPI {
         // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
         startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
                         else Sync[F].delay(startBlockNumber.toLong)
-        topoSortDag <- dag.topoSort(
-                        startBlockNum - depth,
-                        Some(startBlockNum)
-                      )
-        lfb   <- casper.lastFinalizedBlock
-        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+        topoSortDag             <- dag.topoSort(startBlockNum - depth, Some(startBlockNum))
+        DagFringe(blocks, _, _) = dag.finalizationFringes.head
+        fringe                  = blocks.flatMap(_._2).map(PrettyPrinter.buildString).toSet
+        graph                   <- visualizer(topoSortDag, fringe, fringe.head)
       } yield serialize(graph).asRight[Error]
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
@@ -459,29 +448,8 @@ object BlockAPI {
   def showMainChain[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       depth: Int,
       maxDepthLimit: Int
-  ): F[List[LightBlockInfo]] = {
-
-    val errorMessage =
-      "Could not show main chain, casper instance was not available yet."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
-      for {
-        dag        <- MultiParentCasper[F].blockDag
-        tipHashes  <- MultiParentCasper[F].estimator(dag)
-        tipHash    = tipHashes.head
-        tip        <- BlockStore[F].getUnsafe(tipHash)
-        mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
-        blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
-      } yield blockInfos
-
-    if (depth > maxDepthLimit)
-      List.empty[LightBlockInfo].pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
-        casperResponse(_),
-        Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
-      ))
-  }
+  ): F[List[LightBlockInfo]] =
+    List.empty[LightBlockInfo].pure[F]
 
   def findDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
       id: DeployId
@@ -574,17 +542,10 @@ object BlockAPI {
       // TODO this is temporary solution to not calculate fault tolerance all the blocks
       oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
       // Old block fault tolerance / invalid block has -1.0 fault tolerance
-      normalizedFaultTolerance <- oldBlock.ifM(
-                                   dag
-                                     .isFinalized(block.blockHash)
-                                     .map(isFinalized => if (isFinalized) 1f else -1f),
-                                   SafetyOracle[F]
-                                     .normalizedFaultTolerance(dag, block.blockHash)
-                                 )
-      initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
-      faultTolerance = normalizedFaultTolerance - initialFault
-
-      blockInfo = constructor(block, faultTolerance)
+      normalizedFaultTolerance = -1
+      initialFault             <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
+      faultTolerance           = normalizedFaultTolerance - initialFault
+      blockInfo                = constructor(block, faultTolerance)
     } yield blockInfo
 
   private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
@@ -683,17 +644,44 @@ object BlockAPI {
 
   def isFinalized[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log](
       hash: String
-  ): F[ApiErr[Boolean]] = {
+  ): F[ApiErr[Boolean]] =
+    "Finalization is on per deploy basis".asLeft[Boolean].pure[F]
+
+  def finalizationState[F[_]: Monad: EngineCell: Log]: F[ApiErr[List[DagFringe]]] = {
     val errorMessage =
-      "Could not check if block is finalized, casper instance was not available yet."
+      "Could not check finalizationState, casper instance was not available yet."
     EngineCell[F].read >>= (
-      _.withCasper[ApiErr[Boolean]](
+      _.withCasper[ApiErr[List[DagFringe]]](
         implicit casper =>
-          for {
-            dag            <- casper.blockDag
-            givenBlockHash = hash.unsafeHexToByteString
-            result         <- dag.isFinalized(givenBlockHash)
-          } yield result.asRight[Error],
+          casper.blockDag.map { r =>
+//            val fs    = r.finalizationState
+//            val acStr = fs.accepted.flatMap(_.deploys.map(_.show)).mkString(";")
+//            val rjStr = fs.rejected.flatMap(_.deploys.map(_.show)).mkString(";")
+//            var s = s"Fringe: ${PrettyPrinter.buildString(
+//              r.finalizationFringes.head.finalizationFringe.flatMap(_._2)
+//            )} \n Accepted: $acStr \n Rejected: $rjStr"
+
+            r.finalizationFringes.sortBy(_.num).asRight[Error]
+          },
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
+  def findFinalizationState[F[_]: Monad: EngineCell: Log](
+      state: String
+  ): F[ApiErr[DagFringe]] = {
+    val errorMessage =
+      "Could not check finalizationState, casper instance was not available yet."
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[DagFringe]](
+        implicit casper =>
+          casper.blockDag.map { r =>
+            val truncatedByteString = ByteString.copyFrom(Base16.unsafeDecode(state))
+            r.finalizationFringes
+              .find(_.state.startsWith(truncatedByteString))
+              .toRight[String](s"Error: No finaization fringe with state $state")
+          },
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )
