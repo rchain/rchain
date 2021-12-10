@@ -77,7 +77,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
           case Right(Right(p)) => p shouldEqual unit
         }
         stub.sendMessages.length shouldBe 1
-        stub.sendMessages.head shouldBe TLRequest(Some(msg))
+        stub.sendMessages.head shouldBe TLRequest(msg)
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -93,7 +93,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
             p shouldEqual internalCommunicationError("Got response: Test error")
         }
         stub.sendMessages.length shouldBe 1
-        stub.sendMessages.head shouldBe TLRequest(Some(msg))
+        stub.sendMessages.head shouldBe TLRequest(msg)
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -108,7 +108,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
             p shouldEqual peerUnavailable(peerRemote)
         }
         stub.sendMessages.length shouldBe 1
-        stub.sendMessages.head shouldBe TLRequest(Some(msg))
+        stub.sendMessages.head shouldBe TLRequest(msg)
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -123,7 +123,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
             p shouldEqual timeout
         }
         stub.sendMessages.length shouldBe 1
-        stub.sendMessages.head shouldBe TLRequest(Some(msg))
+        stub.sendMessages.head shouldBe TLRequest(msg)
         stub.streamMessages.length shouldBe 0
       }
     }
@@ -138,7 +138,7 @@ class GrpcTransportSpec extends WordSpecLike with Matchers with Inside {
             p shouldEqual protocolException(testThrowable)
         }
         stub.sendMessages.length shouldBe 1
-        stub.sendMessages.head shouldBe TLRequest(Some(msg))
+        stub.sendMessages.head shouldBe TLRequest(msg)
         stub.streamMessages.length shouldBe 0
       }
     }

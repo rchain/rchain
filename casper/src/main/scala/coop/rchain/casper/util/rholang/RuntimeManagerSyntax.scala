@@ -95,8 +95,10 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
       preStateHash: Blake2b256Hash
   )(implicit s: Concurrent[F]): F[List[NumberChannelsDiff]] = Sync[F].defer {
     // Get number channel value for pre-state
-    val getDataFunc = rm.getHistoryRepo.getHistoryReader(preStateHash).getData(_)
-    val getNumFunc  = RholangMergingLogic.convertToReadNumber(getDataFunc)
+    val getDataFunc =
+      (ch: Blake2b256Hash) =>
+        rm.getHistoryRepo.getHistoryReader(preStateHash).flatMap(_.getData(ch))
+    val getNumFunc = RholangMergingLogic.convertToReadNumber(getDataFunc)
 
     // Calculate difference values from final values on number channels
     calculateNumChannelDiff(channelsData, getNumFunc)

@@ -27,20 +27,20 @@ object BlockIndex {
       historyRepository: HistoryRepository[F, C, P, A, K],
       preStateHash: Blake2b256Hash,
       mergeableChs: NumberChannelsDiff
-  ): F[EventLogIndex] = {
-    val preStateReader =
-      historyRepository.getHistoryReader(preStateHash)
-    val produceExistsInPreState = (p: Produce) =>
-      preStateReader.getData(p.channelsHash).map(_.exists(_.source == p))
-    val produceTouchesPreStateJoin = (p: Produce) =>
-      preStateReader.getJoins(p.channelsHash).map(_.exists(_.size > 1))
-    EventLogIndex(
-      events.map(EventConverter.toRspaceEvent),
-      produceExistsInPreState,
-      produceTouchesPreStateJoin,
-      mergeableChs
-    )
-  }
+  ): F[EventLogIndex] =
+    for {
+      preStateReader <- historyRepository.getHistoryReader(preStateHash)
+      produceExistsInPreState = (p: Produce) =>
+        preStateReader.getData(p.channelsHash).map(_.exists(_.source == p))
+      produceTouchesPreStateJoin = (p: Produce) =>
+        preStateReader.getJoins(p.channelsHash).map(_.exists(_.size > 1))
+      eventLogIndex <- EventLogIndex.apply(
+                        events.map(EventConverter.toRspaceEvent),
+                        produceExistsInPreState,
+                        produceTouchesPreStateJoin,
+                        mergeableChs
+                      )
+    } yield eventLogIndex
 
   def apply[F[_]: Concurrent, C, P, A, K](
       blockHash: BlockHash,

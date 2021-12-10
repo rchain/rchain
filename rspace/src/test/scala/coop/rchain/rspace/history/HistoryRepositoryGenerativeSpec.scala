@@ -114,8 +114,9 @@ abstract class HistoryRepositoryGenerativeDefinition
         actions
           .foldLeftM(repository) { (repo, action) =>
             for {
-              next <- repo.checkpoint(action :: Nil)
-              _    <- checkActionResult(action, next.getHistoryReader(next.root))
+              next          <- repo.checkpoint(action :: Nil)
+              historyReader <- next.getHistoryReader(next.root)
+              _             <- checkActionResult(action, historyReader)
             } yield next
           }
       }

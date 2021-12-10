@@ -61,28 +61,6 @@ class StreamHandlerSpec extends FunSpec with Matchers with Inside {
       cache shouldBe empty
     }
 
-    it("should stop processing a stream if stream is missing part of header") {
-      // given
-      val cache = TrieMap[String, Array[Byte]]()
-      val streamWithIncompleteHeader: Observable[Chunk] =
-        Observable.fromIterator(createStreamIterator().map(_.toList).map {
-          case header :: data =>
-            val newHeaderContent: Chunk.Content =
-              Chunk.Content.Header(header.content.header.get.copy(sender = None))
-            val incompleteHeader = header.copy(content = newHeaderContent)
-            (incompleteHeader :: data).toIterator
-          case Nil => throw new RuntimeException("")
-        })
-      // when
-      val err: StreamHandler.StreamError =
-        handleStreamErr(streamWithIncompleteHeader, cache = cache)
-      // then
-      inside(err) {
-        case StreamHandler.StreamError.NotFullMessage(_) =>
-      }
-      cache shouldBe empty
-    }
-
     it("should stop processing a stream if stream is missing header") {
       // given
       val cache = TrieMap[String, Array[Byte]]()

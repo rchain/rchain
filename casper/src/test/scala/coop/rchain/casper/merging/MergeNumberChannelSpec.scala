@@ -180,7 +180,7 @@ class MergeNumberChannelSpec extends FlatSpec {
           )
 
         // Base state reader
-        baseReader       = rm.getHistoryRepo.getHistoryReader(baseCp.root)
+        baseReader       <- rm.getHistoryRepo.getHistoryReader(baseCp.root)
         baseReaderBinary = baseReader.readerBinary
         baseGetData      = baseReader.getData _
 

@@ -22,7 +22,7 @@ import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.models.syntax._
-import coop.rchain.shared.{Log, LogSource}
+import coop.rchain.shared.{Base16, Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
 
@@ -179,8 +179,18 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       finalizedBlocksSet.contains(blockHash).pure[F]
 
     override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
-      val truncatedByteString = truncatedHash.unsafeHexToByteString
-      dagSet.find(hash => hash.startsWith(truncatedByteString))
+      if (truncatedHash.length % 2 == 0) {
+        val truncatedByteString = truncatedHash.unsafeHexToByteString
+        dagSet.find(hash => hash.startsWith(truncatedByteString))
+      } else {
+        // if truncatedHash is odd length string we cannot convert it to ByteString with 8 bit resolution
+        // because each symbol has 4 bit resolution. Need to make a string of even length by removing the last symbol,
+        // then find all the matching hashes and choose one that matches the full truncatedHash string
+        val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
+        dagSet
+          .filter(_.startsWith(truncatedByteString))
+          .find(_.toHexString.startsWith(truncatedHash))
+      }
     }
 
     def topoSort(

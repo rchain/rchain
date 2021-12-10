@@ -71,9 +71,10 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
                               roots,
                               cold
                             )
-      cache <- Ref.of[F, Cache[C, P, A, K]](Cache[C, P, A, K]())
-      testStore = {
-        val hr = historyRepository.getHistoryReader(historyRepository.root).base
+      cache         <- Ref.of[F, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      historyReader <- historyRepository.getHistoryReader(historyRepository.root)
+      testStore <- {
+        val hr = historyReader.base
         HotStore.inMem[F, C, P, A, K](cache, hr)
       }
       spaceAndStore        <- createISpace(historyRepository, testStore)

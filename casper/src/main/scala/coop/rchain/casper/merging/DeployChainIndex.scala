@@ -46,10 +46,12 @@ object DeployChainIndex {
     val deploysWithCost = deploys.map(v => DeployIdWithCost(v.deployId, v.cost))
     val eventLogIndex   = deploys.map(_.eventLogIndex).toList.combineAll
 
-    val preStateReader  = historyRepository.getHistoryReader(preStateHash).readerBinary
-    val postStateReader = historyRepository.getHistoryReader(postStateHash).readerBinary
-
     for {
+      preHistoryReader  <- historyRepository.getHistoryReader(preStateHash)
+      preStateReader    = preHistoryReader.readerBinary
+      postHistoryReader <- historyRepository.getHistoryReader(postStateHash)
+      postStateReader   = postHistoryReader.readerBinary
+
       stateChanges <- StateChange[F, C, P, A, K](
                        preStateReader = preStateReader,
                        postStateReader = postStateReader,
