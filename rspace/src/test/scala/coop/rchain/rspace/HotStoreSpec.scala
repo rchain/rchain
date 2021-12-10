@@ -71,9 +71,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
   ): Unit
 
   def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
-      f: (
-          HotStore[F, String, Pattern, String, StringsCaptor]
-      ) => F[Unit]
+      f: HotStore[F, String, Pattern, String, StringsCaptor] => F[Unit]
   ): Unit
 
   "getContinuations when cache is empty" should "read from history and put into the cache" in forAll {
@@ -120,15 +118,15 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         cachedContinuations: Vector[Continuation],
         installedContinuation: Continuation
     ) =>
-      fixture { (state, history, hotStore) =>
+      fixture { (state, _, hotStore) =>
         {
           for {
             _ <- state.modify { _ =>
                   (HotStoreState(continuations = Map(channels -> cachedContinuations)), ())
                 }
-            _     <- hotStore.installContinuation(channels, installedContinuation)
-            res   <- hotStore.getContinuations(channels)
-            cache <- state.get
+            _   <- hotStore.installContinuation(channels, installedContinuation)
+            res <- hotStore.getContinuations(channels)
+            _   <- state.get
             _ <- S.delay(
                   res shouldEqual installedContinuation +: cachedContinuations
                 )
@@ -191,7 +189,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         installedContinuation: Continuation
     ) =>
       whenever(insertedContinuation != installedContinuation) {
-        fixture { (state, history, hotStore) =>
+        fixture { (state, _, hotStore) =>
           {
             for {
               _ <- state.modify { _ =>
@@ -271,7 +269,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         installedContinuation: Continuation,
         index: Int
     ) =>
-      fixture { (state, history, hotStore) =>
+      fixture { (state, _, hotStore) =>
         {
           for {
             _ <- state.modify { _ =>
@@ -283,8 +281,8 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
                     ()
                   )
                 }
-            res   <- hotStore.removeContinuation(channels, index).attempt
-            cache <- state.get
+            res <- hotStore.removeContinuation(channels, index).attempt
+            _   <- state.get
             _ <- if (index == 0)
                   Sync[F].delay {
                     res shouldBe a[Left[IllegalArgumentException, _]]
@@ -515,7 +513,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         cachedJoins: Joins,
         insertedJoin: Join
     ) =>
-      fixture { (state, history, hotStore) =>
+      fixture { (state, _, hotStore) =>
         {
           for {
             _ <- state.modify { _ =>
@@ -542,7 +540,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         installedJoin: Join
     ) =>
       whenever(insertedJoin != installedJoin && !cachedJoins.contains(insertedJoin)) {
-        fixture { (state, history, hotStore) =>
+        fixture { (state, _, hotStore) =>
           {
             for {
               _ <- state.modify { _ =>
@@ -574,7 +572,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         cachedJoins: Joins,
         installedJoin: Join
     ) =>
-      fixture { (state, history, hotStore) =>
+      fixture { (state, _, hotStore) =>
         {
           for {
             _ <- state.modify { _ =>
@@ -650,7 +648,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         installedJoins: Joins
     ) =>
       whenever(cachedJoins =!= installedJoins && installedJoins.nonEmpty) {
-        fixture { (state, history, hotStore) =>
+        fixture { (state, _, hotStore) =>
           {
             for {
               _ <- state.modify { _ =>
@@ -693,7 +691,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         continuation: Continuation,
         cachedJoins: Joins
     ) =>
-      fixture { (state, history, hotStore) =>
+      fixture { (state, _, hotStore) =>
         {
           for {
             _ <- state.modify { _ =>
@@ -770,7 +768,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         insertedData2: Data
     ) =>
       whenever(channel1 =!= channel2) {
-        fixture { (state, history, hotStore) =>
+        fixture { (_, history, hotStore) =>
           {
             for {
               _ <- history.putData(channel1, historyData1)
@@ -806,7 +804,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         insertedContinuation2: Continuation
     ) =>
       whenever(channels1 =!= channels2) {
-        fixture { (state, history, hotStore) =>
+        fixture { (_, history, hotStore) =>
           {
             for {
               _ <- history.putContinuations(channels1, historyContinuations1)
@@ -868,12 +866,12 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
     (channel: String, datumValue: String) =>
       fixture { (_, _, hotStore) =>
         val key   = channel
-        val datum = Datum.create(channel, datumValue, false)
+        val datum = Datum.create(channel, datumValue, persist = false)
 
         for {
           _   <- hotStore.putDatum(key, datum)
           res <- hotStore.getData(key)
-          _   <- S.delay { res should contain theSameElementsAs (Seq(datum)) }
+          _   <- S.delay { res should contain theSameElementsAs Seq(datum) }
         } yield ()
       }
   }
@@ -882,14 +880,14 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
     (channel: String, datumValue: String) =>
       fixture { (_, _, store) =>
         val key    = channel
-        val datum1 = Datum.create(channel, datumValue, false)
-        val datum2 = Datum.create(channel, datumValue + "2", false)
+        val datum1 = Datum.create(channel, datumValue, persist = false)
+        val datum2 = Datum.create(channel, datumValue + "2", persist = false)
 
         for {
           _   <- store.putDatum(key, datum1)
           _   <- store.putDatum(key, datum2)
           res <- store.getData(key)
-          _   <- S.delay(res should contain theSameElementsAs (Seq(datum1, datum2)))
+          _   <- S.delay(res should contain theSameElementsAs Seq(datum1, datum2))
         } yield ()
       }
   }
@@ -904,7 +902,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           val key = channel
           val data = List.tabulate(size) { i =>
-            Datum.create(channel, datumValue + i, false)
+            Datum.create(channel, datumValue + i, persist = false)
           }
 
           for {
@@ -914,9 +912,9 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             _   <- store.removeDatum(key, index - 1)
             res <- store.getData(key)
             _ <- S.delay {
-                  res should contain theSameElementsAs (data.filterNot(
+                  res should contain theSameElementsAs data.filterNot(
                     _.a == datumValue + (size - index)
-                  ))
+                  )
                 }
           } yield ()
         }
@@ -929,7 +927,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
+          WaitingContinuation.create(key, patterns, continuation, persist = false, SortedSet.empty)
 
         for {
           _   <- store.putContinuation(key, wc)
@@ -946,14 +944,14 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
+          WaitingContinuation.create(key, patterns, continuation, persist = false, SortedSet.empty)
 
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
             key,
             List(StringMatch(pattern + 2)),
             continuation,
-            false,
+            persist = false,
             SortedSet.empty
           )
 
@@ -973,13 +971,13 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         val patterns     = List(StringMatch(pattern))
         val continuation = new StringsCaptor
         val wc1: WaitingContinuation[Pattern, StringsCaptor] =
-          WaitingContinuation.create(key, patterns, continuation, false, SortedSet.empty)
+          WaitingContinuation.create(key, patterns, continuation, persist = false, SortedSet.empty)
         val wc2: WaitingContinuation[Pattern, StringsCaptor] =
           WaitingContinuation.create(
             key,
             List(StringMatch(pattern + 2)),
             continuation,
-            false,
+            persist = false,
             SortedSet.empty
           )
 
@@ -1034,7 +1032,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
       fixture(cache) { store =>
         for {
           snapshot <- store.snapshot()
-        } yield (snapshot shouldBe cache)
+        } yield snapshot shouldBe cache
       }
   }
 
@@ -1051,7 +1049,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             snapshot <- store.snapshot()
             _        <- store.putContinuation(channels, continuation2)
             _        = snapshot.continuations(channels) should contain(continuation1)
-          } yield (snapshot.continuations(channels) should not contain (continuation2))
+          } yield snapshot.continuations(channels) should not contain continuation2
         }
       }
   }
@@ -1068,7 +1066,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             _        <- store.installContinuation(channels, continuation1)
             snapshot <- store.snapshot()
             _        <- store.installContinuation(channels, continuation2)
-          } yield (snapshot.installedContinuations(channels) shouldBe (continuation1))
+          } yield snapshot.installedContinuations(channels) shouldBe continuation1
         }
       }
   }
@@ -1086,7 +1084,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             snapshot <- store.snapshot()
             _        <- store.putDatum(channel, data2)
             _        = snapshot.data(channel) should contain(data1)
-          } yield (snapshot.data(channel) should not contain (data2))
+          } yield snapshot.data(channel) should not contain data2
         }
       }
   }
@@ -1104,7 +1102,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             snapshot <- store.snapshot()
             _        <- store.putJoin(channel, join2)
             _        = snapshot.joins(channel) should contain(join1)
-          } yield (snapshot.joins(channel) should not contain (join2))
+          } yield snapshot.joins(channel) should not contain join2
         }
       }
   }
@@ -1122,7 +1120,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
             snapshot <- store.snapshot()
             _        <- store.installJoin(channel, join2)
             _        = snapshot.installedJoins(channel) should contain(join1)
-          } yield (snapshot.installedJoins(channel) should not contain (join2))
+          } yield snapshot.installedJoins(channel) should not contain join2
         }
       }
   }

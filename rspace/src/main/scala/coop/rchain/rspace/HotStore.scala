@@ -116,7 +116,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
             val installedCon = state.installedContinuations.get(channels)
             val isInstalled  = installedCon.nonEmpty
 
-            val removingInstalled = (isInstalled && index == 0)
+            val removingInstalled = isInstalled && index == 0
             // why -1 here
             // from users who use `HotStore` trait perspective
             // the users need to call getContinuations first to retrieve the continuation of the channels
@@ -149,7 +149,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       _ <- Sync[F]
             .raiseError(
               new IndexOutOfBoundsException(
-                s"Index ${index} out of bounds when removing continuation"
+                s"Index $index out of bounds when removing continuation"
               )
             )
             .whenA(invalidIndex)
@@ -174,7 +174,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                    case Some(data) => (state, data)
                  }
                }
-    } yield (result)
+    } yield result
 
   def putDatum(channel: C, datum: Datum[A]): F[Unit] =
     for {
@@ -208,7 +208,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       _ <- Sync[F]
             .raiseError(
               new IndexOutOfBoundsException(
-                s"Index ${index} out of bounds when removing datum"
+                s"Index $index out of bounds when removing datum"
               )
             )
             .whenA(err)
@@ -264,57 +264,57 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       joinsInHistoryStore <- getJoinsFromHistoryStore(channel)
       contsInHistoryStore <- getContFromHistoryStore(join)
-      err <- hotStoreState.modify[Boolean] { state =>
-              val curJoins = state.joins.getOrElse(channel, joinsInHistoryStore)
+      _ <- hotStoreState.modify[Boolean] { state =>
+            val curJoins = state.joins.getOrElse(channel, joinsInHistoryStore)
 
-              val curConts = state.installedContinuations
-                .get(join) ++: state.continuations.getOrElse(join, contsInHistoryStore)
+            val curConts = state.installedContinuations
+              .get(join) ++: state.continuations.getOrElse(join, contsInHistoryStore)
 
-              val index       = curJoins.indexOf(join)
-              val outOfBounds = !curJoins.isDefinedAt(index)
+            val index       = curJoins.indexOf(join)
+            val outOfBounds = !curJoins.isDefinedAt(index)
 
-              // Remove join is called when continuation is removed, so it can be called when
-              // continuations are present in which case we just want to skip removal.
-              val doRemove = curConts.isEmpty
+            // Remove join is called when continuation is removed, so it can be called when
+            // continuations are present in which case we just want to skip removal.
+            val doRemove = curConts.isEmpty
 
-              if (doRemove) {
-                if (outOfBounds)
-                  (state.copy(joins = state.joins.updated(channel, curJoins)), true)
-                else {
-                  val newVal = removeIndex(curJoins, index)
-                  (state.copy(joins = state.joins.updated(channel, newVal)), false)
-                }
-              } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
-            }
+            if (doRemove) {
+              if (outOfBounds)
+                (state.copy(joins = state.joins.updated(channel, curJoins)), true)
+              else {
+                val newVal = removeIndex(curJoins, index)
+                (state.copy(joins = state.joins.updated(channel, newVal)), false)
+              }
+            } else (state.copy(joins = state.joins.updated(channel, curJoins)), false)
+          }
     } yield ()
 
   def changes(): F[Seq[HotStoreAction]] =
     for {
       cache <- hotStoreState.get
-      continuations = (cache.continuations.map {
-        case (k, v) if (v.isEmpty) => DeleteContinuations(k)
-        case (k, v)                => InsertContinuations(k, v)
-      }).toVector
-      data = (cache.data.map {
-        case (k, v) if (v.isEmpty) => DeleteData(k)
-        case (k, v)                => InsertData(k, v)
-      }).toVector
-      joins = (cache.joins.map {
-        case (k, v) if (v.isEmpty) => DeleteJoins(k)
-        case (k, v)                => InsertJoins(k, v)
-      }).toVector
-    } yield (continuations ++ data ++ joins)
+      continuations = cache.continuations.map {
+        case (k, v) if v.isEmpty => DeleteContinuations(k)
+        case (k, v)              => InsertContinuations(k, v)
+      }.toVector
+      data = cache.data.map {
+        case (k, v) if v.isEmpty => DeleteData(k)
+        case (k, v)              => InsertData(k, v)
+      }.toVector
+      joins = cache.joins.map {
+        case (k, v) if v.isEmpty => DeleteJoins(k)
+        case (k, v)              => InsertJoins(k, v)
+      }.toVector
+    } yield continuations ++ data ++ joins
 
   private def removeIndex[E](col: Seq[E], index: Int): Seq[E] = {
     val (l1, l2) = col splitAt index
-    (l1 ++ (l2 tail))
+    l1 ++ (l2 tail)
   }
 
   def toMap: F[Map[Seq[C], Row[P, A, K]]] =
     for {
       cache         <- hotStoreState.get
-      data          = cache.data.map(_.leftMap(Seq(_))).toMap
-      continuations = (cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))).toMap
+      data          = cache.data.map(_.leftMap(Seq(_)))
+      continuations = cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))
       zipped        = zip(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
       mapped        = zipped.mapValues { case (d, k) => Row(d, k) }
     } yield mapped.filter { case (_, v) => !(v.data.isEmpty && v.wks.isEmpty) }
