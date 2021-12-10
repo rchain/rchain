@@ -94,7 +94,7 @@ object GrpcTransport {
     for {
       _ <- metrics.incrementCounter("send")
       result <- transport
-                 .send(TLRequest(msg.some))
+                 .send(TLRequest(msg))
                  .fromTask
                  .attempt
                  .timer("send-time")
