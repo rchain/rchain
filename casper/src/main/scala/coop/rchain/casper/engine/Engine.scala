@@ -1,31 +1,28 @@
 package coop.rchain.casper.engine
 
-import cats.{Applicative, Monad}
-import cats.syntax.all._
-import cats.effect.{Concurrent, Sync, Timer}
-import EngineCell._
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
+import cats.implicits._
+import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.casper._
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
+import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
+import coop.rchain.casper._
+import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.comm.{transport, PeerNode}
+import coop.rchain.comm.PeerNode
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
 import coop.rchain.shared._
-import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.state.RNodeStateManager
-import coop.rchain.casper.util.comm.CommUtil
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.state.RSpaceStateManager
 import fs2.concurrent.Queue
 
 trait Engine[F[_]] {
@@ -66,7 +63,11 @@ object Engine {
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
-      _ <- BlockDagStorage[F].insert(genesis, invalid = false, approved = true)
+      _ <- BlockDagStorage[F].insert(
+            genesis,
+            invalid = false,
+            0L
+          )
       _ <- BlockStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
@@ -89,16 +90,16 @@ object Engine {
     /* Execution */   : Concurrent: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell
-    /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
       casper: MultiParentCasper[F],
+      blockDagStateRef: Ref[F, BlockDagState],
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      processBlockInRunning: BlockMessage => F[Unit]
   ): F[Unit] = {
     val approvedBlockInfo = PrettyPrinter.buildString(approvedBlock.candidate.block, short = true)
     for {
@@ -108,14 +109,18 @@ object Engine {
               PrettyPrinter.buildStringNoLimit(approvedBlock.candidate.block.blockHash)
             )
           )
+      // TODO these two lines are to make sure finalization is up to date with the DAG state,
+      //  in case finalization has been interrupted by shutdown
+      s <- casper.getSnapshot()
+      _ <- casper.handleValidBlock(approvedBlock.candidate.block, s)
       running = new Running[F](
-        blockProcessingQueue,
-        blocksInProcessing,
         casper,
+        blockDagStateRef,
         approvedBlock,
         validatorId,
         init,
-        disableStateExporter
+        disableStateExporter,
+        processBlockInRunning: BlockMessage => F[Unit]
       )
       _ <- EngineCell[F].set(running)
 
@@ -124,36 +129,35 @@ object Engine {
 
   // format: off
   def transitionToInitializing[F[_]
-    /* Execution */   : Concurrent: Time: Timer
+    /* Execution */   : Concurrent: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
+      blockDagStateRef: Ref[F, BlockDagState],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
       trimState: Boolean = true,
-      disableStateExporter: Boolean = false
+      disableStateExporter: Boolean = false,
+      processBlockInRunning: BlockMessage => F[Unit]
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
       stateResponseQueue <- Queue.bounded[F, StoreItemsMessage](50)
       _ <- EngineCell[F].set(
             new Initializing(
-              blockProcessingQueue,
-              blocksInProcessing,
+              blockDagStateRef,
               casperShardConf,
               validatorId,
               init,
               blockResponseQueue,
               stateResponseQueue,
               trimState,
-              disableStateExporter
+              disableStateExporter,
+              processBlockInRunning
             )
           )
     } yield ()

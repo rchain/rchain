@@ -1,15 +1,15 @@
 package coop.rchain.casper.engine
 
 import cats.Applicative
+import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
-import cats.syntax.all._
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
@@ -21,23 +21,21 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
-import fs2.concurrent.Queue
 
 // format: off
 class GenesisValidator[F[_]
-  /* Execution */   : Concurrent: Time: Timer
+  /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
-    blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-    blocksInProcessing: Ref[F, Set[BlockHash]],
+    blockDagStateRef: Ref[F, BlockDagState],
     casperShardConf: CasperShardConf,
     validatorId: ValidatorIdentity,
-    blockApprover: BlockApproverProtocol
+    blockApprover: BlockApproverProtocol,
+    processBlockInRunning: BlockMessage => F[Unit]
 ) extends Engine[F] {
   import Engine._
   private val F    = Applicative[F]
@@ -61,11 +59,13 @@ class GenesisValidator[F[_]
             .unapprovedBlockPacketHandler(peer, ub) >> {
             Engine
               .transitionToInitializing(
-                blockProcessingQueue,
-                blocksInProcessing,
+                blockDagStateRef,
                 casperShardConf,
                 Some(validatorId),
-                init = noop
+                init = noop,
+                true,
+                false,
+                processBlockInRunning
               )
           }
         )

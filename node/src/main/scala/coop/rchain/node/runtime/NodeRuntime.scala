@@ -2,18 +2,16 @@ package coop.rchain.node.runtime
 
 import cats.data.ReaderT
 import cats.effect._
-import cats.effect.concurrent.{Deferred, Ref}
+import cats.effect.concurrent.Ref
 import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
-import coop.rchain.casper.blocks.BlockProcessor
-import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
+import coop.rchain.blockstorage.dag.state.BlockDagState
+import coop.rchain.casper.engine
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.util.comm._
-import coop.rchain.casper.{engine, _}
+import coop.rchain.casper.processing.MessageProcessor.MessageProcessingStream
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
@@ -27,18 +25,16 @@ import coop.rchain.monix.Monixable
 import coop.rchain.node.api._
 import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.effects.{EventConsumer, RchainEvents}
-import coop.rchain.node.instances.{BlockProcessorInstance, ProposerInstance}
-import coop.rchain.node.runtime.NodeRuntime._
+import coop.rchain.node.instances.ProposerInstance.BlockProposeStream
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
 import coop.rchain.node.{diagnostics, effects, NodeEnvironment}
 import coop.rchain.p2p.effects._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueStoreManager
-import coop.rchain.store.LmdbDirStoreManager.gb
-import fs2.concurrent.Queue
 import kamon._
 import monix.execution.Scheduler
+import NodeRuntime._
 
 import scala.concurrent.duration._
 
@@ -159,6 +155,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       }
       (
         packetHandler,
+        blockProcessingStream,
         apiServers,
         casperLoop,
         updateForkChoiceLoop,
@@ -167,13 +164,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         reportingHTTPRoutes,
         webApi,
         adminWebApi,
-        proposerOpt,
-        proposerQueue,
-        proposerStateRefOpt,
-        blockProcessor,
-        blockProcessorState,
-        blockProcessorQueue,
-        triggerProposeF
+        proposerStream
       ) = result
 
       // 4. launch casper
@@ -200,13 +191,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           reportingHTTPRoutes,
           webApi,
           adminWebApi,
-          proposerOpt,
-          proposerQueue,
-          triggerProposeF,
-          proposerStateRefOpt,
-          blockProcessor,
-          blockProcessorState,
-          blockProcessorQueue
+          blockProcessingStream,
+          proposerStream
         )
       }
       _ <- handleUnrecoverableErrors(program)
@@ -231,13 +217,8 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       reportingRoutes: ReportingHttpRoutes[F],
       webApi: WebApi[F],
       adminWebApi: AdminWebApi[F],
-      proposer: Option[Proposer[F]],
-      proposeRequestsQueue: Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
-      triggerProposeFOpt: Option[ProposeFunction[F]],
-      proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
-      blockProcessor: BlockProcessor[F],
-      blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, (Casper[F], BlockMessage)]
+      blockProcessingStream: MessageProcessingStream[F, BlockDagState],
+      proposerStream: BlockProposeStream[F]
   )(
       implicit
       time: Time[F],
@@ -342,39 +323,35 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       engineInitStream = fs2.Stream.eval(engineInit)
 
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
-      blockProcessorStream = BlockProcessorInstance.create(
-        incomingBlocksQueue,
-        blockProcessor,
-        blockProcessingState,
-        if (nodeConf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]]
-      )
-
-      proposerStream = if (proposer.isDefined)
-        ProposerInstance
-          .create[F](proposeRequestsQueue, proposer.get, proposerStateRefOpt.get)
-      else fs2.Stream.empty
 
       updateForkChoiceLoopStream = fs2.Stream.eval(updateForkChoiceLoop).repeat
 
-      serverStream = fs2
-        .Stream(
-          servers.externalApiServer,
-          servers.internalApiServer,
-          servers.httpServer,
-          servers.adminHttpServer,
-          blockProcessorStream,
-          proposerStream,
-          engineInitStream,
-          casperLoopStream,
-          updateForkChoiceLoopStream
-        )
-        .parJoinUnbounded
+//      serverStream = fs2
+//        .Stream(
+//          servers.externalApiServer,
+//          servers.internalApiServer,
+//          servers.httpServer,
+//          servers.adminHttpServer,
+//          engineInitStream,
+//          casperLoopStream,
+//          updateForkChoiceLoopStream
+//        )
+//        .parJoinUnbounded
 
       // run all streams in parallel, but start server streams after node sees some peers
       node = fs2
         .Stream(
           connectivityStream,
-          waitForFirstConnectionStream ++ serverStream
+          blockProcessingStream,
+          proposerStream,
+          waitForFirstConnectionStream,
+          servers.externalApiServer,
+          servers.internalApiServer,
+          servers.httpServer,
+          servers.adminHttpServer,
+          engineInitStream,
+          casperLoopStream,
+          updateForkChoiceLoopStream
         )
         .parJoinUnbounded
 

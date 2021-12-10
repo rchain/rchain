@@ -62,6 +62,7 @@ object Setup {
   )(implicit mainScheduler: Scheduler): F[
     (
         PacketHandler[F],
+        MessageProcessingStream[F, BlockDagState],
         APIServers,
         CasperLoop[F],
         CasperLoop[F],
@@ -70,14 +71,7 @@ object Setup {
         ReportingHttpRoutes[F],
         WebApi[F],
         AdminWebApi[F],
-        Option[Proposer[F]],
-        Queue[F, (Casper[F], Boolean, Deferred[F, ProposerResult])],
-        // TODO move towards having a single node state
-        Option[Ref[F, ProposerState[F]]],
-        BlockProcessor[F],
-        Ref[F, Set[BlockHash]],
-        Queue[F, (Casper[F], BlockMessage)],
-        Option[ProposeFunction[F]]
+        BlockProposeStream[F]
     )
   ] =
     for {
@@ -187,64 +181,103 @@ object Setup {
       }
       (rnodeStateManager, rspaceStateManager) = stateManagers
 
-      // Engine dynamic reference
-      engineCell          <- EngineCell.init[F]
-      envVars             = EnvVars.envVars[F]
-      blockProcessorQueue <- Queue.unbounded[F, (Casper[F], BlockMessage)]
-      // block processing state - set of items currently in processing
-      blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
-      blockProcessor = {
-        implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
-        BlockProcessor[F]
+      // Ref holding the latest view on the network and messages
+      initValidatedView <- blockDagStorage.getRepresentation.map(_.getPureState)
+      initBufferSt      <- casperBufferStorage.toMap
+      blockDagStateRef  <- Ref.of[F, BlockDagState](BlockDagState(initBufferSt, initValidatedView))
+
+      // Block processing and validation
+      inboundBlocksQueue    <- Queue.unbounded[F, BlockMessage]
+      inboundBlocksStream   = inboundBlocksQueue.dequeueChunk(1)
+      processBlockInRunning = inboundBlocksQueue.enqueue1 _
+      blockDagUpdateLock    <- Semaphore(1)
+      receiverImpl = {
+        implicit val sp = span
+        BlockReceiverImpl[F](
+          inboundBlocksStream,
+          blockDagStateRef,
+          casperBufferStorage,
+          blockStore,
+          blockDagUpdateLock
+        )
       }
 
-      // Proposer instance
+      validatorImpl <- {
+        implicit val (ep, sp) = (eventPublisher, span)
+        BlockValidatorImpl(
+          blockDagStateRef,
+          conf.casper,
+          blockStore,
+          blockDagStorage,
+          casperBufferStorage,
+          deployStorage,
+          runtimeManager,
+          blockDagUpdateLock
+        )
+      }
+      retrieverImpl = BlockRetrieverImpl(blockRetriever)
+      _ <- blockDagStateRef.get
+            .map(_.wantedSet.toSet)
+            .flatMap(req => Log[F].info(s"Requesting ${req}") >> retrieverImpl.retrieve(req))
+      // Block creation
+      proposeQueue <- Queue.unbounded[F, (Boolean, Deferred[F, ProposerResult])]
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val (bs, bd, ds)     = (blockStore, blockDagStorage, deployStorage)
-        implicit val (br, ep)         = (blockRetriever, eventPublisher)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
-        val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
-
-        // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
+        val dummyDeployerKeyOpt = conf.dev.deployerPrivateKey
+        val dummyDeployerKey =
+          if (dummyDeployerKeyOpt.isEmpty) None
+          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+        implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, sp, ep) = (blockRetriever, span, eventPublisher)
+        implicit val (rm, cu)     = (runtimeManager, commUtil)
+        Proposer[F](
+          validatorIdentity,
+          dummyDeployerKey.map((_, "Nil")),
+          conf.casper,
+          blockDagStateRef,
+          blockDagUpdateLock
+        )
       }
-
-      // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
-      proposerQueue <- Queue.unbounded[F, (Casper[F], Boolean, Deferred[F, ProposerResult])]
-
       triggerProposeFOpt: Option[ProposeFunction[F]] = if (proposer.isDefined)
         Some(
-          (casper: Casper[F], isAsync: Boolean) =>
+          (isAsync: Boolean) =>
             for {
               d <- Deferred[F, ProposerResult]
-              _ <- proposerQueue.enqueue1((casper, isAsync, d))
+              _ <- proposeQueue.enqueue1(isAsync, d)
               r <- d.get
             } yield r
         )
       else none[ProposeFunction[F]]
-
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
+      proposerStream = if (proposer.isDefined)
+        ProposerInstance
+          .create[F](proposeQueue, proposer.get, proposerStateRefOpt.get)
+      else fs2.Stream.empty
+
+      // Block processing stream. This is used only in Running Engine. Moving it out of Engine is difficult.
+      blockProcessingStream = MessageProcessor(receiverImpl, retrieverImpl, validatorImpl).stream(
+        if (conf.autopropose) triggerProposeFOpt.traverse(_(true)).void else ().pure
+      )
+
+      // Engine dynamic reference
+      engineCell <- EngineCell.init[F]
+      envVars    = EnvVars.envVars[F]
 
       casperLaunch = {
         implicit val (bs, bd, ds)         = (blockStore, blockDagStorage, deployStorage)
-        implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (br, ep)             = (blockRetriever, eventPublisher)
         implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
-        implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, or, cu)     = (runtimeManager, estimator, oracle, commUtil)
+        implicit val (rm, cu)             = (runtimeManager, commUtil)
         implicit val (rsm, sp)            = (rspaceStateManager, span)
         CasperLaunch.of[F](
-          blockProcessorQueue,
-          blockProcessorStateRef,
+          blockDagStateRef,
           if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter
+          conf.protocolServer.disableStateExporter,
+          processBlockInRunning
         )
       }
       packetHandler = {
@@ -347,6 +380,7 @@ object Setup {
       }
     } yield (
       packetHandler,
+      blockProcessingStream,
       apiServers,
       casperLoop,
       updateForkChoiceLoop,
@@ -355,12 +389,6 @@ object Setup {
       reportingRoutes,
       webApi,
       adminWebApi,
-      proposer,
-      proposerQueue,
-      proposerStateRefOpt,
-      blockProcessor,
-      blockProcessorStateRef,
-      blockProcessorQueue,
-      triggerProposeFOpt
+      proposerStream
     )
 }

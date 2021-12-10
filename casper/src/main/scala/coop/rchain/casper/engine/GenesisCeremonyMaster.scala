@@ -2,11 +2,11 @@ package coop.rchain.casper.engine
 
 import cats.Applicative
 import cats.effect.concurrent.Ref
-import cats.syntax.all._
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Sync}
+import cats.implicits._
 import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
@@ -19,14 +19,12 @@ import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
-import fs2.concurrent.Queue
 
 import scala.concurrent.duration._
 
-class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
+class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
@@ -47,19 +45,18 @@ class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RP
 object GenesisCeremonyMaster {
   import Engine._
   def waitingForApprovedBlockLoop[F[_]
-    /* Execution */   : Concurrent: Time: Timer
+    /* Execution */   : Concurrent: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
-      blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-      blocksInProcessing: Ref[F, Set[BlockHash]],
+      blockDagStateRef: Ref[F, BlockDagState],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      processBlockInRunning: BlockMessage => F[Unit]
   ): F[Unit] =
     for {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
@@ -68,31 +65,36 @@ object GenesisCeremonyMaster {
       cont <- lastApprovedBlockO match {
                case None =>
                  waitingForApprovedBlockLoop[F](
-                   blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
-                   blocksInProcessing: Ref[F, Set[BlockHash]],
+                   blockDagStateRef,
                    casperShardConf,
                    validatorId,
-                   disableStateExporter
+                   disableStateExporter,
+                   processBlockInRunning: BlockMessage => F[Unit]
                  )
                case Some(approvedBlock) =>
                  val ab = approvedBlock.candidate.block
                  for {
-                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
+                   _   <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
+                   dag <- BlockDagStorage[F].getRepresentation
+                   _ <- blockDagStateRef.update(
+                         _.ackValidated(ab.blockHash, dag.getPureState).newState
+                       )
+                   _ <- BlockRetriever[F].ackInCasper(ab.blockHash)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
-                                casperShardConf: CasperShardConf,
-                                ab
+                                casperShardConf.shardName,
+                                casperShardConf.faultToleranceThreshold
                               )
                    _ <- Engine
                          .transitionToRunning[F](
-                           blockProcessingQueue,
-                           blocksInProcessing,
                            casper,
+                           blockDagStateRef,
                            approvedBlock,
                            validatorId,
                            ().pure[F],
-                           disableStateExporter
+                           disableStateExporter,
+                           processBlockInRunning
                          )
                    _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()
