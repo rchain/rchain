@@ -317,11 +317,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         initLastPrefix: Option[ByteVector] = None
 //        lastPrefix: Option[ByteVector] = Some(ByteVector(0x02.toByte))
         settings = ExportDataSettings(
-          exportNodePrefixes = true,
-          exportNodeKVDBKeys = true,
-          exportNodeKVDBValues = true,
-          exportLeafPrefixes = true,
-          exportLeafValues = true
+          expNP = true,
+          expNK = true,
+          expNV = true,
+          expLP = true,
+          expLV = true
         )
 
         dataAll <- sequentialExport(
@@ -355,11 +355,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
         prefabData = (
           ExportData(
-            d1.nodePrefixes ++ d2.nodePrefixes,
-            d1.nodeKVDBKeys ++ d2.nodeKVDBKeys,
-            d1.nodeKVDBValues ++ d2.nodeKVDBValues,
-            d1.leafPrefixes ++ d2.leafPrefixes,
-            d1.leafValues ++ d2.leafValues
+            d1.nP ++ d2.nP,
+            d1.nK ++ d2.nK,
+            d1.nV ++ d2.nV,
+            d1.lP ++ d2.lP,
+            d1.lV ++ d2.lV
           ),
           pr2
         )
@@ -438,11 +438,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         import coop.rchain.rspace.history.RadixTree._
         if (Settings.typeHistory == "RadixHistory") {
           val exportSettings = ExportDataSettings(
-            exportNodePrefixes = false,
-            exportNodeKVDBKeys = true,
-            exportNodeKVDBValues = true,
-            exportLeafPrefixes = false,
-            exportLeafValues = true
+            expNP = false,
+            expNK = true,
+            expNV = true,
+            expLP = false,
+            expLV = true
           )
           sequentialExport[F](
             rootHash.bytes,
@@ -535,7 +535,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 temp                   <- nsTime(export(history2.root, 0, historyInit.getNodeDataFromStore))
                 (expData, timeExpTemp) = temp
 
-                numNodeTemp = expData.nodeKVDBKeys.size
+                numNodeTemp = expData.nK.size
 
                 _                  <- validation(history2W.root, expDataW)
                 temp               <- nsTime(validation(history2.root, expData))

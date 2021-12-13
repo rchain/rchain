@@ -204,22 +204,22 @@ object RadixTree {
     * Data for return
     */
   case class ExportData(
-      nodePrefixes: Seq[ByteVector],
-      nodeKVDBKeys: Seq[ByteVector],
-      nodeKVDBValues: Seq[ByteVector],
-      leafPrefixes: Seq[ByteVector],
-      leafValues: Seq[ByteVector] // it's ptr for datastore
+      nP: Seq[ByteVector], //nodePrefixes
+      nK: Seq[ByteVector], //nodeKVDBKeys
+      nV: Seq[ByteVector], //nodeKVDBValues
+      lP: Seq[ByteVector], //leafPrefixes
+      lV: Seq[ByteVector]  //leafValues (it's ptr for datastore)
   )
 
   /**
     * Which data is need to export?
     */
   case class ExportDataSettings(
-      exportNodePrefixes: Boolean,
-      exportNodeKVDBKeys: Boolean,
-      exportNodeKVDBValues: Boolean,
-      exportLeafPrefixes: Boolean,
-      exportLeafValues: Boolean
+      expNP: Boolean,
+      expNK: Boolean,
+      expNV: Boolean,
+      expLP: Boolean,
+      expLV: Boolean
   )
 
   /**
@@ -236,7 +236,6 @@ object RadixTree {
       settings: ExportDataSettings,
       countableItem: CountableItem = calculateNodes //don't used (will be use in the future)
   ): F[(ExportData, Option[ByteVector])] = {
-    val _ = countableItem //fixme
     final case class NodeData(
         prefix: ByteVector,         //a prefix that describes the path of root to node
         decoded: Node,              //deserialized data (from parsing)
@@ -247,17 +246,17 @@ object RadixTree {
     /**
       * Create path from root to lastPrefix node
       */
-    final case class Params1(
+    final case class InitNPdata(
         nodeHash: ByteVector,   //hash of node for load
         nodePrefix: ByteVector, //prefix of this node
         restPrefix: ByteVector, //a prefix that describes the rest of the Path
         path: Path              //return path
     )
-    def createNodePath(
-        params: Params1
-    ): F[Either[Params1, Path]] =
+    def initNodePath(
+        params: InitNPdata
+    ): F[Either[InitNPdata, Path]] =
       params match {
-        case Params1(hash, nodePrefix, tempPrefix, path) =>
+        case InitNPdata(hash, nodePrefix, tempPrefix, path) =>
           for {
             nodeOpt <- getNodeDataFromStore(hash)
             decoded = {
@@ -276,7 +275,7 @@ object RadixTree {
                     ptrPrefixRest.isEmpty,
                     s"Export error: Node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found"
                   )
-                  Params1(
+                  InitNPdata(
                     ptr,
                     (nodePrefix :+ tempPrefix.head) ++ prefixCommon,
                     prefixRest,
@@ -295,21 +294,21 @@ object RadixTree {
     /**
       * Main loop
       */
-    type Params2 = (
+    type LoopData = (
         Path,       // path of node from current to root
         (Int, Int), // Skip & take counter
         ExportData  // Result of export
     )
-    def loop(params: Params2): F[Either[Params2, (ExportData, Option[ByteVector])]] = {
-      val (path, (skip, take), exportData) = params
-      if (path.isEmpty) Monad[F].pure((exportData, None).asRight) //end of Tree
+    def loop(params: LoopData): F[Either[LoopData, (ExportData, Option[ByteVector])]] = {
+      val (path, (skip, take), expData) = params
+      if (path.isEmpty) Monad[F].pure((expData, None).asRight) //end of Tree
       else {
         val curNodeData   = path.head
         val curNodePrefix = curNodeData.prefix
         val curNode       = curNodeData.decoded
 
         if ((skip, take) == (0, 0))
-          Monad[F].pure((exportData, Some(curNodePrefix)).asRight) //end of skip&take counter
+          Monad[F].pure((expData, Some(curNodePrefix)).asRight) //end of skip&take counter
         else {
           @tailrec
           def findNextNotEmptyItem(lastIndexOpt: Option[Byte]): Option[(Byte, Item)] = {
@@ -326,7 +325,7 @@ object RadixTree {
                 curItem match {
                   case EmptyItem => findNextNotEmptyItem(Some(curIndex))
                   case Leaf(_, _) =>
-                    if (settings.exportLeafPrefixes || settings.exportLeafValues)
+                    if (settings.expLP || settings.expLV)
                       Some(curIndex, curItem)
                     else findNextNotEmptyItem(Some(curIndex))
                   case NodePtr(_, _) => Some(curIndex, curItem)
@@ -336,29 +335,28 @@ object RadixTree {
 
           val nextNotEmptyItem = findNextNotEmptyItem(curNodeData.lastItemIndex)
           nextNotEmptyItem match {
-            case None => Monad[F].pure((path.tail, (skip, take), exportData).asLeft)
+            case None => Monad[F].pure((path.tail, (skip, take), expData).asLeft)
             case Some((itemIndex, item)) =>
               val newCurNodeData = NodeData(curNodePrefix, curNode, Some(itemIndex))
               val newPath        = newCurNodeData +: path.tail
               item match {
-                case EmptyItem => Monad[F].pure((newPath, (skip, take), exportData).asLeft)
+                case EmptyItem => Monad[F].pure((newPath, (skip, take), expData).asLeft)
                 case Leaf(leafPrefix, leafValue) =>
-                  if (skip > 0) Monad[F].pure((newPath, (skip, take), exportData).asLeft)
+                  if (skip > 0) Monad[F].pure((newPath, (skip, take), expData).asLeft)
                   else {
-                    val newLeafPrefixes =
-                      if (settings.exportLeafPrefixes) {
-                        val newLeafPrefix = (curNodePrefix :+ itemIndex) ++ leafPrefix
-                        exportData.leafPrefixes :+ newLeafPrefix
-                      } else Seq()
-                    val newLeafValues =
-                      if (settings.exportLeafValues) exportData.leafValues :+ leafValue
-                      else Seq()
+                    val newLP =
+                      if (settings.expLP) {
+                        val newSingleLP = (curNodePrefix :+ itemIndex) ++ leafPrefix
+                        expData.lP :+ newSingleLP
+                      } else Vector()
+                    val newLV =
+                      if (settings.expLV) expData.lV :+ leafValue else Vector()
                     val newExportData = ExportData(
-                      nodePrefixes = exportData.nodePrefixes,
-                      nodeKVDBKeys = exportData.nodeKVDBKeys,
-                      nodeKVDBValues = exportData.nodeKVDBValues,
-                      leafPrefixes = newLeafPrefixes,
-                      leafValues = newLeafValues
+                      nP = expData.nP,
+                      nK = expData.nK,
+                      nV = expData.nV,
+                      lP = newLP,
+                      lV = newLV
                     )
                     Monad[F].pure((newPath, (skip, take), newExportData).asLeft)
                   }
@@ -366,38 +364,31 @@ object RadixTree {
                 case NodePtr(ptrPrefix, ptr) =>
                   for {
                     childNodeOpt <- getNodeDataFromStore(ptr)
-                    childNodeKVDBValue = {
+                    childNV = {
                       assert(
                         childNodeOpt.isDefined,
                         s"Export error: Node with key ${ptr.toHex} not found"
                       )
                       childNodeOpt.get
                     }
-                    childDecoded    = codecs.decode(childNodeKVDBValue)
-                    childNodePrefix = (curNodePrefix :+ itemIndex) ++ ptrPrefix
-                    childNodeData   = NodeData(childNodePrefix, childDecoded, None)
-                    childPath       = childNodeData +: newPath
+                    childDecoded  = codecs.decode(childNV)
+                    childNP       = (curNodePrefix :+ itemIndex) ++ ptrPrefix
+                    childNodeData = NodeData(childNP, childDecoded, None)
+                    childPath     = childNodeData +: newPath
 
-                    r = if (skip > 0) (childPath, (skip - 1, take), exportData).asLeft
+                    r = if (skip > 0) (childPath, (skip - 1, take), expData).asLeft
                     else {
-                      val newNodePrefixes =
-                        if (settings.exportNodePrefixes) exportData.nodePrefixes :+ childNodePrefix
-                        else Seq()
-                      val newNodeKVDBKeys =
-                        if (settings.exportNodeKVDBKeys) exportData.nodeKVDBKeys :+ ptr
-                        else Seq()
-                      val newNodeKVDBValues =
-                        if (settings.exportNodeKVDBValues)
-                          exportData.nodeKVDBValues :+ childNodeKVDBValue
-                        else Seq()
-                      val newExportData = ExportData(
-                        nodePrefixes = newNodePrefixes,
-                        nodeKVDBKeys = newNodeKVDBKeys,
-                        nodeKVDBValues = newNodeKVDBValues,
-                        leafPrefixes = exportData.leafPrefixes,
-                        leafValues = exportData.leafValues
+                      val newNP = if (settings.expNP) expData.nP :+ childNP else Vector()
+                      val newNK = if (settings.expNK) expData.nK :+ ptr else Vector()
+                      val newNV = if (settings.expNV) expData.nV :+ childNV else Vector()
+                      val newData = ExportData(
+                        nP = newNP,
+                        nK = newNK,
+                        nV = newNV,
+                        lP = expData.lP,
+                        lV = expData.lV
                       )
-                      (childPath, (skip, take - 1), newExportData).asLeft
+                      (childPath, (skip, take - 1), newData).asLeft
                     }
                   } yield r
               }
@@ -407,8 +398,8 @@ object RadixTree {
     }
 
     val rootParams =
-      Params1(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
-    val emptyExportDataF = ExportData(Seq(), Seq(), Seq(), Seq(), Seq()).pure
+      InitNPdata(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
+    val emptyExportDataF = ExportData(Vector(), Vector(), Vector(), Vector(), Vector()).pure
 
     assert(
       (skipSize, takeSize) != (0, 0),
@@ -430,20 +421,20 @@ object RadixTree {
                 )
                 rootOpt.get
               }
-              newNodePrefixes   = if (settings.exportNodePrefixes) Seq(ByteVector.empty) else Seq()
-              newNodeKVDBKeys   = if (settings.exportNodeKVDBKeys) Seq(rootHash) else Seq()
-              newNodeKVDBValues = if (settings.exportNodeKVDBValues) Seq(root) else Seq()
-            } yield ExportData(newNodePrefixes, newNodeKVDBKeys, newNodeKVDBValues, Seq(), Seq())
+              newNP = if (settings.expNP) Vector(ByteVector.empty) else Vector()
+              newNK = if (settings.expNK) Vector(rootHash) else Vector()
+              newNV = if (settings.expNV) Vector(root) else Vector()
+            } yield ExportData(newNP, newNK, newNV, Vector(), Vector())
             (rootExportData, skipSize, takeSize - 1) //take root
           }
         case Some(_) =>
           (emptyExportDataF, skipSize, takeSize) //start from next node after lastPrefix
       }
     for {
-      path                 <- rootParams.tailRecM(createNodePath)
-      initExportData       <- initExportDataF
-      startParams: Params2 = (path, (initSkipSize, initTakeSize), initExportData)
-      r                    <- startParams.tailRecM(loop)
+      path                  <- rootParams.tailRecM(initNodePath)
+      initExportData        <- initExportDataF
+      startParams: LoopData = (path, (initSkipSize, initTakeSize), initExportData)
+      r                     <- startParams.tailRecM(loop)
     } yield r
   }
 
