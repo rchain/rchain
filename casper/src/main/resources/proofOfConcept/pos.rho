@@ -1,0 +1,66 @@
+new return,
+  revAddressOps(`rho:rev:address`),
+  registryLookup(`rho:registry:lookup`),
+  DeployerIdOps(`rho:rchain:deployerId:ops`),
+  getMyRevAddress, deployerPubKeyBytesCh, createUnfVault, POS, revVaultCh, createUnfCh
+in {
+  registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
+  for (@(_,RevVault) <- revVaultCh){
+    // create unforgeable name vault with the provided pub key
+    // ret: the return channel of the create
+    // pubKey: the pubkey which controll the unforgeable name
+    contract createUnfVault(ret, @pubkey) = {
+      new unf, unfAddrRet, createRetCh, pubKeyChainUnfVault, unfVaultHandle, stdout(`rho:io:stdout`) in {
+        revAddressOps!("fromUnforgeable", *unf, *unfAddrRet) |
+        for (@unfAddr <- unfAddrRet){
+          @RevVault!("findOrCreate", unfAddr, *createRetCh) |
+          for (@(true, vault) <- createRetCh){
+            contract unfVaultHandle(@"transfer", @targetAddress, @amount, deployerID, transferRet) = {
+              DeployerIdOps!("pubKeyBytes", *deployerID, *deployerPubKeyBytesCh) |
+              for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+                stdout!(deployerPubKeyBytes)|
+                stdout!(pubkey.hexToBytes())|
+                if (deployerPubKeyBytes ==  pubkey.hexToBytes()){
+                  new unfAuthKeyCh in {
+                    @RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
+                    for (@unfAuthKey <- unfAuthKeyCh){
+                      @vault!("transfer", targetAddress, amount, unfAuthKey, *transferRet)
+                    }
+                  }
+                } else {
+                  transferRet!((false, "not the right pubkey"))
+                }
+              }
+            } |
+            ret!((*unf, unfAddr, vault ,*unfVaultHandle))
+          }
+        }
+      }
+    }|
+    // the pub key would be configured during genesis or expose another method to do
+    createUnfVault!(*createUnfCh, "$pubKey")|
+    for (@(posUnf, PosAddr, PosVault, humanControllHandle)  <- createUnfCh) {
+      contract POS(@"humanTransfer", @targetAddress, @amount, deployerID, transferRet) = {
+        // human transfer would just use this method
+        @humanControllHandle!("transfer", targetAddress, amount, *deployerID, *transferRet)
+      }|
+      contract POS(@"refund", @refundAmount, @deployerAddr, @sysAuthToken, return) = {
+        // skip the checking part here
+        // controll by the unforgeable name directly
+        new unfAuthKeyCh in {
+          @RevVault!("unforgeableAuthKey", posUnf, *unfAuthKeyCh) |
+          for (@unfAuthKey <- unfAuthKeyCh){
+            @PosVault!("transfer", deployerAddr, refundAmount, unfAuthKey, *return)
+          }
+        }
+      }|
+      contract POS(@"info", ret) = {
+        ret!((posUnf, PosAddr, PosVault, humanControllHandle) )
+      }
+    }
+  }|
+
+
+  // insert in some pub name for easy test
+  @"posCh"!(*POS)
+}

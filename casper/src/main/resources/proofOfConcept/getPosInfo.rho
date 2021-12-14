@@ -1,0 +1,10 @@
+new return in {
+  for (pos<<- @"posCh"){
+    new info in {
+      pos!("info", *info)|
+      for (@(posUnf, PosAddr, PosVault, humanControllHandle) <- info){
+        return!(posUnf, PosAddr, PosVault, humanControllHandle)
+      }
+    }
+  }
+}

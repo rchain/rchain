@@ -1,0 +1,8 @@
+for (pos<<- @"posCh"){
+  new info, deployerId(`rho:rchain:deployerId`), stdout(`rho:io:stdout`), ret in {
+    pos!("humanTransfer", "$addr", $humanTransAmount, *deployerId, *ret)|
+    for (@result <- ret){
+      stdout!(result)
+    }
+  }
+}
