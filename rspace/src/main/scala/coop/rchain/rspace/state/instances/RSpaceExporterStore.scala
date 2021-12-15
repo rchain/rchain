@@ -4,7 +4,7 @@ import java.nio.ByteBuffer
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.{HistoryStoreInstances, RootsStoreInstances}
+import coop.rchain.rspace.history.RootsStoreInstances
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.ByteVectorOps.RichByteVector
 import coop.rchain.state.TrieNode
@@ -52,9 +52,10 @@ object RSpaceExporterStore {
         skip: Int,
         take: Int
     ): F[Seq[TrieNode[Blake2b256Hash]]] = {
-      val sourceTrieStore = HistoryStoreInstances.historyStore(sourceHistoryStore)
+      import coop.rchain.rspace.history.RadixStore
+      val sourceTrieStore = new RadixStore(sourceHistoryStore)
       for {
-        nodes <- traverseTrie(startPath, skip, take, sourceTrieStore.get)
+        nodes <- traverseTrie(startPath, skip, take, sourceTrieStore.get1)
       } yield nodes
     }
 

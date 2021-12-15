@@ -114,8 +114,9 @@ trait HistoryHelpers[F[_]] {
       skip: Int,
       take: Int
   ): F[Vector[TrieNode[Blake2b256Hash]]] = {
-    val sourceTrieStore = HistoryStoreInstances.historyStore(historyStore)
-    RSpaceExporter.traverseTrie(startPath, skip, take, sourceTrieStore.get)
+    import coop.rchain.rspace.history.RadixStore
+    val sourceTrieStore = new RadixStore(historyStore)
+    RSpaceExporter.traverseTrie(startPath, skip, take, sourceTrieStore.get1)
   }
 
   def getLeafsSection(
