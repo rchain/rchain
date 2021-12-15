@@ -61,6 +61,8 @@ object ApproveBlockProtocol {
       epochLength: Int,
       quarantineLength: Int,
       numberOfActiveValidators: Int,
+      deployerPubKey: String,
+      insertSignedSignature: String,
       shardId: String,
       deployTimestamp: Option[Long],
       requiredSigs: Int,
@@ -97,7 +99,9 @@ object ApproveBlockProtocol {
                              epochLength = epochLength,
                              quarantineLength = quarantineLength,
                              numberOfActiveValidators = numberOfActiveValidators,
-                             validators = validators
+                             validators = validators,
+                             deployerPubKey = deployerPubKey,
+                             insertSignedSignature = insertSignedSignature
                            ),
                            vaults = vaults,
                            supply = Long.MaxValue,

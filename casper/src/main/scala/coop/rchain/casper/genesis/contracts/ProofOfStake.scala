@@ -15,7 +15,9 @@ final case class ProofOfStake(
     validators: Seq[Validator],
     epochLength: Int,
     quarantineLength: Int,
-    numberOfActiveValidators: Int
+    numberOfActiveValidators: Int,
+    deployerPubKey: String,
+    insertSignedSignature: String
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv.withDeployerId(
@@ -30,7 +32,9 @@ final case class ProofOfStake(
       "initialBonds"             -> ProofOfStake.initialBonds(validators),
       "epochLength"              -> epochLength,
       "quarantineLength"         -> quarantineLength,
-      "numberOfActiveValidators" -> numberOfActiveValidators
+      "numberOfActiveValidators" -> numberOfActiveValidators,
+      "deployerPubKey"           -> deployerPubKey,
+      "insertSignedSignature"    -> insertSignedSignature
     ) {
 
   require(minimumBond <= maximumBond)

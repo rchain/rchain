@@ -182,6 +182,8 @@ object CasperLaunch {
                   conf.genesisBlockData.epochLength,
                   conf.genesisBlockData.quarantineLength,
                   conf.genesisBlockData.numberOfActiveValidators,
+                  conf.genesisBlockData.deployerPubKey,
+                  conf.genesisBlockData.insertSignedSignature,
                   conf.genesisCeremony.requiredSignatures
                 )(Sync[F])
           _ <- EngineCell[F].set(
@@ -209,6 +211,8 @@ object CasperLaunch {
                     conf.genesisBlockData.epochLength,
                     conf.genesisBlockData.quarantineLength,
                     conf.genesisBlockData.numberOfActiveValidators,
+                    conf.genesisBlockData.deployerPubKey,
+                    conf.genesisBlockData.insertSignedSignature,
                     conf.shardName,
                     conf.genesisBlockData.deployTimestamp,
                     conf.genesisCeremony.requiredSignatures,

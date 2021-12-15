@@ -1,5 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
+import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.DeployData
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
@@ -110,10 +111,36 @@ object StandardDeploys {
   def poSGenerator(poS: ProofOfStake): Signed[DeployData] =
     toDeploy(
       poS,
-      poSGeneratorPk,
+      poS.deployerPubKey,
+      //not right, just demonstract,
+      poS.insertSignedSignature,
       1559156420651L
     )
 
+  private def toDeploy(
+      compiledSource: CompiledRholangSource[_],
+      pubKey: String,
+      signature: String,
+      timestamp: Long
+  ): Signed[DeployData] = {
+    val deployData =
+      DeployData(
+        timestamp = timestamp,
+        term = compiledSource.code,
+        phloLimit = accounting.MAX_VALUE,
+        phloPrice = 0,
+        validAfterBlockNumber = 0
+      )
+
+    Signed
+      .fromSignedData(
+        deployData,
+        PublicKey.apply(Base16.unsafeDecode(pubKey)),
+        ByteString.copyFrom(Base16.unsafeDecode(signature)),
+        Secp256k1
+      )
+      .get
+  }
   def revGenerator(
       vaults: Seq[Vault],
       supply: Long,
