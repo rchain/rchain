@@ -246,17 +246,17 @@ object RadixTree {
     /**
       * Create path from root to lastPrefix node
       */
-    final case class InitNPdata(
+    final case class NodePathData(
         nodeHash: ByteVector,   //hash of node for load
         nodePrefix: ByteVector, //prefix of this node
         restPrefix: ByteVector, //a prefix that describes the rest of the Path
         path: Path              //return path
     )
     def initNodePath(
-        params: InitNPdata
-    ): F[Either[InitNPdata, Path]] =
+        params: NodePathData
+    ): F[Either[NodePathData, Path]] =
       params match {
-        case InitNPdata(hash, nodePrefix, tempPrefix, path) =>
+        case NodePathData(hash, nodePrefix, tempPrefix, path) =>
           for {
             nodeOpt <- getNodeDataFromStore(hash)
             decoded = {
@@ -275,7 +275,7 @@ object RadixTree {
                     ptrPrefixRest.isEmpty,
                     s"Export error: Node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found"
                   )
-                  InitNPdata(
+                  NodePathData(
                     ptr,
                     (nodePrefix :+ tempPrefix.head) ++ prefixCommon,
                     prefixRest,
@@ -398,7 +398,7 @@ object RadixTree {
     }
 
     val rootParams =
-      InitNPdata(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
+      NodePathData(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
     val emptyExportDataF = ExportData(Vector(), Vector(), Vector(), Vector(), Vector()).pure
 
     assert(
