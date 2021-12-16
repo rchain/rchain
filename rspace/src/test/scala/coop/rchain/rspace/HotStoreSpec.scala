@@ -1131,12 +1131,10 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
   ) =
     (for {
       historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
-      history = {
-        new History[F, String, Pattern, String, StringsCaptor](historyState)
-      }
-      cache    <- C()
-      hotStore <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
-      res      <- f(cache, history, hotStore)
+      history      = new History[F, String, Pattern, String, StringsCaptor](historyState)
+      cache        <- C()
+      hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
+      res          <- f(cache, history, hotStore)
     } yield res).runSyncUnsafe(1.second)
 
   override def fixture(cache: HotStoreState[String, Pattern, String, StringsCaptor])(
@@ -1144,12 +1142,10 @@ trait InMemHotStoreSpec extends HotStoreSpec[Task] {
   ) =
     (for {
       historyState <- Ref[F].of(HotStoreState[String, Pattern, String, StringsCaptor]())
-      history = {
-        new History[F, String, Pattern, String, StringsCaptor](historyState)
-      }
-      cache    <- C(cache)
-      hotStore <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
-      res      <- f(hotStore)
+      history      = new History[F, String, Pattern, String, StringsCaptor](historyState)
+      cache        <- C(cache)
+      hotStore     <- HotStore[F, String, Pattern, String, StringsCaptor](cache, history)
+      res          <- f(hotStore)
     } yield res).runSyncUnsafe(1.second)
 
 }
