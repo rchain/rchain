@@ -109,7 +109,7 @@ object Main {
     implicit val replServiceClient: GrpcReplClient[F] =
       new GrpcReplClient[F](
         options.grpcHost(),
-        options.grpcPort(),
+        options.grpcInternalPort(),
         options.grpcMaxRecvMessageSize()
       )
     implicit val deployServiceClient: GrpcDeployService[F] =
