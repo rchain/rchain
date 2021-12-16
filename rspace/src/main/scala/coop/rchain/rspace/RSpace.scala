@@ -216,7 +216,7 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
 
   override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
-      changes <- spanF.withMarks("changes") { storeAtom.get().changes() }
+      changes <- spanF.withMarks("changes") { storeAtom.get().changes }
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }

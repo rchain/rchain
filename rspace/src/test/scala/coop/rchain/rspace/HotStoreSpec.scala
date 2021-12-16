@@ -742,7 +742,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
                     ()
                   )
                 }
-            res   <- hotStore.changes()
+            res   <- hotStore.changes
             cache <- state.get
             _ <- S.delay {
                   res.size shouldBe (cache.continuations.size + cache.data.size + cache.joins.size)
@@ -1031,7 +1031,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
     (cache: HotStoreState[String, Pattern, String, StringsCaptor]) =>
       fixture(cache) { store =>
         for {
-          snapshot <- store.snapshot()
+          snapshot <- store.snapshot
         } yield snapshot shouldBe cache
       }
   }
@@ -1046,7 +1046,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           for {
             _        <- store.putContinuation(channels, continuation1)
-            snapshot <- store.snapshot()
+            snapshot <- store.snapshot
             _        <- store.putContinuation(channels, continuation2)
             _        = snapshot.continuations(channels) should contain(continuation1)
           } yield snapshot.continuations(channels) should not contain continuation2
@@ -1064,7 +1064,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           for {
             _        <- store.installContinuation(channels, continuation1)
-            snapshot <- store.snapshot()
+            snapshot <- store.snapshot
             _        <- store.installContinuation(channels, continuation2)
           } yield snapshot.installedContinuations(channels) shouldBe continuation1
         }
@@ -1081,7 +1081,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           for {
             _        <- store.putDatum(channel, data1)
-            snapshot <- store.snapshot()
+            snapshot <- store.snapshot
             _        <- store.putDatum(channel, data2)
             _        = snapshot.data(channel) should contain(data1)
           } yield snapshot.data(channel) should not contain data2
@@ -1099,7 +1099,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           for {
             _        <- store.putJoin(channel, join1)
-            snapshot <- store.snapshot()
+            snapshot <- store.snapshot
             _        <- store.putJoin(channel, join2)
             _        = snapshot.joins(channel) should contain(join1)
           } yield snapshot.joins(channel) should not contain join2
@@ -1117,7 +1117,7 @@ trait HotStoreSpec[F[_]] extends FlatSpec with Matchers with GeneratorDrivenProp
         fixture { (_, _, store) =>
           for {
             _        <- store.installJoin(channel, join1)
-            snapshot <- store.snapshot()
+            snapshot <- store.snapshot
             _        <- store.installJoin(channel, join2)
             _        = snapshot.installedJoins(channel) should contain(join1)
           } yield snapshot.installedJoins(channel) should not contain join2

@@ -22,6 +22,6 @@ package object test {
 
   implicit class StoreOps[F[_]: Functor, C, P, A, K](val store: HotStore[F, C, P, A, K]) {
     def isEmpty(): F[Boolean] =
-      store.changes().map(collectActions[InsertAction]).map(_.isEmpty)
+      store.changes.map(collectActions[InsertAction]).map(_.isEmpty)
   }
 }

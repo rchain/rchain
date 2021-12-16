@@ -1087,7 +1087,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ <- replayStore.get().isEmpty.map(_ shouldBe false)
         _ <- replayStore
               .get()
-              .changes()
+              .changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 
@@ -1126,7 +1126,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ <- replayStore.get().isEmpty.map(_ shouldBe false)
         _ <- replayStore
               .get()
-              .changes()
+              .changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 

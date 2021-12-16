@@ -24,9 +24,9 @@ trait HotStore[F[_], C, P, A, K] {
   def installJoin(channel: C, join: Seq[C]): F[Unit]
   def removeJoin(channel: C, join: Seq[C]): F[Unit]
 
-  def changes(): F[Seq[HotStoreAction]]
+  def changes: F[Seq[HotStoreAction]]
   def toMap: F[Map[Seq[C], Row[P, A, K]]]
-  def snapshot(): F[HotStoreState[C, P, A, K]]
+  def snapshot: F[HotStoreState[C, P, A, K]]
 }
 
 final case class HotStoreState[C, P, A, K](
@@ -69,7 +69,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     historyReaderBase: HistoryReaderBase[F, C, P, A, K]
 ) extends HotStore[F, C, P, A, K] {
 
-  def snapshot(): F[HotStoreState[C, P, A, K]] = hotStoreState.get
+  def snapshot: F[HotStoreState[C, P, A, K]] = hotStoreState.get
 
   // Continuations
 
@@ -282,7 +282,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
           }
     } yield ()
 
-  def changes(): F[Seq[HotStoreAction]] =
+  def changes: F[Seq[HotStoreAction]] =
     for {
       cache <- hotStoreState.get
       continuations = cache.continuations.map {

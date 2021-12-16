@@ -33,7 +33,7 @@ trait StorageExamplesTests[F[_]]
       _             = r3 shouldBe defined
       _             = runK(unpackOption(r3))
       _             = getK(r3).continuation.results shouldBe List(List(bob, bob))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -55,7 +55,7 @@ trait StorageExamplesTests[F[_]]
       _ = r3 shouldBe defined
       _ = runK(unpackOption(r3))
       _ = getK(r3).continuation.results shouldBe List(List(bob, bob))
-    } yield (store.changes().map(_.isEmpty shouldBe true))
+    } yield (store.changes.map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: A joined consume on duplicate channels given twice followed by three produces" should
@@ -81,7 +81,7 @@ trait StorageExamplesTests[F[_]]
       _  = r4 shouldBe defined
       _  = runK(unpackOption(r4))
       _  = getK(r4).continuation.results shouldBe List(List(alice, bob, bob))
-    } yield (store.changes().map(_.isEmpty shouldBe true))
+    } yield (store.changes.map(_.isEmpty shouldBe true))
 
   }
 
@@ -141,7 +141,7 @@ trait StorageExamplesTests[F[_]]
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
 
-    } yield (store.changes().map(_.isEmpty shouldBe true))
+    } yield (store.changes.map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: Multiple produces on multiple duplicate channels followed by the requisite consume" should
@@ -200,7 +200,7 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).continuation.results shouldBe List(
         List(carol, carol, carol, carol, alice, alice, alice, bob, bob)
       )
-    } yield (store.changes().map(_.isEmpty shouldBe true))
+    } yield (store.changes.map(_.isEmpty shouldBe true))
   }
 
   "CORE-365: A joined consume on multiple mixed up duplicate channels followed by the requisite produces" should
@@ -260,7 +260,7 @@ trait StorageExamplesTests[F[_]]
       _ = getK(r10).continuation.results shouldBe List(
         List(carol, alice, carol, bob, bob, carol, alice, alice, carol)
       )
-    } yield (store.changes().map(_.isEmpty shouldBe true))
+    } yield (store.changes.map(_.isEmpty shouldBe true))
   }
 }
 

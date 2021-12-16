@@ -347,7 +347,7 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
-      cache    <- storeAtom.get().snapshot()
+      cache    <- storeAtom.get().snapshot
       log      = eventLog.take()
       _        = eventLog.put(Seq.empty)
       pCounter = produceCounter.take()
