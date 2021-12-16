@@ -77,19 +77,20 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       fromHistoryStore <- getContFromHistoryStore(channels)
       result <- hotStoreState.modify[Seq[WaitingContinuation[P, K]]] { state =>
-                 state.continuations.get(channels) match {
-                   // update with what is in historyStore and return the same
-                   case None =>
-                     (
-                       state.copy(
-                         continuations = state.continuations.updated(channels, fromHistoryStore)
-                       ),
-                       state.installedContinuations.get(channels) ++: fromHistoryStore
-                     )
-                   // just return what is in hot store already
-                   case Some(continuations) =>
-                     (state, state.installedContinuations.get(channels) ++: continuations)
-                 }
+                 state.continuations
+                   .get(channels)
+                   .map(
+                     // just return what is in hot store already
+                     continuations =>
+                       (state, state.installedContinuations.get(channels) ++: continuations)
+                   )
+                   .getOrElse(
+                     // update with what is in historyStore and return the same
+                     state.copy(
+                       continuations = state.continuations.updated(channels, fromHistoryStore)
+                     ),
+                     state.installedContinuations.get(channels) ++: fromHistoryStore
+                   )
                }
     } yield result
 
@@ -161,18 +162,14 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       fromHistoryStore <- getDataFromHistoryStore(channel)
       result <- hotStoreState.modify[Seq[Datum[A]]] { state =>
-                 state.data.get(channel) match {
-                   // update with what is in historyStore and return the same
-                   case None =>
-                     (
-                       state.copy(
-                         data = state.data.updated(channel, fromHistoryStore)
-                       ),
-                       fromHistoryStore
-                     )
-                   // just return what is in hot store already
-                   case Some(data) => (state, data)
-                 }
+                 state.data
+                   .get(channel)
+                   .map((state, _)) // just return what is in hot store already
+                   .getOrElse(
+                     // update with what is in historyStore and return the same
+                     state.copy(data = state.data.updated(channel, fromHistoryStore)),
+                     fromHistoryStore
+                   )
                }
     } yield result
 
@@ -220,21 +217,18 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
     for {
       fromHistoryStore <- getJoinsFromHistoryStore(channel)
       result <- hotStoreState.modify[Seq[Seq[C]]] { state =>
-                 state.joins.get(channel) match {
-                   // update with what is in historyStore and return the same
-                   case None =>
-                     (
-                       state.copy(
-                         joins = state.joins.updated(channel, fromHistoryStore)
-                       ),
-                       state.installedJoins.getOrElse(channel, Seq.empty) ++: fromHistoryStore
-                     )
-                   // just return what is in hot store already
-                   case Some(joins) =>
-                     (state, state.installedJoins.getOrElse(channel, Seq.empty) ++: joins)
-                 }
+                 state.joins
+                   .get(channel)
+                   .map(
+                     // just return what is in hot store already
+                     joins => (state, state.installedJoins.getOrElse(channel, Seq.empty) ++: joins)
+                   )
+                   .getOrElse(
+                     // update with what is in historyStore and return the same
+                     state.copy(joins = state.joins.updated(channel, fromHistoryStore)),
+                     state.installedJoins.getOrElse(channel, Seq.empty) ++: fromHistoryStore
+                   )
                }
-
     } yield result
 
   def putJoin(channel: C, join: Seq[C]): F[Unit] =
@@ -324,11 +318,13 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       d <- Deferred[F, Seq[WaitingContinuation[P, K]]]
       r <- historyStoreCache
             .modify[(Deferred[F, Seq[WaitingContinuation[P, K]]], Boolean)] { cache =>
-              cache.continuations.get(channels) match {
-                case Some(v) => (cache, (v, true))
-                case None =>
-                  (cache.copy(continuations = cache.continuations + (channels -> d)), (d, false))
-              }
+              cache.continuations
+                .get(channels)
+                .map(v => (cache, (v, true)))
+                .getOrElse(
+                  cache.copy(continuations = cache.continuations + (channels -> d)),
+                  (d, false)
+                )
             }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getContinuations(channels) >>= deferred.complete).whenA(!isComplete)
@@ -340,10 +336,10 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       d <- Deferred[F, Seq[Datum[A]]]
       r <- historyStoreCache
             .modify[(Deferred[F, Seq[Datum[A]]], Boolean)] { cache =>
-              cache.datums.get(channel) match {
-                case Some(v) => (cache, (v, true))
-                case None    => (cache.copy(datums = cache.datums + (channel -> d)), (d, false))
-              }
+              cache.datums
+                .get(channel)
+                .map(v => (cache, (v, true)))
+                .getOrElse(cache.copy(datums = cache.datums + (channel -> d)), (d, false))
             }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getData(channel) >>= deferred.complete).whenA(!isComplete)
@@ -355,10 +351,10 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       d <- Deferred[F, Seq[Seq[C]]]
       r <- historyStoreCache
             .modify[(Deferred[F, Seq[Seq[C]]], Boolean)] { cache =>
-              cache.joins.get(channel) match {
-                case Some(v) => (cache, (v, true))
-                case None    => (cache.copy(joins = cache.joins + (channel -> d)), (d, false))
-              }
+              cache.joins
+                .get(channel)
+                .map(v => (cache, (v, true)))
+                .getOrElse(cache.copy(joins = cache.joins + (channel -> d)), (d, false))
             }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
