@@ -322,7 +322,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
                 .get(channels)
                 .map(v => (cache, (v, true)))
                 .getOrElse(
-                  cache.copy(continuations = cache.continuations + (channels -> d)),
+                  cache.copy(continuations = cache.continuations + ((channels, d))),
                   (d, false)
                 )
             }
@@ -339,7 +339,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               cache.datums
                 .get(channel)
                 .map(v => (cache, (v, true)))
-                .getOrElse(cache.copy(datums = cache.datums + (channel -> d)), (d, false))
+                .getOrElse(cache.copy(datums = cache.datums + ((channel, d))), (d, false))
             }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getData(channel) >>= deferred.complete).whenA(!isComplete)
@@ -354,7 +354,7 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
               cache.joins
                 .get(channel)
                 .map(v => (cache, (v, true)))
-                .getOrElse(cache.copy(joins = cache.joins + (channel -> d)), (d, false))
+                .getOrElse(cache.copy(joins = cache.joins + ((channel, d))), (d, false))
             }
       (deferred, isComplete) = r
       _                      <- (historyReaderBase.getJoins(channel) >>= deferred.complete).whenA(!isComplete)
