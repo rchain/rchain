@@ -309,7 +309,7 @@ object DeployGrpcServiceV1 {
             shardId,
             peers.length,
             nodes.length,
-            minPhloPrice.toInt
+            minPhloPrice
           )
           response = StatusResponse().withStatus(status)
         } yield response).toTask
