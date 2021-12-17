@@ -7,9 +7,11 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.RadixTree.ExportData
-import coop.rchain.rspace.history.instances._
 import coop.rchain.rspace.history._
+import coop.rchain.rspace.history.instances._
+import coop.rchain.rspace.state.RSpaceExporter.traverseTrie
 import coop.rchain.shared.Log
+import coop.rchain.state.TrieNode
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
@@ -277,8 +279,10 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
     def exportExperiment(): F[Unit] = {
       import coop.rchain.rspace.history.RadixTree._
-      val lmdbPath: String     = "/git/temp"
-      val root: Blake2b256Hash = v0
+      val lmdbPath: String                                  = "/git/temp"
+      val root: Blake2b256Hash                              = v0
+      def getBlake(x: Blake2b256Hash, store: RadixStore[F]) = store.get1(x.bytes)
+
       for {
         store      <- storeLMDB(lmdbPath)
         radixStore = new RadixStore(store)
@@ -386,11 +390,48 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
             settings
           )
         }
-        r = {
+        _ = {
           assert(newData == dataAll, "Error of validation")
           ()
         }
-      } yield r
+
+        importHash = history1.root
+        startPath1 = Vector((importHash, None))
+        nodesAll   <- traverseTrie(startPath1, 0, 100, radixStore.get1)
+        nodes1     <- traverseTrie(startPath1, 0, 2, radixStore.get1)
+        startPath2 = nodes1.last.path
+        nodes2     <- traverseTrie(startPath2, 0, 100, radixStore.get1)
+//        nodes2 <- traverseTrie(startPath1, 2, 100, radixStore.get1)
+
+        (leafsAll, nonLeafsAll) = nodesAll.partition(_.isLeaf)
+        (leafs1, nonLeafs1)     = nodes1.partition(_.isLeaf)
+        (leafs2, nonLeafs2)     = nodes2.partition(_.isLeaf)
+
+        leafsFabrication = leafs1 ++ leafs2
+
+        last = nonLeafs1.last
+        nonLeafsVabrication = nonLeafs1.dropRight(1) ++
+          Vector(TrieNode(last.hash, last.isLeaf, Vector())) ++ nonLeafs2
+        _ = {
+          assert(
+            leafsFabrication == leafsAll && nonLeafsVabrication == nonLeafsAll,
+            "Error of validation 2"
+          )
+          ()
+        }
+        historyItems = nonLeafsAll.map(_.hash) zip nodeKVDBValues
+
+        //required correct dataItems
+//        dataItems    = Vector()
+//        _ <- RSpaceImporter.validateStateItems(
+//              historyItems,
+//              dataItems,
+//              startPath1,
+//              20000,
+//              0,
+//              getBlake(_, radixStore)
+//            )
+      } yield ()
     }
 
     def experiment(numInit: Int, numInsReadDel: Int): F[Unit] = {
@@ -619,8 +660,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
 //        _ <- simpleExperiment()
 //        _ <- simpleExperimentWithSubTree()
-//        _ <- exportExperiment()
-        _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
+        _ <- exportExperiment()
+//        _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
       } yield ()
     }
 

@@ -24,72 +24,76 @@ object RSpaceExporter {
       skip: Int,
       take: Int,
       getTrie: ByteVector => F[Option[ByteVector]]
-  ): F[Vector[TrieNode[Blake2b256Hash]]] = {
-    import coop.rchain.rspace.history.RadixTree._
-    import scodec.bits.ByteVector
-    val pathSeq                           = startPath.map(_._1)
-    val (rootHash: ByteVector, prefixSeq) = (pathSeq.head.bytes, pathSeq.tail)
-    //todo implemented a temporary solution with lastPrefix coding in 5 blake256 hashes
-    val lastPrefix: Option[ByteVector] =
-      if (prefixSeq.isEmpty) None //start from root
-      else {
-        //max prefix length = 127 bytes
-        //prefix coded 5 Blake256 elements (0 - size, 1..4 - value of prefix)
-        assert(prefixSeq.size >= 5, "Invalid path during export")
-        val (sizePrefix: Int, seq) = (prefixSeq.head.bytes.head & 0xff, prefixSeq.tail)
-        val prefix128: ByteVector  = seq.head.bytes ++ seq(1).bytes ++ seq(2).bytes ++ seq(3).bytes
-        prefix128.take(sizePrefix.toLong).some
-      }
-    val settings =
-      ExportDataSettings(expNP = false, expNK = true, expNV = false, expLP = false, expLV = true)
-    for {
-      expRes                                  <- sequentialExport(rootHash, lastPrefix, skip, take, getTrie, settings)
-      (data, newLastPrefixOpt)                = expRes
-      ExportData(_, nodeKeys, _, _, leafKeys) = data
-      dataKeys = leafKeys.map { key =>
-        val hash = Blake2b256Hash.fromByteArray(key.toArray)
-        TrieNode(hash, isLeaf = true, Vector())
-      }.toVector
-
-      historyKeysWithoutLast = nodeKeys
-        .dropRight(1)
-        .map { key =>
-          val hash = Blake2b256Hash.fromByteArray(key.toArray)
-          TrieNode(hash, isLeaf = false, Vector())
+  ): F[Vector[TrieNode[Blake2b256Hash]]] =
+    if (startPath.isEmpty) Monad[F].pure(Vector())
+    else {
+      import coop.rchain.rspace.history.RadixTree._
+      import scodec.bits.ByteVector
+      val pathSeq                               = startPath.map(_._1)
+      val (rootHash: Blake2b256Hash, prefixSeq) = (pathSeq.head, pathSeq.tail)
+      //todo implemented a temporary solution with lastPrefix coding in 5 blake256 hashes
+      val lastPrefix: Option[ByteVector] =
+        if (prefixSeq.isEmpty) None //start from root
+        else {
+          //max prefix length = 127 bytes
+          //prefix coded 5 Blake256 elements (0 - size, 1..4 - value of prefix)
+          assert(prefixSeq.size >= 5, "Invalid path during export")
+          val (sizePrefix: Int, seq) = (prefixSeq.head.bytes.head & 0xff, prefixSeq.tail)
+          val prefix128: ByteVector  = seq.head.bytes ++ seq(1).bytes ++ seq(2).bytes ++ seq(3).bytes
+          prefix128.take(sizePrefix.toLong).some
         }
-        .toVector
+      val settings =
+        ExportDataSettings(expNP = false, expNK = true, expNV = false, expLP = false, expLV = true)
 
-      lastHistoryKey = nodeKeys.lastOption match {
-        case None => Vector()
-        case Some(lastKey) =>
-          val hash = Blake2b256Hash.fromByteArray(lastKey.toArray)
-          val path = newLastPrefixOpt match {
-            case None => Vector()
-            case Some(prefix) =>
-              val prefixSize = prefix.size.toInt
-              val sizeArray: Array[Byte] = prefix.size.toByte +:
-                (0 until 31).map(_ => 0x00.toByte).toArray
-              val prefixZeros: Array[Byte] =
-                (0 until 128 - prefixSize).map(_ => 0x00.toByte).toArray
-              val prefix128Array = prefix.toArray ++ prefixZeros
-              val blake0         = Blake2b256Hash.fromByteArray(sizeArray)
-              val blake1         = Blake2b256Hash.fromByteArray(prefix128Array.slice(0, 32))
-              val blake2         = Blake2b256Hash.fromByteArray(prefix128Array.slice(32, 64))
-              val blake3         = Blake2b256Hash.fromByteArray(prefix128Array.slice(64, 96))
-              val blake4         = Blake2b256Hash.fromByteArray(prefix128Array.slice(96, 128))
-              Vector(
-                (blake0, None),
-                (blake1, None),
-                (blake2, None),
-                (blake3, None),
-                (blake4, None)
-              )
+      for {
+        expRes                                  <- sequentialExport(rootHash.bytes, lastPrefix, skip, take, getTrie, settings)
+        (data, newLastPrefixOpt)                = expRes
+        ExportData(_, nodeKeys, _, _, leafKeys) = data
+        dataKeys = leafKeys.map { key =>
+          val hash = Blake2b256Hash.fromByteArray(key.toArray)
+          TrieNode(hash, isLeaf = true, Vector())
+        }.toVector
+
+        historyKeysWithoutLast = nodeKeys
+          .dropRight(1)
+          .map { key =>
+            val hash = Blake2b256Hash.fromByteArray(key.toArray)
+            TrieNode(hash, isLeaf = false, Vector())
           }
-          Vector(TrieNode(hash, isLeaf = false, path))
-      }
-      r = dataKeys ++ historyKeysWithoutLast ++ lastHistoryKey
-    } yield r
-  }
+          .toVector
+
+        lastHistoryKey = nodeKeys.lastOption match {
+          case None => Vector()
+          case Some(lastKey) =>
+            val hash = Blake2b256Hash.fromByteArray(lastKey.toArray)
+            val path = newLastPrefixOpt match {
+              case None => Vector()
+              case Some(prefix) =>
+                val prefixSize = prefix.size.toInt
+                val sizeArray: Array[Byte] = prefix.size.toByte +:
+                  (0 until 31).map(_ => 0x00.toByte).toArray
+                val prefixZeros: Array[Byte] =
+                  (0 until 128 - prefixSize).map(_ => 0x00.toByte).toArray
+                val prefix128Array = prefix.toArray ++ prefixZeros
+                val prefixBlake0   = Blake2b256Hash.fromByteArray(sizeArray)
+                val prefixBlake1   = Blake2b256Hash.fromByteArray(prefix128Array.slice(0, 32))
+                val prefixBlake2   = Blake2b256Hash.fromByteArray(prefix128Array.slice(32, 64))
+                val prefixBlake3   = Blake2b256Hash.fromByteArray(prefix128Array.slice(64, 96))
+                val prefixBlake4   = Blake2b256Hash.fromByteArray(prefix128Array.slice(96, 128))
+                Vector(
+                  (rootHash, None),
+                  (prefixBlake0, None),
+                  (prefixBlake1, None),
+                  (prefixBlake2, None),
+                  (prefixBlake3, None),
+                  (prefixBlake4, None)
+                )
+            }
+            Vector(TrieNode(hash, isLeaf = false, path))
+        }
+        r = dataKeys ++ historyKeysWithoutLast ++ lastHistoryKey
+      } yield r
+    }
   // Pretty printer helpers
   def pathPretty(path: (Blake2b256Hash, Option[Byte])) = {
     val (hash, idx) = path

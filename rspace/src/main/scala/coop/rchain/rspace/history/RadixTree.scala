@@ -203,7 +203,7 @@ object RadixTree {
   /**
     * Data for return
     */
-  case class ExportData(
+  final case class ExportData(
       nP: Seq[ByteVector], //nodePrefixes
       nK: Seq[ByteVector], //nodeKVDBKeys
       nV: Seq[ByteVector], //nodeKVDBValues
@@ -214,7 +214,7 @@ object RadixTree {
   /**
     * Which data is need to export?
     */
-  case class ExportDataSettings(
+  final case class ExportDataSettings(
       expNP: Boolean,
       expNK: Boolean,
       expNV: Boolean,
