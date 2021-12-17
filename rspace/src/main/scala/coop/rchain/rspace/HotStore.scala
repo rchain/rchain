@@ -4,7 +4,6 @@ import cats.syntax.all._
 import cats.effect._
 import cats.effect.concurrent.{Deferred, Ref}
 import coop.rchain.rspace.history.HistoryReaderBase
-import coop.rchain.shared.MapOps._
 import coop.rchain.rspace.internal._
 
 import scala.collection.immutable.Map
@@ -309,8 +308,10 @@ private class InMemHotStore[F[_]: Concurrent, C, P, A, K](
       cache         <- hotStoreState.get
       data          = cache.data.map(_.leftMap(Seq(_)))
       continuations = cache.continuations ++ cache.installedContinuations.mapValues(Seq(_))
-      zipped        = zip(data, continuations, Seq.empty[Datum[A]], Seq.empty[WaitingContinuation[P, K]])
-      mapped        = zipped.mapValues { case (d, k) => Row(d, k) }
+      mapped = data.padZip(continuations).mapValues {
+        case (d, k) =>
+          Row(d.getOrElse(Seq.empty[Datum[A]]), k.getOrElse(Seq.empty[WaitingContinuation[P, K]]))
+      }
     } yield mapped.filter { case (_, v) => !(v.data.isEmpty && v.wks.isEmpty) }
 
   private def getContFromHistoryStore(channels: Seq[C]) =
