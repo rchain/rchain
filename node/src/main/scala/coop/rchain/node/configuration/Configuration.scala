@@ -146,4 +146,13 @@ object Configuration {
   // TODO do we need this constraint? Let user set any but warn?
   // private val MaxMessageSizeMinimumValue: Int = 256 * 1024 // 0.25 MB
   // private val MaxMessageSizeMaximumValue: Int = 10 * 1024 * 1024
+
+  def defaultConf(dataDir: Path = Paths.get(".")) =
+    ConfigSource
+      .resources("defaults.conf")
+      .withFallback(
+        ConfigSource.string(
+          s"default-data-dir = $dataDir"
+        )
+      )
 }

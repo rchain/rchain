@@ -131,12 +131,6 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     descr = s"Remote gRPC host for client calls. Defaults to 40401."
   )
 
-  val grpcInternalPort = opt[Int](
-    short = 'i',
-    default = Some(40402),
-    descr = s"Port for internal gRPC API. Defaults to 40402"
-  )
-
   val grpcMaxRecvMessageSize = opt[Int](
     short = 's',
     default = Some(16 * 1024 * 1024),

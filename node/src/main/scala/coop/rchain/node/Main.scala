@@ -109,7 +109,7 @@ object Main {
     implicit val replServiceClient: GrpcReplClient[F] =
       new GrpcReplClient[F](
         options.grpcHost(),
-        options.grpcInternalPort(),
+        replPort(options),
         options.grpcMaxRecvMessageSize()
       )
     implicit val deployServiceClient: GrpcDeployService[F] =
@@ -181,6 +181,16 @@ object Main {
       }
     ) >> program
   }
+
+  /**
+    * If --grpc-port option specified, returns it's value. Otherwise returns port-grpc-internal default value
+    * @param options command line options
+    * @return port for repl/eval mode
+    */
+  private def replPort(options: commandline.Options): Int =
+    if (options.grpcPort.isSupplied) options.grpcPort()
+    else
+      Configuration.defaultConf().at("api-server.port-grpc-internal").load[Int].getOrElse(40402)
 
   private def subcommand(options: commandline.Options): Command =
     options.subcommand match {
