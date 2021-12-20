@@ -91,6 +91,7 @@ object ConfigMapper {
       add("casper.genesis-ceremony.approve-interval", run.approveInterval)
       add("casper.genesis-ceremony.approve-duration", run.approveDuration) //TODO remove
       add("casper.genesis-ceremony.autogen-shard-size", run.autogenShardSize)
+      add("casper.min-phlo-price", run.minPhloPrice)
 
       add("api-server.port-grpc-external", run.apiPortGrpcExternal)
       add("api-server.port-grpc-internal", run.apiPortGrpcInternal)

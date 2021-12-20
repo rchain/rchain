@@ -531,6 +531,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       descr = "Private key for dummy deploys."
     )
 
+    // Similar value `casper.min-phlo-price` defined in defaults.conf and should be moved to Scala based config
+    val minPhloPrice = opt[Long](
+      descr = "MinPhloPrice",
+      default = Some(1),
+      validate = _ >= 0
+    )
+
   }
   addSubcommand(run)
 
