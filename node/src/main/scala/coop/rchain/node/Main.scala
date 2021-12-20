@@ -124,7 +124,7 @@ object Main {
     implicit val proposeServiceClient: GrpcProposeService[F] =
       new GrpcProposeService[F](
         options.grpcHost(),
-        options.grpcPort(),
+        grpcPort,
         options.grpcMaxRecvMessageSize()
       )
 
