@@ -5,6 +5,7 @@ import cats.syntax.all._
 import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import coop.rchain.rspace.serializers.ScodecSerialize.{
   codecPointerBlock,
   codecSkip,
@@ -348,7 +349,7 @@ object HistoryMergingInstances {
                   .emits(
                     partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
                   )
-                  .parJoin(1)
+                  .parJoinProcBounded
                   .compile
                   .toList
         modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
@@ -533,6 +534,18 @@ object HistoryMergingInstances {
     def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = findPath(key).map {
       case (trie, path) => (trie, path.nodes)
     }
+
+    def read(key: ByteVector): F[Option[ByteVector]] =
+      find(key.toArray.toList).flatMap {
+        case (trie, _) =>
+          trie match {
+            case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+            case EmptyPointer          => Applicative[F].pure(None)
+            case _ =>
+              Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
+          }
+      }
 
     def read(key: ByteVector): F[Option[ByteVector]] =
       find(key.toArray.toList).flatMap {

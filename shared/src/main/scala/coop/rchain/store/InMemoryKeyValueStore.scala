@@ -1,11 +1,9 @@
 package coop.rchain.store
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
-import cats.syntax.all._
 import scodec.bits.ByteVector
 
+import java.nio.ByteBuffer
 import scala.collection.concurrent.TrieMap
 
 final case class InMemoryKeyValueStore[F[_]: Sync]() extends KeyValueStore[F] {
@@ -34,4 +32,13 @@ final case class InMemoryKeyValueStore[F[_]: Sync]() extends KeyValueStore[F] {
       val iter = state.toIterator.map { case (k, v) => (k, v.toByteBuffer) }
       f(iter)
     }
+
+  def clear(): Unit = state.clear()
+
+  def numRecords(): Int = state.size
+
+  def sizeBytes(): Long =
+    state.toArray.map { el =>
+      el._1.capacity() + el._2.size
+    }.sum
 }

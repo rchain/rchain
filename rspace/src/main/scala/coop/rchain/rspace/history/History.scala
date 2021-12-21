@@ -44,6 +44,11 @@ trait History[F[_]] extends HistorySelf[F] {
     * Returns History with specified root pointer
     */
   def reset(root: Blake2b256Hash): F[HistoryF]
+
+  /**
+    * Generic find
+    */
+  def read(key: ByteVector): F[Option[ByteVector]]
 }
 
 /**
