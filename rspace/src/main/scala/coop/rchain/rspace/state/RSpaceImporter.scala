@@ -3,10 +3,6 @@ package coop.rchain.rspace.state
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history._
-import coop.rchain.rspace.serializers.ScodecSerialize._
-import coop.rchain.shared.AttemptOps.{RichAttempt, _}
-import coop.rchain.shared.Serialize
 import coop.rchain.state.TrieImporter
 import fs2.Stream
 import scodec.bits.ByteVector
@@ -37,12 +33,9 @@ object RSpaceImporter {
     import cats.instances.list._
 
     val receivedHistorySize = historyItems.size
-    val receivedDataSize    = dataItems.size
     val isEnd               = receivedHistorySize < chunkSize
 
     def raiseError[T](msg: String): F[T] = new StateValidationError(msg).raiseError[F, T]
-
-    def decodeTrie(bytes: ByteVector): Trie = codecTrie.decodeValue(bytes.bits).get
 
     // Validate history items size
     def validateHistorySize[T]: F[Unit] = {
@@ -52,26 +45,17 @@ object RSpaceImporter {
       ).whenA(!sizeIsValid)
     }
 
-    // Validate data items size
-    def validateDataSize[T]: F[Unit] = {
-      val sizeIsValid = receivedDataSize <= chunkSize | isEnd
-      raiseError[T](
-        s"Input size of data items $receivedDataSize is greater then expected chunk size $chunkSize."
-      ).whenA(!sizeIsValid)
-    }
-
-    // Tries decoded from received items
-    // - validate trie hash to match decoded trie hash
-    def tries: F[List[(Blake2b256Hash, Trie)]] = historyItems.toList traverse {
-      case (hash, trieBytes) =>
-        val trie     = decodeTrie(trieBytes)
-        val trieHash = Blake2b256Hash.create(trieBytes)
-        if (hash == trieHash) (hash, trie).pure[F]
-        else
-          raiseError(
-            s"Trie hash does not match decoded trie, key: ${hash.bytes.toHex}, decoded: ${trieHash.bytes.toHex}."
-          )
-    }
+    // Validate history hashes
+    def validateHistoryItemsHashes: F[List[(ByteVector, ByteVector)]] =
+      historyItems.toList traverse {
+        case (hash, trieBytes) =>
+          val trieHash = Blake2b256Hash.create(trieBytes)
+          if (hash == trieHash) (trieHash.bytes, trieBytes).pure[F]
+          else
+            raiseError(
+              s"Trie hash does not match decoded trie, key: ${hash.bytes.toHex}, decoded: ${trieHash.bytes.toHex}."
+            )
+      }
 
     // Validate data hashes
     def validateDataItemsHashes =
@@ -92,24 +76,22 @@ object RSpaceImporter {
       )
 
     // Find Trie by hash. Trie must be found in received history items or in previously imported items.
-    def getTrie(st: Map[Blake2b256Hash, Trie])(hash: Blake2b256Hash) = {
+    def getTrie(st: Map[ByteVector, ByteVector])(hash: ByteVector) = {
       val trieOpt = st.get(hash)
       trieOpt.fold {
         for {
-          bytesOpt <- getFromHistory(hash)
-          bytes    <- bytesOpt.liftTo(trieHashNotFoundError(hash))
-          trie     = decodeTrie(bytes)
-        } yield trie
-      }(_.pure[F])
+          bytesOpt <- getFromHistory(Blake2b256Hash.fromByteArray(hash.toArray))
+          _        <- bytesOpt.liftTo(trieHashNotFoundError(Blake2b256Hash.fromByteArray(hash.toArray)))
+        } yield bytesOpt
+      }(_.some.pure[F])
     }
 
     for {
       // Validate chunk size.
       _ <- validateHistorySize
-      _ <- validateDataSize
 
-      // Decode tries from received history items.
-      trieMap <- tries map (_.toMap)
+      // Validate tries from received history items.
+      trieMap <- validateHistoryItemsHashes map (_.toMap)
 
       // Traverse trie and extract nodes / the same as in export. Nodes must match hashed keys.
       nodes <- RSpaceExporter.traverseTrie(startPath, skip, chunkSize, getTrie(trieMap))

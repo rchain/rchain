@@ -5,6 +5,7 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.metrics.Span
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -72,8 +73,9 @@ object HistoryRepositoryInstances {
     for {
       currentRoot <- rootsRepository.currentRoot()
       // History store
-      historyStore = HistoryStoreInstances.historyStore[F](historyKeyValueStore)
-      history      = HistoryInstances.merging(currentRoot, historyStore)
+      historyStore = new RadixStore[F](historyKeyValueStore)
+      history      <- RadixHistory(currentRoot, historyStore)
+
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)
