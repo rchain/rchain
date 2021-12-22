@@ -79,7 +79,7 @@ object BlockAPI {
 
     // Check if deploy has minimum phlo price
     val minPriceError = new RuntimeException(
-      s"Phlo price is less than minimum price $minPhloPrice."
+      s"Phlo price ${d.data.phloPrice} is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
