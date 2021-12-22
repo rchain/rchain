@@ -80,16 +80,16 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       val engine                          = new EngineWithCasper[Effect](node.casperEff)
       Cell.mvarCell[Effect, Engine[Effect]](engine).flatMap { implicit engineCell =>
         val minPhloPrice = 10.toLong
+        val phloPrice    = 1.toLong
         for {
-          deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = 1)
-          _ <- BlockAPI.deploy[Effect](deployData, None, minPhloPrice = minPhloPrice).handleError {
-                exception =>
-                  assert(
-                    exception.getMessage == s"Phlo price is less than minimum price $minPhloPrice."
-                  )
-                  Right("Ok")
-              }
-        } yield ()
+          deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
+          err        <- BlockAPI.deploy[Effect](deployData, None, minPhloPrice = minPhloPrice).attempt
+        } yield {
+          err.isLeft shouldBe true
+          val ex = err.left.get
+          ex shouldBe a[RuntimeException]
+          ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
+        }
       }
     }
   }
