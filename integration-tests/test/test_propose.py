@@ -96,6 +96,6 @@ def test_deploy_phlo_price_too_small(command_line_options: CommandLineOptions, d
         shutil.copyfile(f'resources/{contract}', os.path.join(bootstrap.local_deploy_dir, contract))
         container_contract_file_path = os.path.join(bootstrap.remote_deploy_dir, contract)
 
-        with pytest.raises(RClientException) as ex:
+        with pytest.raises(RClientException,
+                           match=f'Phlo price {deploy_phlo_price} is less than minimum price {min_phlo_price}.'):
             bootstrap.deploy(container_contract_file_path, USER_KEY, 100000000, deploy_phlo_price)
-            assert ex == f'Phlo price is less than minimum price {min_phlo_price}.'
