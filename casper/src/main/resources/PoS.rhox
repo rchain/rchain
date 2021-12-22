@@ -125,21 +125,68 @@ in {
           pickActiveValidators!($$initialBonds$$, {}, *initialActiveCh) |
           for (@initialActive     <- initialActiveCh; 
                @(true, _) <- moveInitialBondCh) {
-            new stateCh, pendingRewardsInitializedCh in {
+            new stateCh, pendingRewardsInitializedCh, rewardsInfo, totalBonds, totalWithdraw in {
               // Initializes PoS state structure.
               stateCh!({
                 // Map[PublicKey, Int] - each validator stake
                 "allBonds"        : $$initialBonds$$,
                 // List[PublicKey]     - the active validators
                 "activeValidators": initialActive,
-                // Map[PublicKey, Int] - are moved from pendingRewards on epoch change or slashing
-                "committedRewards": {},
                 // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
                 //                       This begins at the start of the next epoch + quarantineLength.
                 "withdrawers"     : {},
+                // Map[PublicKey, (Int, Int)] - New Pending bonded validator, these validators doesn't get reward until next epoch
+                //                              Value(Int, Int) represents (original bond, reward) 
+                "pendingBonds"    : {},
                 "randomImages"    : {},
                 "randomNumbers"   : {},
               }) |
+              contract rewardsInfo(retCh) = {
+                new posBalanceCh, totalBondCh, withdrawCh in {
+                  @posVault!("balance", *posBalanceCh) |
+                  totalBonds!(*totalBondCh) |
+                  totalWithdraw!(*withdrawCh) |
+                  for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @withdrawTotal <- withdrawCh){
+                    for (@state <<- stateCh) {
+                      retCh!((posBalance , totalBond , withdrawTotal, state.get("allBonds"), state.get("withdrawers")))
+                    }
+                  }
+                }
+              } |
+              contract totalBonds(returnCh) = {
+                new computeSum, computeDelta in {
+                  for (@state <<- stateCh){
+                    @ListOps!("fold", state.get("allBonds").toList(), 0, *computeSum, *returnCh) |
+                    contract computeSum(@(pk, bondAmount), @acc, resultCh) = {
+                      resultCh!(acc + bondAmount)
+                    }
+                  }
+                }
+              } |
+              contract totalWithdraw(returnCh) = {
+                new computeSum, computeDelta in {
+                  for (@state <<- stateCh){
+                    @ListOps!("fold", state.get("withdrawers").toList(), 0, *computeSum, *returnCh) |
+                    contract computeSum(@(pk, withdrawAmount), @acc, resultCh) = {
+                      resultCh!(acc + withdrawAmount)
+                    }
+                  }
+                }
+              } |
+              contract PoS(@"getRewards", returnCh) = {
+                new rewardCh, computeReward in {
+                  rewardsInfo!(*rewardCh)|
+                  new stdlog(`rho:io:stdlog`) in {
+                    for (@(posBalance, totalBond, withdrawTotal, bondsMap, withdrawMap) <- rewardCh){
+                      @ListOps!("fold", bondsMap.toList(), {}, *computeReward, *returnCh) |
+                      contract computeReward(@(pk, bonds),@acc,  outCh) = {
+                        //  someAmount / minimumBond to reduce the possibility on overflow long
+                        outCh!(acc.set(pk, (posBalance - totalBond - withdrawTotal) * (bonds / $$minimumBond$$) / (totalBond / $$minimumBond$$)))
+                      }
+                    }
+                  }
+                }
+              } |
               // Peeks at bonds map.
               contract PoS(@"getBonds", returnCh) = {
                 for (@state <<- stateCh) {
@@ -162,13 +209,6 @@ in {
               contract PoS(@"getActiveValidatorVaults", returnCh) = {
                 for (@vaults <<- perActiveValidatorPosVaultsCh) {
                   returnCh!(vaults)
-                }
-              } |
-              // Peeks at the accumulated rewards map, i.e. "committed rewards".
-              // The returned map contains only the rewards committed up to the last closeBlock.
-              contract PoS(@"getRewards", returnCh) = {
-                for (@state <<- stateCh) {
-                  returnCh!(state.get("committedRewards"))
                 }
               } |
               // Exposes Coop multisig vault on returnCh.
@@ -597,23 +637,6 @@ in {
               for (@(true, fromVault) <- vaultCh) {
                 // Transfers from deployer to PoS vault
                 @fromVault!("transfer", toTargetAddress, amount, authKey, *returnCh)
-              }
-            }
-          }
-        } |
-        // Stake-weighted distribution of final deployment cost for bookkeeping in validator state.
-        contract distributeRewards(@amount, @activeValidators, @bonds, returnCh) = {
-          new computeSum, computeDelta, totalActiveStakeCh in {
-            @ListOps!("fold", activeValidators, 0, *computeSum, *totalActiveStakeCh) |
-            contract computeSum(@pk, @acc, resultCh) = {
-              resultCh!(acc + bonds.get(pk))
-            } |
-            // Computes the rewards delta for each active validator.
-            for (@totalActiveStake <- totalActiveStakeCh) {
-              @ListOps!("fold", activeValidators, {}, *computeDelta, *returnCh) |
-              // Stake-weighted rewards delta map.
-              contract computeDelta(@pk, @acc, resultCh) = {
-                resultCh!(acc.set(pk, (amount * bonds.get(pk)) / totalActiveStake))
               }
             }
           }

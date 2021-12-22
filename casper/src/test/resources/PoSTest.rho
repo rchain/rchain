@@ -101,7 +101,6 @@ match (
                 rhoSpec!("assertMany",
                   [
                     (bonds.size() >= 0, "some bonds map should be received"),
-                    ((0, "==", rewards.size()), "the rewards map is initially empty"),
                     ((true, "== <-", *rewardsZeroCh), "no rewards yet")
                   ],
                   *ackCh
