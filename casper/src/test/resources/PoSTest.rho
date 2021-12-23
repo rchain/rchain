@@ -709,7 +709,7 @@ match (
                 @PoS!("getActiveValidators", *activeValidatorsCh) |
                 for (@activeValidators <- activeValidatorsCh){
                   // For testing we need one of the active validators to be the block sender
-                  setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
+                  setBlockData!("sender", activeValidators.toList().nth(0), *blockDataSet) |
                   for (_ <- blockDataSet) {
                     ackCh!(ack)
                   }
@@ -793,7 +793,7 @@ match (
                       @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
                       for (@(true, _) <- chargeCh;
                            @(true, _) <- refundCh) {
-                        match activeValidators.nth(3) {
+                        match activeValidators.toList().nth(3) {
                           slashedValidator => {
                             computeHash!(slashedValidator, *hashCh) |
                             for (@hash <- hashCh) {

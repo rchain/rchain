@@ -130,7 +130,7 @@ in {
               stateCh!({
                 // Map[PublicKey, Int] - each validator stake
                 "allBonds"        : $$initialBonds$$,
-                // List[PublicKey]     - the active validators
+                // Set[PublicKey]     - the active validators
                 "activeValidators": initialActive,
                 // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends
                 //                       This begins at the start of the next epoch + quarantineLength.
@@ -408,7 +408,7 @@ in {
                                               // Moves slashed validator to withdrawers map with no quarantine period.
                                               stateUpdateCh!({
                                                 "allBonds"        : state.get("allBonds").set(validator, 0),
-                                                "activeValidators": state.get("activeValidators"),
+                                                "activeValidators": state.get("activeValidators").delete(validator),
                                                 "withdrawers"     : state.get("withdrawers")
                                                                           .set(validator,
                                                                             $$quarantineLength$$ + $$epochLength$$ * (1 + blockNumber / $$epochLength$$)),
@@ -681,7 +681,7 @@ in {
             @ListOps!("map", availableValidators, *fst, *pksCh) |
             for (@pks <- pksCh) {
               // TODO: Randomly select 100 active validators once we have on-chain randomness
-              returnCh!(pks.take($$numberOfActiveValidators$$))
+              returnCh!(pks.take($$numberOfActiveValidators$$).toSet())
             }
           }
         }
