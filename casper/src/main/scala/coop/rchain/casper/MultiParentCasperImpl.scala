@@ -303,8 +303,16 @@ class MultiParentCasperImpl[F[_]
 
         // This validation is only to punish validator which accepted lower price deploys.
         // And this can happen if not configured correctly.
-        // _      <- EitherT(Validate.phloPrice(b, casperShardConf.minPhloPrice))
-        // _      <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+        minPhloPrice = casperShardConf.minPhloPrice
+        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
+              case _ =>
+                val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+                )
+                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                warnToLog *> asValid
+            }
+        _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
 
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
