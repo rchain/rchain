@@ -22,7 +22,8 @@ final case class CasperConf(
     heightConstraintThreshold: Long,
     roundRobinDispatcher: RoundRobinDispatcher,
     genesisBlockData: GenesisBlockData,
-    genesisCeremony: GenesisCeremonyConf
+    genesisCeremony: GenesisCeremonyConf,
+    minPhloPrice: Long
 )
 
 final case class GenesisBlockData(

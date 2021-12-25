@@ -278,7 +278,8 @@ object Setup {
           else none[ProposeFunction[F]],
           blockReportAPI,
           conf.protocolServer.networkId,
-          conf.casper.shardName
+          conf.casper.shardName,
+          conf.casper.minPhloPrice
         )
       }
       reportingRoutes = {
@@ -324,7 +325,8 @@ object Setup {
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
           conf.protocolServer.networkId,
-          conf.casper.shardName
+          conf.casper.shardName,
+          conf.casper.minPhloPrice
         )
       }
       adminWebApi = {

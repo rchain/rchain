@@ -4,6 +4,7 @@ import shutil
 from typing import Generator
 from contextlib import contextmanager
 import pytest
+from rchain.client import RClientException
 from rchain.crypto import PrivateKey
 from docker.client import DockerClient
 
@@ -37,13 +38,13 @@ FIX_COST_RHO_CONTRACTS = {
 }
 
 @contextmanager
-def start_node(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> Generator[Node, None, None]:
+def start_node(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random, min_phlo_price: int = 1) -> Generator[Node, None, None]:
     genesis_vault = {
         USER_KEY: 5000000000
     }
 
     with testing_context(command_line_options, random_generator, docker_client, wallets_dict=genesis_vault) as context, \
-            started_bootstrap_with_network(context=context) as bootstrap:
+            started_bootstrap_with_network(context=context, min_phlo_price=min_phlo_price) as bootstrap:
             wait_for_approved_block_received_handler_state(context, bootstrap)
             yield bootstrap
 
@@ -85,3 +86,16 @@ def test_deploy_invalid_contract(command_line_options: CommandLineOptions, docke
         block_hash = bootstrap.propose()
         block_info = bootstrap.get_block(block_hash)
         assert len(block_info.deploys) == 1
+
+
+def test_deploy_phlo_price_too_small(command_line_options: CommandLineOptions, docker_client: DockerClient, random_generator: Random) -> None:
+    deploy_phlo_price = 1  # less than min_phlo_price
+    min_phlo_price = 10
+    with start_node(command_line_options, docker_client, random_generator, min_phlo_price=min_phlo_price) as bootstrap:
+        contract = 'contract.rho'
+        shutil.copyfile(f'resources/{contract}', os.path.join(bootstrap.local_deploy_dir, contract))
+        container_contract_file_path = os.path.join(bootstrap.remote_deploy_dir, contract)
+
+        with pytest.raises(RClientException,
+                           match=f'Phlo price {deploy_phlo_price} is less than minimum price {min_phlo_price}.'):
+            bootstrap.deploy(container_contract_file_path, USER_KEY, 100000000, deploy_phlo_price)

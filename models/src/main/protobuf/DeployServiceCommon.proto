@@ -228,6 +228,7 @@ message Status {
   string shardId      = 4;
   int32 peers         = 5;
   int32 nodes         = 6;
+  int64 minPhloPrice  = 7;
 }
 
 message VersionInfo {

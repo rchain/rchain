@@ -34,7 +34,8 @@ object DeployGrpcServiceV1 {
       triggerProposeF: Option[ProposeFunction[F]],
       devMode: Boolean = false,
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Long
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -86,7 +87,7 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, triggerProposeF)) { r =>
+              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice)) { r =>
                 import DeployResponse.Message
                 import DeployResponse.Message._
                 DeployResponse(r.fold[Message](Error, Result))
@@ -307,7 +308,8 @@ object DeployGrpcServiceV1 {
             networkId,
             shardId,
             peers.length,
-            nodes.length
+            nodes.length,
+            minPhloPrice
           )
           response = StatusResponse().withStatus(status)
         } yield response).toTask

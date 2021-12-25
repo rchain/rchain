@@ -511,7 +511,8 @@ def make_bootstrap_node(
     drop_peer_after_retries: int = 0,
     number_of_active_validators: int = 10,
     epoch_length: int = 10000,
-    quarantine_length: int = 50000
+    quarantine_length: int = 50000,
+    min_phlo_price: int = 1
 ) -> Node:
 
     container_name = make_bootstrap_name(network)
@@ -535,7 +536,8 @@ def make_bootstrap_node(
         "--frrd-drop-peer-after-retries":        drop_peer_after_retries,
         "--number-of-active-validators":    number_of_active_validators,
         "--epoch-length":                   epoch_length,
-        "--quarantine-length":              quarantine_length
+        "--quarantine-length":              quarantine_length,
+        "--min-phlo-price":                 min_phlo_price
     }
 
     if cli_flags is not None:
@@ -741,7 +743,8 @@ def started_bootstrap(
     extra_volumes: Optional[List[str]] = None,
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
-    quarantine_length: int = 50000
+    quarantine_length: int = 50000,
+    min_phlo_price: int = 1
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -755,7 +758,8 @@ def started_bootstrap(
         extra_volumes=extra_volumes,
         synchrony_constraint_threshold=synchrony_constraint_threshold,
         epoch_length=epoch_length,
-        quarantine_length=quarantine_length
+        quarantine_length=quarantine_length,
+        min_phlo_price=min_phlo_price
     )
     try:
         wait_for_node_started(context, bootstrap_node)
@@ -772,6 +776,7 @@ def started_bootstrap_with_network(
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
+    min_phlo_price: int = 1,
     extra_volumes: Optional[List[str]] = None,
     wait_for_approved_block: bool = False,
 ) -> Generator[Node, None, None]:
@@ -784,7 +789,8 @@ def started_bootstrap_with_network(
                 synchrony_constraint_threshold=synchrony_constraint_threshold,
                 extra_volumes=extra_volumes,
                 epoch_length=epoch_length,
-                quarantine_length=quarantine_length
+                quarantine_length=quarantine_length,
+                min_phlo_price=min_phlo_price
         ) as bootstrap:
             if wait_for_approved_block:
                 wait_for_approved_block_received_handler_state(context, bootstrap)
