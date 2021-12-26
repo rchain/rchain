@@ -267,7 +267,7 @@ in {
                     for (@currentEpochReward <- currentEpochRewardCh) {
                       @ListOps!("fold", currentEpochReward.toList(), state.get("comittedRewards"), *accumulateReward, *returnCh) |
                       contract accumulateReward(@(pk, reward), @acc, outCh) = {
-                        outCh!(acc.set(pk, acc.getOrElse(pk, 0)+ reward))
+                        outCh!(acc.set(pk, acc.getOrElse(pk, 0) + reward))
                       }
                     }
                   }
@@ -537,12 +537,12 @@ in {
                                       movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
                                       for (@newMovedPendingState <- movePendingWithdrawCh){
                                         stdlog!(("new Moved PendingState", newMovedPendingState)) |
-                                        removeQuarantinedWithdrawers!(blockNumber, newCommittedState, *removeQuarantinedCh) |
+                                        removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
                                         for (@newRemovedQuantinueState <- removeQuarantinedCh) {
                                           stdlog!(("new Removed QuantinueState", newRemovedQuantinueState)) |
                                           pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
                                           for (@newValidators <- newValidatorsCh) {
-                                            stateUpdateCh!(newMovedPendingState.set("activeValidators", newValidators), (true, Nil))
+                                            stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
                                           }
                                         }
                                       }
@@ -564,7 +564,7 @@ in {
                                     contract accumulate(@(pk, reward), @updatedState, resultCh) = {
                                       stdlog!(("accumulate logs", updatedState, pk, reward))|
                                       resultCh!(updatedState.set("comittedRewards", 
-                                                                  updatedState.get("comittedRewards").set(pk, updatedState.getOrElse(pk, 0) + reward)))
+                                                                  updatedState.get("comittedRewards").set(pk, updatedState.get("comittedRewards").getOrElse(pk, 0) + reward)))
                                     }
                                   }
                                 } |
@@ -597,8 +597,8 @@ in {
                                       @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
                                       contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
                                         new payReturnCh in {
-                                          stdlog!(("aremove quantinue", updatedState, pk, bonds, quantine))|
-                                          payWithdrawer!((pk, updatedState.get("comittedRewards").getOrElse(pk, 0)), *payReturnCh) | 
+                                          stdlog!(("remove quantinue", updatedState, pk, bonds, quantine))|
+                                          payWithdrawer!((pk, bonds + updatedState.get("comittedRewards").getOrElse(pk, 0)), *payReturnCh) | 
                                           for (@(true, _) <- payReturnCh) {
                                             resultCh!(updatedState
                                                       .set("comittedRewards", updatedState.get("comittedRewards").delete(pk))
@@ -609,7 +609,8 @@ in {
                                       }
                                     } |
                                     // Check whether quarantine period is finished.
-                                    contract isQuarantineFinished(@(_, (bonds, blockNumber)), resultCh) = {
+                                    contract isQuarantineFinished(@(pk, (bonds, blockNumber)), resultCh) = {
+                                      stdlog!(("isquantinue", pk, blockNumber, currentBlockNumber )) |
                                       resultCh!(currentBlockNumber >= blockNumber)
                                     }
                                   }
