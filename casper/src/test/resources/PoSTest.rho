@@ -52,7 +52,7 @@ match (
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
               ("closeBlock finishes successfully", *test_close_block_finishes),
-              // ("bonding success", *test_bonding_succeeds),
+              ("bonding success", *test_bonding_succeeds),
               // ("withdraw succeeds", *test_withdraw_succeeds),
               // ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
@@ -683,23 +683,7 @@ match (
           } |
 
           contract getPosBalance(retCh) = {
-            new accBalances, vaultsCh, posVaultBalanceCh in {
-              contract accBalances(@(_, _, vault), @acc, resultCh) = {
-                new balanceCh in {
-                  @vault!("balance", *balanceCh) |
-                  for (@balance <- balanceCh) {
-                    resultCh!(acc + balance)
-                  }
-                }
-              } |
-              @posVault!("balance", *posVaultBalanceCh) |
-              for (@posVaultBalance <- posVaultBalanceCh) {
-                @PoS!("getActiveValidatorVaults", *vaultsCh) |
-                for (@vaults <- vaultsCh) {
-                  @ListOps!("fold", vaults, posVaultBalance, *accBalances, *retCh)
-                }
-              }
-            }
+              @posVault!("balance", *retCh) 
           } |
 
           contract closeBlock(ackCh) = {
