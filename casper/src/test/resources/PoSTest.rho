@@ -61,7 +61,7 @@ match (
               ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
-              // ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
+              ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
               // ("commited random matches its image", *test_commit_random),
               // ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
             ]
@@ -683,7 +683,7 @@ match (
                         for(@finalRewards <- finalRewardsCh) {
                           rhoSpec!("assertMany",
                             [
-                              ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
+                              ((0, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
                             ],
                             *ackCh
                           )
