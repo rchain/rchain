@@ -199,7 +199,7 @@ in {
                   for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @activeBonds <- totalActiveBondCh; 
                        @totalWithdraw <- totalWithdrawCh; @totalCommittedRewards <- committedRewardsCh){
                     for (@state <<- stateCh) {
-                      retCh!((posBalance , totalBond , activeBonds, totalWithdraw, totalCommittedRewards, state.get("allBonds")))
+                      retCh!((posBalance , totalBond , activeBonds, totalWithdraw, totalCommittedRewards, state.get("allBonds"), state.get("activeValidators")))
                     }
                   }
                 }
@@ -251,11 +251,16 @@ in {
               contract PoS(@"getCurrentEpochRewards", returnCh) = {
                 new rewardCh, computeReward in {
                   rewardsInfo!(*rewardCh)|
-                  for (@(posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, bondsMap) <- rewardCh){
+                  for (@(posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, bondsMap, activeValidatorsSet) <- rewardCh){
                     @ListOps!("fold", bondsMap.toList(), {}, *computeReward, *returnCh) |
-                    contract computeReward(@(pk, bonds),@acc,  outCh) = {
+                    stdlog!(("current total rewards", posBalance , totalBond, totalWithdraw, totalCommittedRewards, posBalance - totalBond - totalWithdraw - totalCommittedRewards)) |
+                    contract computeReward(@(pk, bonds), @acc,  outCh) = {
                       //  someAmount / minimumBond to reduce the possibility on overflow long
-                      outCh!(acc.set(pk, (posBalance - totalBond - totalWithdraw - totalCommittedRewards) * (bonds / $$minimumBond$$) / (activeBonds / $$minimumBond$$)))
+                      if (activeValidatorsSet.contains(pk)){
+                        outCh!(acc.set(pk, (posBalance - totalBond - totalWithdraw - totalCommittedRewards) * (bonds / $$minimumBond$$) / (activeBonds / $$minimumBond$$)))
+                      } else {
+                        outCh!(acc.set(pk, 0))
+                      }
                     }
                   }
                 }

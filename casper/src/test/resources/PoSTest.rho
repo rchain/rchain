@@ -57,7 +57,7 @@ match (
               ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
-              // ("payment works", *test_pay_succeeds),
+              ("payment works", *test_pay_succeeds),
               // ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
@@ -438,7 +438,7 @@ match (
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
-                isPositive, allRewardsPositiveCh
+                isPositive, allRewardsPositiveCh, initialBondsCh, initialActiveCh
             in {
               prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
@@ -453,9 +453,14 @@ match (
                         getPosBalance!(*initialPosBalanceCh) |
                         @userVault!("balance", *initialUser1BalanceCh) |
                         @PoS!("getRewards", *initialRewardsCh) |
+                        @PoS!("getBonds", *initialBondsCh) |
+                        @PoS!("getActiveValidators", *initialActiveCh) |
                         for (@initialPosBalance   <- initialPosBalanceCh;
                              @initialUser1Balance <- initialUser1BalanceCh;
-                             @initialRewards      <- initialRewardsCh) {
+                             @initialRewards      <- initialRewardsCh;
+                             @initialBonds <- initialBondsCh;
+                             @initialActives <- initialActiveCh) {
+                          stdlog!("info", ("bonding distribution and actives before prechard and refund", initialBonds, initialActives, initialRewards)) |
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *retCh0) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *retCh1) |
                           for (@(true, _) <- retCh0;
@@ -468,6 +473,7 @@ match (
                               for (@finalPosBalance   <- finalPosBalanceCh;
                                    @finalUser1Balance <- finalUser1BalanceCh;
                                    @finalRewards      <- finalRewardsCh) {
+                                stdlog!("info", ("Final rewards", finalRewards)) |
                                 @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                                 contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
                                   resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
@@ -488,7 +494,7 @@ match (
                                       //TODO: active validator stake-weighted reward
                                       ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                       //TODO use arbitrary precision numbers instead of long ints
-                                      ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                      ((98, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                       ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
                                     ],
                                     *ackCh
