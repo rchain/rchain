@@ -283,12 +283,6 @@ in {
                   returnCh!(state.get("withdrawers"))
                 }
               } |
-              // Peeks at active validator vaults.
-              contract PoS(@"getActiveValidatorVaults", returnCh) = {
-                for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                  returnCh!(vaults)
-                }
-              } |
               // Exposes Coop multisig vault on returnCh.
               contract PoS(@"getCoopVault", returnCh) = {
                 for (@(_, coopVault) <<- coopVaultCh) {
@@ -438,7 +432,7 @@ in {
                   }
                 }
               } |
-              new accumulateDeposits, commitRewards, moveFunds in {
+              new commitRewards, moveFunds in {
                 // Private method which transfers all of a validator's rewards + bond to the Coop vault.
                 // Slash expects (Boolean, Either[Nil, String]) on returnCh.
                 contract PoS(@"slash", @deployerId, @blockHash, @sysAuthToken, returnCh) = {
@@ -635,13 +629,7 @@ in {
                       }
                     }
                   }
-                } |
-                // Transfers all accumulated funds to the PoS vault.
-                contract accumulateDeposits(returnCh) = {
-                  for (@vaults <<- perActiveValidatorPosVaultsCh) {
-                    @ListOps!("parMap", vaults, *moveFunds, *returnCh)
-                  }
-                }
+                } 
               } |
               //
               contract PoS(@"commitRandomImage", @deployerId, @hash, ackCh) = {
