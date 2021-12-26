@@ -488,13 +488,15 @@ in {
                                           posAuthKey,
                                           *transferDoneCh
                                         ) |
-                                        for (_ <- transferDoneCh) {
+                                        for (@(true, _) <- transferDoneCh) {
                                           // Sets slashed validator's committed rewards and bond to 0 in state.
                                           // Moves slashed validator to withdrawers map with no quarantine period.
                                           stateUpdateCh!({
                                             "allBonds"        : state.get("allBonds").set(validator, 0),
                                             "activeValidators": state.get("activeValidators").delete(validator),
+                                            "comittedRewards" : state.get("comittedRewards").delete(validator), 
                                             "withdrawers"     : state.get("withdrawers"),
+                                            "pendingWithdrawers": state.get("pendingWithdrawers"),
                                             "randomImages"    : state.get("randomImages"),
                                             "randomNumbers"   : state.get("randomNumbers")
                                           },

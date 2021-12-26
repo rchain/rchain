@@ -64,7 +64,7 @@ match (
               ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
               // TODO we should reimplement the random test in the future when it is available
               ("commited random matches its image", *test_commit_random),
-              // ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
+              ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
             ]
           ) |
 
@@ -818,13 +818,13 @@ match (
                                        @finalRewards     <- finalRewardsCh;
                                        @withdrawers      <- withdrawersCh;
                                        @finalCoopBalance <- finalCoopBalanceCh) {
+                                    stdlog!("info", (initialBonds, finalBonds,slashedValidator)) |
                                     rhoSpec!("assertMany",
                                       [
                                         ((finalBonds, "==", initialBonds.set(slashedValidator, 0)), "Slashed validator's bond is reduced to 0"),
                                         ((0, "==", finalRewards.get(slashedValidator)), "Slashed validator's rewards are reduced to 0"),
-                                        ((true, "==", withdrawers.contains(slashedValidator)), "Slashed validator is immediately moved to withdrawers map"),
-                                        ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator) - initialRewards.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
-                                        ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator) + initialRewards.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
+                                        ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
+                                        ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
                                       ],
                                       *ackCh
                                     )
