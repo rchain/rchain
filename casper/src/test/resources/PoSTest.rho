@@ -56,7 +56,7 @@ match (
               ("withdraw succeeds", *test_withdraw_succeeds),
               ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
-              // ("multiple bondings work", *test_multiple_bonding_succeeds),
+              ("multiple bondings work", *test_multiple_bonding_succeeds),
               // ("payment works", *test_pay_succeeds),
               // ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
