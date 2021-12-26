@@ -58,7 +58,7 @@ match (
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               ("multiple bondings work", *test_multiple_bonding_succeeds),
               ("payment works", *test_pay_succeeds),
-              // ("payment refund works", *test_refund_succeeds),
+              ("payment refund works", *test_refund_succeeds),
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
               // ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
@@ -572,7 +572,7 @@ match (
                                       //TODO: active validator stake-weighted reward
                                       ((8, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                       //TODO use arbitrary precision numbers instead of long ints
-                                      ((48, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                      ((50, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                       ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
                                     ],
                                     *ackCh
