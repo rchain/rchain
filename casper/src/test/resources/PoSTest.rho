@@ -62,7 +62,8 @@ match (
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
-              // ("commited random matches its image", *test_commit_random),
+              // TODO we should reimplement the random test in the future when it is available
+              ("commited random matches its image", *test_commit_random),
               // ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
             ]
           ) |
