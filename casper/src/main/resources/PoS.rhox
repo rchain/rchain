@@ -37,8 +37,8 @@ User transfer the bonding amount directly to posVault. `allBonds` would update w
 
 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
 2. Accumulate `comittedRewards` with the result of step 1
-4. When the block number reaches the quantinue of `withdrawers` , transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
-5. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` when pendingWithdrawers is not empty, remove the validator in `allBonds`
+4. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` when pendingWithdrawers is not empty, remove the validator in `allBonds`
+5. When the block number reaches the quantinue of `withdrawers` , transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
 6. update `pendingWithdrawers` to empty Map {}.
 5. Pick new `activeValidators`
 
@@ -261,8 +261,16 @@ in {
                 }
               } |
               contract PoS(@"getRewards", returnCh) = {
-                for (@state <<- stateCh) {
-                  returnCh!(state.get("comittedRewards"))
+                new currentEpochRewardCh, accumulateReward in {
+                  for (@state <<- stateCh) {
+                    PoS!("getCurrentEpochRewards", *currentEpochRewardCh)| 
+                    for (@currentEpochReward <- currentEpochRewardCh) {
+                      @ListOps!("fold", currentEpochReward.toList(), state.get("comittedRewards"), *accumulateReward, *returnCh) |
+                      contract accumulateReward(@(pk, reward), @acc, outCh) = {
+                        outCh!(acc.set(pk, acc.getOrElse(pk, 0)+ reward))
+                      }
+                    }
+                  }
                 }
               } |
               // Peeks at bonds map.
@@ -281,6 +289,11 @@ in {
               contract PoS(@"getWithdrawers", returnCh) = {
                 for (@state <<- stateCh) {
                   returnCh!(state.get("withdrawers"))
+                }
+              } |
+              contract PoS(@"getPendingWithdrawer", returnCh) = {
+                for (@state <<- stateCh) {
+                  returnCh!(state.get("pendingWithdrawers"))
                 }
               } |
               // Exposes Coop multisig vault on returnCh.
@@ -327,6 +340,7 @@ in {
                         match depositResult {
                           // If deposit is successful, the user becomes a bonded validator.
                           (true, _) => {
+                            stdlog!(("after bonds", state.get("allBonds"), userPk, amount))|
                             resultCh!(state.set("allBonds", state.get("allBonds").set(userPk, amount)), depositResult)
                           }
                           // If deposit is unsuccessful, the user is not bonded.
@@ -520,12 +534,12 @@ in {
                                     accumulateRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
                                       stdlog!(("new commited state", newCommittedState)) |
-                                      removeQuarantinedWithdrawers!(blockNumber, newCommittedState,newCommittedState, *removeQuarantinedCh) |
-                                      for (@newRemovedQuantinueState <- removeQuarantinedCh) {
-                                        stdlog!(("new Removed QuantinueState", newRemovedQuantinueState)) |
-                                        movePendingWithdrawer!(newRemovedQuantinueState, *movePendingWithdrawCh) | 
-                                        for (@newMovedPendingState <- movePendingWithdrawCh){
-                                          stdlog!(("new Moved PendingState", newMovedPendingState)) |
+                                      movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
+                                      for (@newMovedPendingState <- movePendingWithdrawCh){
+                                        stdlog!(("new Moved PendingState", newMovedPendingState)) |
+                                        removeQuarantinedWithdrawers!(blockNumber, newCommittedState, *removeQuarantinedCh) |
+                                        for (@newRemovedQuantinueState <- removeQuarantinedCh) {
+                                          stdlog!(("new Removed QuantinueState", newRemovedQuantinueState)) |
                                           pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
                                           for (@newValidators <- newValidatorsCh) {
                                             stateUpdateCh!(newMovedPendingState.set("activeValidators", newValidators), (true, Nil))
@@ -560,7 +574,7 @@ in {
                                     contract movePending(@(pk, quantine), @updatedState, resultCh) = {
                                       stdlog!(("move pending withdrawer", updatedState, pk, quantine))|
                                       resultCh!(updatedState
-                                                .set("withdrawers", (updatedState.get("allBonds").get(pk), quantine))
+                                                .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quantine)))
                                                 .set("allBonds", updatedState.get("allBonds").delete(pk))
                                                 .set("pendingWithdrawers", updatedState.get("pendingWithdrawers").delete(pk))
                                                 )
@@ -570,7 +584,7 @@ in {
                                 // Checks withdrawer's quarantine period against current block number,
                                 // then computes their payment, removes them from the bonds and withdrawers maps, and
                                 // updates the committed rewards map.
-                                contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, rewards, returnCh) = {
+                                contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
                                   new quarantinedValidatorsCh, validatorsToWithdrawListCh,
                                       isQuarantineFinished, notWithdrawn, computeRemove,
                                       newBondsListCh, newWithdrawersListCh,

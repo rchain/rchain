@@ -53,7 +53,7 @@ match (
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
               ("closeBlock finishes successfully", *test_close_block_finishes),
               ("bonding success", *test_bonding_succeeds),
-              // ("withdraw succeeds", *test_withdraw_succeeds),
+              ("withdraw succeeds", *test_withdraw_succeeds),
               // ("validator is paid after withdraw", *test_validator_is_paid_after_withdraw),
               ("bonding fails if deposit fails", *test_bonding_fails_if_deposit_fails),
               // ("multiple bondings work", *test_multiple_bonding_succeeds),
@@ -226,7 +226,7 @@ match (
                         @PoS!("withdraw", userDeployerId, *withdrawCh) |
                         for (_ <- withdrawCh) {
                           closeBlock!(*closeBlockCh) |
-                          for (_ <- closeBlockCh) {
+                          for (@(true, _) <- closeBlockCh) {
                             @PoS!("getBonds", *finalBondsCh) |
                             getPosBalance!(*finalPosBalanceCh) |
                             @userVault!("balance", *finalUserBalanceCh) |
@@ -241,12 +241,12 @@ match (
                                  @quarantinePeriod <- quarantinePeriodCh) {
                               rhoSpec!("assertMany",
                                 [
-                                  ((finalBonds, "==", initialBonds.set(userPubKey, bondAmt)), "user is correctly added to the bond map"),
-                                  ((finalRewards, "==", initialRewards), "rewards don't change for bonding"),
+                                  ((finalBonds, "==", initialBonds), "user is not in the bond map after withdraw"),
+                                  ((finalRewards, "==", initialRewards.set(userPubKey, 0)), "rewards don't change for bonding"),
                                   ((finalUserBalance, "==", initialUserBalance - bondAmt), "user balance should change by bond amount"),
                                   ((finalPosBalance, "==", initialPosBalance + bondAmt), "pos balance should change by bond amount"),
                                   ((true, "==", withdrawers.contains(userPubKey)), "withdrawer is moved to withdrawers map"),
-                                  ((quarantinePeriod, "==", withdrawers.get(userPubKey)), "withdrawer has correct quarantine finish block")
+                                  (((bondAmt, quarantinePeriod), "==", withdrawers.get(userPubKey)), "withdrawer has correct quarantine and bonds finish block")
                                 ],
                                 *ackCh
                               )
