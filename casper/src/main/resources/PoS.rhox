@@ -82,7 +82,7 @@ new PoS,
     PendingRewards, MergeIntMaps, treeHashMapCh,
     sysAuthTokenOps(`sys:authToken:ops`),
     multiSigRevVaultCh, coopVaultCh,
-    uriOut, sumFromPair, stdlog(`rho:io:stdout`)
+    uriOut, sumFromPair
 in {
   // Simultaneously retrieves RevVault, ListOps, TreeHashMap, and MultiSigRevVault contracts from the registry.
   registryLookup!(`rho:rchain:revVault`, *revVaultCh) |
@@ -172,7 +172,6 @@ in {
                @(true, _) <- moveInitialBondCh) {
             new stateCh, pendingRewardsInitializedCh, rewardsInfo, calTotalActiveBonds, calTotalBonds, calTotalWithdraw, calTotalCommittedRewards in {
               // Initializes PoS state structure.
-              stdlog!(("initial active", initialActive))|
               stateCh!({
                 // Map[PublicKey, Int] - each validator stake
                 "allBonds"        : $$initialBonds$$,
@@ -253,7 +252,6 @@ in {
                   rewardsInfo!(*rewardCh)|
                   for (@(posBalance, totalBond, activeBonds, totalWithdraw, totalCommittedRewards, bondsMap, activeValidatorsSet) <- rewardCh){
                     @ListOps!("fold", bondsMap.toList(), {}, *computeReward, *returnCh) |
-                    stdlog!(("current total rewards", posBalance , totalBond, totalWithdraw, totalCommittedRewards, posBalance - totalBond - totalWithdraw - totalCommittedRewards)) |
                     contract computeReward(@(pk, bonds), @acc,  outCh) = {
                       //  someAmount / minimumBond to reduce the possibility on overflow long
                       if (activeValidatorsSet.contains(pk)){
@@ -345,7 +343,6 @@ in {
                         match depositResult {
                           // If deposit is successful, the user becomes a bonded validator.
                           (true, _) => {
-                            stdlog!(("after bonds", state.get("allBonds"), userPk, amount))|
                             resultCh!(state.set("allBonds", state.get("allBonds").set(userPk, amount)), depositResult)
                           }
                           // If deposit is unsuccessful, the user is not bonded.
@@ -540,13 +537,10 @@ in {
                                   for (@state, stateUpdateCh <- stateProcessCh) {
                                     accumulateRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
-                                      stdlog!(("new commited state", newCommittedState)) |
                                       movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
                                       for (@newMovedPendingState <- movePendingWithdrawCh){
-                                        stdlog!(("new Moved PendingState", newMovedPendingState)) |
                                         removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
                                         for (@newRemovedQuantinueState <- removeQuarantinedCh) {
-                                          stdlog!(("new Removed QuantinueState", newRemovedQuantinueState)) |
                                           pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
                                           for (@newValidators <- newValidatorsCh) {
                                             stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
@@ -569,8 +563,7 @@ in {
                                   new accumulate in {
                                     @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
                                     contract accumulate(@(pk, reward), @updatedState, resultCh) = {
-                                      stdlog!(("accumulate logs", updatedState, pk, reward))|
-                                      resultCh!(updatedState.set("comittedRewards", 
+                                      resultCh!(updatedState.set("comittedRewards",
                                                                   updatedState.get("comittedRewards").set(pk, updatedState.get("comittedRewards").getOrElse(pk, 0) + reward)))
                                     }
                                   }
@@ -579,7 +572,6 @@ in {
                                   new movePending in {
                                     @ListOps!("fold", state.get("pendingWithdrawers").toList(), state, *movePending, *returnCh) | 
                                     contract movePending(@(pk, quantine), @updatedState, resultCh) = {
-                                      stdlog!(("move pending withdrawer", updatedState, pk, quantine))|
                                       resultCh!(updatedState
                                                 .set("withdrawers", updatedState.get("withdrawers").set(pk, (updatedState.get("allBonds").get(pk), quantine)))
                                                 .set("allBonds", updatedState.get("allBonds").delete(pk))
@@ -600,12 +592,10 @@ in {
                                     // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
                                     @ListOps!("filter", state.get("withdrawers").toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
                                     for (@quarantinedValidators <- quarantinedValidatorsCh) {
-                                      stdlog!(("quantinued withdrawer", quarantinedValidators)) |
                                       @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
                                       contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
                                         new payReturnCh in {
-                                          stdlog!(("remove quantinue", updatedState, pk, bonds, quantine))|
-                                          payWithdrawer!((pk, bonds + updatedState.get("comittedRewards").getOrElse(pk, 0)), *payReturnCh) | 
+                                          payWithdrawer!((pk, bonds + updatedState.get("comittedRewards").getOrElse(pk, 0)), *payReturnCh) |
                                           for (@(true, _) <- payReturnCh) {
                                             resultCh!(updatedState
                                                       .set("comittedRewards", updatedState.get("comittedRewards").delete(pk))
@@ -617,7 +607,6 @@ in {
                                     } |
                                     // Check whether quarantine period is finished.
                                     contract isQuarantineFinished(@(pk, (bonds, blockNumber)), resultCh) = {
-                                      stdlog!(("isquantinue", pk, blockNumber, currentBlockNumber )) |
                                       resultCh!(currentBlockNumber >= blockNumber)
                                     }
                                   }
@@ -743,7 +732,6 @@ in {
         new availableValidatorsCh,
             isAvailable, pksCh
         in {
-          stdlog!(("pick", allBonds)) |
           @ListOps!("map", allBonds, *fst, *pksCh) |
           for (@pks <- pksCh) {
             // TODO: Randomly select 100 active validators once we have on-chain randomness
