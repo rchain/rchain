@@ -27,7 +27,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.{BindPattern, BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
@@ -791,5 +791,18 @@ object BlockAPI {
       )
     )
   }
+
+  def getDataAtPar[F[_]: Concurrent: RuntimeManager: BlockStore](
+      blockHash: String,
+      par: Par,
+      usePreStateHash: Boolean
+  ): F[Seq[Par]] =
+    for {
+      block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+      stateHash = if (usePreStateHash) block.body.state.preStateHash
+      else block.body.state.postStateHash
+      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
+      data      <- RuntimeManager[F].getData(stateHash)(sortedPar)
+    } yield data
 
 }
