@@ -4,21 +4,23 @@ import java.io.FileOutputStream
 
 import cats._
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import cats.mtl._
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
 }
 
-class StringSerializer[F[_]: MonadState[?[_], StringBuffer]] extends GraphSerializer[F] {
-  def push(str: String, suffix: String): F[Unit] =
-    MonadState[F, StringBuffer].modify(sb => sb.append(str + suffix))
+class StringSerializer[F[_]](val ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
+  override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
+    (current.append(str + suffix), ())
+  }
 }
 
-class ListSerializer[F[_]: MonadState[?[_], Vector[String]]] extends GraphSerializer[F] {
-  def push(str: String, suffix: String): F[Unit] =
-    MonadState[F, Vector[String]].modify(_ :+ (str + suffix))
+class ListSerializer[F[_]](val ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
+  override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
+    (current :+ (str + suffix), ())
+  }
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {
@@ -109,7 +111,7 @@ object Graphz {
       color: Option[String] = None,
       node: Map[String, String] = Map.empty
   )(
-      implicit ser: GraphSerializer[F]
+      ser: GraphSerializer[F]
   ): F[Graphz[F]] = {
 
     def insert(str: Option[String], v: String => String): F[Unit] = {
@@ -128,7 +130,7 @@ object Graphz {
       _ <- insert(rankdir.map(_.show), r => s"rankdir=$r")
       _ <- insert(attrMkStr(node), n => s"node $n")
       _ <- insert(splines.map(_.show), s => s"splines=$s")
-    } yield new Graphz[F](gtype, t)
+    } yield new Graphz[F](gtype, t)(ser)
   }
 
   def subgraph[F[_]: Monad](
@@ -139,7 +141,7 @@ object Graphz {
       rankdir: Option[GraphRankDir] = None,
       style: Option[String] = None,
       color: Option[String] = None
-  )(implicit ser: GraphSerializer[F]): F[Graphz[F]] =
+  )(ser: GraphSerializer[F]): F[Graphz[F]] =
     apply[F](
       name,
       gtype,
@@ -149,7 +151,7 @@ object Graphz {
       rankdir = rankdir,
       style = style,
       color = color
-    )
+    )(ser)
 
   private def head(gtype: GraphType, subgraph: Boolean, name: String): String = {
     val prefix = (gtype, subgraph) match {
@@ -173,7 +175,7 @@ object Graphz {
   val tab = "  "
 }
 
-class Graphz[F[_]: Monad](gtype: GraphType, t: String)(implicit ser: GraphSerializer[F]) {
+class Graphz[F[_]: Monad](gtype: GraphType, t: String)(ser: GraphSerializer[F]) {
 
   def edge(edg: (String, String)): F[Unit] = edge(edg._1, edg._2)
   def edge(
