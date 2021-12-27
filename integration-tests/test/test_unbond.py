@@ -32,7 +32,7 @@ def get_total_cost_from_block(block_info: BlockInfo) -> int:
         total_cost += deploy.cost
     return total_cost
 
-
+# pylint: disable=too-many-locals
 def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, random_generator: Random,
                                      docker_client: DockerClient) -> None:
     validator_1_initial_bonding_amount = 40000000
@@ -42,14 +42,12 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         BOOTSTRAP_KEY: 20000000,
         VALIDATOR_KEY_1: validator_1_initial_bonding_amount,
         VALIDATOR_KEY_2: 20000000,
-        VALIDATOR_KEY_3: 20000000,
     }
 
     wallets_file = {
         BOOTSTRAP_KEY: 30000000,
         VALIDATOR_KEY_1: validator_1_initial_wallet_amount,
         VALIDATOR_KEY_2: 20000000,
-        VALIDATOR_KEY_3: 20000000,
     }
 
     total_bond_amount = sum(bonded_validator_map.values())
@@ -82,26 +80,30 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         rewards_of_v1 += get_total_cost_from_block(
             block1_info) * validator_1_initial_bonding_amount // total_bond_amount
 
+        wait_for_node_sees_block(context, validator_2, b1)
         # block number 2
         # unbond in block number 2
         # withdraw should happen after
         # (quarantine_length + epoch_length ) = (6 + 3 * (1 + 2 // 3)) = 9 block number
         # so the withdraw happen after block number 9
         # we should see withdraw result in block number 10
-        b2 = validator_1.deploy_contract_with_substitution(substitute_dict={},
+        b2 = validator_2.deploy_contract_with_substitution(substitute_dict={},
                                                            rho_file_path="resources/wallets/unbond.rho",
                                                            private_key=VALIDATOR_KEY_1)
-        block2_info = validator_1.get_block(b2)
+        block2_info = validator_2.get_block(b2)
         rewards_of_v1 += get_total_cost_from_block(
             block2_info) * validator_1_initial_bonding_amount // total_bond_amount
 
+        wait_for_node_sees_block(context, bootstrap_node, b2)
         # block number 3
         # close block happen after all deploys process
-        validator_1.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
-        b3 = validator_1.propose()
-        block3_info = validator_1.get_block(b3)
+        bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
+        b3 = bootstrap_node.propose()
+        block3_info = bootstrap_node.get_block(b3)
         rewards_of_v1 += get_total_cost_from_block(
             block3_info) * validator_1_initial_bonding_amount // total_bond_amount
+
+        wait_for_node_sees_block(context, validator_1, b3)
 
         # block number 4
         # validator_1 is no longer a active validator after block number 3
@@ -110,16 +112,18 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
             validator_1.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
             validator_1.propose()
 
-        wait_for_node_sees_block(context, bootstrap_node, b3)
+        wait_for_node_sees_block(context, validator_2, b3)
 
         # block number 4
         # withdraw not happen yet
-        validator_1_balance_before_bond_refund = get_vault_balance(context, bootstrap_node,
+        b4, validator_1_balance_before_bond_refund = get_vault_balance(context, validator_2,
                                                                    VALIDATOR_KEY_1.get_public_key().get_rev_address(),
                                                                    VALIDATOR_KEY_2, 100000, 1)
         # the unbond process cost validator1 some phlos so the balance of validator1 is smaller than the initial wallet amount
         assert validator_1_balance_before_bond_refund < validator_1_initial_wallet_amount
 
+
+        wait_for_node_sees_block(context, bootstrap_node, b4)
         # block number 5
         bootstrap_node.deploy('/opt/docker/examples/tut-hello-again.rho', VALIDATOR_KEY_3)
         b5 = bootstrap_node.propose()
@@ -127,19 +131,21 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         wait_for_node_sees_block(context, validator_2, b5)
 
         # block number 6
-        validator_1_balance_before_bond_refund = get_vault_balance(context, validator_2,
+        b6, validator_1_balance_before_bond_refund = get_vault_balance(context, validator_2,
                                                                    VALIDATOR_KEY_1.get_public_key().get_rev_address(),
                                                                    VALIDATOR_KEY_2,
                                                                    100000, 1)
         assert validator_1_balance_before_bond_refund < 20000000
 
+        wait_for_node_sees_block(context, bootstrap_node, b6)
         # block number 7
-        validator_1_balance_before_bond_refund = get_vault_balance(context, validator_2,
+        b7, validator_1_balance_before_bond_refund = get_vault_balance(context, bootstrap_node,
                                                                    VALIDATOR_KEY_1.get_public_key().get_rev_address(),
                                                                    VALIDATOR_KEY_2,
                                                                    100000, 1)
         assert validator_1_balance_before_bond_refund < 20000000
 
+        wait_for_node_sees_block(context, validator_2, b7)
         # block number 8
         validator_2.deploy('/opt/docker/examples/tut-hello.rho', VALIDATOR_KEY_3)
         b8 = validator_2.propose()
@@ -147,16 +153,17 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
         wait_for_node_sees_block(context, bootstrap_node, b8)
 
         # block number 9
-        validator_1_balance_before_bond_refund = get_vault_balance(context, bootstrap_node,
+        b9, validator_1_balance_before_bond_refund = get_vault_balance(context, bootstrap_node,
                                                                    VALIDATOR_KEY_1.get_public_key().get_rev_address(),
                                                                    VALIDATOR_KEY_2, 100000, 1)
         assert validator_1_balance_before_bond_refund < validator_1_initial_wallet_amount
 
+        wait_for_node_sees_block(context, validator_2, b9)
         # block number 10
         # withdraw happen in block number 9, result get in block 10
         # get the bonding amount and the reward amount
-        # validator_1_balance_after_refund = get_vault_balance(context, bootstrap_node,
-        #                                                      VALIDATOR_KEY_1.get_public_key().get_rev_address(),
-        #                                                      VALIDATOR_KEY_2,
-        #                                                      100000, 1)
-        # assert validator_1_balance_after_refund == validator_1_balance_before_bond_refund + validator_1_initial_bonding_amount + rewards_of_v1
+        _, validator_1_balance_after_refund = get_vault_balance(context, validator_2,
+                                                             VALIDATOR_KEY_1.get_public_key().get_rev_address(),
+                                                             VALIDATOR_KEY_2,
+                                                             100000, 1)
+        assert validator_1_balance_after_refund == validator_1_balance_before_bond_refund + validator_1_initial_bonding_amount + rewards_of_v1
