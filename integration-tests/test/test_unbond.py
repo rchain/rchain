@@ -32,7 +32,9 @@ def get_total_cost_from_block(block_info: BlockInfo) -> int:
         total_cost += deploy.cost
     return total_cost
 
+# TODO https://github.com/rchain/rchain/issues/3572
 # pylint: disable=too-many-locals
+@pytest.mark.skip
 def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, random_generator: Random,
                                      docker_client: DockerClient) -> None:
     validator_1_initial_bonding_amount = 40000000
@@ -81,6 +83,7 @@ def test_unbond_validator_and_reward(command_line_options: CommandLineOptions, r
             block1_info) * validator_1_initial_bonding_amount // total_bond_amount
 
         wait_for_node_sees_block(context, validator_2, b1)
+        wait_for_node_sees_block(context, bootstrap_node, b1)
         # block number 2
         # unbond in block number 2
         # withdraw should happen after
