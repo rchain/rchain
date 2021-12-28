@@ -146,7 +146,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _   <- g.edge("C", "1")
         _   <- g.close
       } yield g
-      graph.show shouldBe (
+      graph shouldBe (
         """digraph "Process" {
           |  "0"
           |  subgraph {
@@ -227,7 +227,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _   <- g.edge("C", "1")
         _   <- g.close
       } yield g
-      graph.show shouldBe (
+      graph shouldBe (
         """digraph "Process" {
           |  "0"
           |  subgraph "cluster_p1" {
@@ -307,7 +307,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _   <- g.close
       } yield g
       // then
-      graph.show shouldBe (
+      graph shouldBe (
         """digraph "Blockchain" {
           |  rankdir=BT
           |  subgraph {
@@ -356,7 +356,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _     <- graph.edge("new", "runmem")
         _     <- graph.edge("sleep", "runmem")
         _     <- graph.close
-      } yield graph).show shouldBe (
+      } yield graph) shouldBe (
         """graph "G" {
           |  "run" -- "intr"
           |  "intr" -- "runbl"
@@ -383,13 +383,11 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         _   <- (1 to 1000).toList.traverse(i => g.edge(s"e$i" -> s"e${i + 1}"))
         _   <- g.close
       } yield g
-      graph.show // ignore
+      graph // ignore
     }
   }
 
-  implicit class GraphzOps(graph: Effect[Graphz[Effect]]) {
-    def show: String =
-      graph.runS(new StringBuffer).value.toString
+  implicit class GraphzOps(graph: Task[Graphz[Task]]) {
 
     import java.io.{File, PrintWriter}
 
@@ -398,7 +396,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       val outputPath = "/Users/rabbit/output.pdf"
       new File(sourcePath).createNewFile()
       val writer = new PrintWriter(sourcePath)
-      writer.println(show)
+      writer.println(graph)
       writer.flush()
       writer.close
       val dotCmd  = s"dot -Tpdf $sourcePath -o $outputPath"
