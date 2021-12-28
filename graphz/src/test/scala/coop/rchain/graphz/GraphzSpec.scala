@@ -135,9 +135,11 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         ser = new StringSerializer(ref)
         g   <- Graphz[Task]("Process", DiGraph, ser)
         _   <- g.node("0")
-        _   <- g.subgraph(process1)
+        p1  <- process1
+        _   <- g.subgraph(p1)
         _   <- g.edge("0", "A")
-        _   <- g.subgraph(process2)
+        p2  <- process2
+        _   <- g.subgraph(p2)
         _   <- g.edge("0", "K")
         _   <- g.node("1")
         _   <- g.edge("M", "1")
@@ -214,9 +216,11 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         ser = new StringSerializer(ref)
         g   <- Graphz[Task]("Process", DiGraph, ser)
         _   <- g.node("0")
-        _   <- g.subgraph(process1)
+        p1  <- process1
+        _   <- g.subgraph(p1)
         _   <- g.edge("0", "A")
-        _   <- g.subgraph(process2)
+        p2  <- process2
+        _   <- g.subgraph(p2)
         _   <- g.edge("0", "K")
         _   <- g.node("1")
         _   <- g.edge("M", "1")
@@ -292,11 +296,14 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
         ref <- Ref[Task].of(new StringBuffer(""))
         ser = new StringSerializer(ref)
         g   <- Graphz[Task]("Blockchain", DiGraph, ser, rankdir = Some(BT))
-        _   <- g.subgraph(lvl1)
+        l1  <- lvl1
+        _   <- g.subgraph(l1)
         _   <- g.edge("000000" -> "ffeeff")
         _   <- g.edge("000000" -> "ddeecc")
-        _   <- g.subgraph(lvl0)
-        _   <- g.subgraph(timeline)
+        l0  <- lvl0
+        _   <- g.subgraph(l0)
+        tl  <- timeline
+        _   <- g.subgraph(tl)
         _   <- g.close
       } yield g
       // then
