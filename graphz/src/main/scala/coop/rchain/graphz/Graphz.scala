@@ -11,13 +11,13 @@ trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
 }
 
-class StringSerializer[F[_]](val ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
+class StringSerializer[F[_]](ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
     (current.append(str + suffix), ())
   }
 }
 
-class ListSerializer[F[_]](val ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
+class ListSerializer[F[_]](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
     (current :+ (str + suffix), ())
   }
