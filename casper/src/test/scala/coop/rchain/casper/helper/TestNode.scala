@@ -33,7 +33,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.comm.transport.CommunicationResponse
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.graphz.{Graphz, StringSerializer}
+import coop.rchain.graphz.Graphz
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
@@ -350,9 +350,8 @@ case class TestNode[F[_]: Timer](
   def visualizeDag(startBlockNumber: Int): F[String] = {
 
     type G[A] = State[StringBuffer, A]
-    import cats.mtl.implicits._
+    implicit val s: Sync[G] = implicitly[Sync[G]]
 
-    implicit val serializer = new StringSerializer[G]
     val serialize: G[Graphz[G]] => String =
       _.runS(new StringBuffer("")).value.toString
 
