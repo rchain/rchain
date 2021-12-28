@@ -379,7 +379,7 @@ object BlockAPI {
 
   def visualizeDag[
       F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer,
+      G[_]: Monad,
       R
   ](
       depth: Int,

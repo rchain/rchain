@@ -2,6 +2,7 @@ package coop.rchain.casper.api
 
 import cats.{Monad, _}
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
@@ -32,7 +33,7 @@ object GraphzGenerator {
     def empty[G[_]]: DagInfo[G] = DagInfo[G]()
   }
 
-  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Monad: GraphSerializer](
+  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Sync](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
       config: GraphConfig
@@ -46,7 +47,9 @@ object GraphzGenerator {
       val validators     = acc.validators
       val validatorsList = validators.toList.sortBy(_._1)
       for {
-        g <- initGraph[G]("dag")
+        ref <- Ref[G].of(new StringBuffer(""))
+        ser = new StringSerializer(ref)
+        g   <- initGraph[G]("dag", ser)
         allAncestors = validatorsList
           .flatMap {
             case (_, blocks) =>
@@ -74,9 +77,10 @@ object GraphzGenerator {
         // draw clusters per validator
         _ <- validatorsList.traverse {
               case (id, blocks) =>
-                g.subgraph(
-                  validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
-                )
+                validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser).map {
+                  vCluster =>
+                    g.subgraph(vCluster)
+                }
             }
         // draw parent dependencies
         _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
@@ -116,10 +120,14 @@ object GraphzGenerator {
       validators = acc.validators |+| Foldable[List].fold(validators)
     )
 
-  private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
+  private def initGraph[G[_]: Monad](
+      name: String,
+      ser: GraphSerializer[G]
+  ): G[Graphz[G]] =
     Graphz[G](
       name,
       DiGraph,
+      ser,
       rankdir = Some(BT),
       splines = Some("false"),
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
@@ -179,14 +187,15 @@ object GraphzGenerator {
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
 
-  private def validatorCluster[G[_]: Monad: GraphSerializer](
+  private def validatorCluster[G[_]: Monad](
       id: String,
       blocks: ValidatorsBlocks,
       timeseries: List[Long],
-      lastFinalizedBlockHash: String
+      lastFinalizedBlockHash: String,
+      ser: GraphSerializer[G]
   ): G[Graphz[G]] =
     for {
-      g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
+      g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, ser, label = Some(id))
       nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, lastFinalizedBlockHash))
       _ <- nodes.traverse(
             ns =>
