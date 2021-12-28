@@ -101,6 +101,7 @@ object Graphz {
   def apply[F[_]: Monad](
       name: String,
       gtype: GraphType,
+      ser: GraphSerializer[F],
       subgraph: Boolean = false,
       comment: Option[String] = None,
       label: Option[String] = None,
@@ -110,8 +111,6 @@ object Graphz {
       style: Option[String] = None,
       color: Option[String] = None,
       node: Map[String, String] = Map.empty
-  )(
-      ser: GraphSerializer[F]
   ): F[Graphz[F]] = {
 
     def insert(str: Option[String], v: String => String): F[Unit] = {
@@ -130,18 +129,19 @@ object Graphz {
       _ <- insert(rankdir.map(_.show), r => s"rankdir=$r")
       _ <- insert(attrMkStr(node), n => s"node $n")
       _ <- insert(splines.map(_.show), s => s"splines=$s")
-    } yield new Graphz[F](gtype, t)(ser)
+    } yield new Graphz[F](gtype, t, ser)
   }
 
   def subgraph[F[_]: Monad](
       name: String,
       gtype: GraphType,
+      ser: GraphSerializer[F],
       label: Option[String] = None,
       rank: Option[GraphRank] = None,
       rankdir: Option[GraphRankDir] = None,
       style: Option[String] = None,
       color: Option[String] = None
-  )(ser: GraphSerializer[F]): F[Graphz[F]] =
+  ): F[Graphz[F]] =
     apply[F](
       name,
       gtype,
@@ -150,8 +150,9 @@ object Graphz {
       rank = rank,
       rankdir = rankdir,
       style = style,
-      color = color
-    )(ser)
+      color = color,
+      ser = ser
+    )
 
   private def head(gtype: GraphType, subgraph: Boolean, name: String): String = {
     val prefix = (gtype, subgraph) match {
@@ -175,7 +176,7 @@ object Graphz {
   val tab = "  "
 }
 
-class Graphz[F[_]: Monad](gtype: GraphType, t: String)(ser: GraphSerializer[F]) {
+class Graphz[F[_]: Monad](gtype: GraphType, t: String, val ser: GraphSerializer[F]) {
 
   def edge(edg: (String, String)): F[Unit] = edge(edg._1, edg._2)
   def edge(
