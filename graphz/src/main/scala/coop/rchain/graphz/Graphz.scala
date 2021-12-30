@@ -1,26 +1,28 @@
 package coop.rchain.graphz
 
 import java.io.FileOutputStream
-
 import cats._
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
+  def show: F[String]
 }
 
-class StringSerializer[F[_]](ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
+class StringSerializer[F[_]: Concurrent](ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
     (current.append(str + suffix), ())
   }
+  override def show: F[String] = ref.get.map { _.toString }
 }
 
-class ListSerializer[F[_]](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
+class ListSerializer[F[_]: Concurrent](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.modify { current =>
     (current :+ (str + suffix), ())
   }
+  override def show: F[String] = ???
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {
@@ -28,6 +30,7 @@ class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[
     fos.write(str.getBytes)
     fos.flush()
   }
+  override def show: F[String] = ???
 }
 
 sealed trait GraphType
@@ -222,6 +225,8 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String, val ser: GraphSerializer[
 
   def subgraph(sub: Graphz[F]): F[Unit] = sub.ser.push("")
   def close: F[Unit]                    = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
+
+  def show: F[String] = ser.show
 
   private def edgeMkStr: String = gtype match {
     case Graph   => s"$t%s -- %s%s"

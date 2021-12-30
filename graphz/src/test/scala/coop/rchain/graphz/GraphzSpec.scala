@@ -1,26 +1,23 @@
 package coop.rchain.graphz
 
-import cats._
-import cats.data._
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
 class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   describe("Graphz") {
     it("simple graph") {
-      val graph = for {
-        ref <- Ref[Task].of(new StringBuffer(""))
-        ser = new StringSerializer(ref)
-        g   <- Graphz[Task]("G", Graph, ser)
-        _   <- g.close
-      } yield g
-      graph shouldBe (
-        """graph "G" {
-          |}""".stripMargin
-      )
+      (for {
+        ref     <- Ref[Task].of(new StringBuffer(""))
+        ser     = new StringSerializer(ref)
+        g       <- Graphz[Task]("G", Graph, ser)
+        _       <- g.close
+        content <- g.show
+      } yield { content shouldBe """graph "G" {
+                                              |}""".stripMargin }).runSyncUnsafe()
     }
 
     it("simple digraph") {
@@ -387,7 +384,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
     }
   }
 
-  implicit class GraphzOps(graph: Task[Graphz[Task]]) {
+  implicit class GraphzOps(graph: Graphz[Task]) {
 
     import java.io.{File, PrintWriter}
 
