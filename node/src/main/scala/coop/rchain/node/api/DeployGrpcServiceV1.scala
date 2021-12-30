@@ -103,9 +103,7 @@ object DeployGrpcServiceV1 {
         }
 
       def visualizeDag(request: VisualizeDagQuery): Observable[VisualizeBlocksResponse] = {
-        type Effect[A] = State[Vector[String], A]
-        implicit val ser: GraphSerializer[Effect]             = new ListSerializer[Effect]
-        val serialize: Effect[Graphz[Effect]] => List[String] = _.runS(Vector.empty).value.toList
+        val serialize: Task[Graphz[Task]] => List[String] = _ => Vector.empty[String].toList
 
         val depth            = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
         val config           = GraphConfig(request.showJustificationLines)
@@ -115,11 +113,11 @@ object DeployGrpcServiceV1 {
           .fromTask(
             deferList(
               BlockAPI
-                .visualizeDag[F, Effect, List[String]](
+                .visualizeDag[F, Task, List[String]](
                   depth,
                   apiMaxBlocksLimit,
                   startBlockNumber,
-                  (ts, lfb) => GraphzGenerator.dagAsCluster[F, Effect](ts, lfb, config),
+                  (ts, lfb) => GraphzGenerator.dagAsCluster[F, Task](ts, lfb, config),
                   serialize
                 )
                 .map(_.getOrElse(List.empty[String]))
