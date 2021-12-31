@@ -223,9 +223,10 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String, val ser: GraphSerializer[
     ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse(""))
   }
 
-  def subgraph(sub: Graphz[F]): F[Unit] = sub.ser.push("")
-  def close: F[Unit]                    = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
-
+  def subgraph(sub: Graphz[F]): F[Unit] = sub.show.map { content =>
+    ser.push(content)
+  }
+  def close: F[Unit]  = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
   def show: F[String] = ser.show
 
   private def edgeMkStr: String = gtype match {
