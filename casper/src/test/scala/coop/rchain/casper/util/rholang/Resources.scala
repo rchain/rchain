@@ -6,6 +6,7 @@ import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
@@ -60,7 +61,7 @@ object Resources {
     for {
       rStore         <- kvm.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvm)
-      runtimeManager <- RuntimeManager(rStore, mStore)
+      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
     } yield runtimeManager
   }
 
@@ -74,9 +75,13 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      rStore                    <- kvm.rSpaceStores
-      mStore                    <- RuntimeManager.mergeableStore(kvm)
-      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(rStore, mStore)
+      rStore <- kvm.rSpaceStores
+      mStore <- RuntimeManager.mergeableStore(kvm)
+      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
+                                    rStore,
+                                    mStore,
+                                    Genesis.NonNegativeMergeableTagName
+                                  )
     } yield runtimeManagerWithHistory
   }
 

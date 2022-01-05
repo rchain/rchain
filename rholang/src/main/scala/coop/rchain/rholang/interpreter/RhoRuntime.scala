@@ -440,7 +440,8 @@ object RhoRuntime {
       invalidBlocks: InvalidBlocks[F],
       extraSystemProcesses: Seq[Definition[F]],
       urnMap: Map[String, Par],
-      mergeChs: Ref[F, Set[Par]]
+      mergeChs: Ref[F, Set[Par]],
+      mergeableTagName: Par
   ): Reduce[F] = {
     lazy val replayDispatchTable: RhoDispatchMap[F] =
       dispatchTableCreator(
@@ -456,7 +457,8 @@ object RhoRuntime {
         chargingRSpace,
         replayDispatchTable,
         urnMap,
-        mergeChs
+        mergeChs,
+        mergeableTagName
       )
     replayReducer
   }
@@ -478,7 +480,8 @@ object RhoRuntime {
   def createRhoEnv[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
       rspace: RhoISpace[F],
       mergeChs: Ref[F, Set[Par]],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
+      mergeableTagName: Par
   ): F[(Reduce[F], Ref[F, BlockData], InvalidBlocks[F])] =
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
@@ -489,7 +492,8 @@ object RhoRuntime {
         invalidBlocks,
         extraSystemProcesses,
         urnMap,
-        mergeChs
+        mergeChs,
+        mergeableTagName
       )
       res <- introduceSystemProcesses(rspace :: Nil, procDefs.toList)
       _   = assert(res.forall(_.isEmpty))
@@ -515,7 +519,8 @@ object RhoRuntime {
   private def createRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
       extraSystemProcesses: Seq[Definition[F]],
-      initRegistry: Boolean
+      initRegistry: Boolean,
+      mergeableTagName: Par
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
     Span[F].trace(createPlayRuntime) {
       for {
@@ -523,7 +528,7 @@ object RhoRuntime {
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, mergeChs, extraSystemProcesses)
+          createRhoEnv(rspace, mergeChs, extraSystemProcesses, mergeableTagName)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks, mergeChs)
@@ -552,10 +557,11 @@ object RhoRuntime {
     */
   def createRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoISpace[F],
+      mergeableTagName: Par,
       initRegistry: Boolean = true,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[RhoRuntime[F]] =
-    createRuntime[F](rspace, extraSystemProcesses, initRegistry)
+    createRuntime[F](rspace, extraSystemProcesses, initRegistry, mergeableTagName)
 
   /**
     *
@@ -567,6 +573,7 @@ object RhoRuntime {
     */
   def createReplayRhoRuntime[F[_]: Concurrent: Log: Metrics: Span: Parallel](
       rspace: RhoReplayISpace[F],
+      mergeableTagName: Par,
       extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
       initRegistry: Boolean = true
   )(implicit costLog: FunctorTell[F, Chain[Cost]]): F[ReplayRhoRuntime[F]] =
@@ -576,7 +583,7 @@ object RhoRuntime {
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, mergeChs, extraSystemProcesses)
+          createRhoEnv(rspace, mergeChs, extraSystemProcesses, mergeableTagName)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime = new ReplayRhoRuntimeImpl[F](
@@ -597,12 +604,19 @@ object RhoRuntime {
       space: RhoISpace[F],
       replaySpace: RhoReplayISpace[F],
       initRegistry: Boolean,
-      additionalSystemProcesses: Seq[Definition[F]]
+      additionalSystemProcesses: Seq[Definition[F]],
+      mergeableTagName: Par
   ): F[(RhoRuntime[F], ReplayRhoRuntime[F])] =
     for {
-      rhoRuntime <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      rhoRuntime <- RhoRuntime.createRhoRuntime[F](
+                     space,
+                     mergeableTagName,
+                     initRegistry,
+                     additionalSystemProcesses
+                   )
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replaySpace,
+                           mergeableTagName,
                            additionalSystemProcesses,
                            initRegistry
                          )
@@ -614,6 +628,7 @@ object RhoRuntime {
 
   def createRuntime[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
       stores: RSpaceStore[F],
+      mergeableTagName: Par,
       initRegistry: Boolean = false,
       additionalSystemProcesses: Seq[Definition[F]] = Seq.empty
   )(
@@ -626,7 +641,12 @@ object RhoRuntime {
                 .create[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
                   stores
                 )
-      runtime <- createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      runtime <- createRhoRuntime[F](
+                  space,
+                  mergeableTagName,
+                  initRegistry,
+                  additionalSystemProcesses
+                )
     } yield runtime
   }
 }

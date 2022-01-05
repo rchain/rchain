@@ -9,6 +9,7 @@ import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.Validator
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
@@ -71,7 +72,8 @@ object Setup {
 
     val mStore = RuntimeManager.mergeableStore(spaceKVManager).unsafeRunSync(scheduler)
     implicit val runtimeManager =
-      RuntimeManager[Task](rspace, replay, historyRepo, mStore).unsafeRunSync(scheduler)
+      RuntimeManager[Task](rspace, replay, historyRepo, mStore, Genesis.NonNegativeMergeableTagName)
+        .unsafeRunSync(scheduler)
 
     val (validatorSk, validatorPk) = context.validatorKeyPairs.head
     val bonds                      = genesisParams.proofOfStake.validators.flatMap(Validator.unapply).toMap

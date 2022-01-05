@@ -76,9 +76,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                      stores
                    )
       (space, replay) = hrstores
-      rhoRuntime      <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      rhoRuntime <- RhoRuntime
+                     .createRhoRuntime[F](space, Par(), initRegistry, additionalSystemProcesses)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replay,
+                           Par(),
                            additionalSystemProcesses,
                            initRegistry
                          )

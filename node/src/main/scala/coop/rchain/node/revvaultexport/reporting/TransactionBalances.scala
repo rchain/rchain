@@ -230,7 +230,13 @@ object TransactionBalances {
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes <- RhoRuntime
-                   .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
+                   .createRuntimes[F](
+                     rSpacePlay,
+                     rSpaceReplay,
+                     initRegistry = true,
+                     Seq.empty,
+                     Par()
+                   )
       (rhoRuntime, _)    = runtimes
       targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeHexToByteString)
       targetBlock        = targetBlockOpt.get

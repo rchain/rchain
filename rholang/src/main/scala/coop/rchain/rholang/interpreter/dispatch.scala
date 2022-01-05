@@ -49,14 +49,15 @@ object RholangAndScalaDispatcher {
       tuplespace: RhoTuplespace[M],
       dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
       urnMap: Map[String, Par],
-      mergeChs: Ref[M, Set[Par]]
+      mergeChs: Ref[M, Set[Par]],
+      mergeableTagName: Par
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
 
     implicit lazy val dispatcher: Dispatch[M, ListParWithRandom, TaggedContinuation] =
       new RholangAndScalaDispatcher(dispatchTable)
 
     implicit lazy val reducer: Reduce[M] =
-      new DebruijnInterpreter[M](tuplespace, dispatcher, urnMap, mergeChs)
+      new DebruijnInterpreter[M](tuplespace, dispatcher, urnMap, mergeChs, mergeableTagName)
 
     (dispatcher, reducer)
   }
@@ -67,7 +68,7 @@ object RholangAndScalaDispatcher {
       urnMap: Map[String, Par]
   ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
     val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
-
-    apply(tuplespace, dispatchTable, urnMap, emptyMergeableRef)
+    val dummyMergeableTag = Par()
+    apply(tuplespace, dispatchTable, urnMap, emptyMergeableRef, dummyMergeableTag)
   }
 }

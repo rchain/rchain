@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.catscontrib.TaskContrib._
@@ -91,7 +92,8 @@ object Interactive {
     val p                                  = Files.createTempDirectory("interactive-")
     val kvm                                = RNodeKeyValueStoreManager[Task](p).unsafeRunSync
     val rspaceStore                        = kvm.rSpaceStores.runSyncUnsafe()
-    val runtime                            = RhoRuntime.createRuntime[Task](rspaceStore).unsafeRunSync
+    val runtime =
+      RhoRuntime.createRuntime[Task](rspaceStore, Genesis.NonNegativeMergeableTagName).unsafeRunSync
     new Interactive(runtime)
   }
 }

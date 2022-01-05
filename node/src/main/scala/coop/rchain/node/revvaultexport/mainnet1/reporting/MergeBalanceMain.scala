@@ -173,7 +173,7 @@ object MergeBalanceMain {
                    store
                  )
       (rSpacePlay, rSpaceReplay) = spaces
-      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
+      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
       blockOpt                   <- blockStore.get(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
