@@ -22,7 +22,7 @@ object RholangOnlyDispatcher {
       new RholangOnlyDispatcher
 
     implicit lazy val reducer: DebruijnInterpreter[F] =
-      new DebruijnInterpreter[F](tuplespace, dispatcher, urnMap, mergeChs)
+      new DebruijnInterpreter[F](tuplespace, dispatcher, urnMap, mergeChs, Par())
 
     (dispatcher, reducer)
   }

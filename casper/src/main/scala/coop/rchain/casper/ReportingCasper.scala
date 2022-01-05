@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
   BlockMessage,
   ProcessedDeploy,
@@ -205,7 +206,7 @@ object ReportingRuntime {
       mergeChs <- Ref.of(Set[Par]())
       rhoEnv <- {
         implicit val c = cost
-        createRhoEnv(reporting, mergeChs, extraSystemProcesses)
+        createRhoEnv(reporting, mergeChs, extraSystemProcesses, Genesis.NonNegativeMergeableTagName)
       }
       (reducer, blockRef, invalidBlocks) = rhoEnv
       runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks, mergeChs)

@@ -16,6 +16,7 @@ import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -151,7 +152,7 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
@@ -160,7 +161,8 @@ object Setup {
         for {
           rStores    <- rnodeStoreManager.rSpaceStores
           mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
-          rm         <- RuntimeManager.createWithHistory[F](rStores, mergeStore)
+          rm <- RuntimeManager
+                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
         } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory

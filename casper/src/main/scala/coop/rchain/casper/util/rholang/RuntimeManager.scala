@@ -77,7 +77,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
-    mergeableStore: MergeableStore[F]
+    mergeableStore: MergeableStore[F],
+    mergeableTagName: Par
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -87,7 +88,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
                      RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
                    ]
                    .spawn
-      runtime <- RhoRuntime.createRhoRuntime(newSpace)
+      runtime <- RhoRuntime.createRhoRuntime(newSpace, mergeableTagName)
     } yield runtime
 
   def spawnReplayRuntime: F[ReplayRhoRuntime[F]] =
@@ -101,7 +102,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
                            TaggedContinuation
                          ]]
                          .spawn
-      runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace)
+      runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace, mergeableTagName)
     } yield runtime
 
   def computeState(startHash: StateHash)(
@@ -245,19 +246,24 @@ object RuntimeManager {
       rSpace: RhoISpace[F],
       replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F],
-      mergeableStore: MergeableStore[F]
+      mergeableStore: MergeableStore[F],
+      mergeableTagName: Par
   ): F[RuntimeManagerImpl[F]] =
-    Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore))
+    Sync[F].delay(
+      RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore, mergeableTagName)
+    )
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
-      mergeableStore: MergeableStore[F]
+      mergeableStore: MergeableStore[F],
+      mergeableTagName: Par
   )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore).map(_._1)
+    createWithHistory(store, mergeableStore, mergeableTagName).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
-      mergeableStore: MergeableStore[F]
+      mergeableStore: MergeableStore[F],
+      mergeableTagName: Par
   )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -267,7 +273,7 @@ object RuntimeManager {
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore)
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore, mergeableTagName)
             .map((_, historyRepo))
       }
   }
