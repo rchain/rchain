@@ -99,13 +99,12 @@ object GraphzGenerator {
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)
-        val parents = b.header.parentsHashList.toList
+        val parents = b.header.parentsHashList
           .map(PrettyPrinter.buildString)
         val justifications = b.justifications
           .map(_.latestBlockHash)
           .map(PrettyPrinter.buildString)
-          .toSet
-          .toList
+          .distinct
         val validatorBlocks =
           Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
         Map(blockSenderHash -> validatorBlocks)
@@ -135,10 +134,8 @@ object GraphzGenerator {
     validators
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, parentsHashes, _) => {
-          parentsHashes
-            .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
-        }
+        case ValidatorBlock(blockHash, parentsHashes, _) =>
+          parentsHashes.traverse(p => g.edge(blockHash, p, constraint = Some(false)))
       }
       .as(())
 
@@ -149,21 +146,17 @@ object GraphzGenerator {
     validators.values.toList
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, _, justifications) => {
-          justifications
-            .traverse(
-              j =>
-                g.edge(
-                  blockHash,
-                  j,
-                  style = Some(Dotted),
-                  constraint = Some(false),
-                  arrowHead = Some(NoneArrow)
-                )
-            )
-
-        }
-
+        case ValidatorBlock(blockHash, _, justifications) =>
+          justifications.traverse(
+            j =>
+              g.edge(
+                blockHash,
+                j,
+                style = Some(Dotted),
+                constraint = Some(false),
+                arrowHead = Some(NoneArrow)
+              )
+          )
       }
       .as(())
 
@@ -175,10 +168,10 @@ object GraphzGenerator {
   ): Map[String, Option[GraphStyle]] =
     blocks.get(ts) match {
       case Some(tsBlocks) =>
-        (tsBlocks.map {
+        tsBlocks.map {
           case ValidatorBlock(blockHash, _, _) =>
-            (blockHash -> styleFor(blockHash, lastFinalizedBlockHash))
-        }).toMap
+            blockHash -> styleFor(blockHash, lastFinalizedBlockHash)
+        }.toMap
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
 

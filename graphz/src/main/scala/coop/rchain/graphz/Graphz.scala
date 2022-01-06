@@ -34,72 +34,66 @@ class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[
 }
 
 sealed trait GraphType
-final case object Graph   extends GraphType
-final case object DiGraph extends GraphType
+case object Graph   extends GraphType
+case object DiGraph extends GraphType
 
 sealed trait GraphShape
-final case object Circle       extends GraphShape
-final case object DoubleCircle extends GraphShape
-final case object Box          extends GraphShape
-final case object PlainText    extends GraphShape
-final case object Msquare      extends GraphShape
-final case object Record       extends GraphShape
+case object Circle       extends GraphShape
+case object DoubleCircle extends GraphShape
+case object Box          extends GraphShape
+case object PlainText    extends GraphShape
+case object Msquare      extends GraphShape
+case object Record       extends GraphShape
 
 sealed trait GraphRank
-final case object Same   extends GraphRank
-final case object Min    extends GraphRank
-final case object Source extends GraphRank
-final case object Max    extends GraphRank
-final case object Sink   extends GraphRank
+case object Same   extends GraphRank
+case object Min    extends GraphRank
+case object Source extends GraphRank
+case object Max    extends GraphRank
+case object Sink   extends GraphRank
 
 sealed trait GraphRankDir
-final case object TB extends GraphRankDir
-final case object BT extends GraphRankDir
-final case object LR extends GraphRankDir
-final case object RL extends GraphRankDir
+case object TB extends GraphRankDir
+case object BT extends GraphRankDir
+case object LR extends GraphRankDir
+case object RL extends GraphRankDir
 
 sealed trait GraphStyle
-final case object Solid  extends GraphStyle
-final case object Bold   extends GraphStyle
-final case object Filled extends GraphStyle
-final case object Invis  extends GraphStyle
-final case object Dotted extends GraphStyle
-final case object Dashed extends GraphStyle
+case object Solid  extends GraphStyle
+case object Bold   extends GraphStyle
+case object Filled extends GraphStyle
+case object Invis  extends GraphStyle
+case object Dotted extends GraphStyle
+case object Dashed extends GraphStyle
 
 sealed trait GraphArrowType
-final case object NormalArrow extends GraphArrowType
-final case object InvArrow    extends GraphArrowType
-final case object NoneArrow   extends GraphArrowType
+case object NormalArrow extends GraphArrowType
+case object InvArrow    extends GraphArrowType
+case object NoneArrow   extends GraphArrowType
 
 object Graphz {
 
-  implicit val showShape: Show[GraphShape] = new Show[GraphShape] {
-    def show(shape: GraphShape): String = shape match {
-      case Circle       => "circle"
-      case DoubleCircle => "doublecircle"
-      case Box          => "box"
-      case PlainText    => "plaintext"
-      case Msquare      => "Msquare"
-      case Record       => "record"
-    }
+  implicit val showShape: Show[GraphShape] = {
+    case Circle       => "circle"
+    case DoubleCircle => "doublecircle"
+    case Box          => "box"
+    case PlainText    => "plaintext"
+    case Msquare      => "Msquare"
+    case Record       => "record"
   }
 
-  def smallToString[A]: Show[A] = new Show[A] {
-    def show(a: A): String = a.toString.toLowerCase
-  }
+  def smallToString[A]: Show[A] = (a: A) => a.toString.toLowerCase
 
   implicit val showStyle: Show[GraphStyle]     = smallToString[GraphStyle]
   implicit val showRank: Show[GraphRank]       = smallToString[GraphRank]
   implicit val showRankDir: Show[GraphRankDir] = Show.fromToString[GraphRankDir]
-  implicit val showArrowType: Show[GraphArrowType] = new Show[GraphArrowType] {
-    def show(arrowType: GraphArrowType): String = arrowType match {
-      case NormalArrow => "normal"
-      case InvArrow    => "inv"
-      case NoneArrow   => "none"
-    }
+  implicit val showArrowType: Show[GraphArrowType] = {
+    case NormalArrow => "normal"
+    case InvArrow    => "inv"
+    case NoneArrow   => "none"
   }
 
-  def DefaultShape = Circle
+  def DefaultShape: GraphShape = Circle
 
   def apply[F[_]: Monad](
       name: String,

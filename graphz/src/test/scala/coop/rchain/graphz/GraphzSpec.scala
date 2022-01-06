@@ -391,12 +391,12 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
 
     it("Huge graph") { // test for a stack overflow
       val graph = for {
-        ref     <- Ref[Task].of(new StringBuffer(""))
-        ser     = new StringSerializer(ref)
-        g       <- Graphz[Task]("G", DiGraph, ser)
-        _       <- (1 to 1000).toList.traverse(i => g.edge(s"e$i" -> s"e${i + 1}"))
-        _       <- g.close
-        content <- g.show
+        ref <- Ref[Task].of(new StringBuffer(""))
+        ser = new StringSerializer(ref)
+        g   <- Graphz[Task]("G", DiGraph, ser)
+        _   <- (1 to 1000).toList.traverse(i => g.edge(s"e$i" -> s"e${i + 1}"))
+        _   <- g.close
+        _   <- g.show
       } yield g
       graph // ignore
     }
@@ -413,7 +413,7 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
       val writer = new PrintWriter(sourcePath)
       writer.println(graph)
       writer.flush()
-      writer.close
+      writer.close()
       val dotCmd  = s"dot -Tpdf $sourcePath -o $outputPath"
       val openCmd = s"open $outputPath"
       import sys.process._
