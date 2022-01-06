@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.{Monad, _}
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -33,7 +33,7 @@ object GraphzGenerator {
     def empty[G[_]]: DagInfo[G] = DagInfo[G]()
   }
 
-  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Sync](
+  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Sync: Concurrent](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
       config: GraphConfig
