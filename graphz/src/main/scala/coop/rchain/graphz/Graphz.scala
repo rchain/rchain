@@ -22,7 +22,7 @@ class ListSerializer[F[_]: Concurrent](ref: Ref[F, Vector[String]]) extends Grap
   def push(str: String, suffix: String): F[Unit] = ref.update { current =>
     current :+ (str + suffix)
   }
-  def show: F[String] = ???
+  def show: F[String] = ref.get.map { _.mkString("") }
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {
