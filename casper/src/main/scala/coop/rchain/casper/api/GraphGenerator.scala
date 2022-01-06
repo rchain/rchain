@@ -24,13 +24,13 @@ object GraphzGenerator {
 
   type ValidatorsBlocks = Map[Long, List[ValidatorBlock]]
 
-  final case class DagInfo[G[_]](
+  final case class DagInfo(
       validators: Map[String, ValidatorsBlocks] = Map.empty,
       timeseries: List[Long] = List.empty
   )
 
   object DagInfo {
-    def empty[G[_]]: DagInfo[G] = DagInfo[G]()
+    def empty: DagInfo = DagInfo()
   }
 
   def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Sync: Concurrent](
@@ -39,7 +39,7 @@ object GraphzGenerator {
       config: GraphConfig
   ): F[G[Graphz[G]]] =
     for {
-      acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G](_, _))
+      acc <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
     } yield {
 
       val timeseries     = acc.timeseries.reverse
@@ -94,10 +94,10 @@ object GraphzGenerator {
 
     }
 
-  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore, G[_]](
-      acc: DagInfo[G],
+  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore](
+      acc: DagInfo,
       blockHashes: Vector[BlockHash]
-  ): F[DagInfo[G]] =
+  ): F[DagInfo] =
     for {
       blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
       timeEntry = blocks.head.body.state.blockNumber
