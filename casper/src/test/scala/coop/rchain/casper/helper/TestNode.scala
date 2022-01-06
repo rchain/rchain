@@ -348,14 +348,14 @@ case class TestNode[F[_]: Timer](
   def shutoff() = transportLayerEff.clear(local)
 
   def visualizeDag(startBlockNumber: Int): F[String] = {
-    val serialize: Task[Graphz[Task]] => String = _.toString
+    val serialize: F[Graphz[F]] => String = _.toString
 
-    val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, Task, String](
+    val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, String](
       Int.MaxValue,
       apiMaxBlocksLimit,
       startBlockNumber,
       (ts, lfb) =>
-        GraphzGenerator.dagAsCluster[F, Task](
+        GraphzGenerator.dagAsCluster[F](
           ts,
           lfb,
           GraphConfig(showJustificationLines = true)

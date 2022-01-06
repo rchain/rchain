@@ -33,66 +33,61 @@ object GraphzGenerator {
     def empty: DagInfo = DagInfo()
   }
 
-  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Sync: Concurrent](
+  def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log: BlockStore](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
       config: GraphConfig
-  ): F[G[Graphz[G]]] =
+  ): F[Graphz[F]] =
     for {
-      acc <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
-    } yield {
-
-      val timeseries     = acc.timeseries.reverse
-      val firstTs        = timeseries.head
-      val validators     = acc.validators
-      val validatorsList = validators.toList.sortBy(_._1)
-      for {
-        ref <- Ref[G].of(new StringBuffer(""))
-        ser = new StringSerializer(ref)
-        g   <- initGraph[G]("dag", ser)
-        allAncestors = validatorsList
-          .flatMap {
-            case (_, blocks) =>
-              blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
+      acc            <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
+      timeseries     = acc.timeseries.reverse
+      firstTs        = timeseries.head
+      validators     = acc.validators
+      validatorsList = validators.toList.sortBy(_._1)
+      ref            <- Ref[F].of(new StringBuffer(""))
+      ser            = new StringSerializer(ref)
+      g              <- initGraph[F]("dag", ser)
+      allAncestors = validatorsList
+        .flatMap {
+          case (_, blocks) =>
+            blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
+        }
+        .distinct
+        .sorted
+      // draw ancesotrs first
+      _ <- allAncestors.traverse(
+            ancestor =>
+              g.node(
+                ancestor,
+                style = styleFor(ancestor, lastFinalizedBlockHash),
+                shape = Box
+              )
+          )
+      // create invisible edges from ancestors to first node in each cluster for proper alligment
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              allAncestors.traverse(ancestor => {
+                val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
+                nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
+              })
           }
-          .distinct
-          .sorted
-        // draw ancesotrs first
-        _ <- allAncestors.traverse(
-              ancestor =>
-                g.node(
-                  ancestor,
-                  style = styleFor(ancestor, lastFinalizedBlockHash),
-                  shape = Box
-                )
-            )
-        // create invisible edges from ancestors to first node in each cluster for proper alligment
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                allAncestors.traverse(ancestor => {
-                  val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
-                  nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
-                })
-            }
-        // draw clusters per validator
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser).map {
-                  vCluster =>
-                    g.subgraph(vCluster)
-                }
-            }
-        // draw parent dependencies
-        _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
-        // draw justification dotted lines
-        _ <- config.showJustificationLines.fold(
-              drawJustificationDottedLines[G](g, validators),
-              ().pure[G]
-            )
-        _ <- g.close
-      } yield g
-
-    }
+      // draw clusters per validator
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser).map {
+                vCluster =>
+                  g.subgraph(vCluster)
+              }
+          }
+      // draw parent dependencies
+      _ <- drawParentDependencies[F](g, validatorsList.map(_._2))
+      // draw justification dotted lines
+      _ <- config.showJustificationLines.fold(
+            drawJustificationDottedLines[F](g, validators),
+            ().pure[F]
+          )
+      _ <- g.close
+    } yield g
 
   private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore](
       acc: DagInfo,
@@ -120,11 +115,11 @@ object GraphzGenerator {
       validators = acc.validators |+| Foldable[List].fold(validators)
     )
 
-  private def initGraph[G[_]: Monad](
+  private def initGraph[F[_]: Monad](
       name: String,
-      ser: GraphSerializer[G]
-  ): G[Graphz[G]] =
-    Graphz[G](
+      ser: GraphSerializer[F]
+  ): F[Graphz[F]] =
+    Graphz[F](
       name,
       DiGraph,
       ser,
@@ -133,10 +128,10 @@ object GraphzGenerator {
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
 
-  private def drawParentDependencies[G[_]: Applicative](
-      g: Graphz[G],
+  private def drawParentDependencies[F[_]: Applicative](
+      g: Graphz[F],
       validators: List[ValidatorsBlocks]
-  ): G[Unit] =
+  ): F[Unit] =
     validators
       .flatMap(_.values.toList.flatten)
       .traverse {
@@ -147,10 +142,10 @@ object GraphzGenerator {
       }
       .as(())
 
-  private def drawJustificationDottedLines[G[_]: Applicative](
-      g: Graphz[G],
+  private def drawJustificationDottedLines[F[_]: Applicative](
+      g: Graphz[F],
       validators: Map[String, ValidatorsBlocks]
-  ): G[Unit] =
+  ): F[Unit] =
     validators.values.toList
       .flatMap(_.values.toList.flatten)
       .traverse {
@@ -187,15 +182,15 @@ object GraphzGenerator {
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
 
-  private def validatorCluster[G[_]: Monad](
+  private def validatorCluster[F[_]: Monad](
       id: String,
       blocks: ValidatorsBlocks,
       timeseries: List[Long],
       lastFinalizedBlockHash: String,
-      ser: GraphSerializer[G]
-  ): G[Graphz[G]] =
+      ser: GraphSerializer[F]
+  ): F[Graphz[F]] =
     for {
-      g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, ser, label = Some(id))
+      g     <- Graphz.subgraph[F](s"cluster_$id", DiGraph, ser, label = Some(id))
       nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, lastFinalizedBlockHash))
       _ <- nodes.traverse(
             ns =>
