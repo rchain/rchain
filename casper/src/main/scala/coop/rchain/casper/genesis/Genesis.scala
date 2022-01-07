@@ -29,7 +29,8 @@ object Genesis {
       StandardDeploys.nonNegativeNumber.data.timestamp
     )
     import coop.rchain.models.rholang.implicits._
-    GPrivate(ByteString.copyFrom(rand.next()))
+    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
+    GPrivate(ByteString.copyFrom(unforgeableByte))
   }
 
   def defaultBlessedTerms(

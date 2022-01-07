@@ -22,24 +22,25 @@ final class RhoRuntimeOps[F[_]: Sync](
       term: String,
       normalizerEnv: Map[String, Par]
   ): F[EvaluateResult] =
-    evaluate(term, Cost.UNSAFE_MAX, normalizerEnv)
+    evaluate(term, Cost.UNSAFE_MAX, normalizerEnv, Blake2b512Random(128))
 
   def evaluate(
       term: String
   ): F[EvaluateResult] =
-    evaluate(term, Cost.UNSAFE_MAX, Map.empty)
+    evaluate(term, Cost.UNSAFE_MAX, Map.empty, Blake2b512Random(128))
 
   def evaluate(
       term: String,
       initialPhlo: Cost
-  ): F[EvaluateResult] = evaluate(term, initialPhlo, Map.empty)
+  ): F[EvaluateResult] = evaluate(term, initialPhlo, Map.empty, Blake2b512Random(128))
 
   def evaluate(
       term: String,
       initialPhlo: Cost,
-      normalizerEnv: Map[String, Par]
+      normalizerEnv: Map[String, Par],
+      randSeed: Blake2b512Random
   ): F[EvaluateResult] = {
-    implicit val rand: Blake2b512Random = Blake2b512Random(128)
+    implicit val rand: Blake2b512Random = randSeed
     runtime.createSoftCheckpoint >>= { checkpoint =>
       runtime.evaluate(term, initialPhlo, normalizerEnv).attempt >>= {
         case Right(evaluateResult) =>

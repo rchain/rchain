@@ -12,7 +12,7 @@ import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
@@ -45,13 +45,19 @@ object Resources {
   }
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
-      prefix: String
+      prefix: String,
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
-    mkTempDir[F](prefix).evalMap(mkTestRNodeStoreManager[F]).evalMap(mkRuntimeManagerAt[F])
+    mkTempDir[F](prefix)
+      .evalMap(mkTestRNodeStoreManager[F])
+      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
-  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](kvm: KeyValueStoreManager[F])(
+  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
+      kvm: KeyValueStoreManager[F],
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+  )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
@@ -61,7 +67,7 @@ object Resources {
     for {
       rStore         <- kvm.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvm)
-      runtimeManager <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
+      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName)
     } yield runtimeManager
   }
 
