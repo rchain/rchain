@@ -81,7 +81,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       stateHash  = Base16.encode(checkpoint.root.toByteString.toByteArray)
-      _ = "9ff69faea28024a50ddcee894066ec31233e5b95f0f2bbd87af06def2ad94e7c" should be(
+        "10cce029738696f1e120a6bad4bdf3f18adca25ccf36133bd4916f607a6a50c0"
         stateHash
       )
     } yield ()
