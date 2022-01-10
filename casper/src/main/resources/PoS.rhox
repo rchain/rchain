@@ -117,9 +117,8 @@ in {
           )
         }
       } |
-      // create unforgeable name vault with the provided pub key
       // ret: the return channel of the create
-      // pubKey: the pubkey which controll the unforgeable name
+      // pubKey: the pubkey which control the unforgeable name
       contract createUnfVault(ret, @pubkey) = {
         new unf, unfAddrRet, createRetCh, pubKeyChainUnfVault, unfVaultHandle, stdout(`rho:io:stdout`) in {
           revAddressOps!("fromUnforgeable", *unf, *unfAddrRet) |
@@ -149,7 +148,7 @@ in {
         }
       }|
       createUnfVault!(*posVaultCh, "$$posPubKey$$") |
-      for (@(posVaultUnf, posVaultAddr, posVault, humanControllHandle) <- posVaultCh){
+      for (@(posVaultUnf, posVaultAddr, posVault, humanControlHandle) <- posVaultCh){
       @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
       for (@posDeployerRevAddress <- posDeployerRevAddressCh;
            @posDeployerAuthKey    <- posDeployerAuthKeyCh;
@@ -529,13 +528,13 @@ in {
                                   stateProcessCh, paymentDoneCh,
                                   accDepositsDoneCh, commitRewardsCh,
                                   newValidatorsCh, removeQuarantinedCh, currentEpochRewardCh,
-                                  accumulateRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
+                                  commitCurrentEpochRewards, updatedRewardsCh, movePendingWithdrawCh, movePendingWithdrawer
                               in {
                                 PoS!("getCurrentEpochRewards", * currentEpochRewardCh) |
                                 for (@currentRewards <- currentEpochRewardCh) {
                                   runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                   for (@state, stateUpdateCh <- stateProcessCh) {
-                                    accumulateRewards!(state, currentRewards, *updatedRewardsCh) |
+                                    commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
                                       movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
                                       for (@newMovedPendingState <- movePendingWithdrawCh){
@@ -559,7 +558,7 @@ in {
                                     }
                                   }
                                 } |
-                                contract accumulateRewards(@state, @currentRewards, returnCh) = {
+                                contract commitCurrentEpochRewards(@state, @currentRewards, returnCh) = {
                                   new accumulate in {
                                     @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
                                     contract accumulate(@(pk, reward), @updatedState, resultCh) = {

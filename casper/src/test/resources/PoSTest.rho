@@ -247,7 +247,7 @@ match (
                                   ((finalUserBalance, "==", initialUserBalance - bondAmt), "user balance should change by bond amount"),
                                   ((finalPosBalance, "==", initialPosBalance + bondAmt), "pos balance should change by bond amount"),
                                   ((true, "==", withdrawers.contains(userPubKey)), "withdrawer is moved to withdrawers map"),
-                                  (((bondAmt, quarantinePeriod), "==", withdrawers.get(userPubKey)), "withdrawer has correct quarantine and bonds finish block")
+                                  (((bondAmt, quarantinePeriod), "==", withdrawers.get(userPubKey)), "withdrawer state has correct quarantine period and bonds after withdrawing from pos")
                                 ],
                                 *ackCh
                               )
@@ -287,7 +287,7 @@ match (
                     (bondAmt, chargeAmt, refundAmt, blockNumber) => {
                       @PoS!("bond", validatorDeployerId, bondAmt, *bondCh) |
                       for (@(true, _) <- bondCh) {
-                        stdlog!("info", ("successfully bond bbbb... ")) |
+                        stdlog!("info", ("successfully bond.")) |
                         closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
                           prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
@@ -300,7 +300,7 @@ match (
                               for (_ <- closeBlockCh) {
                                 @PoS!("getRewards", *rewardsCh) |
                                 for (@rewards <- rewardsCh) {
-                                  stdlog!("info", ("After prechar and refund of the rewards", rewards)) |
+                                  stdlog!("info", ("After precharge and refund of the rewards", rewards)) |
                                   validatorRewardCh!(rewards.getOrElse(validatorPubKey, 0)) |
                                   for (@validatorReward <- validatorRewardCh) {
                                     setBlockData!("blockNumber", blockNumber, *blockDataCh) |
@@ -461,7 +461,7 @@ match (
                              @initialRewards      <- initialRewardsCh;
                              @initialBonds <- initialBondsCh;
                              @initialActives <- initialActiveCh) {
-                          stdlog!("info", ("bonding distribution and actives before prechard and refund", initialBonds, initialActives, initialRewards)) |
+                          stdlog!("info", ("bonding distribution and actives before precharge and refund", initialBonds, initialActives, initialRewards)) |
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *retCh0) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *retCh1) |
                           for (@(true, _) <- retCh0;
