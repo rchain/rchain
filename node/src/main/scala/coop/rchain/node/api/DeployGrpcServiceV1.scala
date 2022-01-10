@@ -35,7 +35,8 @@ object DeployGrpcServiceV1 {
       devMode: Boolean = false,
       networkId: String,
       shardId: String,
-      minPhloPrice: Long
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -87,7 +88,7 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice)) { r =>
+              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice, isNodeReadOnly)) { r =>
                 import DeployResponse.Message
                 import DeployResponse.Message._
                 DeployResponse(r.fold[Message](Error, Result))

@@ -53,7 +53,8 @@ object BlockAPI {
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
       triggerPropose: Option[ProposeFunction[F]],
-      minPhloPrice: Long
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -69,6 +70,13 @@ object BlockAPI {
         // call a propose if proposer defined
         _ <- triggerPropose.traverse(_(casper, true))
       } yield r
+
+    // Check if node is read-only
+    val readOnlyError = new RuntimeException(
+      s"Deploy was rejected because node is running in read-only mode. " +
+        s"To be a validator node should be run with a validator private key."
+    ).raiseError[F, ApiErr[String]]
+    val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
 
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
@@ -89,7 +97,9 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+      ApiErr[String]
+    ](
       casperDeploy,
       logErrorMessage
     ))

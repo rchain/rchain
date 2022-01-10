@@ -79,11 +79,14 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val noopSpan: Span[Effect] = NoopSpan[Effect]()
       val engine                          = new EngineWithCasper[Effect](node.casperEff)
       Cell.mvarCell[Effect, Engine[Effect]](engine).flatMap { implicit engineCell =>
-        val minPhloPrice = 10.toLong
-        val phloPrice    = 1.toLong
+        val minPhloPrice   = 10.toLong
+        val phloPrice      = 1.toLong
+        val isNodeReadOnly = false
         for {
           deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
-          err        <- BlockAPI.deploy[Effect](deployData, None, minPhloPrice = minPhloPrice).attempt
+          err <- BlockAPI
+                  .deploy[Effect](deployData, None, minPhloPrice = minPhloPrice, isNodeReadOnly)
+                  .attempt
         } yield {
           err.isLeft shouldBe true
           val ex = err.left.get
