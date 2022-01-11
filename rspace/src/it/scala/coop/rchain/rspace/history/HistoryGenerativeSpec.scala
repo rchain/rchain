@@ -1,12 +1,11 @@
 package coop.rchain.rspace.history
 
-import org.scalatest.{FlatSpec, Matchers, OptionValues}
-import History._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import org.scalacheck.{Arbitrary, Gen, Shrink}
 import coop.rchain.shared.GeneratorUtils.distinctListOf
 import monix.eval.Task
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest.prop._
+import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
 class HistoryGenerativeSpec
     extends FlatSpec
@@ -27,11 +26,12 @@ class HistoryGenerativeSpec
   "process" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryRandomThreeBytes)
   ) { keys: List[Key] =>
-    val actions             = keys.map(k => (k, TestData.randomBlake))
-    val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+    val actions = keys.map(k => (k, TestData.randomBlake))
+    val emptyMergingHistory =
+      HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
     val emptySimplisticHistory: HistoryWithFind[Task] =
-      SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
+      SimplisticHistory.noMerging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
     val emptyState = Map.empty[Key, (Data, HistoryWithFind[Task], HistoryWithFind[Task])] // accumulate actions performed on the trie
 
@@ -66,19 +66,18 @@ class HistoryGenerativeSpec
 
     val deletions           = map.values.map(_._1).map(v => DeleteAction(v._1)).toList
     val finalMergingHistory = resultMergingHistory.process(deletions)
-    runEffect(finalMergingHistory).root shouldBe emptyRootHash
+    runEffect(finalMergingHistory).root shouldBe HistoryMergingInstances.emptyRootHash
 
     val finalSimplisticHistory = resultSimplisticHistory.process(deletions)
-    runEffect(finalSimplisticHistory).root shouldBe emptyRootHash
+    runEffect(finalSimplisticHistory).root shouldBe HistoryMergingInstances.emptyRootHash
   }
 
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
     keys: List[Key] =>
-      val actions             = keys.map(k => (k, TestData.randomBlake))
-      val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
-
+      val actions = keys.map(k => (k, TestData.randomBlake))
+      val emptyMergingHistory = HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
       val emptySimplisticHistory: HistoryWithFind[Task] =
-        SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
+        SimplisticHistory.noMerging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
       val inserts                  = actions.map { case (k, v) => InsertAction(k, v) }
       val postInsertMergingHistory = runEffect(emptyMergingHistory.process(inserts))
@@ -94,8 +93,8 @@ class HistoryGenerativeSpec
       val postDeletionNonMergingHistory =
         runEffect(postInsertNonMergingHistory.process(deletions))
 
-      postDeletionMergingHistory.root shouldBe emptyRootHash
-      postDeletionNonMergingHistory.root shouldBe emptyRootHash
+      postDeletionMergingHistory.root shouldBe HistoryInstances.emptyRootHash
+      postDeletionNonMergingHistory.root shouldBe HistoryMergingInstances.emptyRootHash
   }
 
   val arbitraryRandomThreeBytes: Arbitrary[Key] =

@@ -15,6 +15,8 @@ import scala.language.higherKinds
   * History implementation with radix tree
   */
 object RadixHistory {
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteArray(hashNode(emptyNode)._1.toArray)
+
   def apply[F[_]: Sync: Parallel](
       root: Blake2b256Hash,
       store: RadixStore[F]

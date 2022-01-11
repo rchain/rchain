@@ -44,7 +44,7 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootRepository     = new RootRepository[Task](rootsStore)
       channelKVStore     <- kvm.store("channels")
       channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
-      emptyHistory       = HistoryMergingInstances.merging(History.emptyRootHash, historyStore)
+      emptyHistory       = HistoryMergingInstances.merging(HistoryMergingInstances.emptyRootHash, historyStore)
       exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
@@ -73,7 +73,7 @@ class InmemHistoryRepositoryGenerativeSpec
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
     val emptyHistory =
-      HistoryMergingInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+      HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
     implicit val log: Log[Task]   = new Log.NOPLog[Task]
     implicit val span: Span[Task] = new NoopSpan[Task]
     val kvm                       = InMemoryStoreManager[Task]

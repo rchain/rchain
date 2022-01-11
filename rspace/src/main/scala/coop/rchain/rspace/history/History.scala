@@ -2,6 +2,7 @@ package coop.rchain.rspace.history
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.rspace.history.instances.RadixHistory
 import scodec.bits.ByteVector
 
 /**
@@ -51,6 +52,9 @@ trait History[F[_]] extends HistorySelf[F] {
   def read(key: ByteVector): F[Option[ByteVector]]
 }
 
+object History {
+  val emptyRootHash: Blake2b256Hash = RadixHistory.emptyRootHash
+}
 /**
   * Support for old ("merging") History
   *

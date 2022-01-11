@@ -14,7 +14,7 @@ class CachingHistorySpec
   def create: (MergingHistory[Task], CachingHistoryStore[Task]) = {
     val historyStore = inMemHistoryStore
     val caching      = CachingHistoryStore(historyStore)
-    val history      = new MergingHistory[Task](History.emptyRootHash, caching)
+    val history      = new MergingHistory[Task](HistoryInstances.emptyRootHash, caching)
     (history, caching)
   }
 

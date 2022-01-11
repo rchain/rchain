@@ -5,6 +5,7 @@ import cats.syntax.all._
 import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.rspace.serializers.ScodecSerialize.{codecTrie, RichAttempt}
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import coop.rchain.rspace.serializers.ScodecSerialize.{
   codecPointerBlock,
@@ -26,6 +27,10 @@ object HistoryMergingInstances {
   type SubtrieAtIndex   = (Index, KeyPath, NonEmptyTriePointer)
 
   def MalformedTrieError = new RuntimeException("malformed trie")
+
+  val emptyRoot: Trie               = EmptyTrie
+  private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).getUnsafe.toByteVector
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.create(encodeEmptyRoot)
 
   val emptyRoot: Trie               = EmptyTrie
   private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).getUnsafe.toByteVector
