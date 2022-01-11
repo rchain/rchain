@@ -73,8 +73,7 @@ object BlockAPI {
 
     // Check if node is read-only
     val readOnlyError = new RuntimeException(
-      s"Deploy was rejected because node is running in read-only mode. " +
-        s"To be a validator node should be run with a validator private key."
+      "Deploy was rejected because node is running in read-only mode."
     ).raiseError[F, ApiErr[String]]
     val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
 
