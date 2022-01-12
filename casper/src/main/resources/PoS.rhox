@@ -169,7 +169,8 @@ in {
           pickActiveValidators!($$initialBonds$$.toList(), *initialActiveCh) |
           for (@initialActive     <- initialActiveCh; 
                @(true, _) <- moveInitialBondCh) {
-            new stateCh, pendingRewardsInitializedCh, rewardsInfo, calTotalActiveBonds, calTotalBonds, calTotalWithdraw, calTotalCommittedRewards in {
+            new stateCh, pendingRewardsInitializedCh, rewardsInfo, calTotalActiveBonds, calTotalBonds, 
+                accumulateTotalBondsAlg, accumulateTotalWithdrawAlg, accumulateCommittedRewardsAlg, accumulateItemInState in {
               // Initializes PoS state structure.
               stateCh!({
                 // Map[PublicKey, Int] - each validator stake
@@ -190,10 +191,10 @@ in {
               contract rewardsInfo(retCh) = {
                 new posBalanceCh, totalActiveBondCh, totalBondCh, totalWithdrawCh, committedRewardsCh in {
                   @posVault!("balance", *posBalanceCh) |
-                  calTotalBonds!(*totalBondCh) |
+                  accumulateItemInState!(*totalBondCh, "allBonds", *accumulateTotalBondsAlg) |
                   calTotalActiveBonds!(*totalActiveBondCh) |
-                  calTotalWithdraw!(*totalWithdrawCh) |
-                  calTotalCommittedRewards!(*committedRewardsCh) |
+                  accumulateItemInState!(*totalWithdrawCh, "withdrawers", *accumulateTotalWithdrawAlg) |
+                  accumulateItemInState!(*committedRewardsCh, "comittedRewards", *accumulateCommittedRewardsAlg) |
                   for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @activeBonds <- totalActiveBondCh; 
                        @totalWithdraw <- totalWithdrawCh; @totalCommittedRewards <- committedRewardsCh){
                     for (@state <<- stateCh) {
@@ -203,7 +204,7 @@ in {
                 }
               } |
               contract calTotalActiveBonds(returnCh) = {
-                new computeSum, computeDelta in {
+                new computeSum in {
                   for (@state <<- stateCh){
                     @ListOps!("fold", state.get("allBonds").toList(), 0, *computeSum, *returnCh) |
                     contract computeSum(@(pk, bondAmount), @acc, resultCh) = {
@@ -216,36 +217,20 @@ in {
                   }
                 }
               } |
-              contract calTotalBonds(returnCh) = {
-                new computeSum, computeDelta in {
-                  for (@state <<- stateCh){
-                    @ListOps!("fold", state.get("allBonds").toList(), 0, *computeSum, *returnCh) |
-                    contract computeSum(@(pk, bondAmount), @acc, resultCh) = {
-                      resultCh!(acc + bondAmount)
-                    }
-                  }
-                }
+              contract accumulateTotalBondsAlg(@(pk, bondAmount), @acc, resultCh) = {
+                resultCh!(acc + bondAmount)
               } |
-              contract calTotalWithdraw(returnCh) = {
-                new computeSum in {
-                  for (@state <<- stateCh){
-                    @ListOps!("fold", state.get("withdrawers").toList(), 0, *computeSum, *returnCh) |
-                    contract computeSum(@(pk, (previousBonding, quantinue)), @acc, resultCh) = {
-                      resultCh!(acc + previousBonding)
-                    }
-                  }
-                }
+              contract accumulateTotalWithdrawAlg(@(pk, (previousBonding, quantinue)), @acc, resultCh) = {
+                resultCh!(acc + previousBonding)
               } |
-              contract calTotalCommittedRewards(returnCh) = {
-                new computeSum, computeDelta in {
-                  for (@state <<- stateCh){
-                    @ListOps!("fold", state.get("comittedRewards").toList(), 0, *computeSum, *returnCh) |
-                    contract computeSum(@(pk, reward), @acc, resultCh) = {
-                      resultCh!(acc + reward)
-                    }
-                  }
-                }
+              contract accumulateCommittedRewardsAlg(@(pk, reward), @acc, resultCh) = {
+                resultCh!(acc + reward)
               } |
+              contract accumulateItemInState(returnCh, @stateKey, accumulateAlgo) = {
+                for (@state <<- stateCh){
+                  @ListOps!("fold", state.get(stateKey).toList(), 0, *accumulateAlgo, *returnCh) 
+                }
+              }|
               contract PoS(@"getCurrentEpochRewards", returnCh) = {
                 new rewardCh, computeReward in {
                   rewardsInfo!(*rewardCh)|
@@ -318,7 +303,7 @@ in {
               } |
               contract PoS(@"humanTransfer", @targetAddress, @amount, @deployerID, @transferRet) = {
                 // human transfer would just use this method
-                @humanControllHandle!("transfer", targetAddress, amount, deployerID, transferRet)
+                @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
               // Public method allowing users to bond and become validators.
               contract PoS(@"bond", @deployerId, @amount, returnCh) = {
