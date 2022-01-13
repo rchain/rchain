@@ -27,7 +27,7 @@ or the docker images.
 ### 2. use the self-pushed docker image
 
 ```bash
-docker pull zsluedem/revdefine:revdefine-0.1.2
+docker pull zsluedem/revdefine:revdefine-0.1.3
 ```
 
 ## How to run the node
@@ -56,7 +56,7 @@ docker-compose file.
 version: "2.3"
 services:
   rnode:
-    image: zsluedem/revdefine:revdefine-0.1.2
+    image: zsluedem/revdefine:revdefine-0.1.3
     user: root
     networks:
       - rchain-net
