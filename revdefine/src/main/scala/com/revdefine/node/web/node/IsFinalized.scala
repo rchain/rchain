@@ -8,7 +8,7 @@ import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.api.BlockAPI.BlockRetrievalError
 import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 
 object IsFinalized {
@@ -16,9 +16,7 @@ object IsFinalized {
       blockHash: String
   ): F[Boolean] =
     for {
-      hashByteString <- Base16
-                         .decode(blockHash)
-                         .map(ByteString.copyFrom)
+      hashByteString <- blockHash.hexToByteString
                          .liftTo[F](
                            BlockRetrievalError(
                              s"Input hash value is not valid hex string: $blockHash"

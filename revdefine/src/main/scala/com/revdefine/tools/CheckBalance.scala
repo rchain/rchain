@@ -3,11 +3,11 @@ package com.revdefine.tools
 import cats.syntax.all._
 import com.revdefine.node.store.MongoStore.createStore
 import com.revdefine.syntax.all.mongoFindObservableSyntax
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.{BindPattern, ListParWithRandom}
 import coop.rchain.rspace.Match
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -77,7 +77,7 @@ object CheckBalance {
         val file = stateBalancesFile.toFile
         val bw   = new PrintWriter(file)
         stateBalances.foreach {
-          case (key, balance) => bw.write(s"${Base16.encode(key.toByteArray)},${balance}\n")
+          case (key, balance) => bw.write(s"${key.toHexString},${balance}\n")
         }
         bw.close()
       }

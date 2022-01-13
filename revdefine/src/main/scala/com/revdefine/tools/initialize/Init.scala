@@ -41,13 +41,13 @@ import com.revdefine.node.web.transfer.Transfer.{
 import com.revdefine.origin.revvaultexport.RhoTrieTraverser
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import org.rogach.scallop.{ScallopConf, ScallopOption}
 import scodec.codecs.utf8
 import coop.rchain.shared.syntax._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import monix.execution.Scheduler.Implicits.global
 
 import java.io.{File, PrintWriter}
@@ -189,7 +189,7 @@ object Init {
                            SCodec.transactionResponseCodec
                          )
       genesisBlock <- blockStore.getUnsafe(
-                       ByteString.copyFrom(Base16.unsafeDecode(GenesisBlockHash))
+                       GenesisBlockHash.unsafeHexToByteString
                      )
       genesisTransactions = {
         val transferDeploys = genesisBlock.body.deploys.slice(8, 82)
@@ -207,7 +207,7 @@ object Init {
                   amount = amount.toLong,
                   blockNumber = 0,
                   blockHash = GenesisBlockHash,
-                  deployId = Base16.encode(deploy.deploy.sig.toByteArray),
+                  deployId = deploy.deploy.sig.toHexString,
                   timestamp = deploy.deploy.data.timestamp,
                   isFinalized = true,
                   isSucceeded = true,
@@ -219,14 +219,12 @@ object Init {
           }
           .toList
       }
-      targetBlock     <- blockStore.getUnsafe(ByteString.copyFrom(Base16.unsafeDecode(targetBlockHash)))
+      targetBlock     <- blockStore.getUnsafe(targetBlockHash.unsafeHexToByteString)
       transactionsMap <- transactionStore.toMap
       allNewTransactions <- transactionsMap.toList.flatTraverse {
                              case (blockHash, transaction) =>
                                for {
-                                 block <- blockStore.getUnsafe(
-                                           ByteString.copyFrom(Base16.unsafeDecode(blockHash))
-                                         )
+                                 block <- blockStore.getUnsafe(blockHash.unsafeHexToByteString)
                                  transactions = transaction.data.map(
                                    fromRnodeTransaction(_, block, isFinalized = true)
                                  )

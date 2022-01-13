@@ -10,7 +10,7 @@ import coop.rchain.casper.api.BlockAPI.BlockRetrievalError
 import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
 
@@ -20,9 +20,7 @@ object BlockApi {
       blockHash: String
   ): F[BlockMessage] =
     for {
-      hashByteString <- Base16
-                         .decode(blockHash)
-                         .map(ByteString.copyFrom)
+      hashByteString <- blockHash.hexToByteString
                          .liftTo[F](
                            BlockRetrievalError(
                              s"Input hash value is not valid hex string: $blockHash"

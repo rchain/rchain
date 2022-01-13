@@ -5,7 +5,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.{BindPattern, ListParWithRandom}
 import coop.rchain.rspace.{Match}
@@ -50,7 +50,7 @@ object ReWriteApprovedBlock {
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
       approvedBlock     <- blockStore.getApprovedBlock
       _                 <- log.info(s"approve block is ${approvedBlock}")
-      blockOpt          <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt          <- blockStore.get(blockHash.unsafeHexToByteString)
       _                 <- log.info(s"target new approved block is ${blockOpt}")
       block             = blockOpt.get
       newApproved       = ApprovedBlock(ApprovedBlockCandidate(block, 0), List.empty)

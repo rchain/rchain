@@ -10,7 +10,7 @@ import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.models.Par
 import coop.rchain.shared.Log
 
@@ -22,9 +22,7 @@ object ExploreDeploy {
       usePreStateHash: Boolean
   ): F[Seq[Par]] =
     for {
-      hashByteString <- Base16
-                         .decode(blockHash)
-                         .map(ByteString.copyFrom)
+      hashByteString <- blockHash.hexToByteString
                          .liftTo[F](
                            BlockRetrievalError(
                              s"Input hash value is not valid hex string: $blockHash"

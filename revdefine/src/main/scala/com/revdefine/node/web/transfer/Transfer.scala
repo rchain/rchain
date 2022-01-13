@@ -9,7 +9,7 @@ import coop.rchain.node.web.{
   UserDeploy => OriUserDeploy
 }
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 
 object Transfer {
 
@@ -46,7 +46,7 @@ object Transfer {
   ): Transaction = {
     def findDeployIdTimestamp(deployId: String) =
       block.body.deploys
-        .find(p => Base16.encode(p.deploy.sig.toByteArray) == deployId)
+        .find(p => p.deploy.sig.toHexString == deployId)
         .get
         .deploy
         .data
@@ -65,7 +65,7 @@ object Transfer {
       toAddr = t.transaction.toAddr,
       amount = t.transaction.amount,
       transactionType = transactionType,
-      blockHash = Base16.encode(block.blockHash.toByteArray),
+      blockHash = block.blockHash.toHexString,
       blockNumber = block.body.state.blockNumber,
       deployId = deployId,
       timestamp = timestamp,

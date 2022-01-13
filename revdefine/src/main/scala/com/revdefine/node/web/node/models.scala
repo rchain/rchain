@@ -13,11 +13,12 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy => OriProcessedSystemDeploy,
   ProduceEvent => OriProduceEvent
 }
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
+import coop.rchain.shared.Base16
 
 object models {
   implicit class ByteStringOps(bytes: ByteString) {
-    def toBase16: String = Base16.encode(bytes.toByteArray)
+    def toBase16: String = bytes.toHexString
   }
   final case class Peek(channelIndex: Int)
   sealed trait Event

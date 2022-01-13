@@ -2,7 +2,7 @@ package com.revdefine.tools
 
 import coop.rchain.blockstorage.KeyValueBlockStore.bytesToBlockProto
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.lmdbjava.ByteBufferProxy.PROXY_SAFE
@@ -41,7 +41,7 @@ object ExportDeployID {
         value.body.deploys.foreach(
           d =>
             bw.write(
-              s"${Base16.encode(d.deploy.sig.toByteArray)},${Base16.encode(value.blockHash.toByteArray)}\n"
+              s"${d.deploy.sig.toHexString},${value.blockHash.toHexString}\n"
             )
         )
     }

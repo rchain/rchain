@@ -10,7 +10,7 @@ import com.revdefine.node.web.transfer.Transfer.Transaction
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.dag.DagOps
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.Log
@@ -49,9 +49,9 @@ object UpdateFinalized {
         - <- Log[F].debug(s"Find ${unFinalizedTransactionBlock.length} blocks to be finalized.")
         _ <- unFinalizedTransactionBlock.traverse { b =>
               val finalizing =
-                Log[F].debug(s"Started to finalized ${Base16.encode(b.toByteArray)}") >>
-                  mongo.finalizedBlock(Base16.encode(b.toByteArray)) >> Log[F].debug(
-                  s"Successfully finalized ${Base16.encode(b.toByteArray)}"
+                Log[F].debug(s"Started to finalized ${b.toHexString}") >>
+                  mongo.finalizedBlock(b.toHexString) >> Log[F].debug(
+                  s"Successfully finalized ${b.toHexString}"
                 )
               ConcurrentEffect[F].handleErrorWith(finalizing) {
                 case e @ MongoOperateError(msg) =>

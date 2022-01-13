@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionAPI}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.Log
@@ -35,20 +35,18 @@ object UpdateTransaction {
         getTransactionStream = unKnownTransactionBlock.evalMap { b =>
           for {
             _ <- Log[F].debug(
-                  s"Getting transactions from ${Base16.encode(b.blockHash.toByteArray)}"
+                  s"Getting transactions from ${b.blockHash.toHexString}"
                 )
             transactions <- transactionAPI
-                             .getTransaction(
-                               Base16.encode(b.blockHash.toByteArray)
-                             )
+                             .getTransaction(b.blockHash.toHexString)
                              .map(_.data)
             _ <- Log[F].debug(
-                  s"Successfully got ${transactions.length} transactions from ${Base16.encode(b.blockHash.toByteArray)}"
+                  s"Successfully got ${transactions.length} transactions from ${b.blockHash.toHexString}"
                 )
             newTransfers = transactions.map(fromRnodeTransaction(_, b, isFinalized = false))
             _            <- mongo.insertTransaction(newTransfers)
             _ <- Log[F].debug(
-                  s"Successfully insert ${transactions.length} transactions from ${Base16.encode(b.blockHash.toByteArray)} into mongo"
+                  s"Successfully insert ${transactions.length} transactions from ${b.blockHash.toHexString} into mongo"
                 )
           } yield ()
         }

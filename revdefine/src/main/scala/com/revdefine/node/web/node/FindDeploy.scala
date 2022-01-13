@@ -9,7 +9,7 @@ import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 
 object FindDeploy {
@@ -21,9 +21,7 @@ object FindDeploy {
     val oldDeployOpt = oldDeployMap.get(deployId)
     for {
       blockHash <- if (oldDeployOpt.isEmpty) for {
-                    hashByteString <- Base16
-                                       .decode(deployId)
-                                       .map(ByteString.copyFrom)
+                    hashByteString <- deployId.hexToByteString
                                        .liftTo[F](
                                          new Exception(
                                            s"Input hash value is not valid hex string: $deployId"
@@ -49,9 +47,7 @@ object FindDeploy {
                                 )
                   } yield blockHash
                   else
-                    Base16
-                      .decode(oldDeployOpt.get)
-                      .map(ByteString.copyFrom)
+                    oldDeployOpt.get.hexToByteString
                       .liftTo[F](
                         new Exception(
                           s"Input hash value is not valid hex string on old deploy map: $oldDeployOpt.get.head"

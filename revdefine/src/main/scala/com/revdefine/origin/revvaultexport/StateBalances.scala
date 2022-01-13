@@ -7,7 +7,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
@@ -37,7 +37,7 @@ object StateBalances {
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
       blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockOpt          <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt          <- blockStore.get(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace

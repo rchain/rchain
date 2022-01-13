@@ -147,6 +147,7 @@ class DefineRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextS
         implicit val tr = transport
         implicit val ti = time
         implicit val me = metrics
+        implicit val nd = nodeDiscovery
         FunctionsSetup.setupNodeFunctions[F](
           rpConnections,
           rpConfAsk,

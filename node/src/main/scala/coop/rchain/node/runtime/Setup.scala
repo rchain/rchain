@@ -317,7 +317,6 @@ object Setup {
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         implicit val (ra, rc)         = (rpConfAsk, rpConnections)
-
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,

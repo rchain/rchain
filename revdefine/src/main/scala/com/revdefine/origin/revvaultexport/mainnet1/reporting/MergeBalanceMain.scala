@@ -7,7 +7,7 @@ import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.syntax._
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
@@ -175,7 +175,7 @@ object MergeBalanceMain {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
       (rhoRuntime, _)            = runtimes
-      blockOpt                   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt                   <- blockStore.get(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
       postStateHash              = block.body.state.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {

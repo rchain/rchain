@@ -16,7 +16,7 @@ import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPref
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
@@ -25,7 +25,7 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 import fs2.Stream
 
@@ -57,7 +57,7 @@ object TransactionBalances {
   val initialPosStakingVault: RevAccount = RevAccount(
     RevAddress
       .fromPublicKey(
-        Secp256k1.toPublic(PrivateKey(Base16.unsafeDecode(StandardDeploys.poSGeneratorPk)))
+        Secp256k1.toPublic(PrivateKey(StandardDeploys.poSGeneratorPk.unsafeDecodeHex))
       )
       .get,
     0,
@@ -237,8 +237,8 @@ object TransactionBalances {
                                                       deployerRevAddr,
                                                       blockPerValidator,
                                                       block.body.state.blockNumber,
-                                                      Base16.encode(block.blockHash.toByteArray),
-                                                      Base16.encode(pd.deploy.sig.toByteArray),
+                                                      block.blockHash.toHexString,
+                                                      pd.deploy.sig.toHexString,
                                                       pd.deploy.data.timestamp,
                                                       true,
                                                       isFinalized,
@@ -250,8 +250,8 @@ object TransactionBalances {
                                                       blockPerValidator,
                                                       deployerRevAddr,
                                                       block.body.state.blockNumber,
-                                                      Base16.encode(block.blockHash.toByteArray),
-                                                      Base16.encode(pd.deploy.sig.toByteArray),
+                                                      block.blockHash.toHexString,
+                                                      pd.deploy.sig.toHexString,
                                                       pd.deploy.data.timestamp,
                                                       true,
                                                       isFinalized,
@@ -263,8 +263,8 @@ object TransactionBalances {
                                                       blockPerValidator,
                                                       initialPosStakingVault.address.toBase58,
                                                       block.body.state.blockNumber,
-                                                      Base16.encode(block.blockHash.toByteArray),
-                                                      Base16.encode(block.blockHash.toByteArray),
+                                                      block.blockHash.toHexString,
+                                                      block.blockHash.toHexString,
                                                       block.header.timestamp,
                                                       true,
                                                       isFinalized,
@@ -279,8 +279,8 @@ object TransactionBalances {
                                                       deployerRevAddr,
                                                       blockPerValidator,
                                                       block.body.state.blockNumber,
-                                                      Base16.encode(block.blockHash.toByteArray),
-                                                      Base16.encode(pd.deploy.sig.toByteArray),
+                                                      block.blockHash.toHexString,
+                                                      pd.deploy.sig.toHexString,
                                                       pd.deploy.data.timestamp,
                                                       true,
                                                       isFinalized,
@@ -292,8 +292,8 @@ object TransactionBalances {
                                                       blockPerValidator,
                                                       deployerRevAddr,
                                                       block.body.state.blockNumber,
-                                                      Base16.encode(block.blockHash.toByteArray),
-                                                      Base16.encode(pd.deploy.sig.toByteArray),
+                                                      block.blockHash.toHexString,
+                                                      pd.deploy.sig.toHexString,
                                                       pd.deploy.data.timestamp,
                                                       isSucceeded = true,
                                                       isFinalized,
@@ -305,7 +305,7 @@ object TransactionBalances {
                                               transfers ++ addedTransfers
                                           }
                                         transactions <- transactionStore.get(
-                                                         Base16.encode(blockHash.toByteArray)
+                                                         blockHash.toHexString
                                                        )
                                         res = transactions.get.flatten
                                           .foldLeft(Vector.empty[Transfer]) {
@@ -315,7 +315,7 @@ object TransactionBalances {
                                                 transaction.fromAddr,
                                                 transaction.toAddr,
                                                 block.body.state.blockNumber,
-                                                Base16.encode(block.blockHash.toByteArray),
+                                                block.blockHash.toHexString,
                                                 transaction.deploy.sig,
                                                 transaction.deploy.timestamp,
                                                 transaction.success,
@@ -387,7 +387,7 @@ object TransactionBalances {
       runtimes <- RhoRuntime
                    .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
       (rhoRuntime, _)  = runtimes
-      targetBlockOpt   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(targetBlockHash)))
+      targetBlockOpt   <- blockStore.get(targetBlockHash.unsafeHexToByteString)
       targetBlock      = targetBlockOpt.get
       _                <- log.info(s"Getting balance from $targetBlock")
       genesisVaultMap  <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)

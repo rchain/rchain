@@ -2,7 +2,7 @@ package com.revdefine.tools
 
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import coop.rchain.metrics.Metrics
 import coop.rchain.shared.Log
 import monix.eval.Task
@@ -38,7 +38,7 @@ object CheckMeta {
 
       rep    <- blockDagStorage.getRepresentation
       latest = rep.lastFinalizedBlock
-      _      <- log.info(s"Last finalized block is ${Base16.encode(latest.toByteArray)}")
+      _      <- log.info(s"Last finalized block is ${latest.toHexString}")
     } yield ()).runSyncUnsafe()
   }
 }
