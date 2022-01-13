@@ -15,6 +15,7 @@ import coop.rchain.rholang.interpreter.SystemProcesses.Definition
 import coop.rchain.rholang.interpreter.accounting.utils._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.{EvaluateResult, RhoRuntime, _}
+import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.RSpace.RSpaceStore
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
@@ -258,6 +259,22 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
         val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), contract)
         assert(result._1.errors.isEmpty)
         assert(result._2.errors.isEmpty)
+        assert(result._1.cost == result._2.cost)
+      }
+    }
+  }
+
+  "replay the same term with not enough phlo" should "get the same result" in {
+    val r = scala.util.Random
+    for (_ <- 1 to 100) {
+      val long        = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val contract    = fromLong(long)
+      val parsingCost = accounting.parsingCost(contract)
+      if (contract != "") {
+        // parsingCost.value+10 to make sure is runtime out of phlo
+        val result = evaluateAndReplay(Cost(parsingCost.value + 10), contract)
+        assert(result._1.errors.head == OutOfPhlogistonsError)
+        assert(result._2.errors.head == OutOfPhlogistonsError)
         assert(result._1.cost == result._2.cost)
       }
     }
