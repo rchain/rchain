@@ -17,10 +17,10 @@ import coop.rchain.casper.protocol.{
   SingleReport,
   SlashSystemDeployDataProto
 }
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.Par
 import coop.rchain.node.web.Transaction.TransactionStore
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.shared.Base16
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.shared.syntax._
 import scodec.codecs.utf8
@@ -264,11 +264,16 @@ object Transaction {
       transferUnforgeable: Par
   ): TransactionAPIImpl[F] = TransactionAPIImpl(blockReportAPI, transferUnforgeable)
 
+  def store[F[_]: Concurrent](
+      kvm: KeyValueStoreManager[F]
+  ): F[KeyValueTypedStore[F, String, TransactionResponse]] =
+    kvm.database("transaction", utf8, SCodec.transactionResponseCodec)
+
   def cacheTransactionAPI[F[_]: Concurrent](
       transactionAPI: TransactionAPI[F],
       kvm: KeyValueStoreManager[F]
   ): F[CacheTransactionAPI[F]] =
-    kvm.database("transaction", utf8, SCodec.transactionResponseCodec).map { s =>
+    store(kvm).map { s =>
       CacheTransactionAPI(
         transactionAPI,
         s

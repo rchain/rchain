@@ -105,6 +105,8 @@ object Resources {
 
       override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
 
+      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
+
       override def topoSort(
           startBlockNumber: Long,
           maybeEndBlockNumber: Option[Long]
@@ -128,7 +130,7 @@ object Resources {
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )

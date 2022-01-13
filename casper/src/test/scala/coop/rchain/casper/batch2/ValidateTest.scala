@@ -19,7 +19,6 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
@@ -27,7 +26,8 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.Time
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Time}
 import coop.rchain.shared.scalatestcontrib._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -61,7 +61,7 @@ class ValidateTest
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )
@@ -161,7 +161,7 @@ class ValidateTest
         _            <- createChain[Task](6)
         (_, wrongPk) = Secp256k1.newKeyPair
         empty        = ByteString.EMPTY
-        invalidKey   = ByteString.copyFrom(Base16.unsafeDecode("abcdef1234567890"))
+        invalidKey   = "abcdef1234567890".unsafeHexToByteString
         block0       <- signedBlock(0).map(_.copy(sender = empty))
         block1       <- signedBlock(1).map(_.copy(sender = invalidKey))
         block2       <- signedBlock(2).map(_.copy(sender = ByteString.copyFrom(wrongPk.bytes)))

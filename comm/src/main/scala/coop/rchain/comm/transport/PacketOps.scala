@@ -2,12 +2,11 @@ package coop.rchain.comm.transport
 
 import java.text.SimpleDateFormat
 import java.util.Date
-
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm.protocol.routing._
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 
 import scala.collection.concurrent.TrieMap
 import scala.util.Random

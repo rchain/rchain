@@ -1,6 +1,6 @@
 package coop.rchain.casper.util
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.MultiParentCasper.ignoreDoppelgangerCheck
 import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode

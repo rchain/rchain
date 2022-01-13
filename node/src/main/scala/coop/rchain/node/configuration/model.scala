@@ -122,3 +122,4 @@ final case class BondStatus(publicKey: PublicKey)                          exten
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command
+final case object Status                                                   extends Command

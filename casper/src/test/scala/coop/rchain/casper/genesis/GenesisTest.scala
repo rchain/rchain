@@ -13,13 +13,13 @@ import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
 import coop.rchain.casper.util.{BondsParser, ProtoUtil, VaultParser}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.models.syntax._
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.Time
+import coop.rchain.shared.{Base16, Time}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
@@ -46,7 +46,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )
@@ -174,7 +174,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _     = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }
@@ -222,7 +222,7 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           _       = log.infos.length should be(3)
           result = validators
             .map {
-              case (v, i) => Bond(ByteString.copyFrom(Base16.unsafeDecode(v)), i.toLong)
+              case (v, i) => Bond(v.unsafeHexToByteString, i.toLong)
             }
         } yield result.forall(bonds.contains(_)) should be(true)
     }

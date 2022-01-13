@@ -1,7 +1,7 @@
 package coop.rchain.casper.helper
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
 import coop.rchain.models.Expr.ExprInstance.{ETupleBody, GBool}

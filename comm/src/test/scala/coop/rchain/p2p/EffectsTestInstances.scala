@@ -2,7 +2,7 @@ package coop.rchain.p2p
 
 import cats._
 import cats.effect._
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.comm.CommError._
 import coop.rchain.comm._
 import coop.rchain.comm.discovery._

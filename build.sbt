@@ -132,7 +132,8 @@ lazy val shared = (project in file("shared"))
       catsEffectLawsTest,
       catsLawsTest,
       catsLawsTestkitTest,
-      enumeratum
+      enumeratum,
+      jaxb
     )
   )
 
@@ -212,7 +213,6 @@ lazy val crypto = (project in file("crypto"))
       bouncyProvCastle,
       scalacheck,
       kalium,
-      jaxb,
       secp256k1Java,
       scodecBits
     ),
@@ -384,6 +384,8 @@ lazy val node = (project in file("node"))
         ExecCmd("CMD", "run")
       )
     },
+    // Replace unsupported character `+`
+    version in Docker := { version.value.replace("+", "__") },
     mappings in Docker ++= {
       val base = (defaultLinuxInstallLocation in Docker).value
       directory((baseDirectory in rholang).value / "examples")

@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.Applicative
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect.Sync
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History.emptyRootHash

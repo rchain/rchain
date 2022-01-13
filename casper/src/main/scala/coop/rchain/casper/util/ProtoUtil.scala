@@ -10,7 +10,6 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.{DeployData, _}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.dag.DagOps
@@ -18,6 +17,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
+import coop.rchain.shared.Base16
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable
@@ -294,9 +294,6 @@ object ProtoUtil {
       blockMessage.extraBytes.toByteArray
     )
   def hashString(b: BlockMessage): String = Base16.encode(b.blockHash.toByteArray)
-
-  def stringToByteString(string: String): ByteString =
-    ByteString.copyFrom(Base16.unsafeDecode(string))
 
   def computeCodeHash(dd: DeployData): Par = {
     val bytes             = dd.term.getBytes(StandardCharsets.UTF_8)

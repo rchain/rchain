@@ -153,6 +153,7 @@ object HashM extends HashMDerivation {
   implicit val DataWithBlockInfoHash          = gen[DataWithBlockInfo]
   implicit val WaitingContinuationInfoHash    = gen[WaitingContinuationInfo]
   implicit val BlockQueryByHeightHash         = gen[BlocksQueryByHeight]
+  implicit val Status                         = gen[Status]
 
   implicit val ApprovedBlockHash          = gen[ApprovedBlock]
   implicit val ApprovedBlockCandidateHash = gen[ApprovedBlockCandidate]

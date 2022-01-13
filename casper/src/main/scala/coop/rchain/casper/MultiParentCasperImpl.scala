@@ -128,7 +128,7 @@ class MultiParentCasperImpl[F[_]
 
     def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
       BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
-        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.base16String))
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
 
     implicit val ms = CasperMetricsSource
 
@@ -299,7 +299,21 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT(
               EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
-        _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+
+        // This validation is only to punish validator which accepted lower price deploys.
+        // And this can happen if not configured correctly.
+        minPhloPrice = casperShardConf.minPhloPrice
+        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
+              case _ =>
+                val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+                )
+                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                warnToLog *> asValid
+            }
+        _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
@@ -445,15 +459,15 @@ object MultiParentCasperImpl {
 
   private def blockEvent(block: BlockMessage) = {
 
-    val blockHash = block.blockHash.base16String
+    val blockHash = block.blockHash.toHexString
     val parentHashes =
-      block.header.parentsHashList.map(_.base16String)
+      block.header.parentsHashList.map(_.toHexString)
     val justificationHashes =
       block.justifications.toList
-        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.base16String
+    val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }

@@ -6,7 +6,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import scala.util.Left
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 
 object PathOps {
 
@@ -51,7 +51,7 @@ object PathOps {
 
       import scala.collection.JavaConverters._
 
-      import cats.implicits._
+      import cats.syntax.all._
 
       def deleteFile(file: File): F[Unit] =
         for {

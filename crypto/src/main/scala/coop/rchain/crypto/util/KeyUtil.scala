@@ -5,12 +5,11 @@ import java.math.BigInteger
 import java.nio.file.Path
 import java.security.KeyFactory
 import java.security.spec.ECPublicKeySpec
-
 import cats.effect.{Resource, Sync}
 import cats.syntax.all._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.{Secp256k1, SignaturesAlg}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.shared.Base16
 import org.bouncycastle.jce.{ECNamedCurveTable, ECPointUtil}
 import org.bouncycastle.jce.provider.BouncyCastleProvider
 import org.bouncycastle.jce.spec.{ECNamedCurveSpec, ECPrivateKeySpec}

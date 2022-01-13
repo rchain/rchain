@@ -318,14 +318,15 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
 
   override def reset(root: Blake2b256Hash): F[Unit] = spanF.trace(resetSpanLabel) {
     for {
-      nextHistory <- historyRepositoryAtom.get().reset(root)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           = eventLog.take()
-      _           = eventLog.put(Seq.empty)
-      _           = produceCounter.take()
-      _           = produceCounter.put(Map.empty.withDefaultValue(0))
-      _           <- createNewHotStore(nextHistory.getHistoryReader(root))
-      _           <- restoreInstalls()
+      nextHistory   <- historyRepositoryAtom.get().reset(root)
+      _             = historyRepositoryAtom.set(nextHistory)
+      _             = eventLog.take()
+      _             = eventLog.put(Seq.empty)
+      _             = produceCounter.take()
+      _             = produceCounter.put(Map.empty.withDefaultValue(0))
+      historyReader <- nextHistory.getHistoryReader(root)
+      _             <- createNewHotStore(historyReader)
+      _             <- restoreInstalls()
 
       // TODO: temp fix to release Semaphores inside TwoStepLock
       //  Adjust when runtime changes got in, create instance on spawn runtime.
@@ -357,9 +358,10 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
     spanF.trace(revertSoftCheckpointSpanLabel) {
       val history = historyRepositoryAtom.get()
       for {
+        historyReader <- history.getHistoryReader(history.root)
         hotStore <- HotStore.from(
-                     checkpoint.cacheSnapshot.cache,
-                     history.getHistoryReader(history.root).base
+                     checkpoint.cacheSnapshot,
+                     historyReader.base
                    )
         _ = storeAtom.set(hotStore)
         _ = eventLog.take()

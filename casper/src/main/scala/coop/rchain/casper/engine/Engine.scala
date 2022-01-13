@@ -1,8 +1,8 @@
 package coop.rchain.casper.engine
 
 import cats.{Applicative, Monad}
+import cats.syntax.all._
 import cats.effect.{Concurrent, Sync, Timer}
-import cats.implicits._
 import EngineCell._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.BlockStore

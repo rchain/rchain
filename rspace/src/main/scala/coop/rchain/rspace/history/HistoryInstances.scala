@@ -1,7 +1,7 @@
 package coop.rchain.rspace.history
 
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
@@ -557,8 +557,10 @@ object HistoryInstances {
       (start, key, TriePath.empty).tailRecM(traverse)
     }
 
-    override def reset(root: Blake2b256Hash): History[F] =
-      this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
+    override def reset(root: Blake2b256Hash): F[History[F]] =
+      Sync[F].delay(
+        this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
+      )
 
   }
 

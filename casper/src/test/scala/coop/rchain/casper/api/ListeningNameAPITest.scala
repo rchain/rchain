@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
