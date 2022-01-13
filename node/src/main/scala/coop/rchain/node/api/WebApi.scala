@@ -70,7 +70,8 @@ object WebApi {
       triggerProposeF: Option[ProposeFunction[F]],
       networkId: String,
       shardId: String,
-      minPhloPrice: Long
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -93,7 +94,7 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice))
+        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice, isNodeReadOnly))
         .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
