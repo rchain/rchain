@@ -32,7 +32,7 @@ or the docker images.
 ### 2. use the self-pushed docker image
 
 ```bash
-docker pull zsluedem/revdefine:revdefine-0.1.3
+docker pull zsluedem/revdefine:revdefine-0.1.4
 ```
 
 ## How to run the node
@@ -59,7 +59,7 @@ The setup tutorial is going to demonstrate how to start the revdefin RNode with 
 version: "2.3"
 services:
   rnode:
-    image: zsluedem/revdefine:revdefine-0.1.3
+    image: zsluedem/revdefine:revdefine-0.1.4
     user: root
     networks:
       - rchain-net
@@ -160,7 +160,7 @@ The docker script for initialization is below:
 version: "2.3"
 services:
   rnode:
-    image: zsluedem/revdefine:revdefine-0.1.3
+    image: zsluedem/revdefine:revdefine-0.1.4
     user: root
     container_name: rnode
     environment:
@@ -197,7 +197,7 @@ The docker script for initialization is below:
 version: "2.3"
 services:
   rnode:
-    image: zsluedem/revdefine:revdefine-0.1.3
+    image: zsluedem/revdefine:revdefine-0.1.4
     user: root
     container_name: rnode
     environment:
