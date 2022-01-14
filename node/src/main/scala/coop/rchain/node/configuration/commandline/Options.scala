@@ -542,6 +542,10 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       validate = _ >= 0
     )
 
+    val disableCostAccounting = opt[Flag](
+      descr = "Disable cost accounting for deploys."
+    )
+
   }
   addSubcommand(run)
 

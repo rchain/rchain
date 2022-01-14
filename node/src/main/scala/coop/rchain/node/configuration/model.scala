@@ -29,7 +29,8 @@ final case class NodeConf(
     // So its in HOCON notation that should be loaded into `NodeConf` case class.
     // As we need loader to throw an error when unknown HOCON key is met - this field should also
     // be present in the model.
-    defaultDataDir: String
+    defaultDataDir: String,
+    disableCostAccounting: Boolean
 )
 
 final case class ProtocolServer(
