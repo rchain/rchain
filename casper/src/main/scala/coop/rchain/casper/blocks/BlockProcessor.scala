@@ -119,7 +119,7 @@ object BlockProcessor {
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
-  (
+  (disableCostAccounting: Boolean = false)(
       implicit casperBuffer: CasperBufferStorage[F]
   ): BlockProcessor[F] = {
 
@@ -172,7 +172,8 @@ object BlockProcessor {
       )
     }
 
-    val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) => c.validate(b, s)
+    val validateBlock = (c: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
+      c.validate(b, s, disableCostAccounting)
 
     def ackProcessed =
       (b: BlockMessage) => BlockRetriever[F].ackInCasper(b.blockHash)

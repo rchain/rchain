@@ -277,89 +277,94 @@ class Running[F[_]
 
   override def init: F[Unit] = theInit
 
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case h: BlockHashMessage =>
-      handleBlockHashMessage(peer, h)(
-        ignoreCasperMessage
-      )
-    case b: BlockMessage =>
-      for {
-        _ <- casper.getValidator.flatMap {
-              case None => ().pure[F]
-              case Some(id) =>
-                F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
-                  Log[F].warn(
-                    s"There is another node $peer proposing using the same private key as you. " +
-                      s"Or did you restart your node?"
-                  )
-                )
-            }
-        _ <- ignoreCasperMessage(b.blockHash).ifM(
-              Log[F].debug(
-                s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                  s"from ${peer.endpoint.host}"
-              ),
-              blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
-                s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                  s"from ${peer.endpoint.host}"
-              )
-            )
-      } yield ()
-
-    case br: BlockRequest => handleBlockRequest(peer, br)
-    // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
-    // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
-    case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
-    case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
-    case _: ForkChoiceTipRequest.type =>
-      handleForkChoiceTipRequest(peer)(casper)
-    case abr: ApprovedBlockRequest =>
-      for {
-        lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
-
-        // Create approved block from last finalized block
-        lastFinalizedBlock = for {
-          lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
-
-          // Each approved block should be justified by validators signatures
-          // ATM we have signatures only for genesis approved block - we also have to have a procedure
-          // for gathering signatures for each approved block post genesis.
-          // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
-          // TODO We need signatures of Validators supporting this block
-          lastApprovedBlock = ApprovedBlock(
-            ApprovedBlockCandidate(lfBlock, 0),
-            List.empty
-          )
-        } yield lastApprovedBlock
-
-        approvedBlock <- if (abr.trimState)
-                          // If Last Finalized State is requested return Last Finalized block as Approved block
-                          lastFinalizedBlock
-                        else
-                          // Respond with approved block that this node is started from.
-                          // The very first one is genesis, but this node still might start from later block,
-                          // so it will not necessary be genesis.
-                          approvedBlock.pure[F]
-
-        _ <- handleApprovedBlockRequest(peer, approvedBlock)
-      } yield ()
-    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
-
-    // Approved state store records
-    case StoreItemsMessageRequest(startPath, skip, take) =>
-      val start = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
-      val logRequest = Log[F].info(
-        s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
-      )
-      if (!disableStateExporter) {
-        logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
-      } else {
-        Log[F].info(
-          s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
+  override def handle(
+      peer: PeerNode,
+      msg: CasperMessage,
+      disableCostAccounting: Boolean = false
+  ): F[Unit] =
+    msg match {
+      case h: BlockHashMessage =>
+        handleBlockHashMessage(peer, h)(
+          ignoreCasperMessage
         )
-      }
-    case _ => noop
-  }
+      case b: BlockMessage =>
+        for {
+          _ <- casper.getValidator.flatMap {
+                case None => ().pure[F]
+                case Some(id) =>
+                  F.whenA(b.sender == ByteString.copyFrom(id.publicKey.bytes))(
+                    Log[F].warn(
+                      s"There is another node $peer proposing using the same private key as you. " +
+                        s"Or did you restart your node?"
+                    )
+                  )
+              }
+          _ <- ignoreCasperMessage(b.blockHash).ifM(
+                Log[F].debug(
+                  s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                    s"from ${peer.endpoint.host}"
+                ),
+                blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
+                  s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                    s"from ${peer.endpoint.host}"
+                )
+              )
+        } yield ()
+
+      case br: BlockRequest => handleBlockRequest(peer, br)
+      // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
+      // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
+      case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
+      case hb: HasBlock         => handleHasBlockMessage(peer, hb)(ignoreCasperMessage)
+      case _: ForkChoiceTipRequest.type =>
+        handleForkChoiceTipRequest(peer)(casper)
+      case abr: ApprovedBlockRequest =>
+        for {
+          lfBlockHash <- BlockDagStorage[F].getRepresentation.map(_.lastFinalizedBlock)
+
+          // Create approved block from last finalized block
+          lastFinalizedBlock = for {
+            lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
+
+            // Each approved block should be justified by validators signatures
+            // ATM we have signatures only for genesis approved block - we also have to have a procedure
+            // for gathering signatures for each approved block post genesis.
+            // Now new node have to trust bootstrap if it wants to trim state when connecting to the network.
+            // TODO We need signatures of Validators supporting this block
+            lastApprovedBlock = ApprovedBlock(
+              ApprovedBlockCandidate(lfBlock, 0),
+              List.empty
+            )
+          } yield lastApprovedBlock
+
+          approvedBlock <- if (abr.trimState)
+                            // If Last Finalized State is requested return Last Finalized block as Approved block
+                            lastFinalizedBlock
+                          else
+                            // Respond with approved block that this node is started from.
+                            // The very first one is genesis, but this node still might start from later block,
+                            // so it will not necessary be genesis.
+                            approvedBlock.pure[F]
+
+          _ <- handleApprovedBlockRequest(peer, approvedBlock)
+        } yield ()
+      case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable(na.nodeIdentifer)
+
+      // Approved state store records
+      case StoreItemsMessageRequest(startPath, skip, take) =>
+        val start = startPath.map(RSpaceExporter.pathPretty).mkString(" ")
+        val logRequest = Log[F].info(
+          s"Received request for store items, startPath: [$start], chunk: $take, skip: $skip, from: $peer"
+        )
+        if (!disableStateExporter) {
+          logRequest *> handleStateItemsMessageRequest(peer, startPath, skip, take)
+        } else {
+          Log[F].info(
+            s"Received StoreItemsMessage request but the node is configured to not respond to StoreItemsMessage, from ${peer}."
+          )
+        }
+      case _ => noop
+    }
 
   override def withCasper[A](
       f: MultiParentCasper[F] => F[A],

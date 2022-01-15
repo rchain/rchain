@@ -193,7 +193,7 @@ object Setup {
       blockProcessor = {
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
         implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
-        BlockProcessor[F]
+        BlockProcessor[F](conf.disableCostAccounting)
       }
 
       // Proposer instance
@@ -209,7 +209,7 @@ object Setup {
         val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")), conf.disableCostAccounting)
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer
@@ -246,7 +246,7 @@ object Setup {
       }
       packetHandler = {
         implicit val ec = engineCell
-        CasperPacketHandler[F]
+        CasperPacketHandler[F](conf.disableCostAccounting)
       }
       // Bypass fair dispatcher
       /*packetHandler <- {

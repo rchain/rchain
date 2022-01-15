@@ -273,7 +273,8 @@ class MultiParentCasperImpl[F[_]
 
   override def validate(
       b: BlockMessage,
-      s: CasperSnapshot[F]
+      s: CasperSnapshot[F],
+      disableCostAccounting: Boolean
   ): F[Either[BlockError, ValidBlock]] = {
     val validationProcess: EitherT[F, BlockError, ValidBlock] =
       for {
@@ -284,7 +285,7 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
-                .validateBlockCheckpoint(b, s, RuntimeManager[F])
+                .validateBlockCheckpoint(b, s, RuntimeManager[F], disableCostAccounting)
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)

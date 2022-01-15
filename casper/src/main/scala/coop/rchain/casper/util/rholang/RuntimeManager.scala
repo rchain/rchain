@@ -44,13 +44,15 @@ trait RuntimeManager[F[_]] {
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator],
-      isGenesis: Boolean
+      isGenesis: Boolean,
+      disableCostAccounting: Boolean = false
   ): F[Either[ReplayFailure, StateHash]]
   def computeState(hash: StateHash)(
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      disableCostAccounting: Boolean = false
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])]
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -118,9 +120,19 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      disableCostAccounting: Boolean
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    spawnRuntime.flatMap(_.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks))
+    spawnRuntime.flatMap(
+      _.computeState(
+        startHash,
+        terms,
+        systemDeploys,
+        blockData,
+        invalidBlocks,
+        disableCostAccounting
+      )
+    )
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
@@ -134,11 +146,19 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      isGenesis: Boolean, //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      disableCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
       replayRuntime
-        .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
+        .replayComputeState(startHash)(
+          terms,
+          systemDeploys,
+          blockData,
+          invalidBlocks,
+          isGenesis,
+          disableCostAccounting
+        )
     }
 
   def captureResults(

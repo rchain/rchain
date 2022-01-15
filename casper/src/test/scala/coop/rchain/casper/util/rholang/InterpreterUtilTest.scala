@@ -102,7 +102,8 @@ class InterpreterUtilTest
                 genesisContext.validatorPks.head,
                 seqNum
               ),
-              Map.empty[BlockHash, Validator]
+              Map.empty[BlockHash, Validator],
+              disableCostAccounting = false
             )
             .attempt
       )

@@ -51,7 +51,8 @@ object InterpreterUtil {
   def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
       block: BlockMessage,
       s: CasperSnapshot[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      disableCostAccounting: Boolean = false
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
     for {
@@ -88,7 +89,8 @@ object InterpreterUtil {
                                         incomingPreStateHash,
                                         block,
                                         s.dag,
-                                        runtimeManager
+                                        runtimeManager,
+                                        disableCostAccounting
                                       )
                        result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
                      } yield result
@@ -101,7 +103,8 @@ object InterpreterUtil {
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
-      runtimeManager: RuntimeManager[F]
+      runtimeManager: RuntimeManager[F],
+      disableCostAccounting: Boolean
   )(implicit spanF: Span[F]): F[Either[ReplayFailure, StateHash]] =
     spanF.trace(ReplayBlockMetricsSource) {
       val internalDeploys       = ProtoUtil.deploys(block)
@@ -123,7 +126,8 @@ object InterpreterUtil {
           internalSystemDeploys,
           blockData,
           invalidBlocks,
-          isGenesis
+          isGenesis,
+          disableCostAccounting
         )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
@@ -226,7 +230,8 @@ object InterpreterUtil {
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator],
+      disableCostAccounting: Boolean
   )(
       implicit spanF: Span[F]
   ): F[
@@ -244,7 +249,8 @@ object InterpreterUtil {
                    deploys,
                    systemDeploys,
                    blockData,
-                   invalidBlocks
+                   invalidBlocks,
+                   disableCostAccounting
                  )
         (postStateHash, processedDeploys, processedSystemDeploys) = result
       } yield (

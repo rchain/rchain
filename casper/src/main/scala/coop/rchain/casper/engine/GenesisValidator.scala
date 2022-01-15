@@ -48,28 +48,33 @@ class GenesisValidator[F[_]
   private def ack(hash: BlockHash): F[Unit]           = seenCandidates.modify(_ + (hash -> true))
 
   override val init = noop
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
-    case ub: UnapprovedBlock =>
-      isRepeated(ub.candidate.block.blockHash)
-        .ifM(
-          Log[F].warn(
-            s"UnapprovedBlock ${PrettyPrinter.buildString(ub.candidate.block.blockHash)} is already being verified. " +
-              s"Dropping repeated message."
-          ),
-          ack(ub.candidate.block.blockHash) >> blockApprover
-            .unapprovedBlockPacketHandler(peer, ub) >> {
-            Engine
-              .transitionToInitializing(
-                blockProcessingQueue,
-                blocksInProcessing,
-                casperShardConf,
-                Some(validatorId),
-                init = noop
-              )
-          }
-        )
-    case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
-    case _                            => noop
-  }
+  override def handle(
+      peer: PeerNode,
+      msg: CasperMessage,
+      disableCostAccounting: Boolean = false
+  ): F[Unit] =
+    msg match {
+      case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+      case ub: UnapprovedBlock =>
+        isRepeated(ub.candidate.block.blockHash)
+          .ifM(
+            Log[F].warn(
+              s"UnapprovedBlock ${PrettyPrinter.buildString(ub.candidate.block.blockHash)} is already being verified. " +
+                s"Dropping repeated message."
+            ),
+            ack(ub.candidate.block.blockHash) >> blockApprover
+              .unapprovedBlockPacketHandler(peer, ub, disableCostAccounting) >> {
+              Engine
+                .transitionToInitializing(
+                  blockProcessingQueue,
+                  blocksInProcessing,
+                  casperShardConf,
+                  Some(validatorId),
+                  init = noop
+                )
+            }
+          )
+      case na: NoApprovedBlockAvailable => logNoApprovedBlockAvailable[F](na.nodeIdentifer)
+      case _                            => noop
+    }
 }

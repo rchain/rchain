@@ -438,7 +438,8 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
       terms: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
+      invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
+      disableCostAccounting: Boolean
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
     Span[F].traceI("compute-state") {
       for {
@@ -448,7 +449,8 @@ final class RhoRuntimeOps[F[_]: Sync: Span: Log](
                                 processDeploys(
                                   startHash,
                                   terms,
-                                  processDeployWithCostAccounting
+                                  if (disableCostAccounting) processDeploy
+                                  else processDeployWithCostAccounting
                                 )
                               }
         (startHash, processedDeploys) = deployProcessResult
@@ -697,7 +699,8 @@ In both cases we want to check reply data and see if everything is in order */
       systemDeploys: Seq[ProcessedSystemDeploy],
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
-      isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      isGenesis: Boolean, //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
+      disableCostAccounting: Boolean
   ): F[Either[ReplayFailure, StateHash]] =
     Span[F].traceI("replay-compute-state") {
       for {
@@ -707,7 +710,7 @@ In both cases we want to check reply data and see if everything is in order */
                    startHash,
                    terms,
                    systemDeploys,
-                   replayDeploy(withCostAccounting = !isGenesis),
+                   replayDeploy(withCostAccounting = !isGenesis && !disableCostAccounting),
                    replaySystemDeploy(blockData)
                  )
       } yield result

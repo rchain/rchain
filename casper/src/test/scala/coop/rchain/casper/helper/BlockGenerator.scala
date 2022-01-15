@@ -87,7 +87,8 @@ object BlockGenerator {
                  s,
                  runtimeManager,
                  BlockData.fromBlock(b),
-                 Map.empty[BlockHash, Validator]
+                 Map.empty[BlockHash, Validator],
+                 disableCostAccounting = false
                ).attempt
       Right((preStateHash, postStateHash, processedDeploys, rejectedDeploys, _)) = result
     } yield (postStateHash, processedDeploys)
