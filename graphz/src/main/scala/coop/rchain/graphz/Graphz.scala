@@ -1,9 +1,9 @@
 package coop.rchain.graphz
 
 import java.io.FileOutputStream
-
 import cats._
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.mtl._
 
@@ -26,6 +26,11 @@ class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[
     fos.write(str.getBytes)
     fos.flush()
   }
+}
+
+class ListSerializerRef[F[_]](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
+  def push(str: String, suffix: String): F[Unit] =
+    ref.update(_ :+ (str + suffix))
 }
 
 sealed trait GraphType
@@ -107,7 +112,9 @@ object Graphz {
       rankdir: Option[GraphRankDir] = None,
       style: Option[String] = None,
       color: Option[String] = None,
-      node: Map[String, String] = Map.empty
+      graph: Map[String, String] = Map.empty,
+      node: Map[String, String] = Map.empty,
+      edge: Map[String, String] = Map.empty,
   )(
       implicit ser: GraphSerializer[F]
   ): F[Graphz[F]] = {
@@ -126,7 +133,9 @@ object Graphz {
       _ <- insert(color, s => s"color=$s")
       _ <- insert(rank.map(_.show), r => s"rank=$r")
       _ <- insert(rankdir.map(_.show), r => s"rankdir=$r")
+      _ <- insert(attrMkStr(graph), n => s"graph $n")
       _ <- insert(attrMkStr(node), n => s"node $n")
+      _ <- insert(attrMkStr(edge), n => s"edge $n")
       _ <- insert(splines.map(_.show), s => s"splines=$s")
     } yield new Graphz[F](gtype, t)
   }

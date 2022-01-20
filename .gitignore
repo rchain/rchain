@@ -84,3 +84,4 @@ integration-tests.log
 .metals
 .history
 .vscode
+vdags/
