@@ -11,6 +11,7 @@ import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
 import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
@@ -36,7 +37,9 @@ trait WebApi[F[_]] {
   def deploy(request: DeployRequest): F[String]
 
   // Read data (listen)
-  def listenForDataAtName(request: DataRequest): F[DataResponse]
+  def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
+
+  def listenForDataAtPar(request: DataAtParRequest): F[DataAtParResponse]
 
   // Blocks info
 
@@ -63,7 +66,7 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
+  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: RuntimeManager: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
@@ -97,11 +100,16 @@ object WebApi {
         .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice, isNodeReadOnly))
         .flatMap(_.liftToBlockApiErr)
 
-    def listenForDataAtName(req: DataRequest): F[DataResponse] =
+    def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       BlockAPI
         .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit)
         .flatMap(_.liftToBlockApiErr)
-        .map(toDataResponse)
+        .map(toDataAtNameResponse)
+
+    def listenForDataAtPar(req: DataAtParRequest): F[DataAtParResponse] =
+      BlockAPI
+        .getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash)
+        .map(toDataAtParResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
@@ -193,7 +201,7 @@ object WebApi {
       usePreStateHash: Boolean
   )
 
-  final case class DataRequest(
+  final case class DataAtNameRequest(
       // For simplicity only one Unforgeable name is allowed
       // instead of the whole RhoExpr (proto Par)
       name: RhoUnforg,
@@ -201,9 +209,19 @@ object WebApi {
       depth: Int
   )
 
-  final case class DataResponse(
+  final case class DataAtParRequest(
+      blockHash: String,
+      name: RhoUnforg,
+      usePreStateHash: Boolean
+  )
+
+  final case class DataAtNameResponse(
       exprs: List[RhoExprWithBlock],
       length: Int
+  )
+
+  final case class DataAtParResponse(
+      pars: Seq[Par]
   )
 
   final case class RhoExprWithBlock(
@@ -352,10 +370,13 @@ object WebApi {
 
   // Data request/response protobuf wrappers
 
-  private def toPar(req: DataRequest): Par =
+  private def toPar(req: DataAtNameRequest): Par =
     Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
 
-  private def toDataResponse(req: (Seq[DataWithBlockInfo], Int)): DataResponse = {
+  private def toPar(req: DataAtParRequest): Par =
+    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+
+  private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
     val exprsWithBlock = dbs.foldLeft(List[RhoExprWithBlock]()) { (acc, data) =>
       val exprs = data.postBlockData.flatMap(exprFromParProto)
@@ -364,8 +385,10 @@ object WebApi {
       val block = data.block.get
       RhoExprWithBlock(expr, block) +: acc
     }
-    DataResponse(exprsWithBlock, length)
+    DataAtNameResponse(exprsWithBlock, length)
   }
+
+  private def toDataAtParResponse(pars: Seq[Par]): DataAtParResponse = DataAtParResponse(pars)
 
   private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
     val (pars, lightBlockInfo) = data

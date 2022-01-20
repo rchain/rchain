@@ -318,9 +318,10 @@ object Setup {
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
-        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bs, or, sp)      = (engineCell, blockStore, oracle, span)
+        implicit val (ra, rc)              = (rpConfAsk, rpConnections)
+        val isNodeReadOnly                 = conf.casper.validatorPrivateKey.isEmpty
+        implicit val rm: RuntimeManager[F] = runtimeManager
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
