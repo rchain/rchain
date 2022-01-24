@@ -66,7 +66,7 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: RuntimeManager: EngineCell: Log: Span: SafetyOracle: BlockStore](
+  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
@@ -74,7 +74,8 @@ object WebApi {
       networkId: String,
       shardId: String,
       minPhloPrice: Long,
-      isNodeReadOnly: Boolean
+      isNodeReadOnly: Boolean,
+      runtimeManager: RuntimeManager[F]
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -106,10 +107,12 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
-    def listenForDataAtPar(req: DataAtParRequest): F[DataAtParResponse] =
+    def listenForDataAtPar(req: DataAtParRequest): F[DataAtParResponse] = {
+      implicit val rm: RuntimeManager[F] = runtimeManager
       BlockAPI
         .getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash)
         .map(toDataAtParResponse)
+    }
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
