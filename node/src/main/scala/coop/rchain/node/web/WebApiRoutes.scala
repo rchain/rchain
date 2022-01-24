@@ -96,7 +96,7 @@ object WebApiRoutes {
     implicit val lightBlockEncoder          = jsonEncoderOf[F, LightBlockInfo]
     implicit val lightBlockListEnc          = jsonEncoderOf[F, List[LightBlockInfo]]
     implicit val dataAtNameRespEncoder      = jsonEncoderOf[F, DataAtNameResponse]
-    implicit val dataAtParRespEncoder       = jsonEncoderOf[F, DataAtParResponse]
+    implicit val dataAtParRespEncoder       = jsonEncoderOf[F, RhoDataResponse]
     implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
     implicit val explRespEncoder            = jsonEncoderOf[F, ExploratoryDeployResponse]
     implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
@@ -144,7 +144,7 @@ object WebApiRoutes {
         req.handle[DataAtNameRequest, DataAtNameResponse](webApi.listenForDataAtName)
 
       case req @ POST -> Root / "data-at-par" =>
-        req.handle[DataAtParRequest, DataAtParResponse](webApi.listenForDataAtPar)
+        req.handle[DataAtParRequest, RhoDataResponse](webApi.getDataAtPar)
 
       // Blocks
 

@@ -39,7 +39,7 @@ trait WebApi[F[_]] {
   // Read data (listen)
   def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
 
-  def listenForDataAtPar(request: DataAtParRequest): F[DataAtParResponse]
+  def getDataAtPar(request: DataAtParRequest): F[RhoDataResponse]
 
   // Blocks info
 
@@ -107,11 +107,20 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
-    def listenForDataAtPar(req: DataAtParRequest): F[DataAtParResponse] = {
+    def getDataAtPar(req: DataAtParRequest): F[RhoDataResponse] = {
       implicit val rm: RuntimeManager[F] = runtimeManager
-      BlockAPI
-        .getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash)
-        .map(toDataAtParResponse)
+
+      val deployId = req.name match {
+        case unforg: UnforgPrivate  => unforg.data
+        case unforg: UnforgDeploy   => unforg.data
+        case unforg: UnforgDeployer => unforg.data
+      }
+
+      findDeploy(deployId).flatMap { block =>
+        BlockAPI.getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash).map { pars =>
+          RhoDataResponse(pars.flatMap(exprFromParProto), block)
+        }
+      }
     }
 
     def lastFinalizedBlock: F[BlockInfo] =
@@ -223,16 +232,17 @@ object WebApi {
       length: Int
   )
 
-  final case class DataAtParResponse(
-      pars: Seq[Par]
-  )
-
   final case class RhoExprWithBlock(
       expr: RhoExpr,
       block: LightBlockInfo
   )
 
   final case class ExploratoryDeployResponse(
+      expr: Seq[RhoExpr],
+      block: LightBlockInfo
+  )
+
+  final case class RhoDataResponse(
       expr: Seq[RhoExpr],
       block: LightBlockInfo
   )
@@ -390,8 +400,6 @@ object WebApi {
     }
     DataAtNameResponse(exprsWithBlock, length)
   }
-
-  private def toDataAtParResponse(pars: Seq[Par]): DataAtParResponse = DataAtParResponse(pars)
 
   private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
     val (pars, lightBlockInfo) = data
