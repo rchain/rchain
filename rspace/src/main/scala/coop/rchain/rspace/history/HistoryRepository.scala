@@ -7,7 +7,6 @@ import coop.rchain.metrics.Span
 import coop.rchain.rspace.channelStore.ChannelStore
 import coop.rchain.rspace.channelStore.instances.ChannelStoreImpl
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
 import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterStore}
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -71,9 +70,9 @@ object HistoryRepositoryInstances {
     )
     for {
       currentRoot <- rootsRepository.currentRoot()
+
       // History store
-      historyStore = new RadixStore[F](historyKeyValueStore)
-      history      <- RadixHistory(currentRoot, historyStore)
+      history <- History.create(currentRoot, historyKeyValueStore)
 
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)

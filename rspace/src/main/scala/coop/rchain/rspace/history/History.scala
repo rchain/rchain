@@ -1,10 +1,13 @@
 package coop.rchain.rspace.history
 
+import cats.Parallel
+import cats.effect.{Concurrent, Sync}
+import cats.implicits.toFunctorOps
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
 import coop.rchain.rspace.history.instances.RadixHistory
 import scodec.bits.ByteVector
-
+import coop.rchain.store.KeyValueStore
 /**
   * Helper trait to be able to return self type for _process_ and _reset_ methods.
   *
@@ -15,6 +18,8 @@ import scodec.bits.ByteVector
 trait HistorySelf[F[_]] {
   type HistoryF <: HistorySelf[F]
 }
+
+import scala.language.higherKinds
 
 /**
   * History definition represents key-value API for RSpace tuple space
@@ -54,6 +59,13 @@ trait History[F[_]] extends HistorySelf[F] {
 
 object History {
   val emptyRootHash: Blake2b256Hash = RadixHistory.emptyRootHash
+//  val emptyRootHash: Blake2b256Hash = HistoryInstances.emptyRootHash //for MergingHistory
+
+  def create[F[_]: Concurrent: Sync: Parallel](
+      root: Blake2b256Hash,
+      store: KeyValueStore[F]
+  ): F[History[F]] = RadixHistory(root, new RadixStore[F](store)).map(h => h)
+  //    Sync[F].delay(HistoryInstances.merging(root, HistoryStoreInstances.historyStore[F](store))) //for MergingHistory
 }
 /**
   * Support for old ("merging") History
