@@ -253,7 +253,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   "replay the same term with same event logs" should "get the same cost" in {
     val r = scala.util.Random
     for (_ <- 1 to 100) {
-      val long     = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val long     = math.abs(r.nextLong)
       val contract = fromLong(long)
       if (contract != "") {
         val result = evaluateAndReplay(Cost(Integer.MAX_VALUE), contract)
@@ -267,7 +267,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   "replay the same term with not enough phlo" should "get the same result" in {
     val r = scala.util.Random
     for (_ <- 1 to 100) {
-      val long        = ((r.nextLong % 0X144000000L) + 0X144000000L) % 0X144000000L
+      val long        = math.abs(r.nextLong)
       val contract    = fromLong(long)
       val parsingCost = accounting.parsingCost(contract)
       if (contract != "") {
