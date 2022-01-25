@@ -7,7 +7,7 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalatest.prop._
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
 
-class HistoryGenerativeSpec
+class MergingHistoryGenerativeSpec
     extends FlatSpec
     with Matchers
     with OptionValues
@@ -26,7 +26,7 @@ class HistoryGenerativeSpec
   "process" should "accept new leafs (insert, update, delete)" in forAll(
     distinctListOf(arbitraryRandomThreeBytes)
   ) { keys: List[Key] =>
-    val actions = keys.map(k => (k, TestData.randomBlake))
+    val actions = keys.map(k => (k, MergingTestData.randomBlake))
     val emptyMergingHistory =
       HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
@@ -74,7 +74,7 @@ class HistoryGenerativeSpec
 
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
     keys: List[Key] =>
-      val actions = keys.map(k => (k, TestData.randomBlake))
+      val actions = keys.map(k => (k, MergingTestData.randomBlake))
       val emptyMergingHistory = HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
       val emptySimplisticHistory: HistoryWithFind[Task] =
         SimplisticHistory.noMerging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)

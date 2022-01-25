@@ -3,7 +3,7 @@ package coop.rchain.rspace.history
 import cats.implicits._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History.KeyPath
-import coop.rchain.rspace.history.TestData._
+import coop.rchain.rspace.history.MergingTestData._
 import coop.rchain.shared.Base16
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -14,7 +14,11 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+class MergingHistorySpec
+    extends FlatSpec
+    with Matchers
+    with OptionValues
+    with InMemoryHistoryTestBase {
 
   // Empty                     root
   //                            |
@@ -257,7 +261,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
 }
 
-object TestData {
+object MergingTestData {
 
   implicit def toByteVector(bytes: KeyPath): ByteVector = ByteVector(bytes)
 

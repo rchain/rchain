@@ -13,7 +13,7 @@ import coop.rchain.rspace.state.instances.{RSpaceExporterStore, RSpaceImporterSt
 import coop.rchain.rspace.test.ArbitraryInstances.{arbitraryDatumString, _}
 import coop.rchain.shared.PathOps._
 import coop.rchain.shared.{Log, Serialize}
-import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.store.{InMemoryKeyValueStore, InMemoryStoreManager}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -36,7 +36,6 @@ class LMDBHistoryRepositoryGenerativeSpec
     implicit val span: Span[Task] = new NoopSpan[Task]
     for {
       historyLmdbKVStore <- kvm.store("history")
-      historyStore       = HistoryStoreInstances.historyStore(historyLmdbKVStore)
       coldLmdbKVStore    <- kvm.store("cold")
       coldStore          = ColdStoreInstances.coldStore(coldLmdbKVStore)
       rootsLmdbKVStore   <- kvm.store("roots")
@@ -44,9 +43,9 @@ class LMDBHistoryRepositoryGenerativeSpec
       rootRepository     = new RootRepository[Task](rootsStore)
       channelKVStore     <- kvm.store("channels")
       channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
-      emptyHistory       = HistoryMergingInstances.merging(HistoryMergingInstances.emptyRootHash, historyStore)
-      exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
-      importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      emptyHistory       <- History.create(History.emptyRootHash, historyLmdbKVStore)
+      exporter = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -67,31 +66,31 @@ class LMDBHistoryRepositoryGenerativeSpec
     dbDir.recursivelyDelete()
 }
 
-class InmemHistoryRepositoryGenerativeSpec
+class InMemHistoryRepositoryGenerativeSpec
     extends HistoryRepositoryGenerativeDefinition
     with InMemoryHistoryRepositoryTestBase {
 
   override def repo: Task[HistoryRepository[Task, String, Pattern, String, StringsCaptor]] = {
-    val emptyHistory =
-      HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
+
     implicit val log: Log[Task]   = new Log.NOPLog[Task]
     implicit val span: Span[Task] = new NoopSpan[Task]
     val kvm                       = InMemoryStoreManager[Task]
     for {
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
       channelKVStore <- kvm.store("channels")
       channelStore   = ChannelStoreImpl[Task, String](channelKVStore, stringSerialize)
       r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
-        emptyHistory,
-        rootRepository,
-        inMemColdStore,
-        emptyExporter,
-        emptyImporter,
+      emptyHistory,
+      rootRepository,
+      inMemColdStore,
+      emptyExporter,
+      emptyImporter,
         channelStore,
-        serializeString,
-        serializePattern,
-        serializeString,
-        serializeCont
-      )
+      serializeString,
+      serializePattern,
+      serializeString,
+      serializeCont
+    )
     } yield r
   }
 
