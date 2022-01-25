@@ -331,8 +331,7 @@ object Setup {
           conf.protocolServer.networkId,
           conf.casper.shardName,
           conf.casper.minPhloPrice,
-          isNodeReadOnly,
-          runtimeManager
+          isNodeReadOnly
         )
       }
       adminWebApi = {

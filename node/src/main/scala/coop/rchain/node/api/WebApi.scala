@@ -74,8 +74,7 @@ object WebApi {
       networkId: String,
       shardId: String,
       minPhloPrice: Long,
-      isNodeReadOnly: Boolean,
-      runtimeManager: RuntimeManager[F]
+      isNodeReadOnly: Boolean
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -107,21 +106,10 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
-    def getDataAtPar(req: DataAtParRequest): F[RhoDataResponse] = {
-      implicit val rm: RuntimeManager[F] = runtimeManager
-
-      val deployId = req.name match {
-        case unforg: UnforgPrivate  => unforg.data
-        case unforg: UnforgDeploy   => unforg.data
-        case unforg: UnforgDeployer => unforg.data
+    def getDataAtPar(req: DataAtParRequest): F[RhoDataResponse] =
+      BlockAPI.getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash).map {
+        case (pars, block) => RhoDataResponse(pars.flatMap(exprFromParProto), block)
       }
-
-      findDeploy(deployId).flatMap { block =>
-        BlockAPI.getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash).map { pars =>
-          RhoDataResponse(pars.flatMap(exprFromParProto), block)
-        }
-      }
-    }
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)

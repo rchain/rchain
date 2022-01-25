@@ -801,17 +801,28 @@ object BlockAPI {
     )
   }
 
-  def getDataAtPar[F[_]: Concurrent: RuntimeManager: BlockStore](
+  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
       blockHash: String,
       par: Par,
       usePreStateHash: Boolean
-  ): F[Seq[Par]] =
-    for {
-      block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-      stateHash = if (usePreStateHash) block.body.state.preStateHash
-      else block.body.state.postStateHash
-      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-      data      <- RuntimeManager[F].getData(stateHash)(sortedPar)
-    } yield data
+  ): F[(Seq[Par], LightBlockInfo)] = {
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): F[(Seq[Par], LightBlockInfo)] =
+      for {
+        block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+        stateHash = if (usePreStateHash) block.body.state.preStateHash
+        else block.body.state.postStateHash
+        sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
+        runtimeManager <- casper.getRuntimeManager
+        data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
+      } yield (data.postBlockData, data.getBlock)
+
+    EngineCell[F].read >>= (_.withCasper[(Seq[Par], LightBlockInfo)](
+      casperResponse(_),
+      (Seq.empty[Par], LightBlockInfo()).pure
+    ))
+  }
 
 }
