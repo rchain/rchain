@@ -639,4 +639,17 @@ object Validate {
         } yield BlockError.BlockException(ex).asLeft[ValidBlock]
     }
   }
+
+  /**
+    * All of deploys must have greater or equal phloPrice then minPhloPrice
+    */
+  def phloPrice[F[_]: Log: Concurrent](
+      b: BlockMessage,
+      minPhloPrice: Long
+  ): F[ValidBlockProcessing] =
+    if (b.body.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
+      BlockStatus.valid.asRight[BlockError].pure
+    } else {
+      BlockStatus.lowDeployCost.asLeft[ValidBlock].pure
+    }
 }

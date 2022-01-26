@@ -152,7 +152,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           autogenShardSize = 5,
           genesisValidatorMode = false,
           ceremonyMasterMode = false
-        )
+        ),
+        minPhloPrice = 1
       ),
       metrics = Metrics(
         prometheus = false,

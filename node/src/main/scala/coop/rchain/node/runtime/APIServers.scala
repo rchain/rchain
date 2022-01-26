@@ -35,7 +35,9 @@ object APIServers {
       proposeFOpt: Option[ProposeFunction[F]],
       blockReportAPI: BlockReportAPI[F],
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   )(
       implicit
       blockStore: BlockStore[F],
@@ -57,7 +59,9 @@ object APIServers {
         proposeFOpt,
         devMode,
         networkId,
-        shardId
+        shardId,
+        minPhloPrice,
+        isNodeReadOnly
       )
     val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
     APIServers(repl, propose, deploy)

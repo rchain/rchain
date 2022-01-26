@@ -105,11 +105,14 @@ object Main {
   private def runCLI[F[_]: Sync: Monixable: ConsoleIO: Timer](
       options: commandline.Options
   ): F[Unit] = {
+    val grpcPort =
+      if (options.grpcPort.isSupplied) options.grpcPort() else commandline.Options.GrpcInternalPort
+
     // Clients for executing gRPC calls on remote RNode instance
     implicit val replServiceClient: GrpcReplClient[F] =
       new GrpcReplClient[F](
         options.grpcHost(),
-        options.grpcPort(),
+        grpcPort,
         options.grpcMaxRecvMessageSize()
       )
     implicit val deployServiceClient: GrpcDeployService[F] =
@@ -121,7 +124,7 @@ object Main {
     implicit val proposeServiceClient: GrpcProposeService[F] =
       new GrpcProposeService[F](
         options.grpcHost(),
-        options.grpcPort(),
+        grpcPort,
         options.grpcMaxRecvMessageSize()
       )
 
