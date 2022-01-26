@@ -811,9 +811,7 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
       for {
-        block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-        stateHash = if (usePreStateHash) block.body.state.preStateHash
-        else block.body.state.postStateHash
+        block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
         sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
         runtimeManager <- casper.getRuntimeManager
         data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
