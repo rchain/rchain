@@ -107,9 +107,12 @@ object WebApi {
         .map(toDataAtNameResponse)
 
     def getDataAtPar(req: DataAtParRequest): F[RhoDataResponse] =
-      BlockAPI.getDataAtPar(req.blockHash, toPar(req), req.usePreStateHash).map {
-        case (pars, block) => RhoDataResponse(pars.flatMap(exprFromParProto), block)
-      }
+      BlockAPI
+        .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
+        .flatMap(_.liftToBlockApiErr)
+        .map {
+          case (pars, block) => RhoDataResponse(pars.flatMap(exprFromParProto), block)
+        }
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
