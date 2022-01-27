@@ -98,7 +98,6 @@ object WebApiRoutes {
     implicit val dataAtNameRespEncoder      = jsonEncoderOf[F, DataAtNameResponse]
     implicit val dataAtParRespEncoder       = jsonEncoderOf[F, RhoDataResponse]
     implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
-    implicit val explRespEncoder            = jsonEncoderOf[F, ExploratoryDeployResponse]
     implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
     // Decoders
     implicit val deployRequestDecoder     = jsonOf[F, DeployRequest]
@@ -125,12 +124,12 @@ object WebApiRoutes {
         req.handle[DeployRequest, String](webApi.deploy)
 
       case req @ POST -> Root / "explore-deploy" =>
-        req.handle[String, ExploratoryDeployResponse](
+        req.handle[String, RhoDataResponse](
           term => webApi.exploratoryDeploy(term, none[String], usePreStateHash = false)
         )
 
       case req @ POST -> Root / "explore-deploy-by-block-hash" =>
-        req.handle[ExploreDeployRequest, ExploratoryDeployResponse](
+        req.handle[ExploreDeployRequest, RhoDataResponse](
           req =>
             if (req.blockHash.isEmpty)
               webApi.exploratoryDeploy(req.term, none[String], req.usePreStateHash)

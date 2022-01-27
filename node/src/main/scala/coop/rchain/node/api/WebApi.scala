@@ -55,7 +55,7 @@ trait WebApi[F[_]] {
       term: String,
       blockHash: Option[String],
       usePreStateHash: Boolean
-  ): F[ExploratoryDeployResponse]
+  ): F[RhoDataResponse]
 
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
@@ -130,11 +130,11 @@ object WebApi {
         term: String,
         blockHash: Option[String],
         usePreStateHash: Boolean
-    ): F[ExploratoryDeployResponse] =
+    ): F[RhoDataResponse] =
       BlockAPI
         .exploratoryDeploy(term, blockHash, usePreStateHash, devMode)
         .flatMap(_.liftToBlockApiErr)
-        .map(toExploratoryResponse)
+        .map(toRhoDataResponse)
 
     def status: F[ApiStatus] =
       for {
@@ -390,18 +390,9 @@ object WebApi {
     DataAtNameResponse(exprsWithBlock, length)
   }
 
-  private def toResponse[A](
-      data: (Seq[Par], LightBlockInfo),
-      responseFactory: (Seq[RhoExpr], LightBlockInfo) => A
-  ): A = {
+  private def toRhoDataResponse(data: (Seq[Par], LightBlockInfo)): RhoDataResponse = {
     val (pars, lightBlockInfo) = data
     val rhoExprs               = pars.flatMap(exprFromParProto)
-    responseFactory(rhoExprs, lightBlockInfo)
+    RhoDataResponse(rhoExprs, lightBlockInfo)
   }
-
-  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)): ExploratoryDeployResponse =
-    toResponse(data, (expr, block) => ExploratoryDeployResponse(expr, block))
-
-  private def toRhoDataResponse(data: (Seq[Par], LightBlockInfo)): RhoDataResponse =
-    toResponse(data, (expr, block) => RhoDataResponse(expr, block))
 }
