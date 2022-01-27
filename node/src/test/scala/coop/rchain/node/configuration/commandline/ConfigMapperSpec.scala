@@ -248,7 +248,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           autogenShardSize = 111111,
           genesisValidatorMode = true,
           ceremonyMasterMode = true
-        )
+        ),
+        minPhloPrice = 1
       ),
       metrics = Metrics(
         prometheus = true,

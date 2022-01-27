@@ -69,7 +69,9 @@ object WebApi {
       cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -92,7 +94,7 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, triggerProposeF))
+        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice, isNodeReadOnly))
         .flatMap(_.liftToBlockApiErr)
 
     def listenForDataAtName(req: DataRequest): F[DataResponse] =
@@ -136,7 +138,8 @@ object WebApi {
         networkId,
         shardId,
         peers.length,
-        nodes.length
+        nodes.length,
+        minPhloPrice
       )
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
@@ -230,7 +233,8 @@ object WebApi {
       networkId: String,
       shardId: String,
       peers: Int,
-      nodes: Int
+      nodes: Int,
+      minPhloPrice: Long
   )
 
   final case class VersionInfo(api: String, node: String)

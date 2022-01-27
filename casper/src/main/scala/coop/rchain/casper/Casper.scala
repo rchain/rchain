@@ -162,7 +162,8 @@ final case class CasperShardConf(
     bondMinimum: Long,
     bondMaximum: Long,
     epochLength: Int,
-    quarantineLength: Int
+    quarantineLength: Int,
+    minPhloPrice: Long
 )
 
 sealed abstract class MultiParentCasperInstances {

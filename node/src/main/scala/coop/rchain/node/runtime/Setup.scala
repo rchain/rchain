@@ -271,6 +271,8 @@ object Setup {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (ra, rp)         = (rpConfAsk, rpConnections)
+        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -281,7 +283,9 @@ object Setup {
           else none[ProposeFunction[F]],
           blockReportAPI,
           conf.protocolServer.networkId,
-          conf.casper.shardName
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          isNodeReadOnly
         )
       }
       reportingRoutes = {
@@ -319,6 +323,7 @@ object Setup {
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         implicit val (ra, rc)         = (rpConfAsk, rpConnections)
+        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
@@ -327,7 +332,9 @@ object Setup {
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
           conf.protocolServer.networkId,
-          conf.casper.shardName
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          isNodeReadOnly
         )
       }
       adminWebApi = {

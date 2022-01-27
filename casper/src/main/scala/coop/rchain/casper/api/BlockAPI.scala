@@ -27,7 +27,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.{BindPattern, BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
@@ -52,7 +52,9 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[ProposeFunction[F]]
+      triggerPropose: Option[ProposeFunction[F]],
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -69,6 +71,12 @@ object BlockAPI {
         _ <- triggerPropose.traverse(_(casper, true))
       } yield r
 
+    // Check if node is read-only
+    val readOnlyError = new RuntimeException(
+      "Deploy was rejected because node is running in read-only mode."
+    ).raiseError[F, ApiErr[String]]
+    val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
+
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
     val forbiddenKeyError = new RuntimeException(
@@ -77,9 +85,8 @@ object BlockAPI {
     val forbiddenKeyCheck = forbiddenKeyError.whenA(isForbiddenKey)
 
     // Check if deploy has minimum phlo price
-    val minPhloPrice = 1
     val minPriceError = new RuntimeException(
-      s"Phlo price is less than minimum price $minPhloPrice."
+      s"Phlo price ${d.data.phloPrice} is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
@@ -89,7 +96,9 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+      ApiErr[String]
+    ](
       casperDeploy,
       logErrorMessage
     ))
@@ -793,5 +802,18 @@ object BlockAPI {
       )
     )
   }
+
+  def getDataAtPar[F[_]: Concurrent: RuntimeManager: BlockStore](
+      blockHash: String,
+      par: Par,
+      usePreStateHash: Boolean
+  ): F[Seq[Par]] =
+    for {
+      block <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+      stateHash = if (usePreStateHash) block.body.state.preStateHash
+      else block.body.state.postStateHash
+      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
+      data      <- RuntimeManager[F].getData(stateHash)(sortedPar)
+    } yield data
 
 }
