@@ -110,9 +110,7 @@ object WebApi {
       BlockAPI
         .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
-        .map {
-          case (pars, block) => RhoDataResponse(pars.flatMap(exprFromParProto), block)
-        }
+        .map(toRhoDataResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
@@ -392,10 +390,18 @@ object WebApi {
     DataAtNameResponse(exprsWithBlock, length)
   }
 
-  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
+  private def toResponse[A](
+      data: (Seq[Par], LightBlockInfo),
+      responseFactory: (Seq[RhoExpr], LightBlockInfo) => A
+  ): A = {
     val (pars, lightBlockInfo) = data
     val rhoExprs               = pars.flatMap(exprFromParProto)
-    ExploratoryDeployResponse(rhoExprs, lightBlockInfo)
+    responseFactory(rhoExprs, lightBlockInfo)
   }
 
+  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)): ExploratoryDeployResponse =
+    toResponse(data, (expr, block) => ExploratoryDeployResponse(expr, block))
+
+  private def toRhoDataResponse(data: (Seq[Par], LightBlockInfo)): RhoDataResponse =
+    toResponse(data, (expr, block) => RhoDataResponse(expr, block))
 }
