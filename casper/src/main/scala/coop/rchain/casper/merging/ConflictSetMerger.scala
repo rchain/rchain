@@ -2,16 +2,22 @@ package coop.rchain.casper.merging
 
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.models.ListParWithRandom
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.HistoryReaderBinary
 import coop.rchain.rspace.merger.MergingLogic._
 import coop.rchain.rspace.merger.StateChange._
 import coop.rchain.rspace.merger._
+import coop.rchain.rspace.serializers.ScodecSerialize.DatumB
 import coop.rchain.shared.{Log, Stopwatch}
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.convertToReadNumber
+import coop.rchain.rspace.internal.Datum
 
 object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
+  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements", "org.wartremover.warts.Throw"))
   def merge[F[_]: Concurrent: Log, R: Ordering](
       actualSet: Set[R],
       lateSet: Set[R],
@@ -21,7 +27,8 @@ object ConflictSetMerger {
       stateChanges: R => F[StateChange],
       mergeableChannels: R => NumberChannelsDiff,
       computeTrieActions: (StateChange, NumberChannelsDiff) => F[Vector[HotStoreTrieAction]],
-      applyTrieActions: Seq[HotStoreTrieAction] => F[Blake2b256Hash]
+      applyTrieActions: Seq[HotStoreTrieAction] => F[Blake2b256Hash],
+      getData: Blake2b256Hash => F[Seq[Datum[ListParWithRandom]]]
   ): F[(Blake2b256Hash, Set[R])] = {
 
     type Branch = Set[R]
@@ -42,6 +49,41 @@ object ConflictSetMerger {
         .sortBy(b => (b.map(targetF).sum, b.size, b.head.head))
         .headOption
         .getOrElse(Set.empty)
+    }
+
+    def calMergedResult(
+        branch: R,
+        originResult: Map[Blake2b256Hash, Long]
+    ): Map[Blake2b256Hash, Long] = {
+      val diff = mergeableChannels.apply(branch)
+      diff.foldLeft(originResult) {
+        case (ba, br) =>
+          val result = Math.addExact(ba.getOrElse(br._1, 0L), br._2)
+          if (result < 0) {
+            throw new ArithmeticException("merged result negative")
+          } else {
+            ba.updated(br._1, result)
+          }
+      }
+    }
+
+    def getMergedResultRejection(
+        options: Set[Set[R]],
+        base: Map[Blake2b256Hash, Long],
+        targetF: R => Long
+    ): Set[R] = {
+      val (_, rejected) = options.flatten.toList
+        .sortBy(b => targetF(b))
+        .foldLeft((base, Set.empty[R])) {
+          case ((balances, rejected), deploy) =>
+            try {
+              (calMergedResult(deploy, balances), rejected)
+            } catch {
+              case _: ArithmeticException => (balances, rejected + deploy)
+            }
+
+        }
+      rejected
     }
 
     val (rejectedAsDependents, mergeSet) =
@@ -65,15 +107,32 @@ object ConflictSetMerger {
     val rejectionTargetF = (dc: Branch) => dc.map(cost).sum
     val optimalRejection = getOptimalRejection(rejectionOptions, rejectionTargetF)
     val toMerge          = branches diff optimalRejection
-    val rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
 
     for {
-      r                               <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
+      baseMergeableChRes <- toMerge.flatten
+                             .map(mergeableChannels)
+                             .flatMap(_.keys)
+                             .toList
+                             .traverse(
+                               channelHash =>
+                                 convertToReadNumber(getData)
+                                   .apply(channelHash)
+                                   .map(res => (channelHash, res.getOrElse(0L)))
+                             )
+                             .map(_.toMap)
+      overflowOrNegativeRejections = getMergedResultRejection(
+        toMerge,
+        baseMergeableChRes,
+        cost
+      )
+      ultimateMerge                   = branches.flatten diff optimalRejection.flatten diff overflowOrNegativeRejections
+      rejected                        = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten ++ overflowOrNegativeRejections
+      r                               <- Stopwatch.duration(ultimateMerge.toList.traverse(stateChanges).map(_.combineAll))
       (allChanges, combineAllChanges) = r
 
       // All number channels merged
       // TODO: Negative or overflow should be rejected before!
-      allMergeableChannels = toMerge.toList.flatten.map(mergeableChannels).combineAll
+      allMergeableChannels = ultimateMerge.toList.map(mergeableChannels).combineAll
 
       r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
       (trieActions, computeActionsTime) = r
