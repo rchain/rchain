@@ -2,6 +2,7 @@ package coop.rchain.node.configuration
 
 import coop.rchain.casper.CasperConf
 import coop.rchain.casper.util.comm.ListenAtName.Name
+import coop.rchain.casper.util.comm.ListenAtPar
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.crypto.{PrivateKey, PublicKey}
@@ -122,4 +123,6 @@ final case class BondStatus(publicKey: PublicKey)                          exten
 final case object Help                                                     extends Command
 final case class DataAtName(name: Name)                                    extends Command
 final case class ContAtName(names: List[Name])                             extends Command
-final case object Status                                                   extends Command
+final case class DataAtPar(name: ListenAtPar.Name, blockHash: String, usePreStateHash: Boolean)
+    extends Command
+final case object Status extends Command

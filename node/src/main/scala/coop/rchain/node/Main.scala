@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.Parallel
 import cats.effect._
 import cats.syntax.all._
+import coop.rchain.casper.util.comm.ListenAtPar.toPar
 import coop.rchain.casper.util.comm._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.PrivateKey
@@ -165,9 +166,11 @@ object Main {
       case ShowBlocks(depth)            => DeployRuntime.getBlocks[F](depth)
       case VisualizeDag(depth, showJustificationLines) =>
         DeployRuntime.visualizeDag[F](depth, showJustificationLines)
-      case MachineVerifiableDag  => DeployRuntime.machineVerifiableDag[F]
-      case DataAtName(name)      => DeployRuntime.listenForDataAtName[F](name)
-      case ContAtName(names)     => DeployRuntime.listenForContinuationAtName[F](names)
+      case MachineVerifiableDag => DeployRuntime.machineVerifiableDag[F]
+      case DataAtName(name)     => DeployRuntime.listenForDataAtName[F](name)
+      case ContAtName(names)    => DeployRuntime.listenForContinuationAtName[F](names)
+      case DataAtPar(name, blockHash, usePreStateHash) =>
+        DeployRuntime.getDataAtPar[F](toPar(name), blockHash, usePreStateHash)
       case Keygen(path)          => generateKey(path)
       case LastFinalizedBlock    => DeployRuntime.lastFinalizedBlock[F]
       case IsFinalized(hash)     => DeployRuntime.isFinalized[F](hash)
@@ -217,8 +220,14 @@ object Main {
       case Some(options.bondStatus)           => BondStatus(options.bondStatus.validatorPublicKey())
       case Some(options.dataAtName)           => DataAtName(options.dataAtName.name())
       case Some(options.contAtName)           => ContAtName(options.contAtName.name())
-      case Some(options.status)               => Status
-      case _                                  => Help
+      case Some(options.dataAtPar) =>
+        DataAtPar(
+          options.dataAtPar.name(),
+          options.dataAtPar.blockHash(),
+          options.dataAtPar.usePreStateHash()
+        )
+      case Some(options.status) => Status
+      case _                    => Help
     }
 
   private def decryptKeyFromCon[F[_]: Sync: ConsoleIO](
