@@ -8,6 +8,7 @@ import cats.syntax.all._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.Par
 import coop.rchain.models.either.implicits._
 import coop.rchain.monix.Monixable
 import coop.rchain.shared.syntax._
@@ -26,6 +27,7 @@ trait DeployService[F[_]] {
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
+  def getDataAtPar(request: DataAtParQuery): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]]
   def lastFinalizedBlock: F[Either[Seq[String], String]]
   def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
   def bondStatus(q: BondStatusQuery): F[Either[Seq[String], String]]
@@ -142,6 +144,17 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       .toEitherF(
         _.message.error,
         _.message.payload.map(_.blockResults)
+      )
+
+  def getDataAtPar(
+      request: DataAtParQuery
+  ): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]] =
+    stub
+      .getDataAtPar(request)
+      .fromTask
+      .toEitherF(
+        _.message.error,
+        _.message.payload.map(r => (r.par, r.block))
       )
 
   def lastFinalizedBlock: F[Either[Seq[String], String]] =
