@@ -665,7 +665,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   }
 
-  it should "execute with monix" in {
+  it should "execute with monix" ignore {
     import monix.eval.Task
     import monix.execution.Scheduler.Implicits.global
 

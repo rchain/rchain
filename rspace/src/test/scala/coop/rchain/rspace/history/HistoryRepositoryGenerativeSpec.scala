@@ -44,8 +44,8 @@ class LMDBHistoryRepositoryGenerativeSpec
       channelKVStore     <- kvm.store("channels")
       channelStore       = ChannelStoreImpl(channelKVStore, stringSerialize)
       emptyHistory       <- History.create(History.emptyRootHash, historyLmdbKVStore)
-      exporter = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
-      importer = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      exporter           = RSpaceExporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
+      importer           = RSpaceImporterStore[Task](historyLmdbKVStore, coldLmdbKVStore, rootsLmdbKVStore)
       repository: HistoryRepository[Task, String, Pattern, String, StringsCaptor] = HistoryRepositoryImpl
         .apply[Task, String, Pattern, String, StringsCaptor](
           emptyHistory,
@@ -76,21 +76,21 @@ class InMemHistoryRepositoryGenerativeSpec
     implicit val span: Span[Task] = new NoopSpan[Task]
     val kvm                       = InMemoryStoreManager[Task]
     for {
-      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
+      emptyHistory   <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
       channelKVStore <- kvm.store("channels")
       channelStore   = ChannelStoreImpl[Task, String](channelKVStore, stringSerialize)
       r = HistoryRepositoryImpl[Task, String, Pattern, String, StringsCaptor](
-      emptyHistory,
-      rootRepository,
-      inMemColdStore,
-      emptyExporter,
-      emptyImporter,
+        emptyHistory,
+        rootRepository,
+        inMemColdStore,
+        emptyExporter,
+        emptyImporter,
         channelStore,
-      serializeString,
-      serializePattern,
-      serializeString,
-      serializeCont
-    )
+        serializeString,
+        serializePattern,
+        serializeString,
+        serializeCont
+      )
     } yield r
   }
 

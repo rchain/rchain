@@ -3,6 +3,14 @@ package coop.rchain.rspace.state
 import cats.effect._
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.{ColdStoreInstances, ContinuationsLeaf, DataLeaf, JoinsLeaf}
+import coop.rchain.rspace.serializers.ScodecSerialize.{
+  decodeContinuations,
+  decodeDatums,
+  decodeJoins
+}
+import coop.rchain.shared.AttemptOps.RichAttempt
+import coop.rchain.shared.Serialize
 import coop.rchain.state.TrieImporter
 import fs2.Stream
 import scodec.bits.ByteVector
@@ -56,10 +64,6 @@ object RSpaceImporter {
         case (hash, trieBytes) =>
           val trieHash = Blake2b256Hash.create(trieBytes)
           if (hash == trieHash) (trieHash.bytes, trieBytes).pure[F]
-        //    but on each case of Trie instance (see `Trie.hash`)
-        //  - this adds substantial time for validation e.g. 20k records 450ms (with encoding 2.4sec)
-        // https://github.com/rchain/rchain/blob/4dd216a7/rspace/src/main/scala/coop/rchain/rspace/history/HistoryStore.scala#L25-L26
-        val trieHash = Trie.hash(trie)
           else
             raiseError(
               s"Trie hash does not match decoded trie, key: ${hash.bytes.toHex}, decoded: ${trieHash.bytes.toHex}."
