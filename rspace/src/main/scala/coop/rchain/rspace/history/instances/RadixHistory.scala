@@ -52,16 +52,13 @@ final case class RadixHistory[F[_]: Sync: Parallel](
 
   override def process(actions: List[HistoryAction]): F[History[F]] =
     for {
-      _ <- Sync[F].ensure(actions.pure[F])(
-            new RuntimeException("Cannot process duplicate actions on one key")
-          )(hasNoDuplicates)
+      _ <- new RuntimeException("Cannot process duplicate actions on one key").raiseError
+            .unlessA(hasNoDuplicates(actions))
 
       newRootNodeOpt <- impl.makeActions(rootNode, actions)
-      newRootHash <- newRootNodeOpt match {
-                      case Some(newRootNode) =>
-                        val hash = impl.saveNode(newRootNode)
-                        impl.commit().map(_ => hash.some)
-                      case None => none.pure
+      newRootHash <- newRootNodeOpt.traverse { newRootNode =>
+                      val hash = impl.saveNode(newRootNode)
+                      impl.commit().as(hash)
                     }
       _ <- Sync[F].delay(impl.clearWriteCache())
       _ <- Sync[F].delay(impl.clearReadCache())
