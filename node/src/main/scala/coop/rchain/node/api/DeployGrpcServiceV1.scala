@@ -103,7 +103,7 @@ object DeployGrpcServiceV1 {
         }
 
       def visualizeDag(request: VisualizeDagQuery): Observable[VisualizeBlocksResponse] = {
-        val serialize: F[Graphz[F]] => List[String] = _ => Vector.empty[String].toList
+        val serialize: Graphz[F] => List[String] = _ => Vector.empty[String].toList
 
         val depth            = if (request.depth <= 0) apiMaxBlocksLimit else request.depth
         val config           = GraphConfig(request.showJustificationLines)

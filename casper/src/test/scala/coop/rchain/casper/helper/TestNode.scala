@@ -348,7 +348,7 @@ case class TestNode[F[_]: Timer](
   def shutoff() = transportLayerEff.clear(local)
 
   def visualizeDag(startBlockNumber: Int): F[String] = {
-    val serialize: F[Graphz[F]] => String = _.toString
+    val serialize: Graphz[F] => String = _.toString
 
     val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, String](
       Int.MaxValue,

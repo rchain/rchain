@@ -385,11 +385,11 @@ object BlockAPI {
       maxDepthLimit: Int,
       startBlockNumber: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
-      serialize: F[Graphz[F]] => R
+      serialize: Graphz[F] => R
   ): F[ApiErr[R]] = {
     val errorMessage = "visual dag failed"
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] = {
-      val graph = for {
+    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
+      for {
         dag <- MultiParentCasper[F].blockDag
         // the default startBlockNumber is 0
         // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
@@ -399,11 +399,9 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb <- casper.lastFinalizedBlock
-        g   <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
-      } yield g
-      Sync[F].delay(serialize(graph).asRight[Error])
-    }
+        lfb   <- casper.lastFinalizedBlock
+        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+      } yield serialize(graph).asRight[Error]
 
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
