@@ -25,12 +25,12 @@ object GraphzGenerator {
   type ValidatorsBlocks = Map[Long, List[ValidatorBlock]]
 
   final case class DagInfo(
-      validators: Map[String, ValidatorsBlocks] = Map.empty,
-      timeseries: List[Long] = List.empty
+      validators: Map[String, ValidatorsBlocks],
+      timeseries: List[Long]
   )
 
   object DagInfo {
-    def empty: DagInfo = DagInfo()
+    def empty: DagInfo = DagInfo(validators = Map.empty, timeseries = List.empty)
   }
 
   def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log: BlockStore](
