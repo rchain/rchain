@@ -102,7 +102,7 @@ object WebApiRoutes {
     // Decoders
     implicit val deployRequestDecoder     = jsonOf[F, DeployRequest]
     implicit val dataAtNameRequestDecoder = jsonOf[F, DataAtNameRequest]
-    implicit val dataAtParRequestDecoder  = jsonOf[F, DataAtParRequest]
+    implicit val dataAtParRequestDecoder  = jsonOf[F, DataAtNameByBlockHashRequest]
     implicit val prepareDecoder           = jsonOf[F, PrepareRequest]
     implicit val ExploreDeployRequest     = jsonOf[F, ExploreDeployRequest]
 
@@ -142,8 +142,8 @@ object WebApiRoutes {
       case req @ POST -> Root / "data-at-name" =>
         req.handle[DataAtNameRequest, DataAtNameResponse](webApi.listenForDataAtName)
 
-      case req @ POST -> Root / "data-at-par" =>
-        req.handle[DataAtParRequest, RhoDataResponse](webApi.getDataAtPar)
+      case req @ POST -> Root / "data-at-name-by-block-hash" =>
+        req.handle[DataAtNameByBlockHashRequest, RhoDataResponse](webApi.getDataAtPar)
 
       // Blocks
 

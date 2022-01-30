@@ -39,7 +39,7 @@ trait WebApi[F[_]] {
   // Read data (listen)
   def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
 
-  def getDataAtPar(request: DataAtParRequest): F[RhoDataResponse]
+  def getDataAtPar(request: DataAtNameByBlockHashRequest): F[RhoDataResponse]
 
   // Blocks info
 
@@ -106,7 +106,7 @@ object WebApi {
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
-    def getDataAtPar(req: DataAtParRequest): F[RhoDataResponse] =
+    def getDataAtPar(req: DataAtNameByBlockHashRequest): F[RhoDataResponse] =
       BlockAPI
         .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
@@ -210,9 +210,9 @@ object WebApi {
       depth: Int
   )
 
-  final case class DataAtParRequest(
-      blockHash: String,
+  final case class DataAtNameByBlockHashRequest(
       name: RhoUnforg,
+      blockHash: String,
       usePreStateHash: Boolean
   )
 
@@ -375,7 +375,7 @@ object WebApi {
   private def toPar(req: DataAtNameRequest): Par =
     Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
 
-  private def toPar(req: DataAtParRequest): Par =
+  private def toPar(req: DataAtNameByBlockHashRequest): Par =
     Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
 
   private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
