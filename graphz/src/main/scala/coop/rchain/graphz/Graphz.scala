@@ -12,21 +12,17 @@ trait GraphSerializer[F[_]] {
 }
 
 class StringSerializer[F[_]: Concurrent](ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
-  def push(str: String, suffix: String): F[Unit] = ref.update { current =>
-    current.append(str + suffix)
-  }
-  def show: F[String] = ref.get.map { _.toString }
+  override def push(str: String, suffix: String): F[Unit] = ref.update(_.append(str + suffix))
+  def show: F[String]                                     = ref.get.map { _.toString }
 }
 
 class ListSerializer[F[_]: Concurrent](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
-  def push(str: String, suffix: String): F[Unit] = ref.update { current =>
-    current :+ (str + suffix)
-  }
-  def show: F[String] = ref.get.map { _.mkString("") }
+  override def push(str: String, suffix: String): F[Unit] = ref.update(_ :+ (str + suffix))
+  def show: F[String]                                     = ref.get.map { _.mkString("") }
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {
-  def push(str: String, suffix: String): F[Unit] = Sync[F].delay {
+  override def push(str: String, suffix: String): F[Unit] = Sync[F].delay {
     fos.write(str.getBytes)
     fos.flush()
   }
