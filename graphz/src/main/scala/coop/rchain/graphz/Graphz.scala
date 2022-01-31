@@ -8,17 +8,14 @@ import cats.syntax.all._
 
 trait GraphSerializer[F[_]] {
   def push(str: String, suffix: String = "\n"): F[Unit]
-  def show: F[String]
 }
 
 class StringSerializer[F[_]: Concurrent](ref: Ref[F, StringBuffer]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.update(_.append(str + suffix))
-  def show: F[String]                                     = ref.get.map { _.toString }
 }
 
 class ListSerializer[F[_]: Concurrent](ref: Ref[F, Vector[String]]) extends GraphSerializer[F] {
   override def push(str: String, suffix: String): F[Unit] = ref.update(_ :+ (str + suffix))
-  def show: F[String]                                     = ref.get.map { _.mkString("") }
 }
 
 class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[F] {
@@ -26,7 +23,6 @@ class FileSerializer[F[_]: Sync](fos: FileOutputStream) extends GraphSerializer[
     fos.write(str.getBytes)
     fos.flush()
   }
-  override def show: F[String] = ???
 }
 
 sealed trait GraphType
@@ -217,11 +213,8 @@ class Graphz[F[_]: Monad](gtype: GraphType, t: String, val ser: GraphSerializer[
     ser.push(t + Graphz.quote(name) + Graphz.attrMkStr(attrs).map(a => " " + a).getOrElse(""))
   }
 
-  def subgraph(sub: Graphz[F]): F[Unit] = sub.show.flatMap { content =>
-    ser.push(content)
-  }
-  def close: F[Unit]  = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
-  def show: F[String] = ser.show
+  def subgraph(sub: Graphz[F]): F[Unit] = ser.push("")
+  def close: F[Unit]                    = ser.push(s"${t.substring(Graphz.tab.length)}}", suffix = "")
 
   private def edgeMkStr: String = gtype match {
     case Graph   => s"$t%s -- %s%s"
