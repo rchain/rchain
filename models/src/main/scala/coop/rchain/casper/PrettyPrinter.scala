@@ -23,12 +23,13 @@ object PrettyPrinter {
   private def buildString(b: BlockMessage, short: Boolean): String =
     s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)" +
       (if (short) {
-         s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
+         s"#${b.body.state.blockNumber} (${buildString(b.blockHash)} @ ${b.finFringeNum})"
        } else {
          s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
            s"-- Sender ID ${buildString(b.sender)} " +
            s"-- Contents ${buildString(b.body.state)}" +
-           s"-- Shard ID ${limit(b.shardId, 10)}"
+           s"-- Shard ID ${limit(b.shardId, 10)}" +
+           s"-- Base FF num ${b.finFringeNum}"
        })
 
   def buildString(bh: BlockHashMessage): String =

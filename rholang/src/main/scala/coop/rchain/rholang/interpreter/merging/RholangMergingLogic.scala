@@ -18,7 +18,7 @@ import coop.rchain.rspace.{HotStoreTrieAction, TrieInsertBinaryProduce}
 import coop.rchain.scodec.codecs
 import scodec.Codec
 import scodec.bits.ByteVector
-import scodec.codecs.{bytes, int64, uint16, variableSizeBytes}
+import scodec.codecs.{bytes, int64, long, uint16, variableSizeBytes}
 
 object RholangMergingLogic {
 
@@ -207,7 +207,7 @@ object RholangMergingLogic {
 
   val codecByteVectorVar: Codec[ByteVector] = variableSizeBytes(uint16, bytes)
 
-  val codecMergeableKey: Codec[(ByteVector, ByteVector, Int)] =
-    (codecByteVectorVar :: codecByteVectorVar :: uint16).as[(ByteVector, ByteVector, Int)]
+  val codecMergeableKey: Codec[(ByteVector, ByteVector, Long)] =
+    (codecByteVectorVar :: codecByteVectorVar :: int64).as[(ByteVector, ByteVector, Long)]
 
 }

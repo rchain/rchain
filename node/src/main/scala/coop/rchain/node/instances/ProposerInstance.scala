@@ -20,7 +20,7 @@ object ProposerInstance {
       state: Ref[F, ProposerState[F]]
   ): BlockProposeStream[F] = {
     // stream of requests to propose
-    val in = proposeRequestsQueue.dequeue
+    val in = proposeRequestsQueue.dequeueChunk(1)
 
     // max number of concurrent attempts to propose. Actual propose can happen only one at a time, but clients
     // are free to make propose attempt. In that case proposeID returned will be None.

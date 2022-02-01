@@ -4,7 +4,7 @@ import cats.Monad
 import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.{ByteString, Int32Value, StringValue}
+import com.google.protobuf.{ByteString, Int32Value, Int64Value, StringValue}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
@@ -193,8 +193,9 @@ object ProtoUtil {
       header: Header,
       justifications: Seq[Justification],
       shardId: String,
-      seqNum: Int = 0,
-      sender: ByteString = ByteString.EMPTY
+      seqNum: Long = 0,
+      sender: ByteString = ByteString.EMPTY,
+      finFringeNum: Long = 0
   ): BlockMessage = {
     // TODO FIX-ME fields that can be empty SHOULD be optional
     val block = BlockMessage(
@@ -207,7 +208,8 @@ object ProtoUtil {
       sig = ByteString.EMPTY,
       sigAlgorithm = "",
       shardId,
-      extraBytes = ByteString.EMPTY
+      extraBytes = ByteString.EMPTY,
+      finFringeNum
     )
 
     val hash = hashBlock(block)
@@ -221,7 +223,7 @@ object ProtoUtil {
       blockMessage.body.toProto.toByteArray,
       blockMessage.sender.toByteArray,
       StringValue.of(blockMessage.sigAlgorithm).toByteArray,
-      Int32Value.of(blockMessage.seqNum).toByteArray,
+      Int64Value.of(blockMessage.seqNum).toByteArray,
       StringValue.of(blockMessage.shardId).toByteArray,
       blockMessage.extraBytes.toByteArray
     )

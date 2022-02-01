@@ -13,4 +13,5 @@ object BlockDagBufferState {
   final case object Requested                                         extends MessageStatus
   final case class AwaitingDependencies(dependencies: Set[BlockHash]) extends MessageStatus
   final case object ValidationInProgress                              extends MessageStatus
+  def awaitingDependencies(d: Set[BlockHash]): MessageStatus = AwaitingDependencies(d)
 }

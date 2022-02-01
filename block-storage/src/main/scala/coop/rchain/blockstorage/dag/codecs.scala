@@ -35,7 +35,7 @@ object codecs {
 
   val codecValidator = xmapToByteString(bytes(Validator.Length))
 
-  val codecSeqNum = int32
+  val codecSeqNum = int64
 
   val codecBlockHashSet = listOfN(int32, codecBlockHash).xmap[Set[BlockHash]](_.toSet, _.toList)
 

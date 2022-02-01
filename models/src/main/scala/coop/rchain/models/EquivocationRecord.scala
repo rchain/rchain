@@ -44,5 +44,5 @@ final case class EquivocationRecord(
 )
 
 object EquivocationRecord {
-  type SequenceNumber = Int
+  type SequenceNumber = Long
 }

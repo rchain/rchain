@@ -42,8 +42,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
           val imgType  = "jpg"
           val fileName = s"$filePrefix.$imgType"
           println(s"Generating dot image: $fileName")
-
-          val dotCmd = Seq("dot", s"-T$imgType", "-o", fileName)
+          val dotCmd = Process(Seq("/usr/local/bin/dot", s"-T$imgType", "-o", fileName))
           dotCmd #< new ByteArrayInputStream(graphString.getBytes) lineStream
         }
       } yield ()

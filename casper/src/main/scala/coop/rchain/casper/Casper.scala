@@ -107,7 +107,7 @@ final case class CasperSnapshot[F[_]](
     invalidBlocks: Map[Validator, BlockHash],
     deploysInScope: Set[DeployId],
     maxBlockNum: Long,
-    maxSeqNums: Map[Validator, Int],
+    maxSeqNums: Map[Validator, Long],
     deployLifespan: Int,
     shardName: String,
     casperVersion: Long

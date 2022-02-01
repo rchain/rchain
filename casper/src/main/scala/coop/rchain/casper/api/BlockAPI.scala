@@ -68,7 +68,7 @@ object BlockAPI {
                 )
               )
         // call a propose if proposer defined
-        _ <- triggerPropose.traverse(_(true))
+        //_ <- triggerPropose.traverse(_(true))
       } yield r
 
     // Check if node is read-only
@@ -399,7 +399,7 @@ object BlockAPI {
         startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
                         else Sync[F].delay(startBlockNumber.toLong)
         topoSortDag             <- dag.topoSort(startBlockNum - depth, Some(startBlockNum))
-        DagFringe(blocks, _, _) = dag.finalizationFringes.head
+        DagFringe(blocks, _, _) = dag.finalizationFringes.last._2
         fringe                  = blocks.flatMap(_._2).map(PrettyPrinter.buildString).toSet
         graph                   <- visualizer(topoSortDag, fringe, fringe.head)
       } yield serialize(graph).asRight[Error]
@@ -661,7 +661,7 @@ object BlockAPI {
 //              r.finalizationFringes.head.finalizationFringe.flatMap(_._2)
 //            )} \n Accepted: $acStr \n Rejected: $rjStr"
 
-            r.finalizationFringes.sortBy(_.num).asRight[Error]
+            r.finalizationFringes.values.toList.reverse.asRight[Error]
           },
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
@@ -678,7 +678,7 @@ object BlockAPI {
         implicit casper =>
           casper.blockDag.map { r =>
             val truncatedByteString = ByteString.copyFrom(Base16.unsafeDecode(state))
-            r.finalizationFringes
+            r.finalizationFringes.valuesIterator
               .find(_.state.startsWith(truncatedByteString))
               .toRight[String](s"Error: No finaization fringe with state $state")
           },

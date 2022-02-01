@@ -25,16 +25,16 @@ import fs2.Stream
 sealed abstract class ProposerResult
 object ProposerEmpty                                                         extends ProposerResult
 final case class ProposerSuccess(status: ProposeStatus, block: BlockMessage) extends ProposerResult
-final case class ProposerFailure(status: ProposeStatus, seqNumber: Int)      extends ProposerResult
-final case class ProposerStarted(seqNumber: Int)                             extends ProposerResult
+final case class ProposerFailure(status: ProposeStatus, seqNumber: Long)     extends ProposerResult
+final case class ProposerStarted(seqNumber: Long)                            extends ProposerResult
 
 object ProposerResult {
   def empty: ProposerResult = ProposerEmpty
   def success(status: ProposeStatus, block: BlockMessage): ProposerResult =
     ProposerSuccess(status, block)
-  def failure(status: ProposeStatus, seqNumber: Int): ProposerResult =
+  def failure(status: ProposeStatus, seqNumber: Long): ProposerResult =
     ProposerFailure(status, seqNumber)
-  def started(seqNumber: Int): ProposerResult = ProposerStarted(seqNumber)
+  def started(seqNumber: Long): ProposerResult = ProposerStarted(seqNumber)
 }
 
 class Proposer[F[_]: Concurrent: Log: Span](
@@ -46,9 +46,50 @@ class Proposer[F[_]: Concurrent: Log: Span](
     ) => F[BlockCreatorResult],
     validateBlock: (CasperSnapshot[F], BlockMessage) => F[ValidBlockProcessing],
     proposeEffect: (BlockMessage, CasperSnapshot[F]) => F[Unit],
-    validator: ValidatorIdentity
+    validator: ValidatorIdentity,
+    loadDeploys: F[Set[Signed[DeployData]]]
 ) {
   import coop.rchain.models.syntax._
+
+  private def checkSyncConstr(s: CasperSnapshot[F]): F[Boolean] = {
+    val selfJ = s.latestMessages
+      .find {
+        case (v, _) => v.toByteArray sameElements validator.publicKey.bytes
+      }
+      .map(_._2)
+
+    val prevJs  = selfJ.map(_.justifications.map(_.latestBlockHash)).getOrElse(List())
+    val newMsgs = s.latestMessages.values.map(_.blockHash).toSet -- prevJs
+    //    -- selfJ
+    //      .map(m => Set(m.blockHash))
+    //      .getOrElse(Set())
+    val syncV = (newMsgs.size.toFloat / prevJs.size)
+    (syncV > 0.67).pure[F]
+
+//    for {
+//      fms <- s.finalizedFringe.finalizationFringe.toList.traverse {
+//              case (v, h) =>
+//                h.toList.traverse(s.dag.lookupUnsafe).map(_.map(_.seqNum).max).map((v, _))
+//            }
+//      lms       = s.latestMessages.map { case (v, m) => (v, m.seqNum) }
+//      distances = fms.map { case (v, h) => (v, lms(v) - h) }.sortBy { case (_, d) => d }.reverse
+//      // if you are in 1/2 of fastest - you are rabbit
+//      rabbits = distances.take(distances.size / 2)
+//      turtles = distances.drop(distances.size / 2)
+//      slowDown = rabbits
+//        .find(_._1.toByteArray sameElements validator.publicKey.bytes)
+//        .exists { case (_, v) => v > turtles.head._2 }
+//      _ <- Log[F].info(s"unfin distances: ${distances.map(_._2)}")
+//
+//    } yield true //!slowDown
+  }
+
+//  private def acquiescence(s: CasperSnapshot[F]) = {
+//    val parentStates = s.latestMessages.map(_._2.postStateHash).toSet
+//    loadDeploys.map(
+//      _.isEmpty && parentStates.size == 1 && s.finalizedFringe.state == parentStates.head
+//    )
+//  }
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
   // This is the whole logic of propose
@@ -57,38 +98,26 @@ class Proposer[F[_]: Concurrent: Log: Span](
   ): F[(ProposeResult, Option[BlockMessage])] =
     Span[F].traceI("do-propose") {
       for {
-        // TODO this genesis should not be here, but required for sync constraint code. Remove
-        genesis <- casper.getApprovedBlock
-        // check if node is allowed to propose a block
-        chk <- Casper
-                .shouldPropose(s, loadDeploys)
-                .ifM(
-                  checkProposeConstraints(genesis, s),
-                  // TODO re-enable reasons to propose, so blocks are created lazily
-                  //  disabled due to https://github.com/rchain/rchain/pull/3570
-                  checkProposeConstraints(genesis, s) //CheckProposeConstraintsResult.noReasonToPropose.pure[F]
-                )
-        r <- chk match {
-              case v: CheckProposeConstraintsFailure =>
-                (ProposeResult.failure(v), none[BlockMessage]).pure[F]
-              case CheckProposeConstraintsSuccess =>
-                for {
-                  b <- createBlock(s, validator)
-                  r <- b match {
-                        case Created(b) =>
-                          validateBlock(casper, s, b).flatMap {
-                            case Right(v) =>
-                              proposeEffect(casper, b) >>
-                                (ProposeResult.success(v), b.some).pure[F]
-                            case Left(v) =>
-                              Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
-                                new Throwable(
-                                  s"Validation of self created block failed with reason: $v, cancelling propose."
-                                )
-                              )
-                          }
-                      }
-                } yield r
+        syncOK <- checkSyncConstr(s)
+        acq    <- false.pure[F] //acquiescence(s)
+        b      <- if (syncOK && !acq) createBlock(s, validator) else NotEnoughNewBlocks.pure[F]
+        r <- b match {
+              case Created(b) =>
+                validateBlock(s, b).flatMap {
+                  case Right(v) =>
+                    proposeEffect(b, s) >>
+                      (ProposeResult.success(v), b.some).pure[F]
+                  case Left(v) =>
+                    Concurrent[F].raiseError[(ProposeResult, Option[BlockMessage])](
+                      new Throwable(
+                        s"Validation of self created block failed with reason: $v, cancelling propose."
+                      )
+                    )
+                }
+              case NotEnoughNewBlocks =>
+                Log[F]
+                  .info(s"Not enough blocks. Canceling propose")
+                  .as((ProposeResult.notEnoughBlocks, none[BlockMessage]))
             }
       } yield r
     }
@@ -97,9 +126,9 @@ class Proposer[F[_]: Concurrent: Log: Span](
       isAsync: Boolean,
       proposeIdDef: Deferred[F, ProposerResult]
   ): F[(ProposeResult, Option[BlockMessage])] = {
-    def getValidatorNextSeqNumber(cs: CasperSnapshot[F]): Int = {
+    def getValidatorNextSeqNumber(cs: CasperSnapshot[F]): Long = {
       val valBytes = ByteString.copyFrom(validator.publicKey.bytes)
-      cs.maxSeqNums.getOrElse(valBytes, 0) + 1
+      cs.maxSeqNums.getOrElse(valBytes, 0L) + 1
     }
     for {
       // get snapshot to serve as a base for propose
@@ -183,14 +212,15 @@ object Proposer {
         // Publish event
         EventPublisher[F].publish(MultiParentCasperImpl.createdEvent(b))
 
-//    val loadDeploys = DeployStorage[F].readAll
+    val loadDeploys = DeployStorage[F].readAll
 
     new Proposer(
       getCasperSnapshot,
       createBlock,
       validateBlock,
       proposeEffect,
-      validatorIdentity
+      validatorIdentity,
+      loadDeploys
     )
   }
 }

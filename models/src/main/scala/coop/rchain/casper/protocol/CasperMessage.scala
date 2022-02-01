@@ -171,11 +171,12 @@ final case class BlockMessage(
     body: Body,
     justifications: List[Justification],
     sender: ByteString,
-    seqNum: Int,
+    seqNum: Long,
     sig: ByteString,
     sigAlgorithm: String,
     shardId: String,
-    extraBytes: ByteString = ByteString.EMPTY
+    extraBytes: ByteString = ByteString.EMPTY,
+    finFringeNum: Long
 ) extends CasperMessage {
   def toProto: BlockMessageProto = BlockMessage.toProto(this)
 
@@ -198,7 +199,8 @@ object BlockMessage {
       bm.sig,
       bm.sigAlgorithm,
       bm.shardId,
-      bm.extraBytes
+      bm.extraBytes,
+      bm.finFringeNum
     )
 
   def toProto(bm: BlockMessage): BlockMessageProto =
@@ -213,6 +215,7 @@ object BlockMessage {
       .withSigAlgorithm(bm.sigAlgorithm)
       .withShardId(bm.shardId)
       .withExtraBytes(bm.extraBytes)
+      .withFinFringeNum(bm.finFringeNum)
 
 }
 

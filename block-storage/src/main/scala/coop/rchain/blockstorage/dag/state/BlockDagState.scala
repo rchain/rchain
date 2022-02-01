@@ -16,9 +16,9 @@ final case class BlockDagState(
     val missingSet       = justifications.diff(validated.dagSet)
     val ready            = missingSet.isEmpty
     val toRequest        = missingSet.filterNot(buffer.contains)
-    val newMessageStatus = if (ready) ValidationInProgress else AwaitingDependencies(missingSet)
+    val newMessageStatus = if (ready) ValidationInProgress else awaitingDependencies(missingSet)
     val changes          = Map(message -> newMessageStatus) ++ toRequest.map(_ -> Requested)
-    val newSt            = this.copy(buffer = buffer ++ changes)
+    val newSt            = BlockDagState(changes.foldLeft(buffer)((acc, v) => acc + v), validated) // ++ does not work https://github.com/scala/bug/issues/12140
     AckReceivedResult(newSt, changes, missingSet, toRequest)
   }
 

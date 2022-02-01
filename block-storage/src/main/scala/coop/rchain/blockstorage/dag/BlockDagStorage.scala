@@ -14,6 +14,8 @@ import coop.rchain.blockstorage.casper.Casper.FinalizationFringe
 import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
 import coop.rchain.models.block.StateHash.StateHash
 
+import scala.collection.immutable.SortedMap
+
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
@@ -44,6 +46,8 @@ object BlockDagStorage {
 
 trait BlockDagRepresentation[F[_]] {
   def children(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+  def closestChildren(blockHash: BlockHash): F[Option[Set[BlockHash]]]
+  def witnesses(blockHash: BlockHash): F[Option[Set[BlockHash]]]
   def lookup(blockHash: BlockHash): F[Option[BlockMetadata]]
   def contains(blockHash: BlockHash): F[Boolean]
   def latestMessageHash(validator: Validator): F[Option[BlockHash]]
@@ -61,7 +65,7 @@ trait BlockDagRepresentation[F[_]] {
   def genesis: F[BlockHash]
   def finalizationState: BlockDagFinalizationState
   def getPureState: BlockDagRepresentationState
-  def finalizationFringes: List[DagFringe]
+  def finalizationFringes: SortedMap[Long, DagFringe]
 }
 
 trait EquivocationsTracker[F[_]] {

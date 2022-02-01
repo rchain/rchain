@@ -1,12 +1,10 @@
 package coop.rchain.blockstorage.casper
-
-import cats.effect.Sync
-import cats.syntax.all._
-import fs2.Stream
+import coop.rchain.casper.pcasper.sim.Simulation
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
 class CasperSpec extends FlatSpec with Matchers {
+
 //
 //  type Validator = Int
 //  type Message   = Int

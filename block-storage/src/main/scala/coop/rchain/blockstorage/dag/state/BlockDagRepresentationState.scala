@@ -12,11 +12,13 @@ import scala.collection.immutable.{Set, SortedMap}
 final case class BlockDagRepresentationState(
     dagSet: Set[BlockHash],
     latestMessagesMap: Map[Validator, BlockHash],
-    childrenMap: Map[BlockHash, Set[BlockHash]],
+    childrenMap: Map[BlockHash, Map[Validator, Vector[BlockHash]]],
+    witnessMap: Map[BlockHash, Map[Validator, BlockHash]],
     heightMap: SortedMap[Long, Set[BlockHash]],
     invalidBlocksSet: Set[BlockHash],
     finalizationState: BlockDagFinalizationState,
-    latestFringes: List[DagFringe]
+    latestFringes: SortedMap[Long, DagFringe],
+    finalityViews: Map[Validator, Long]
 )
 
 object BlockDagRepresentationState {

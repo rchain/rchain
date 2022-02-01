@@ -97,8 +97,8 @@ object Finalization02 {
               case (acc, jfs) =>
                 val toAdd = jfs.flatMap(x => loadMsgViews(x.root)) // -- msgView.finalized
                 val next  = toAdd -- acc
-//                println(s"ACC ${acc.map(_.id)}")
-//                println(s"NEXT ${next.map(_.id)}")
+                //                println(s"ACC ${acc.map(_.id)}")
+                //                println(s"NEXT ${next.map(_.id)}")
                 (acc ++ next, next)
             }
             .takeWhile(_._2.nonEmpty)
@@ -108,7 +108,7 @@ object Finalization02 {
 
         val selfParent              = msgViewsJfs.find(x => x.root.sender == msg.sender)
         def hasSeenInParent(m: Msg) =
-//          selfParent.exists(x => x.root.justifications.values.exists(_ == m.id))
+          //          selfParent.exists(x => x.root.justifications.values.exists(_ == m.id))
           selfParent.exists(x => loadMsgViews(x.root).exists(x => x.root.id == m.id))
         val mViews = msgViewsJfs.filterNot { m =>
           hasSeenInParent(m.root) || m.finalized.contains(m.root)
@@ -148,7 +148,7 @@ object Finalization02 {
         val msgSeenByStr = iterSeen
           .map {
             case (s, mvs) =>
-//              val mvsStr = mvs.mkString(", ")
+              //              val mvsStr = mvs.mkString(", ")
               val mvsStr = showMsgs(mvs.map(_.root).toSeq)
               s"  ${s.id} ⊢ $mvsStr"
           }
@@ -156,10 +156,10 @@ object Finalization02 {
 
         if (me == msg.sender) {
           println(s"${me.id}: ADDED ${msg.id}")
-//          println(s"DAG ${showMsgs(newDag.values.toSeq)}")
+          //          println(s"DAG ${showMsgs(newDag.values.toSeq)}")
           println(s"COMM:\n$seenBySeenStr")
           println(s"VIEW:\n  $newMsgView")
-//          println(s"SEEN:\n$msgSeenByStr")
+          //          println(s"SEEN:\n$msgSeenByStr")
           println(s"---------------------------------")
         }
 
@@ -252,7 +252,7 @@ object Finalization02 {
   def runNetwork[F[_]: Monad](network: Network, genHeight: Int, skipPercentage: Float) =
     (genHeight, network).tailRecM {
       case (round, net) =>
-//        println(s"ROUND: $round")
+        //        println(s"ROUND: $round")
 
         val newMsgSenders = net.senders.map { ss =>
           val rnd = Math.random()
@@ -262,7 +262,7 @@ object Finalization02 {
           (newS, m)
         }
 
-//        println(s"  > created msg")
+        //        println(s"  > created msg")
 
         val newSS   = newMsgSenders.map(_._1)
         val newMsgs = newMsgSenders.map(_._2)
@@ -272,7 +272,7 @@ object Finalization02 {
             ss.map(_.addMsg(m))
         }
 
-//        println(s"  > added msg")
+        //        println(s"  > added msg")
 
         val newNet = net.copy(newSenderStates)
 

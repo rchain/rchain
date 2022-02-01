@@ -180,10 +180,11 @@ object blockImplicits {
         ),
         justifications = justifications.toList,
         sender = validator,
-        seqNum = setSeqNumber.get,
+        seqNum = setSeqNumber.get.toLong,
         sig = ByteString.EMPTY,
         sigAlgorithm = "",
-        shardId = shardId
+        shardId = shardId,
+        finFringeNum = 0L
       )
       blockHash <- if (hashF.isEmpty) arbitrary[BlockHash](arbitraryBlockHash)
                   else Gen.const(hashF.get(block))

@@ -50,6 +50,7 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
+import coop.rchain.models.syntax._
 import coop.rchain.shared._
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
@@ -177,10 +178,12 @@ object Setup {
       blockDagStateRef  <- Ref.of[F, BlockDagState](BlockDagState(initBufferSt, initValidatedView))
 
       // Block processing and validation
-      inboundBlocksQueue    <- Queue.unbounded[F, BlockMessage]
-      inboundBlocksStream   = inboundBlocksQueue.dequeueChunk(1)
-      processBlockInRunning = inboundBlocksQueue.enqueue1 _
-      blockDagUpdateLock    <- Semaphore(1)
+      inboundBlocksQueue  <- Queue.unbounded[F, BlockMessage]
+      inboundBlocksStream = inboundBlocksQueue.dequeueChunk(1)
+      processBlockInRunning = (m: BlockMessage) =>
+        Log[F].info(s"Block ${m.blockHash.show} sent to processing queue.") *> inboundBlocksQueue
+          .enqueue1(m)
+      blockDagUpdateLock <- Semaphore(1)
       receiverImpl = {
         implicit val sp = span
         BlockReceiverImpl[F](

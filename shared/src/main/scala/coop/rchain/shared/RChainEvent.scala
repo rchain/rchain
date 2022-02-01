@@ -10,7 +10,7 @@ final case class BlockCreated(
     justificationHashes: List[(String, String)],
     deployIds: List[String],
     creator: String,
-    seqNum: Int
+    seqNum: Long
 ) extends RChainEvent
 
 final case class BlockAdded(
@@ -19,7 +19,7 @@ final case class BlockAdded(
     justificationHashes: List[(String, String)],
     deployIds: List[String],
     creator: String,
-    seqNum: Int
+    seqNum: Long
 ) extends RChainEvent
 
 final case class BlockFinalised(blockHash: String) extends RChainEvent
@@ -31,7 +31,7 @@ object RChainEvent {
       justifications: List[(String, String)],
       deployIds: List[String],
       creator: String,
-      seqNum: Int
+      seqNum: Long
   ): RChainEvent =
     BlockCreated(bs, parents, justifications, deployIds, creator, seqNum)
 
@@ -41,7 +41,7 @@ object RChainEvent {
       justifications: List[(String, String)],
       deployIds: List[String],
       creator: String,
-      seqNum: Int
+      seqNum: Long
   ): RChainEvent =
     BlockAdded(bs, parents, justifications, deployIds, creator, seqNum)
 

@@ -53,27 +53,26 @@ final case class BlockValidatorImpl[F[_]
       snapshot         <- casper.getSnapshot(block.some) // Todo create snapshot from latest in blockDagStatRef
       validationResult <- casper.validate(block, snapshot)
       _                <- Log[F].info(s"Validating ${message.show.take(10)}. Done. Invoking Effects.")
-      r <- blockDagUpdateLock.withPermit(
-            for {
-              // Todo implement precise offence storage + make pure state output changes for storage, not vice versa
-              newRepr <- validationResult match {
-                          case Left(v: InvalidBlock) =>
-                            Log[F].info(
-                              s"Validating ${message.show.take(10)}. Done. Block invalid."
-                            ) >> casper.handleInvalidBlock(block, v, snapshot)
+      r <- for {
+            // Todo implement precise offence storage + make pure state output changes for storage, not vice versa
+            newRepr <- validationResult match {
+                        case Left(v: InvalidBlock) =>
+                          Log[F].info(
+                            s"Validating ${message.show.take(10)}. Done. Block invalid."
+                          ) >> casper.handleInvalidBlock(block, v, snapshot)
 
-                          case _ => casper.handleValidBlock(block, snapshot)
-                        }
-              // Todo This should be in the same lock that BlockDagStorage.insert is using
-              r <- blockDagStatRef.modify { st =>
-                    val ValidatedResult(newSt, unlockedChildren) =
-                      st.ackValidated(message, newRepr.getPureState)
-                    (newSt, ValidationResult(newSt, unlockedChildren))
-                  }
-              _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
-              _ <- bufferStorage.delete(message)
-            } yield r
-          )
+                        case _ => casper.handleValidBlock(block, snapshot)
+                      }
+            // Todo This should be in the same lock that BlockDagStorage.insert is using
+            r <- blockDagStatRef.modify { st =>
+                  val ValidatedResult(newSt, unlockedChildren) =
+                    st.ackValidated(message, newRepr.getPureState)
+                  (newSt, ValidationResult(newSt, unlockedChildren))
+                }
+            _ <- bufferStorage.put(r.dependentUnlocked.map(_ -> ValidationInProgress).toList)
+            _ <- bufferStorage.delete(message)
+          } yield r
+
       _ <- Log[F].info(
             s"Validating ${message.show.take(100)}. Done. Invoking Effects. Done. Unlocked: [${r.dependentUnlocked
               .map(_.show.take(10))
@@ -103,15 +102,6 @@ object BlockValidatorImpl {
       validationQueue <- Queue.unbounded[F, BlockHash]
       stream          = validationQueue.dequeueChunk(1)
       append          = validationQueue.enqueue1 _
-      // Send to validation blocks that are in pending validation status
-      // (e.g. node has been restarted in the middle of validation)
-      // Note: validation will be started when stream is started
-      dagState          <- blockDagStateRef.get
-      pendingValidation = dagState.buffer.collect { case (h, ValidationInProgress) => h }
-      _                 <- pendingValidation.toList.traverse(append)
-      _ <- Log[F].info(
-            s"Pending blocks added to validation queue: ${PrettyPrinter.buildString(pendingValidation.toList)}."
-          )
     } yield BlockValidatorImpl(
       stream,
       append,

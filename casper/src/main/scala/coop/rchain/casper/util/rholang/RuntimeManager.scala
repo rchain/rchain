@@ -3,12 +3,12 @@ package coop.rchain.casper.util.rholang
 import cats.Parallel
 import cats.data.EitherT
 import cats.effect._
+import cats.effect.concurrent.{Deferred, Ref}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager.{MergeableStore, StateHash}
-import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
+import coop.rchain.casper.util.rholang.RuntimeManager.{mergeableStore, MergeableStore, StateHash}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -28,6 +28,7 @@ import coop.rchain.rspace.{RSpace, ReplayRSpace}
 import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import coop.rchain.models.syntax._
+import coop.rchain.shared.Caching.memoize
 import coop.rchain.shared.{Base16, Log}
 import retry.RetryDetails.{GivingUp, WillDelayAndRetry}
 import retry._
@@ -77,7 +78,9 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
-    mergeableStore: MergeableStore[F]
+    mergeableStore: MergeableStore[F],
+    bondsCache: Ref[F, Map[StateHash, Deferred[F, Option[Seq[Bond]]]]],
+    validatorsCache: Ref[F, Map[StateHash, Deferred[F, Option[Seq[Validator]]]]]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -154,53 +157,75 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator],
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
-  ): F[Either[ReplayFailure, StateHash]] =
-    spawnReplayRuntime.flatMap { replayRuntime =>
-      val replayOp = replayRuntime
-        .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
-      EitherT(replayOp).semiflatMap {
-        case (stateHash, mergeableChs) =>
-          // Block data used for mergeable key
-          val BlockData(_, _, sender, seqNum) = blockData
-          // Convert from final to diff values and persist mergeable (number) channels for post-state hash
-          val preStateHash = startHash.toBlake2b256Hash
-          this
-            .saveMergeableChannels(stateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
-            .as(stateHash.toByteString)
-      }.value
+  ): F[Either[ReplayFailure, StateHash]] = {
+    val isStateTransition = terms.nonEmpty || systemDeploys.nonEmpty
+    if (isStateTransition)
+      spawnReplayRuntime.flatMap { replayRuntime =>
+        val replayOp = replayRuntime
+          .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
+        EitherT(replayOp).semiflatMap {
+          case (stateHash, mergeableChs) =>
+            // Block data used for mergeable key
+            val BlockData(_, _, sender, seqNum) = blockData
+            // Convert from final to diff values and persist mergeable (number) channels for post-state hash
+            val preStateHash = startHash.toBlake2b256Hash
+            this
+              .saveMergeableChannels(stateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
+              .as(stateHash.toByteString)
+        }.value
+      } else {
+      // TODO this is required to insert the state hash into mergeable channels store.
+      //  There are no mergeable channels actually, so value is empty Seq, but the key is requested later
+      //  and node breaks if there record for the state is not there.
+      // Block data used for mergeable key
+      val BlockData(_, _, sender, seqNum) = blockData
+      // Convert from final to diff values and persist mergeable (number) channels for post-state hash
+      val preStateHash = startHash.toBlake2b256Hash
+      this
+        .saveMergeableChannels(preStateHash, sender.bytes, seqNum, Seq(), preStateHash)
+        .as(preStateHash.toByteString.asRight[ReplayFailure])
     }
+  }
 
   def captureResults(
       start: StateHash,
       deploy: Signed[DeployData]
   ): F[Seq[Par]] = spawnRuntime.flatMap(_.captureResults(start, deploy))
 
-  def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
-    spawnRuntime.flatMap(_.getActiveValidators(startHash))
+  def getActiveValidators(h: StateHash): F[Seq[Validator]] = {
+    val compute = (startHash: StateHash) =>
+      spawnRuntime.flatMap(_.getActiveValidators(startHash)).map(_.some)
+    memoize[F, StateHash, Seq[Validator]](compute(_), validatorsCache)(h).map(_.get)
+  }
 
-  def computeBonds(hash: StateHash): F[Seq[Bond]] =
-    spawnRuntime.flatMap { runtime =>
-      def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
-        case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
-          Log[F].error(
-            s"Unexpected exception ${err} during computeBonds. Retrying ${retriesSoFar + 1} time."
-          )
-        case GivingUp(totalRetries: Int, _) =>
-          Log[F].error(
-            s"Unexpected exception ${err} during computeBonds. Giving up after ${totalRetries} retries."
-          )
-      }
+  def computeBonds(h: StateHash): F[Seq[Bond]] = {
+    val compute = (hash: StateHash) =>
+      spawnRuntime
+        .flatMap { runtime =>
+          def logError(err: Throwable, details: RetryDetails): F[Unit] = details match {
+            case WillDelayAndRetry(_, retriesSoFar: Int, _) =>
+              Log[F].error(
+                s"Unexpected exception ${err} during computeBonds. Retrying ${retriesSoFar + 1} time."
+              )
+            case GivingUp(totalRetries: Int, _) =>
+              Log[F].error(
+                s"Unexpected exception ${err} during computeBonds. Giving up after ${totalRetries} retries."
+              )
+          }
 
-      implicit val s = new retry.Sleep[F] {
-        override def sleep(delay: FiniteDuration): F[Unit] = ().pure[F]
-      }
+          implicit val s = new retry.Sleep[F] {
+            override def sleep(delay: FiniteDuration): F[Unit] = ().pure[F]
+          }
 
-      //TODO this retry is a temp solution for debugging why this throws `IllegalArgumentException`
-      retryingOnAllErrors[Seq[Bond]](
-        RetryPolicies.limitRetries[F](5),
-        onError = logError
-      )(runtime.computeBonds(hash))
-    }
+          //TODO this retry is a temp solution for debugging why this throws `IllegalArgumentException`
+          retryingOnAllErrors[Seq[Bond]](
+            RetryPolicies.limitRetries[F](5),
+            onError = logError
+          )(runtime.computeBonds(hash))
+        }
+        .map(_.some)
+    memoize[F, StateHash, Seq[Bond]](compute(_), bondsCache)(h).map(_.get)
+  }
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
@@ -247,7 +272,17 @@ object RuntimeManager {
       historyRepo: RhoHistoryRepository[F],
       mergeableStore: MergeableStore[F]
   ): F[RuntimeManagerImpl[F]] =
-    Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore))
+    for {
+      bondsCache      <- Ref.of[F, Map[StateHash, Deferred[F, Option[Seq[Bond]]]]](Map())
+      validatorsCache <- Ref.of[F, Map[StateHash, Deferred[F, Option[Seq[Validator]]]]](Map())
+    } yield RuntimeManagerImpl(
+      rSpace,
+      replayRSpace,
+      historyRepo,
+      mergeableStore,
+      bondsCache,
+      validatorsCache
+    )
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],

@@ -6,6 +6,7 @@ import cats.implicits._
 import cats.{Applicative, Monad}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.dag.state.BlockDagBufferState.ValidationInProgress
 import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -22,6 +23,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.shared._
 import fs2.concurrent.Queue
 
@@ -113,6 +115,17 @@ object Engine {
       //  in case finalization has been interrupted by shutdown
       s <- casper.getSnapshot()
       _ <- casper.handleValidBlock(approvedBlock.candidate.block, s)
+      // Send to validation blocks that are in pending validation status
+      // (e.g. node has been restarted in the middle of validation)
+      // Note: validation will be started when stream is started
+      dagState          <- blockDagStateRef.get
+      pendingValidation = dagState.buffer.collect { case (h, ValidationInProgress) => h }
+      _ <- pendingValidation.toList.traverse(
+            BlockStore[F].getUnsafe(_).flatMap(processBlockInRunning)
+          )
+      _ <- Log[F].info(
+            s"Pending blocks added to validation queue: ${PrettyPrinter.buildString(pendingValidation.toList)}."
+          )
       running = new Running[F](
         casper,
         blockDagStateRef,

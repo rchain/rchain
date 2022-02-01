@@ -15,11 +15,14 @@ trait DependencyGraph[F[_], M, S] {
 
   def children(message: M): F[List[M]]
 
+  /** First messages from all senders that have message in the view (as ancestor). */
+  def witnesses(message: M): F[List[M]]
+
   /** Sender of a message. */
   def sender(message: M): S
 
   /** Sequence number of a message across sender's messages. */
-  def seqNum(message: M): Int
+  def seqNum(message: M): Long
 }
 
 object DependencyGraph {

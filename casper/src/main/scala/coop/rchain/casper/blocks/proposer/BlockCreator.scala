@@ -42,7 +42,7 @@ object BlockCreator {
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
-      val nextSeqNum     = s.maxSeqNums.getOrElse(selfId, 0) + 1
+      val nextSeqNum     = s.maxSeqNums.getOrElse(selfId, 0L) + 1
       val nextBlockNum   = s.maxBlockNum + 1
       val justifications = s.latestMessages
 
@@ -62,7 +62,7 @@ object BlockCreator {
         } yield validUnique.take(1)
 
       def prepareSlashingDeploys(
-          seqNum: Int,
+          seqNum: Long,
           activeValidators: Set[Validator]
       ): F[Seq[SlashDeploy]] =
         for {
@@ -108,10 +108,17 @@ object BlockCreator {
         dummyDeploys    = prepareDummyDeploy(nextBlockNum)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum, activeValidators.toSet)
         // make sure closeBlock is the last system Deploy
-        systemDeploys = slashingDeploys :+ CloseBlockDeploy(
-          SystemDeployUtil
-            .generateCloseDeployRandomSeed(selfId, nextSeqNum)
-        )
+        systemDeploys = slashingDeploys ++ (if (slashingDeploys.nonEmpty || nextBlockNum % 1000 == 0) // TODO put here epoch change not hardcode
+                                              Seq(
+                                                CloseBlockDeploy(
+                                                  SystemDeployUtil
+                                                    .generateCloseDeployRandomSeed(
+                                                      selfId,
+                                                      nextSeqNum
+                                                    )
+                                                )
+                                              )
+                                            else Seq())
         deploys = if (userDeploys.isEmpty) dummyDeploys else userDeploys
 
         now           <- Time[F].currentMillis
@@ -134,6 +141,7 @@ object BlockCreator {
         _             <- Span[F].mark("before-packing-block")
         shardId       = s.shardName
         casperVersion = s.casperVersion
+        finFringeNum  = s.finalizedFringe.num
         // unsignedBlock got blockHash(hashed without signature)
         unsignedBlock = packageBlock(
           blockData,
@@ -145,7 +153,8 @@ object BlockCreator {
           processedSystemDeploys,
           newBonds,
           shardId,
-          casperVersion
+          casperVersion,
+          finFringeNum
         )
         _ <- Span[F].mark("block-created")
         // signedBlock add signature and replace hashed-without-signature
@@ -181,7 +190,8 @@ object BlockCreator {
       systemDeploys: Seq[ProcessedSystemDeploy],
       bondsMap: Seq[Bond],
       shardId: String,
-      version: Long
+      version: Long,
+      finFringeNum: Long
   ): BlockMessage = {
     val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
     val body = {
@@ -194,7 +204,14 @@ object BlockCreator {
     }
     val parents = justifications.map(_.latestBlockHash).toList
     val header  = Header(parents, blockData.timeStamp, version)
-    ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
+    ProtoUtil.unsignedBlockProto(
+      body,
+      header,
+      justifications,
+      shardId,
+      blockData.seqNum,
+      finFringeNum = finFringeNum
+    )
   }
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =

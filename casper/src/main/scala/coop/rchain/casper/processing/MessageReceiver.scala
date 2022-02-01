@@ -27,7 +27,7 @@ trait MessageReceiver[F[_], M, S] {
   /**
     * Write diagnostic data.
     */
-  def diagRejected(r: ReceiveReject): F[Unit]
+  def diagRejected(message: M, r: ReceiveReject): F[Unit]
 
   /**
     * @return [[ReceiveResult]] */

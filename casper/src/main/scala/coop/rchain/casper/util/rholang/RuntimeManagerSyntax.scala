@@ -14,6 +14,7 @@ import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.MergingLogic.{NumberChannelsDiff, NumberChannelsEndVal}
 import coop.rchain.shared.AttemptOpsF.RichAttempt
+import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax._
 import scodec.bits.ByteVector
 
@@ -28,7 +29,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
   /**
     * Load mergeable channels from store
     */
-  def loadMergeableChannels(stateHashBS: StateHash, creator: Array[Byte], seqNum: Int)(
+  def loadMergeableChannels(stateHashBS: StateHash, creator: Array[Byte], seqNum: Long)(
       implicit s: Sync[F]
   ): F[Seq[NumberChannelsDiff]] = {
     val stateHash = stateHashBS.toBlake2b256Hash
@@ -59,7 +60,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
   def saveMergeableChannels(
       postStateHash: Blake2b256Hash,
       creator: Array[Byte],
-      seqNum: Int,
+      seqNum: Long,
       channelsData: Seq[NumberChannelsEndVal],
       // Used to calculate value difference from final values
       preStateHash: Blake2b256Hash
@@ -73,7 +74,6 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
         val channels = data.map(NumberChannel.tupled)
         DeployMergeableData(channels.toList)
       }
-
       // Key is composed from post-state hash and block creator with seq number
       key        = (postStateHash.bytes, ByteVector(creator), seqNum)
       keyEncoded <- codecMergeableKey.encode(key).get.map(_.toByteVector)

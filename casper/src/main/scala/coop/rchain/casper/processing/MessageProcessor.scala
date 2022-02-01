@@ -1,4 +1,5 @@
 package coop.rchain.casper.processing
+import cats.Show
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.casper.processing.MessageReceiver.ReceiveResult
@@ -23,25 +24,42 @@ final case class MessageProcessor[F[_], M, S](
     * @return Stream of Casper states after each message processed. The output is not that valuable because
     *         message processing should happen always on top of the latest state, but still might be useful.
     */
-  def stream(attemptPropose: F[Unit])(implicit c: Concurrent[F]): Stream[F, S] = {
+  def stream(attemptPropose: F[Unit])(implicit c: Concurrent[F], show: Show[M]): Stream[F, S] = {
     val pullIncoming = receiver.input
-    // Check and store incoming messages concurrently
-      .parEvalMapProcBounded { m => // Todo not ack retrieved if sig is invalid
-        retriever.ackRetrieved(m) >> receiver.checkIgnore(m).semiflatTap(receiver.store).value
-      }
-      // Invoke effect sequentially
-      .evalMap {
-        case Left(reason) => receiver.diagRejected(reason)
-        case Right(m) =>
-          receiver.receivedEffect(m).flatMap {
-            case ReceiveResult(_, _, r) if r.nonEmpty => retriever.retrieve(r)
-            case ReceiveResult(_, p, _)               => validator.appendToInput(m).whenA(p.isEmpty)
+    // Invoke effect sequentially
+      .parEvalMapUnorderedProcBounded { m =>
+        coop.rchain.shared.Log
+          .log[F]
+          .info(s"Block ${m.show} starting processing.") >>
+          retriever.ackRetrieved(m) >>
+          receiver.checkIgnore(m).semiflatTap(receiver.store).value.flatMap {
+            case Left(reason) => receiver.diagRejected(m, reason)
+            case Right(m) =>
+              receiver.receivedEffect(m).flatMap {
+                case ReceiveResult(_, _, r) if r.nonEmpty => retriever.retrieve(r)
+                case ReceiveResult(_, p, _)               => validator.appendToInput(m).whenA(p.isEmpty)
+              }
           }
       }
+//    val pullIncoming = receiver.input
+    // TODO allow only one message with the same hash processed at a time
+//    // Check and store incoming messages concurrently
+//      .parEvalMapProcBounded { m => // Todo not ack retrieved if sig is invalid
+//        retriever.ackRetrieved(m) >> receiver.checkIgnore(m).semiflatTap(receiver.store).value
+//      }
+//      // Invoke effect sequentially
+//      .evalMap {
+//        case Left(reason) => receiver.diagRejected(reason)
+//        case Right(m) =>
+//          receiver.receivedEffect(m).flatMap {
+//            case ReceiveResult(_, _, r) if r.nonEmpty => retriever.retrieve(r)
+//            case ReceiveResult(_, p, _)               => validator.appendToInput(m).whenA(p.isEmpty)
+//          }
+//      }
 
     val doValidate = validator.input
     // Validate all messages concurrently
-      .parEvalMapProcBounded(m => validator.validate(m))
+      .parEvalMapUnorderedProcBounded(m => validator.validate(m))
       // Start validation of unlocked children
       .evalMap {
         case ValidationResult(newSt, childrenUnlocked) =>

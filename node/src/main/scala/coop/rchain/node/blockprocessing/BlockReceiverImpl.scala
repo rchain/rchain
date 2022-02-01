@@ -6,6 +6,7 @@ import cats.effect.concurrent.{Ref, Semaphore}
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.FlatCasperBufferKeyValueStorage.CasperBufferStorage
+import coop.rchain.blockstorage.dag.state.BlockDagBufferState.MessageStatus
 import coop.rchain.blockstorage.dag.state.BlockDagState
 import coop.rchain.blockstorage.dag.state.BlockDagState.AckReceivedResult
 import coop.rchain.casper.{PrettyPrinter, Validate}
@@ -22,7 +23,7 @@ import scala.collection.concurrent.TrieMap
 
 final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: BlockStore](
     override val input: Stream[F, BlockHash],
-    block: TrieMap[BlockHash, BlockMessage], // this servers as a buffer to address full message
+    block: TrieMap[BlockHash, BlockMessage], // this serves as a buffer to address full message
     blockDagState: Ref[F, BlockDagState],
     bufferStorage: CasperBufferStorage[F],
     blockDagUpdateLock: Semaphore[F]
@@ -47,17 +48,26 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
     } yield r
   }
 
-  override def diagRejected(r: MessageReceiver.ReceiveReject): F[Unit] =
-    Log[F].debug(s"Message rejected :$r")
+  import coop.rchain.models.syntax._
+  override def diagRejected(m: BlockHash, r: MessageReceiver.ReceiveReject): F[Unit] =
+    Log[F].debug(s"Message ${m.show.take(10)} rejected :$r")
 
   override def store(message: BlockHash): F[Unit] = BlockStore[F].put(block(message))
 
   override def receivedEffect(
       message: BlockHash
   ): F[ReceiveResult[BlockHash, BlockDagState]] =
-    blockDagUpdateLock.withPermit(
-      blockDagState
-        .modify { state =>
+    blockDagState
+      .modify { state =>
+        if (state.received(message))
+          (
+            state,
+            (
+              Map.empty[BlockHash, MessageStatus],
+              ReceiveResult(state, Set.empty[BlockHash], Set.empty[BlockHash])
+            )
+          )
+        else {
           val AckReceivedResult(newState, changes, dependenciesPending, dependenciesToRequest) =
             state.ackReceived(
               message,
@@ -68,16 +78,22 @@ final case class BlockReceiverImpl[F[_]: Concurrent: Log: Span: Metrics: Time: B
             (changes, ReceiveResult(newState, dependenciesPending, dependenciesToRequest))
           )
         }
-        .flatMap { case (changes, r) => bufferStorage.put(changes.toSeq).as(r) }
-        // clean blocks map buffer to not leak memory
-        .flatTap { r =>
-          block.remove(message).pure >> Log[F].info(
-            s"receivedEffect toReq:${PrettyPrinter
-              .buildString(r.dependenciesToRetrieve)} pending: ${PrettyPrinter
-              .buildString(r.dependenciesPending)}"
-          )
-        }
-    )
+      }
+      .flatMap {
+        case (changes, r) =>
+          // remove block only when receive is ack-ed. This is to not remove twice in case of concurrent receive effects.
+          (bufferStorage.put(changes.toSeq) >> block.remove(message).pure)
+            .whenA(changes.nonEmpty)
+            .as(r)
+      }
+      // clean blocks map buffer to not leak memory
+      .flatTap { r =>
+        Log[F].info(
+          s"receivedEffect toReq:${PrettyPrinter
+            .buildString(r.dependenciesToRetrieve)} pending: ${PrettyPrinter
+            .buildString(r.dependenciesPending)}"
+        )
+      }
 }
 
 object BlockReceiverImpl {

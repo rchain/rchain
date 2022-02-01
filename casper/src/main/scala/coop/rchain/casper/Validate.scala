@@ -317,7 +317,7 @@ object Validate {
     import cats.instances.option._
 
     for {
-      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(0) {
+      creatorJustificationSeqNumber <- ProtoUtil.creatorJustification(b).foldM(0L) {
                                         case (_, Justification(_, latestBlockHash)) =>
                                           s.dag.lookup(latestBlockHash).map {
                                             case Some(block) =>

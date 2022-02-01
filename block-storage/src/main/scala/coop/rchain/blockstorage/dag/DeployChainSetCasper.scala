@@ -33,14 +33,22 @@ object DeployChainSetCasper {
     override def justifications(message: BlockMetadata): F[List[BlockMetadata]] =
       message.justifications.map(_.latestBlockHash).traverse(dag.lookupUnsafe(_))
     override def sender(message: BlockMetadata): Validator = message.sender
-    override def seqNum(message: BlockMetadata): Int       = message.seqNum
+    override def seqNum(message: BlockMetadata): Long      = message.seqNum
     override def parents(
         message: BlockMetadata
     ): F[List[BlockMetadata]] = message.parents.traverse(dag.lookupUnsafe)
     override def children(
         message: BlockMetadata
     ): F[List[BlockMetadata]] =
-      dag.children(message.blockHash).flatMap(_.getOrElse(Set()).toList.traverse(dag.lookupUnsafe))
+      dag
+        .closestChildren(message.blockHash)
+        .flatMap(_.getOrElse(Set()).toList.traverse(dag.lookupUnsafe))
+    override def witnesses(
+        message: BlockMetadata
+    ): F[List[BlockMetadata]] =
+      dag
+        .witnesses(message.blockHash)
+        .flatMap(_.getOrElse(Set()).toList.traverse(dag.lookupUnsafe))
   }
 
   final case class BlockMetadataSafetyOracle[F[_]: Sync]()
