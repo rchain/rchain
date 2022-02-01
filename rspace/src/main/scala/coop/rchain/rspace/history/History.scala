@@ -11,7 +11,7 @@ import scodec.bits.{BitVector, ByteVector}
   *
   * Used to extend History with old _find_ method in [[HistoryWithFind]].
   *
-  * TODO: Delete when old ("merging") [[HistoryInstances.MergingHistory]] is removed.
+  * TODO: Delete when old ("merging") [[HistoryMergingInstances.MergingHistory]] is removed.
   */
 trait HistorySelf[F[_]] {
   type HistoryF <: HistorySelf[F]
@@ -51,7 +51,7 @@ trait History[F[_]] extends HistorySelf[F] {
 /**
   * Support for old ("merging") History
   *
-  * TODO: Delete when old ("merging") [[HistoryInstances.MergingHistory]] is removed.
+  * TODO: Delete when old ("merging") [[HistoryMergingInstances.MergingHistory]] is removed.
   */
 trait HistoryWithFind[F[_]] extends History[F] {
   override type HistoryF <: HistoryWithFind[F]
@@ -64,9 +64,7 @@ trait HistoryWithFind[F[_]] extends History[F] {
 
 object History {
 
-  val emptyRoot: Trie               = EmptyTrie
-  private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).getUnsafe.toByteVector
-  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.create(encodeEmptyRoot)
+  val emptyRootHash: Blake2b256Hash = HistoryMergingInstances.emptyRootHash
 
   // this mapping is kept explicit on purpose
   @inline

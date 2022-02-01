@@ -28,7 +28,7 @@ class HistoryGenerativeSpec
     distinctListOf(arbitraryRandomThreeBytes)
   ) { keys: List[Key] =>
     val actions             = keys.map(k => (k, TestData.randomBlake))
-    val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+    val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
     val emptySimplisticHistory: HistoryWithFind[Task] =
       SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)
@@ -75,7 +75,7 @@ class HistoryGenerativeSpec
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
     keys: List[Key] =>
       val actions             = keys.map(k => (k, TestData.randomBlake))
-      val emptyMergingHistory = HistoryInstances.merging[Task](emptyRootHash, inMemHistoryStore)
+      val emptyMergingHistory = HistoryMergingInstances.merging[Task](emptyRootHash, inMemHistoryStore)
 
       val emptySimplisticHistory: HistoryWithFind[Task] =
         SimplisticHistory.noMerging[Task](emptyRootHash, inMemHistoryStore)

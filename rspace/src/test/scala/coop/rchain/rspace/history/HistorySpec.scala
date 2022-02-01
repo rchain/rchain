@@ -231,7 +231,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
   protected def withEmptyTrie(f: HistoryWithFind[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+      HistoryMergingInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 

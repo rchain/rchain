@@ -1,13 +1,9 @@
 package coop.rchain.rspace.history
 
-import cats.implicits.catsSyntaxApplicativeId
-import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
+import coop.rchain.rspace.history.HistoryMergingInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.TestData._
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers, OptionValues}
-
-import scala.concurrent.duration._
 
 class CachingHistorySpec
     extends FlatSpec
