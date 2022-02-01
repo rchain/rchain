@@ -60,7 +60,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
       lock      = blockLockMap.getOrElseUpdate(b.blockHash, semaphore)
       result <- lock.withPermit(
                  for {
-                   cached <- reportStore.get(b.blockHash)
+                   cached <- reportStore.get1(b.blockHash)
                    res <- if (cached.isEmpty || forceReplay)
                            replayBlock(b).flatTap(reportStore.put(b.blockHash, _))
                          else
