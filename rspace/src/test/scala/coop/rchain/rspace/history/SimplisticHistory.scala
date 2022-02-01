@@ -4,8 +4,13 @@ import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Applicative, FlatMap}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
-import coop.rchain.rspace.history.HistoryMergingInstances.MalformedTrieError
+import coop.rchain.rspace.history.History.KeyPath
+import coop.rchain.rspace.history.HistoryMergingInstances.{
+  commonPrefix,
+  toByte,
+  toInt,
+  MalformedTrieError
+}
 import scodec.bits.ByteVector
 
 import scala.Ordering.Implicits.seqDerivedOrdering
