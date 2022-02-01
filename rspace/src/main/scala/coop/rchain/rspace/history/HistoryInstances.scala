@@ -22,7 +22,8 @@ object HistoryInstances {
   final case class MergingHistory[F[_]: Parallel: Concurrent: Sync](
       root: Blake2b256Hash,
       historyStore: CachingHistoryStore[F]
-  ) extends History[F] {
+  ) extends HistoryWithFind[F] {
+    override type HistoryF = HistoryWithFind[F]
 
     def skip(path: History.KeyPath, ptr: ValuePointer): (TriePointer, Option[Trie]) =
       if (path.isEmpty) {
@@ -308,7 +309,7 @@ object HistoryInstances {
           commitUncommonLeftSubtrie(currentPath, previousPath, previousRoot)
       }
 
-    def process(actions: List[HistoryAction]): F[History[F]] =
+    def process(actions: List[HistoryAction]): F[HistoryWithFind[F]] =
       for {
         _ <- Sync[F].ensure(actions.pure[F])(
               new RuntimeException("Cannot process duplicate actions on one key")
@@ -509,6 +510,18 @@ object HistoryInstances {
       case (trie, path) => (trie, path.nodes)
     }
 
+    def read(key: ByteVector): F[Option[ByteVector]] =
+      find(key.toArray.toList).flatMap {
+        case (trie, _) =>
+          trie match {
+            case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+            case EmptyPointer          => Applicative[F].pure(none)
+            case _ =>
+              Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
+          }
+      }
+
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
       historyStore.get(root) >>= (findPath(key, _))
 
@@ -557,7 +570,7 @@ object HistoryInstances {
       (start, key, TriePath.empty).tailRecM(traverse)
     }
 
-    override def reset(root: Blake2b256Hash): F[History[F]] =
+    override def reset(root: Blake2b256Hash): F[HistoryWithFind[F]] =
       Sync[F].delay(
         this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
       )
@@ -567,7 +580,7 @@ object HistoryInstances {
   def merging[F[_]: Concurrent: Parallel](
       root: Blake2b256Hash,
       historyStore: HistoryStore[F]
-  ): History[F] =
+  ): HistoryWithFind[F] =
     new MergingHistory[F](root, CachingHistoryStore(historyStore))
 
   final case class CachingHistoryStore[F[_]: Sync](historyStore: HistoryStore[F])

@@ -186,7 +186,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
         _ <- (1 to 10).toList.foldLeftM[
               Task,
               (
-                  History[Task],
+                  HistoryWithFind[Task],
                   List[InsertAction],
                   TrieMap[KeyPath, Blake2b256Hash]
               )
@@ -229,7 +229,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
       } yield ()
   }
 
-  protected def withEmptyTrie(f: History[Task] => Task[Unit]): Unit = {
+  protected def withEmptyTrie(f: HistoryWithFind[Task] => Task[Unit]): Unit = {
     val emptyHistory =
       HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
