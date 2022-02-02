@@ -399,7 +399,8 @@ object RadixTree {
 
     val rootParams =
       NodePathData(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
-    val emptyExportDataF = ExportData(Vector(), Vector(), Vector(), Vector(), Vector()).pure
+    val emptyExportData  = ExportData(Vector(), Vector(), Vector(), Vector(), Vector())
+    val emptyExportDataF = emptyExportData.pure
 
     assert(
       (skipSize, takeSize) != (0, 0),
@@ -430,11 +431,19 @@ object RadixTree {
         case Some(_) =>
           (emptyExportDataF, skipSize, takeSize) //start from next node after lastPrefix
       }
-    for {
+
+    val doExport = for {
       path                  <- rootParams.tailRecM(initNodePath)
       initExportData        <- initExportDataF
       startParams: LoopData = (path, (initSkipSize, initTakeSize), initExportData)
       r                     <- startParams.tailRecM(loop)
+    } yield r
+    val emptyResult = Monad[F].pure((emptyExportData, None))
+
+    for {
+      rootNodeOpt <- getNodeDataFromStore(rootHash)
+      r <- if (rootNodeOpt.isDefined) doExport
+          else emptyResult
     } yield r
   }
 
