@@ -55,9 +55,9 @@ class CasperBufferStorageTest extends FlatSpecLike with Matchers {
   }
 
   "when removed hash A is the last parent for hash B, key B" should "be removed from parents store" in {
-    underlyingStore.get(B).runSyncUnsafe() shouldBe Some(Set(A))
+    underlyingStore.get1(B).runSyncUnsafe() shouldBe Some(Set(A))
     casperBuffer.remove(A).runSyncUnsafe()
-    underlyingStore.get(B).runSyncUnsafe() shouldBe None
+    underlyingStore.get1(B).runSyncUnsafe() shouldBe None
   }
 
   "when removed hash A is the last parent for hash B, B" should "become pendant" in {
