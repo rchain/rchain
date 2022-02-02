@@ -55,7 +55,7 @@ object ChannelStoreImpl {
         _                <- store.put(eventKey, ContinuationHash(continuationHash))
       } yield ()
 
-    override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] = store.get(hash)
+    override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] = store.get1(hash)
 
     // Get lexical Ordering for ByteString
     implicit val bsLexicalOrdering: Ordering[ByteString] =

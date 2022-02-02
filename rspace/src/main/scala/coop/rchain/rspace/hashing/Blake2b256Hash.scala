@@ -60,6 +60,9 @@ object Blake2b256Hash {
   def create(byteVector: ByteVector): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Blake2b256.hash(byteVector)))
 
+  def fromByteVector(bytes: ByteVector): Blake2b256Hash =
+    new Blake2b256Hash(bytes)
+
   def fromHex(string: String): Blake2b256Hash =
     new Blake2b256Hash(ByteVector(Base16.unsafeDecode(string)))
 

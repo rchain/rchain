@@ -5,13 +5,20 @@ import cats.syntax.all._
 import cats.{Applicative, FlatMap, Parallel}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
-import scodec.bits.ByteVector
+import coop.rchain.rspace.serializers.ScodecSerialize.{
+  codecPointerBlock,
+  codecSkip,
+  codecTrie,
+  RichAttempt
+}
+import coop.rchain.shared.Base16
+import scodec.bits.{BitVector, ByteVector}
 
 import scala.Function.tupled
 import scala.Ordering.Implicits.seqDerivedOrdering
 import scala.collection.concurrent.TrieMap
 
-object HistoryInstances {
+object HistoryMergingInstances {
 
   type Index            = Byte
   type LastModification = (KeyPath, Trie)
@@ -19,10 +26,28 @@ object HistoryInstances {
 
   def MalformedTrieError = new RuntimeException("malformed trie")
 
+  val emptyRoot: Trie               = EmptyTrie
+  private[this] def encodeEmptyRoot = codecTrie.encode(emptyRoot).getUnsafe.toByteVector
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.create(encodeEmptyRoot)
+
+  // this mapping is kept explicit on purpose
+  @inline
+  private[history] def toInt(b: Byte): Int =
+    java.lang.Byte.toUnsignedInt(b)
+
+  // this mapping is kept explicit on purpose
+  @inline
+  private[history] def toByte(i: Int): Byte =
+    i.toByte
+
+  def commonPrefix(l: KeyPath, r: KeyPath): KeyPath =
+    (l.view, r.view).zipped.takeWhile { case (ll, rr) => ll == rr }.map(_._1).toSeq
+
   final case class MergingHistory[F[_]: Parallel: Concurrent: Sync](
       root: Blake2b256Hash,
       historyStore: CachingHistoryStore[F]
-  ) extends History[F] {
+  ) extends HistoryWithFind[F] {
+    override type HistoryF = HistoryWithFind[F]
 
     def skip(path: History.KeyPath, ptr: ValuePointer): (TriePointer, Option[Trie]) =
       if (path.isEmpty) {
@@ -308,7 +333,7 @@ object HistoryInstances {
           commitUncommonLeftSubtrie(currentPath, previousPath, previousRoot)
       }
 
-    def process(actions: List[HistoryAction]): F[History[F]] =
+    def process(actions: List[HistoryAction]): F[HistoryWithFind[F]] =
       for {
         _ <- Sync[F].ensure(actions.pure[F])(
               new RuntimeException("Cannot process duplicate actions on one key")
@@ -509,6 +534,18 @@ object HistoryInstances {
       case (trie, path) => (trie, path.nodes)
     }
 
+    def read(key: ByteVector): F[Option[ByteVector]] =
+      find(key.toArray.toList).flatMap {
+        case (trie, _) =>
+          trie match {
+            case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+            case EmptyPointer          => Applicative[F].pure(none)
+            case _ =>
+              Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
+
+          }
+      }
+
     private[history] def findPath(key: KeyPath): F[(TriePointer, TriePath)] =
       historyStore.get(root) >>= (findPath(key, _))
 
@@ -557,7 +594,7 @@ object HistoryInstances {
       (start, key, TriePath.empty).tailRecM(traverse)
     }
 
-    override def reset(root: Blake2b256Hash): F[History[F]] =
+    override def reset(root: Blake2b256Hash): F[HistoryWithFind[F]] =
       Sync[F].delay(
         this.copy(root = root, historyStore = CachingHistoryStore(historyStore.historyStore))
       )
@@ -567,7 +604,7 @@ object HistoryInstances {
   def merging[F[_]: Concurrent: Parallel](
       root: Blake2b256Hash,
       historyStore: HistoryStore[F]
-  ): History[F] =
+  ): HistoryWithFind[F] =
     new MergingHistory[F](root, CachingHistoryStore(historyStore))
 
   final case class CachingHistoryStore[F[_]: Sync](historyStore: HistoryStore[F])
@@ -633,4 +670,105 @@ object HistoryInstances {
     }
 
   }
+}
+
+/*
+ * Type definitions for Merkle Trie implementation (History)
+ */
+
+sealed trait Trie
+
+sealed trait NonEmptyTrie extends Trie
+
+case object EmptyTrie extends Trie
+
+final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
+  lazy val encoded: BitVector = codecSkip.encode(this).getUnsafe
+
+  lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
+
+  override def toString: String =
+    s"Skip(${hash}, ${affix.toHex}\n  ${ptr})"
+}
+
+final case class PointerBlock private (toVector: Vector[TriePointer]) extends NonEmptyTrie {
+  def updated(tuples: List[(Int, TriePointer)]): PointerBlock =
+    new PointerBlock(tuples.foldLeft(toVector) { (vec, curr) =>
+      vec.updated(curr._1, curr._2)
+    })
+
+  def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
+
+  lazy val encoded: BitVector = codecPointerBlock.encode(this).getUnsafe
+
+  lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
+
+  override def toString: String = {
+    // TODO: this is difficult to visualize, maybe XML representation would be useful?
+    val pbs =
+      toVector.zipWithIndex
+        .filter { case (v, _) => v != EmptyPointer }
+        .map { case (v, n) => s"<$v, ${Base16.encode(Array(n.toByte))}>" }
+        .mkString(",\n  ")
+    s"PB(${hash}\n  $pbs)"
+  }
+}
+
+object Trie {
+
+  /**
+    * Creates hash of Merkle Trie
+    *
+    * TODO: Fix encoding to use codec for the whole [[Trie]] and not for specific inherited variant.
+    */
+  def hash(trie: Trie): Blake2b256Hash =
+    trie match {
+      case pb: PointerBlock  => pb.hash
+      case s: Skip           => s.hash
+      case _: EmptyTrie.type => HistoryMergingInstances.emptyRootHash
+    }
+}
+
+object PointerBlock {
+  val length = 256
+
+  val empty: PointerBlock = new PointerBlock(Vector.fill(length)(EmptyPointer))
+
+  def apply(first: (Int, TriePointer), second: (Int, TriePointer)): PointerBlock =
+    PointerBlock.empty.updated(List(first, second))
+
+  def unapply(arg: PointerBlock): Option[Vector[TriePointer]] = Option(arg.toVector)
+}
+
+/*
+ * Trie pointer definitions
+ */
+
+sealed trait TriePointer
+
+sealed trait NonEmptyTriePointer extends TriePointer {
+  def hash: Blake2b256Hash
+}
+
+case object EmptyPointer extends TriePointer
+
+sealed trait ValuePointer extends NonEmptyTriePointer
+
+final case class LeafPointer(hash: Blake2b256Hash) extends ValuePointer
+
+final case class SkipPointer(hash: Blake2b256Hash) extends NonEmptyTriePointer
+
+final case class NodePointer(hash: Blake2b256Hash) extends ValuePointer
+
+/*
+ * Trie path used as a helper for traversal in History implementation
+ */
+
+final case class TriePath(nodes: Vector[Trie], conflicting: Option[Trie], edges: KeyPath) {
+  def append(affix: KeyPath, t: Trie): TriePath =
+    this.copy(nodes = this.nodes :+ t, edges = this.edges ++ affix)
+}
+
+object TriePath {
+  def empty: TriePath = TriePath(Vector(), None, Nil)
 }
