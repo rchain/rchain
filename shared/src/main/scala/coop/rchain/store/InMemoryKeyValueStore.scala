@@ -38,7 +38,6 @@ final case class InMemoryKeyValueStore[F[_]: Sync]() extends KeyValueStore[F] {
   def numRecords(): Int = state.size
 
   def sizeBytes(): Long =
-    state.toArray.map { el =>
-      el._1.capacity() + el._2.size
-    }.sum
+    state.map { case (byteBuffer, byteVector) => byteBuffer.capacity + byteVector.size }.sum
+
 }

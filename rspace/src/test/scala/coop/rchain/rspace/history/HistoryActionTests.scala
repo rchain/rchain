@@ -28,7 +28,7 @@ class HistoryActionTests
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
       readValue    <- newHistory.read(_zeros)
-      _            = readValue shouldBe Some(data.head.hash.bytes)
+      _            = readValue shouldBe data.head.hash.bytes.some
     } yield ()
   }
 
@@ -39,7 +39,7 @@ class HistoryActionTests
       newHistory      <- emptyHistory.process(data)
       historyOneReset <- emptyHistory.reset(newHistory.root)
       readValue       <- historyOneReset.read(_zeros)
-      _               = readValue shouldBe Some(data.head.hash.bytes)
+      _               = readValue shouldBe data.head.hash.bytes.some
     } yield ()
   }
 
@@ -49,7 +49,7 @@ class HistoryActionTests
       emptyHistory <- emptyHistoryF
       newHistory   <- emptyHistory.process(data)
       readValues   <- data.traverse(action => newHistory.read(action.key))
-      _            = readValues shouldBe data.map(action => Some(action.hash.bytes))
+      _            = readValues shouldBe data.map(_.hash.bytes.some)
     } yield ()
   }
 
@@ -61,7 +61,7 @@ class HistoryActionTests
         emptyHistory <- emptyHistoryF
         newHistory   <- emptyHistory.process(data)
         readValues   <- data.traverse(action => newHistory.read(action.key))
-        _            = readValues shouldBe data.map(action => Some(action.hash.bytes))
+        _            = readValues shouldBe data.map(_.hash.bytes.some)
       } yield ()
   }
 

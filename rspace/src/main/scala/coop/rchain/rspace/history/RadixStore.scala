@@ -6,7 +6,6 @@ import coop.rchain.store.KeyValueStore
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
-import scala.language.higherKinds
 
 class RadixStore[F[_]: Sync](store: KeyValueStore[F]) {
 

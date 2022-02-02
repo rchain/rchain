@@ -7,7 +7,6 @@ import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap
-import scala.language.higherKinds
 
 /**
   * Radix Tree implementation
@@ -49,7 +48,8 @@ object RadixTree {
     *                                                          bit6..bit0 - prefix length = M (from 0 to 127)
     */
   object codecs {
-    private val defSize = 32
+    private val defSize  = 32
+    private val headSize = 2 //2 bytes: first - item number, second - second byte
 
     def encode(node: Node): ByteVector = {
       //calculating size of buffer
@@ -68,7 +68,7 @@ object RadixTree {
                 value.size == defSize,
                 "error during serialization (size of leafValue not equal 32)"
               )
-              loopSize(index + 1, size + 2 + sizePrefix + defSize)
+              loopSize(index + 1, size + headSize + sizePrefix + defSize)
 
             case NodePtr(ptrPrefix, ptr) =>
               val sizePrefix = ptrPrefix.size.toInt
@@ -77,7 +77,7 @@ object RadixTree {
                 ptr.size == defSize,
                 "error during serialization (size of ptrPrefix not equal 32)"
               )
-              loopSize(index + 1, size + 2 + sizePrefix + defSize)
+              loopSize(index + 1, size + headSize + sizePrefix + defSize)
           } else size
 
       val size = loopSize(0, 0)
@@ -265,7 +265,7 @@ object RadixTree {
               codecs.decode(node)
             }
             r = if (tempPrefix.isEmpty)
-              (NodeData(nodePrefix, decoded, None) +: path).asRight //happy end
+              (NodeData(nodePrefix, decoded, none) +: path).asRight //happy end
             else                                                    //go dipper
               decoded(byteToInt(tempPrefix.head)) match {
                 case NodePtr(ptrPrefix, ptr) =>
@@ -279,7 +279,7 @@ object RadixTree {
                     ptr,
                     (nodePrefix :+ tempPrefix.head) ++ prefixCommon,
                     prefixRest,
-                    NodeData(nodePrefix, decoded, Some(tempPrefix.head)) +: path
+                    NodeData(nodePrefix, decoded, tempPrefix.head.some) +: path
                   ).asLeft
                 case _ =>
                   assert(
@@ -301,34 +301,33 @@ object RadixTree {
     )
     def loop(params: LoopData): F[Either[LoopData, (ExportData, Option[ByteVector])]] = {
       val (path, (skip, take), expData) = params
-      if (path.isEmpty) Monad[F].pure((expData, None).asRight) //end of Tree
+      if (path.isEmpty) Monad[F].pure((expData, none).asRight) //end of Tree
       else {
         val curNodeData   = path.head
         val curNodePrefix = curNodeData.prefix
         val curNode       = curNodeData.decoded
 
         if ((skip, take) == (0, 0))
-          Monad[F].pure((expData, Some(curNodePrefix)).asRight) //end of skip&take counter
+          Monad[F].pure((expData, curNodePrefix.some).asRight) //end of skip&take counter
         else {
           @tailrec
           def findNextNotEmptyItem(lastIndexOpt: Option[Byte]): Option[(Byte, Item)] = {
-            val curIndexOpt = lastIndexOpt match {
-              case None => Some(0.toByte)
-              case Some(index) =>
-                if (index == 0xFF.toByte) None
-                else Some((byteToInt(index) + 1).toByte)
-            }
+            def incIndex(index: Byte) =
+              if (index == 0xFF.toByte) none
+              else (byteToInt(index) + 1).toByte.some
+            val curIndexOpt = lastIndexOpt.map(incIndex).getOrElse(0.toByte.some)
+
             curIndexOpt match {
-              case None => None
+              case None => none
               case Some(curIndex) =>
                 val curItem = curNode(byteToInt(curIndex))
                 curItem match {
-                  case EmptyItem => findNextNotEmptyItem(Some(curIndex))
+                  case EmptyItem => findNextNotEmptyItem(curIndex.some)
                   case Leaf(_, _) =>
                     if (settings.expLP || settings.expLV)
-                      Some(curIndex, curItem)
-                    else findNextNotEmptyItem(Some(curIndex))
-                  case NodePtr(_, _) => Some(curIndex, curItem)
+                      (curIndex, curItem).some
+                    else findNextNotEmptyItem(curIndex.some)
+                  case NodePtr(_, _) => (curIndex, curItem).some
                 }
             }
           }
@@ -337,7 +336,7 @@ object RadixTree {
           nextNotEmptyItem match {
             case None => Monad[F].pure((path.tail, (skip, take), expData).asLeft)
             case Some((itemIndex, item)) =>
-              val newCurNodeData = NodeData(curNodePrefix, curNode, Some(itemIndex))
+              val newCurNodeData = NodeData(curNodePrefix, curNode, itemIndex.some)
               val newPath        = newCurNodeData +: path.tail
               item match {
                 case EmptyItem => Monad[F].pure((newPath, (skip, take), expData).asLeft)
@@ -373,7 +372,7 @@ object RadixTree {
                     }
                     childDecoded  = codecs.decode(childNV)
                     childNP       = (curNodePrefix :+ itemIndex) ++ ptrPrefix
-                    childNodeData = NodeData(childNP, childDecoded, None)
+                    childNodeData = NodeData(childNP, childDecoded, none)
                     childPath     = childNodeData +: newPath
 
                     r = if (skip > 0) (childPath, (skip - 1, take), expData).asLeft
@@ -407,29 +406,29 @@ object RadixTree {
       s"Export error: invalid initial conditions (skipSize, takeSize)==(0,0)"
     )
 
+    val noRootStart  = (emptyExportDataF, skipSize, takeSize)     //start from next node after lastPrefix
+    val skippedStart = (emptyExportDataF, skipSize - 1, takeSize) //skipped node start
+    val rootExportData = for {
+      rootOpt <- getNodeDataFromStore(rootHash)
+      root = {
+        assert(
+          rootOpt.isDefined,
+          s"Export error: root node with key ${rootHash.toHex} not found"
+        )
+        rootOpt.get
+      }
+      newNP = if (settings.expNP) Vector(ByteVector.empty) else Vector()
+      newNK = if (settings.expNK) Vector(rootHash) else Vector()
+      newNV = if (settings.expNV) Vector(root) else Vector()
+    } yield ExportData(newNP, newNK, newNV, Vector(), Vector())
+    val rootStart = (rootExportData, skipSize, takeSize - 1) //take root
+
     //defining init data
-    val (initExportDataF, initSkipSize, initTakeSize) =
-      lastPrefix match {
-        case None => //start from root
-          if (skipSize > 0) (emptyExportDataF, skipSize - 1, takeSize) //skip root
-          else {
-            val rootExportData = for {
-              rootOpt <- getNodeDataFromStore(rootHash)
-              root = {
-                assert(
-                  rootOpt.isDefined,
-                  s"Export error: root node with key ${rootHash.toHex} not found"
-                )
-                rootOpt.get
-              }
-              newNP = if (settings.expNP) Vector(ByteVector.empty) else Vector()
-              newNK = if (settings.expNK) Vector(rootHash) else Vector()
-              newNV = if (settings.expNV) Vector(root) else Vector()
-            } yield ExportData(newNP, newNK, newNV, Vector(), Vector())
-            (rootExportData, skipSize, takeSize - 1) //take root
-          }
-        case Some(_) =>
-          (emptyExportDataF, skipSize, takeSize) //start from next node after lastPrefix
+    val (initExportDataF, initSkipSize, initTakeSize) = lastPrefix
+      .map(_ => noRootStart)
+      .getOrElse {
+        if (skipSize > 0) skippedStart
+        else rootStart
       }
 
     val doExport = for {
@@ -438,7 +437,7 @@ object RadixTree {
       startParams: LoopData = (path, (initSkipSize, initTakeSize), initExportData)
       r                     <- startParams.tailRecM(loop)
     } yield r
-    val emptyResult = Monad[F].pure((emptyExportData, None))
+    val emptyResult = Monad[F].pure((emptyExportData, none))
 
     for {
       rootNodeOpt <- getNodeDataFromStore(rootHash)
@@ -453,13 +452,7 @@ object RadixTree {
       * Load and decode serializing data from KVDB.
       */
     private def loadNodeFromStore(nodePtr: ByteVector): F[Option[Node]] =
-      for {
-        nodeOpt <- store.get(Seq(nodePtr))
-        r = nodeOpt.head match {
-          case None       => None
-          case Some(node) => Some(codecs.decode(node))
-        }
-      } yield r
+      store.get1(nodePtr).map(_.map(codecs.decode))
 
     /**
       * Cache for storing read and decoded nodes.
@@ -474,25 +467,17 @@ object RadixTree {
       * If there is no such record in cache - load and decode from KVDB, then save to cacheR.
       * If there is no such record in KVDB - execute assert (if set noAssert flag - return emptyNode).
       */
-    def loadNode(nodePtr: ByteVector, noAssert: Boolean = false): F[Node] =
+    def loadNode(nodePtr: ByteVector, noAssert: Boolean = false): F[Node] = {
+      def errorMsg(): Unit = assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}")
+      val cacheMiss = for {
+        storeNodeOpt <- loadNodeFromStore(nodePtr)
+        _            = storeNodeOpt.map(cacheR.update(nodePtr, _)).getOrElse(errorMsg())
+      } yield storeNodeOpt.getOrElse(emptyNode)
       for {
         cacheNodeOpt <- Sync[F].delay(cacheR.get(nodePtr))
-        res <- cacheNodeOpt match {
-                case None =>
-                  for {
-                    storeNodeOpt <- loadNodeFromStore(nodePtr)
-                    r = storeNodeOpt match {
-                      case None =>
-                        assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}")
-                        emptyNode
-                      case Some(storeNode) =>
-                        cacheR.update(nodePtr, storeNode)
-                        storeNode
-                    }
-                  } yield r
-                case Some(cacheNode) => Sync[F].pure(cacheNode)
-              }
+        res          <- cacheNodeOpt.map(_.pure).getOrElse(cacheMiss)
       } yield res
+    }
 
     /**
       * Clear [[cacheR]] (cache for storing read nodes).
@@ -514,14 +499,12 @@ object RadixTree {
       */
     def saveNode(node: Node): ByteVector = {
       val (hash, bytes) = hashNode(node)
-      cacheR.get(hash) match { // collision alarm
-        case Some(v) =>
-          assert(
-            v == node,
-            s"collision in cache (record with key = ${hash.toHex} has already existed)"
-          )
-        case None => cacheR.update(hash, node)
-      }
+      // collision alarm
+      def generateErrorMsg(v: Node): Unit = assert(
+        v == node,
+        s"collision in cache (record with key = ${hash.toHex} has already existed)"
+      )
+      cacheR.get(hash).map(generateErrorMsg).getOrElse(cacheR.update(hash, node))
       cacheW.update(hash, bytes)
       hash
     }
@@ -563,19 +546,19 @@ object RadixTree {
       type Params = (Node, ByteVector)
       def loop(params: Params): F[Either[Params, Option[ByteVector]]] =
         params match {
-          case (_, ByteVector.empty) => Sync[F].pure(None.asRight) //Not found
+          case (_, ByteVector.empty) => Sync[F].pure(none.asRight) //Not found
           case (curNode, prefix) =>
             curNode(byteToInt(prefix.head)) match {
-              case EmptyItem => Sync[F].pure(None.asRight) //Not found
+              case EmptyItem => Sync[F].pure(none.asRight) //Not found
 
               case Leaf(leafPrefix, value) =>
                 if (leafPrefix == prefix.tail) Sync[F].pure(value.some.asRight) //Happy end
-                else Sync[F].pure(None.asRight)                                 //Not found
+                else Sync[F].pure(none.asRight)                                 //Not found
 
               case NodePtr(ptrPrefix, ptr) =>
                 val (_, prefixRest, ptrPrefixRest) = commonPrefix(prefix.tail, ptrPrefix)
                 if (ptrPrefixRest.isEmpty) loadNode(ptr).map(n => (n, prefixRest).asLeft) //Deeper
-                else Sync[F].pure(None.asRight)                                           //Not found
+                else Sync[F].pure(none.asRight)                                           //Not found
             }
         }
       Sync[F].tailRecM(startNode, startPrefix)(loop)
@@ -606,9 +589,9 @@ object RadixTree {
     private def saveNodeAndCreateItem(
         node: Node,
         prefix: ByteVector,
-        optimization: Boolean = true
+        compaction: Boolean = true
     ): Item =
-      if (optimization) {
+      if (compaction) {
         val nonEmptyItems = node.iterator.filter(_ != EmptyItem).take(2).toList
         nonEmptyItems.size match {
           case 0 => EmptyItem //all items are empty
@@ -654,7 +637,7 @@ object RadixTree {
             val newNode = emptyNode
               .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
               .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
-            saveNodeAndCreateItem(newNode, commPrefix, optimization = false).some.pure
+            saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
           }
 
         case NodePtr(ptrPrefix, ptr) =>
@@ -667,11 +650,9 @@ object RadixTree {
             for {
               childNode    <- loadNode(ptr)
               childItemOpt <- update(childNode(childItemIdx), childInsPrefix, insValue) //deeper
-              returnedItem = childItemOpt match {
-                case None => none
-                case Some(childItem) =>
-                  val updatedChildNode = childNode.updated(childItemIdx, childItem)
-                  saveNodeAndCreateItem(updatedChildNode, commPrefix, optimization = false).some
+              returnedItem = childItemOpt.map { childItem =>
+                val updatedChildNode = childNode.updated(childItemIdx, childItem)
+                saveNodeAndCreateItem(updatedChildNode, commPrefix, compaction = false)
               }
             } yield returnedItem
           } else {
@@ -679,7 +660,7 @@ object RadixTree {
             val newNode = emptyNode
               .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
               .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
-            saveNodeAndCreateItem(newNode, commPrefix, optimization = false).some.pure
+            saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
           }
       }
 
@@ -705,10 +686,8 @@ object RadixTree {
             for {
               childNode    <- loadNode(ptr)
               childItemOpt <- delete(childNode(childItemIdx), childDelPrefix) //deeper
-              returnedChild = childItemOpt match {
-                case None => none
-                case Some(childItem) =>
-                  saveNodeAndCreateItem(childNode.updated(childItemIdx, childItem), commPrefix).some
+              returnedChild = childItemOpt.map { childItem =>
+                saveNodeAndCreateItem(childNode.updated(childItemIdx, childItem), commPrefix)
               }
             } yield returnedChild
           }
@@ -754,10 +733,7 @@ object RadixTree {
               for {
                 createdNode <- createNodeFromItem(curNode(index))
                 newNodeOpt  <- makeActions(createdNode, newActions)
-                newItem = newNodeOpt match {
-                  case None          => none
-                  case Some(newNode) => saveNodeAndCreateItem(newNode, ByteVector.empty).some
-                }
+                newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
               } yield (index, newItem)
             }
           }

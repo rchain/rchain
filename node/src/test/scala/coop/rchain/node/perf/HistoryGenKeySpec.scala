@@ -2,16 +2,13 @@ package coop.rchain.node.perf
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
-
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
-import coop.rchain.rspace.state.RSpaceExporter.traverseTrie
 import coop.rchain.shared.{Base16, Log}
-import coop.rchain.state.TrieNode
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
@@ -20,7 +17,7 @@ import java.io.File
 import java.math.BigInteger
 import java.nio.file.Paths
 import scala.concurrent.ExecutionContext
-import scala.language.higherKinds
+
 class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   object Settings {
@@ -47,61 +44,17 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
     val flagSize: Boolean = calcSize && (typeStore == "inMemo")
 
-    val taskCur: List[ExpT] = tasksMedium0
+    val taskCur: List[ExpT] = tasksList
   }
 
   case class ExpT(initNum: Int, insReadDelNum: Int)
-
-  val tasksSmall: List[ExpT] = List(ExpT(1, 20000))
-
-  val tasksMedium0: List[ExpT] = List(
+  val tasksList: List[ExpT] = List(
     ExpT(1, 300),
     ExpT(1, 1000),
     ExpT(1, 5000),
     ExpT(1, 10000),
     ExpT(1, 30000),
-    ExpT(1, 100000),
-    ExpT(1, 200000),
-    ExpT(1, 300000),
-    ExpT(1, 400000)
-  )
-
-  val tasksMedium1: List[ExpT] = List(
-    ExpT(1, 5000),
-    ExpT(300, 5000),
-    ExpT(1000, 5000),
-    ExpT(5000, 5000),
-    ExpT(10000, 5000),
-    ExpT(30000, 5000)
-  )
-
-  val tasksLarge0: List[ExpT] = List(
-    ExpT(1, 1000),
-    ExpT(1, 10000),
-    ExpT(1, 50000),
-    ExpT(1, 100000),
-    ExpT(1, 200000)
-//    ExpT(1, 300000),
-//    ExpT(1, 400000),
-//    ExpT(1, 500000)
-//    ExpT(1, 600000)
-//    ExpT(1, 700000),
-//    ExpT(1, 800000),
-//    ExpT(1, 900000),
-//    ExpT(1, 1000000)
-  )
-
-  val tasksLarge1: List[ExpT] = List(
-//    ExpT(100000, 100000),
-//    ExpT(200000, 100000),
-//    ExpT(300000, 100000),
-//    ExpT(400000, 100000),
-//    ExpT(500000, 100000),
-//    ExpT(600000, 100000),
-//    ExpT(700000, 100000),
-//    ExpT(800000, 100000),
-//    ExpT(900000, 100000),
-    ExpT(1000000, 100000)
+    ExpT(1, 100000)
   )
 
   def deleteFile(path: String): Boolean = new File(path).delete()
@@ -203,234 +156,6 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     }
 
     val v0: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("00"))
-    val v1: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("01"))
-    val v2: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("02"))
-    val v3: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("03"))
-    val v4: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("04"))
-    val v5: Blake2b256Hash = Blake2b256Hash.fromByteArray(fill32Bytes("05"))
-
-    def simpleExperiment(): F[Unit] =
-      for {
-        historyInit <- getHistory(v0, "/git/temp")
-        history1    <- historyInit.history.process(InsertAction(v1.bytes.toArray, v1) :: Nil)
-        v1NewOpt    <- history1.read(v1.bytes)
-        _           <- assert(v1NewOpt.get == v1.bytes, "error").pure
-        history2    <- history1.process(InsertAction(v2.bytes.toArray, v2) :: Nil)
-        v2NewOpt    <- history2.read(v2.bytes)
-        _           <- assert(v2NewOpt.get == v2.bytes, "error").pure
-        history3    <- history2.process(DeleteAction(v2.bytes.toArray) :: Nil)
-        _           <- assert(history3.root == history1.root, "error").pure
-
-      } yield ()
-
-    def strToSeq(s: String): Seq[Byte] =
-      Base16.unsafeDecode(s)
-
-    def simpleExperimentWithSubTree(): F[Unit] =
-      for {
-        historyInit          <- getHistory(v0, "/git/temp")
-        prefix0: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x00.toByte, 0x00.toByte)
-        prefix1: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x01.toByte, 0x00.toByte)
-        prefix2: Array[Byte] = Array(0x01.toByte, 0x00.toByte, 0x01.toByte)
-        prefix3: Array[Byte] = Array(0x02.toByte)
-        prefix4: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x04.toByte, 0x04.toByte)
-        prefix5: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x05.toByte)
-//        prefix5: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x04.toByte) //error case
-
-        history1 <- historyInit.history.process(
-                     InsertAction(prefix0, v0)
-                       :: InsertAction(prefix1, v1)
-                       :: InsertAction(prefix2, v2)
-                       :: InsertAction(prefix3, v3)
-                       :: Nil
-                   )
-
-        v0NewOpt <- history1.read(ByteVector(prefix0))
-        v1NewOpt <- history1.read(ByteVector(prefix1))
-        v2NewOpt <- history1.read(ByteVector(prefix2))
-        v3NewOpt <- history1.read(ByteVector(prefix3))
-        _ <- assert(
-              (v0NewOpt.get == v0.bytes) && (v1NewOpt.get == v1.bytes) && (v2NewOpt.get == v2.bytes) && (v3NewOpt.get == v3.bytes),
-              "error1"
-            ).pure
-
-        history2 <- history1.process(
-                     InsertAction(prefix4, v4)
-                       :: InsertAction(prefix5, v5)
-                       :: Nil
-                   )
-        v4NewOpt <- history2.read(ByteVector(prefix4))
-        v5NewOpt <- history2.read(ByteVector(prefix5))
-        _ <- assert(
-              (v4NewOpt.get == v4.bytes) && (v5NewOpt.get == v5.bytes),
-              "error2"
-            ).pure
-
-        history3 <- history2.process(
-                     DeleteAction(prefix4)
-                       :: DeleteAction(prefix5)
-                       :: Nil
-                   )
-        _ <- assert(history3.root == history1.root, "error3").pure
-
-      } yield ()
-
-    def exportExperiment(): F[Unit] = {
-      import coop.rchain.rspace.history.RadixTree._
-      val lmdbPath: String     = "/git/temp"
-      val root: Blake2b256Hash = v0
-
-      for {
-        store      <- storeLMDB(lmdbPath)
-        radixStore = new RadixStore(store)
-        history    <- RadixHistory[F](root, radixStore)
-
-        prefix0: Array[Byte] = Array(0x00.toByte, 0x00.toByte, 0x00.toByte, 0x00.toByte)
-        prefix1: Array[Byte] = Array(0x01.toByte, 0x01.toByte, 0x00.toByte, 0x00.toByte)
-        prefix2: Array[Byte] = Array(0x01.toByte, 0x01.toByte, 0x01.toByte, 0x00.toByte)
-        prefix3: Array[Byte] = Array(0x01.toByte, 0x02.toByte, 0x00.toByte, 0x00.toByte)
-        prefix4: Array[Byte] = Array(0x02.toByte, 0x01.toByte, 0x00.toByte, 0x00.toByte)
-        prefix5: Array[Byte] = Array(0x02.toByte, 0x02.toByte, 0x00.toByte, 0x00.toByte)
-
-        history1 <- history.process(
-                     InsertAction(prefix0, v0)
-                       :: InsertAction(prefix1, v1)
-                       :: InsertAction(prefix2, v2)
-                       :: InsertAction(prefix3, v3)
-                       :: InsertAction(prefix4, v4)
-                       :: InsertAction(prefix5, v5)
-                       :: Nil
-                   )
-
-        v0NewOpt <- history1.read(ByteVector(prefix0))
-        v1NewOpt <- history1.read(ByteVector(prefix1))
-        v2NewOpt <- history1.read(ByteVector(prefix2))
-        v3NewOpt <- history1.read(ByteVector(prefix3))
-        v4NewOpt <- history1.read(ByteVector(prefix4))
-        v5NewOpt <- history1.read(ByteVector(prefix5))
-        _ <- assert(
-              (v0NewOpt.get, v1NewOpt.get, v2NewOpt.get, v3NewOpt.get, v4NewOpt.get, v5NewOpt.get) ==
-                (v0.bytes, v1.bytes, v2.bytes, v3.bytes, v4.bytes, v5.bytes),
-              "error1"
-            ).pure
-
-        rootHash: ByteVector               = history1.root.bytes
-        initLastPrefix: Option[ByteVector] = None
-//        lastPrefix: Option[ByteVector] = Some(ByteVector(0x02.toByte))
-        settings = ExportDataSettings(
-          expNP = true,
-          expNK = true,
-          expNV = true,
-          expLP = true,
-          expLV = true
-        )
-
-        dataAll <- sequentialExport(
-                    rootHash,
-                    initLastPrefix,
-                    0,
-                    1000,
-                    radixStore.get1,
-                    settings
-                  )
-
-        data1 <- sequentialExport(
-                  rootHash,
-                  initLastPrefix,
-                  0,
-                  2,
-                  radixStore.get1,
-                  settings
-                )
-        (d1, pr1) = data1
-
-        data2 <- sequentialExport(
-                  rootHash,
-                  pr1,
-                  0,
-                  1000,
-                  radixStore.get1,
-                  settings
-                )
-        (d2, pr2) = data2
-
-        prefabData = (
-          ExportData(
-            d1.nP ++ d2.nP,
-            d1.nK ++ d2.nK,
-            d1.nV ++ d2.nV,
-            d1.lP ++ d2.lP,
-            d1.lV ++ d2.lV
-          ),
-          pr2
-        )
-
-        r = {
-          assert(prefabData == dataAll, "Error prefabrication")
-          ()
-        }
-
-        (
-          ExportData(_, nodeKVDBKeys, nodeKVDBValues, _, _),
-          lastPrefix
-        )            = prefabData
-        localStorage = (nodeKVDBKeys zip nodeKVDBValues).toMap
-
-        newData <- {
-          def newGet(key: ByteVector) = localStorage.get(key).pure
-          sequentialExport(
-            rootHash,
-            initLastPrefix,
-            0,
-            1000000,
-            newGet,
-            settings
-          )
-        }
-        _ = {
-          assert(newData == dataAll, "Error of validation")
-          ()
-        }
-
-        importHash = history1.root
-        startPath1 = Vector((importHash, None))
-        nodesAll   <- traverseTrie(startPath1, 0, 100, radixStore.get1)
-        nodes1     <- traverseTrie(startPath1, 0, 2, radixStore.get1)
-        startPath2 = nodes1.last.path
-        nodes2     <- traverseTrie(startPath2, 0, 100, radixStore.get1)
-//        nodes2 <- traverseTrie(startPath1, 2, 100, radixStore.get1)
-
-        (leafsAll, nonLeafsAll) = nodesAll.partition(_.isLeaf)
-        (leafs1, nonLeafs1)     = nodes1.partition(_.isLeaf)
-        (leafs2, nonLeafs2)     = nodes2.partition(_.isLeaf)
-
-        leafsFabrication = leafs1 ++ leafs2
-
-        last = nonLeafs1.last
-        nonLeafsVabrication = nonLeafs1.dropRight(1) ++
-          Vector(TrieNode(last.hash, last.isLeaf, Vector())) ++ nonLeafs2
-        _ = {
-          assert(
-            leafsFabrication == leafsAll && nonLeafsVabrication == nonLeafsAll,
-            "Error of validation 2"
-          )
-          ()
-        }
-        historyItems = nonLeafsAll.map(_.hash) zip nodeKVDBValues
-
-        //required correct dataItems
-//        def getBlake(x: Blake2b256Hash, store: RadixStore[F]) = store.get1(x.bytes)
-//        dataItems    = Vector()
-//        _ <- RSpaceImporter.validateStateItems(
-//              historyItems,
-//              dataItems,
-//              startPath1,
-//              20000,
-//              0,
-//              getBlake(_, radixStore)
-//            )
-      } yield ()
-    }
 
     def experiment(numInit: Int, numInsReadDel: Int): F[Unit] = {
 
@@ -655,10 +380,6 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           "timeExp(sec)"
         ) + fS("timeValid(sec)") + fS("numNode") + strSize
         _ <- println(str).pure
-
-//        _ <- simpleExperiment()
-//        _ <- simpleExperimentWithSubTree()
-//        _ <- exportExperiment()
         _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
       } yield ()
     }

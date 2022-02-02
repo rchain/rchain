@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.effect.concurrent.Ref
-import cats.implicits.{catsSyntaxEitherId, catsSyntaxFlatMapIdOps, toTraverseOps}
+import cats.syntax.all._
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.examples.StringExamples.implicits._
@@ -17,10 +17,7 @@ import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
 import monix.execution.atomic.AtomicAny
 import org.scalatest._
-import org.scalatest.prop._
 import scodec.bits.ByteVector
-
-import scala.language.higherKinds
 
 trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, String] {
 
@@ -42,7 +39,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
         initPoint <- space1.createCheckpoint()
 
         //export 1 page from space1
-        initStartPath = Vector((initPoint.root, None))
+        initStartPath = Vector((initPoint.root, none))
         exportData <- RSpaceExporterItems.getHistoryAndData(
                        exporter1,
                        initStartPath,
@@ -124,9 +121,9 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
             } yield if (historyItemsPage.size < pageSize) r.asRight else r.asLeft
         }
 
-      val inithistoryItems: Seq[(Blake2b256Hash, ByteVector)] = Seq.empty
+      val initHistoryItems: Seq[(Blake2b256Hash, ByteVector)] = Seq.empty
       val initDataItems: Seq[(Blake2b256Hash, ByteVector)]    = Seq.empty
-      val initChildNum: Option[Byte]                          = None
+      val initChildNum: Option[Byte]                          = none
 
       for {
         //generate init data in space1
@@ -137,7 +134,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
 
         //multipage export from space1
         initStartPath  = Seq((initPoint.root, initChildNum))
-        initExportData = (inithistoryItems, initDataItems, initStartPath)
+        initExportData = (initHistoryItems, initDataItems, initStartPath)
         exportData     <- initExportData.tailRecM(multipageExport)
         historyItems   = exportData._1
         dataItems      = exportData._2
@@ -190,7 +187,6 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
                            )
               historyItemsPage = exportData._1.items
               dataItemsPage    = exportData._2.items
-              lastPath         = exportData._1.lastPath
 
               //validate exporting page
               _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
@@ -211,9 +207,9 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
             } yield if (historyItemsPage.size < pageSize) r.asRight else r.asLeft
         }
 
-      val inithistoryItems: Seq[(Blake2b256Hash, ByteVector)] = Seq.empty
+      val initHistoryItems: Seq[(Blake2b256Hash, ByteVector)] = Seq.empty
       val initDataItems: Seq[(Blake2b256Hash, ByteVector)]    = Seq.empty
-      val initChildNum: Option[Byte]                          = None
+      val initChildNum: Option[Byte]                          = none
 
       for {
         //generate init data in space1
@@ -224,7 +220,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
 
         //multipage export with skip from space1
         initStartPath  = Seq((initPoint.root, initChildNum))
-        initExportData = (inithistoryItems, initDataItems, initStartPath, startSkip)
+        initExportData = (initHistoryItems, initDataItems, initStartPath, startSkip)
         exportData     <- initExportData.tailRecM(multipageExportWithSkip)
         historyItems   = exportData._1
         dataItems      = exportData._2
@@ -246,11 +242,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
   }
 }
 
-trait ExportImportTestsBase[C, P, A, K]
-    extends FlatSpec
-    with Matchers
-    with OptionValues
-    with PropertyChecks {
+trait ExportImportTestsBase[C, P, A, K] extends FlatSpec with Matchers {
 
   def fixture[S](
       f: (
