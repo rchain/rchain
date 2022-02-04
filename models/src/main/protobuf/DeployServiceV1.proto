@@ -45,8 +45,8 @@ service DeployService {
   // Find data sent to a name.
   // OBSOLETE: Use getDataAtName instead. This method will be removed in the future version of RNode.
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
-  // Find data sent to a par.
-  rpc getDataAtName(DataAtParQuery) returns (RhoDataResponse) {}
+  // Find data sent to a name.
+  rpc getDataAtName(DataAtNameByBlockQuery) returns (RhoDataResponse) {}
   // Find processes receiving on a name.
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.

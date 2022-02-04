@@ -49,7 +49,7 @@ message DataAtNameQuery {
   Par name = 2;
 }
 
-message DataAtParQuery {
+message DataAtNameByBlockQuery {
   Par par              = 1 [(scalapb.field).no_box = true];
   string blockHash     = 2;
   bool usePreStateHash = 3;

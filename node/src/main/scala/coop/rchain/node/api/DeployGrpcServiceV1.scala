@@ -181,7 +181,7 @@ object DeployGrpcServiceV1 {
         }
 
       def getDataAtName(
-          request: DataAtParQuery
+          request: DataAtNameByBlockQuery
       ): Task[RhoDataResponse] =
         defer(
           BlockAPI

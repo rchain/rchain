@@ -27,7 +27,9 @@ trait DeployService[F[_]] {
   def listenForContinuationAtName(
       request: ContinuationAtNameQuery
   ): F[Either[Seq[String], Seq[ContinuationsWithBlockInfo]]]
-  def getDataAtPar(request: DataAtParQuery): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]]
+  def getDataAtPar(
+      request: DataAtNameByBlockQuery
+  ): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]]
   def lastFinalizedBlock: F[Either[Seq[String], String]]
   def isFinalized(q: IsFinalizedQuery): F[Either[Seq[String], String]]
   def bondStatus(q: BondStatusQuery): F[Either[Seq[String], String]]
@@ -147,7 +149,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       )
 
   def getDataAtPar(
-      request: DataAtParQuery
+      request: DataAtNameByBlockQuery
   ): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]] =
     stub
       .getDataAtName(request)
