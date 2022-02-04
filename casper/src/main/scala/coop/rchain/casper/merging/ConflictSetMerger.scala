@@ -52,10 +52,10 @@ object ConflictSetMerger {
     }
 
     def calMergedResult(
-        branch: R,
+        branch: Branch,
         originResult: Map[Blake2b256Hash, Long]
     ): Map[Blake2b256Hash, Long] = {
-      val diff = mergeableChannels.apply(branch)
+      val diff = branch.map(mergeableChannels).toList.combineAll
       diff.foldLeft(originResult) {
         case (ba, br) =>
           val result = Math.addExact(ba.getOrElse(br._1, 0L), br._2)
@@ -68,23 +68,24 @@ object ConflictSetMerger {
     }
 
     def getMergedResultRejection(
-        options: Set[Set[R]],
-        base: Map[Blake2b256Hash, Long],
-        targetF: R => Long
-    ): Set[R] = {
-      val (_, rejected) = options.flatten.toList
-        .sortBy(b => targetF(b))
-        .foldLeft((base, Set.empty[R])) {
-          case ((balances, rejected), deploy) =>
-            try {
-              (calMergedResult(deploy, balances), rejected)
-            } catch {
-              case _: ArithmeticException => (balances, rejected + deploy)
-            }
+        branches: Set[Branch],
+        rejectOptions: Set[Set[Branch]],
+        base: Map[Blake2b256Hash, Long]
+    ): Set[Set[Branch]] =
+      rejectOptions.map {
+        case normalRejectOptions =>
+          val (_, rejected) = (branches diff normalRejectOptions)
+            .foldLeft((base, Set.empty[Branch])) {
+              case ((balances, rejected), deploy) =>
+                try {
+                  (calMergedResult(deploy, balances), rejected)
+                } catch {
+                  case _: ArithmeticException => (balances, rejected + deploy)
+                }
 
-        }
-      rejected
-    }
+            }
+          rejected ++ normalRejectOptions
+      }
 
     val (rejectedAsDependents, mergeSet) =
       actualSet.partition(t => lateSet.exists(depends(t, _)))
@@ -105,11 +106,9 @@ object ConflictSetMerger {
 
     /** target function for rejection is minimising cost of deploys rejected */
     val rejectionTargetF = (dc: Branch) => dc.map(cost).sum
-    val optimalRejection = getOptimalRejection(rejectionOptions, rejectionTargetF)
-    val toMerge          = branches diff optimalRejection
 
     for {
-      baseMergeableChRes <- toMerge.flatten
+      baseMergeableChRes <- branches.flatten
                              .map(mergeableChannels)
                              .flatMap(_.keys)
                              .toList
@@ -120,19 +119,21 @@ object ConflictSetMerger {
                                    .map(res => (channelHash, res.getOrElse(0L)))
                              )
                              .map(_.toMap)
-      overflowOrNegativeRejections = getMergedResultRejection(
-        toMerge,
-        baseMergeableChRes,
-        cost
+      rejectionOptionsWithOverflow = getMergedResultRejection(
+        branches,
+        rejectionOptions,
+        baseMergeableChRes
       )
-      ultimateMerge                   = branches.flatten diff optimalRejection.flatten diff overflowOrNegativeRejections
-      rejected                        = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten ++ overflowOrNegativeRejections
-      r                               <- Stopwatch.duration(ultimateMerge.toList.traverse(stateChanges).map(_.combineAll))
+      optimalRejection = getOptimalRejection(rejectionOptionsWithOverflow, rejectionTargetF)
+      rejected         = lateSet ++ rejectedAsDependents ++ optimalRejection.flatten
+      toMerge          = branches diff optimalRejection
+      r                <- Stopwatch.duration(toMerge.toList.flatten.traverse(stateChanges).map(_.combineAll))
+
       (allChanges, combineAllChanges) = r
 
       // All number channels merged
       // TODO: Negative or overflow should be rejected before!
-      allMergeableChannels = ultimateMerge.toList.map(mergeableChannels).combineAll
+      allMergeableChannels = toMerge.toList.flatten.map(mergeableChannels).combineAll
 
       r                                 <- Stopwatch.duration(computeTrieActions(allChanges, allMergeableChannels))
       (trieActions, computeActionsTime) = r
