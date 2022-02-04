@@ -43,9 +43,10 @@ service DeployService {
   // Get a summary of blocks on the blockchain.
   rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
   // Find data sent to a name.
+  // OBSOLETE: Use getDataAtName instead. This method will be removed in the future version of RNode.
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
   // Find data sent to a par.
-  rpc getDataAtPar(DataAtParQuery) returns (RhoDataResponse) {}
+  rpc getDataAtName(DataAtParQuery) returns (RhoDataResponse) {}
   // Find processes receiving on a name.
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.

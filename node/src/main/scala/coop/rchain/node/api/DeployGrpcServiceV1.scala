@@ -180,7 +180,7 @@ object DeployGrpcServiceV1 {
           )
         }
 
-      def getDataAtPar(
+      def getDataAtName(
           request: DataAtParQuery
       ): Task[RhoDataResponse] =
         defer(

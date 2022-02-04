@@ -150,7 +150,7 @@ class GrpcDeployService[F[_]: Monixable: Sync](host: String, port: Int, maxMessa
       request: DataAtParQuery
   ): F[Either[Seq[String], (Seq[Par], LightBlockInfo)]] =
     stub
-      .getDataAtPar(request)
+      .getDataAtName(request)
       .fromTask
       .toEitherF(
         _.message.error,
