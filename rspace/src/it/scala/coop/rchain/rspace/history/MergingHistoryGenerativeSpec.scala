@@ -28,7 +28,8 @@ class MergingHistoryGenerativeSpec
   ) { keys: List[Key] =>
     val actions = keys.map(k => (k, MergingTestData.randomBlake))
     val emptyMergingHistory =
-      HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
+      HistoryMergingInstances
+        .merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
     val emptySimplisticHistory: HistoryWithFind[Task] =
       SimplisticHistory.noMerging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
@@ -75,7 +76,8 @@ class MergingHistoryGenerativeSpec
   "process" should "accept new leafs in bulk" in forAll(distinctListOf(arbitraryRandomThreeBytes)) {
     keys: List[Key] =>
       val actions = keys.map(k => (k, MergingTestData.randomBlake))
-      val emptyMergingHistory = HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
+      val emptyMergingHistory = HistoryMergingInstances
+        .merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
       val emptySimplisticHistory: HistoryWithFind[Task] =
         SimplisticHistory.noMerging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
 
@@ -93,7 +95,7 @@ class MergingHistoryGenerativeSpec
       val postDeletionNonMergingHistory =
         runEffect(postInsertNonMergingHistory.process(deletions))
 
-      postDeletionMergingHistory.root shouldBe HistoryInstances.emptyRootHash
+      postDeletionMergingHistory.root shouldBe HistoryMergingInstances.emptyRootHash
       postDeletionNonMergingHistory.root shouldBe HistoryMergingInstances.emptyRootHash
   }
 

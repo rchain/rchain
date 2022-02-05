@@ -19,6 +19,7 @@ import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import scodec.bits.ByteVector
 
+// todo don't works for MergingHistory
 trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, String] {
 
   "export and import of one page" should "works correctly" in fixture {

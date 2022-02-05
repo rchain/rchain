@@ -233,7 +233,8 @@ class MergingHistorySpec
 
   protected def withEmptyTrie(f: HistoryWithFind[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      HistoryMergingInstances.merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
+      HistoryMergingInstances
+        .merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 

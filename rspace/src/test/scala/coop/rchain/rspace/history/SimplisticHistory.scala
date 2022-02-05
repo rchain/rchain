@@ -325,8 +325,6 @@ final case class SimplisticHistory[F[_]: Sync](
     }
 
   def reset(root: Blake2b256Hash): F[HistoryWithFind[F]] = Sync[F].delay(this.copy(root = root))
-
-  def reset(root: Blake2b256Hash): F[History[F]] = Sync[F].delay(this.copy(root = root))
 }
 
 object SimplisticHistory {

@@ -4,12 +4,9 @@ import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.History.KeyPath
 import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history._
 import scodec.bits.ByteVector
-
-import scala.language.higherKinds
 
 /**
   * History implementation with radix tree
@@ -17,10 +14,7 @@ import scala.language.higherKinds
 object RadixHistory {
   val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteArray(hashNode(emptyNode)._1.toArray)
 
-  def apply[F[_]: Sync: Parallel](
-      root: Blake2b256Hash,
-      store: RadixStore[F]
-  ): F[RadixHistory[F]] =
+  def apply[F[_]: Sync: Parallel](root: Blake2b256Hash, store: RadixStore[F]): F[History[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
       node <- impl.loadNode(root.bytes, noAssert = true)
@@ -33,8 +27,7 @@ final case class RadixHistory[F[_]: Sync: Parallel](
     impl: RadixTreeImpl[F],
     store: RadixStore[F]
 ) extends History[F] {
-
-  override def find(key: KeyPath): F[(TriePointer, Vector[Trie])] = ???
+  override type HistoryF = History[F]
 
   override def root: Blake2b256Hash = rootHash
 

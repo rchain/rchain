@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.HistoryInstances.{CachingHistoryStore, MergingHistory}
+import coop.rchain.rspace.history.HistoryMergingInstances.{CachingHistoryStore, MergingHistory}
 import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
