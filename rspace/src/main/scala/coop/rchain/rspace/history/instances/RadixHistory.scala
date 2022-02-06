@@ -6,6 +6,8 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history._
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueStore
+import coop.rchain.store.{KeyValueStore, KeyValueTypedStore}
 import scodec.bits.ByteVector
 
 /**
@@ -14,18 +16,26 @@ import scodec.bits.ByteVector
 object RadixHistory {
   val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteArray(hashNode(emptyNode)._1.toArray)
 
-  def apply[F[_]: Sync: Parallel](root: Blake2b256Hash, store: RadixStore[F]): F[History[F]] =
+  def apply[F[_]: Sync: Parallel](
+      root: Blake2b256Hash,
+      store: KeyValueTypedStore[F, ByteVector, ByteVector]
+  ): F[RadixHistory[F]] =
     for {
       impl <- Sync[F].delay(new RadixTreeImpl[F](store))
       node <- impl.loadNode(root.bytes, noAssert = true)
     } yield RadixHistory(root, node, impl, store)
+
+  def createStore[F[_]: Sync](
+      store: KeyValueStore[F]
+  ): KeyValueTypedStore[F, ByteVector, ByteVector] =
+    store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
 }
 
 final case class RadixHistory[F[_]: Sync: Parallel](
     rootHash: Blake2b256Hash,
     rootNode: Node,
     impl: RadixTreeImpl[F],
-    store: RadixStore[F]
+    store: KeyValueTypedStore[F, ByteVector, ByteVector]
 ) extends History[F] {
   override type HistoryF = History[F]
 

@@ -71,8 +71,11 @@ object History {
   def create[F[_]: Concurrent: Sync: Parallel](
       root: Blake2b256Hash,
       store: KeyValueStore[F]
-  ): F[History[F]] = RadixHistory(root, new RadixStore[F](store))
-//    Sync[F].delay(HistoryMergingInstances.merging(root, HistoryStoreInstances.historyStore[F](store))) //for MergingHistory
+  ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))
+//  ): F[HistoryWithFind[F]] =
+//    Sync[F].delay(
+//      HistoryMergingInstances.merging(root, HistoryStoreInstances.historyStore[F](store))
+//    ) //for MergingHistory
 
   type KeyPath = Seq[Byte]
 }

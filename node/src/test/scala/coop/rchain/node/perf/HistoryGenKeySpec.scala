@@ -1,4 +1,5 @@
 package coop.rchain.node.perf
+
 import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
@@ -9,6 +10,7 @@ import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
 import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.syntax._
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{FlatSpec, Matchers}
 import scodec.bits.ByteVector
@@ -121,7 +123,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         case "inMemo" =>
           val inMemoStore = InMemoryKeyValueStore[F]
           inMemoStore.clear()
-          val radixStore = new RadixStore(inMemoStore)
+          val radixStore = RadixHistory.createStore(inMemoStore)
           for { history <- RadixHistory[F](root, radixStore) } yield HistoryWithFunc(
             history,
             radixStore.get1,
@@ -131,7 +133,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
         case "lmdb" =>
           for {
             store      <- storeLMDB(lmdbPath)
-            radixStore = new RadixStore(store)
+            radixStore = RadixHistory.createStore(store)
             history    <- RadixHistory[F](root, radixStore)
           } yield HistoryWithoutFunc(history, radixStore.get1)
       }

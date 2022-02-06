@@ -1,14 +1,17 @@
 package coop.rchain.rspace.state.instances
 
-import java.nio.ByteBuffer
 import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RootsStoreInstances
+import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.ByteVectorOps.RichByteVector
+import coop.rchain.shared.syntax._
 import coop.rchain.state.TrieNode
 import coop.rchain.store.KeyValueStore
+
+import java.nio.ByteBuffer
 
 object RSpaceExporterStore {
   // RSpace exporter constructor / smart constructor "guards" private class
@@ -52,8 +55,7 @@ object RSpaceExporterStore {
         skip: Int,
         take: Int
     ): F[Seq[TrieNode[Blake2b256Hash]]] = {
-      import coop.rchain.rspace.history.RadixStore
-      val sourceTrieStore = new RadixStore(sourceHistoryStore)
+      val sourceTrieStore = RadixHistory.createStore(sourceHistoryStore)
       for {
         nodes <- traverseTrie(startPath, skip, take, sourceTrieStore.get1)
       } yield nodes

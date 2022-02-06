@@ -3,6 +3,8 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Monad, Parallel}
+import coop.rchain.shared.syntax._
+import coop.rchain.store.KeyValueTypedStore
 import scodec.bits.ByteVector
 
 import scala.annotation.tailrec
@@ -446,7 +448,7 @@ object RadixTree {
     } yield r
   }
 
-  class RadixTreeImpl[F[_]: Sync: Parallel](store: RadixStore[F]) {
+  class RadixTreeImpl[F[_]: Sync: Parallel](store: KeyValueTypedStore[F, ByteVector, ByteVector]) {
 
     /**
       * Load and decode serializing data from KVDB.
