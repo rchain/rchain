@@ -70,6 +70,13 @@ object ConflictSetMerger {
     def foldRejection(baseBalance: Map[Blake2b256Hash, Long], branches: Set[Branch]) = {
       val (_, rejected) = branches.foldLeft((baseBalance, Set.empty[Branch])) {
         case ((balances, rejected), deploy) =>
+          // TODO come up with a better algorithm to solve below case
+          // currently we are accumulating result from some order and reject the deploy once negative result happens
+          // which doesn't seem perfect cases below
+          //
+          // base result 10 and folding the result from order like [-10, -1, 20]
+          // which on the second case `-1`, the calculation currently would reject it because the result turns
+          // into negative.However, if you look at the all the item view 10 - 10 -1 + 20 is not negative
           try {
             (calMergedResult(deploy, balances), rejected)
           } catch {
