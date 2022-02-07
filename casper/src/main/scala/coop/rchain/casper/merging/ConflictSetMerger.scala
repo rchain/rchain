@@ -67,24 +67,31 @@ object ConflictSetMerger {
       }
     }
 
+    def foldRejection(baseBalance: Map[Blake2b256Hash, Long], branches: Set[Branch]) = {
+      val (_, rejected) = branches.foldLeft((baseBalance, Set.empty[Branch])) {
+        case ((balances, rejected), deploy) =>
+          try {
+            (calMergedResult(deploy, balances), rejected)
+          } catch {
+            case _: ArithmeticException => (balances, rejected + deploy)
+          }
+      }
+      rejected
+    }
+
     def getMergedResultRejection(
         branches: Set[Branch],
         rejectOptions: Set[Set[Branch]],
         base: Map[Blake2b256Hash, Long]
     ): Set[Set[Branch]] =
-      rejectOptions.map {
-        case normalRejectOptions =>
-          val (_, rejected) = (branches diff normalRejectOptions)
-            .foldLeft((base, Set.empty[Branch])) {
-              case ((balances, rejected), deploy) =>
-                try {
-                  (calMergedResult(deploy, balances), rejected)
-                } catch {
-                  case _: ArithmeticException => (balances, rejected + deploy)
-                }
-
-            }
-          rejected ++ normalRejectOptions
+      if (rejectOptions.isEmpty) {
+        Set(foldRejection(base, branches))
+      } else {
+        rejectOptions.map {
+          case normalRejectOptions =>
+            val rejected = foldRejection(base, branches diff normalRejectOptions)
+            rejected ++ normalRejectOptions
+        }
       }
 
     val (rejectedAsDependents, mergeSet) =

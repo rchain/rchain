@@ -86,7 +86,6 @@ class MergeNumberChannelSpec extends FlatSpec {
       expectedFinalResult: Long
   ) = {
 
-
     Resources.mkRuntimeManager[F]("merging-test").use { rm =>
       for {
         runtime <- rm.spawnRuntime
@@ -224,8 +223,8 @@ class MergeNumberChannelSpec extends FlatSpec {
             )
 
         (finalHash, rejected) = r
-        rejectedSigs = rejected.flatMap(_.deploysWithCost.map(_.id))
-        _ = rejectedSigs shouldBe expectedRejected
+        rejectedSigs          = rejected.flatMap(_.deploysWithCost.map(_.id))
+        _                     = rejectedSigs shouldBe expectedRejected
 
         // Read merged value
 
@@ -250,9 +249,8 @@ class MergeNumberChannelSpec extends FlatSpec {
       ),
       rightTerms = Seq(
         DeployTestInfo(rhoChange(-6), 10L, "0x22") // -20
-
       ),
-      expectedRejected =  Set(makeSig("0x22")),
+      expectedRejected = Set(makeSig("0x22")),
       expectedFinalResult = 5
     )
   }
