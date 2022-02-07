@@ -73,6 +73,8 @@ class MergeNumberChannelSpec extends FlatSpec {
                          |}
                          |""".stripMargin
 
+  def parRho(ori: String, appendRho: String) = Seq(ori, appendRho).mkString("|")
+
   def makeSig(hex: String) = {
     val bv = ByteVector.fromHex(hex).get
     ByteString.copyFrom(bv.toArray)
@@ -266,6 +268,22 @@ class MergeNumberChannelSpec extends FlatSpec {
       ),
       expectedRejected = Set(makeSig("0x22")),
       expectedFinalResult = 5
+    )
+  }
+
+  "multiple branches with normal rejection" should "choose from normal reject options" in effectTest {
+    testCase[Task](
+      baseTerms = Seq(rhoST, rhoChange(100)),
+      leftTerms = Seq(
+        DeployTestInfo(parRho(rhoChange(-20), "@\"X\"!(1)"), 10L, "0x11"),
+        DeployTestInfo(rhoChange(-10), 10L, "0x12")
+      ),
+      rightTerms = Seq(
+        DeployTestInfo(rhoChange(-60), 10L, "0x22"),
+        DeployTestInfo(parRho(rhoChange(-20), "for(_ <- @\"X\") {Nil}"), 11L, "0x21")
+      ),
+      expectedRejected = Set(makeSig("0x11")),
+      expectedFinalResult = 10
     )
   }
 
