@@ -371,24 +371,4 @@ class GraphzSpec extends FunSpec with Matchers with BeforeAndAfterEach with Appe
 
     def show: String = ref.flatMap(_.get).map(_.toString).runSyncUnsafe()
   }
-
-  implicit class GraphzOps(graph: Graphz[Task]) {
-
-    import java.io.{File, PrintWriter}
-
-    def view(): Unit = {
-      val sourcePath = "/Users/rabbit/temp.gv"
-      val outputPath = "/Users/rabbit/output.pdf"
-      new File(sourcePath).createNewFile()
-      val writer = new PrintWriter(sourcePath)
-      writer.println(graph)
-      writer.flush()
-      writer.close()
-      val dotCmd  = s"dot -Tpdf $sourcePath -o $outputPath"
-      val openCmd = s"open $outputPath"
-      import sys.process._
-      (dotCmd !)
-      (openCmd !)
-    }
-  }
 }
