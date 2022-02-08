@@ -377,15 +377,12 @@ object BlockAPI {
       ))
   }
 
-  def visualizeDag[
-      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
-      R
-  ](
+  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore, R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
-      serialize: Graphz[F] => R
+      serialize: F[R]
   ): F[ApiErr[R]] = {
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
@@ -399,9 +396,10 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb   <- casper.lastFinalizedBlock
-        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
-      } yield serialize(graph).asRight[Error]
+        lfb    <- casper.lastFinalizedBlock
+        _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+        result <- serialize
+      } yield result.asRight[Error]
 
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
