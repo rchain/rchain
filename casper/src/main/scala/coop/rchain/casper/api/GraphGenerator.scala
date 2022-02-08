@@ -36,7 +36,8 @@ object GraphzGenerator {
   def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log: BlockStore](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
-      config: GraphConfig
+      config: GraphConfig,
+      ser: GraphSerializer[F]
   ): F[Graphz[F]] =
     for {
       acc            <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
@@ -44,8 +45,6 @@ object GraphzGenerator {
       firstTs        = timeseries.head
       validators     = acc.validators
       validatorsList = validators.toList.sortBy(_._1)
-      ref            <- Ref[F].of(new StringBuffer(""))
-      ser            = new StringSerializer(ref)
       g              <- initGraph[F]("dag", ser)
       allAncestors = validatorsList
         .flatMap {
@@ -74,10 +73,7 @@ object GraphzGenerator {
       // draw clusters per validator
       _ <- validatorsList.traverse {
             case (id, blocks) =>
-              validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser).map {
-                vCluster =>
-                  g.subgraph(vCluster)
-              }
+              validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser)
           }
       // draw parent dependencies
       _ <- drawParentDependencies[F](g, validatorsList.map(_._2))
