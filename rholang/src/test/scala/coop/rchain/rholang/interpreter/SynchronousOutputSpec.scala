@@ -5,6 +5,31 @@ import org.scalatest.{FlatSpec, Matchers}
 
 class SynchronousOutputSpec extends FlatSpec with Matchers {
 
+  "';'" should "have a higher precedence than '|' 2" in {
+    val s = "@3!?(3). | @1!?(1) ; @2!?(2). "
+    val t =
+      """
+        # new x0 in {
+        #   @3!(*x0, 3) |
+        #   for(_ <- x0){
+        #     Nil
+        #   }
+        # } |
+        # new x0 in {
+        #   @1!(*x0, 1) |
+        #   for(_ <- x0){
+        #     new x1 in {
+        #       @2!(*x1, 2) |
+        #       for(_ <- x1 ) {
+        #         Nil
+        #       }
+        #     }
+        #   }
+        # }
+        # """.stripMargin('#')
+    assertCompiledEqual(s, t)
+  }
+
   "';'" should "have a higher precedence than '|'" in {
     val s = "@1!?(1) ; @2!?(2). | @3!?(3)."
     val t =
