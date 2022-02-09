@@ -9,22 +9,26 @@ import coop.rchain.rspace.history.HistoryMergingInstances.{CachingHistoryStore, 
 import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
-import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
-import org.scalatest.{FlatSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
 import java.io.File
 import java.math.BigInteger
-import java.nio.file.Paths
+import java.nio.file
+import java.nio.file.Files
 import scala.concurrent.ExecutionContext
+import scala.reflect.io.{Directory, Path}
+import scala.util.Random
 
-class HistoryGenKeySpec extends FlatSpec with Matchers {
+class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   object Settings {
 //    val typeHistory: String = "MergingHistory"
-    val typeHistory: String = "RadixHistory"
+//    val typeHistory: String = "RadixHistory"
+    val typeHistory: String = "DefaultHistory"
 
     val typeStore: String = "lmdb"
 //    val typeStore: String = "inMemo"
@@ -55,24 +59,31 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     ExpT(1, 1000),
     ExpT(1, 5000),
     ExpT(1, 10000),
-    ExpT(1, 30000),
-    ExpT(1, 100000)
+    ExpT(1, 30000)
+//    ExpT(1, 100000)
   )
 
   def deleteFile(path: String): Boolean = new File(path).delete()
 
   sealed trait CreateHistory[F[_]] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]]
+    def create(root: Blake2b256Hash): F[HistoryType[F]]
   }
 
-  def storeLMDB[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span](
-      path: String
-  ): F[KeyValueStore[F]] =
+  val tempPath: file.Path = Files.createTempDirectory(s"lmdb-test-")
+  val tempDir: Directory  = Directory(Path(tempPath.toFile))
+
+  override def beforeAll: Unit = tempDir.deleteRecursively
+
+  override def afterAll: Unit = tempDir.deleteRecursively
+
+  def storeLMDB[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      : F[KeyValueStore[F]] =
     for {
-      lmdbHistoryManager <- LmdbStoreManager(Paths.get(path), 8L * 1024 * 1024 * 1024)
-      lmdbHistoryStore   <- lmdbHistoryManager.store("db")
-      _                  <- Sync[F].delay(deleteFile(path + "/data.mdb"))
-      _                  <- Sync[F].delay(deleteFile(path + "/lock.mdb"))
+      lmdbHistoryManager <- LmdbStoreManager(
+                             tempPath.resolve(Random.nextString(32)),
+                             8L * 1024 * 1024 * 1024
+                           )
+      lmdbHistoryStore <- lmdbHistoryManager.store("db")
     } yield lmdbHistoryStore
 
   sealed trait HistoryType[F[_]] {
@@ -92,7 +103,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   case class createMergingHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+    def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
         case "inMemo" =>
           val inMemoStore = InMemoryKeyValueStore[F]
@@ -106,7 +117,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           )
         case "lmdb" =>
           for {
-            store <- storeLMDB(lmdbPath)
+            store <- storeLMDB()
             history <- MergingHistory(
                         root,
                         CachingHistoryStore(HistoryStoreInstances.historyStore(store))
@@ -118,7 +129,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   case class createRadixHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
-    def create(root: Blake2b256Hash, lmdbPath: String): F[HistoryType[F]] =
+    def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
         case "inMemo" =>
           val inMemoStore = InMemoryKeyValueStore[F]
@@ -132,10 +143,31 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
           )
         case "lmdb" =>
           for {
-            store      <- storeLMDB(lmdbPath)
+            store      <- storeLMDB()
             radixStore = RadixHistory.createStore(store)
             history    <- RadixHistory[F](root, radixStore)
           } yield HistoryWithoutFunc(history, radixStore.get1)
+      }
+  }
+
+  case class createDefaultHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+      extends CreateHistory[F] {
+    def create(root: Blake2b256Hash): F[HistoryType[F]] =
+      Settings.typeStore match {
+        case "inMemo" =>
+          val store = InMemoryKeyValueStore[F]
+          store.clear()
+          for { history <- History.create(root, store) } yield HistoryWithFunc(
+            history,
+            _ => Sync[F].pure(None),
+            store.sizeBytes,
+            store.numRecords
+          )
+        case "lmdb" =>
+          for {
+            store   <- storeLMDB()
+            history <- History.create(root, store)
+          } yield HistoryWithoutFunc(history, _ => Sync[F].pure(None))
       }
   }
 
@@ -146,10 +178,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
     override def init: Deps =
       (ectx, Concurrent[F], ContextShift[F], Parallel[F], Log[F], Metrics[F], Span[F])
 
-    def getHistory(root: Blake2b256Hash, path: String): F[HistoryType[F]] =
+    def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case "MergingHistory" => createMergingHistory[F].create(root, path)
-        case "RadixHistory"   => createRadixHistory[F].create(root, path)
+        case "MergingHistory" => createMergingHistory[F].create(root)
+        case "RadixHistory"   => createRadixHistory[F].create(root)
+        case "DefaultHistory" => createDefaultHistory[F].create(root)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {
@@ -279,8 +312,8 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
               val deleteActions    = insReadDelHashes.map(x => DeleteAction(x.bytes.toArray.toList))
 
               for {
-                historyInitW <- getHistory(v0, "/git/temp2")
-                historyInit  <- getHistory(v0, "/git/temp")
+                historyInitW <- getHistory(v0)
+                historyInit  <- getHistory(v0)
 
                 history1W <- historyInitW.history.process(initInsertActions)
                 history1  <- historyInit.history.process(initInsertActions)
@@ -306,6 +339,10 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
                 _                  <- validation(history2W.root, expDataW)
                 temp               <- nsTime(validation(history2.root, expData))
                 (_, timeValidTemp) = temp
+
+                // Clearing readCache before deleting test
+                _ <- history2W.process(List())
+                _ <- history2.process(List())
 
                 _                    <- history2W.process(deleteActions)
                 temp                 <- nsTime(history2.process(deleteActions))
@@ -388,7 +425,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers {
 
   }
 
-  it should "execute with monix" ignore {
+  it should "execute with monix" in {
     import monix.eval.Task
     import monix.execution.Scheduler.Implicits.global
 
