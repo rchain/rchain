@@ -91,7 +91,7 @@ in {
             nodeGet!((map, nybList.slice(0, n)), *valCh) |
             for (@val <- valCh) {
               if (n == len) {
-                ret!(val.get(suffix))
+                ret!(val.get(suffix).nth(1))
               } else {
                 // Otherwise check if the rest of the path exists.
                 // Bit k set means node k exists.
@@ -140,7 +140,7 @@ in {
                   new restCh, valCh in {
                     nodeGet!((map, nybList), *restCh) |
                     for (@rest <- restCh) {
-                      ret!(rest.get(hash.slice(depth, 32)))
+                      ret!(rest.get(hash.slice(depth, 32)).nth(1))
                     }
                   }
                 }
@@ -149,7 +149,7 @@ in {
           }
         } |
 
-        contract TreeHashMapSetter(@map, @nybList, @n, @len, @newVal, @suffix, ret) = {
+        contract TreeHashMapSetter(@map, @key, @nybList, @n, @len, @newVal, @suffix, ret) = {
           // Look up the value of the node at (map, nybList.slice(0, n + 1))
           new valCh, restCh in {
             match (map, nybList.slice(0, n)) {
@@ -161,13 +161,13 @@ in {
                       // If we're at the end of the path, set the node to newVal.
                       if (val == 0) {
                         // Release the lock
-                        @[node, *storeToken]!({suffix: newVal}) |
+                        @[node, *storeToken]!({suffix: (key, newVal)}) |
                         // Return
                         ret!(Nil)
                       }
                       else {
                         // Release the lock
-                        @[node, *storeToken]!(val.set(suffix, newVal)) |
+                        @[node, *storeToken]!(val.set(suffix, (key, newVal))) |
                         // Return
                         ret!(Nil)
                       }
@@ -196,18 +196,18 @@ in {
                             }
                           } |
                           // Child node now exists, loop
-                          TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                          TreeHashMapSetter!(map, key, nybList, n + 1, len, newVal, suffix, *ret)
                         } else {
                           // Child node created between reads
                           // Release lock
                           @[node, *storeToken]!(val) |
                           // Loop
-                          TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                          TreeHashMapSetter!(map, key, nybList, n + 1, len, newVal, suffix, *ret)
                         }
                       }
                     } else {
                       // Child node exists, loop
-                      TreeHashMapSetter!(map, nybList, n + 1, len, newVal, suffix, *ret)
+                      TreeHashMapSetter!(map, key, nybList, n + 1, len, newVal, suffix, *ret)
                     }
                   }
                 }
@@ -225,7 +225,7 @@ in {
                 // Get the bit list
                 ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
                 for (@nybList <- nybListCh) {
-                  TreeHashMapSetter!(map, nybList, 0, 2 * depth, newVal, hash.slice(depth, 32), *ret)
+                  TreeHashMapSetter!(map, key, nybList, 0, 2 * depth, newVal, hash.slice(depth, 32), *ret)
                 }
               }
             }
@@ -267,7 +267,7 @@ in {
           }
         } |
 
-        contract TreeHashMapUpdater(@map, @nybList, @n, @len, update, @suffix, ret) = {
+        contract TreeHashMapUpdater(@map, @key, @nybList, @n, @len, update, @suffix, ret) = {
           // Look up the value of the node at [map, nybList.slice(0, n + 1)
           new valCh in {
             match (map, nybList.slice(0, n)) {
@@ -284,10 +284,10 @@ in {
                         // Acquire the lock on this node
                         for (@val <- @[node, *storeToken]) {
                           // Update the current value
-                          update!(val.get(suffix), *resultCh) |
+                          update!(val.get(suffix).nth(1), *resultCh) |
                           for (@newVal <- resultCh) {
                             // Release the lock
-                            @[node, *storeToken]!(val.set(suffix, newVal)) |
+                            @[node, *storeToken]!(val.set(suffix, (key, newVal))) |
                             // Return
                             ret!(Nil)
                           }
@@ -303,7 +303,7 @@ in {
                       ret!(Nil)
                     } else {
                       // Child node exists, loop
-                      TreeHashMapUpdater!(map, nybList, n + 1, len, *update, suffix, *ret)
+                      TreeHashMapUpdater!(map, key, nybList, n + 1, len, *update, suffix, *ret)
                     }
                   }
                 }
@@ -320,7 +320,7 @@ in {
                 // Get the bit list
                 ByteArrayToNybbleList!(hash, 0, depth, [], *nybListCh) |
                 for (@nybList <- nybListCh) {
-                  TreeHashMapUpdater!(map, nybList, 0, 2 * depth, *update, hash.slice(depth, 32), *ret)
+                  TreeHashMapUpdater!(map, key, nybList, 0, 2 * depth, *update, hash.slice(depth, 32), *ret)
                 }
               }
             }
