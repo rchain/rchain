@@ -428,7 +428,7 @@ class TreeHashMapMergeabilitySpec
       runtime: RhoRuntime[F],
       depth: Int,
       stateHash: Blake2b256Hash
-  ): F[Map[ByteString, String]] =
+  ): F[Map[ByteString, (String, String)]] =
     for {
       treeMapHandleR <- runtime.playExploratoryDeploy(
                          getTreeHashMapHandle,
@@ -439,7 +439,7 @@ class TreeHashMapMergeabilitySpec
       result = RhoTrieTraverser.vecParMapToMap(
         maps,
         p => p.exprs.head.getGByteArray,
-        p => p.exprs.head.getGString
+        p => (p.exprs.head.getETupleBody.ps.head.exprs.head.getGString, p.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
       )
     } yield result
 
@@ -518,7 +518,7 @@ class TreeHashMapMergeabilitySpec
                         .head
                         .getGByteArray
                         .substring(treeHashMapDepth, 32)
-                      mergedTreeMap.getOrElse(hashedKey, "") != kv.value
+                      mergedTreeMap.getOrElse(hashedKey, ("",""))._2 != kv.value
                     })
               )
         } yield (),
