@@ -63,10 +63,14 @@ object VaultBalanceGetter {
       extracted = RhoTrieTraverser.vecParMapToMap(
         vaultMap,
         p => p.exprs.head.getGByteArray,
-        p => p
+        p =>
+          (
+            p.exprs.head.getETupleBody.ps.head.exprs.head.getGString,
+            p.exprs.head.getETupleBody.ps(1)
+          )
       )
       result <- extracted.toList.traverse {
-                 case (key, vaultPar) =>
+                 case (key, (addr @ _, vaultPar)) =>
                    for {
                      balance <- getBalanceFromVaultPar(vaultPar, runtime)
                    } yield (key, balance.get)
