@@ -17,7 +17,6 @@ import coop.rchain.rspace.internal.Datum
 object ConflictSetMerger {
 
   /** R is a type for minimal rejection unit */
-  @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements", "org.wartremover.warts.Throw"))
   def merge[F[_]: Concurrent: Log, R: Ordering](
       actualSet: Set[R],
       lateSet: Set[R],
@@ -59,11 +58,8 @@ object ConflictSetMerger {
       diff.foldLeft(originResult) {
         case (ba, br) =>
           val result = Math.addExact(ba.getOrElse(br._1, 0L), br._2)
-          if (result < 0) {
-            throw new ArithmeticException("merged result negative")
-          } else {
-            ba.updated(br._1, result)
-          }
+          assert(result >= 0, "merged result negative")
+          ba.updated(br._1, result)
       }
     }
 
@@ -81,6 +77,7 @@ object ConflictSetMerger {
             (calMergedResult(deploy, balances), rejected)
           } catch {
             case _: ArithmeticException => (balances, rejected + deploy)
+            case _: AssertionError      => (balances, rejected + deploy)
           }
       }
       rejected
