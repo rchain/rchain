@@ -317,7 +317,7 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
       historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
       nextHistory   <- historyRepo.reset(historyRepo.history.root)
       historyReader <- nextHistory.getHistoryReader(nextHistory.root)
-      hotStore      <- HotStore.empty(historyReader.base)
+      hotStore      <- HotStore(historyReader.base)
       rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore)
       _             <- rSpaceReplay.restoreInstalls()
     } yield rSpaceReplay

@@ -1288,21 +1288,21 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                             history,
                             channels
                           )
-      cache         <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      cache         <- Ref[Task].of(HotStoreState[C, P, A, K]())
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)
       store <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
       }
 
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
         store
       )
-      historyCache <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      historyCache <- Ref[Task].of(HotStoreState[C, P, A, K]())
       replayStore <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
