@@ -65,7 +65,7 @@ class HistoryActionTests
       } yield ()
   }
 
-  // todo don't works for MergingHistory
+  // TODO: Don't works for MergingHistory
   "deletion of a non existing records" should "not throw error" in withEmptyHistory {
     emptyHistoryF =>
       val changes1 = insert(hexKey("0011")) :: Nil
@@ -89,9 +89,10 @@ class HistoryActionTests
         err.isLeft shouldBe true
         val ex = err.left.get
         ex shouldBe a[AssertionError]
-        ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same"
-//        ex shouldBe a[RuntimeException] //todo for MergingHistory
-//        ex.getMessage shouldBe s"malformed trie"
+        ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
+        // TODO: For MergingHistory
+        // ex shouldBe a[RuntimeException]
+        // ex.getMessage shouldBe s"malformed trie"
       }
   }
 
@@ -105,7 +106,7 @@ class HistoryActionTests
         err.isLeft shouldBe true
         val ex = err.left.get
         ex shouldBe a[RuntimeException]
-        ex.getMessage shouldBe s"Cannot process duplicate actions on one key"
+        ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
       val data2 = insert(_zeros) :: delete(_zeros) :: Nil
       for {
@@ -115,7 +116,7 @@ class HistoryActionTests
         err.isLeft shouldBe true
         val ex = err.left.get
         ex shouldBe a[RuntimeException]
-        ex.getMessage shouldBe s"Cannot process duplicate actions on one key"
+        ex.getMessage shouldBe s"Cannot process duplicate actions on one key."
       }
   }
 
@@ -200,7 +201,7 @@ class HistoryActionTests
         _                = historyOneSize shouldBe historyTwoSize
       } yield ()
   }
-// todo don't works for MergingHistory
+// TODO: Don't works for MergingHistory
   "Collision detecting in KVDB" should "works" in withEmptyHistoryAndStore {
     (emptyHistoryF, inMemoStore) =>
       def copyBVToBuf(bv: ByteVector): ByteBuffer = {
@@ -222,7 +223,7 @@ class HistoryActionTests
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe
           s"assertion failed: 1 collisions in KVDB (first collision with key = " +
-            s"${History.emptyRootHash.bytes.toHex})"
+            s"${History.emptyRootHash.bytes.toHex})."
       }
   }
 

@@ -364,7 +364,7 @@ object HistoryMergingInstances {
       } yield this.copy(root = newRootHash)
 
     private def hasNoDuplicates(actions: List[HistoryAction]) =
-      actions.map(_.key).toSet.size == actions.size
+      actions.map(_.key).distinct.size == actions.size
 
     private[rspace] def processSubtree(
         start: Trie

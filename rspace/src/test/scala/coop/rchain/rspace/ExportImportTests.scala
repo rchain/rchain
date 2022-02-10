@@ -19,13 +19,13 @@ import monix.execution.atomic.AtomicAny
 import org.scalatest._
 import scodec.bits.ByteVector
 
-// todo don't works for MergingHistory
+// TODO: Don't works for MergingHistory
 trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, String] {
 
   "export and import of one page" should "works correctly" in fixture {
     (space1, exporter1, importer1, space2, _, importer2) =>
       implicit val log: Log.NOPLog[Task] = new Log.NOPLog[Task]()
-      val pageSize                       = 1000 //match more than dataSize
+      val pageSize                       = 1000 // Match more than dataSize
       val dataSize: Int                  = 10
       val startSkip: Int                 = 0
       val range                          = 0 until dataSize
@@ -33,13 +33,13 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       val continuation                   = "continuation"
 
       for {
-        //generate init data in space1
+        // Generate init data in space1
         _ <- range.toVector.traverse { i =>
               space1.produce(s"ch$i", s"data$i", persist = false)
             }
         initPoint <- space1.createCheckpoint()
 
-        //export 1 page from space1
+        // Export 1 page from space1
         initStartPath = Vector((initPoint.root, none))
         exportData <- RSpaceExporterItems.getHistoryAndData(
                        exporter1,
@@ -51,7 +51,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
         historyItems = exportData._1.items.toVector
         dataItems    = exportData._2.items.toVector
 
-        //validate exporting page
+        // Validate exporting page
         _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
               historyItems,
               dataItems,
@@ -61,13 +61,13 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
               importer1.getHistoryItem
             )
 
-        //import page to space2
+        // Import page to space2
         _ <- importer2.setHistoryItems[ByteVector](historyItems, _.toDirectByteBuffer)
         _ <- importer2.setDataItems[ByteVector](dataItems, _.toDirectByteBuffer)
         _ <- importer2.setRoot(initPoint.root)
         _ <- space2.reset(initPoint.root)
 
-        //testing data in space2 (match all installed channels)
+        // Testing data in space2 (match all installed channels)
         _ <- range.toVector.traverse { i =>
               space2.consume(Seq(s"ch$i"), pattern, continuation, persist = false)
             }
@@ -88,15 +88,15 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       val continuation                   = "continuation"
 
       type Params = (
-          Seq[(Blake2b256Hash, ByteVector)],  //historyItems
-          Seq[(Blake2b256Hash, ByteVector)],  //dataItems
-          Seq[(Blake2b256Hash, Option[Byte])] //startPath
+          Seq[(Blake2b256Hash, ByteVector)],  // HistoryItems
+          Seq[(Blake2b256Hash, ByteVector)],  // DataItems
+          Seq[(Blake2b256Hash, Option[Byte])] // StartPath
       )
       def multipageExport(params: Params): Task[Either[Params, Params]] =
         params match {
           case (historyItems, dataItems, startPath) =>
             for {
-              //export 1 page from space1
+              // Export 1 page from space1
               exportData <- RSpaceExporterItems.getHistoryAndData(
                              exporter1,
                              startPath,
@@ -108,7 +108,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
               dataItemsPage    = exportData._2.items
               lastPath         = exportData._1.lastPath
 
-              //validate exporting page
+              // Validate exporting page
               _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
                     historyItemsPage,
                     dataItemsPage,
@@ -127,26 +127,26 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       val initChildNum: Option[Byte]                          = none
 
       for {
-        //generate init data in space1
+        // Generate init data in space1
         _ <- range.toVector.traverse { i =>
               space1.produce(s"ch$i", s"data$i", persist = false)
             }
         initPoint <- space1.createCheckpoint()
 
-        //multipage export from space1
+        // Multipage export from space1
         initStartPath  = Seq((initPoint.root, initChildNum))
         initExportData = (initHistoryItems, initDataItems, initStartPath)
         exportData     <- initExportData.tailRecM(multipageExport)
         historyItems   = exportData._1
         dataItems      = exportData._2
 
-        //import page to space2
+        // Import page to space2
         _ <- importer2.setHistoryItems[ByteVector](historyItems, _.toDirectByteBuffer)
         _ <- importer2.setDataItems[ByteVector](dataItems, _.toDirectByteBuffer)
         _ <- importer2.setRoot(initPoint.root)
         _ <- space2.reset(initPoint.root)
 
-        //testing data in space2 (match all installed channels)
+        // Testing data in space2 (match all installed channels)
         _ <- range.toVector.traverse { i =>
               space2.consume(Seq(s"ch$i"), pattern, continuation, persist = false)
             }
@@ -156,8 +156,8 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       } yield ()
   }
 
-  //Attention! Skipped export is significantly slower than last path export.
-  //But on the other hand, this allows you to work simultaneously with several nodes.
+  // Attention! Skipped export is significantly slower than last path export.
+  // But on the other hand, this allows you to work simultaneously with several nodes.
   "multipage export with skip" should "works correctly" in fixture {
     (space1, exporter1, importer1, space2, _, importer2) =>
       implicit val log: Log.NOPLog[Task] = new Log.NOPLog[Task]()
@@ -169,16 +169,16 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       val continuation                   = "continuation"
 
       type Params = (
-          Seq[(Blake2b256Hash, ByteVector)],   //historyItems
-          Seq[(Blake2b256Hash, ByteVector)],   //dataItems
-          Seq[(Blake2b256Hash, Option[Byte])], //startPath
-          Int                                  //size of skip
+          Seq[(Blake2b256Hash, ByteVector)],   // HistoryItems
+          Seq[(Blake2b256Hash, ByteVector)],   // DataItems
+          Seq[(Blake2b256Hash, Option[Byte])], // StartPath
+          Int                                  // Size of skip
       )
       def multipageExportWithSkip(params: Params): Task[Either[Params, Params]] =
         params match {
           case (historyItems, dataItems, startPath, skip) =>
             for {
-              //export 1 page from space1
+              // Export 1 page from space1
               exportData <- RSpaceExporterItems.getHistoryAndData(
                              exporter1,
                              startPath,
@@ -189,7 +189,7 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
               historyItemsPage = exportData._1.items
               dataItemsPage    = exportData._2.items
 
-              //validate exporting page
+              // Validate exporting page
               _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
                     historyItemsPage,
                     dataItemsPage,
@@ -213,26 +213,26 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
       val initChildNum: Option[Byte]                          = none
 
       for {
-        //generate init data in space1
+        // Generate init data in space1
         _ <- range.toVector.traverse { i =>
               space1.produce(s"ch$i", s"data$i", persist = false)
             }
         initPoint <- space1.createCheckpoint()
 
-        //multipage export with skip from space1
+        // Multipage export with skip from space1
         initStartPath  = Seq((initPoint.root, initChildNum))
         initExportData = (initHistoryItems, initDataItems, initStartPath, startSkip)
         exportData     <- initExportData.tailRecM(multipageExportWithSkip)
         historyItems   = exportData._1
         dataItems      = exportData._2
 
-        //import page to space2
+        // Import page to space2
         _ <- importer2.setHistoryItems[ByteVector](historyItems, _.toDirectByteBuffer)
         _ <- importer2.setDataItems[ByteVector](dataItems, _.toDirectByteBuffer)
         _ <- importer2.setRoot(initPoint.root)
         _ <- space2.reset(initPoint.root)
 
-        //testing data in space2 (match all installed channels)
+        // Testing data in space2 (match all installed channels)
         _ <- range.toVector.traverse { i =>
               space2.consume(Seq(s"ch$i"), pattern, continuation, persist = false)
             }

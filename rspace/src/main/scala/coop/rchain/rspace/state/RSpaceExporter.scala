@@ -1,6 +1,6 @@
 package coop.rchain.rspace.state
 
-import cats.Monad
+import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.state.{TrieExporter, TrieNode}
@@ -19,45 +19,51 @@ object RSpaceExporter {
 
   final case object EmptyHistoryException extends Exception
 
-  def traverseTrie[F[_]: Monad](
+  def traverseHistory[F[_]: Sync](
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       skip: Int,
       take: Int,
-      getTrie: ByteVector => F[Option[ByteVector]]
+      getFromHistory: ByteVector => F[Option[ByteVector]]
   ): F[Vector[TrieNode[Blake2b256Hash]]] =
-    if (startPath.isEmpty) Monad[F].pure(Vector())
+    if (startPath.isEmpty) Vector[TrieNode[Blake2b256Hash]]().pure
     else {
       import coop.rchain.rspace.history.RadixTree._
       import scodec.bits.ByteVector
       val pathSeq                               = startPath.map(_._1)
       val (rootHash: Blake2b256Hash, prefixSeq) = (pathSeq.head, pathSeq.tail)
-      //todo implemented a temporary solution with lastPrefix coding in 5 blake256 hashes
+      // TODO: Implemented a temporary solution with lastPrefix coding in 5 blake256 hashes.
       val lastPrefix: Option[ByteVector] =
-        if (prefixSeq.isEmpty) None //start from root
+        if (prefixSeq.isEmpty) None // Start from root
         else {
-          //max prefix length = 127 bytes
-          //prefix coded 5 Blake256 elements (0 - size, 1..4 - value of prefix)
-          assert(prefixSeq.size >= 5, "Invalid path during export")
+          // Max prefix length = 127 bytes.
+          // Prefix coded 5 Blake256 elements (0 - size, 1..4 - value of prefix).
+          assert(prefixSeq.size >= 5, "Invalid path during export.")
           val (sizePrefix: Int, seq) = (prefixSeq.head.bytes.head & 0xff, prefixSeq.tail)
           val prefix128: ByteVector  = seq.head.bytes ++ seq(1).bytes ++ seq(2).bytes ++ seq(3).bytes
           prefix128.take(sizePrefix.toLong).some
         }
       val settings =
-        ExportDataSettings(expNP = false, expNK = true, expNV = false, expLP = false, expLV = true)
+        ExportDataSettings(
+          flagNPrefixes = false,
+          flagNKeys = true,
+          flagNValues = false,
+          flagLPrefixes = false,
+          flagLValues = true
+        )
 
       for {
-        expRes                                  <- sequentialExport(rootHash.bytes, lastPrefix, skip, take, getTrie, settings)
+        expRes                                  <- sequentialExport(rootHash.bytes, lastPrefix, skip, take, getFromHistory, settings)
         (data, newLastPrefixOpt)                = expRes
         ExportData(_, nodeKeys, _, _, leafKeys) = data
         dataKeys = leafKeys.map { key =>
-          val hash = Blake2b256Hash.fromByteArray(key.toArray)
+          val hash = Blake2b256Hash.fromByteVector(key)
           TrieNode(hash, isLeaf = true, Vector())
         }.toVector
 
         historyKeysWithoutLast = nodeKeys
           .dropRight(1)
           .map { key =>
-            val hash = Blake2b256Hash.fromByteArray(key.toArray)
+            val hash = Blake2b256Hash.fromByteVector(key)
             TrieNode(hash, isLeaf = false, Vector())
           }
           .toVector
@@ -65,7 +71,7 @@ object RSpaceExporter {
         lastHistoryKey = nodeKeys.lastOption match {
           case None => Vector()
           case Some(lastKey) =>
-            val hash = Blake2b256Hash.fromByteArray(lastKey.toArray)
+            val hash = Blake2b256Hash.fromByteVector(lastKey)
             val path = newLastPrefixOpt match {
               case None => Vector()
               case Some(prefix) =>
@@ -95,7 +101,7 @@ object RSpaceExporter {
       } yield r
     }
   // Pretty printer helpers
-  def pathPretty(path: (Blake2b256Hash, Option[Byte])) = {
+  def pathPretty(path: (Blake2b256Hash, Option[Byte])): String = {
     val (hash, idx) = path
     val idxStr      = idx.fold("--")(i => String.format("%02x", Integer.valueOf(i & 0xff)))
     s"$idxStr:${hash.bytes.toHex.take(8)}"

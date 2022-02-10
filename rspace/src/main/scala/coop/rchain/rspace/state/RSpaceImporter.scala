@@ -59,7 +59,7 @@ object RSpaceImporter {
     }
 
     // Validate history hashes
-    def validateHistoryItemsHashes: F[List[(ByteVector, ByteVector)]] =
+    def getAndValidateHistoryItems: F[List[(ByteVector, ByteVector)]] =
       historyItems.toList traverse {
         case (hash, trieBytes) =>
           val trieHash = Blake2b256Hash.create(trieBytes)
@@ -107,18 +107,18 @@ object RSpaceImporter {
             } yield ()
         }
 
-    def trieHashNotFoundError(h: Blake2b256Hash) =
+    def nodeHashNotFoundError(h: Blake2b256Hash) =
       new StateValidationError(
         s"Trie hash not found in received items or in history store, hash: ${h.bytes.toHex}."
       )
 
-    // Find Trie by hash. Trie must be found in received history items or in previously imported items.
-    def getTrie(st: Map[ByteVector, ByteVector])(hash: ByteVector) = {
+    // Find node by hash. Node must be found in received history items or in previously imported items.
+    def getNode(st: Map[ByteVector, ByteVector])(hash: ByteVector) = {
       val trieOpt = st.get(hash)
       trieOpt.fold {
         for {
-          bytesOpt <- getFromHistory(Blake2b256Hash.fromByteArray(hash.toArray))
-          _        <- bytesOpt.liftTo(trieHashNotFoundError(Blake2b256Hash.fromByteArray(hash.toArray)))
+          bytesOpt <- getFromHistory(Blake2b256Hash.fromByteVector(hash))
+          _        <- bytesOpt.liftTo(nodeHashNotFoundError(Blake2b256Hash.fromByteVector(hash)))
         } yield bytesOpt
       }(_.some.pure[F])
     }
@@ -128,10 +128,10 @@ object RSpaceImporter {
       _ <- validateHistorySize
 
       // Validate tries from received history items.
-      trieMap <- validateHistoryItemsHashes map (_.toMap)
+      trieMap <- getAndValidateHistoryItems map (_.toMap)
 
       // Traverse trie and extract nodes / the same as in export. Nodes must match hashed keys.
-      nodes <- RSpaceExporter.traverseTrie(startPath, skip, chunkSize, getTrie(trieMap))
+      nodes <- RSpaceExporter.traverseHistory(startPath, skip, chunkSize, getNode(trieMap))
 
       // Extract history and data keys.
       (leafs, nonLeafs) = nodes.partition(_.isLeaf)

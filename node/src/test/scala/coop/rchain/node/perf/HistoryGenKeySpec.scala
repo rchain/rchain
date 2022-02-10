@@ -237,11 +237,11 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
         import coop.rchain.rspace.history.RadixTree._
         if (Settings.typeHistory == "RadixHistory") {
           val exportSettings = ExportDataSettings(
-            expNP = false,
-            expNK = true,
-            expNV = true,
-            expLP = false,
-            expLV = true
+            flagNPrefixes = false,
+            flagNKeys = true,
+            flagNValues = true,
+            flagLPrefixes = false,
+            flagLValues = true
           )
           sequentialExport[F](
             rootHash.bytes,
@@ -334,7 +334,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
                 temp                   <- nsTime(export(history2.root, 0, historyInit.getNodeDataFromStore))
                 (expData, timeExpTemp) = temp
 
-                numNodeTemp = expData.nK.size
+                numNodeTemp = expData.nKeys.size
 
                 _                  <- validation(history2W.root, expDataW)
                 temp               <- nsTime(validation(history2.root, expData))

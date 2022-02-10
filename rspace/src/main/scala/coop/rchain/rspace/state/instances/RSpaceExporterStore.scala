@@ -57,7 +57,7 @@ object RSpaceExporterStore {
     ): F[Seq[TrieNode[Blake2b256Hash]]] = {
       val sourceTrieStore = RadixHistory.createStore(sourceHistoryStore)
       for {
-        nodes <- traverseTrie(startPath, skip, take, sourceTrieStore.get1)
+        nodes <- traverseHistory(startPath, skip, take, sourceTrieStore.get1)
       } yield nodes
     }
 
