@@ -114,7 +114,7 @@ object Graphz {
       color: Option[String] = None,
       graph: Map[String, String] = Map.empty,
       node: Map[String, String] = Map.empty,
-      edge: Map[String, String] = Map.empty,
+      edge: Map[String, String] = Map.empty
   )(
       implicit ser: GraphSerializer[F]
   ): F[Graphz[F]] = {
