@@ -26,7 +26,7 @@ object Finalization02 {
   }
 
   // M |- root{ seenMsgs Final{ finalized } }
-  case class MsgView(
+  final case class MsgView(
       root: Msg,
       seenMsgs: Set[MsgView],
       finalized: Set[Msg]
