@@ -411,18 +411,11 @@ object Simulation {
         .getOrElse(sender -> Vector(fringe))
 
       // Check if new fringe is consistent with existing fringes
+      val newFringeIndex       = newFringes(sender).length - 1
+      val fringesWithSameIndex = newFringes.values.flatMap(_.lift(newFringeIndex))
 
-      // intersectingFringes is a sequence of messages which each sender has
-      // Example:
-      //  Sender1: [0 - 1 - 2] - 3 - 4
-      //  Sender2: [0 - 1 - 2]
-      //  Sender3: [0 - 1 - 2] - 3
-      val minFringeLength     = newFringes.values.map(_.length).min
-      val intersectingFringes = newFringes.values.map(_.take(minFringeLength))
-
-      // All intersecting fringes must be the same
       assert(
-        intersectingFringes.forall(_ == intersectingFringes.head),
+        fringesWithSameIndex.forall(_ == fringesWithSameIndex.head),
         "Fringes of senders are not equals"
       )
 
