@@ -416,10 +416,22 @@ object Simulation {
 
       assert(
         fringesWithSameIndex.forall(_ == fringesWithSameIndex.head),
-        "Fringes of senders are not equals"
+        s"Fringes of senders are not equals. The current state is:\n${dump(newFringes)}"
       )
 
       FringeProcessor(newFringes)
     }
+    private def dump(fringesState: Map[Sender, Vector[Set[Msg]]]): String =
+      fringesState
+        .map {
+          case (sender, vec) =>
+            val senderFringesStr = vec.zipWithIndex
+              .map {
+                case (fringe, index) => s" $index: ${fringe.map(_.id).mkString(", ")}"
+              }
+              .mkString("\n")
+            s"Sender ${sender.id}\n$senderFringesStr"
+        }
+        .mkString("\n")
   }
 }
