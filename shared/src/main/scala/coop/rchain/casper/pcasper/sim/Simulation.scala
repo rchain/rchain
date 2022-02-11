@@ -348,7 +348,7 @@ object Simulation {
     )
     val initFinState = Queue(senders.map(_ -> genesisMsg).toMap)
 
-    val fringeProcessor = Ref.of[Id, FringeProcessor](FringeProcessor(Map.empty))
+    val fringeProcessor = Ref.of[Id, FringeProcessor](FringeProcessor(Map.empty, sendersCount))
 
     val senderStates =
       senders.map(
@@ -401,7 +401,7 @@ object Simulation {
         res.pure[F]
     }
 
-  final case class FringeProcessor(fringes: Map[Sender, Vector[Set[Msg]]]) {
+  final case class FringeProcessor(fringes: Map[Sender, Vector[Set[Msg]]], sendersCount: Int) {
     def addSenderFringe(sender: Sender, fringe: Set[Msg]): FringeProcessor = {
       // Add new fringe
       val newFringes = fringes + fringes
@@ -419,8 +419,17 @@ object Simulation {
         s"Fringes of senders are not equals. The current state is:\n${dump(newFringes)}"
       )
 
-      FringeProcessor(newFringes)
+      def removeByIndexFrom[T](v: Vector[T], i: Int): Vector[T] = v.patch(i, Vector.empty, 1)
+
+      // If all senders have fringe with `newFringeIndex` it can be removed to reduce storage space
+      val updatedFringes = if (fringesWithSameIndex.size == sendersCount) newFringes.map {
+        case (sender, vec) =>
+          sender -> removeByIndexFrom(vec, newFringeIndex)
+      } else newFringes
+
+      FringeProcessor(updatedFringes, sendersCount)
     }
+
     private def dump(fringesState: Map[Sender, Vector[Set[Msg]]]): String =
       fringesState
         .map {
