@@ -132,7 +132,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   val sut = new NetworkRunner[Task]()
 
-  it should "run network with complete dag" in {
+  it should "run network with complete dag" ignore {
     val r        = sut.runDagComplete.runSyncUnsafe()
     val (end, _) = r
     val a = end.senders.toList.map(
@@ -143,7 +143,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   }
 
-  it should "run random network" in {
+  it should "run random network" ignore {
     val r        = sut.runRandom.runSyncUnsafe()
     val (end, _) = r.last
     val a = end.senders.toList.map(
