@@ -38,7 +38,8 @@ object BlockCreator {
   def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None
+      dummyDeployOpt: Option[(PrivateKey, String)] = None,
+      disableCostAccounting: Boolean
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -123,7 +124,8 @@ object BlockCreator {
                                    s,
                                    runtimeManager,
                                    blockData,
-                                   invalidBlocks
+                                   invalidBlocks,
+                                   disableCostAccounting
                                  )
                 (
                   preStateHash,

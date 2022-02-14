@@ -164,15 +164,16 @@ object Proposer {
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None
+      dummyDeployOpt: Option[(PrivateKey, String)] = None,
+      disableCostAccounting: Boolean
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
     val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
-      BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
+      BlockCreator.create(s, validatorIdentity, dummyDeployOpt, disableCostAccounting)
 
     val validateBlock = (casper: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
-      casper.validate(b, s)
+      casper.validate(b, s, disableCostAccounting)
 
     val checkValidatorIsActive = (s: CasperSnapshot[F], validator: ValidatorIdentity) =>
       if (s.onChainState.activeValidators.contains(ByteString.copyFrom(validator.publicKey.bytes)))

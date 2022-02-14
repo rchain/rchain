@@ -258,7 +258,8 @@ class ConfigMapperSpec extends FunSuite with Matchers {
         zipkin = true,
         sigar = true
       ),
-      dev = DevConf(deployerPrivateKey = None)
+      dev = DevConf(deployerPrivateKey = None),
+      disableCostAccounting = false
     )
     config shouldEqual expectedConfig
   }

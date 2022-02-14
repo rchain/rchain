@@ -173,7 +173,7 @@ case class TestNode[F[_]: Timer](
       true
     )
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
-  implicit val packetHandlerEff          = CasperPacketHandler[F]
+  implicit val packetHandlerEff          = CasperPacketHandler[F](disableCostAccounting = false)
 
   def proposeSync: F[BlockHash] =
     for {
@@ -233,7 +233,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, disableCostAccounting = false)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -242,7 +242,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, disableCostAccounting = false)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -534,7 +534,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi).some
+                   case Some(vi) => Proposer[F](vi, disableCostAccounting = false).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous
@@ -548,7 +548,7 @@ object TestNode {
                        } yield r
                  )
                  // Block processor
-                 blockProcessor = BlockProcessor[F]
+                 blockProcessor = BlockProcessor[F](false)
 
                  blockProcessingPipe = {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>

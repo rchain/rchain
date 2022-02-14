@@ -60,25 +60,30 @@ class Initializing[F[_]
 
   override def init: F[Unit] = theInit
 
-  override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = msg match {
-    case ab: ApprovedBlock =>
-      onApprovedBlock(peer, ab, disableStateExporter)
-    case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
-    case na: NoApprovedBlockAvailable =>
-      logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
-        Time[F].sleep(10.seconds) >>
-        CommUtil[F].requestApprovedBlock(trimState)
+  override def handle(
+      peer: PeerNode,
+      msg: CasperMessage,
+      disableCostAccounting: Boolean = false
+  ): F[Unit] =
+    msg match {
+      case ab: ApprovedBlock =>
+        onApprovedBlock(peer, ab, disableStateExporter)
+      case br: ApprovedBlockRequest => sendNoApprovedBlockAvailable(peer, br.identifier)
+      case na: NoApprovedBlockAvailable =>
+        logNoApprovedBlockAvailable[F](na.nodeIdentifer) >>
+          Time[F].sleep(10.seconds) >>
+          CommUtil[F].requestApprovedBlock(trimState)
 
-    case s: StoreItemsMessage =>
-      Log[F].info(s"Received ${s.pretty} from $peer.") *> tupleSpaceQueue.enqueue1(s)
+      case s: StoreItemsMessage =>
+        Log[F].info(s"Received ${s.pretty} from $peer.") *> tupleSpaceQueue.enqueue1(s)
 
-    case b: BlockMessage =>
-      Log[F]
-        .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
-        blockMessageQueue.enqueue1(b)
+      case b: BlockMessage =>
+        Log[F]
+          .info(s"BlockMessage received ${PrettyPrinter.buildString(b, short = true)} from $peer.") *>
+          blockMessageQueue.enqueue1(b)
 
-    case _ => ().pure
-  }
+      case _ => ().pure
+    }
 
   // TEMP: flag for single call for process approved block
   val startRequester = Ref.unsafe(true)

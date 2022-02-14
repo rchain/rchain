@@ -121,6 +121,8 @@ object ConfigMapper {
       add("dev-mode", run.devMode)
       add("dev.deployer-private-key", run.deployerPrivateKey)
 
+      add("disable-cost-accounting", run.disableCostAccounting)
+
       //TODO remove
       //add(keys.KnownValidatorsFile, run.knownValidators
     }

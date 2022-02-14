@@ -42,7 +42,8 @@ final case class BlockApproverProtocol private (
 
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk: RuntimeManager](
       peer: PeerNode,
-      u: UnapprovedBlock
+      u: UnapprovedBlock,
+      disableCostAccounting: Boolean = false
   ): F[Unit] = {
     val candidate = u.candidate
     Log[F].info(s"Received expected genesis block candidate from $peer. Verifying...") >>
@@ -57,7 +58,8 @@ final case class BlockApproverProtocol private (
           maximumBond,
           epochLength,
           quarantineLength,
-          numberOfActiveValidators
+          numberOfActiveValidators,
+          disableCostAccounting
         )
         .flatMap {
           case Right(_) =>
@@ -135,7 +137,8 @@ object BlockApproverProtocol {
       maximumBond: Long,
       epochLength: Int,
       quarantineLength: Int,
-      numberOfActiveValidators: Int
+      numberOfActiveValidators: Int,
+      disableCostAccounting: Boolean = false
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
@@ -210,7 +213,8 @@ object BlockApproverProtocol {
                         List.empty,
                         BlockData.fromBlock(candidate.block),
                         Map.empty[BlockHash, Validator],
-                        isGenesis = true
+                        isGenesis = true,
+                        disableCostAccounting
                       )
                   ).leftMap { status =>
                     s"Failed status during replay: $status."

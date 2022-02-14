@@ -17,19 +17,20 @@ import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.MetricsSemaphore
 
 object CasperPacketHandler {
-  def apply[F[_]: FlatMap: EngineCell: Log]: PacketHandler[F] =
+  def apply[F[_]: FlatMap: EngineCell: Log](disableCostAccounting: Boolean): PacketHandler[F] =
     (peer: PeerNode, packet: Packet) =>
       toCasperMessageProto(packet).toEither
         .flatMap(proto => CasperMessage.from(proto))
         .fold(
           err => Log[F].warn(s"Could not extract casper message from packet sent by $peer: $err"),
-          message => EngineCell[F].read >>= (_.handle(peer, message))
+          message => EngineCell[F].read >>= (_.handle(peer, message, disableCostAccounting))
         )
 
   def fairDispatcher[F[_]: Concurrent: EngineCell: Log: Span: Metrics](
       maxPeerQueueSize: Int,
       giveUpAfterSkipped: Int,
-      dropPeerAfterRetries: Int
+      dropPeerAfterRetries: Int,
+      disableCostAccounting: Boolean
   )(implicit spanF: Span[F]): F[PacketHandler[F]] = {
     import FairRoundRobinDispatcher._
 
@@ -63,7 +64,7 @@ object CasperPacketHandler {
       }
 
     def handle(holder: BlockCreator, message: (PeerNode, CasperMessage)): F[Unit] =
-      EngineCell[F].read >>= (_.handle(message._1, message._2))
+      EngineCell[F].read >>= (_.handle(message._1, message._2, disableCostAccounting))
 
     val fairRoundRobinDispatcherF = fairLock >>= { lock =>
       FairRoundRobinDispatcher[F, BlockCreator, (PeerNode, CasperMessage)](

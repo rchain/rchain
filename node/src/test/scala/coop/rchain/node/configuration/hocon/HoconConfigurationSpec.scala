@@ -162,7 +162,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
         zipkin = false,
         sigar = false
       ),
-      dev = DevConf(deployerPrivateKey = None)
+      dev = DevConf(deployerPrivateKey = None),
+      disableCostAccounting = false
     )
     config shouldEqual expectedConfig
   }

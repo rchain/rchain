@@ -30,7 +30,7 @@ import fs2.concurrent.Queue
 
 trait Engine[F[_]] {
   def init: F[Unit]
-  def handle(peer: PeerNode, msg: CasperMessage): F[Unit]
+  def handle(peer: PeerNode, msg: CasperMessage, disableCostAccounting: Boolean = false): F[Unit]
   def withCasper[A](
       f: MultiParentCasper[F] => F[A],
       default: F[A]
@@ -40,9 +40,13 @@ trait Engine[F[_]] {
 object Engine {
 
   def noop[F[_]: Applicative] = new Engine[F] {
-    private[this] val noop                                           = Applicative[F].unit
-    override def handle(peer: PeerNode, msg: CasperMessage): F[Unit] = noop
-    override val init: F[Unit]                                       = noop
+    private[this] val noop = Applicative[F].unit
+    override def handle(
+        peer: PeerNode,
+        msg: CasperMessage,
+        disableCostAccounting: Boolean = false
+    ): F[Unit]                 = noop
+    override val init: F[Unit] = noop
   }
 
   /**
