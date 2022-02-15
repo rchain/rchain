@@ -206,7 +206,7 @@ object ReportingRuntime {
       mergeChs <- Ref.of(Set[Par]())
       rhoEnv <- {
         implicit val c = cost
-        createRhoEnv(reporting, mergeChs, extraSystemProcesses, Genesis.NonNegativeMergeableTagName)
+        createRhoEnv(reporting, mergeChs, Genesis.NonNegativeMergeableTagName, extraSystemProcesses)
       }
       (reducer, blockRef, invalidBlocks) = rhoEnv
       runtime                            = new ReportingRuntime[F](reducer, reporting, cost, blockRef, invalidBlocks, mergeChs)

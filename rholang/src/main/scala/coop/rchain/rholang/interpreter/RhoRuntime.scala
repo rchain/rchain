@@ -480,8 +480,8 @@ object RhoRuntime {
   def createRhoEnv[F[_]: Concurrent: Parallel: _cost: Log: Metrics: Span](
       rspace: RhoISpace[F],
       mergeChs: Ref[F, Set[Par]],
-      extraSystemProcesses: Seq[Definition[F]] = Seq.empty,
-      mergeableTagName: Par
+      mergeableTagName: Par,
+      extraSystemProcesses: Seq[Definition[F]] = Seq.empty
   ): F[(Reduce[F], Ref[F, BlockData], InvalidBlocks[F])] =
     for {
       mapsAndRefs                                     <- setupMapsAndRefs(extraSystemProcesses)
@@ -528,7 +528,7 @@ object RhoRuntime {
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, mergeChs, extraSystemProcesses, mergeableTagName)
+          createRhoEnv(rspace, mergeChs, mergeableTagName, extraSystemProcesses)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime                            = new RhoRuntimeImpl[F](reducer, rspace, cost, blockRef, invalidBlocks, mergeChs)
@@ -583,7 +583,7 @@ object RhoRuntime {
         mergeChs <- Ref.of(Set[Par]())
         rhoEnv <- {
           implicit val c: _cost[F] = cost
-          createRhoEnv(rspace, mergeChs, extraSystemProcesses, mergeableTagName)
+          createRhoEnv(rspace, mergeChs, mergeableTagName, extraSystemProcesses)
         }
         (reducer, blockRef, invalidBlocks) = rhoEnv
         runtime = new ReplayRhoRuntimeImpl[F](
