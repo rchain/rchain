@@ -126,6 +126,24 @@ class FinalizationSpec extends FlatSpec with Matchers {
           } yield r
       }
     }
+
+    def runInfinite: F[Unit] = {
+      val nets = List(10).map(genNet)
+
+      // This recursive function never finished
+      nets.tailRecM[F, Unit] { networks =>
+        val newNetState = networks.traverse {
+          case (net, name) =>
+            for {
+              net1_       <- runSections(net, List((1, .0f)), s"start-$name")
+              (net1, _)   = net1_
+              r           <- runSections(net1, List((5, .0f)), s"result-$name")
+              (newNet, _) = r
+            } yield (newNet, name)
+        }
+        newNetState.map(_.asLeft[Unit])
+      }
+    }
   }
 
   implicit val s = monix.execution.Scheduler.global
@@ -152,6 +170,10 @@ class FinalizationSpec extends FlatSpec with Matchers {
     )
     println(a.mkString("\n"))
 
+  }
+
+  it should "run infinite test" in {
+    sut.runInfinite.runSyncUnsafe()
   }
 
   def dagAsCluster[F[_]: Sync: GraphSerializer](
