@@ -103,7 +103,7 @@ class MergeNumberChannelSpec extends FlatSpec {
                                 evalResult <- runtime.evaluate(deploy.term)
                                 _ = assert(
                                   evalResult.errors.isEmpty,
-                                  s"${evalResult.errors}\n$deploy.term"
+                                  s"${evalResult.errors}\n ${deploy.term}"
                                 )
                                 // Get final values for mergeable (number) channels
                                 numChanFinal <- runtime
