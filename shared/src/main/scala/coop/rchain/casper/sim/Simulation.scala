@@ -1,4 +1,4 @@
-package coop.rchain.casper.pcasper.sim
+package coop.rchain.casper.sim
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
@@ -65,7 +65,8 @@ object Simulation {
       seen: Map[Msg, MsgView] = Map(),
       childMap: Map[Msg, Map[Sender, Queue[Msg]]] = Map(),
       witnessMap: Map[Msg, Map[Sender, Msg]] = Map(),
-      realFringes: Queue[Fringe[Msg, Sender]]
+      realFringes: Queue[Fringe[Msg, Sender]],
+      fringeProcessor: Ref[Id, FringeProcessor]
   ) {
     override def hashCode(): Int = this.me.id.hashCode()
 
@@ -189,9 +190,12 @@ object Simulation {
           loadJfs(_).map(v => v.sender -> v).toMap
         )(_.senderSeq.toLong, _.sender)
         val newRealFringes =
-          if (advancement.nonEmpty)
-            advancement.map(v => realFringes :+ (curFringe ++ v)).getOrElse(realFringes)
-          else realFringes
+          if (advancement.nonEmpty) {
+            val newFringes =
+              advancement.map(v => realFringes :+ (curFringe ++ v)).getOrElse(realFringes)
+            fringeProcessor.update(_.addSenderFringe(me, newFringes.last.values.toSet))
+            newFringes
+          } else realFringes
 
         /** FINALIZATION END */
         // TODO prepare provisional finalization to make merging of final chunks easier
@@ -344,6 +348,8 @@ object Simulation {
     )
     val initFinState = Queue(senders.map(_ -> genesisMsg).toMap)
 
+    val fringeProcessor = Ref.of[Id, FringeProcessor](FringeProcessor(Map.empty, sendersCount))
+
     val senderStates =
       senders.map(
         s =>
@@ -354,7 +360,8 @@ object Simulation {
             dag,
             heightMap,
             seen,
-            realFringes = initFinState
+            realFringes = initFinState,
+            fringeProcessor = fringeProcessor
           )
       )
 
@@ -393,4 +400,47 @@ object Simulation {
           else newNet.asRight                       // Final value
         res.pure[F]
     }
+
+  final case class FringeProcessor(fringes: Map[Sender, Vector[Set[Msg]]], sendersCount: Int) {
+    def addSenderFringe(sender: Sender, fringe: Set[Msg]): FringeProcessor = {
+      // Add new fringe
+      val newFringes = fringes + fringes
+        .get(sender)
+        .map(v => v :+ fringe)
+        .map(sender -> _)
+        .getOrElse(sender -> Vector(fringe))
+
+      // Check if new fringe is consistent with existing fringes
+      val newFringeIndex       = newFringes(sender).length - 1
+      val fringesWithSameIndex = newFringes.values.flatMap(_.lift(newFringeIndex))
+
+      assert(
+        fringesWithSameIndex.forall(_ == fringesWithSameIndex.head),
+        s"Fringes of senders are not equals. The current state is:\n${dump(newFringes)}"
+      )
+
+      def removeByIndexFrom[T](v: Vector[T], i: Int): Vector[T] = v.patch(i, Vector.empty, 1)
+
+      // If all senders have fringe with `newFringeIndex` it can be removed to reduce storage space
+      val updatedFringes = if (fringesWithSameIndex.size == sendersCount) newFringes.map {
+        case (sender, vec) =>
+          sender -> removeByIndexFrom(vec, newFringeIndex)
+      } else newFringes
+
+      FringeProcessor(updatedFringes, sendersCount)
+    }
+
+    private def dump(fringesState: Map[Sender, Vector[Set[Msg]]]): String =
+      fringesState
+        .map {
+          case (sender, vec) =>
+            val senderFringesStr = vec.zipWithIndex
+              .map {
+                case (fringe, index) => s" $index: ${fringe.map(_.id).mkString(", ")}"
+              }
+              .mkString("\n")
+            s"Sender ${sender.id}\n$senderFringesStr"
+        }
+        .mkString("\n")
+  }
 }

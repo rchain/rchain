@@ -7,7 +7,7 @@ import cats.{Applicative, Foldable, Monad}
 import coop.rchain.casper.api.GraphzGenerator.{DagInfo, ValidatorsBlocks}
 import coop.rchain.casper.api.ValidatorBlock
 import coop.rchain.graphz._
-import coop.rchain.casper.pcasper.sim.Simulation._
+import coop.rchain.casper.sim.Simulation._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
