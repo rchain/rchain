@@ -1,4 +1,4 @@
-package coop.rchain.casper.pcasper.sim
+package coop.rchain.casper.sim
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
