@@ -62,13 +62,4 @@ object RholangAndScalaDispatcher {
     (dispatcher, reducer)
   }
 
-  def apply[M[_]: Sync: Parallel: _cost](
-      tuplespace: RhoTuplespace[M],
-      dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
-      urnMap: Map[String, Par]
-  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
-    val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
-    val dummyMergeableTag = Par()
-    apply(tuplespace, dispatchTable, urnMap, emptyMergeableRef, dummyMergeableTag)
-  }
 }
