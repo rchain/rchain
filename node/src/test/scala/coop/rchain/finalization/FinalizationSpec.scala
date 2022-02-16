@@ -158,7 +158,9 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   }
 
-  it should "run infinite test" in {
+  // This test is ignored by default to provide finite tests time execution
+  // It makes sense to turn on this test only on the local machine for long-time finalization testing
+  it should "run infinite test" ignore {
     sut.runInfinite.runSyncUnsafe()
   }
 
