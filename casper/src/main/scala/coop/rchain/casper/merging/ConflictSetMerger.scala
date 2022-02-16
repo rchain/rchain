@@ -53,13 +53,24 @@ object ConflictSetMerger {
     def calMergedResult(
         branch: Branch,
         originResult: Map[Blake2b256Hash, Long]
-    ): Map[Blake2b256Hash, Long] = {
+    ): Option[Map[Blake2b256Hash, Long]] = {
       val diff = branch.map(mergeableChannels).toList.combineAll
-      diff.foldLeft(originResult) {
-        case (ba, br) =>
-          val result = Math.addExact(ba.getOrElse(br._1, 0L), br._2)
-          assert(result >= 0, "merged result negative")
-          ba.updated(br._1, result)
+      diff.foldLeft[Option[Map[Blake2b256Hash, Long]]](Some(originResult)) {
+        case (baOpt, br) =>
+          baOpt.flatMap {
+            case ba =>
+              try {
+                val result = Math.addExact(ba.getOrElse(br._1, 0L), br._2)
+                if (result < 0) {
+                  none
+                } else {
+                  Some(ba.updated(br._1, result))
+                }
+              } catch {
+                case _: ArithmeticException => none
+              }
+          }
+
       }
     }
 
@@ -73,12 +84,7 @@ object ConflictSetMerger {
           // base result 10 and folding the result from order like [-10, -1, 20]
           // which on the second case `-1`, the calculation currently would reject it because the result turns
           // into negative.However, if you look at the all the item view 10 - 10 -1 + 20 is not negative
-          try {
-            (calMergedResult(deploy, balances), rejected)
-          } catch {
-            case _: ArithmeticException => (balances, rejected + deploy)
-            case _: AssertionError      => (balances, rejected + deploy)
-          }
+          calMergedResult(deploy, balances).fold((balances, rejected + deploy))((_, rejected))
       }
       rejected
     }
@@ -102,7 +108,7 @@ object ConflictSetMerger {
       actualSet.partition(t => lateSet.exists(depends(t, _)))
 
     /** split merging set into branches without cross dependencies
-      * TODO make dependencies directional, maintain dependency graph. Now if l depends on r or otherwise - it does not matter.*/
+      * TODO make dependencies directional, maintain dependency graph. Now if l depends on r or otherwise - it does not matter. */
     val (branches, branchesTime) =
       Stopwatch.profile(computeRelatedSets[R](mergeSet, (l, r) => depends(l, r)))
 
