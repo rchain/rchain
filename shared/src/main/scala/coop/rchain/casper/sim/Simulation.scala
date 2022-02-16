@@ -3,7 +3,7 @@ package coop.rchain.casper.sim
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Id, Monad, Show}
-import coop.rchain.casper.lcasper.{FinalityView, LevelView}
+import coop.rchain.casper.eagercasper.{FinalityView, LevelView}
 import coop.rchain.shared.Stopwatch
 
 import coop.rchain.catscontrib.effect.implicits.syncId
