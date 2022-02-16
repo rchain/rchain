@@ -301,7 +301,7 @@ in {
               contract PoS(@"getQuarantineLength", returnCh) = {
                 returnCh!($$quarantineLength$$)
               } |
-              contract PoS(@"humanTransfer", @targetAddress, @amount, @deployerID, @transferRet) = {
+              contract PoS(@"posVaultTransfer", @targetAddress, @amount, @deployerID, @transferRet) = {
                 // human transfer would just use this method
                 @humanControlHandle!("transfer", targetAddress, amount, deployerID, transferRet)
               } |
