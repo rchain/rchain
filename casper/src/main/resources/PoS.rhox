@@ -6,7 +6,7 @@
 // quarantineLength - the length of the quarantine time in blocks
 /*
 
-Life circle in POS
+Life cycle in POS
 
 POS internal state:
 "allBonds"        : Map[Validator, bonds],
