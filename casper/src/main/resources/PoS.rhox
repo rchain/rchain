@@ -170,7 +170,7 @@ in {
           for (@initialActive     <- initialActiveCh; 
                @(true, _) <- moveInitialBondCh) {
             new stateCh, pendingRewardsInitializedCh, rewardsInfo, calTotalActiveBonds, calTotalBonds, 
-                accumulateTotalBondsAlg, accumulateTotalWithdrawAlg, accumulateCommittedRewardsAlg, accumulateItemInState in {
+                accumulateSndNum, accumulateFstOfSndArg, accumulateItemInState in {
               // Initializes PoS state structure.
               stateCh!({
                 // Map[PublicKey, Int] - each validator stake
@@ -191,10 +191,10 @@ in {
               contract rewardsInfo(retCh) = {
                 new posBalanceCh, totalActiveBondCh, totalBondCh, totalWithdrawCh, committedRewardsCh in {
                   @posVault!("balance", *posBalanceCh) |
-                  accumulateItemInState!(*totalBondCh, "allBonds", *accumulateTotalBondsAlg) |
+                  accumulateItemInState!(*totalBondCh, "allBonds", *accumulateSndNum) |
                   calTotalActiveBonds!(*totalActiveBondCh) |
-                  accumulateItemInState!(*totalWithdrawCh, "withdrawers", *accumulateTotalWithdrawAlg) |
-                  accumulateItemInState!(*committedRewardsCh, "comittedRewards", *accumulateCommittedRewardsAlg) |
+                  accumulateItemInState!(*totalWithdrawCh, "withdrawers", *accumulateFstOfSndArg) |
+                  accumulateItemInState!(*committedRewardsCh, "comittedRewards", *accumulateSndNum) |
                   for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @activeBonds <- totalActiveBondCh; 
                        @totalWithdraw <- totalWithdrawCh; @totalCommittedRewards <- committedRewardsCh){
                     for (@state <<- stateCh) {
@@ -217,14 +217,11 @@ in {
                   }
                 }
               } |
-              contract accumulateTotalBondsAlg(@(pk, bondAmount), @acc, resultCh) = {
-                resultCh!(acc + bondAmount)
+              contract accumulateSndNum(@(_, amount), @acc, resultCh) = {
+                resultCh!(acc + amount)
               } |
-              contract accumulateTotalWithdrawAlg(@(pk, (previousBonding, quantinue)), @acc, resultCh) = {
-                resultCh!(acc + previousBonding)
-              } |
-              contract accumulateCommittedRewardsAlg(@(pk, reward), @acc, resultCh) = {
-                resultCh!(acc + reward)
+              contract accumulateFstOfSndArg(@(_, (amount, _)), @acc, resultCh) = {
+                resultCh!(acc + amount)
               } |
               contract accumulateItemInState(returnCh, @stateKey, accumulateAlgo) = {
                 for (@state <<- stateCh){
