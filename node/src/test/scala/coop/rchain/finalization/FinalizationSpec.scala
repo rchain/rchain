@@ -49,7 +49,12 @@ class FinalizationSpec extends FlatSpec with Matchers {
       } yield ()
     }
 
-    def runSections(start: Network, roundSkip: List[(Int, Float)], prefix: String) = {
+    def runSections(
+        start: Network,
+        roundSkip: List[(Int, Float)],
+        prefix: String,
+        enableOutput: Boolean
+    ) = {
       val senderCount = start.senders.size
       roundSkip.foldM(start, 0) {
         case ((net, n), (height, skipP)) =>
@@ -57,46 +62,52 @@ class FinalizationSpec extends FlatSpec with Matchers {
 //            val name = s"$prefix-$n-$senderCount-$skipP"
             val name = s"$prefix-$n-$senderCount"
 
-            printDag(res, name).as((res, n + 1))
+            printDag(res, name).whenA(enableOutput).as((res, n + 1))
           }
       }
     }
 
-    def genNet(senders: Int) =
-      initNetwork(sendersCount = senders, stake = 1) -> s"net$senders"
+    def genNet(senders: Int, enableOutput: Boolean) =
+      initNetwork(sendersCount = senders, stake = 1, enableOutput) -> s"net$senders"
 
     def runDagComplete = {
-      val (net, _) = genNet(6)
-      runSections(net, List((6, .0f)), s"complete")
+      val enableOutput = true
+      val (net, _)     = genNet(6, enableOutput)
+      runSections(net, List((6, .0f)), s"complete", enableOutput)
     }
 
     def runRandom = {
-      val nets = List(10).map(genNet)
-      nets.traverse { case (net, name) => randomTest(net, name) }
+      val enableOutput = true
+      val nets         = List(10).map(genNet(_, enableOutput))
+      nets.traverse { case (net, name) => randomTest(net, name, enableOutput) }
     }
 
-    def runInfinite: F[Unit] = {
-      val nets = List(10).map(genNet)
-      nets.tailRecM[F, Unit] { networks =>
-        val newNetState = networks.traverse {
-          case (net, name) => randomTest(net, name).map { case (newNet, _) => (newNet, name) }
-        }
-        newNetState.map(_.asLeft[Unit]) // Infinite loop
+    def runInfinite(enableOutput: Boolean): F[Unit] = {
+      val nets           = List(10).map(genNet(_, enableOutput))
+      val startIteration = 1
+      (nets, startIteration).tailRecM[F, Unit] {
+        case (networks, iteration) =>
+          println(s"Iteration $iteration")
+          val newNetState = networks.traverse {
+            case (net, name) =>
+              randomTest(net, name, enableOutput).map { case (newNet, _) => (newNet, name) }
+          }
+          newNetState.map((_, iteration + 1).asLeft[Unit]) // Infinite loop
       }
     }
 
-    private def randomTest(net: Network, name: String): F[(Network, Int)] =
+    private def randomTest(net: Network, name: String, enableOutput: Boolean): F[(Network, Int)] =
       for {
-        net1_     <- runSections(net, List((1, .0f)), s"start-$name")
+        net1_     <- runSections(net, List((1, .0f)), s"start-$name", enableOutput)
         (net1, _) = net1_
 
         // Split network
         (fst, snd) = net1.split(.3f)
 
-        fst1_     <- runSections(fst, List((5, .5f)), s"fst-$name")
+        fst1_     <- runSections(fst, List((5, .5f)), s"fst-$name", enableOutput)
         (fst1, _) = fst1_
 
-        snd1_     <- runSections(snd, List((4, .4f)), s"snd-$name")
+        snd1_     <- runSections(snd, List((4, .4f)), s"snd-$name", enableOutput)
         (snd1, _) = snd1_
 
         // Merge networks
@@ -105,11 +116,11 @@ class FinalizationSpec extends FlatSpec with Matchers {
         (n11, n12)   = net2.split(.4f)
         (n111, n112) = n11.split(.5f)
 
-        n111end_     <- runSections(n111, List((10, .5f)), s"n111-$name")
+        n111end_     <- runSections(n111, List((10, .5f)), s"n111-$name", enableOutput)
         (n111end, _) = n111end_
-        n112end_     <- runSections(n112, List((4, .1f)), s"n112-$name")
+        n112end_     <- runSections(n112, List((4, .1f)), s"n112-$name", enableOutput)
         (n112end, _) = n112end_
-        n12end_      <- runSections(n12, List((5, .4f)), s"n12-$name")
+        n12end_      <- runSections(n12, List((5, .4f)), s"n12-$name", enableOutput)
         (n12end, _)  = n12end_
 
         net3 = n112end >|< n12end
@@ -118,17 +129,17 @@ class FinalizationSpec extends FlatSpec with Matchers {
         (n21, n22)   = net4.split(.3f)
         (n211, n212) = n21.split(.5f)
 
-        n211end_     <- runSections(n211, List((13, .4f)), s"n211-$name")
+        n211end_     <- runSections(n211, List((13, .4f)), s"n211-$name", enableOutput)
         (n211end, _) = n211end_
-        n212end_     <- runSections(n212, List((8, .4f)), s"n212-$name")
+        n212end_     <- runSections(n212, List((8, .4f)), s"n212-$name", enableOutput)
         (n212end, _) = n212end_
-        n22end_      <- runSections(n22, List((5, .4f)), s"n22-$name")
+        n22end_      <- runSections(n22, List((5, .4f)), s"n22-$name", enableOutput)
         (n22end, _)  = n22end_
 
         net5 = n212end >|< n211end
         net6 = net5 >|< n22end
 
-        r <- runSections(net6, List((5, .0f)), s"result-$name")
+        r <- runSections(net6, List((5, .0f)), s"result-$name", enableOutput)
       } yield r
   }
 
@@ -136,7 +147,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   val sut = new NetworkRunner[Task]()
 
-  it should "run network with complete dag" ignore {
+  it should "run network with complete dag" in {
     val r        = sut.runDagComplete.runSyncUnsafe()
     val (end, _) = r
     val a = end.senders.toList.map(
@@ -161,7 +172,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
   // This test is ignored by default to provide finite tests time execution
   // It makes sense to turn on this test only on the local machine for long-time finalization testing
   it should "run infinite test" ignore {
-    sut.runInfinite.runSyncUnsafe()
+    sut.runInfinite(enableOutput = false).runSyncUnsafe()
   }
 
   def dagAsCluster[F[_]: Sync: GraphSerializer](

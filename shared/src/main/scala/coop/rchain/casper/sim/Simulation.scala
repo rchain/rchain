@@ -66,7 +66,8 @@ object Simulation {
       childMap: Map[Msg, Map[Sender, Queue[Msg]]] = Map(),
       witnessMap: Map[Msg, Map[Sender, Msg]] = Map(),
       realFringes: Queue[Fringe[Msg, Sender]],
-      fringeProcessor: Ref[Id, FringeProcessor]
+      fringeProcessor: Ref[Id, FringeProcessor],
+      enableOutput: Boolean
   ) {
     override def hashCode(): Int = this.me.id.hashCode()
 
@@ -250,7 +251,7 @@ object Simulation {
 //          }
 //          .mkString("\n")
 
-        if (me == msg.sender) {
+        if (me == msg.sender && enableOutput) {
           println(s"${me.id}: ADDED ${msg.id}")
           //          println(s"DAG ${showMsgs(newDag.values.toSeq)}")
           println(s"COMM:\n$seenBySeenStr")
@@ -318,7 +319,7 @@ object Simulation {
     }
   }
 
-  def initNetwork(sendersCount: Int, stake: Int) = {
+  def initNetwork(sendersCount: Int, stake: Int, enableOutput: Boolean) = {
     // Arbitrary number of senders (bonded validators)
     val senders = (0 until sendersCount).map { n =>
       Sender(n, stake)
@@ -361,7 +362,8 @@ object Simulation {
             heightMap,
             seen,
             realFringes = initFinState,
-            fringeProcessor = fringeProcessor
+            fringeProcessor = fringeProcessor,
+            enableOutput = enableOutput
           )
       )
 
