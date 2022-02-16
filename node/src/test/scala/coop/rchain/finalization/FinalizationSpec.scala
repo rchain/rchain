@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Foldable, Monad}
 import coop.rchain.casper.api.GraphzGenerator.{DagInfo, ValidatorsBlocks}
 import coop.rchain.casper.api.ValidatorBlock
+import coop.rchain.casper.sim.Simulation._
 import coop.rchain.graphz._
 import coop.rchain.casper.sim.Simulation._
 import monix.eval.Task
