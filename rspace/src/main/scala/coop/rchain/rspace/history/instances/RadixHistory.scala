@@ -57,21 +57,15 @@ final case class RadixHistory[F[_]: Sync: Parallel](
             .unlessA(hasNoDuplicates(actions))
 
       newRootNodeOpt <- impl.makeActions(rootNode, actions)
-      newRootHash <- newRootNodeOpt.traverse { newRootNode =>
-                      val hash = impl.saveNode(newRootNode)
-                      impl.commit().as(hash)
-                    }
-      _ <- Sync[F].delay(impl.clearWriteCache())
-      _ <- Sync[F].delay(impl.clearReadCache())
-    } yield
-      if (newRootHash.isDefined)
-        this.copy(
-          Blake2b256Hash.fromByteVector(newRootHash.get),
-          newRootNodeOpt.get,
-          impl,
-          store
-        )
-      else this
+      newHistoryOpt <- newRootNodeOpt.traverse { newRootNode =>
+                        val hash       = impl.saveNode(newRootNode)
+                        val blakeHash  = Blake2b256Hash.fromByteVector(hash)
+                        val newHistory = this.copy(blakeHash, newRootNode, impl, store)
+                        impl.commit().as(newHistory)
+                      }
+      _ = impl.clearWriteCache()
+      _ = impl.clearReadCache()
+    } yield newHistoryOpt.getOrElse(this)
 
   private def hasNoDuplicates(actions: List[HistoryAction]) =
     actions.map(_.key).distinct.size == actions.size

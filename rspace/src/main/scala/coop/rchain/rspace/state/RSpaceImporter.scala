@@ -40,8 +40,8 @@ object RSpaceImporter {
   )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
     import cats.instances.list._
 
-    val receivedHistorySize = historyItems.size
-    val isEnd               = receivedHistorySize < chunkSize
+    def receivedHistorySize = historyItems.size
+    def isEnd               = receivedHistorySize < chunkSize
 
     def raiseError[T](msg: String): F[T] = new StateValidationError(msg).raiseError[F, T]
     def raiseErrorEx[T](msg: String, cause: Throwable): F[T] =
@@ -52,7 +52,7 @@ object RSpaceImporter {
 
     // Validate history items size
     def validateHistorySize[T]: F[Unit] = {
-      val sizeIsValid = receivedHistorySize == chunkSize | isEnd
+      def sizeIsValid = receivedHistorySize == chunkSize | isEnd
       raiseError[T](
         s"Input size of history items is not valid. Expected chunk size $chunkSize, received $receivedHistorySize."
       ).whenA(!sizeIsValid)

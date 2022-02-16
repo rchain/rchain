@@ -79,7 +79,7 @@ class HistoryActionTests
       }
   }
 
-  "History don't" should "allow to store different length key records in same branch" in withEmptyHistory {
+  "History" should "not allow to store different length key records in same branch" in withEmptyHistory {
     emptyHistoryF =>
       val data = insert(hexKey("01")) :: insert(hexKey("0100")) :: Nil
       for {
@@ -96,7 +96,7 @@ class HistoryActionTests
       }
   }
 
-  "History don't" should "allow to process HistoryActions with same keys" in withEmptyHistory {
+  "History" should "not allow to process HistoryActions with same keys" in withEmptyHistory {
     emptyHistoryF =>
       val data1 = insert(_zeros) :: insert(_zeros) :: Nil
       for {
@@ -220,9 +220,9 @@ class HistoryActionTests
       } yield {
         err.isLeft shouldBe true
         val ex = err.left.get
-        ex shouldBe a[AssertionError]
+        ex shouldBe a[RuntimeException]
         ex.getMessage shouldBe
-          s"assertion failed: 1 collisions in KVDB (first collision with key = " +
+          s"1 collisions in KVDB (first collision with key = " +
             s"${History.emptyRootHash.bytes.toHex})."
       }
   }

@@ -111,6 +111,13 @@ object RadixTree {
 
       val arr = new Array[Byte](size) //Allocation memory
 
+      // Leaf second byte: Leaf identifier (most significant bit = 0) and prefixSize (lower 7 bits = size)
+      def encodeLeafSecondByte(prefixSize: Int) = (prefixSize & 0x7F).toByte // (size & 01111111b)
+
+      // NodePtr second byte: NodePtr identifier (most significant bit = 1) and prefixSize (lower 7 bits = size)
+      def encodeNodePtrSecondByte(prefixSize: Int) =
+        (0x80 | (prefixSize & 0x7F)).toByte // 10000000b | (size & 01111111b)
+
       // Serialization (fill allocated memory)
       @tailrec
       def loopFill(numItem: Int, idx0: Int): Array[Byte] =
@@ -123,10 +130,10 @@ object RadixTree {
             case Leaf(prefix, value) =>
               // Fill first byte - item number
               arr(idx0) = numItem.toByte
-              // Fill second byte - Leaf identifier (most significant bit = 0) and prefixSize (lower 7 bits = size)
+              // Fill second byte - Leaf identifier
               val idxSecondByte   = idx0 + 1
               val prefixSize: Int = prefix.size.toInt
-              arr(idxSecondByte) = (prefixSize & 0x7F).toByte // (size & 01111111b)
+              arr(idxSecondByte) = encodeLeafSecondByte(prefixSize)
               // Fill prefix
               val idxPrefixStart = idxSecondByte + 1
               for (i <- 0 until prefixSize) arr(idxPrefixStart + i) = prefix(i.toLong)
@@ -141,7 +148,7 @@ object RadixTree {
               // Fill second byte - NodePtr identifier (most significant bit = 1) and prefixSize (lower 7 bits = size)
               val idxSecondByte   = idx0 + 1
               val prefixSize: Int = prefix.size.toInt
-              arr(idxSecondByte) = (0x80 | (prefixSize & 0x7F)).toByte // 10000000b | (size & 01111111b)
+              arr(idxSecondByte) = encodeNodePtrSecondByte(prefixSize)
               // Fill prefix
               val idxPrefixStart = idxSecondByte + 1
               for (i <- 0 until prefixSize) arr(idxPrefixStart + i) = prefix(i.toLong)
@@ -159,6 +166,10 @@ object RadixTree {
     def decode(bv: ByteVector): Node = {
       val arr     = bv.toArray
       val maxSize = arr.length
+
+      // If first bit 0 - return true, otherwise false.
+      def isLeaf(secondByte: Byte) = (secondByte & 0x80) == 0x00
+
       @tailrec
       // Each loop decodes one non-empty item.
       def loop(idx0: Int, node: Node): Node =
@@ -188,10 +199,10 @@ object RadixTree {
             val idx0Next = idxValOrPtrStart + defSize // Calculating start position for next loop
 
             // Decoding type of non-empty item
-            val item = if ((secondByte & 0x80) == 0x00) { // If first bit 0 - decoding as Leaf
+            val item = if (isLeaf(secondByte)) {
               Leaf(ByteVector(prefix), ByteVector(valOrPtr))
             } else {
-              NodePtr(ByteVector(prefix), ByteVector(valOrPtr)) // If first bit 1 - decoding as NodePtr.
+              NodePtr(ByteVector(prefix), ByteVector(valOrPtr))
             }
 
             (idx0Next, node.updated(numItem, item))
@@ -246,18 +257,18 @@ object RadixTree {
   /**
     * Data returned after export
     *
-    * @param nPrefixes Node prefixes
-    * @param nKeys Node KVDB keys
-    * @param nValues Node KVDB values
-    * @param lPrefixes Leaf prefixes
-    * @param lValues Leaf values (it's pointer for data in datastore)
+    * @param nodePrefixes Node prefixes
+    * @param nodeKeys Node KVDB keys
+    * @param nodeValues Node KVDB values
+    * @param leafPrefixes Leaf prefixes
+    * @param leafValues Leaf values (it's pointer for data in datastore)
     */
   final case class ExportData(
-      nPrefixes: Seq[ByteVector],
-      nKeys: Seq[ByteVector],
-      nValues: Seq[ByteVector],
-      lPrefixes: Seq[ByteVector],
-      lValues: Seq[ByteVector]
+      nodePrefixes: Seq[ByteVector],
+      nodeKeys: Seq[ByteVector],
+      nodeValues: Seq[ByteVector],
+      leafPrefixes: Seq[ByteVector],
+      leafValues: Seq[ByteVector]
   )
 
   /**
@@ -266,11 +277,11 @@ object RadixTree {
     * If false - data will not be exported.
     */
   final case class ExportDataSettings(
-      flagNPrefixes: Boolean,
-      flagNKeys: Boolean,
-      flagNValues: Boolean,
-      flagLPrefixes: Boolean,
-      flagLValues: Boolean
+      flagNodePrefixes: Boolean,
+      flagNodeKeys: Boolean,
+      flagNodeValues: Boolean,
+      flagLeafPrefixes: Boolean,
+      flagLeafValues: Boolean
   )
 
   /**
@@ -280,7 +291,7 @@ object RadixTree {
     * @param lastPrefix Describes the path of root to last processed element (if None - start from root)
     * @param skipSize Describes how many elements to skip
     * @param takeSize Describes how many elements to take
-    * @param getNodeDataFromStore Function to getng data from storage
+    * @param getNodeDataFromStore Function to get data from storage
     * @param settings [[ExportDataSettings]]
     *
     * @return
@@ -308,7 +319,7 @@ object RadixTree {
     type Path = Vector[NodeData] // Sequence used in recursions
 
     final case class NodePathData(
-        nodeHash: ByteVector,   // Hash of node for load
+        hash: ByteVector,       // Hash of node for load
         nodePrefix: ByteVector, // Prefix of this node
         restPrefix: ByteVector, // Prefix that describes the rest of the Path
         path: Path              // Return path
@@ -317,49 +328,42 @@ object RadixTree {
     /**
       * Create path from root to lastPrefix node
       */
-    def initNodePath(
-        params: NodePathData
-    ): F[Either[NodePathData, Path]] =
-      params match {
-        case NodePathData(hash, nodePrefix, tempPrefix, path) =>
-          for {
-            nodeOpt <- getNodeDataFromStore(hash)
-            node <- nodeOpt.liftTo[F](
-                     new Exception(s"Export error: node with key ${hash.toHex} not found.")
-                   )
-            decodedNode = Codecs.decode(node)
-            r = if (tempPrefix.isEmpty)
-              (NodeData(nodePrefix, decodedNode, none) +: path).asRight // Happy end
-            else                                                        // Go dipper
-              decodedNode(byteToInt(tempPrefix.head)) match {
-                case NodePtr(ptrPrefix, ptr) =>
-                  val (prefixCommon, prefixRest, ptrPrefixRest) =
-                    commonPrefix(tempPrefix.tail, ptrPrefix)
-                  assert(
-                    ptrPrefixRest.isEmpty,
-                    s"Export error: node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found."
-                  )
-                  NodePathData(
-                    ptr,
-                    (nodePrefix :+ tempPrefix.head) ++ prefixCommon,
-                    prefixRest,
-                    NodeData(nodePrefix, decodedNode, tempPrefix.head.some) +: path
-                  ).asLeft
-                case _ =>
-                  assert(
-                    assertion = false,
-                    s"Export error: node with prefix ${(nodePrefix ++ tempPrefix).toHex} not found."
-                  )
-                  Vector().asRight // Not found
-              }
-          } yield r
+    def initNodePath(p: NodePathData): F[Either[NodePathData, Path]] = {
+      def processChildItem(node: Node) = {
+        val itemIdx = byteToInt(p.restPrefix.head)
+        node(itemIdx) match {
+          case NodePtr(ptrPrefix, ptr) =>
+            val (prefixCommon, prefixRest, ptrPrefixRest) =
+              commonPrefix(p.restPrefix.tail, ptrPrefix)
+            assert(
+              ptrPrefixRest.isEmpty,
+              s"Export error: node with prefix ${(p.nodePrefix ++ p.restPrefix).toHex} not found."
+            )
+            NodePathData(
+              ptr,
+              (p.nodePrefix :+ p.restPrefix.head) ++ prefixCommon,
+              prefixRest,
+              NodeData(p.nodePrefix, node, p.restPrefix.head.some) +: p.path
+            ).asLeft
+          case _ =>
+            assert(
+              assertion = false,
+              s"Export error: node with prefix ${(p.nodePrefix ++ p.restPrefix).toHex} not found."
+            )
+            Vector().asRight // Not found
+        }
       }
-
-    type LoopData = (
-        Path,       // Path of node from current to root
-        (Int, Int), // Skip & take counter
-        ExportData  // Result of export
-    )
+      for {
+        nodeOpt <- getNodeDataFromStore(p.hash)
+        node <- nodeOpt.liftTo[F](
+                 new Exception(s"Export error: node with key ${p.hash.toHex} not found.")
+               )
+        decodedNode = Codecs.decode(node)
+      } yield
+        if (p.restPrefix.isEmpty)
+          (NodeData(p.nodePrefix, decodedNode, none) +: p.path).asRight // Happy end
+        else processChildItem(decodedNode)                              // Go dipper
+    }
 
     /**
       * Find next non-empty item.
@@ -378,130 +382,177 @@ object RadixTree {
         curItem match {
           case EmptyItem => findNextNonEmptyItem(node, curIdx.some)
           case Leaf(_, _) =>
-            if (settings.flagLPrefixes || settings.flagLValues) (curIdx, curItem).some
+            if (settings.flagLeafPrefixes || settings.flagLeafValues) (curIdx, curItem).some
             else findNextNonEmptyItem(node, curIdx.some)
           case NodePtr(_, _) => (curIdx, curItem).some
         }
       }
 
-    /**
-      * Export one [[Node]] and recursively move to the next. If the Skip counter or take counter is more than 1
-      */
-    def nodeExport(params: LoopData): F[Either[LoopData, (ExportData, Option[ByteVector])]] = {
-      val (path, (skip, take), expData) = params
-      if (path.isEmpty) // End of Tree
-        (expData, Option.empty[ByteVector]).asRight[LoopData].pure
+    final case class stepData(
+        path: Path,         // Path of node from current to root
+        skip: Int,          // Skip counter
+        take: Int,          // Take counter
+        expData: ExportData // Result of export
+    )
+
+    def addLeaf(
+        p: stepData,
+        leafPrefix: ByteVector,
+        leafValue: ByteVector,
+        itemIndex: Byte,
+        curNodePrefix: ByteVector,
+        newPath: Vector[NodeData]
+    ): stepData =
+      if (p.skip > 0)
+        stepData(newPath, p.skip, p.take, p.expData)
       else {
-        val curNodeData   = path.head
-        val curNodePrefix = curNodeData.prefix
-        val curNode       = curNodeData.decoded
+        val newLP = if (settings.flagLeafPrefixes) {
+          val newSingleLP = (curNodePrefix :+ itemIndex) ++ leafPrefix
+          p.expData.leafPrefixes :+ newSingleLP
+        } else Vector()
+        val newLV =
+          if (settings.flagLeafValues) p.expData.leafValues :+ leafValue
+          else Vector()
+        val newExportData = ExportData(
+          nodePrefixes = p.expData.nodePrefixes,
+          nodeKeys = p.expData.nodeKeys,
+          nodeValues = p.expData.nodeValues,
+          leafPrefixes = newLP,
+          leafValues = newLV
+        )
+        stepData(newPath, p.skip, p.take, newExportData)
+      }
 
-        if ((skip, take) == (0, 0))
-          (expData, curNodePrefix.some).asRight[LoopData].pure // End of skip&take counter
-        else {
-          val nextNotEmptyItem = findNextNonEmptyItem(curNode, curNodeData.lastItemIndex)
-          nextNotEmptyItem match {
-            case None =>
-              (path.tail, (skip, take), expData).asLeft[(ExportData, Option[ByteVector])].pure
-            case Some((itemIndex, item)) =>
-              val newCurNodeData = NodeData(curNodePrefix, curNode, itemIndex.some)
-              val newPath        = newCurNodeData +: path.tail
-              item match {
-                case EmptyItem =>
-                  (newPath, (skip, take), expData).asLeft[(ExportData, Option[ByteVector])].pure
-                case Leaf(leafPrefix, leafValue) =>
-                  if (skip > 0)
-                    (newPath, (skip, take), expData).asLeft[(ExportData, Option[ByteVector])].pure
-                  else {
-                    val newLP =
-                      if (settings.flagLPrefixes) {
-                        val newSingleLP = (curNodePrefix :+ itemIndex) ++ leafPrefix
-                        expData.lPrefixes :+ newSingleLP
-                      } else Vector()
-                    val newLV =
-                      if (settings.flagLValues) expData.lValues :+ leafValue else Vector()
-                    val newExportData = ExportData(
-                      nPrefixes = expData.nPrefixes,
-                      nKeys = expData.nKeys,
-                      nValues = expData.nValues,
-                      lPrefixes = newLP,
-                      lValues = newLV
+    def addNodePtr(
+        p: stepData,
+        ptrPrefix: ByteVector,
+        ptr: ByteVector,
+        itemIndex: Byte,
+        curNodePrefix: ByteVector,
+        newPath: Vector[NodeData]
+    ): F[stepData] = {
+      def constructNodePtrData(
+          childPath: Vector[NodeData],
+          childNP: ByteVector,
+          childNV: ByteVector
+      ) = {
+        val newNP =
+          if (settings.flagNodePrefixes) p.expData.nodePrefixes :+ childNP
+          else Vector()
+        val newNK =
+          if (settings.flagNodeKeys) p.expData.nodeKeys :+ ptr else Vector()
+        val newNV =
+          if (settings.flagNodeValues) p.expData.nodeValues :+ childNV
+          else Vector()
+        val newData = ExportData(
+          nodePrefixes = newNP,
+          nodeKeys = newNK,
+          nodeValues = newNV,
+          leafPrefixes = p.expData.leafPrefixes,
+          leafValues = p.expData.leafValues
+        )
+        stepData(childPath, p.skip, p.take - 1, newData)
+      }
+      for {
+        childNodeOpt <- getNodeDataFromStore(ptr)
+        childNV <- childNodeOpt.liftTo[F](
+                    new Exception(
+                      s"Export error: Node with key ${ptr.toHex} not found"
                     )
-                    (newPath, (skip, take), newExportData)
-                      .asLeft[(ExportData, Option[ByteVector])]
-                      .pure
-                  }
+                  )
+        childDecoded  = Codecs.decode(childNV)
+        childNP       = (curNodePrefix :+ itemIndex) ++ ptrPrefix
+        childNodeData = NodeData(childNP, childDecoded, none)
+        childPath     = childNodeData +: newPath
+      } yield
+        if (p.skip > 0) stepData(childPath, p.skip - 1, p.take, p.expData)
+        else constructNodePtrData(childPath, childNP, childNV)
+    }
+    def addElement(
+        p: stepData,
+        itemIndex: Byte,
+        item: Item,
+        curNode: Node,
+        curNodePrefix: ByteVector
+    ): F[stepData] = Sync[F].defer {
+      val newCurNodeData = NodeData(curNodePrefix, curNode, itemIndex.some)
+      val newPath        = newCurNodeData +: p.path.tail
+      item match {
+        case EmptyItem =>
+          stepData(newPath, p.skip, p.take, p.expData).pure
+        case Leaf(leafPrefix, leafValue) =>
+          addLeaf(p, leafPrefix, leafValue, itemIndex, curNodePrefix, newPath).pure
+        case NodePtr(ptrPrefix, ptr) =>
+          addNodePtr(p, ptrPrefix, ptr, itemIndex, curNodePrefix, newPath)
+      }
+    }
 
-                case NodePtr(ptrPrefix, ptr) =>
-                  for {
-                    childNodeOpt <- getNodeDataFromStore(ptr)
-                    childNV <- childNodeOpt.liftTo[F](
-                                new Exception(s"Export error: Node with key ${ptr.toHex} not found")
-                              )
-                    childDecoded  = Codecs.decode(childNV)
-                    childNP       = (curNodePrefix :+ itemIndex) ++ ptrPrefix
-                    childNodeData = NodeData(childNP, childDecoded, none)
-                    childPath     = childNodeData +: newPath
+    /**
+      * Export one element (Node or Leaf) and recursively move to the next step.
+      */
+    def exportStep(p: stepData): F[Either[stepData, (ExportData, Option[ByteVector])]] =
+      Sync[F].defer {
+        if (p.path.isEmpty) // End of Tree
+          (p.expData, Option.empty[ByteVector]).asRight[stepData].pure
+        else {
+          val curNodeData   = p.path.head
+          val curNodePrefix = curNodeData.prefix
+          val curNode       = curNodeData.decoded
 
-                    r = if (skip > 0) (childPath, (skip - 1, take), expData).asLeft
-                    else {
-                      val newNP =
-                        if (settings.flagNPrefixes) expData.nPrefixes :+ childNP else Vector()
-                      val newNK = if (settings.flagNKeys) expData.nKeys :+ ptr else Vector()
-                      val newNV = if (settings.flagNValues) expData.nValues :+ childNV else Vector()
-                      val newData = ExportData(
-                        nPrefixes = newNP,
-                        nKeys = newNK,
-                        nValues = newNV,
-                        lPrefixes = expData.lPrefixes,
-                        lValues = expData.lValues
-                      )
-                      (childPath, (skip, take - 1), newData).asLeft
-                    }
-                  } yield r
+          if ((p.skip, p.take) == (0, 0))
+            (p.expData, curNodePrefix.some).asRight[stepData].pure // End of skip&take counter
+          else {
+            val nextNotEmptyItemOpt = findNextNonEmptyItem(curNode, curNodeData.lastItemIndex)
+            val newStepDataF = nextNotEmptyItemOpt
+              .map {
+                case (itemIndex, item) =>
+                  addElement(p, itemIndex, item, curNode, curNodePrefix)
               }
+              .getOrElse(stepData(p.path.tail, p.skip, p.take, p.expData).pure)
+            newStepDataF.map(_.asLeft)
           }
         }
       }
-    }
 
-    assert(
-      (skipSize, takeSize) != (0, 0),
-      s"Export error: invalid initial conditions (skipSize, takeSize)==(0,0)."
-    )
+    def initConditionsException: F[Unit] =
+      new RuntimeException(
+        s"Export error: invalid initial conditions (skipSize, takeSize)==(0,0)."
+      ).raiseError
+    def emptyExportData = ExportData(Vector(), Vector(), Vector(), Vector(), Vector())
+    def emptyResult     = (emptyExportData, none).pure
 
-    val emptyExportData = ExportData(Vector(), Vector(), Vector(), Vector(), Vector())
-
-    def doExport(rootNodeSer: ByteVector) = {
-      val rootParams =
-        NodePathData(rootHash, ByteVector.empty, lastPrefix.getOrElse(ByteVector.empty), Vector())
-      val noRootStart  = (emptyExportData, skipSize, takeSize)     // Start from next node after lastPrefix
-      val skippedStart = (emptyExportData, skipSize - 1, takeSize) // Skipped node start
-      val rootExportData: ExportData = {
-        val newNP = if (settings.flagNPrefixes) Vector(ByteVector.empty) else Vector()
-        val newNK = if (settings.flagNKeys) Vector(rootHash) else Vector()
-        val newNV = if (settings.flagNValues) Vector(rootNodeSer) else Vector()
-        ExportData(newNP, newNK, newNV, Vector(), Vector())
-      }
-      val rootStart = (rootExportData, skipSize, takeSize - 1) // Take root
-
-      // Defining init data
-      val (initExportData, initSkipSize, initTakeSize) = lastPrefix
-        .as(noRootStart)
-        .getOrElse {
-          if (skipSize > 0) skippedStart
-          else rootStart
-        }
+    def doExport(rootNodeSer: ByteVector) =
       for {
-        path                  <- rootParams.tailRecM(initNodePath)
-        startParams: LoopData = (path, (initSkipSize, initTakeSize), initExportData)
-        r                     <- startParams.tailRecM(nodeExport)
-      } yield r
-    }
+        rootParams <- NodePathData(
+                       rootHash,
+                       ByteVector.empty,
+                       lastPrefix.getOrElse(ByteVector.empty),
+                       Vector()
+                     ).pure
+        noRootStart  = (emptyExportData, skipSize, takeSize)     // Start from next node after lastPrefix
+        skippedStart = (emptyExportData, skipSize - 1, takeSize) // Skipped node start
+        rootExportData = {
+          val newNP = if (settings.flagNodePrefixes) Vector(ByteVector.empty) else Vector()
+          val newNK = if (settings.flagNodeKeys) Vector(rootHash) else Vector()
+          val newNV = if (settings.flagNodeValues) Vector(rootNodeSer) else Vector()
+          ExportData(newNP, newNK, newNV, Vector(), Vector())
+        }
+        rootStart = (rootExportData, skipSize, takeSize - 1) // Take root
 
-    val emptyResult = (emptyExportData, none).pure
+        // Defining init data
+        (initExportData, initSkipSize, initTakeSize) = lastPrefix
+          .as(noRootStart)
+          .getOrElse {
+            if (skipSize > 0) skippedStart
+            else rootStart
+          }
+        path                  <- rootParams.tailRecM(initNodePath)
+        startParams: stepData = stepData(path, initSkipSize, initTakeSize, initExportData)
+        r                     <- startParams.tailRecM(exportStep)
+      } yield r
 
     for {
+      _              <- initConditionsException.whenA((skipSize, takeSize) == (0, 0))
       rootNodeSerOpt <- getNodeDataFromStore(rootHash)
       r              <- rootNodeSerOpt.map(doExport).getOrElse(emptyResult)
     } yield r
@@ -535,14 +586,15 @@ object RadixTree {
       */
     def loadNode(nodePtr: ByteVector, noAssert: Boolean = false): F[Node] = {
       def errorMsg(): Unit = assert(noAssert, s"Missing node in database. ptr=${nodePtr.toHex}.")
-      val cacheMiss = for {
-        storeNodeOpt <- loadNodeFromStore(nodePtr)
-        _            = storeNodeOpt.map(cacheR.update(nodePtr, _)).getOrElse(errorMsg())
-      } yield storeNodeOpt.getOrElse(emptyNode)
+      def cacheMiss =
+        for {
+          storeNodeOpt <- loadNodeFromStore(nodePtr)
+          _            = storeNodeOpt.map(cacheR.update(nodePtr, _)).getOrElse(errorMsg())
+        } yield storeNodeOpt.getOrElse(emptyNode)
       for {
         cacheNodeOpt <- Sync[F].delay(cacheR.get(nodePtr))
-        res          <- cacheNodeOpt.map(_.pure).getOrElse(cacheMiss)
-      } yield res
+        r            <- cacheNodeOpt.map(_.pure).getOrElse(cacheMiss)
+      } yield r
     }
 
     /**
@@ -567,12 +619,11 @@ object RadixTree {
       */
     def saveNode(node: Node): ByteVector = {
       val (hash, bytes) = hashNode(node)
-      // Collision alarm
-      def generateErrorMsg(v: Node): Unit = assert(
+      def checkCollision(v: Node): Unit = assert(
         v == node,
         s"Collision in cache: record with key = ${hash.toHex} has already existed."
       )
-      cacheR.get(hash).map(generateErrorMsg).getOrElse(cacheR.update(hash, node))
+      cacheR.get(hash).map(checkCollision).getOrElse(cacheR.update(hash, node))
       cacheW.update(hash, bytes)
       hash
     }
@@ -580,26 +631,24 @@ object RadixTree {
     /**
       * Save all cacheW to KVDB
       *
-      * If detected collision with older KVDB data - execute assert
+      * If detected collision with older KVDB data - execute Exception
       */
     def commit(): F[Unit] = {
-      val kvPairs = cacheW.toList
+      def collisionException(collisions: List[(ByteVector, ByteVector)]): F[Unit] =
+        new RuntimeException(
+          s"${collisions.length} collisions in KVDB (first collision with key = ${collisions.head._1.toHex})."
+        ).raiseError
       for {
+        kvPairs           <- Sync[F].delay(cacheW.toList)
         ifAbsent          <- store.contains(kvPairs.map(_._1))
         kvIfAbsent        = kvPairs zip ifAbsent
         kvExist           = kvIfAbsent.filter(_._2).map(_._1)
         valueExistInStore <- store.get(kvExist.map(_._1))
         kvvExist          = kvExist zip valueExistInStore.map(_.getOrElse(ByteVector.empty))
         kvCollision       = kvvExist.filter(kvv => !(kvv._1._2 == kvv._2)).map(_._1)
-        kvAbsent = if (kvCollision.isEmpty) kvIfAbsent.filterNot(_._2).map(_._1)
-        else {
-          assert(
-            assertion = false,
-            s"${kvCollision.length} collisions in KVDB (first collision with key = ${kvCollision.head._1.toHex})."
-          )
-          List.empty
-        }
-        _ <- store.put(kvAbsent)
+        _                 <- if (kvCollision.nonEmpty) collisionException(kvCollision) else ().pure
+        kvAbsent          = kvIfAbsent.filterNot(_._2).map(_._1)
+        _                 <- store.put(kvAbsent)
       } yield ()
     }
 
@@ -633,24 +682,29 @@ object RadixTree {
       (startNode, startPrefix).tailRecM(loop)
     }
 
-    /**
-      * Create node from [[Item]].
-      *
-      * If item is NodePtr and prefix is empty - load child node
-      */
-    private def createNodeFromItem(item: Item): F[Node] =
+    private def createNodeFromItem(item: Item): Node =
       item match {
-        case EmptyItem => emptyNode.pure
+        case EmptyItem => emptyNode
         case Leaf(leafPrefix, leafValue) =>
           assert(
             leafPrefix.nonEmpty,
             "Impossible to create a node. LeafPrefix should be non empty."
           )
-          emptyNode.updated(byteToInt(leafPrefix.head), Leaf(leafPrefix.tail, leafValue)).pure
+          emptyNode.updated(byteToInt(leafPrefix.head), Leaf(leafPrefix.tail, leafValue))
         case NodePtr(nodePtrPrefix, ptr) =>
-          if (nodePtrPrefix.isEmpty) loadNode(ptr)
-          else
-            emptyNode.updated(byteToInt(nodePtrPrefix.head), NodePtr(nodePtrPrefix.tail, ptr)).pure
+          emptyNode
+            .updated(byteToInt(nodePtrPrefix.head), NodePtr(nodePtrPrefix.tail, ptr))
+      }
+
+    /**
+      * Create node from [[Item]].
+      *
+      * If item is NodePtr and prefix is empty - load child node
+      */
+    private def createOrLoadNode(item: Item): F[Node] =
+      item match {
+        case NodePtr(ByteVector.empty, ptr) => loadNode(ptr)
+        case _                              => Sync[F].delay(createNodeFromItem(item))
       }
 
     /**
@@ -691,50 +745,59 @@ object RadixTree {
         curItem: Item,
         insPrefix: ByteVector,
         insValue: ByteVector
-    ): F[Option[Item]] =
-      curItem match {
-        case EmptyItem =>
-          (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
+    ): F[Option[Item]] = {
 
-        case Leaf(leafPrefix, leafValue) =>
-          assert(leafPrefix.size == insPrefix.size, "All Radix keys should be same length.")
-          if (leafPrefix == insPrefix) {
-            if (insValue == leafValue) none[Item].pure
-            else (Leaf(insPrefix, insValue): Item).some.pure
-          } // Update Leaf.
-          else {
-            // Create child node, insert existing and new leaf in this node.
-            // Intentionally not recursive for speed up.
-            val (commPrefix, insPrefixRest, leafPrefixRest) = commonPrefix(insPrefix, leafPrefix)
-            val newNode = emptyNode
-              .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
-              .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
-            saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
+      def insertNewNodeToChild(
+          childPtr: ByteVector,
+          childPrefix: ByteVector,
+          insPrefix: ByteVector
+      ) =
+        for {
+          childNode                      <- loadNode(childPtr)
+          (childItemIdx, childInsPrefix) = (byteToInt(insPrefix.head), insPrefix.tail)
+          childItemOpt                   <- update(childNode(childItemIdx), childInsPrefix, insValue) // Deeper
+          returnedItem = childItemOpt.map { childItem =>
+            val updatedChildNode = childNode.updated(childItemIdx, childItem)
+            saveNodeAndCreateItem(updatedChildNode, childPrefix, compaction = false)
           }
+        } yield returnedItem
 
-        case NodePtr(ptrPrefix, ptr) =>
-          assert(ptrPrefix.size < insPrefix.size, "Radix key should be longer than NodePtr key.")
-          val (commPrefix, insPrefixRest, ptrPrefixRest) = commonPrefix(insPrefix, ptrPrefix)
-          if (ptrPrefixRest.isEmpty) {
-            val (childItemIdx, childInsPrefix) =
-              (byteToInt(insPrefixRest.head), insPrefixRest.tail)
-            // Add new node to existing child node.
-            for {
-              childNode    <- loadNode(ptr)
-              childItemOpt <- update(childNode(childItemIdx), childInsPrefix, insValue) // Deeper
-              returnedItem = childItemOpt.map { childItem =>
-                val updatedChildNode = childNode.updated(childItemIdx, childItem)
-                saveNodeAndCreateItem(updatedChildNode, commPrefix, compaction = false)
-              }
-            } yield returnedItem
-          } else {
-            // Create child node, insert existing Ptr and new leaf in this node.
-            val newNode = emptyNode
-              .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
-              .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
-            saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
-          }
+      Sync[F].defer {
+        curItem match {
+          case EmptyItem =>
+            (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
+
+          case Leaf(leafPrefix, leafValue) =>
+            assert(leafPrefix.size == insPrefix.size, "All Radix keys should be same length.")
+            if (leafPrefix == insPrefix) {
+              if (insValue == leafValue) none[Item].pure
+              else (Leaf(insPrefix, insValue): Item).some.pure
+            } // Update Leaf.
+            else {
+              // Create child node, insert existing and new leaf in this node.
+              // Intentionally not recursive for speed up.
+              val (commPrefix, insPrefixRest, leafPrefixRest) = commonPrefix(insPrefix, leafPrefix)
+              val newNode = emptyNode
+                .updated(byteToInt(leafPrefixRest.head), Leaf(leafPrefixRest.tail, leafValue))
+                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+              saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
+            }
+
+          case NodePtr(ptrPrefix, ptr) =>
+            assert(ptrPrefix.size < insPrefix.size, "Radix key should be longer than NodePtr key.")
+            val (commPrefix, insPrefixRest, ptrPrefixRest) = commonPrefix(insPrefix, ptrPrefix)
+            if (ptrPrefixRest.isEmpty)
+              insertNewNodeToChild(ptr, commPrefix, insPrefixRest) // Add new node to existing child node.
+            else {
+              // Create child node, insert existing Ptr and new leaf in this node.
+              val newNode = emptyNode
+                .updated(byteToInt(ptrPrefixRest.head), NodePtr(ptrPrefixRest.tail, ptr))
+                .updated(byteToInt(insPrefixRest.head), Leaf(insPrefixRest.tail, insValue))
+              saveNodeAndCreateItem(newNode, commPrefix, compaction = false).some.pure
+            }
+        }
       }
+    }
 
     /**
       * Delete leaf value from this part of tree (start from curItem).
@@ -743,29 +806,36 @@ object RadixTree {
       * If not found leaf with  delPrefix - return [[None]].
       * @return Updated current item.
       */
-    def delete(curItem: Item, delPrefix: ByteVector): F[Option[Item]] =
-      curItem match {
-        case EmptyItem => none[Item].pure // Not found
-
-        case Leaf(leafPrefix, _) =>
-          if (leafPrefix == delPrefix) (EmptyItem: Item).some.pure // Happy end
-          else none[Item].pure                                     // Not found
-
-        case NodePtr(ptrPrefix, ptr) =>
-          val (commPrefix, delPrefixRest, ptrPrefixRest) = commonPrefix(delPrefix, ptrPrefix)
-          if (ptrPrefixRest.nonEmpty || delPrefixRest.isEmpty) none[Item].pure // Not found
-          else {
-            val (childItemIdx, childDelPrefix) =
-              (byteToInt(delPrefixRest.head), delPrefixRest.tail)
-            for {
-              childNode    <- loadNode(ptr)
-              childItemOpt <- delete(childNode(childItemIdx), childDelPrefix) // Deeper
-              returnedChild = childItemOpt.map { childItem =>
-                saveNodeAndCreateItem(childNode.updated(childItemIdx, childItem), commPrefix)
-              }
-            } yield returnedChild
+    def delete(curItem: Item, delPrefix: ByteVector): F[Option[Item]] = {
+      def deleteFromChildNode(
+          childPtr: ByteVector,
+          childPrefix: ByteVector,
+          delPrefix: ByteVector
+      ): F[Option[Item]] =
+        for {
+          childNode                   <- loadNode(childPtr)
+          (delItemIdx, delItemPrefix) = (byteToInt(delPrefix.head), delPrefix.tail)
+          childItemOpt                <- delete(childNode(delItemIdx), delItemPrefix)
+          newChildNode = childItemOpt.map { childItem =>
+            saveNodeAndCreateItem(childNode.updated(delItemIdx, childItem), childPrefix)
           }
+        } yield newChildNode
+
+      Sync[F].defer {
+        curItem match {
+          case EmptyItem => none[Item].pure // Not found
+
+          case Leaf(leafPrefix, _) =>
+            if (leafPrefix == delPrefix) (EmptyItem: Item).some.pure // Happy end
+            else none[Item].pure                                     // Not found
+
+          case NodePtr(ptrPrefix, ptr) =>
+            val (commPrefix, delPrefixRest, ptrPrefixRest) = commonPrefix(delPrefix, ptrPrefix)
+            if (ptrPrefixRest.nonEmpty || delPrefixRest.isEmpty) none[Item].pure // Not found
+            else deleteFromChildNode(ptr, commPrefix, delPrefixRest)             // Deeper
+        }
       }
+    }
 
     /**
       * Parallel processing of [[HistoryAction]]s in this part of tree (start from curNode).
@@ -773,53 +843,76 @@ object RadixTree {
       * New data load to [[cacheW]].
       * @return Updated curNode. if no action was taken - return [[None]].
       */
-    def makeActions(curNode: Node, curActions: List[HistoryAction]): F[Option[Node]] = {
-      // Group the actions by the first byte of the prefix.
-      val groups = curActions
-        .groupBy(_.key.headOption.getOrElse {
-          assert(assertion = false, "The length of all prefixes in the subtree must be the same.")
-          0x00.toByte // TODO: Need rewrite this place without unused constant
-        })
-        .toList
-      // Process actions within each group.
-      val newGroupItemsF = groups.map {
-        case (groupIdx, groupActions) =>
-          val index = byteToInt(groupIdx)
-          val item  = curNode(index)
-          if (groupActions.length == 1) {
-            // If we have 1 action in group.
-            // We can't parallel next and we should use sequential traversing with help update() or delete().
-            val newItem = groupActions.head match {
-              case InsertAction(key, hash) =>
-                update(item, ByteVector(key).tail, hash.bytes)
-              case DeleteAction(key) => delete(item, ByteVector(key).tail)
-            }
-            newItem.map((index, _))
-          } else {
-            // If we have more than 1 action. We can create more parallel processes.
-            val notExistInsertAction = groupActions.collectFirst { case _: InsertAction => true }.isEmpty
-            val clearGroupActions =
-              if (item == EmptyItem && notExistInsertAction) groupActions.collect {
-                case v: InsertAction => v
-              } else groupActions
-            if (clearGroupActions.isEmpty) (index, none[Item]).pure
-            else {
-              val newActions = clearGroupActions.map {
-                case InsertAction(key, hash) => InsertAction(key.tail, hash)
-                case DeleteAction(key)       => DeleteAction(key.tail)
-              }
-              for {
-                createdNode <- createNodeFromItem(curNode(index))
-                newNodeOpt  <- makeActions(createdNode, newActions)
-                newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
-              } yield (index, newItem)
-            }
-          }
+    def makeActions(curNode: Node, actions: List[HistoryAction]): F[Option[Node]] = {
+
+      // If we have 1 action in group.
+      // We can't parallel next and we should use sequential traversing with help update() or delete().
+      def processOneAction(action: HistoryAction, item: Item, itemIdx: Int) =
+        for {
+          newItem <- action match {
+                      case InsertAction(key, hash) => update(item, ByteVector(key).tail, hash.bytes)
+                      case DeleteAction(key)       => delete(item, ByteVector(key).tail)
+                    }
+        } yield (itemIdx, newItem)
+
+      def clearingDeleteActions(actions: List[HistoryAction], item: Item) = {
+        val notExistInsertAction = actions.collectFirst { case _: InsertAction => true }.isEmpty
+        if (item == EmptyItem && notExistInsertAction) actions.collect {
+          case v: InsertAction => v
+        } else actions
       }
 
+      def trimKeys(actions: List[HistoryAction]): List[HistoryAction] =
+        actions.map {
+          case InsertAction(key, hash) => InsertAction(key.tail, hash)
+          case DeleteAction(key)       => DeleteAction(key.tail)
+        }
+
+      def processNonEmptyActions(actions: List[HistoryAction], itemIdx: Int) =
+        for {
+          createdNode <- createOrLoadNode(curNode(itemIdx))
+          newActions  = trimKeys(actions)
+          newNodeOpt  <- makeActions(createdNode, newActions)
+          newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
+        } yield (itemIdx, newItem)
+
+      // If we have more than 1 action. We can create more parallel processes.
+      def processSeveralActions(actions: List[HistoryAction], item: Item, itemIdx: Int) =
+        for {
+          clearedActions <- Sync[F].delay(clearingDeleteActions(actions, item))
+          r <- if (clearedActions.isEmpty) (itemIdx, none[Item]).pure
+              else processNonEmptyActions(clearedActions, itemIdx)
+        } yield r
+
+      // Process actions within each group.
+      def processGroupedActions(groupedActions: List[(Byte, List[HistoryAction])], curNode: Node) =
+        groupedActions.map {
+          case (groupIdx, actionsInGroup) =>
+            for {
+              itemIdx <- Sync[F].delay(byteToInt(groupIdx))
+              item    = curNode(itemIdx)
+              r <- if (actionsInGroup.length == 1)
+                    processOneAction(actionsInGroup.head, item, itemIdx)
+                  else processSeveralActions(actionsInGroup, item, itemIdx)
+            } yield r
+        }
+
+      // Group the actions by the first byte of the prefix.
+      def grouping(actions: List[HistoryAction]) =
+        actions.groupBy { action =>
+          val firstByteOpt = action.key.headOption
+          assert(
+            firstByteOpt.nonEmpty,
+            "The length of all prefixes in the subtree must be the same."
+          )
+          firstByteOpt.get
+        }.toList
+
       for {
+        // Group the actions by the first byte of the prefix.
+        groupedActions <- Sync[F].delay(grouping(actions))
         // Process actions within each group.
-        newGroupItems <- newGroupItemsF.parSequence
+        newGroupItems <- processGroupedActions(groupedActions, curNode).parSequence
         // Update all changed items in current node.
         newCurNode = newGroupItems.foldLeft(curNode) {
           case (tempNode, (index, newItemOpt)) =>
@@ -832,19 +925,77 @@ object RadixTree {
     /**
       * Pretty printer for Radix tree
       */
-    final def print(curNode: Node, indentLevel: Int = 0): Unit = {
-      val indent               = Seq.fill(indentLevel * 2)(" ").mkString
-      def prn(s: String): Unit = println(s"$indent$s")
-      curNode.zipWithIndex foreach {
-        case (EmptyItem, _) => Unit
+    final def printTree(
+        rootNode: Node,
+        treeName: String,
+        noPrintFlag: Boolean
+    ): F[Vector[String]] = {
 
-        case (Leaf(leafPrefix, value), idx) =>
-          prn(s"${idx.toHexString.toUpperCase}${leafPrefix.toHex}: ${value.toHex}")
-
-        case (NodePtr(ptrPrefix, ptr), idx) =>
-          prn(s"${idx.toHexString.toUpperCase}${ptrPrefix.toHex} [${ptr.toHex}]")
-          loadNode(ptr).map(print(_, indentLevel + 1))
+      def constructIdxStr(idx: Int): String = {
+        val firstSymbol  = ((idx >> 4).toByte & 0xF).toHexString
+        val secondSymbol = (idx.toByte & 0xF).toHexString
+        (firstSymbol ++ secondSymbol).toUpperCase()
       }
+
+      def constructPrefixStr(prefix: ByteVector): String =
+        if (prefix.isEmpty) "empty" else prefix.toHex.toUpperCase
+
+      def constructLeafValueStr(leafValue: ByteVector) =
+        (leafValue.toHex.take(4) ++ "..." ++ leafValue.toHex.takeRight(4)).toUpperCase
+
+      def constructLeafStr(
+          indent: String,
+          idx: Int,
+          leafPrefix: ByteVector,
+          leafValue: ByteVector
+      ) = {
+        val idxStr    = constructIdxStr(idx)
+        val prefixStr = constructPrefixStr(leafPrefix)
+        val valueStr  = constructLeafValueStr(leafValue)
+        s"$indent[$idxStr]LEAF: prefix = $prefixStr, data = $valueStr"
+      }
+
+      def constructNodePtrStr(
+          indent: String,
+          idx: Int,
+          ptrPrefix: ByteVector
+      ) = {
+        val idxStr    = constructIdxStr(idx)
+        val prefixStr = constructPrefixStr(ptrPrefix)
+        s"$indent[$idxStr]PTR: prefix = $prefixStr, ptr =>"
+      }
+
+      def constructIdent(indentLevel: Int) = Seq.fill(indentLevel * 3)(" ").mkString
+
+      def print(node: Node, indentLevel: Int): F[Vector[String]] =
+        for {
+          indent <- Sync[F].delay(constructIdent(indentLevel))
+          itemVectors <- node.zipWithIndex.traverse {
+                          case (EmptyItem, _) => Vector[String]().pure
+                          case (Leaf(leafPrefix, value), idx) =>
+                            val leafStr = constructLeafStr(indent, idx, leafPrefix, value)
+                            Vector(leafStr).pure
+                          case (NodePtr(ptrPrefix, ptr), idx) =>
+                            for {
+                              childNode    <- loadNode(ptr)
+                              childTreeStr <- print(childNode, indentLevel + 1)
+                              ptrStr       = constructNodePtrStr(indent, idx, ptrPrefix)
+                              r            = ptrStr +: childTreeStr
+                            } yield r
+                        }
+          res = itemVectors.foldLeft(Vector[String]())(_ ++ _)
+        } yield res
+
+      def constructFirstStr(treeName: String) = treeName.toUpperCase() + ": root =>"
+
+      def printStrings(strings: Vector[String]) = strings.map(println(_))
+
+      for {
+        strings     <- print(rootNode, 1)
+        firstString = constructFirstStr(treeName)
+        r           = firstString +: strings
+        _           <- if (noPrintFlag) ().pure else Sync[F].delay(printStrings(r))
+      } yield r
     }
   }
 }

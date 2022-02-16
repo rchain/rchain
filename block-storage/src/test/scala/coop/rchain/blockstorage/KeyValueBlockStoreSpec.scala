@@ -5,7 +5,7 @@ import cats.instances.tuple._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockCandidate, BlockMessage}
-import coop.rchain.models.blockImplicits.{blockElementGen, blockElementsGen}
+import coop.rchain.models.blockImplicits.blockElementGen
 import coop.rchain.models.syntax._
 import coop.rchain.store.KeyValueStore
 import monix.eval.Task
