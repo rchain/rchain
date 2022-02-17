@@ -218,7 +218,7 @@ object TransactionBalances {
       walletPath: Path,
       bondPath: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext): F[GlobalVaultsInfo] = {
+  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
@@ -279,7 +279,11 @@ object TransactionBalances {
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
       }
-      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allWrappedTransactions)
-    } yield afterTransferMap
+      allSortedTransactions = allWrappedTransactions.sortBy(_.blockNumber)
+      _ <- log.info(
+            s"Transaction history from ${allSortedTransactions.head} to ${allSortedTransactions.tail}"
+          )
+      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allSortedTransactions)
+    } yield (afterTransferMap, allSortedTransactions)
   }
 }
