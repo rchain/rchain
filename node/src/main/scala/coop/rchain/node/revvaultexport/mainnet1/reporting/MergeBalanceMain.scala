@@ -181,6 +181,7 @@ object MergeBalanceMain {
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {
+                               _ <- Log[Task].info(s"account is not correct ${account}")
                                balance <- getBalanceFromRholang[Task](
                                            account.address,
                                            rhoRuntime,
@@ -191,7 +192,7 @@ object MergeBalanceMain {
                                )
                                _ <- Log[Task]
                                      .info(
-                                       s"Should Before adjusted ${account} after ${adjustAccount}"
+                                       s"Should Before adjusted after ${adjustAccount}"
                                      )
                              } yield acc :+ adjustAccount
                              else {
