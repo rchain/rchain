@@ -37,10 +37,10 @@ User transfer the bonding amount directly to posVault. `allBonds` would update w
 
 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
 2. Accumulate `comittedRewards` with the result of step 1
-4. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` when pendingWithdrawers is not empty, remove the validator in `allBonds`
-5. When the block number reaches the quantinue of `withdrawers` , transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
-6. update `pendingWithdrawers` to empty Map {}.
-5. Pick new `activeValidators`
+3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` when pendingWithdrawers is not empty, remove the validator in `allBonds`
+4. When the block number reaches the quantinue of `withdrawers` , transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
+5. update `pendingWithdrawers` to empty Map {}.
+6. Pick new `activeValidators`
 
 
 ## Slashing
@@ -177,9 +177,10 @@ in {
                 "allBonds"        : $$initialBonds$$,
                 // Set[PublicKey]     - the active validators
                 "activeValidators": initialActive,
-                // Map[PublicKey, (Int, Int)] - the validators wishing to withdraw and the block number when their quarantine ends
-                //                              This begins at the start of the next epoch + quarantineLength.
-                //                              Value(Int, Int) represents (original bond, reward, quantinue length)
+                // Map[PublicKey, (Int, Int)] - The validators who issued a withdraw request , finished validating jobs and not active.
+                //                              When the validator reachs the quantinue length, it would be removed in the map and 
+                //                              pos would transfer back all the original bond and rewards back to validator vault. 
+                //                              Value(Int, Int) represents (original bond + reward, quantinue length)
                 "withdrawers"     : {},
                 // Map[PublicKey, Int]
                 "comittedRewards" : {}, 
@@ -516,12 +517,20 @@ in {
                                 for (@currentRewards <- currentEpochRewardCh) {
                                   runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                   for (@state, stateUpdateCh <- stateProcessCh) {
+                                    // 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
+                                    // 2. Accumulate `comittedRewards` with the result of step 1
                                     commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
+                                      // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` 
+                                      // when pendingWithdrawers is not empty, remove the validator in `allBonds`
                                       movePendingWithdrawer!(newCommittedState, *movePendingWithdrawCh) |
                                       for (@newMovedPendingState <- movePendingWithdrawCh){
+                                        // 4. When the block number reaches the quantinue of `withdrawers` ,
+                                        //  transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
+                                        // 5. update `pendingWithdrawers` to empty Map {}.
                                         removeQuarantinedWithdrawers!(blockNumber, newMovedPendingState, *removeQuarantinedCh) |
                                         for (@newRemovedQuantinueState <- removeQuarantinedCh) {
+                                          // 6. Pick new `activeValidators`
                                           pickActiveValidators!(newMovedPendingState.get("allBonds").toList(), *newValidatorsCh) |
                                           for (@newValidators <- newValidatorsCh) {
                                             stateUpdateCh!(newRemovedQuantinueState.set("activeValidators", newValidators), (true, Nil))
