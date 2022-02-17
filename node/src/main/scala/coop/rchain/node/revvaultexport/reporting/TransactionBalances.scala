@@ -275,7 +275,8 @@ object TransactionBalances {
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
             isFinalized <- dagRepresantation.isFinalized(blockHash)
-          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized)
+            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
+          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
       }
       afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allWrappedTransactions)
