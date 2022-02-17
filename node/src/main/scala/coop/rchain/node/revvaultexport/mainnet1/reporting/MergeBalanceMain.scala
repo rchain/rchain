@@ -200,7 +200,6 @@ object MergeBalanceMain {
                              else {
                                val adjustAccount =
                                  account.copy(adjustedStateBalance = account.stateBalance)
-                               println(s"Not before adjusted ${account} after ${adjustAccount}")
                                acc :+ adjustAccount
                              }.pure[Task]
                          }
