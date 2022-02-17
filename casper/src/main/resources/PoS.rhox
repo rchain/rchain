@@ -12,7 +12,7 @@ POS internal state:
 "allBonds"        : Map[Validator, bonds],
 "activeValidators": Set[Validator],
 "withdrawers"     : Map[Validator, (bonds, quantinue)],
-"comittedRewards" : Map[Validator, rewards], 
+"committedRewards" : Map[Validator, rewards], 
 "pendingWithdrawers": Map[Validator, quantinue]
 
 **There are two vaults `posVault` and `coopMultiSigVault` while pos contract have no controll on `coopMultiSigVault` but `posVault`**
@@ -36,7 +36,7 @@ User transfer the bonding amount directly to posVault. `allBonds` would update w
 ## EpochChange(CloseBlock)
 
 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
-2. Accumulate `comittedRewards` with the result of step 1
+2. Accumulate `committedRewards` with the result of step 1
 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` when pendingWithdrawers is not empty, remove the validator in `allBonds`
 4. When the block number reaches the quantinue of `withdrawers` , transfer the corresponding bonds+ rewards to the corresponding validator from posVault. 
 5. update `pendingWithdrawers` to empty Map {}.
@@ -183,7 +183,7 @@ in {
                 //                              Value(Int, Int) represents (original bond + reward, quantinue length)
                 "withdrawers"     : {},
                 // Map[PublicKey, Int]
-                "comittedRewards" : {}, 
+                "committedRewards" : {}, 
                 // Map[PublicKey, Int] - the validators wishing to withdraw and the block number when their quarantine ends 
                 "pendingWithdrawers": {},
                 "randomImages"    : {},
@@ -195,7 +195,7 @@ in {
                   accumulateItemInState!(*totalBondCh, "allBonds", *accumulateSndNum) |
                   calTotalActiveBonds!(*totalActiveBondCh) |
                   accumulateItemInState!(*totalWithdrawCh, "withdrawers", *accumulateFstOfSndArg) |
-                  accumulateItemInState!(*committedRewardsCh, "comittedRewards", *accumulateSndNum) |
+                  accumulateItemInState!(*committedRewardsCh, "committedRewards", *accumulateSndNum) |
                   for (@posBalance <- posBalanceCh; @totalBond <- totalBondCh; @activeBonds <- totalActiveBondCh; 
                        @totalWithdraw <- totalWithdrawCh; @totalCommittedRewards <- committedRewardsCh){
                     for (@state <<- stateCh) {
@@ -250,7 +250,7 @@ in {
                   for (@state <<- stateCh) {
                     PoS!("getCurrentEpochRewards", *currentEpochRewardCh)| 
                     for (@currentEpochReward <- currentEpochRewardCh) {
-                      @ListOps!("fold", currentEpochReward.toList(), state.get("comittedRewards"), *accumulateReward, *returnCh) |
+                      @ListOps!("fold", currentEpochReward.toList(), state.get("committedRewards"), *accumulateReward, *returnCh) |
                       contract accumulateReward(@(pk, reward), @acc, outCh) = {
                         outCh!(acc.set(pk, acc.getOrElse(pk, 0) + reward))
                       }
@@ -473,7 +473,7 @@ in {
                                           stateUpdateCh!({
                                             "allBonds"        : state.get("allBonds").set(validator, 0),
                                             "activeValidators": state.get("activeValidators").delete(validator),
-                                            "comittedRewards" : state.get("comittedRewards").delete(validator), 
+                                            "committedRewards" : state.get("committedRewards").delete(validator), 
                                             "withdrawers"     : state.get("withdrawers"),
                                             "pendingWithdrawers": state.get("pendingWithdrawers"),
                                             "randomImages"    : state.get("randomImages"),
@@ -518,7 +518,7 @@ in {
                                   runMVar!(*stateCh, *stateProcessCh, *ackCh) |
                                   for (@state, stateUpdateCh <- stateProcessCh) {
                                     // 1. Calculate all the validator current epoch rewards based on active validator bonding proportion
-                                    // 2. Accumulate `comittedRewards` with the result of step 1
+                                    // 2. Accumulate `committedRewards` with the result of step 1
                                     commitCurrentEpochRewards!(state, currentRewards, *updatedRewardsCh) |
                                     for (@newCommittedState <- updatedRewardsCh) {
                                       // 3. Update `withdrawers` according to `allBonds` and `pendingWithdrawers` 
@@ -553,8 +553,8 @@ in {
                                   new accumulate in {
                                     @ListOps!("fold", currentRewards.toList(), state, *accumulate, *returnCh) |
                                     contract accumulate(@(pk, reward), @updatedState, resultCh) = {
-                                      resultCh!(updatedState.set("comittedRewards",
-                                                                  updatedState.get("comittedRewards").set(pk, updatedState.get("comittedRewards").getOrElse(pk, 0) + reward)))
+                                      resultCh!(updatedState.set("committedRewards",
+                                                                  updatedState.get("committedRewards").set(pk, updatedState.get("committedRewards").getOrElse(pk, 0) + reward)))
                                     }
                                   }
                                 } |
@@ -585,10 +585,10 @@ in {
                                       @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
                                       contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
                                         new payReturnCh in {
-                                          payWithdrawer!((pk, bonds + updatedState.get("comittedRewards").getOrElse(pk, 0)), *payReturnCh) |
+                                          payWithdrawer!((pk, bonds + updatedState.get("committedRewards").getOrElse(pk, 0)), *payReturnCh) |
                                           for (@(true, _) <- payReturnCh) {
                                             resultCh!(updatedState
-                                                      .set("comittedRewards", updatedState.get("comittedRewards").delete(pk))
+                                                      .set("committedRewards", updatedState.get("committedRewards").delete(pk))
                                                       .set("withdrawers", updatedState.get("withdrawers").delete(pk))
                                                       )
                                           }
