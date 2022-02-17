@@ -182,11 +182,13 @@ object MergeBalanceMain {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {
                                _ <- Log[Task].info(s"account is not correct ${account}")
-                               balance <- getBalanceFromRholang[Task](
-                                           account.address,
-                                           rhoRuntime,
-                                           postStateHash
-                                         )
+                               balance <- if (account.address != "unknown")
+                                           getBalanceFromRholang[Task](
+                                             account.address,
+                                             rhoRuntime,
+                                             postStateHash
+                                           )
+                                         else 0L.pure[Task]
                                adjustAccount = account.copy(
                                  adjustedStateBalance = balance
                                )
