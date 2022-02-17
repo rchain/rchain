@@ -430,7 +430,7 @@ in {
                   }
                 }
               } |
-              new commitRewards, moveFunds in {
+              new commitRewards in {
                 // Private method which transfers all of a validator's rewards + bond to the Coop vault.
                 // Slash expects (Boolean, Either[Nil, String]) on returnCh.
                 contract PoS(@"slash", @deployerId, @blockHash, @sysAuthToken, returnCh) = {
@@ -607,26 +607,6 @@ in {
                         }
                       } else {
                         ackCh!((false, "Invalid system auth token"))
-                      }
-                    }
-                  }
-                } |
-                // Moves the entire contents of a validator's vault to the PoS vault.
-                contract moveFunds(@(unf, revAddr, vault), returnCh) = {
-                  new balanceCh, unfAuthKeyCh, transferDoneCh in {
-                    @vault!("balance", *balanceCh) |
-                    for (@balance <- balanceCh) {
-                      if (balance > 0) {
-                        @RevVault!("unforgeableAuthKey", unf, *unfAuthKeyCh) |
-                        for (@authKey <- unfAuthKeyCh) {
-                          // Transfer funds from validator vault to the PoS vault.
-                          @vault!("transfer", posVaultAddr, balance, authKey, *transferDoneCh) |
-                          for (@(true, _) <- transferDoneCh) {
-                            returnCh!(true)
-                          }
-                        }
-                      } else {
-                        returnCh!(true)
                       }
                     }
                   }
