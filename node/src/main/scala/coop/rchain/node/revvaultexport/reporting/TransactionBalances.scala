@@ -136,7 +136,7 @@ object TransactionBalances {
   ): GlobalVaultsInfo = {
     val resultMap = transfers.foldLeft(genesisVault.vaultMaps) {
       case (m, transfer) =>
-        if (transfer.isFinalized) {
+        if (transfer.isFinalized && transfer.transaction.transaction.failReason.isEmpty) {
           val fromAddr = transfer.transaction.transaction.fromAddr
           val toAddr   = transfer.transaction.transaction.toAddr
           val amount   = transfer.transaction.transaction.amount
@@ -274,7 +274,7 @@ object TransactionBalances {
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
-            isFinalized <- dagRepresantation.isFinalized(blockHash)
+            isFinalized         <- dagRepresantation.isFinalized(blockHash)
             isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
