@@ -3,8 +3,6 @@ package coop.rchain.casper.sim
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Id, Monad, Show}
-import coop.rchain.casper.pcasper.Fringe.{Fringe, LazyReconciler}
-import coop.rchain.casper.pcasper.{Fringe, PCasper}
 import coop.rchain.casper.lcasper.{FinalityView, LevelView}
 import coop.rchain.shared.Stopwatch
 
