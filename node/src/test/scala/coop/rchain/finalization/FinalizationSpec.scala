@@ -127,6 +127,20 @@ class FinalizationSpec extends FlatSpec with Matchers {
           } yield r
       }
     }
+
+    def runOneOut = {
+      val nets = List(10).map(genNet)
+
+      nets.traverse {
+        case (net, name) =>
+          for {
+            net1_     <- runSections(net, List((10, 0f)), s"net1-$name")
+            (net1, _) = net1_
+            (o, _)    = net1.split(.9f)
+            r         <- runSections(o, List((10, .0f)), s"o-$name")
+          } yield r
+      }
+    }
   }
 
   implicit val s = monix.execution.Scheduler.global
@@ -146,6 +160,17 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   it should "run random network" in {
     val r        = sut.runRandom.runSyncUnsafe()
+    val (end, _) = r.last
+    val a = end.senders.toList.map(
+      _.realFringes
+        .map(_.toList.sortBy { case (k, _) => k.id }.map(_._2.id).toString())
+    )
+    println(a.mkString("\n"))
+
+  }
+
+  it should "run network with one down" in {
+    val r        = sut.runOneOut.runSyncUnsafe()
     val (end, _) = r.last
     val a = end.senders.toList.map(
       _.realFringes
