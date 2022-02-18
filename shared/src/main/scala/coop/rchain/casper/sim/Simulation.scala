@@ -2,11 +2,11 @@ package coop.rchain.casper.sim
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import cats.{Id, Monad, Show}
+import cats.{Id, Monad}
+import coop.rchain.casper.lazycasper.Fringe
 import coop.rchain.casper.eagercasper.{FinalityView, LevelView}
-import coop.rchain.shared.Stopwatch
-
 import coop.rchain.catscontrib.effect.implicits.syncId
+import coop.rchain.shared.Stopwatch
 
 import scala.collection.immutable.{Queue, SortedMap}
 
@@ -183,19 +183,28 @@ object Simulation {
           }
           .mkString("\n")
 
-        import coop.rchain.catscontrib.effect.implicits._
-
         // Fringe to record as final, fringe to associate with the message
-        val ((toFinalize, toPutInMessage), finTime) = {
-          Stopwatch.profile(
-            LocalFinalization.run(msg)(witnessMap.getOrElse(_, Map()), loadMsgViews)
-          )
-        }
 //        val ((toFinalize, toPutInMessage), finTime) = {
 //          Stopwatch.profile(
-//            Sync[Id].delay(GlobalFinalization.run(msg)(genesisBonds))
+//            LocalFinalization.run(msg)(witnessMap.getOrElse(_, Map()), loadMsgViews)
 //          )
 //        }
+        val ((toFinalizeG, toPutInMessageG), finTime) = {
+          Stopwatch.profile(
+            LazyFinalization.run(
+              genesisBonds,
+              msgViewsJfs.map(_.root),
+              realFringes.toList,
+              witnessMap.getOrElse(_, Map()),
+              loadJfs(_: Msg).map(m => m.sender -> m).toMap
+            )
+          )
+        }
+        val toFinalize = toFinalizeG.map(v => LevelView(-1, Vector(v)))
+//        val toPutInMessage = FinalityView(toPutInMessageG.map(fr => LevelView(-1, Vector(fr))))
+        val tpm =
+          if (toFinalize.nonEmpty) toFinalize else Vector(LevelView(-1, Vector(realFringes.last)))
+        val toPutInMessage = FinalityView(tpm)
         println(s"Finalization run in $finTime")
 
         //    val newRealFringes =
