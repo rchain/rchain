@@ -82,7 +82,7 @@ class MergeNumberChannelSpec extends FlatSpec {
     ByteString.copyFrom(bv.toArray)
   }
 
-  def baseRhoSeed = {
+  def baseRhoSeed: Blake2b512Random = {
     val bytes: Array[Byte] = Array.fill(128)(1)
     Blake2b512Random(bytes)
   }
@@ -153,9 +153,10 @@ class MergeNumberChannelSpec extends FlatSpec {
         // Base state
         _ <- baseTerms.zipWithIndex.toList.traverse {
               case (term, i) =>
+                implicit val r = baseRhoSeed
                 for {
                   baseRes <- runtime
-                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par], baseRhoSeed)
+                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
                   _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
                 } yield ()
             }
