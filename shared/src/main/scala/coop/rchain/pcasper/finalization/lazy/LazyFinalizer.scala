@@ -62,17 +62,20 @@ final case class LazyFinalizer[F[_]: Sync, M, S, P](
   override def computeFinal(minGenJsViews: Iterable[LazyFinal[M, S]]): F[LazyFinal[M, S]] = {
 
     val baseComplete = highestMessages(minGenJsViews.map(_.complete))(seqNum)
-    val baseProvisional = {
-      val partitions = minGenJsViews.filter {
-        case LazyFinal(_, partition) => partition.contains(sndr)
-      }
-      assert(
-        partitions.size <= 1,
-        s"Overlapping partitions are not allowed by LazyCasper, please check if input argument " +
-          s"is a minimal generative justification set."
-      )
-      if (partitions.nonEmpty) partitions.head.provisional else baseComplete
-    }
+
+    // this can be costly but for now this assert makes sense to ensure correctness
+    assert(
+      {
+        !minGenJsViews.map(_.provisional).toList.distinct.combinations(2).exists {
+          case List(l, r) =>
+            val absorbs    = (l.keySet diff r.keySet).isEmpty
+            val intersects = (l.keySet intersect r.keySet).nonEmpty
+            intersects && !absorbs
+        }
+      },
+      s"Lazy Finalizer does not allow for provisional views to be partially overlapping."
+    )
+    val baseProvisional = highestMessages(minGenJsViews.map(_.provisional).toSet)(seqNum)
 
     val newProvisionalF: F[Fringe[M, S]] =
       if (baseComplete != baseProvisional)
