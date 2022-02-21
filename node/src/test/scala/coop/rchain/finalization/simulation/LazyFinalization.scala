@@ -2,8 +2,7 @@ package coop.rchain.finalization.simulation
 
 import cats.Id
 import coop.rchain.finalization.simulation.Simulation.{Msg, MsgView, Sender}
-import coop.rchain.pcasper.finalization.DagData
-import coop.rchain.pcasper.finalization.`lazy`.{LazyFinal, LazyFinalizer}
+import coop.rchain.pcasper.finalization.`lazy`.{DagData, LazyFinal, LazyFinalizer}
 
 /**
   * A high level logic for local finalization.
