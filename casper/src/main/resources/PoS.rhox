@@ -467,7 +467,8 @@ in {
                                           posAuthKey,
                                           *transferDoneCh
                                         ) |
-                                        for (@(true, _) <- transferDoneCh) {
+                                        // FIXME handle transfer failing case
+                                        for (_ <- transferDoneCh) {
                                           // Sets slashed validator's committed rewards and bond to 0 in state.
                                           // Moves slashed validator to withdrawers map with no quarantine period.
                                           stateUpdateCh!({
