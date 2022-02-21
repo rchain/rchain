@@ -11,6 +11,8 @@ import coop.rchain.casper.sim.Simulation._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.util.Random
+
 class FinalizationSpec extends FlatSpec with Matchers {
 
   class NetworkRunner[F[_]: Sync] {
@@ -88,12 +90,73 @@ class FinalizationSpec extends FlatSpec with Matchers {
       (nets, startIteration).tailRecM[F, Unit] {
         case (networks, iteration) =>
           println(s"Iteration $iteration")
-          val newNetState = networks.traverse {
-            case (net, name) =>
-              randomTest(net, name, enableOutput).map { case (newNet, _) => (newNet, name) }
-          }
-          newNetState.map((_, iteration + 1).asLeft[Unit]) // Infinite loop
+          val newNetworks = splitMerge(networks)
+          newNetworks.map((_, iteration + 1).asLeft[Unit]) // Infinite loop
       }
+    }
+
+    object Action extends Enumeration {
+      val Split, Merge = Value
+      def random: Value = Random.nextInt(2) match {
+        case 0 => Split
+        case 1 => Merge
+      }
+    }
+
+    private def splitMerge(nets: List[(Network, String)]): F[List[(Network, String)]] = {
+      def removeByIndexFrom[T](v: List[T], i: Int): List[T] = v.patch(i, List.empty, 1)
+      def uniqueNameFor(net: Network): String               = net.hashCode.toString
+
+      // Runs simulation for network with random number of rounds and skip percent
+      def runRounds(net: Network): F[Network] = {
+        val rounds = Random.nextInt(15) + 1 // from 1 to 15 inclusive
+        val skip   = Random.nextFloat
+        for {
+          r <- runSections(net, List((rounds, skip)), uniqueNameFor(net), enableOutput = false)
+        } yield r._1
+      }
+
+      // Splits random network and runs random number of rounds for both parts
+      def splitAndRun(nets: List[(Network, String)]): F[List[(Network, String)]] =
+        for {
+          index         <- Sync[F].delay(Random.nextInt(nets.size))
+          (left, right) = nets(index)._1.split(Random.nextFloat)
+          r <- if (left.senders.nonEmpty && right.senders.nonEmpty) {
+                for {
+                  leftNet  <- runRounds(left)
+                  rightNet <- runRounds(right)
+                } yield {
+                  // Replace partition by index with leftNet and rightNet
+                  removeByIndexFrom(nets, index) :+
+                    (leftNet, uniqueNameFor(leftNet)) :+
+                    (rightNet, uniqueNameFor(rightNet))
+                }
+              } else {
+                nets.pure
+              }
+        } yield r
+
+      // Merges two random networks into one
+      def merge(nets: List[(Network, String)]): F[List[(Network, String)]] = Sync[F].delay {
+        if (nets.length >= 2) {
+          // Take 2 random indices, remove corresponding items and add merging of them
+          val indexes             = Random.shuffle(nets.indices.toList).take(2)
+          val (leftNet, rightNet) = (nets(indexes.head)._1, nets(indexes(1))._1)
+          val mergedNets          = leftNet >|< rightNet
+          nets.zipWithIndex
+            .filter { case (_, index) => !indexes.contains(index) }
+            .map { case (namedNet, _) => namedNet } :+ (mergedNets, uniqueNameFor(mergedNets))
+        } else {
+          nets
+        }
+      }
+
+      for {
+        act <- Action.random match {
+                case Action.Split => splitAndRun(nets)
+                case Action.Merge => merge(nets)
+              }
+      } yield act
     }
 
     private def randomTest(net: Network, name: String, enableOutput: Boolean): F[(Network, Int)] =
