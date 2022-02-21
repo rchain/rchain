@@ -7,7 +7,7 @@ import coop.rchain.shared.syntax._
 
 /**
   * Partitioner ensuring two properties:
-  * 1. No other overlapping partition can be detected.
+  * 1. Given the same base no other overlapping partition can be detected.
   * 2. Partition senders match supplied criteria.
   */
 final case class LazyPartitioner[F[_]: Sync, M, S](
@@ -54,25 +54,25 @@ final case class LazyPartitioner[F[_]: Sync, M, S](
     }
 
     val certainPartitionF = for {
-      lvl1 <- nextOK(base)
-      lvl2 <- nextOK(lvl1)
-      r <- if (lvl2.isEmpty || lvl1.isEmpty) none[Set[S]].pure[F]
+      step1 <- nextOK(base)
+      step2 <- nextOK(step1)
+      r <- if (step1.isEmpty || step2.isEmpty) none[Set[S]].pure[F]
           else
-            (lvl1, lvl2).tailRecM {
-              case (l1, l2) =>
+            (step1, step2).tailRecM {
+              case (s1, s2) =>
                 // TODO add optimisation when l1 is all across nad l2 is supermajority
 
-                val partitionImplied = l2.keySet
+                val partitionImplied = s2.keySet
 
-                val settledF = Sync[F].delay(l1.keySet == l2.keySet)
+                val settledF = Sync[F].delay(s1.keySet == s2.keySet)
 
                 val isSafeF = {
                   val partitionBonds = bondsMap.filterKeys(partitionImplied)
-                  nextOK(l2).map(l3 => isSupermajority(l3.keys, partitionBonds))
+                  nextOK(s2).map(l3 => isSupermajority(l3.keys, partitionBonds))
                 }
 
                 val cannotOverlapF = {
-                  val partitionProvers = Vector(l1, l2).flatMap(_.valuesIterator).distinct
+                  val partitionProvers = Vector(s1, s2).flatMap(_.valuesIterator).distinct
                   val sideJustificationsF = partitionProvers
                     .traverse(justificationsF)
                     .map(_.map(_.filterNot { case (s, _) => partitionImplied.contains(s) }))
@@ -81,9 +81,9 @@ final case class LazyPartitioner[F[_]: Sync, M, S](
                   sameSideJsF ||^ lateSideJsF
                 }
 
-                val loadNextLevelF = nextOK(l2).map { nextLvl =>
-                  if (nextLvl.isEmpty) none[Set[S]].asRight[(Map[S, M], Map[S, M])]
-                  else (l2, nextLvl).asLeft[Option[Set[S]]]
+                val loadNextLevelF = nextOK(s2).map { nextStep =>
+                  if (nextStep.isEmpty) none[Set[S]].asRight[(Map[S, M], Map[S, M])]
+                  else (s2, nextStep).asLeft[Option[Set[S]]]
                 }
 
                 (settledF &&^ isSafeF &&^ cannotOverlapF).ifM(
