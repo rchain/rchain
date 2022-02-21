@@ -542,10 +542,13 @@ in {
                                 } | 
                                 // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
                                 contract payWithdrawer(@(pk, amount), returnCh) = {
-                                  new vaultCh, revAddressCh in {
+                                  new vaultCh, revAddressCh, createCh in {
                                     revAddressOps!("fromPublicKey", pk, *revAddressCh) |
                                     for (@toRevAddress <- revAddressCh) {
-                                      @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
+                                      @RevVault!("findOrCreate", toRevAddress, *createCh) |
+                                      for (@_ <- createCh){
+                                        @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
+                                      }
                                     }
                                   }
                                 } |
