@@ -578,23 +578,25 @@ in {
                                 // updates the committed rewards map.
                                 contract removeQuarantinedWithdrawers(@currentBlockNumber, @state, returnCh) = {
                                   new quarantinedValidatorsCh, validatorsToWithdrawListCh,
-                                      isQuarantineFinished, notWithdrawn, computeRemove,
-                                      newBondsListCh, newWithdrawersListCh,
-                                      newRewardsListCh
+                                      isQuarantineFinished, notWithdrawn, payWithdraw, 
+                                      newBondsListCh, newWithdrawersListCh, 
+                                      computeRemove, payRet
                                   in {
                                     // Calculate rewards by taking PoS balance on PoS vault and subtract all active stake + newly bonded
                                     @ListOps!("filter", state.get("withdrawers").toList(), *isQuarantineFinished, *quarantinedValidatorsCh) |
                                     for (@quarantinedValidators <- quarantinedValidatorsCh) {
-                                      @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
-                                      contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
-                                        new payReturnCh in {
-                                          payWithdrawer!((pk, bonds + updatedState.get("committedRewards").getOrElse(pk, 0)), *payReturnCh) |
-                                          for (@(true, _) <- payReturnCh) {
-                                            resultCh!(updatedState
-                                                      .set("committedRewards", updatedState.get("committedRewards").delete(pk))
-                                                      .set("withdrawers", updatedState.get("withdrawers").delete(pk))
-                                                      )
-                                          }
+                                      @ListOps!("unorderedParMap", quarantinedValidators, *payWithdraw, *payRet) |
+                                      contract payWithdraw(@(pk, (bonds, quantine)), resultCh) = {
+                                        // FIXME fix transfer in failure case
+                                        payWithdrawer!((pk, bonds + state.get("committedRewards").getOrElse(pk, 0)), *resultCh)
+                                      } |
+                                      for (@_ <- payRet) {
+                                        @ListOps!("fold", quarantinedValidators, state, *computeRemove, *returnCh) |
+                                        contract computeRemove(@(pk, (bonds, quantine)), @updatedState, resultCh) = {
+                                          resultCh!(updatedState
+                                                    .set("committedRewards", updatedState.get("committedRewards").delete(pk))
+                                                    .set("withdrawers", updatedState.get("withdrawers").delete(pk))
+                                                    )
                                         }
                                       }
                                     } |
