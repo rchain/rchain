@@ -682,7 +682,7 @@ object RadixTree {
       (startNode, startPrefix).tailRecM(loop)
     }
 
-    private def createNodeFromItem(item: Item): Node =
+    def createNodeFromItem(item: Item): Node =
       item match {
         case EmptyItem => emptyNode
         case Leaf(leafPrefix, leafValue) =>
