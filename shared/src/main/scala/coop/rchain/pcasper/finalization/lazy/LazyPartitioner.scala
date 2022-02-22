@@ -56,44 +56,46 @@ final case class LazyPartitioner[F[_]: Sync, M, S](
     val certainPartitionF = for {
       step1 <- nextOK(base)
       step2 <- nextOK(step1)
-      r <- if (step1.isEmpty || step2.isEmpty) none[Set[S]].pure[F]
-          else
-            (step1, step2).tailRecM {
-              case (s1, s2) =>
-                // TODO add optimisation when l1 is all across nad l2 is supermajority
+      allAcrossCaseF = Sync[F].delay {
+        if (isSupermajority(step2.keys, bondsMap)) bondsMap.keySet.some else none[Set[S]]
+      }
+      partitionCaseF = (step1, step2).tailRecM {
+        case (s1, s2) =>
+          nextOK(s2).flatMap { s3 =>
+            val partitionImplied = s3.keySet
 
-                val partitionImplied = s2.keySet
+            val settledF = Sync[F].delay(s1.keySet == s2.keySet && s1.keySet == s3.keySet)
 
-                val settledF = Sync[F].delay(s1.keySet == s2.keySet)
-
-                val isSafeF = {
-                  val partitionBonds = bondsMap.filterKeys(partitionImplied)
-                  nextOK(s2).map(l3 => isSupermajority(l3.keys, partitionBonds))
-                }
-
-                val cannotOverlapF = {
-                  val partitionProvers = Vector(s1, s2).flatMap(_.valuesIterator).distinct
-                  val sideJustificationsF = partitionProvers
-                    .traverse(justificationsF)
-                    .map(_.map(_.filterNot { case (s, _) => partitionImplied.contains(s) }))
-                  val sameSideJsF = sideJustificationsF.map(_.distinct.size == 1)
-                  val lateSideJsF = sideJustificationsF.flatMap { sideJss =>
-                    val highestSideJss = highestMessages(sideJss)(seqNum).valuesIterator.toList
-                    highestSideJss.forallM(isLate(_)(base, seqNum, justificationsF))
-                  }
-                  sameSideJsF ||^ lateSideJsF
-                }
-
-                val loadNextLevelF = nextOK(s2).map { nextStep =>
-                  if (nextStep.isEmpty) none[Set[S]].asRight[(Map[S, M], Map[S, M])]
-                  else (s2, nextStep).asLeft[Option[Set[S]]]
-                }
-
-                (settledF &&^ isSafeF &&^ cannotOverlapF).ifM(
-                  partitionImplied.some.asRight[(Map[S, M], Map[S, M])].pure[F],
-                  loadNextLevelF
-                )
+            val cannotOverlapF = {
+              val partitionProvers = Vector(s1, s2, s3).flatMap(_.valuesIterator).distinct
+              val sideJustificationsF = partitionProvers
+                .traverse(justificationsF)
+                .map(_.map(_.filterNot { case (s, _) => partitionImplied.contains(s) }))
+              val sameSideJsF = sideJustificationsF.map(_.size == 1)
+              val lateSideJsF = sideJustificationsF
+                .map(highestMessages(_)(seqNum).valuesIterator.toList)
+                .flatMap(_.forallM(isLate[F, M, S](_)(base, seqNum, justificationsF)))
+              sameSideJsF ||^ lateSideJsF
             }
+
+            val loadNextLevelF = Sync[F].delay {
+              if (s3.isEmpty) none[Set[S]].asRight[(Map[S, M], Map[S, M])]
+              else (s2, s3).asLeft[Option[Set[S]]]
+            }
+
+            val partitionFoundF = partitionImplied.some.asRight[(Map[S, M], Map[S, M])].pure[F]
+
+            (settledF &&^ cannotOverlapF).ifM(partitionFoundF, loadNextLevelF)
+          }
+      }
+
+      r <- if (step1.isEmpty || step2.isEmpty) none[Set[S]].pure[F]
+          else {
+            // TODO enable optimisation for all across
+            //  now its not done to test more general logic of partition detection
+            val allAcross = false // step1.keySet == bondsMap.keySet
+            if (allAcross) allAcrossCaseF else partitionCaseF
+          }
     } yield r
 
     // First level of a partition
