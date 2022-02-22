@@ -39,7 +39,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   def generateDataForHash(lastByte: Byte): Array[Byte] =
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toArray
 
-  "Tree with makeActions" should "be built correctly!!!" in makeActionsSpec {
+  "Tree with makeActions" should "be built correctly!!!" in createRadixTreeImpl {
     (radixTreeImplF, typedStore) ⇒
       for {
         impl       ← radixTreeImplF
@@ -81,7 +81,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  protected def makeActionsSpec(
+  protected def createRadixTreeImpl(
       f: (
           Task[RadixTreeImpl[Task]],
           KeyValueTypedStore[Task, ByteVector, ByteVector]
