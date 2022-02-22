@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.RadixTree.RadixTreeImpl
+import coop.rchain.rspace.history.RadixTree.{Item, RadixTreeImpl}
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
@@ -19,6 +19,7 @@ import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
 import scodec.bits.ByteVector
+
 import scala.concurrent.duration._
 import scala.util.Random
 
@@ -79,6 +80,194 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
         _ = treeInfo shouldBe etalonVectorStr
       } yield ()
+  }
+
+  "Appending leaf in empty tree" should "work" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl ← radixTreeImplF
+        newItemOpt ← impl.update(
+                      RadixTree.EmptyItem,
+                      TestData.hexKey("FFFFFFF1").toVector,
+                      generateDataForHash(0xA.toByte).toVector
+                    )
+
+        newRootNodeOpt = newItemOpt.map(item ⇒ impl.createNodeFromItem(item))
+        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE LEAF", false)
+
+        etalonVectorStr = Vector(
+          "TREE WITH ONE LEAF: root =>",
+          "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
+        )
+
+        _ = printedTreeStr shouldBe etalonVectorStr
+      } yield ()
+  }
+
+  "Creating tree with two leafs and one nodePtr" should "work" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl                     ← radixTreeImplF
+        commonKeyPartForTwoLeafs = "001122"
+        keys = Vector[Seq[Byte]](
+          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+        )
+        firstLeafOpt ← impl.update(
+                        RadixTree.EmptyItem,
+                        keys(0),
+                        generateDataForHash(0x11.toByte).toVector
+                      )
+        secondLeafOpt ← impl.update(
+                         firstLeafOpt.get,
+                         keys(1),
+                         generateDataForHash(0x55.toByte).toVector
+                       )
+
+        newRootNodeOpt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
+        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE NODE AND 2 LEAFS", false)
+
+        etalonVectorStr = Vector(
+          "TREE WITH ONE NODE AND 2 LEAFS: root =>",
+          "   [00]PTR: prefix = 0112, ptr =>",
+          "      [20]LEAF: prefix = 13, data = 0000...0011",
+          "      [22]LEAF: prefix = 25, data = 0000...0055"
+        )
+
+        _ = printedTreeStr shouldBe etalonVectorStr
+      } yield ()
+  }
+  // TODO: Ask Denis!!!!!
+  "Appending leaf to leaf" should "create node with two leafs" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl          ← radixTreeImplF
+        emptyRHash    = RadixHistory.emptyRootHash
+        emptyRootNode ← impl.loadNode(emptyRHash.bytes, noAssert = true)
+
+        keys = Vector[Seq[Byte]](
+          TestData.hexKey("00000000"),
+          TestData.hexKey("34564544")
+        )
+        firstLeafOpt ← impl.update(
+                        RadixTree.EmptyItem,
+                        keys(0),
+                        generateDataForHash(0x11.toByte).toVector
+                      )
+
+        secondLeafOpt ← impl.update(
+                         firstLeafOpt.get,
+                         keys(1),
+                         generateDataForHash(0x55.toByte).toVector
+                       )
+
+        //  TODO: look in makeActions!!
+        // newRoot1Opt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
+        newRoot1 ← impl.createOrLoadNode(secondLeafOpt.get)
+
+        printed ← impl.printTree(newRoot1, "TREE", false)
+      } yield ()
+  }
+
+  //  TODO: Ask Deins!!!!
+  "Updating leaf" should "work correctly" in createRadixTreeImpl { (radixTreeImplF, typedStore) ⇒
+    for {
+      impl          ← radixTreeImplF
+      firstLeafData = generateDataForHash(0xCB.toByte).toVector
+      newLeafData   = generateDataForHash(0xFF.toByte).toVector
+      leafKey       = TestData.hexKey("0123456F1").toVector
+
+      //  Create tree with one leaf
+      leafItemOpt ← impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
+
+      newRootNodeOpt = leafItemOpt.map(item ⇒ impl.createNodeFromItem(item))
+      printedTreeBeforeChangingLeafData ← impl.printTree(
+                                           newRootNodeOpt.get,
+                                           "TREE WITH ONE LEAF",
+                                           false
+                                         )
+
+      itemAfterChangeDataOpt ← impl.update(leafItemOpt.get, leafKey, newLeafData)
+
+      newRootNodeAfterChangeLeafOpt = itemAfterChangeDataOpt.map(
+        item ⇒ impl.createNodeFromItem(item)
+      )
+      printedTreeWithNewLeafData ← impl.printTree(
+                                    newRootNodeAfterChangeLeafOpt.get,
+                                    "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
+                                    false
+                                  )
+
+      treeBeforeChangeLeaf = Vector(
+        "TREE WITH ONE LEAF: root =>",
+        "   [00]LEAF: prefix = 123456F1, data = 0000...00CB"
+      )
+
+      treeAfterChangeLeaf = Vector(
+        "TREE WITH ONE LEAF (AFTER CHANGING DATA): root =>",
+        "   [00]LEAF: prefix = 123456F1, data = 0000...00FF"
+      )
+
+      _ = printedTreeBeforeChangingLeafData shouldBe treeBeforeChangeLeaf
+      _ = printedTreeWithNewLeafData shouldBe treeAfterChangeLeaf
+    } yield ()
+  }
+
+  "RadixTreeImpl" should "not allow to enter keys with different lengths" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl        ← radixTreeImplF
+        leafData    = generateDataForHash(0xCB.toByte).toVector
+        leafKey     = TestData.hexKey("0123456F1").toVector
+        testLeafKey = TestData.hexKey("112").toVector
+
+        leafItemOpt ← impl.update(RadixTree.EmptyItem, leafKey, leafData)
+        err         ← impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
+      } yield {
+        err.isLeft shouldBe true
+        val ex = err.left.get
+        ex shouldBe a[AssertionError]
+        ex.getMessage shouldBe s"assertion failed: All Radix keys should be same length."
+      }
+  }
+
+  "RadixTreeImpl" should "not allow to radix key is smaller than nodePtr key" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl                     ← radixTreeImplF
+        commonKeyPartForTwoLeafs = "121122"
+        keys = Vector[Seq[Byte]](
+          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+        )
+        firstLeafOpt ← impl.update(
+                        RadixTree.EmptyItem,
+                        keys(0),
+                        generateDataForHash(0x11.toByte).toVector
+                      )
+        secondLeafOpt ← impl.update(
+                         firstLeafOpt.get,
+                         keys(1),
+                         generateDataForHash(0x55.toByte).toVector
+                       )
+
+        newRootNodeOpt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
+        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE NODE AND 2 LEAFS", false)
+
+        rootNodeItem = newRootNodeOpt.get(1)
+        err ← impl
+               .update(
+                 rootNodeItem,
+                 TestData.hexKey("0"),
+                 generateDataForHash(0x33.toByte).toVector
+               )
+               .attempt
+      } yield {
+        err.isLeft shouldBe true
+        val ex = err.left.get
+        ex shouldBe a[AssertionError]
+        ex.getMessage shouldBe s"assertion failed: Radix key should be longer than NodePtr key."
+      }
   }
 
   protected def createRadixTreeImpl(
