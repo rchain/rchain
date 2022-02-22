@@ -11,6 +11,8 @@ import coop.rchain.casper.sim.Simulation._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
+import scala.util.Random
+
 class FinalizationSpec extends FlatSpec with Matchers {
 
   class NetworkRunner[F[_]: Sync] {
@@ -49,7 +51,12 @@ class FinalizationSpec extends FlatSpec with Matchers {
       } yield ()
     }
 
-    def runSections(start: Network, roundSkip: List[(Int, Float)], prefix: String) = {
+    def runSections(
+        start: Network,
+        roundSkip: List[(Int, Float)],
+        prefix: String,
+        enableOutput: Boolean
+    ) = {
       val senderCount = start.senders.size
       roundSkip.foldM(start, 0) {
         case ((net, n), (height, skipP)) =>
@@ -57,75 +64,146 @@ class FinalizationSpec extends FlatSpec with Matchers {
 //            val name = s"$prefix-$n-$senderCount-$skipP"
             val name = s"$prefix-$n-$senderCount"
 
-            printDag(res, name).as((res, n + 1))
+            printDag(res, name).whenA(enableOutput).as((res, n + 1))
           }
       }
     }
 
-    def genNet(senders: Int) =
-      initNetwork(sendersCount = senders, stake = 1) -> s"net$senders"
+    def genNet(senders: Int, enableOutput: Boolean) =
+      initNetwork(sendersCount = senders, stake = 1, enableOutput) -> s"net$senders"
 
     def runDagComplete = {
-      val (net, _) = genNet(6)
-      runSections(net, List((6, .0f)), s"complete")
+      val enableOutput = true
+      val (net, _)     = genNet(6, enableOutput)
+      runSections(net, List((6, .0f)), s"complete", enableOutput)
     }
 
     def runRandom = {
+      val enableOutput = true
+      val nets         = List(10).map(genNet(_, enableOutput))
+      nets.traverse { case (net, name) => randomTest(net, name, enableOutput) }
+    }
 
-      val nets = List(10).map(genNet)
-
-      nets.traverse {
-        case (net, name) =>
-          for {
-            net1_     <- runSections(net, List((1, .0f)), s"start-$name")
-            (net1, _) = net1_
-
-            // Split network
-            (fst, snd) = net1.split(.3f)
-
-//            _ = println(s"Split in ${fst.senders.size} and ${snd.senders.size}")
-
-//            fst1_ <- runSections(fst, List((7, .5f), (3, .3f)), s"fst-$name")
-            fst1_     <- runSections(fst, List((5, .5f)), s"fst-$name")
-            (fst1, _) = fst1_
-
-//            snd1_ <- runSections(snd, List((5, .4f), (5, .5f)), s"snd-$name")
-            snd1_     <- runSections(snd, List((4, .4f)), s"snd-$name")
-            (snd1, _) = snd1_
-
-            // Merge networks
-            net2 = fst1 >|< snd1
-
-            (n11, n12)   = net2.split(.4f)
-            (n111, n112) = n11.split(.5f)
-
-            n111end_     <- runSections(n111, List((10, .5f)), s"n111-$name")
-            (n111end, _) = n111end_
-            n112end_     <- runSections(n112, List((4, .1f)), s"n112-$name")
-            (n112end, _) = n112end_
-            n12end_      <- runSections(n12, List((5, .4f)), s"n12-$name")
-            (n12end, _)  = n12end_
-
-            net3 = n112end >|< n12end
-            net4 = net3 >|< n111end
-
-            (n21, n22)   = net4.split(.3f)
-            (n211, n212) = n21.split(.5f)
-
-            n211end_     <- runSections(n211, List((13, .4f)), s"n211-$name")
-            (n211end, _) = n211end_
-            n212end_     <- runSections(n212, List((8, .4f)), s"n212-$name")
-            (n212end, _) = n212end_
-            n22end_      <- runSections(n22, List((5, .4f)), s"n22-$name")
-            (n22end, _)  = n22end_
-
-            net5 = n212end >|< n211end
-            net6 = net5 >|< n22end
-
-            r <- runSections(net6, List((5, .0f)), s"result-$name")
-          } yield r
+    def runInfinite(enableOutput: Boolean): F[Unit] = {
+      val nets           = List(10).map(genNet(_, enableOutput))
+      val startIteration = 1
+      (nets, startIteration).tailRecM[F, Unit] {
+        case (networks, iteration) =>
+          println(s"Iteration $iteration")
+          val newNetworks = splitMerge(networks)
+          newNetworks.map((_, iteration + 1).asLeft[Unit]) // Infinite loop
       }
     }
+
+    object Action extends Enumeration {
+      val Split, Merge = Value
+      def random: Value = Random.nextInt(2) match {
+        case 0 => Split
+        case 1 => Merge
+      }
+    }
+
+    private def splitMerge(nets: List[(Network, String)]): F[List[(Network, String)]] = {
+      def removeByIndexFrom[T](v: List[T], i: Int): List[T] = v.patch(i, List.empty, 1)
+      def uniqueNameFor(net: Network): String               = net.hashCode.toString
+
+      // Runs simulation for network with random number of rounds and skip percent
+      def runRounds(net: Network): F[Network] = {
+        val rounds = Random.nextInt(15) + 1 // from 1 to 15 inclusive
+        val skip   = Random.nextFloat
+        for {
+          r <- runSections(net, List((rounds, skip)), uniqueNameFor(net), enableOutput = false)
+        } yield r._1
+      }
+
+      // Splits random network and runs random number of rounds for both parts
+      def splitAndRun(nets: List[(Network, String)]): F[List[(Network, String)]] =
+        for {
+          index         <- Sync[F].delay(Random.nextInt(nets.size))
+          (left, right) = nets(index)._1.split(Random.nextFloat)
+          r <- if (left.senders.nonEmpty && right.senders.nonEmpty) {
+                for {
+                  leftNet  <- runRounds(left)
+                  rightNet <- runRounds(right)
+                } yield {
+                  // Replace partition by index with leftNet and rightNet
+                  removeByIndexFrom(nets, index) :+
+                    (leftNet, uniqueNameFor(leftNet)) :+
+                    (rightNet, uniqueNameFor(rightNet))
+                }
+              } else {
+                nets.pure
+              }
+        } yield r
+
+      // Merges two random networks into one
+      def merge(nets: List[(Network, String)]): F[List[(Network, String)]] = Sync[F].delay {
+        if (nets.length >= 2) {
+          // Take 2 random indices, remove corresponding items and add merging of them
+          val indexes             = Random.shuffle(nets.indices.toList).take(2)
+          val (leftNet, rightNet) = (nets(indexes.head)._1, nets(indexes(1))._1)
+          val mergedNets          = leftNet >|< rightNet
+          nets.zipWithIndex
+            .filter { case (_, index) => !indexes.contains(index) }
+            .map { case (namedNet, _) => namedNet } :+ (mergedNets, uniqueNameFor(mergedNets))
+        } else {
+          nets
+        }
+      }
+
+      for {
+        act <- Action.random match {
+                case Action.Split => splitAndRun(nets)
+                case Action.Merge => merge(nets)
+              }
+      } yield act
+    }
+
+    private def randomTest(net: Network, name: String, enableOutput: Boolean): F[(Network, Int)] =
+      for {
+        net1_     <- runSections(net, List((1, .0f)), s"start-$name", enableOutput)
+        (net1, _) = net1_
+
+        // Split network
+        (fst, snd) = net1.split(.3f)
+
+        fst1_     <- runSections(fst, List((5, .5f)), s"fst-$name", enableOutput)
+        (fst1, _) = fst1_
+
+        snd1_     <- runSections(snd, List((4, .4f)), s"snd-$name", enableOutput)
+        (snd1, _) = snd1_
+
+        // Merge networks
+        net2 = fst1 >|< snd1
+
+        (n11, n12)   = net2.split(.4f)
+        (n111, n112) = n11.split(.5f)
+
+        n111end_     <- runSections(n111, List((10, .5f)), s"n111-$name", enableOutput)
+        (n111end, _) = n111end_
+        n112end_     <- runSections(n112, List((4, .1f)), s"n112-$name", enableOutput)
+        (n112end, _) = n112end_
+        n12end_      <- runSections(n12, List((5, .4f)), s"n12-$name", enableOutput)
+        (n12end, _)  = n12end_
+
+        net3 = n112end >|< n12end
+        net4 = net3 >|< n111end
+
+        (n21, n22)   = net4.split(.3f)
+        (n211, n212) = n21.split(.5f)
+
+        n211end_     <- runSections(n211, List((13, .4f)), s"n211-$name", enableOutput)
+        (n211end, _) = n211end_
+        n212end_     <- runSections(n212, List((8, .4f)), s"n212-$name", enableOutput)
+        (n212end, _) = n212end_
+        n22end_      <- runSections(n22, List((5, .4f)), s"n22-$name", enableOutput)
+        (n22end, _)  = n22end_
+
+        net5 = n212end >|< n211end
+        net6 = net5 >|< n22end
+
+        r <- runSections(net6, List((5, .0f)), s"result-$name", enableOutput)
+      } yield r
   }
 
   implicit val s = monix.execution.Scheduler.global
@@ -152,6 +230,12 @@ class FinalizationSpec extends FlatSpec with Matchers {
     )
     println(a.mkString("\n"))
 
+  }
+
+  // This test is ignored by default to provide finite tests time execution
+  // It makes sense to turn on this test only on the local machine for long-time finalization testing
+  it should "run infinite test" ignore {
+    sut.runInfinite(enableOutput = false).runSyncUnsafe()
   }
 
   def dagAsCluster[F[_]: Sync: GraphSerializer](
