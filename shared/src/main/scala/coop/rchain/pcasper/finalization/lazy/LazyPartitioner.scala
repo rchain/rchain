@@ -77,7 +77,10 @@ final case class LazyPartitioner[F[_]: Sync, M, S](
                     .traverse(justificationsF)
                     .map(_.map(_.filterNot { case (s, _) => partitionImplied.contains(s) }))
                   val sameSideJsF = sideJustificationsF.map(_.distinct.size == 1)
-                  val lateSideJsF = sideJustificationsF.map(_.forall(isLate(_)(base, seqNum)))
+                  val lateSideJsF = sideJustificationsF.flatMap { sideJss =>
+                    val highestSideJss = highestMessages(sideJss)(seqNum).valuesIterator.toList
+                    highestSideJss.forallM(isLate(_)(base, seqNum, justificationsF))
+                  }
                   sameSideJsF ||^ lateSideJsF
                 }
 

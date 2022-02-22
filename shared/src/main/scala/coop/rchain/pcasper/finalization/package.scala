@@ -1,5 +1,6 @@
 package coop.rchain.pcasper
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all._
 
@@ -34,6 +35,10 @@ package object finalization {
       .traverse { case (s, m) => witnessesF(m).map(_.find { case (s1, _) => s1 == s }) }
       .map(_.flatten.toMap)
 
-  def isLate[M, S](view: Map[S, M])(boundary: Map[S, M], seqNum: M => Long): Boolean =
-    view.mapValues(seqNum).forall { case (s, vSn) => vSn < seqNum(boundary(s)) }
+  def isLate[F[_]: Applicative, M, S](
+      message: M
+  )(boundary: Map[S, M], seqNum: M => Long, justificationsF: M => F[Map[S, M]]): F[Boolean] =
+    justificationsF(message).map { jss =>
+      jss.mapValues(seqNum).forall { case (s, vSn) => vSn < seqNum(boundary(s)) }
+    }
 }
