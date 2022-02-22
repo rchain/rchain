@@ -682,7 +682,7 @@ object RadixTree {
       (startNode, startPrefix).tailRecM(loop)
     }
 
-    def createNodeFromItem(item: Item): Node =
+    private def createNodeFromItem(item: Item): Node =
       item match {
         case EmptyItem => emptyNode
         case Leaf(leafPrefix, leafValue) =>
@@ -692,6 +692,10 @@ object RadixTree {
           )
           emptyNode.updated(byteToInt(leafPrefix.head), Leaf(leafPrefix.tail, leafValue))
         case NodePtr(nodePtrPrefix, ptr) =>
+          assert(
+            nodePtrPrefix.nonEmpty,
+            "Impossible to create a node. NodePtrPrefix should be non empty."
+          )
           emptyNode
             .updated(byteToInt(nodePtrPrefix.head), NodePtr(nodePtrPrefix.tail, ptr))
       }
@@ -701,7 +705,7 @@ object RadixTree {
       *
       * If item is NodePtr and prefix is empty - load child node
       */
-    private def createOrLoadNode(item: Item): F[Node] =
+    def constructNodeFromItem(item: Item): F[Node] =
       item match {
         case NodePtr(ByteVector.empty, ptr) => loadNode(ptr)
         case _                              => Sync[F].delay(createNodeFromItem(item))
@@ -870,7 +874,7 @@ object RadixTree {
 
       def processNonEmptyActions(actions: List[HistoryAction], itemIdx: Int) =
         for {
-          createdNode <- createOrLoadNode(curNode(itemIdx))
+          createdNode <- constructNodeFromItem(curNode(itemIdx))
           newActions  = trimKeys(actions)
           newNodeOpt  <- makeActions(createdNode, newActions)
           newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
