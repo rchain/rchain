@@ -25,7 +25,7 @@ object Simulation {
       .reduceOption(_ filterKeys _.keySet.contains)
       .getOrElse(Map())
 
-  def initNetwork(sendersCount: Int, stake: Int) = {
+  def initNetwork(sendersCount: Int, stake: Int, enableOutput: Boolean) = {
     // Arbitrary number of senders (bonded validators)
     val senders = (0 until sendersCount).map { n =>
       Sender(n, stake)
@@ -75,7 +75,8 @@ object Simulation {
             Map(),
             realFringes = initFinState,
             fringeProcessor = fringeProcessor,
-            fullBonds
+            fullBonds,
+            enableOutput = enableOutput
           )
       )
     Network(senderStates)
@@ -163,7 +164,8 @@ object Simulation {
       witnessMap: Map[Msg, Map[Sender, Msg]] = Map(),
       realFringes: Queue[Fringe[Msg, Sender]],
       fringeProcessor: Ref[Id, FringeProcessor],
-      genesisBonds: Map[Sender, Long]
+      genesisBonds: Map[Sender, Long],
+      enableOutput: Boolean
   ) {
     override def hashCode(): Int = this.me.id.hashCode()
 
@@ -353,7 +355,7 @@ object Simulation {
 //          }
 //          .mkString("\n")
 
-        if (me == msg.sender) {
+        if (me == msg.sender && enableOutput) {
           println(s"${me.id}: ADDED ${msg.id}")
           //          println(s"DAG ${showMsgs(newDag.values.toSeq)}")
           println(s"COMM:\n$seenBySeenStr")
