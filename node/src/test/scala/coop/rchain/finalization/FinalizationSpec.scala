@@ -84,13 +84,15 @@ class FinalizationSpec extends FlatSpec with Matchers {
       nets.traverse { case (net, name) => randomTest(net, name, enableOutput) }
     }
 
-    def runInfinite(enableOutput: Boolean): F[Unit] = {
+    def runInfinite(enableOutput: Boolean, generateCode: Boolean): F[Unit] = {
       val nets           = List(10).map(genNet(_, enableOutput))
       val startIteration = 1
       (nets, startIteration).tailRecM[F, Unit] {
         case (networks, iteration) =>
-          println(s"Iteration $iteration")
-          val newNetworks = splitMerge(networks)
+          if (!generateCode) {
+            println(s"Iteration $iteration")
+          }
+          val newNetworks = splitMerge(networks, generateCode)
           newNetworks.map((_, iteration + 1).asLeft[Unit]) // Infinite loop
       }
     }
@@ -103,33 +105,53 @@ class FinalizationSpec extends FlatSpec with Matchers {
       }
     }
 
-    private def splitMerge(nets: List[(Network, String)]): F[List[(Network, String)]] = {
+    private def splitMerge(
+        nets: List[(Network, String)],
+        generateCode: Boolean
+    ): F[List[(Network, String)]] = {
       def removeByIndexFrom[T](v: List[T], i: Int): List[T] = v.patch(i, List.empty, 1)
-      def uniqueNameFor(net: Network): String               = net.hashCode.toString
+      def uniqueNameFor[T](t: T): String =
+        "n" + (t, Random.nextInt).hashCode.toString.replace("-", "_")
 
       // Runs simulation for network with random number of rounds and skip percent
-      def runRounds(net: Network): F[Network] = {
+      def runRounds(namedNet: (Network, String)): F[(Network, String)] = {
         val rounds = Random.nextInt(15) + 1 // from 1 to 15 inclusive
         val skip   = Random.nextFloat
         for {
-          r <- runSections(net, List((rounds, skip)), uniqueNameFor(net), enableOutput = false)
-        } yield r._1
+          r <- runSections(namedNet._1, List((rounds, skip)), namedNet._2, enableOutput = false)
+        } yield {
+          val newNet     = r._1
+          val newNetName = uniqueNameFor(newNet)
+          if (generateCode) {
+            println(
+              s"""${newNetName}_ <- runSections(${namedNet._2}, List(($rounds, ${skip}f)), "${namedNet._2}", enableOutput)""".stripMargin
+            )
+            println(s"($newNetName, _) = ${newNetName}_")
+          }
+          (newNet, newNetName)
+        }
       }
 
       // Splits random network and runs random number of rounds for both parts
       def splitAndRun(nets: List[(Network, String)]): F[List[(Network, String)]] =
         for {
           index         <- Sync[F].delay(Random.nextInt(nets.size))
-          (left, right) = nets(index)._1.split(Random.nextFloat)
+          splitPercent  = Random.nextFloat
+          name          = nets(index)._2
+          (left, right) = nets(index)._1.split(splitPercent)
+          leftName      = uniqueNameFor(left)
+          rightName     = uniqueNameFor(right)
+
           r <- if (left.senders.nonEmpty && right.senders.nonEmpty) {
+                if (generateCode) {
+                  println(s"($leftName, $rightName) = $name.split(${splitPercent}f)")
+                }
                 for {
-                  leftNet  <- runRounds(left)
-                  rightNet <- runRounds(right)
+                  leftNet  <- runRounds((left, leftName))
+                  rightNet <- runRounds((right, rightName))
                 } yield {
                   // Replace partition by index with leftNet and rightNet
-                  removeByIndexFrom(nets, index) :+
-                    (leftNet, uniqueNameFor(leftNet)) :+
-                    (rightNet, uniqueNameFor(rightNet))
+                  removeByIndexFrom(nets, index) :+ leftNet :+ rightNet
                 }
               } else {
                 nets.pure
@@ -142,7 +164,15 @@ class FinalizationSpec extends FlatSpec with Matchers {
           // Take 2 random indices, remove corresponding items and add merging of them
           val indexes             = Random.shuffle(nets.indices.toList).take(2)
           val (leftNet, rightNet) = (nets(indexes.head)._1, nets(indexes(1))._1)
+          val leftName            = nets(indexes.head)._2
+          val rightName           = nets(indexes(1))._2
           val mergedNets          = leftNet >|< rightNet
+          val mergedName          = uniqueNameFor(mergedNets)
+
+          if (generateCode) {
+            println(s"$mergedName = $leftName >|< $rightName")
+          }
+
           nets.zipWithIndex
             .filter { case (_, index) => !indexes.contains(index) }
             .map { case (namedNet, _) => namedNet } :+ (mergedNets, uniqueNameFor(mergedNets))
@@ -234,8 +264,8 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   // This test is ignored by default to provide finite tests time execution
   // It makes sense to turn on this test only on the local machine for long-time finalization testing
-  it should "run infinite test" ignore {
-    sut.runInfinite(enableOutput = false).runSyncUnsafe()
+  it should "run infinite test" in {
+    sut.runInfinite(enableOutput = false, generateCode = true).runSyncUnsafe()
   }
 
   def dagAsCluster[F[_]: Sync: GraphSerializer](
