@@ -6,8 +6,8 @@ import cats.syntax.all._
 import cats.{Applicative, Foldable, Monad}
 import coop.rchain.casper.api.GraphzGenerator.{DagInfo, ValidatorsBlocks}
 import coop.rchain.casper.api.ValidatorBlock
+import coop.rchain.finalization.simulation.Simulation._
 import coop.rchain.graphz._
-import coop.rchain.casper.sim.Simulation._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -82,6 +82,21 @@ class FinalizationSpec extends FlatSpec with Matchers {
       val enableOutput = true
       val nets         = List(10).map(genNet(_, enableOutput))
       nets.traverse { case (net, name) => randomTest(net, name, enableOutput) }
+    }
+
+    def runOneOut = {
+      val enableOutput = true
+      val nets         = List(10).map(genNet(_, enableOutput))
+
+      nets.traverse {
+        case (net, name) =>
+          for {
+            net1_     <- runSections(net, List((10, 0f)), s"net1-$name", enableOutput)
+            (net1, _) = net1_
+            (o, _)    = net1.split(.9f)
+            r         <- runSections(o, List((10, .0f)), s"o-$name", enableOutput)
+          } yield r
+      }
     }
 
     def runInfinite(enableOutput: Boolean): F[Unit] = {
@@ -210,7 +225,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   val sut = new NetworkRunner[Task]()
 
-  it should "run network with complete dag" ignore {
+  it should "run network with complete dag" in {
     val r        = sut.runDagComplete.runSyncUnsafe()
     val (end, _) = r
     val a = end.senders.toList.map(
@@ -221,8 +236,19 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   }
 
-  it should "run random network" ignore {
+  it should "run random network" in {
     val r        = sut.runRandom.runSyncUnsafe()
+    val (end, _) = r.last
+    val a = end.senders.toList.map(
+      _.realFringes
+        .map(_.toList.sortBy { case (k, _) => k.id }.map(_._2.id).toString())
+    )
+    println(a.mkString("\n"))
+
+  }
+
+  it should "run network with one down" in {
+    val r        = sut.runOneOut.runSyncUnsafe()
     val (end, _) = r.last
     val a = end.senders.toList.map(
       _.realFringes
@@ -234,7 +260,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   // This test is ignored by default to provide finite tests time execution
   // It makes sense to turn on this test only on the local machine for long-time finalization testing
-  it should "run infinite test" ignore {
+  it should "run infinite test" in {
     sut.runInfinite(enableOutput = false).runSyncUnsafe()
   }
 

@@ -1,12 +1,12 @@
-package coop.rchain.casper.sim
+package coop.rchain.finalization.simulation
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import cats.{Id, Monad, Show}
-import coop.rchain.casper.pcasper.Fringe.{Fringe, LazyReconciler}
-import coop.rchain.casper.pcasper.{Fringe, PCasper}
-
+import cats.{Id, Monad}
 import coop.rchain.catscontrib.effect.implicits.syncId
+import coop.rchain.pcasper.finalization.{Finalizer, Fringe}
+import coop.rchain.pcasper.finalization.`lazy`.LazyFinal
+import coop.rchain.shared.Stopwatch
 
 import scala.collection.immutable.{Queue, SortedMap}
 
@@ -19,6 +19,102 @@ object Simulation {
       .map { case (_, m) => s"${m.id}" }
       .mkString(" ")
 
+  // Bonds map should consist of senders bonded in all parents bonds maps
+  def bondsMap(parentsBonds: Iterable[Map[Sender, Long]]) =
+    parentsBonds
+      .reduceOption(_ filterKeys _.keySet.contains)
+      .getOrElse(Map())
+
+  def initNetwork(sendersCount: Int, stake: Int, enableOutput: Boolean) = {
+    // Arbitrary number of senders (bonded validators)
+    val senders = (0 until sendersCount).map { n =>
+      Sender(n, stake)
+    }.toSet
+
+    // Genesis message created by first sender
+    val sender0   = senders.find(_.id == 0).get
+    val fullBonds = senders.map(_ -> stake.toLong).toMap
+    val genesisMsg =
+      Msg(s"g", height = 0, sender = sender0, senderSeq = -1, justifications = Map(), fullBonds)
+
+    // Latest messages for all senders is genesis message
+    val latestMsgs = senders.map((_, genesisMsg)).toMap
+
+    // Initial messages in the DAG
+    val dag = Map((genesisMsg.id, genesisMsg))
+
+    val heightMap = SortedMap(genesisMsg.height -> Set(genesisMsg))
+
+    val initFinal = {
+      val complete = senders.map(_ -> genesisMsg).toMap
+      LazyFinal(complete, Map())
+    }
+    // Seen state
+    val seen = Map(
+      genesisMsg -> MsgView(
+        root = genesisMsg,
+        seenMsgs = Set(),
+        finalized = initFinal
+      )
+    )
+    val initFinState = Queue(senders.map(_ -> genesisMsg).toMap)
+
+    val fringeProcessor = Ref.of[Id, FringeProcessor](FringeProcessor(Map.empty, sendersCount))
+
+    val senderStates =
+      senders.map(
+        s =>
+          SenderState(
+            me = s,
+            seqNum = 0,
+            latestMsgs,
+            dag,
+            heightMap,
+            seen,
+            Map(),
+            Map(),
+            realFringes = initFinState,
+            fringeProcessor = fringeProcessor,
+            fullBonds,
+            enableOutput = enableOutput
+          )
+      )
+    Network(senderStates)
+  }
+
+  def runNetwork[F[_]: Monad](network: Network, genHeight: Int, skipPercentage: Float) =
+    (genHeight, network).tailRecM {
+      case (round, net) =>
+        //        println(s"ROUND: $round")
+
+        val newMsgSenders = net.senders.map { ss =>
+          val rnd = Math.random()
+          val (newS, m) =
+            if (rnd > skipPercentage) ss.createMsg()
+            else (ss, ss.dag.head._2)
+          (newS, m)
+        }
+
+        //        println(s"  > created msg")
+
+        val newSS   = newMsgSenders.map(_._1)
+        val newMsgs = newMsgSenders.map(_._2)
+
+        val newSenderStates = newMsgs.foldLeft(newSS) {
+          case (ss, m) =>
+            ss.map(_.addMsg(m))
+        }
+
+        //        println(s"  > added msg")
+
+        val newNet = net.copy(newSenderStates)
+
+        val res =
+          if (round > 1) (round - 1, newNet).asLeft // Loop
+          else newNet.asRight                       // Final value
+        res.pure[F]
+    }
+
   // Sender represents validator node
   final case class Sender(id: Int, stake: Int) {
     override def hashCode(): Int = this.id.hashCode()
@@ -30,7 +126,8 @@ object Simulation {
       height: Int,
       sender: Sender,
       senderSeq: Int,
-      justifications: Map[Int, String]
+      justifications: Map[Int, String],
+      bondsMap: Map[Sender, Long]
   ) {
     override def hashCode(): Int = this.id.hashCode()
   }
@@ -39,7 +136,7 @@ object Simulation {
   final case class MsgView(
       root: Msg,
       seenMsgs: Set[MsgView],
-      finalized: Map[Sender, Msg]
+      finalized: LazyFinal[Msg, Sender]
   ) {
     override def hashCode(): Int = this.root.id.hashCode()
 
@@ -47,7 +144,7 @@ object Simulation {
       val sms     = seenMsgs.map(_.root)
       val seenStr = showMsgs(sms.toSeq)
 
-      val finalizedStr = showFringe(finalized)
+      val finalizedStr = showFringe(finalized.complete)
 
       s"${root.id} { $seenStr F{ $finalizedStr }}"
     }
@@ -67,9 +164,33 @@ object Simulation {
       witnessMap: Map[Msg, Map[Sender, Msg]] = Map(),
       realFringes: Queue[Fringe[Msg, Sender]],
       fringeProcessor: Ref[Id, FringeProcessor],
+      genesisBonds: Map[Sender, Long],
       enableOutput: Boolean
   ) {
     override def hashCode(): Int = this.me.id.hashCode()
+
+    def createMsg(): (SenderState, Msg) = {
+      val maxHeight      = latestMsgs.map(_._2.height).max
+      val newHeight      = maxHeight + 1
+      val newSeqNum      = seqNum + 1
+      val justifications = latestMsgs.map { case (s, m) => (s.id, m.id) }
+      val mBonds         = bondsMap(justifications.map(j => dag(j._2)).map(_.bondsMap))
+
+      // Create new message
+      val newMsg = Msg(
+        id = s"${me.id}-$newHeight",
+        height = newHeight,
+        sender = me,
+        senderSeq = newSeqNum,
+        justifications,
+        mBonds
+      )
+
+      // Add message to self state
+      val newState = addMsg(newMsg)
+
+      (newState, newMsg)
+    }
 
     def addMsg(msg: Msg): SenderState =
       if (dag.contains(msg.id)) this
@@ -151,7 +272,7 @@ object Simulation {
           //          selfParent.exists(x => x.root.justifications.values.exists(_ == m.id))
           selfParent.exists(x => loadMsgViews(x.root).exists(x => x.root.id == m.id))
         val mViews = msgViewsJfs.filterNot { m =>
-          hasSeenInParent(m.root) || m.finalized.valuesIterator.contains(m.root)
+          hasSeenInParent(m.root) //|| m.finalized.contains(m.root)
         }
 
         val seenBySeen = mViews
@@ -174,63 +295,42 @@ object Simulation {
           }
           .mkString("\n")
 
-        /** FINALIZATION START */
-        implicit val showSender: Show[Sender] = new Show[Sender] {
-          override def show(t: Sender): String = s"${t.id}"
-        }
-        // this sum of maps to make sure view includes all senders
-        val view = latestMsgs.map { case (s, _) => (s, Msg("g", 0, Sender(0, 1), -1, Map())) } ++
-          loadJfs(msg).map(m => (m.sender, m))
-        val bondsMap  = latestMsgs.keySet.map(m => (m -> m.stake.toLong)).toMap
-        val curFringe = realFringes.last
-        val advancement = PCasper.updateFinalFringe[Id, Msg, Sender](
-          curFringe,
-          bondsMap,
-          view,
-          witnessMap.getOrElse(_, Map()),
-          loadJfs(_).map(v => v.sender -> v).toMap
-        )(_.senderSeq.toLong, _.sender)
-        val newRealFringes =
-          if (advancement.nonEmpty) {
-            val newFringes =
-              advancement.map(v => realFringes :+ (curFringe ++ v)).getOrElse(realFringes)
-            fringeProcessor.update(_.addSenderFringe(me, newFringes.last.values.toSet))
-            newFringes
-          } else realFringes
-
-        /** FINALIZATION END */
-        // TODO prepare provisional finalization to make merging of final chunks easier
-        /** PROVISIONING START */
-        //        // Prepare view on finalization from views of parents
-        //        // For the purpose of simulation conflict resolution and state merging on reconciliation is irrelevant.
-        //        // Only the shape of the final fringe matters.
-        //        val reconciler = new LazyReconciler[Id, Msg, Sender](_.senderSeq.toLong)
-        //        implicit val showSender: Show[Sender] = new Show[Sender] {
-        //          override def show(t: Sender): String = s"${t.id}"
-        //        }
-        //
-        //        val justifications = loadMsgViews(msg).map(_.root)
-        //        val parents =
-        //          justifications.filter(j => (loadMsgViews(j).map(_.root) intersect justifications).isEmpty)
-        //
-        //        val allGenesis = bondsMap.map { case (s, _) => s -> Msg("g", -1, s, 0, Map()) }
-        //        val r = PCasper.computeFinalityView[Id, Msg, Sender](
-        //          allGenesis ++ justifications // this allGenesis is prefixed because genesis has only 1 sender
-        //            .map(v => v.sender -> v)
-        //            .toMap,
-        //          parents.toList,
-        //          reconciler,
-        //          bondsMap,
-        //          witnessMap.getOrElse(_, Map()),
-        //          loadJfs(_).map(v => v.sender -> v).toMap
-        //        )(
-        //          seen(_).finalized.pure,
-        //          _.senderSeq.toLong,
-        //          _.sender
-        //        )
-        /** PROVISIONING END */
-//        val partition = seenBySeen.flatMap(x => x._2.filter(y => seers(y.root.sender)))
+//        // Fringe to record as final, fringe to associate with the message
+//        val ((toFinalize, toPutInMessage), finTime) = {
+//          Stopwatch.profile(
 //
+//          )
+//        }
+        val (mFinal @ LazyFinal(complete, _), finTime) = {
+          Stopwatch.profile(
+            LazyFinalization.run(
+              msg.sender,
+              mViews,
+              genesisBonds,
+              msgViewsJfs.map(_.root),
+              witnessMap.getOrElse(_, Map()),
+              loadJfs(_: Msg).map(m => m.sender -> m).toMap
+            )
+//            EagerFinalization.run(msg)(witnessMap.getOrElse(_, Map()), loadMsgViews)
+          )
+        }
+        println(s"Finalization run in $finTime")
+
+        //    val newRealFringes =
+        //      if (advancement.nonEmpty)
+        //        advancement.map(v => realFringes :+ (curFringe ++ v)).getOrElse(realFringes)
+        //      else realFringes
+
+        val newRealFringes =
+          if (realFringes.contains(complete)) realFringes
+          else {
+            val newFringes = realFringes :+ complete
+            fringeProcessor.update(_.addSenderFringe(me, complete.valuesIterator.toSet))
+            newFringes
+          }
+
+        //        val partition = seenBySeen.flatMap(x => x._2.filter(y => seers(y.root.sender)))
+        //
 //        val mFinalized = if (partition.size >= 2) {
 //          partition.map(_.root).toSet
 //        } else {
@@ -238,7 +338,11 @@ object Simulation {
 //        }
 
         val newMsgView =
-          MsgView(root = msg, seenMsgs = mViews, finalized = Map()) // TODO compute view of the message
+          MsgView(
+            root = msg,
+            seenMsgs = mViews,
+            finalized = mFinal
+          ) // TODO compute view of the message
 
         val newSeen = seen + ((msg, newMsgView))
 //
@@ -271,27 +375,6 @@ object Simulation {
           realFringes = newRealFringes
         )
       }
-
-    def createMsg(): (SenderState, Msg) = {
-      val maxHeight      = latestMsgs.map(_._2.height).max
-      val newHeight      = maxHeight + 1
-      val newSeqNum      = seqNum + 1
-      val justifications = latestMsgs.map { case (s, m) => (s.id, m.id) }
-
-      // Create new message
-      val newMsg = Msg(
-        id = s"${me.id}-$newHeight",
-        height = newHeight,
-        sender = me,
-        senderSeq = newSeqNum,
-        justifications
-      )
-
-      // Add message to self state
-      val newState = addMsg(newMsg)
-
-      (newState, newMsg)
-    }
   }
 
   // State that represents the whole network
@@ -318,90 +401,6 @@ object Simulation {
       Network(newSenders1 ++ newSenders2)
     }
   }
-
-  def initNetwork(sendersCount: Int, stake: Int, enableOutput: Boolean) = {
-    // Arbitrary number of senders (bonded validators)
-    val senders = (0 until sendersCount).map { n =>
-      Sender(n, stake)
-    }.toSet
-
-    // Genesis message created by first sender
-    val sender0 = senders.find(_.id == 0).get
-    val genesisMsg =
-      Msg(s"g", height = 0, sender = sender0, senderSeq = -1, justifications = Map())
-
-    // Latest messages for all senders is genesis message
-    val latestMsgs = senders.map((_, genesisMsg)).toMap
-
-    // Initial messages in the DAG
-    val dag = Map((genesisMsg.id, genesisMsg))
-
-    val heightMap = SortedMap(genesisMsg.height -> Set(genesisMsg))
-
-    val initFringe = senders.map(_ -> genesisMsg).toMap
-    // Seen state
-    val seen = Map(
-      genesisMsg -> MsgView(
-        root = genesisMsg,
-        seenMsgs = Set(),
-        finalized = initFringe
-      )
-    )
-    val initFinState = Queue(senders.map(_ -> genesisMsg).toMap)
-
-    val fringeProcessor = Ref.of[Id, FringeProcessor](FringeProcessor(Map.empty, sendersCount))
-
-    val senderStates =
-      senders.map(
-        s =>
-          SenderState(
-            me = s,
-            seqNum = 0,
-            latestMsgs,
-            dag,
-            heightMap,
-            seen,
-            realFringes = initFinState,
-            fringeProcessor = fringeProcessor,
-            enableOutput = enableOutput
-          )
-      )
-
-    Network(senderStates)
-  }
-
-  def runNetwork[F[_]: Monad](network: Network, genHeight: Int, skipPercentage: Float) =
-    (genHeight, network).tailRecM {
-      case (round, net) =>
-        //        println(s"ROUND: $round")
-
-        val newMsgSenders = net.senders.map { ss =>
-          val rnd = Math.random()
-          val (newS, m) =
-            if (rnd > skipPercentage) ss.createMsg()
-            else (ss, ss.dag.head._2)
-          (newS, m)
-        }
-
-        //        println(s"  > created msg")
-
-        val newSS   = newMsgSenders.map(_._1)
-        val newMsgs = newMsgSenders.map(_._2)
-
-        val newSenderStates = newMsgs.foldLeft(newSS) {
-          case (ss, m) =>
-            ss.map(_.addMsg(m))
-        }
-
-        //        println(s"  > added msg")
-
-        val newNet = net.copy(newSenderStates)
-
-        val res =
-          if (round > 1) (round - 1, newNet).asLeft // Loop
-          else newNet.asRight                       // Final value
-        res.pure[F]
-    }
 
   final case class FringeProcessor(fringes: Map[Sender, Vector[Set[Msg]]], sendersCount: Int) {
     def addSenderFringe(sender: Sender, fringe: Set[Msg]): FringeProcessor = {
