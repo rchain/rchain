@@ -26,9 +26,6 @@ object Casper {
   /** Fringe candidate has multiple next messages for some senders.*/
   type FringeCandidate[M, S] = Map[S, Option[M]]
 
-  /** Fringe have to go across all senders. */
-  type Fringe[M, S] = Map[S, M]
-
   final case class DagPath[M, S](source: M, sink: M, sendersSeen: Set[S])
 
   /** Next messages to be finalized. */

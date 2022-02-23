@@ -7,6 +7,7 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._
+import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager._
@@ -19,8 +20,10 @@ import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.ParBuilder
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
+import coop.rchain.blockstorage.syntax._
 
 import scala.collection.Seq
 
@@ -41,31 +44,55 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
       block: BlockMessage,
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
-    if (incomingPreStateHash != s.finalizedFringe.state) {
-      //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
-      Log[F]
-        .warn(
-          s"Computed pre-state hash ${PrettyPrinter.buildString(s.finalizedFringe.state)} does not equal block's pre-state hash ${PrettyPrinter
-            .buildString(incomingPreStateHash)}"
-        )
-        .as(none[StateHash].asRight[BlockError])
-    } else {
-      for {
-        replayResult <- replayBlock(
-                         incomingPreStateHash,
-                         block,
-                         s.dag,
-                         runtimeManager
+    for {
+      _ <- Span[F].mark("before-unsafe-get-parents")
+      parents <- block.justifications.traverse {
+                  case Justification(_, h) => BlockStore[F].getUnsafe(h)
+                }
+      _                   <- Span[F].mark("before-compute-parents-post-state")
+      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
+      _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
+      result <- computedParentsInfo match {
+                 case Left(ex) =>
+                   BlockStatus.exception(ex).asLeft[Option[StateHash]].pure
+                 case Right((computedPreStateHash, rejectedDeploys @ _)) =>
+                   val rejectedDeployIds = rejectedDeploys.toSet
+                   if (incomingPreStateHash != computedPreStateHash) {
+                     //TODO at this point we may just as well terminate the replay, there's no way it will succeed.
+                     Log[F]
+                       .warn(
+                         s"Computed pre-state hash ${PrettyPrinter.buildString(computedPreStateHash)} does not equal block's pre-state hash ${PrettyPrinter
+                           .buildString(incomingPreStateHash)}"
                        )
-        result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
-      } yield result
-    }
+                       .as(none[StateHash].asRight[BlockError])
+                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
+                     Log[F]
+                       .warn(
+                         s"Computed rejected deploys " +
+                           s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
+                           s"block's rejected deploy " +
+                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
+                       )
+                       .as(InvalidRejectedDeploy.asLeft)
+                   } else {
+                     for {
+                       replayResult <- replayBlock(
+                                        incomingPreStateHash,
+                                        block,
+                                        s.dag,
+                                        runtimeManager
+                                      )
+                       result <- handleErrors(ProtoUtil.postStateHash(block), replayResult)
+                     } yield result
+                   }
+               }
+    } yield result
   }
 
   private def replayBlock[F[_]: Sync: Log: BlockStore](
@@ -170,30 +197,98 @@ object InterpreterUtil {
   }
 
   def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
+      s: CasperSnapshot[F],
+      parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator],
-      preStateHash: StateHash
+      invalidBlocks: Map[BlockHash, Validator]
   )(
       implicit spanF: Span[F]
   ): F[
-    (StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
+    (StateHash, StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])
   ] =
-    spanF.trace(ComputeDeploysCheckpointMetricsSource) {
-      for {
-        result <- runtimeManager.computeState(preStateHash)(
-                   deploys,
-                   systemDeploys,
-                   blockData,
-                   invalidBlocks
-                 )
-        (postStateHash, processedDeploys, processedSystemDeploys) = result
-      } yield (
-        postStateHash,
-        processedDeploys,
-        processedSystemDeploys
-      )
+    for {
+      nonEmptyParents <- parents.pure
+                          .ensure(new IllegalArgumentException("Parents must not be empty"))(
+                            _.nonEmpty
+                          )
+      computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
+      (preStateHash, rejectedDeploys) = computedParentsInfo
+      result <- runtimeManager.computeState(preStateHash)(
+                 deploys,
+                 systemDeploys,
+                 blockData,
+                 invalidBlocks
+               )
+      (postStateHash, processedDeploys, processedSystemDeploys) = result
+    } yield (
+      preStateHash,
+      postStateHash,
+      processedDeploys,
+      rejectedDeploys,
+      processedSystemDeploys
+    )
+
+  private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
+      parents: Seq[BlockMessage],
+      s: CasperSnapshot[F],
+      runtimeManager: RuntimeManager[F]
+  )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
+    parents match {
+      // For genesis, use empty trie's root hash
+      case Seq() =>
+        (RuntimeManager.emptyStateHashFixed, Seq.empty[ByteString]).pure[F]
+
+      // For single parent, get itd post state hash
+      case Seq(parent) =>
+        (ProtoUtil.postStateHash(parent), Seq.empty[ByteString]).pure[F]
+
+      // we might want to take some data from the parent with the most stake,
+      // e.g. bonds map, slashing deploys, bonding deploys.
+      // such system deploys are not mergeable, so take them from one of the parents.
+      case _ => {
+        val blockIndexF = (v: BlockHash) => {
+          val cached = BlockIndex.cache.get(v).map(_.pure)
+          cached.getOrElse {
+            for {
+              b         <- BlockStore[F].getUnsafe(v)
+              preState  = b.body.state.preStateHash
+              postState = b.body.state.postStateHash
+              sender    = b.sender.toByteArray
+              seqNum    = b.seqNum
+
+              mergeableChs <- runtimeManager.loadMergeableChannels(postState, sender, seqNum)
+
+              blockIndex <- BlockIndex(
+                             b.blockHash,
+                             b.body.deploys,
+                             b.body.systemDeploys,
+                             preState.toBlake2b256Hash,
+                             postState.toBlake2b256Hash,
+                             runtimeManager.getHistoryRepo,
+                             mergeableChs
+                           )
+            } yield blockIndex
+          }
+        }
+        for {
+          lfbState <- BlockStore[F]
+                       .getUnsafe(s.lastFinalizedBlock)
+                       .map(_.body.state.postStateHash)
+                       .map(Blake2b256Hash.fromByteString)
+          r <- DagMerger.merge[F](
+                s.dag,
+                s.lastFinalizedBlock,
+                lfbState,
+                blockIndexF(_).map(_.deployChains),
+                runtimeManager.getHistoryRepo,
+                DagMerger.costOptimalRejectionAlg
+              )
+          (state, rejected) = r
+        } yield (ByteString.copyFrom(state.bytes.toArray), rejected)
+
+      }
     }
 }

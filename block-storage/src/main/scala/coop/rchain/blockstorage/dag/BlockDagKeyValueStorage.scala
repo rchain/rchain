@@ -1,15 +1,14 @@
 package coop.rchain.blockstorage.dag
 
-import cats.{Id, Show}
 import cats.data.OptionT
-import cats.effect.concurrent.{Deferred, Ref, Semaphore}
+import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
 import coop.rchain.blockstorage.dag.BlockDagStorage._
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
-import coop.rchain.blockstorage.dag.DeployChainSetCasper._
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs.{codecDeployChain, _}
 import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState
@@ -17,24 +16,18 @@ import coop.rchain.blockstorage.dag.state.BlockDagRepresentationState.BlockDagFi
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil.{bonds, _}
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{BlockMessage, Bond, DeployChain, Justification}
-import coop.rchain.blockstorage.casper.Casper
-import coop.rchain.blockstorage.casper.Casper.FinalizationFringe
-import coop.rchain.blockstorage.casper.ConflictsResolver.ConflictResolution
-import coop.rchain.casper.pcasper.Fringe.{Fringe, LazyReconciler}
-import coop.rchain.casper.pcasper.{Finalizer, PCasper}
+import coop.rchain.casper.protocol.{BlockMessage, Bond, DeployChain}
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash.StateHash
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Base16, Log, LogSource}
+import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
-import coop.rchain.models.syntax._
-import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import scala.collection.immutable.SortedMap
 import scala.collection.mutable
@@ -316,6 +309,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         // fringe exists - try update
         case Some((latestIdx, fringe)) =>
           FinalityState.updateFinalFringe(
+            block.sender,
+            block.justifications,
             dag,
             fringe,
             bonds,

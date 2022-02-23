@@ -10,7 +10,6 @@ import coop.rchain.blockstorage.casper.DependencyGraph.{
 }
 import coop.rchain.blockstorage.casper.SafetyOracle2.Agreement
 import coop.rchain.blockstorage.casper._
-import coop.rchain.casper.pcasper.{Finalizer, Fringe}
 import coop.rchain.shared.Log
 import fs2.{Chunk, Stream}
 

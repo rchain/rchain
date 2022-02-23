@@ -7,17 +7,14 @@ import coop.rchain.blockstorage.casper.syntax.all._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DagFringe
 import coop.rchain.blockstorage.dag.DeployChainSetCasper.BlockMetadataDag
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.pcasper.Fringe.{Fringe, LazyReconciler}
-import coop.rchain.casper.pcasper.PCasper
-import coop.rchain.casper.protocol.{BlockMessage, Bond, DeployChain, Justification}
-import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.casper.protocol.{DeployChain, Justification}
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.models.syntax._
+import coop.rchain.pcasper.finalization.{isSupermajority, Fringe}
+import coop.rchain.pcasper.finalization.`lazy`.{DagData, LazyFinal, LazyFinalizer, LazyPartitioner}
 import coop.rchain.shared.{Base16, Log}
-
-import scala.collection.immutable.SortedMap
 
 final case class FinalityState[M, S](
     fringeFinal: Fringe[M, S],
@@ -34,6 +31,8 @@ object FinalityState {
 
   /** Update finalization of the network. */
   def updateFinalFringe[F[_]: Log: Concurrent](
+      viewSender: Validator,
+      view: List[Justification],
       dag: BlockDagRepresentation[F],
       latestFringe: DagFringe,
       bonds: Map[Validator, Long],
@@ -162,15 +161,32 @@ object FinalityState {
                 }
         } yield ()
 
-      _ <- PCasper
-            .updateFinalFringe[F, BlockMetadata, Validator](
-              latestFringeMeta.toMap.mapValues(_.head),
-              bonds,
-              latestMessages,
-              witF,
-              jsF
-            )(_.seqNum, _.sender)
-            .flatMap(_.traverse(recordFinal))
+      genesis       <- dag.genesis.flatMap(dag.lookupUnsafe)
+      genesisView   = bonds.mapValues(_ => genesis)
+      jfsAllAcrossF = jsF(_: BlockMetadata).map(genesisView ++ _)
+      view <- view
+               .map(m => (m.validator, m.latestBlockHash))
+               .traverse {
+                 case (s, m) => dag.lookupUnsafe(m).map(s -> _)
+               }
+               .map(genesisView ++ _)
+
+      dg = new DagData[F, BlockMetadata, Validator] {
+        override def witnessesF: BlockMetadata => F[Map[Validator, BlockMetadata]] = witF
+
+        override def justificationsF: BlockMetadata => F[Map[Validator, BlockMetadata]] =
+          jfsAllAcrossF
+
+        override def seqNum: BlockMetadata => Long = _.seqNum
+
+        override def sender: BlockMetadata => Validator = _.sender
+      }
+
+      _ = LazyFinalizer(viewSender, view, bonds, dg).computeFinal(
+        List(LazyFinal(latestFringeMeta.toMap.mapValues(_.head), Map()))
+      )
+
+//            .flatMap(_.traverse(recordFinal))
     } yield ()
   }
 //

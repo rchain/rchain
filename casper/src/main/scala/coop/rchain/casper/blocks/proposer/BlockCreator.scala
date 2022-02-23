@@ -19,6 +19,7 @@ import coop.rchain.models.DeployId
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.shared.{Log, Stopwatch, Time}
+import coop.rchain.blockstorage.syntax._
 
 object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
@@ -101,8 +102,8 @@ object BlockCreator {
 
       val createBlockProcess = for {
         _                <- Log[F].info(s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})")
-        preStateHash     = s.finalizedFringe.state
-        activeValidators <- runtimeManager.getActiveValidators(preStateHash)
+        finalState       = s.finalizedFringe.state
+        activeValidators <- runtimeManager.getActiveValidators(finalState)
 
         userDeploys     <- prepareUserDeploys(nextBlockNum)
         dummyDeploys    = prepareDummyDeploy(nextBlockNum)
@@ -124,24 +125,23 @@ object BlockCreator {
         now           <- Time[F].currentMillis
         invalidBlocks = s.invalidBlocks
         blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+        parents <- justifications.valuesIterator.toList
+                    .traverse(m => BlockStore[F].getUnsafe(m.blockHash))
         checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
+                           s,
+                           parents,
                            deploys.toSeq,
                            systemDeploys,
                            runtimeManager,
                            blockData,
-                           invalidBlocks,
-                           preStateHash
+                           invalidBlocks
                          )
-        (
-          postStateHash,
-          processedDeploys,
-          processedSystemDeploys
-        )             = checkpointData
-        newBonds      <- runtimeManager.computeBonds(postStateHash)
-        _             <- Span[F].mark("before-packing-block")
-        shardId       = s.shardName
-        casperVersion = s.casperVersion
-        finFringeNum  = s.finalizedFringe.num
+        (preStateHash, postStateHash, processedDeploys, processedSystemDeploys) = checkpointData
+        newBonds                                                                <- runtimeManager.computeBonds(postStateHash)
+        _                                                                       <- Span[F].mark("before-packing-block")
+        shardId                                                                 = s.shardName
+        casperVersion                                                           = s.casperVersion
+        finFringeNum                                                            = s.finalizedFringe.num
         // unsignedBlock got blockHash(hashed without signature)
         unsignedBlock = packageBlock(
           blockData,
