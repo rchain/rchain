@@ -53,7 +53,7 @@ class HistoryActionTests
     } yield ()
   }
 
-  "History" should "allow to store different length key records in different branches" in withEmptyHistory {
+  "history" should "allow to store different length key records in different branches" in withEmptyHistory {
     emptyHistoryF =>
       val data = insert(hexKey("01")) :: insert(hexKey("02")) ::
         insert(hexKey("0001")) :: insert(hexKey("0002")) :: Nil
@@ -79,7 +79,7 @@ class HistoryActionTests
       }
   }
 
-  "History" should "not allow to store different length key records in same branch" in withEmptyHistory {
+  "history" should "not allow to store different length key records in same branch" in withEmptyHistory {
     emptyHistoryF =>
       val data = insert(hexKey("01")) :: insert(hexKey("0100")) :: Nil
       for {
@@ -96,7 +96,7 @@ class HistoryActionTests
       }
   }
 
-  "History" should "not allow to process HistoryActions with same keys" in withEmptyHistory {
+  "history" should "not allow to process HistoryActions with same keys" in withEmptyHistory {
     emptyHistoryF =>
       val data1 = insert(_zeros) :: insert(_zeros) :: Nil
       for {
@@ -120,7 +120,7 @@ class HistoryActionTests
       }
   }
 
-  "History after deleting all records" should "be empty" in withEmptyHistory { emptyHistoryF =>
+  "history after deleting all records" should "be empty" in withEmptyHistory { emptyHistoryF =>
     val insertions = insert(_zeros) :: Nil
     val deletions  = delete(_zeros) :: Nil
     for {
@@ -155,7 +155,7 @@ class HistoryActionTests
     } yield ()
   }
 
-  "History" should "correctly build the same trees in different ways" in withEmptyHistory {
+  "history" should "correctly build the same trees in different ways" in withEmptyHistory {
     emptyHistoryF =>
       val insertOne       = insert(hexKey("010000")) :: insert(hexKey("0200")) :: Nil
       val insertTwo       = insert(hexKey("010001")) :: insert(hexKey("0300")) :: Nil
@@ -186,7 +186,7 @@ class HistoryActionTests
       } yield ()
   }
 
-  "Adding already existing records" should "not change history" in withEmptyHistoryAndStore {
+  "adding already existing records" should "not change history" in withEmptyHistoryAndStore {
     (emptyHistoryF, inMemoStore) =>
       val inserts = insert(_zeros) :: Nil
       for {
@@ -202,7 +202,7 @@ class HistoryActionTests
       } yield ()
   }
 // TODO: Don't works for MergingHistory
-  "Collision detecting in KVDB" should "works" in withEmptyHistoryAndStore {
+  "collision detecting in KVDB" should "works" in withEmptyHistoryAndStore {
     (emptyHistoryF, inMemoStore) =>
       def copyBVToBuf(bv: ByteVector): ByteBuffer = {
         val arr    = bv.toArray
