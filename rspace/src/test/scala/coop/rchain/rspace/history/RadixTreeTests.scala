@@ -92,8 +92,8 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                       generateDataForHash(0xA.toByte).toVector
                     )
 
-        newRootNodeOpt = newItemOpt.map(item ⇒ impl.createNodeFromItem(item))
-        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE LEAF", false)
+        newRootNode    ← impl.constructNodeFromItem(newItemOpt.get)
+        printedTreeStr ← impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
 
         etalonVectorStr = Vector(
           "TREE WITH ONE LEAF: root =>",
@@ -113,19 +113,19 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
           TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
           TestData.hexKey(commonKeyPartForTwoLeafs + "225")
         )
-        firstLeafOpt ← impl.update(
-                        RadixTree.EmptyItem,
-                        keys(0),
-                        generateDataForHash(0x11.toByte).toVector
-                      )
-        secondLeafOpt ← impl.update(
-                         firstLeafOpt.get,
-                         keys(1),
-                         generateDataForHash(0x55.toByte).toVector
-                       )
+        item1Opt ← impl.update(
+                    RadixTree.EmptyItem,
+                    keys(0),
+                    generateDataForHash(0x11.toByte).toVector
+                  )
+        item2Opt ← impl.update(
+                    item1Opt.get,
+                    keys(1),
+                    generateDataForHash(0x55.toByte).toVector
+                  )
 
-        newRootNodeOpt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
-        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        newRootNode    ← impl.constructNodeFromItem(item2Opt.get)
+        printedTreeStr ← impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
 
         etalonVectorStr = Vector(
           "TREE WITH ONE NODE AND 2 LEAFS: root =>",
@@ -137,39 +137,43 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         _ = printedTreeStr shouldBe etalonVectorStr
       } yield ()
   }
-  // TODO: Ask Denis!!!!!
   "Appending leaf to leaf" should "create node with two leafs" in createRadixTreeImpl {
     (radixTreeImplF, typedStore) ⇒
       for {
-        impl          ← radixTreeImplF
-        emptyRHash    = RadixHistory.emptyRootHash
-        emptyRootNode ← impl.loadNode(emptyRHash.bytes, noAssert = true)
+        impl ← radixTreeImplF
 
         keys = Vector[Seq[Byte]](
           TestData.hexKey("00000000"),
           TestData.hexKey("34564544")
         )
-        firstLeafOpt ← impl.update(
+        rootItem1Opt ← impl.update(
                         RadixTree.EmptyItem,
                         keys(0),
                         generateDataForHash(0x11.toByte).toVector
                       )
 
-        secondLeafOpt ← impl.update(
-                         firstLeafOpt.get,
-                         keys(1),
-                         generateDataForHash(0x55.toByte).toVector
-                       )
+        rootItem2Opt ← impl.update(
+                        rootItem1Opt.get,
+                        keys(1),
+                        generateDataForHash(0x55.toByte).toVector
+                      )
 
         //  TODO: look in makeActions!!
         // newRoot1Opt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
-        newRoot1 ← impl.createOrLoadNode(secondLeafOpt.get)
+        newRoot1 ← impl.constructNodeFromItem(rootItem2Opt.get)
 
-        printed ← impl.printTree(newRoot1, "TREE", false)
+        printedTreeStr ← impl.printTree(newRoot1, "TREE: TWO LEAFS", false)
+
+        etalonTreeStr = Vector(
+          "TREE: TWO LEAFS: root =>",
+          "   [00]LEAF: prefix = 000000, data = 0000...0011",
+          "   [34]LEAF: prefix = 564544, data = 0000...0055"
+        )
+
+        _ = printedTreeStr shouldBe etalonTreeStr
       } yield ()
   }
 
-  //  TODO: Ask Deins!!!!
   "Updating leaf" should "work correctly" in createRadixTreeImpl { (radixTreeImplF, typedStore) ⇒
     for {
       impl          ← radixTreeImplF
@@ -180,20 +184,19 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       //  Create tree with one leaf
       leafItemOpt ← impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
 
-      newRootNodeOpt = leafItemOpt.map(item ⇒ impl.createNodeFromItem(item))
+      newRootNode <- impl.constructNodeFromItem(leafItemOpt.get)
       printedTreeBeforeChangingLeafData ← impl.printTree(
-                                           newRootNodeOpt.get,
+                                           newRootNode,
                                            "TREE WITH ONE LEAF",
                                            false
                                          )
 
       itemAfterChangeDataOpt ← impl.update(leafItemOpt.get, leafKey, newLeafData)
 
-      newRootNodeAfterChangeLeafOpt = itemAfterChangeDataOpt.map(
-        item ⇒ impl.createNodeFromItem(item)
-      )
+      newRootNodeAfterChangeLeaf ← impl.constructNodeFromItem(itemAfterChangeDataOpt.get)
+
       printedTreeWithNewLeafData ← impl.printTree(
-                                    newRootNodeAfterChangeLeafOpt.get,
+                                    newRootNodeAfterChangeLeaf,
                                     "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
                                     false
                                   )
@@ -240,21 +243,21 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
           TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
           TestData.hexKey(commonKeyPartForTwoLeafs + "225")
         )
-        firstLeafOpt ← impl.update(
-                        RadixTree.EmptyItem,
-                        keys(0),
-                        generateDataForHash(0x11.toByte).toVector
-                      )
-        secondLeafOpt ← impl.update(
-                         firstLeafOpt.get,
-                         keys(1),
-                         generateDataForHash(0x55.toByte).toVector
-                       )
+        item1Opt ← impl.update(
+                    RadixTree.EmptyItem,
+                    keys(0),
+                    generateDataForHash(0x11.toByte).toVector
+                  )
+        item2Opt ← impl.update(
+                    item1Opt.get,
+                    keys(1),
+                    generateDataForHash(0x55.toByte).toVector
+                  )
 
-        newRootNodeOpt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
-        printedTreeStr ← impl.printTree(newRootNodeOpt.get, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        newRootNode    ← impl.constructNodeFromItem(item2Opt.get)
+        printedTreeStr ← impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
 
-        rootNodeItem = newRootNodeOpt.get(1)
+        rootNodeItem = newRootNode(1)
         err ← impl
                .update(
                  rootNodeItem,
