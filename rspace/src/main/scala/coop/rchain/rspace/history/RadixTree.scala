@@ -28,14 +28,14 @@ object RadixTree {
   final case class Leaf(prefix: ByteVector, value: ByteVector) extends Item
 
   /**
-    * Item which contain pointer for child [[Node]]
+    * Item which contain pointer for child [[Node]].
     */
   final case class NodePtr(prefix: ByteVector, ptr: ByteVector) extends Item
 
   /**
     * Base type for nodes in Radix History.
     *
-    * Always contains 256 [[Item]]
+    * Must contain 256 [[Item]]s.
     */
   type Node = Vector[Item]
 
@@ -45,7 +45,7 @@ object RadixTree {
   val numItems = 256
 
   /**
-    * Empty node consists only of [[EmptyItem]]'s.
+    * Empty node consists only of [[EmptyItem]]s.
     */
   val emptyNode: Node = (0 until numItems).map(_ => EmptyItem).toVector
 
@@ -81,35 +81,29 @@ object RadixTree {
     def encode(node: Node): ByteVector = {
 
       // Calculating size of serialized data
-      val sizeNode = node.size
-      @tailrec
-      def loopSize(index: Int, size: Int): Int =
-        if (sizeNode > index)
-          node(index) match {
-            case EmptyItem => loopSize(index + 1, size)
+      val calcSize = node.foldLeft(0) {
+        case (size, EmptyItem) => size
 
-            case Leaf(leafPrefix, value) =>
-              val sizePrefix = leafPrefix.size.toInt
-              assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
-              assert(
-                value.size == defSize,
-                "Error during serialization: size of leafValue not equal 32."
-              )
-              loopSize(index + 1, size + headSize + sizePrefix + defSize)
+        case (size, Leaf(leafPrefix, value)) =>
+          val sizePrefix = leafPrefix.size.toInt
+          assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
+          assert(
+            value.size == defSize,
+            "Error during serialization: size of leafValue not equal 32."
+          )
+          size + headSize + sizePrefix + defSize
 
-            case NodePtr(ptrPrefix, ptr) =>
-              val sizePrefix = ptrPrefix.size.toInt
-              assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
-              assert(
-                ptr.size == defSize,
-                "Error during serialization: size of ptrPrefix not equal 32."
-              )
-              loopSize(index + 1, size + headSize + sizePrefix + defSize)
-          } else size
+        case (size, NodePtr(ptrPrefix, ptr)) =>
+          val sizePrefix = ptrPrefix.size.toInt
+          assert(sizePrefix <= 127, "Error during serialization: size of prefix more than 127.")
+          assert(
+            ptr.size == defSize,
+            "Error during serialization: size of ptrPrefix not equal 32."
+          )
+          size + headSize + sizePrefix + defSize
+      }
 
-      val size = loopSize(0, 0) // Calculating size
-
-      val arr = new Array[Byte](size) //Allocation memory
+      val arr = new Array[Byte](calcSize) //Allocation memory
 
       // Leaf second byte: Leaf identifier (most significant bit = 0) and prefixSize (lower 7 bits = size)
       def encodeLeafSecondByte(prefixSize: Int) = (prefixSize & 0x7F).toByte // (size & 01111111b)
@@ -120,45 +114,45 @@ object RadixTree {
 
       // Serialization (fill allocated memory)
       @tailrec
-      def loopFill(numItem: Int, idx0: Int): Array[Byte] =
-        if (idx0 == size) arr // Happy end (return serializing data).
+      def putItemIntoArray(numItem: Int, pos0: Int): Array[Byte] =
+        if (pos0 == calcSize) arr // Happy end (return serializing data).
         else {
           node(numItem) match {
             // If current item is empty - just skip serialization of this item
-            case EmptyItem => loopFill(numItem + 1, idx0) // Loop to the next item.
+            case EmptyItem => putItemIntoArray(numItem + 1, pos0) // Loop to the next item.
 
             case Leaf(prefix, value) =>
               // Fill first byte - item number
-              arr(idx0) = numItem.toByte
+              arr(pos0) = numItem.toByte
               // Fill second byte - Leaf identifier
-              val idxSecondByte   = idx0 + 1
+              val posSecondByte   = pos0 + 1
               val prefixSize: Int = prefix.size.toInt
-              arr(idxSecondByte) = encodeLeafSecondByte(prefixSize)
+              arr(posSecondByte) = encodeLeafSecondByte(prefixSize)
               // Fill prefix
-              val idxPrefixStart = idxSecondByte + 1
-              for (i <- 0 until prefixSize) arr(idxPrefixStart + i) = prefix(i.toLong)
+              val posPrefixStart = posSecondByte + 1
+              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill leafValue
-              val idxValueStart = idxPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(idxValueStart + i) = value(i.toLong)
-              loopFill(numItem + 1, idxValueStart + defSize) // Loop to the next item.
+              val posValueStart = posPrefixStart + prefixSize
+              for (i <- 0 until defSize) arr(posValueStart + i) = value(i.toLong)
+              putItemIntoArray(numItem + 1, posValueStart + defSize) // Loop to the next item.
 
             case NodePtr(prefix, ptr) =>
               // Fill first byte - item number
-              arr(idx0) = numItem.toByte
+              arr(pos0) = numItem.toByte
               // Fill second byte - NodePtr identifier (most significant bit = 1) and prefixSize (lower 7 bits = size)
-              val idxSecondByte   = idx0 + 1
+              val posSecondByte   = pos0 + 1
               val prefixSize: Int = prefix.size.toInt
-              arr(idxSecondByte) = encodeNodePtrSecondByte(prefixSize)
+              arr(posSecondByte) = encodeNodePtrSecondByte(prefixSize)
               // Fill prefix
-              val idxPrefixStart = idxSecondByte + 1
-              for (i <- 0 until prefixSize) arr(idxPrefixStart + i) = prefix(i.toLong)
+              val posPrefixStart = posSecondByte + 1
+              for (i <- 0 until prefixSize) arr(posPrefixStart + i) = prefix(i.toLong)
               // Fill ptr
-              val idxPtrStart = idxPrefixStart + prefixSize
-              for (i <- 0 until defSize) arr(idxPtrStart + i) = ptr(i.toLong)
-              loopFill(numItem + 1, idxPtrStart + defSize) // Loop to the next item.
+              val posPtrStart = posPrefixStart + prefixSize
+              for (i <- 0 until defSize) arr(posPtrStart + i) = ptr(i.toLong)
+              putItemIntoArray(numItem + 1, posPtrStart + defSize) // Loop to the next item.
           }
         }
-      ByteVector(loopFill(0, 0))
+      ByteVector(putItemIntoArray(0, 0))
     }
 
     /** Deserialization [[ByteVector]] to [[Node]]
@@ -172,31 +166,31 @@ object RadixTree {
 
       @tailrec
       // Each loop decodes one non-empty item.
-      def loop(idx0: Int, node: Node): Node =
-        if (idx0 == maxSize) node // End of deserialization
+      def decodeItem(pos0: Int, node: Node): Node =
+        if (pos0 == maxSize) node // End of deserialization
         else {
           val (idx0Next, nodeNext) = try {
-            val numItem: Int = byteToInt(arr(idx0)) // Take first byte - it's item's number
+            val numItem: Int = byteToInt(arr(pos0)) // Take first byte - it's item's number
             assert(
               node(numItem) == EmptyItem,
               "Error during deserialization: wrong number of item."
             )
-            val idx1       = idx0 + 1
-            val secondByte = arr(idx1) // Take second byte
+            val pos1       = pos0 + 1
+            val secondByte = arr(pos1) // Take second byte
 
             // Decoding prefix
             val prefixSize: Int = secondByte & 0x7F // Lower 7 bits - it's size of prefix (0..127).
             val prefix          = new Array[Byte](prefixSize)
-            val idxPrefixStart  = idx1 + 1
-            for (i <- 0 until prefixSize) prefix(i) = arr(idxPrefixStart + i) // Take prefix
+            val posPrefixStart  = pos1 + 1
+            for (i <- 0 until prefixSize) prefix(i) = arr(posPrefixStart + i) // Take prefix
 
             // Decoding leaf or nodePtr data
             val valOrPtr         = new Array[Byte](defSize)
-            val idxValOrPtrStart = idxPrefixStart + prefixSize
+            val posValOrPtrStart = posPrefixStart + prefixSize
             for (i <- 0 until defSize)
-              valOrPtr(i) = arr(idxValOrPtrStart + i) // Take next 32 bytes - it's data
+              valOrPtr(i) = arr(posValOrPtrStart + i) // Take next 32 bytes - it's data
 
-            val idx0Next = idxValOrPtrStart + defSize // Calculating start position for next loop
+            val pos0Next = posValOrPtrStart + defSize // Calculating start position for next loop
 
             // Decoding type of non-empty item
             val item = if (isLeaf(secondByte)) {
@@ -205,16 +199,16 @@ object RadixTree {
               NodePtr(ByteVector(prefix), ByteVector(valOrPtr))
             }
 
-            (idx0Next, node.updated(numItem, item))
+            (pos0Next, node.updated(numItem, item))
           } catch {
             case _: Exception =>
               assert(assertion = false, "Error during deserialization: out of range")
               (maxSize, emptyNode)
           }
-          loop(idx0Next, nodeNext) // Try to decode next item.
+          decodeItem(idx0Next, nodeNext) // Try to decode next item.
         }
 
-      loop(0, emptyNode)
+      decodeItem(0, emptyNode)
     }
   }
 
@@ -223,22 +217,22 @@ object RadixTree {
     *
     * @return (Common part , rest of b1, rest of b2).
     */
-  def commonPrefix(b1: ByteVector, b2: ByteVector): (ByteVector, ByteVector, ByteVector) = {
+  def commonPrefix(vL: ByteVector, vR: ByteVector): (ByteVector, ByteVector, ByteVector) = {
+    val lengthL   = vL.length
+    val lengthR   = vR.length
+    val lengthMin = lengthL min lengthR
+
     @tailrec
-    def go(
-        common: ByteVector,
-        l: ByteVector,
-        r: ByteVector
-    ): (ByteVector, ByteVector, ByteVector) =
-      if (r.isEmpty) {
-        (common, l, r)
-      } else {
-        val lHead = l.head
-        val rHead = r.head
-        if (lHead == rHead) go(common :+ lHead, l.tail, r.tail)
-        else (common, l, r)
-      }
-    go(ByteVector.empty, b1, b2)
+    def findLastCommonIdx(idx: Long): Long =
+      if (idx >= lengthMin) idx
+      else if (vL(idx) == vR(idx)) findLastCommonIdx(idx + 1)
+      else idx
+
+    val lastCommonIdx = findLastCommonIdx(0)
+    val common        = vL.take(lastCommonIdx)
+    val restL         = vL.drop(lastCommonIdx)
+    val restR         = vR.drop(lastCommonIdx)
+    (common, restL, restR)
   }
 
   /**
@@ -629,11 +623,11 @@ object RadixTree {
     }
 
     /**
-      * Save all cacheW to KVDB
+      * Save all [[cacheW]] to [[store]]
       *
       * If detected collision with older KVDB data - execute Exception
       */
-    def commit(): F[Unit] = {
+    def commit: F[Unit] = {
       def collisionException(collisions: List[(ByteVector, ByteVector)]): F[Unit] =
         new RuntimeException(
           s"${collisions.length} collisions in KVDB (first collision with key = ${collisions.head._1.toHex})."

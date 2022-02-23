@@ -52,7 +52,8 @@ final case class RadixHistory[F[_]: Sync: Parallel](
 
   override def process(actions: List[HistoryAction]): F[History[F]] =
     for {
-      // TODO: To improve time perfomance, it is possible to implement this check into the makeActions().
+
+      /** TODO: To improve time, it is possible to implement this check into the [[RadixTreeImpl.makeActions()]]. */
       _ <- new RuntimeException("Cannot process duplicate actions on one key.").raiseError
             .unlessA(hasNoDuplicates(actions))
 
@@ -61,7 +62,7 @@ final case class RadixHistory[F[_]: Sync: Parallel](
                         val hash       = impl.saveNode(newRootNode)
                         val blakeHash  = Blake2b256Hash.fromByteVector(hash)
                         val newHistory = this.copy(blakeHash, newRootNode, impl, store)
-                        impl.commit().as(newHistory)
+                        impl.commit.as(newHistory)
                       }
       _ = impl.clearWriteCache()
       _ = impl.clearReadCache()
