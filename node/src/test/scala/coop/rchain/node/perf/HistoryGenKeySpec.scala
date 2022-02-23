@@ -11,7 +11,7 @@ import coop.rchain.rspace.history.RadixTree.ExportData
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.history.instances._
 import coop.rchain.shared.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.{Base16, Log, Stopwatch}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, LmdbStoreManager}
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, Matchers}
 import scodec.bits.ByteVector
@@ -20,36 +20,40 @@ import java.io.File
 import java.math.BigInteger
 import java.nio.file
 import java.nio.file.Files
-import scala.concurrent.ExecutionContext
 import scala.reflect.io.{Directory, Path}
 import scala.util.Random
 
 class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
+  object TypesOfHistory extends Enumeration {
+    type TypeHistory = Value
+    val Merging, Radix, Default = Value
+  }
+  import TypesOfHistory._
+
+  object TypesOfStore extends Enumeration {
+    type TypeStore = Value
+    val Lmdb, InMemo = Value
+  }
+  import TypesOfStore._
+
   object Settings {
-//    val typeHistory: String = "MergingHistory"
-//    val typeHistory: String = "RadixHistory"
-    val typeHistory: String = "DefaultHistory"
+    val typeHistory: TypeHistory = Default
 
-    val typeStore: String = "lmdb"
-//    val typeStore: String = "inMemo"
+    val typeStore: TypeStore = Lmdb
 
-//    val calcSize: Boolean = false
     val calcSize: Boolean = true
 
-//    val deleteTest: Boolean = false
     val deleteTest: Boolean = true
 
     val random: Boolean = false
-//    val random: Boolean = true
 
-//    val averageStatistic: Boolean = true
     val averageStatistic: Boolean = false
 
     val averageNum: Int    = 5
     val averageWarmUp: Int = 3
 
-    val flagSize: Boolean = calcSize && (typeStore == "inMemo")
+    val flagSize: Boolean = calcSize && (typeStore == InMemo)
 
     val taskCur: List[ExpT] = tasksList
   }
@@ -61,15 +65,9 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     ExpT(1, 5000),
     ExpT(1, 10000),
     ExpT(1, 30000)
-//    ExpT(1, 30000),
-//    ExpT(1, 100000)
   )
 
   def deleteFile(path: String): Boolean = new File(path).delete()
-
-  sealed trait CreateHistory[F[_]] {
-    def create(root: Blake2b256Hash): F[HistoryType[F]]
-  }
 
   val tempPath: file.Path = Files.createTempDirectory(s"lmdb-test-")
   val tempDir: Directory  = Directory(Path(tempPath.toFile))
@@ -96,6 +94,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       history: History[F],
       getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
   ) extends HistoryType[F]
+
   case class HistoryWithFunc[F[_]](
       history: History[F],
       getNodeDataFromStore: ByteVector => F[Option[ByteVector]],
@@ -103,41 +102,45 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       numRecords: () => Int
   ) extends HistoryType[F]
 
-  case class createMergingHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  sealed trait CreateHistory[F[_]] {
+    def create(root: Blake2b256Hash): F[HistoryType[F]]
+  }
+
+  case class CreateMergingHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
-        case "inMemo" =>
-          for {
-            inMemoStore <- InMemoryKeyValueStore[F].pure
-            _           = inMemoStore.clear()
-            store       = HistoryStoreInstances.historyStore(inMemoStore)
-            history     <- MergingHistory(root, CachingHistoryStore(store)).pure
-          } yield HistoryWithFunc(
+        case InMemo =>
+          val inMemoStore = InMemoryKeyValueStore[F]
+          val _           = inMemoStore.clear()
+          val store       = HistoryStoreInstances.historyStore(inMemoStore)
+          val history     = MergingHistory(root, CachingHistoryStore(store))
+          val r: HistoryType[F] = HistoryWithFunc(
             history,
-            _ => Sync[F].pure(None),
+            _ => none[ByteVector].pure,
             inMemoStore.sizeBytes,
             inMemoStore.numRecords
           )
-        case "lmdb" =>
+          r.pure
+        case Lmdb =>
           for {
             store <- storeLMDB()
             history <- MergingHistory(
                         root,
                         CachingHistoryStore(HistoryStoreInstances.historyStore(store))
                       ).pure
-          } yield HistoryWithoutFunc(history, _ => Sync[F].pure(None))
+          } yield HistoryWithoutFunc(history, _ => none[ByteVector].pure)
 
       }
   }
 
-  case class createRadixHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateRadixHistory[F[_]: Sync: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
-        case "inMemo" =>
+        case InMemo =>
           for {
-            inMemoStore <- InMemoryKeyValueStore[F].pure
+            inMemoStore <- Sync[F].delay(InMemoryKeyValueStore[F])
             _           = inMemoStore.clear()
             radixStore  = RadixHistory.createStore(inMemoStore)
             history     <- RadixHistory[F](root, radixStore)
@@ -147,7 +150,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
             inMemoStore.sizeBytes,
             inMemoStore.numRecords
           )
-        case "lmdb" =>
+        case Lmdb =>
           for {
             store      <- storeLMDB()
             radixStore = RadixHistory.createStore(store)
@@ -156,41 +159,36 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
       }
   }
 
-  case class createDefaultHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
+  case class CreateDefaultHistory[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span]()
       extends CreateHistory[F] {
     def create(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeStore match {
-        case "inMemo" =>
+        case InMemo =>
           for {
-            store   <- InMemoryKeyValueStore[F].pure
+            store   <- Sync[F].delay(InMemoryKeyValueStore[F])
             _       = store.clear()
             history <- History.create(root, store)
           } yield HistoryWithFunc(
             history,
-            _ => Sync[F].pure(None),
+            _ => none[ByteVector].pure,
             store.sizeBytes,
             store.numRecords
           )
-        case "lmdb" =>
+        case Lmdb =>
           for {
             store   <- storeLMDB()
             history <- History.create(root, store)
-          } yield HistoryWithoutFunc(history, _ => Sync[F].pure(None))
+          } yield HistoryWithoutFunc(history, _ => none[ByteVector].pure)
       }
   }
 
-  class Experiment[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span: Sync](
-      implicit ectx: ExecutionContext
-  ) extends HistoryHelpers[F] {
-
-    override def init: Deps =
-      (ectx, Concurrent[F], ContextShift[F], Parallel[F], Log[F], Metrics[F], Span[F])
+  class Experiment[F[_]: Concurrent: ContextShift: Parallel: Log: Metrics: Span: Sync] {
 
     def getHistory(root: Blake2b256Hash): F[HistoryType[F]] =
       Settings.typeHistory match {
-        case "MergingHistory" => createMergingHistory[F].create(root)
-        case "RadixHistory"   => createRadixHistory[F].create(root)
-        case "DefaultHistory" => createDefaultHistory[F].create(root)
+        case Merging => CreateMergingHistory[F].create(root)
+        case Radix   => CreateRadixHistory[F].create(root)
+        case Default => CreateDefaultHistory[F].create(root)
       }
 
     def fill32Bytes(s: String): Array[Byte] = {
@@ -243,7 +241,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
           getNodeDataFromStore: ByteVector => F[Option[ByteVector]]
       ): F[ExportData] = {
         import coop.rchain.rspace.history.RadixTree._
-        if (Settings.typeHistory == "RadixHistory") {
+        if (Settings.typeHistory == Radix) {
           val exportSettings = ExportDataSettings(
             flagNodePrefixes = false,
             flagNodeKeys = true,
@@ -272,13 +270,16 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
                            expData.nodeValues.map(bytes => ByteVector(Blake2b256.hash(bytes)))
                          )
 
-          _ <- Sync[F].delay(assert(keysForValid == expData.nodeKeys, "Error 1 of validation"))
+          _ = assert(keysForValid == expData.nodeKeys, "Error 1 of validation")
 
           localStorage = (expData.nodeKeys zip expData.nodeValues).toMap
 
           expDataForValid <- export(rootHash, 0, localStorage.get(_).pure)
-          _               <- assert(expDataForValid == expData, "Error 2 of validation").pure
+          _               = assert(expDataForValid == expData, "Error 2 of validation")
         } yield ()
+
+      def nsTime[A](block: F[A]): F[(A, Long)] =
+        Stopwatch.nsTime(block).map(x => (x._1, x._2.toMillis))
 
       def statistic(
           i: Int,
@@ -322,13 +323,13 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
                 history1W <- historyInitW.history.process(initInsertActions)
                 history1  <- historyInit.history.process(initInsertActions)
 
-                size0 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+                size0 = calcSizeBytesAndNumRecords(historyInit)
 
                 history2W             <- history1W.process(insertActions)
                 temp                  <- nsTime(history1.process(insertActions))
                 (history2, timeITemp) = temp
 
-                size1 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+                size1 = calcSizeBytesAndNumRecords(historyInit)
 
                 _              <- readAndVerify(history2W, insReadDelHashes)
                 temp           <- nsTime(readAndVerify(history2, insReadDelHashes))
@@ -352,11 +353,10 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
                 temp                 <- nsTime(history2.process(deleteActions))
                 (history3, timeDExp) = temp
 
-                size2 <- Sync[F].delay(calcSizeBytesAndNumRecords(historyInit))
+                size2 = calcSizeBytesAndNumRecords(historyInit)
 
-                _ <- Sync[F]
-                      .delay(assert(history3.root == history1.root, "Test delete not passed"))
-                      .whenA(Settings.deleteTest)
+                _ = if (Settings.deleteTest)
+                  assert(history3.root == history1.root, "Test delete not passed")
 
                 _ = if (Settings.averageStatistic)
                   statistic(
@@ -414,8 +414,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     def fS(v: String): String = "%10s, ".format(v)
     val test: F[Unit] = {
       for {
-        _ <- println(Settings.typeHistory).pure
-
+        _ <- Sync[F].delay(println("Type of history: " + Settings.typeHistory))
         strSize = if (Settings.flagSize)
           fS("[sizeInit(MB)") + fS("numInit]") + fS("[sizeI(MB)") +
             fS("numI]") + fS("[sizeD(MB)") + fS("numD]")
@@ -423,7 +422,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
         str = fS("numInit") + fS("numIRD") + fS("timeI(sec)") + fS("timeR(sec)") + fS("timeD(sec)") + fS(
           "timeExp(sec)"
         ) + fS("timeValid(sec)") + fS("numNode") + strSize
-        _ <- println(str).pure
+        _ = println(str)
         _ <- Settings.taskCur.traverse(x => experiment(x.initNum, x.insReadDelNum).map(x => x))
       } yield ()
     }

@@ -26,12 +26,12 @@ object Stopwatch {
       _  <- log(s"$m")
     } yield a
 
-  def nsTimeToLong[F[_]: Sync, A](block: => F[A]): F[(A, Long)] =
+  def nsTime[F[_]: Sync, A](block: => F[A]): F[(A, FiniteDuration)] =
     for {
       t0 <- Sync[F].delay(System.nanoTime)
       a  <- block
       t1 = System.nanoTime
-      m  = Duration.fromNanos(t1 - t0).toMillis
+      m  = Duration.fromNanos(t1 - t0)
     } yield (a, m)
 
   def duration[F[_]: Sync, A](block: => F[A]): F[(A, String)] =
