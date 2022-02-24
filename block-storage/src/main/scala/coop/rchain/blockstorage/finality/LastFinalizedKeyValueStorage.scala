@@ -24,7 +24,7 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
     lastFinalizedBlockDb.put(Seq((fixedKey, blockHash)))
 
   override def get(): F[Option[BlockHash]] =
-    lastFinalizedBlockDb.get(fixedKey)
+    lastFinalizedBlockDb.get1(fixedKey)
 
   val DONE = ByteString.copyFrom(Array.fill[Byte](32)(-1))
 
@@ -48,7 +48,7 @@ class LastFinalizedKeyValueStorage[F[_]: Sync] private (
       approvedBlockHashOpt <- blockStore.getApprovedBlock.map(_.map(_.candidate.block.blockHash))
       // record hash stored in LastFinalizedStorage, or ApprovedBlock or throw error
       lfb  <- persistedLfbOpt.orElse(approvedBlockHashOpt).liftTo(new Exception(errNoLfbInStorage))
-      curV <- blockMetadataDb.get(lfb).flatMap(_.liftTo[F](new Exception(errNoMetadataForLfb)))
+      curV <- blockMetadataDb.get1(lfb).flatMap(_.liftTo[F](new Exception(errNoMetadataForLfb)))
       _    <- blockMetadataDb.put(lfb, curV.copy(directlyFinalized = true, finalized = true))
       blocksInfoMap <- blockMetadataDb
                         .collect {

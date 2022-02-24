@@ -339,14 +339,14 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       historyReader: HistoryReader[F, Blake2b256Hash, C, P, A, K]
   ): F[Unit] =
     for {
-      nextHotStore <- HotStore.empty(historyReader.base)
+      nextHotStore <- HotStore(historyReader.base)
       _            = storeAtom.set(nextHotStore)
     } yield ()
 
   override def createSoftCheckpoint(): F[SoftCheckpoint[C, P, A, K]] =
     /*spanF.trace(createSoftCheckpointSpanLabel) */
     for {
-      cache    <- storeAtom.get().snapshot()
+      cache    <- storeAtom.get().snapshot
       log      = eventLog.take()
       _        = eventLog.put(Seq.empty)
       pCounter = produceCounter.take()
@@ -358,15 +358,12 @@ abstract class RSpaceOps[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, 
       val history = historyRepositoryAtom.get()
       for {
         historyReader <- history.getHistoryReader(history.root)
-        hotStore <- HotStore.from(
-                     checkpoint.cacheSnapshot,
-                     historyReader.base
-                   )
-        _ = storeAtom.set(hotStore)
-        _ = eventLog.take()
-        _ = eventLog.put(checkpoint.log)
-        _ = produceCounter.take()
-        _ = produceCounter.put(checkpoint.produceCounter)
+        hotStore      <- HotStore(checkpoint.cacheSnapshot, historyReader.base)
+        _             = storeAtom.set(hotStore)
+        _             = eventLog.take()
+        _             = eventLog.put(checkpoint.log)
+        _             = produceCounter.take()
+        _             = produceCounter.put(checkpoint.produceCounter)
       } yield ()
     }
 

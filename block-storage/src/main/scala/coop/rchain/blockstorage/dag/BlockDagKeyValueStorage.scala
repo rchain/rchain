@@ -215,7 +215,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
-      deployIndex.get(deployId)
+      deployIndex.get1(deployId)
 
     override def nonFinalizedSet: Set[BlockHash] =
       dagSet diff finalizedBlocksSet
@@ -306,7 +306,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def shouldAddAsLatest: F[Boolean] =
       latestMessagesIndex
       // Try get sender's latest message
-        .get(block.sender)
+        .get1(block.sender)
         // Get metadata from index
         .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
         // Check if seq number is greater that existing

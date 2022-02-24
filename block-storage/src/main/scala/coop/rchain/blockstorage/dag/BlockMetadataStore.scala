@@ -113,7 +113,7 @@ object BlockMetadataStore {
       } yield ()
     }
 
-    def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get(hash)
+    def get(hash: BlockHash): F[Option[BlockMetadata]] = store.get1(hash)
 
     def getUnsafe(hash: BlockHash)(
         implicit f: Sync[F],

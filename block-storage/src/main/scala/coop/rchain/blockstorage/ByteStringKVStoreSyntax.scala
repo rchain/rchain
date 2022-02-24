@@ -27,6 +27,6 @@ final class ByteStringKVStoreOps[F[_], V](
   ): F[V] = {
     def source = s"${file.value}:${line.value} ${enclosing.value}"
     def errMsg = s"ByteStringKVStore is missing key ${PrettyPrinter.buildString(key)}\n $source"
-    store.get(key) >>= (_.liftTo(ByteStringKVInconsistencyError(errMsg)))
+    store.get1(key) >>= (_.liftTo(ByteStringKVInconsistencyError(errMsg)))
   }
 }

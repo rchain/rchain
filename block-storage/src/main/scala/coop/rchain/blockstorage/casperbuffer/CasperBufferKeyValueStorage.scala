@@ -33,7 +33,7 @@ final class CasperBufferKeyValueStorage[F[_]: Concurrent: Log] private (
   override def addRelation(parent: BlockHash, child: BlockHash): F[Unit] =
     lock.withPermit(
       for {
-        parents <- parentsStore.get(child).map(_.getOrElse(Set.empty[BlockHash]))
+        parents <- parentsStore.get1(child).map(_.getOrElse(Set.empty[BlockHash]))
         _       <- parentsStore.put(child, parents + parent)
         _ <- blockDependencyDag.update(
               curState => DoublyLinkedDagOperations.add(curState, parent, child)
