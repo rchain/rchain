@@ -104,7 +104,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Creating tree with two leafs and one nodePtr" should "work" in createRadixTreeImpl {
+  "Appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in createRadixTreeImpl {
     (radixTreeImplF, typedStore) ⇒
       for {
         impl                     ← radixTreeImplF
@@ -118,23 +118,33 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                     keys(0),
                     generateDataForHash(0x11.toByte).toVector
                   )
+
+        rootNode1    ← impl.constructNodeFromItem(item1Opt.get)
+        printedTree1 ← impl.printTree(rootNode1, "TREE WITH ONE LEAF", false)
+
+        etalonTree1 = Vector(
+          "TREE WITH ONE LEAF: root =>",
+          "   [00]LEAF: prefix = 01122013, data = 0000...0011"
+        )
+
         item2Opt ← impl.update(
                     item1Opt.get,
                     keys(1),
                     generateDataForHash(0x55.toByte).toVector
                   )
 
-        rootNode       ← impl.constructNodeFromItem(item2Opt.get)
-        printedTreeStr ← impl.printTree(rootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        rootNode2    ← impl.constructNodeFromItem(item2Opt.get)
+        printedTree2 ← impl.printTree(rootNode2, "TREE WITH ONE NODE AND 2 LEAFS", false)
 
-        etalonTree = Vector(
+        etalonTree2 = Vector(
           "TREE WITH ONE NODE AND 2 LEAFS: root =>",
           "   [00]PTR: prefix = 0112, ptr =>",
           "      [20]LEAF: prefix = 13, data = 0000...0011",
           "      [22]LEAF: prefix = 25, data = 0000...0055"
         )
 
-        _ = printedTreeStr shouldBe etalonTree
+        _ = printedTree1 shouldBe etalonTree1
+        _ = printedTree2 shouldBe etalonTree2
       } yield ()
   }
   "Appending leaf to leaf" should "create node with two leafs" in createRadixTreeImpl {
