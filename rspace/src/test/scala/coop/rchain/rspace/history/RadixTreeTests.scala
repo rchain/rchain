@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.RadixTree.{Item, RadixTreeImpl}
+import coop.rchain.rspace.history.RadixTree.{byteToInt, commonPrefix, Item, NodePtr, RadixTreeImpl}
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
@@ -158,8 +158,6 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                         generateDataForHash(0x55.toByte).toVector
                       )
 
-        //  TODO: look in makeActions!!
-        // newRoot1Opt = secondLeafOpt.map(item ⇒ impl.createNodeFromItem(item))
         newRoot1 ← impl.constructNodeFromItem(rootItem2Opt.get)
 
         printedTreeStr ← impl.printTree(newRoot1, "TREE: TWO LEAFS", false)
@@ -271,6 +269,156 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: Radix key should be longer than NodePtr key."
       }
+  }
+
+  "Deleting not exising node" should "return none" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl ← radixTreeImplF
+
+        //  Create tree with one node
+        leafData = generateDataForHash(0xCC.toByte).toVector
+        leafKey  = TestData.hexKey("0123456F1").toVector
+
+        itemOpt  ← impl.update(RadixTree.EmptyItem, leafKey, leafData)
+        rootNode ← impl.constructNodeFromItem(itemOpt.get)
+
+        printedTreeStr ← impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", false)
+
+        //  Trying to delete not existing leaf...
+        del ← impl.delete(itemOpt.get, TestData.hexKey("000").toVector.tail)
+
+        _ = del.map(item ⇒ item shouldBe None)
+      } yield ()
+  }
+
+  "Deleting leaf from tree with only one leaf" should "destroy tree" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl ← radixTreeImplF
+
+        //  Create tree with one node
+        leafData = generateDataForHash(0xCC.toByte).toVector
+        leafKey  = TestData.hexKey("0123456F1").toVector
+
+        itemOpt   ← impl.update(RadixTree.EmptyItem, leafKey, leafData)
+        rootNode1 ← impl.constructNodeFromItem(itemOpt.get)
+
+        printedTreeStr ← impl.printTree(rootNode1, "TREE (TEST DELETING ONE LEAF)", false)
+
+        //  Trying to delete not existing leaf...
+        deletedItem         ← impl.delete(itemOpt.get, leafKey)
+        rootNode2           = rootNode1.updated((leafKey.head).toInt, deletedItem.get)
+        printedEmptyTreeStr ← impl.printTree(rootNode2, "EMPTY TREE", false)
+
+        emptyTreeStr = Vector("EMPTY TREE: root =>")
+
+        _ = deletedItem.map(item ⇒ item shouldBe RadixTree.EmptyItem)
+        _ = emptyTreeStr shouldBe printedEmptyTreeStr
+      } yield ()
+  }
+
+  "Deleting leaf from node with two leafs" should "work correctly" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl ← radixTreeImplF
+
+        keys = Vector[Seq[Byte]](
+          TestData.hexKey("00000000"),
+          TestData.hexKey("34564544")
+        )
+
+        rootItem1Hash = generateDataForHash(0x11.toByte).toVector
+        rootItem2Hash = generateDataForHash(0xAF.toByte).toVector
+        rootItem1Opt ← impl.update(
+                        RadixTree.EmptyItem,
+                        keys(0),
+                        rootItem1Hash
+                      )
+
+        rootItem2Opt ← impl.update(
+                        rootItem1Opt.get,
+                        keys(1),
+                        rootItem2Hash
+                      )
+
+        rootNode1    ← impl.constructNodeFromItem(rootItem2Opt.get)
+        printedTree1 ← impl.printTree(rootNode1, "TREE: TWO LEAFS (BEFORE DELETING)", false)
+
+        itemIdx <- Sync[Task].delay(byteToInt(keys(0).head))
+
+        itemToDelete = rootNode1(itemIdx)
+        deletedItem  ← impl.delete(itemToDelete, keys(0).tail)
+        rootNode2    = rootNode1.updated(itemIdx, deletedItem.get)
+
+        printedTree2 ← impl.printTree(
+                        rootNode2,
+                        "TREE: TWO LEAFS (AFTER DELETING)",
+                        false
+                      )
+
+        etalonTreeStr1 = Vector(
+          "TREE: TWO LEAFS (BEFORE DELETING): root =>",
+          "   [00]LEAF: prefix = 000000, data = 0000...0011",
+          "   [34]LEAF: prefix = 564544, data = 0000...00AF"
+        )
+
+        etalonTreeStr2 = Vector(
+          "TREE: TWO LEAFS (AFTER DELETING): root =>",
+          "   [34]LEAF: prefix = 564544, data = 0000...00AF"
+        )
+        _ = printedTree1 shouldBe etalonTreeStr1
+        _ = printedTree2 shouldBe etalonTreeStr2
+      } yield ()
+  }
+
+  "Deleting data from leaf" should "destroy this leaf" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl                     ← radixTreeImplF
+        ptrPrefix                = "FA"
+        commonKeyPartForTwoLeafs = ptrPrefix + "01122"
+        keys = Vector[Seq[Byte]](
+          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+        )
+        item1Opt ← impl.update(
+                    RadixTree.EmptyItem,
+                    keys(0),
+                    generateDataForHash(0x11.toByte).toVector
+                  )
+        item2Opt ← impl.update(
+                    item1Opt.get,
+                    keys(1),
+                    generateDataForHash(0x55.toByte).toVector
+                  )
+
+        rootNode1    ← impl.constructNodeFromItem(item2Opt.get)
+        printedTree1 ← impl.printTree(rootNode1, "TREE WITH ONE NODE AND 2 LEAFS", false)
+
+        etalonTree1 = Vector(
+          "TREE WITH ONE NODE AND 2 LEAFS: root =>",
+          "   [FA]PTR: prefix = 0112, ptr =>",
+          "      [20]LEAF: prefix = 13, data = 0000...0011",
+          "      [22]LEAF: prefix = 25, data = 0000...0055"
+        )
+
+        itemIdx     <- Sync[Task].delay(byteToInt(keys(0).head))
+        deletedItem ← impl.delete(rootNode1(0xFA), keys(0).tail)
+        rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
+        hash        = impl.saveNode(rootNode2)
+
+        printedTree2 ← impl.printTree(rootNode2, "TREE (AFTER DELETE)", false)
+
+        etalonTree2 = Vector(
+          "TREE (AFTER DELETE): root =>",
+          "   [FA]LEAF: prefix = 01122225, data = 0000...0055"
+        )
+
+        _ = printedTree1 shouldBe etalonTree1
+        _ = printedTree2 shouldBe etalonTree2
+
+      } yield ()
   }
 
   protected def createRadixTreeImpl(
