@@ -429,7 +429,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   }
 
-  it should "run regression test" in {
+  it should "run regression test" ignore {
     val r        = sut.runRegression.runSyncUnsafe()
     val (end, _) = r.last
     val a = end.senders.toList.map(
@@ -441,7 +441,7 @@ class FinalizationSpec extends FlatSpec with Matchers {
 
   // This test is ignored by default to provide finite tests time execution
   // It makes sense to turn on this test only on the local machine for long-time finalization testing
-  it should "run infinite test" in {
+  it should "run infinite test" ignore {
     sut.runInfinite(enableOutput = false, generateCode = true).runSyncUnsafe()
   }
 
