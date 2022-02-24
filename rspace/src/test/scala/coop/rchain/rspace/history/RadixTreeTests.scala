@@ -68,7 +68,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         newRootNodeOpt ← impl.makeActions(rootNode, insertActions2)
         treeInfo       ← impl.printTree(newRootNodeOpt.get, "TREE1", false)
 
-        etalonVectorStr = Vector(
+        etalonTree = Vector(
           "TREE1: root =>",
           "   [0F]PTR: prefix = F0, ptr =>",
           "      [00]LEAF: prefix = 0201, data = 0000...000B",
@@ -78,7 +78,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
           "      [12]LEAF: prefix = empty, data = 0000...0002"
         )
 
-        _ = treeInfo shouldBe etalonVectorStr
+        _ = treeInfo shouldBe etalonTree
       } yield ()
   }
 
@@ -86,21 +86,21 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     (radixTreeImplF, typedStore) ⇒
       for {
         impl ← radixTreeImplF
-        newItemOpt ← impl.update(
-                      RadixTree.EmptyItem,
-                      TestData.hexKey("FFFFFFF1").toVector,
-                      generateDataForHash(0xA.toByte).toVector
-                    )
+        item1 ← impl.update(
+                 RadixTree.EmptyItem,
+                 TestData.hexKey("FFFFFFF1").toVector,
+                 generateDataForHash(0xA.toByte).toVector
+               )
 
-        newRootNode    ← impl.constructNodeFromItem(newItemOpt.get)
+        newRootNode    ← impl.constructNodeFromItem(item1.get)
         printedTreeStr ← impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
 
-        etalonVectorStr = Vector(
+        etalonTree = Vector(
           "TREE WITH ONE LEAF: root =>",
           "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
         )
 
-        _ = printedTreeStr shouldBe etalonVectorStr
+        _ = printedTreeStr shouldBe etalonTree
       } yield ()
   }
 
@@ -124,17 +124,17 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                     generateDataForHash(0x55.toByte).toVector
                   )
 
-        newRootNode    ← impl.constructNodeFromItem(item2Opt.get)
-        printedTreeStr ← impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        rootNode       ← impl.constructNodeFromItem(item2Opt.get)
+        printedTreeStr ← impl.printTree(rootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
 
-        etalonVectorStr = Vector(
+        etalonTree = Vector(
           "TREE WITH ONE NODE AND 2 LEAFS: root =>",
           "   [00]PTR: prefix = 0112, ptr =>",
           "      [20]LEAF: prefix = 13, data = 0000...0011",
           "      [22]LEAF: prefix = 25, data = 0000...0055"
         )
 
-        _ = printedTreeStr shouldBe etalonVectorStr
+        _ = printedTreeStr shouldBe etalonTree
       } yield ()
   }
   "Appending leaf to leaf" should "create node with two leafs" in createRadixTreeImpl {
@@ -158,17 +158,17 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                         generateDataForHash(0x55.toByte).toVector
                       )
 
-        newRoot1 ← impl.constructNodeFromItem(rootItem2Opt.get)
+        rootNode ← impl.constructNodeFromItem(rootItem2Opt.get)
 
-        printedTreeStr ← impl.printTree(newRoot1, "TREE: TWO LEAFS", false)
+        printedTreeStr ← impl.printTree(rootNode, "TREE: TWO LEAFS", false)
 
-        etalonTreeStr = Vector(
+        etalonTree = Vector(
           "TREE: TWO LEAFS: root =>",
           "   [00]LEAF: prefix = 000000, data = 0000...0011",
           "   [34]LEAF: prefix = 564544, data = 0000...0055"
         )
 
-        _ = printedTreeStr shouldBe etalonTreeStr
+        _ = printedTreeStr shouldBe etalonTree
       } yield ()
   }
 
@@ -180,37 +180,37 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       leafKey       = TestData.hexKey("0123456F1").toVector
 
       //  Create tree with one leaf
-      leafItemOpt ← impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
+      item1Opt ← impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
 
-      newRootNode <- impl.constructNodeFromItem(leafItemOpt.get)
-      printedTreeBeforeChangingLeafData ← impl.printTree(
-                                           newRootNode,
-                                           "TREE WITH ONE LEAF",
-                                           false
-                                         )
+      rootNode1 <- impl.constructNodeFromItem(item1Opt.get)
+      printedTree1 ← impl.printTree(
+                      rootNode1,
+                      "TREE WITH ONE LEAF",
+                      false
+                    )
 
-      itemAfterChangeDataOpt ← impl.update(leafItemOpt.get, leafKey, newLeafData)
+      item2Opt  ← impl.update(item1Opt.get, leafKey, newLeafData)
+      itemIdx   <- Sync[Task].delay(byteToInt(leafKey.head))
+      rootNode2 ← impl.constructNodeFromItem(item2Opt.get)
 
-      newRootNodeAfterChangeLeaf ← impl.constructNodeFromItem(itemAfterChangeDataOpt.get)
+      printedTree2 ← impl.printTree(
+                      rootNode2,
+                      "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
+                      false
+                    )
 
-      printedTreeWithNewLeafData ← impl.printTree(
-                                    newRootNodeAfterChangeLeaf,
-                                    "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
-                                    false
-                                  )
-
-      treeBeforeChangeLeaf = Vector(
+      etalonTree1 = Vector(
         "TREE WITH ONE LEAF: root =>",
         "   [00]LEAF: prefix = 123456F1, data = 0000...00CB"
       )
 
-      treeAfterChangeLeaf = Vector(
+      etalonTree2 = Vector(
         "TREE WITH ONE LEAF (AFTER CHANGING DATA): root =>",
         "   [00]LEAF: prefix = 123456F1, data = 0000...00FF"
       )
 
-      _ = printedTreeBeforeChangingLeafData shouldBe treeBeforeChangeLeaf
-      _ = printedTreeWithNewLeafData shouldBe treeAfterChangeLeaf
+      _ = printedTree1 shouldBe etalonTree1
+      _ = printedTree2 shouldBe etalonTree2
     } yield ()
   }
 
@@ -232,7 +232,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       }
   }
 
-  "RadixTreeImpl" should "not allow to radix key is smaller than nodePtr key" in createRadixTreeImpl {
+  "RadixTreeImpl" should "not allow to radix key is smaller than NodePtr key" in createRadixTreeImpl {
     (radixTreeImplF, typedStore) ⇒
       for {
         impl                     ← radixTreeImplF
@@ -357,18 +357,18 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                         false
                       )
 
-        etalonTreeStr1 = Vector(
+        etalonTree1 = Vector(
           "TREE: TWO LEAFS (BEFORE DELETING): root =>",
           "   [00]LEAF: prefix = 000000, data = 0000...0011",
           "   [34]LEAF: prefix = 564544, data = 0000...00AF"
         )
 
-        etalonTreeStr2 = Vector(
+        etalonTree2 = Vector(
           "TREE: TWO LEAFS (AFTER DELETING): root =>",
           "   [34]LEAF: prefix = 564544, data = 0000...00AF"
         )
-        _ = printedTree1 shouldBe etalonTreeStr1
-        _ = printedTree2 shouldBe etalonTreeStr2
+        _ = printedTree1 shouldBe etalonTree1
+        _ = printedTree2 shouldBe etalonTree2
       } yield ()
   }
 
@@ -406,7 +406,6 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         itemIdx     <- Sync[Task].delay(byteToInt(keys(0).head))
         deletedItem ← impl.delete(rootNode1(0xFA), keys(0).tail)
         rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
-        hash        = impl.saveNode(rootNode2)
 
         printedTree2 ← impl.printTree(rootNode2, "TREE (AFTER DELETE)", false)
 
