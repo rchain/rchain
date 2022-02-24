@@ -176,7 +176,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
             BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
           ),
-          Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
+          Par().copy(exprs = Vector(Expr(GInt(0))))
         )
         listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,

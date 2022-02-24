@@ -66,7 +66,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
       d: DeployInfoWithEventData,
       report: SingleReport,
       txCtor: String => TransactionType
-  ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.get.sig)))
+  ) = findTransactions(report).map(t => TransactionInfo(t, txCtor(d.deployInfo.sig)))
 
   def getTransaction(blockHash: Blake2b256Hash): F[List[TransactionInfo]] =
     blockReportAPI.blockReport(blockHash.toByteString, forceReplay = false).flatMap { res =>
@@ -95,7 +95,7 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
           val systemDeployTransactions = b.systemDeploys.flatMap { s =>
             // system doesn't get precharge and refund , so it would always get one
             val transactions = findTransactions(s.report.head)
-            val txCtor = s.systemDeploy.get.systemDeploy.value match {
+            val txCtor = s.systemDeploy.systemDeploy.value match {
               case SlashSystemDeployDataProto(_, _)  => SlashingDeploy
               case CloseBlockSystemDeployDataProto() => CloseBlock
             }
@@ -111,16 +111,16 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     val transactions = report.events.iterator
       .map(_.report.value)
       .collect {
-        case ReportCommProto(Some(consume), produces) =>
+        case ReportCommProto(consume, produces) =>
           consume.channels.headOption.map((_, produces))
       }
       .flatten
       .collect { case (channel, produces) if channel == transferUnforgeable => produces.head }
       .map { produce =>
-        val fromAddr       = produce.data.get.pars.head.exprs.head.getGString
-        val toAddr         = produce.data.get.pars(2).exprs.head.getGString
-        val amount         = produce.data.get.pars(3).exprs.head.getGInt
-        val retUnforgeable = produce.data.get.pars(5)
+        val fromAddr       = produce.data.pars.head.exprs.head.getGString
+        val toAddr         = produce.data.pars(2).exprs.head.getGString
+        val amount         = produce.data.pars(3).exprs.head.getGInt
+        val retUnforgeable = produce.data.pars(5)
         Transaction(fromAddr, toAddr, amount, retUnforgeable, None)
       }
       .toList
@@ -130,13 +130,11 @@ final case class TransactionAPIImpl[F[_]: Concurrent](
     val failedMap = report.events.iterator
       .map(_.report.value)
       .collect {
-        case ReportProduceProto(Some(channel), data)
-            if transactionRetUnforgeables.contains(channel) =>
-          val success =
-            data.get.pars.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool
+        case ReportProduceProto(channel, data) if transactionRetUnforgeables.contains(channel) =>
+          val success = data.pars.head.exprs.head.getETupleBody.ps.head.exprs.head.getGBool
           val failedReason =
             if (success) None
-            else Some(data.get.pars.head.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
+            else Some(data.pars.head.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
           (channel, failedReason)
       }
       .toMap

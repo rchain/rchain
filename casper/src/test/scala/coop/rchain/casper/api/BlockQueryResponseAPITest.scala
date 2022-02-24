@@ -91,39 +91,36 @@ class BlockQueryResponseAPITest
             blockInfo.deploys should be(
               randomDeploys.map(_.toDeployInfo)
             )
-            blockInfo.blockInfo match {
-              case Some(b) =>
-                b.blockHash should be(secondBlock.blockHash.toHexString)
-                b.sender should be(secondBlock.sender.toHexString)
-                b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-                b.seqNum should be(secondBlock.toProto.seqNum)
-                b.sig should be(secondBlock.sig.toHexString)
-                b.sigAlgorithm should be(secondBlock.sigAlgorithm)
-                b.shardId should be(secondBlock.toProto.shardId)
-                b.extraBytes should be(secondBlock.toProto.extraBytes)
-                b.version should be(secondBlock.header.version)
-                b.timestamp should be(secondBlock.header.timestamp)
-                b.headerExtraBytes should be(secondBlock.header.extraBytes)
-                b.parentsHashList should be(
-                  secondBlock.header.parentsHashList.map(_.toHexString)
-                )
-                b.blockNumber should be(secondBlock.body.state.blockNumber)
-                b.preStateHash should be(
-                  secondBlock.body.state.preStateHash.toHexString
-                )
-                b.postStateHash should be(
-                  secondBlock.body.state.postStateHash.toHexString
-                )
-                b.bodyExtraBytes should be(secondBlock.body.extraBytes)
-                b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
-                b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-                b.deployCount should be(secondBlock.body.deploys.length)
-                b.faultTolerance should be(faultTolerance)
-                b.justifications should be(
-                  secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
-                )
-              case None => assert(false)
-            }
+            val b = blockInfo.blockInfo
+            b.blockHash should be(secondBlock.blockHash.toHexString)
+            b.sender should be(secondBlock.sender.toHexString)
+            b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+            b.seqNum should be(secondBlock.toProto.seqNum)
+            b.sig should be(secondBlock.sig.toHexString)
+            b.sigAlgorithm should be(secondBlock.sigAlgorithm)
+            b.shardId should be(secondBlock.toProto.shardId)
+            b.extraBytes should be(secondBlock.toProto.extraBytes)
+            b.version should be(secondBlock.header.version)
+            b.timestamp should be(secondBlock.header.timestamp)
+            b.headerExtraBytes should be(secondBlock.header.extraBytes)
+            b.parentsHashList should be(
+              secondBlock.header.parentsHashList.map(_.toHexString)
+            )
+            b.blockNumber should be(secondBlock.body.state.blockNumber)
+            b.preStateHash should be(
+              secondBlock.body.state.preStateHash.toHexString
+            )
+            b.postStateHash should be(
+              secondBlock.body.state.postStateHash.toHexString
+            )
+            b.bodyExtraBytes should be(secondBlock.body.extraBytes)
+            b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+            b.blockSize should be(secondBlock.toProto.serializedSize.toString)
+            b.deployCount should be(secondBlock.body.deploys.length)
+            b.faultTolerance should be(faultTolerance)
+            b.justifications should be(
+              secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
+            )
         }
       } yield ()
   }
