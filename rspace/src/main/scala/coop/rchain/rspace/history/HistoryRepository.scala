@@ -73,7 +73,7 @@ object HistoryRepositoryInstances {
       currentRoot <- rootsRepository.currentRoot()
       // History store
       historyStore = HistoryStoreInstances.historyStore[F](historyKeyValueStore)
-      history      = HistoryInstances.merging(currentRoot, historyStore)
+      history      = HistoryMergingInstances.merging(currentRoot, historyStore)
       // Cold store
       coldStore = ColdStoreInstances.coldStore[F](coldKeyValueStore)
       // RSpace importer/exporter / directly operates on Store (lmdb)

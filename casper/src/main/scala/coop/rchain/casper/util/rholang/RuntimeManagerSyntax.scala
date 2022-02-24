@@ -44,7 +44,7 @@ final class RuntimeManagerOps[F[_]](private val rm: RuntimeManager[F]) extends A
 
     for {
       key    <- getKey
-      resOpt <- rm.getMergeableStore.get(key)
+      resOpt <- rm.getMergeableStore.get1(key)
       res    <- resOpt.liftTo(mergeableStoreError)
       resMrg = res.map(_.channels.map(x => (x.hash, x.diff)).toMap)
     } yield resMrg

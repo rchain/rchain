@@ -174,7 +174,8 @@ class HistoryRepositorySpec
     Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
-    val emptyHistory              = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+    val emptyHistory =
+      HistoryMergingInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val pastRoots                 = rootRepository
     implicit val log: Log[Task]   = new NOPLog()
     implicit val span: Span[Task] = new NoopSpan[Task]()

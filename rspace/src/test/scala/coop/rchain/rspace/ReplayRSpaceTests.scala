@@ -1087,7 +1087,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ <- replayStore.get().isEmpty.map(_ shouldBe false)
         _ <- replayStore
               .get()
-              .changes()
+              .changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 
@@ -1126,7 +1126,7 @@ trait ReplayRSpaceTests extends ReplayRSpaceTestsBase[String, Pattern, String, S
         _ <- replayStore.get().isEmpty.map(_ shouldBe false)
         _ <- replayStore
               .get()
-              .changes()
+              .changes
               .map(collectActions[InsertContinuations[String, Pattern, String]])
               .map(_.length shouldBe 1)
 
@@ -1286,21 +1286,21 @@ trait InMemoryReplayRSpaceTestsBase[C, P, A, K] extends ReplayRSpaceTestsBase[C,
                             cold,
                             history
                           )
-      cache         <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      cache         <- Ref[Task].of(HotStoreState[C, P, A, K]())
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)
       store <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](cache, hr).map(AtomicAny(_))
       }
 
       space = new RSpace[Task, C, P, A, K](
         historyRepository,
         store
       )
-      historyCache <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
+      historyCache <- Ref[Task].of(HotStoreState[C, P, A, K]())
       replayStore <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](historyCache, hr).map(AtomicAny(_))
       }
       replaySpace = new ReplayRSpace[Task, C, P, A, K](
         historyRepository,
