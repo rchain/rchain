@@ -5,6 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.shared.Time
 import fs2.Stream
+import fs2.Stream._
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
@@ -12,6 +13,10 @@ import scala.concurrent.duration.{DurationInt, FiniteDuration}
 trait Fs2StreamSyntax {
   implicit final def sharedSyntaxFs2Stream[F[_], A](stream: Stream[F, A]): Fs2StreamOps[F, A] =
     new Fs2StreamOps[F, A](stream)
+
+  implicit final def sharedSyntaxFs2StreamOfStreams[F[_], A](
+      streams: Stream[F, Stream[F, A]]
+  ): Fs2StreamOfStreamsOps[F, A] = new Fs2StreamOfStreamsOps[F, A](streams)
 }
 
 class Fs2StreamOps[F[_], A](
@@ -19,6 +24,24 @@ class Fs2StreamOps[F[_], A](
     private val stream: Stream[F, A]
 ) {
   val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors
+
+  /**
+    * Variant of [[Stream.parEvalMap]] with parallelism bound to number of processors.
+    */
+  def parEvalMapProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+    stream.parEvalMap[F2, B](availableProcessors)(f)
+
+  /**
+    * Variant of [[Stream.parEvalMapUnordered]] with parallelism bound to number of processors.
+    */
+  def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
+    stream.parEvalMapUnordered[F2, B](availableProcessors)(f)
+
+  /**
+    * Variant of [[Stream.evalFilterAsync]] with parallelism bound to number of processors.
+    */
+  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[Boolean]): Stream[F2, A] =
+    stream.evalFilterAsync[F2](availableProcessors)(f)
 
   /**
     * Variation of [[Stream.takeWhile]] including ending element selected by predicate.
@@ -65,29 +88,18 @@ class Fs2StreamOps[F[_], A](
       stream.flatTap(_ => resetTimeRef) concurrently nextStream.repeat
     }
 
+}
+
+class Fs2StreamOfStreamsOps[F[_], A](
+    // fs2 Stream of streams extensions / syntax
+    private val streams: Stream[F, Stream[F, A]]
+) {
+  val availableProcessors = java.lang.Runtime.getRuntime.availableProcessors
+
+  // TODO: [fs2 v3] Variant of [[Stream.NestedStreamOps.parJoin]] with parallelism bound to number of processors.
   /**
     * Variant of [[Stream.parJoin]] with parallelism bound to number of processors.
     */
-  def parJoinProcBounded[F2[_]: Concurrent, B](
-      implicit ev: A <:< Stream[F2, B],
-      ev2: F[Any] <:< F2[Any]
-  ): Stream[F2, B] = stream.parJoin(availableProcessors)
-
-  /**
-    * Variant of [[Stream.parEvalMap]] with parallelism bound to number of processors.
-    */
-  def parEvalMapProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
-    stream.parEvalMap[F2, B](availableProcessors)(f)
-
-  /**
-    * Variant of [[Stream.parEvalMapUnordered]] with parallelism bound to number of processors.
-    */
-  def parEvalMapUnorderedProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[B]): Stream[F2, B] =
-    stream.parEvalMapUnordered[F2, B](availableProcessors)(f)
-
-  /**
-    * Variant of [[Stream.evalFilterAsync]] with parallelism bound to number of processors.
-    */
-  def evalFilterAsyncProcBounded[F2[x] >: F[x]: Concurrent, B](f: A => F2[Boolean]): Stream[F2, A] =
-    stream.evalFilterAsync[F2](availableProcessors)(f)
+  def parJoinProcBounded(implicit F: Concurrent[F]): Stream[F, A] =
+    streams.parJoin(availableProcessors)
 }
