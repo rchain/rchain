@@ -430,6 +430,39 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
+  "reading data from existing node" should "return data" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl     ← radixTreeImplF
+        itemData = generateDataForHash(0xCB.toByte).toVector
+        key      = TestData.hexKey("0123456F1").toVector
+        itemOpt  ← impl.update(RadixTree.EmptyItem, key, itemData)
+        rootNode ← impl.constructNodeFromItem(itemOpt.get)
+
+        readedDataOpt ← impl.read(rootNode, key)
+
+        _ = readedDataOpt.map(readedData ⇒ readedData.toArray shouldBe itemData.toArray)
+
+      } yield ()
+  }
+
+  "reading non - existent data" should "return none" in createRadixTreeImpl {
+    (radixTreeImplF, typedStore) ⇒
+      for {
+        impl     ← radixTreeImplF
+        itemData = generateDataForHash(0xCB.toByte).toVector
+        key      = TestData.hexKey("0123456F1").toVector
+        itemOpt  ← impl.update(RadixTree.EmptyItem, key, itemData)
+        rootNode ← impl.constructNodeFromItem(itemOpt.get)
+
+        notExistingKey = TestData.hexKey("000").toVector
+        readedDataOpt  ← impl.read(rootNode, notExistingKey)
+
+        _ = readedDataOpt.map(readedData ⇒ readedData shouldBe none)
+
+      } yield ()
+  }
+
   protected def createRadixTreeImpl(
       f: (
           Task[RadixTreeImpl[Task]],
