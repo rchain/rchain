@@ -241,56 +241,53 @@ class MultiParentCasperImpl[F[_]
 
       getBlockView = (m: BlockMessage) =>
         for {
-          p <- m.header.parentsHashList.traverse(BlockStore[F].getUnsafe)
-          s <- computeOnChainState(p.head)
-          j = m.justifications.map { case Justification(v, h) => (v, h) }.toMap
+          p       <- m.header.parentsHashList.traverse(BlockStore[F].getUnsafe)
+          s       <- computeOnChainState(p.head)
+          j       = m.justifications.map { case Justification(v, h) => (v, h) }.toMap
+          dagView <- fullDag.truncate(j)
+          // compute LFB for the view
+          minNum       <- p.map(_.blockHash).traverse(dagView.lookupUnsafe).map(_.map(_.blockNum).min)
+          lowestHeight = minNum - Finalizer.MaxSearchDepth // lowest height puts a constraint on search area
+          lfb <- dagView
+                  .findLastFinalizedBlock(
+                    latestMessagesView = j,
+                    faultToleranceThreshold = casperShardConf.faultToleranceThreshold,
+                    lowestHeight = lowestHeight
+                  )
+                  .flatMap { lfbOpt =>
+                    // if approved block is in search range - return it.
+                    // This is required because genesis has fault tolerance less then max value so wont be finalized for
+                    // all thresholds.
+                    // Also in future approved block restored from LFS might be finalized with fault tolerance less then current
+                    // fault tolerance from shard config
 
-          findLfb = (latestMessages: Map[Validator, BlockHash]) =>
-            for {
-              minNum       <- p.map(_.blockHash).traverse(fullDag.lookupUnsafe).map(_.map(_.blockNum).min)
-              lowestHeight = minNum - Finalizer.MaxSearchDepth // lowest height puts a constraint on search area
+                    val approvedBlockIsInRange = dagView
+                      .lookupUnsafe(approvedBlock.blockHash)
+                      .map(_.blockNum)
+                      .map(_ >= lowestHeight)
 
-              lfb <- fullDag
-                      .findLastFinalizedBlock(
-                        latestMessagesView = latestMessages,
-                        faultToleranceThreshold = casperShardConf.faultToleranceThreshold,
-                        lowestHeight = lowestHeight
-                      )
-                      .flatMap { lfbOpt =>
-                        // if approved block is in search range - return it.
-                        // This is required because genesis has fault tolerance less then max value so wont be finalized for
-                        // all thresholds.
-                        // Also in future approved block restored from LFS might be finalized with fault tolerance less then current
-                        // fault tolerance from shard config
-
-                        val approvedBlockIsInRange = fullDag
-                          .lookupUnsafe(approvedBlock.blockHash)
-                          .map(_.blockNum)
-                          .map(_ >= lowestHeight)
-
-                        val notFoundF = approvedBlockIsInRange.ifM(
-                          approvedBlock.blockHash.pure[F], {
-                            val lfbNotFoundErrMsg = s"No last finalized block found when creating casper snapshot for " +
-                              s"${targetMessageOpt.map(PrettyPrinter.buildString(_)).getOrElse("the most recent view")}."
-                            new Exception(lfbNotFoundErrMsg).raiseError[F, BlockHash]
-                          }
-                        )
-                        lfbOpt.map(_.pure[F]).getOrElse(notFoundF)
+                    val notFoundF = approvedBlockIsInRange.ifM(
+                      approvedBlock.blockHash.pure[F], {
+                        val lfbNotFoundErrMsg = s"No last finalized block found when creating casper snapshot for " +
+                          s"${targetMessageOpt.map(PrettyPrinter.buildString(_)).getOrElse("the most recent view")}."
+                        new Exception(lfbNotFoundErrMsg).raiseError[F, BlockHash]
                       }
-            } yield lfb
-          dagView <- fullDag.truncate(j, findLfb)
-        } yield (dagView, p, s, j)
+                    )
+                    lfbOpt.map(_.pure[F]).getOrElse(notFoundF)
+                  }
+        } yield (dagView, lfb, p, s, j)
 
       getLatestView = for {
         p <- computeParents(fullDag)
         s <- computeOnChainState(p.head)
         j <- computeJustifications(fullDag, s)
-      } yield (fullDag, p, s, j)
+        // LFB can be read from storage which is updated after each new block processed
+        lfb = fullDag.lastFinalizedBlock
+      } yield (fullDag, lfb, p, s, j)
 
       // if target message supplied, create dag view, otherwise get the most recent view
-      view                                         <- targetMessageOpt.map(getBlockView).getOrElse(getLatestView)
-      (dag, parents, onChainState, justifications) = view
-      lfb                                          = dag.lastFinalizedBlock
+      view                                              <- targetMessageOpt.map(getBlockView).getOrElse(getLatestView)
+      (dag, lfb, parents, onChainState, justifications) = view
 
       parentMetas <- parents.map(_.blockHash).traverse(dag.lookupUnsafe)
       maxBlockNum = parentMetas.map(_.blockNum).max

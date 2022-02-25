@@ -45,10 +45,8 @@ trait BlockDagRepresentation[F[_]] {
   def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
   def find(truncatedHash: String): F[Option[BlockHash]]
-  def nonFinalizedSet: Set[BlockHash]
   def truncate(
-      latestMessages: Map[Validator, BlockHash],
-      findLfb: Map[Validator, BlockHash] => F[BlockHash]
+      latestMessages: Map[Validator, BlockHash]
   ): F[BlockDagRepresentation[F]]
 }
 

@@ -20,8 +20,7 @@ import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.shared.syntax._
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log, LogSource}
+import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import fs2.Stream
 
@@ -66,75 +65,127 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     /**
       * Truncate full DAG according to some view, defined by latest messages.
+      *
+      * Please see example below: `-` here denote message that are not seen by target view.
+      * Target latest messages are A B C D E. G - genesis
+      *
+      * Computing of excess messages can be divided into 3 parts:
+      * 1. high excess - messages that has height above highest target latest message. This is done simply by
+      * splitting height map.
+      * 2. lmRange excess, which are messages inside the range of target latest messages, but not seen yet by
+      * the view (are higher then some target latest message from the same sender).
+      * This requires reading metadata which is more costly then 1.
+      * 3. unseen senders excess (low excess) - Please note that the first column is full of `-`, which means target
+      * message sender is ignoring this validator, but this particular node adds these
+      * messages for some reason. It does not seem like a impossible scenario, and makes truncating logic a
+      * bit more complex.
+      *
+      *   - - -   -
+      *     -       _____  ^             high excess              ^
+      *     B   -          v                                      v
+      *     *   D E
+      *     * C                        lmRange excess
+      * - - *   *
+      * - A * * * * _____  ^                                      ^
+      * -   *   *          v   unseenSendersExcess (low excess)   v
+      * -   * * * *
+      * - * *   *
+      *     G
+      *
       */
     override def truncate(
-        targetLatestMessages: Map[Validator, BlockHash],
-        findLfb: Map[Validator, BlockHash] => F[BlockHash]
+        targetLatestMessages: Map[Validator, BlockHash]
     ): F[BlockDagRepresentation[F]] = {
-      val lmAll                     = this.latestMessagesMap.values.toSet
-      val lmSeen                    = targetLatestMessages.values.toSet
-      val targetEqualLatestView     = lmAll == lmSeen
-      val knownSenders              = this.latestMessagesMap.keySet
-      val seenSenders               = targetLatestMessages.keySet
-      val unknownSender             = targetLatestMessages.keysIterator.find(!knownSenders.contains(_))
-      def noSenderMsg(v: Validator) = s"Error when truncating the DAG: sender ${v.show} unknown."
-
-      val doTruncate = for {
-        lfb             <- findLfb(targetLatestMessages)
-        latestFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
-        // for all known latest messages, collect all self justifications until first finalized message found
-        toAdjust <- Stream
-                     .fromIterator(lmAll.iterator)
-                     .flatMap(
-                       this
-                       // message + all self justifications
-                         .fromSenderBelowWith(_, m => (m.blockHash, m.blockNum))
-                         // take while first finalized message is found
-                         .takeWhile {
-                           case (hash, _) => !latestFinalized.contains(hash)
-                         }
-                         .mapAccumulate(init = false) {
-                           case (childIsSeen, (hash, height)) =>
-                             val seen = childIsSeen || lmSeen.contains(hash)
-                             (seen, (hash, height))
-                         }
-                     )
-                     .compile
-                     .toList
-
-        (u, r) = toAdjust.partition { case (seen, _) => seen }
-
-        toUnfinalize = u.map { case (_, (hash, height)) => (hash, height) }
-        toRemove     = r.map { case (_, (hash, height)) => (hash, height) }
-
-        excessSet       = toRemove.map { case (hash, _)     => hash }.toSet
-        nonFinalizedSet = toUnfinalize.map { case (hash, _) => hash }.toSet
-
-        // new truncated values
-        truncatedDagSet     = this.dagSet diff excessSet
-        truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
-        truncatedHeightMap = toRemove.foldLeft(this.heightMap) {
-          case (acc, (hash, height)) => acc.updated(height, acc(height) - hash)
+      final case class HeightView(
+          height: Long,
+          excess: Iterator[ByteString],
+          inView: Iterator[ByteString]
+      )
+      for {
+        lmMetas <- targetLatestMessages.values.toStream.traverse(this.lookupUnsafe)
+        (highestHeight, lowestHeight, lmPerValidatorHeight) = lmMetas.foldLeft(
+          (0L, Long.MaxValue, Map.empty[ByteString, Long])
+        ) {
+          case ((curHH, curLH, curLVH), meta) =>
+            val newHH  = Math.max(curHH, meta.blockNum)
+            val newLH  = Math.min(curLH, meta.blockNum)
+            val newLVH = curLVH.updated(meta.sender, meta.blockNum)
+            (newHH, newLH, newLVH)
         }
-        truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
+        // messages higher then highest latest message are outside the view
+        (highExcess, withoutHighExcess) = heightMap.partition { case (h, _) => h > highestHeight }
+
+        // messages inside range of latest message heights might contain new messages from validator that are not seen yet
+        lmRangeViews <- heightMap
+                         .range(lowestHeight, highestHeight + 1)
+                         .toStream
+                         .traverse {
+                           case (h, messages) =>
+                             for {
+                               lms <- messages.toStream
+                                       .traverse(this.lookupUnsafe)
+                                       .map(_.map(m => (m.blockHash, m.sender)))
+                               (inView, excess) = lms.partition {
+                                 case (_, sender) =>
+                                   // remove message if target view is not aware of validator,
+                                   // or latest message in full view is newer then target
+                                   val senderSeen = lmPerValidatorHeight.contains(sender)
+                                   senderSeen && h <= lmPerValidatorHeight(sender)
+                               }
+                               r = HeightView(
+                                 h,
+                                 excess = excess.map { case (hash, _) => hash }.toIterator,
+                                 inView = inView.map { case (hash, _) => hash }.toIterator
+                               )
+                             } yield r
+                         }
+                         .map(_.toSet)
+        excessMessages = lmRangeViews.flatMap(_.excess) ++ highExcess.values.flatten
+
+        // check clause 3
+        fullLMMetas <- this.latestMessages
+        // senders that are in the full dag but not seen by view that is being created
+        unseenSenders = fullLMMetas.filter { case (_, meta) => meta.blockNum != 0 }.keySet diff targetLatestMessages.keySet
+        unseenSendersExcess <- Stream
+                              // gather all messages of unseen validators
+                                .fromIterator(unseenSenders.toIterator)
+                                .map(fullLMMetas(_).blockHash)
+                                .flatMap { h =>
+                                  Stream(h) ++ this.selfJustificationChain(h).map(_.latestBlockHash)
+                                }
+                                // if message is already removed no need to process it again
+                                .filterNot(excessMessages.contains)
+                                .evalMap(this.lookupUnsafe)
+                                // the lowest message in the DAG is always genesis - never remove genesis
+                                .filterNot(_.blockNum == heightMap.keySet.min)
+                                .map(meta => meta.blockNum -> meta.blockHash)
+                                // accumulate messages into low excess map
+                                .mapAccumulate(Map.empty[Long, Set[BlockHash]]) {
+                                  case (acc, (height, hash)) =>
+                                    val newVal = acc.getOrElse(height, Set.empty[BlockHash]) + hash
+                                    (acc.updated(height, newVal), hash)
+                                }
+                                .map { case (acc, _) => acc }
+                                .compile
+                                .last
+                                .map(_.getOrElse(Map.empty))
+        // new truncated values
+        truncatedDagSet     = this.dagSet diff excessMessages diff unseenSendersExcess.values.flatten.toSet
+        truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
+        withoutRangeExcess = lmRangeViews.foldLeft(withoutHighExcess)(
+          (acc, heightView) => acc.updated(heightView.height, heightView.inView.toSet)
+        )
+        truncatedHeightMap = unseenSendersExcess.foldLeft(withoutRangeExcess) {
+          case (acc, (height, excess)) => acc.updated(height, acc(height) -- excess)
+        }
 
         view = this.copy(
-          lastFinalizedBlockHash = lfb,
-          finalizedBlocksSet = truncatedFinalizesSet,
           dagSet = truncatedDagSet,
           latestMessagesMap = targetLatestMessages,
           heightMap = truncatedHeightMap,
           invalidBlocksSet = truncatedInvalidSet
         )
-
-      } yield view.asInstanceOf[BlockDagRepresentation[F]]
-
-      unknownSender match {
-        case None =>
-          if (targetEqualLatestView) this.asInstanceOf[BlockDagRepresentation[F]].pure
-          else doTruncate
-        case Some(v) => new Exception(noSenderMsg(v)).raiseError[F, BlockDagRepresentation[F]]
-      }
+      } yield view
     }
 
     override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
@@ -188,9 +239,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
 
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
       deployIndex.get1(deployId)
-
-    override def nonFinalizedSet: Set[BlockHash] =
-      dagSet diff finalizedBlocksSet
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
