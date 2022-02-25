@@ -99,10 +99,9 @@ object Resources {
 
       override def latestMessageHash(validator: Validator): F[Option[BlockHash]] = ???
 
-      override def latestMessageHashes: F[Map[Validator, BlockHash]] =
-        Map.empty[Validator, BlockHash].pure[F]
+      override def latestMessageHashes: F[Map[Validator, BlockHash]] = ???
 
-      override def invalidBlocks: F[Set[BlockMetadata]] = Set.empty[BlockMetadata].pure[F]
+      override def invalidBlocks: F[Set[BlockMetadata]] = ???
 
       override def latestBlockNumber: F[Long] = ???
 

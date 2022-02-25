@@ -7,11 +7,10 @@ import cats.syntax.all._
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, NoOpsCasperEffect}
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.util.GenesisBuilder.defaultValidatorSks
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
@@ -96,8 +95,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               createBlock = createBlockF,
               validateBlock = alwaysSuccesfullValidation,
               proposeEffect = proposeEffect(0),
-              validator = dummyValidatorIdentity,
-              loadDeploys = Set.empty[Signed[DeployData]].pure[Task]
+              validator = dummyValidatorIdentity
             )
 
             for {
@@ -127,8 +125,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               createBlock = createBlockF,
               validateBlock = alwaysSuccesfullValidation,
               proposeEffect = proposeEffect(0),
-              validator = dummyValidatorIdentity,
-              loadDeploys = Set.empty[Signed[DeployData]].pure[Task]
+              validator = dummyValidatorIdentity
             )
 
             for {
@@ -157,8 +154,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               createBlock = createBlockF,
               validateBlock = alwaysSuccesfullValidation,
               proposeEffect = proposeEffect(0),
-              validator = dummyValidatorIdentity,
-              loadDeploys = Set.empty[Signed[DeployData]].pure[Task]
+              validator = dummyValidatorIdentity
             )
             for {
               d      <- Deferred[Task, ProposerResult]
@@ -186,8 +182,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
                 getCasperSnapshot = getCasperSnapshotF,
                 createBlock = createBlockF,
                 proposeEffect = proposeEffect(0),
-                validator = dummyValidatorIdentity,
-                loadDeploys = Set.empty[Signed[DeployData]].pure[Task]
+                validator = dummyValidatorIdentity
               )
 
               for {
@@ -216,8 +211,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
               getCasperSnapshot = getCasperSnapshotF,
               createBlock = createBlockF,
               proposeEffect = proposeEffect(10),
-              validator = dummyValidatorIdentity,
-              loadDeploys = Set.empty[Signed[DeployData]].pure[Task]
+              validator = dummyValidatorIdentity
             )
 
             for {
