@@ -12,7 +12,7 @@ import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
-import coop.rchain.casper.{Casper, CasperSnapshot, PrettyPrinter, ValidatorIdentity}
+import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -111,50 +111,54 @@ object BlockCreator {
             .generateCloseDeployRandomSeed(selfId, nextSeqNum)
         )
         deploys = userDeploys -- s.deploysInScope ++ dummyDeploys
-
-        now           <- Time[F].currentMillis
-        invalidBlocks = s.invalidBlocks
-        blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
-        checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
-                           parents,
-                           deploys.toSeq,
-                           systemDeploys,
-                           s,
-                           runtimeManager,
-                           blockData,
-                           invalidBlocks
-                         )
-        (
-          preStateHash,
-          postStateHash,
-          processedDeploys,
-          rejectedDeploys,
-          processedSystemDeploys
-        )             = checkpointData
-        newBonds      <- runtimeManager.computeBonds(postStateHash)
-        _             <- Span[F].mark("before-packing-block")
-        shardId       = s.onChainState.shardConf.shardName
-        casperVersion = s.onChainState.shardConf.casperVersion
-        // unsignedBlock got blockHash(hashed without signature)
-        unsignedBlock = packageBlock(
-          blockData,
-          parents.map(_.blockHash),
-          justifications.toSeq,
-          preStateHash,
-          postStateHash,
-          processedDeploys,
-          rejectedDeploys,
-          processedSystemDeploys,
-          newBonds,
-          shardId,
-          casperVersion
-        )
-        _ <- Span[F].mark("block-created")
-        // signedBlock add signature and replace hashed-without-signature
-        // blockHash to hashed-with-signature blockHash
-        signedBlock = validatorIdentity.signBlock(unsignedBlock)
-        _           <- Span[F].mark("block-signed")
-      } yield BlockCreatorResult.created(signedBlock)
+        r <- if (deploys.nonEmpty || slashingDeploys.nonEmpty)
+              for {
+                now           <- Time[F].currentMillis
+                invalidBlocks = s.invalidBlocks
+                blockData     = BlockData(now, nextBlockNum, validatorIdentity.publicKey, nextSeqNum)
+                checkpointData <- InterpreterUtil.computeDeploysCheckpoint(
+                                   parents,
+                                   deploys.toSeq,
+                                   systemDeploys,
+                                   s,
+                                   runtimeManager,
+                                   blockData,
+                                   invalidBlocks
+                                 )
+                (
+                  preStateHash,
+                  postStateHash,
+                  processedDeploys,
+                  rejectedDeploys,
+                  processedSystemDeploys
+                )             = checkpointData
+                newBonds      <- runtimeManager.computeBonds(postStateHash)
+                _             <- Span[F].mark("before-packing-block")
+                shardId       = s.onChainState.shardConf.shardName
+                casperVersion = s.onChainState.shardConf.casperVersion
+                // unsignedBlock got blockHash(hashed without signature)
+                unsignedBlock = packageBlock(
+                  blockData,
+                  parents.map(_.blockHash),
+                  justifications.toSeq,
+                  preStateHash,
+                  postStateHash,
+                  processedDeploys,
+                  rejectedDeploys,
+                  processedSystemDeploys,
+                  newBonds,
+                  shardId,
+                  casperVersion
+                )
+                _ <- Span[F].mark("block-created")
+                // signedBlock add signature and replace hashed-without-signature
+                // blockHash to hashed-with-signature blockHash
+                signedBlock = validatorIdentity.signBlock(unsignedBlock)
+                _           <- Span[F].mark("block-signed")
+              } yield BlockCreatorResult.created(signedBlock)
+            else
+              BlockCreatorResult.noNewDeploys.pure[F]
+      } yield r
 
       for {
         // Create block and measure duration
