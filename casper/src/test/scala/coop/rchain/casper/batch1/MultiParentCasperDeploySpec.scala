@@ -1,6 +1,6 @@
 package coop.rchain.casper.batch1
 
-import coop.rchain.casper.blocks.proposer.Created
+import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.batch2.EngineWithCasper
