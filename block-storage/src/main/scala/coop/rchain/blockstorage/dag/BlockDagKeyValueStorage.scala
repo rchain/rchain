@@ -125,12 +125,12 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                                lms <- messages.toStream
                                        .traverse(this.lookupUnsafe)
                                        .map(_.map(m => (m.blockHash, m.sender)))
-                               (inView, excess) = lms.partition {
+                               (excess, inView) = lms.partition {
                                  case (_, sender) =>
                                    // remove message if target view is not aware of validator,
                                    // or latest message in full view is newer then target
                                    val senderSeen = lmPerValidatorHeight.contains(sender)
-                                   senderSeen && h <= lmPerValidatorHeight(sender)
+                                   senderSeen && h > lmPerValidatorHeight(sender)
                                }
                                r = HeightView(
                                  h,
