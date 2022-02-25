@@ -6,7 +6,6 @@ import scalapb.TypeMapper
 
 final case class BlockMetadata(
     blockHash: ByteString,
-    postStateHash: ByteString,
     parents: List[ByteString],
     sender: ByteString,
     justifications: List[Justification],
@@ -24,7 +23,6 @@ object BlockMetadata {
   implicit val typeMapper = TypeMapper[BlockMetadataInternal, BlockMetadata] { internal =>
     BlockMetadata(
       internal.blockHash,
-      internal.postStateHash,
       internal.parents,
       internal.sender,
       internal.justifications.map(Justification.from),
@@ -46,8 +44,7 @@ object BlockMetadata {
       metadata.seqNum,
       metadata.invalid,
       metadata.directlyFinalized,
-      metadata.finalized,
-      metadata.postStateHash
+      metadata.finalized
     )
   }
 
@@ -78,7 +75,6 @@ object BlockMetadata {
   ): BlockMetadata =
     BlockMetadata(
       b.blockHash,
-      b.body.state.postStateHash,
       b.header.parentsHashList,
       b.sender,
       b.justifications,
