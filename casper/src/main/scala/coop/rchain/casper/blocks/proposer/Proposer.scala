@@ -71,8 +71,6 @@ class Proposer[F[_]: Concurrent: Log: Span](
                 .shouldPropose(s, loadDeploys)
                 .ifM(
                   checkProposeConstraints(genesis, s),
-                  // TODO re-enable reasons to propose, so blocks are created lazily
-                  //  disabled due to https://github.com/rchain/rchain/pull/3570
                   checkProposeConstraints(genesis, s) //CheckProposeConstraintsResult.noReasonToPropose.pure[F]
                 )
         r <- chk match {
