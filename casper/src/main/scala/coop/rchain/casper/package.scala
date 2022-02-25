@@ -1,12 +1,10 @@
 package coop.rchain
 
-import coop.rchain.casper.BlockDagRepresentationSyntax
 import coop.rchain.casper.blocks.proposer.ProposerResult
-import coop.rchain.casper.rholang.{RuntimeReplaySyntax, RuntimeSyntax}
 import coop.rchain.casper.util.comm.CommUtilSyntax
-import coop.rchain.casper.util.rholang.RuntimeManagerSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.casper.util.rholang.RhoRuntimeSyntax
 
 package object casper {
   type TopoSort             = Vector[Vector[BlockHash]]
@@ -20,13 +18,12 @@ package object casper {
   val MergingMetricsSource: Metrics.Source = Metrics.Source(CasperMetricsSource, "merging")
 
   // Importing syntax object means using all extensions in the project
-  object syntax extends AllSyntaxCasper with AllSyntaxComm with AllSyntaxBlockStorage
+  object syntax
+      extends AllSyntaxCasper
+      with AllSyntaxComm
+      with AllSyntaxBlockStorage
+      with RhoRuntimeSyntax
 }
 
 // Casper syntax
-trait AllSyntaxCasper
-    extends CommUtilSyntax
-    with BlockDagRepresentationSyntax
-    with RuntimeSyntax
-    with RuntimeReplaySyntax
-    with RuntimeManagerSyntax
+trait AllSyntaxCasper extends CommUtilSyntax

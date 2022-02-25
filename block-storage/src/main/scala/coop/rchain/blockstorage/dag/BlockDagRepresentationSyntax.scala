@@ -160,11 +160,11 @@ final class BlockDagRepresentationOps[F[_]](
       .compile
       .to(Set)
 
-  def ancestors(start: List[BlockHash], filterF: BlockHash => F[Boolean])(
+  def ancestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
     Stream
-      .unfoldEval(start) { lvl =>
+      .unfoldEval(List(blockHash)) { lvl =>
         val parents = lvl
           .traverse(lookupUnsafe)
           .flatMap(_.flatMap(_.parents).distinct.filterA(filterF))
@@ -177,5 +177,5 @@ final class BlockDagRepresentationOps[F[_]](
   def withAncestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
-    ancestors(List(blockHash), filterF).map(_ + blockHash)
+    ancestors(blockHash, filterF).map(_ + blockHash)
 }

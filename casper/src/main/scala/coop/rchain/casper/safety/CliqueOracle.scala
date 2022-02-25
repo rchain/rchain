@@ -94,11 +94,11 @@ object CliqueOracle {
     (lmB, lmAjB).tupled.semiflatMap((mightEventuallyDisagree _).tupled.map(_.not)).getOrElse(false)
   }
 
-  private def computeMaxCliqueWeight[F[_]: Sync](
+  private def computeMaxCliqueWeight[F[_]: Concurrent: Span](
       targetMsg: M,
       agreeingWeightMap: WeightMap,
       dag: BlockDagRepresentation[F]
-  ): F[Long] = {
+  ): F[Long] = Span[F].traceI("compute-max-clique-weight") {
 
     /** across combination of validators compute pairs that do not have disagreement */
     def computeAgreeingValidatorPairs: Stream[F, (V, V)] =
@@ -116,7 +116,7 @@ object CliqueOracle {
     }
   }
 
-  def computeOutput[F[_]: Sync](
+  def computeOutput[F[_]: Concurrent: Span](
       targetMsg: M,
       messageWeightMap: WeightMap,
       agreeingWeightMap: WeightMap,
@@ -132,7 +132,7 @@ object CliqueOracle {
       }
   }
 
-  def normalizedFaultTolerance[F[_]: Sync: Log: Metrics: Span](
+  def normalizedFaultTolerance[F[_]: Concurrent: Log: Metrics: Span](
       targetMsg: M,
       dag: BlockDagRepresentation[F]
   ): F[Float] = {
@@ -147,7 +147,9 @@ object CliqueOracle {
 
       Stream
         .fromIterator(weightMap.toIterator)
-        .evalFilter { case (validator, _) => agree(validator, targetMsg) }
+        .evalFilterAsyncProcBounded {
+          case (validator, _) => agree(validator, targetMsg)
+        }
         .compile
         .to(Map)
     }
