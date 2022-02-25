@@ -555,7 +555,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
         printedTree1 ← impl.printTree(rootNode2Opt.get, "TREE1111", false)
 
-        _ = inMemoStore.numRecords() shouldBe insertActions.size
+        _ = inMemoStore.numRecords() shouldBe 3
 
       } yield ()
   }
@@ -603,6 +603,25 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
         _ = nodesCount1 shouldBe 2
         _ = nodesCount2 shouldBe 3
+      } yield ()
+  }
+
+  "function saveNode" should "put node into store" in withRadixTreeImplAndStore {
+    (radixTreeImplF, inMemoStore) ⇒
+      for {
+        impl        ← radixTreeImplF
+        itemData    = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+        key         = TestData.hexKey("0123456F1").toVector
+        itemOpt     ← impl.update(RadixTree.EmptyItem, key, itemData)
+        nodesCount1 = inMemoStore.numRecords()
+
+        node     ← impl.constructNodeFromItem(itemOpt.get)
+        saved    = impl.saveNode(node)
+        commited ← impl.commit
+
+        nodesCount2 = inMemoStore.numRecords()
+        _           = nodesCount1 shouldBe 0
+        _           = nodesCount2 shouldBe 1
       } yield ()
   }
 
