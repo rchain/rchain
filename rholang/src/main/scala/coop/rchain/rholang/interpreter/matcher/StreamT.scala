@@ -239,7 +239,7 @@ private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadErr
     }
 
   def suspend[A](thunk: => StreamT[F, A]): StreamT[F, A] =
-    StreamT(F.suspend(thunk.next))
+    StreamT(F.defer(thunk.next))
 
 }
 
