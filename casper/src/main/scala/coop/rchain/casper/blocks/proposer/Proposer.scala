@@ -71,7 +71,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
                 .shouldPropose(s, loadDeploys)
                 .ifM(
                   checkProposeConstraints(genesis, s),
-                  checkProposeConstraints(genesis, s) //CheckProposeConstraintsResult.noReasonToPropose.pure[F]
+                  CheckProposeConstraintsResult.noReasonToPropose.pure[F]
                 )
         r <- chk match {
               case v: CheckProposeConstraintsFailure =>
