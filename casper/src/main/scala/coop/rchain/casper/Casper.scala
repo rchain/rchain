@@ -48,7 +48,7 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot(targetBlockOpt: Option[BlockMessage] = None): F[CasperSnapshot[F]]
+  def getSnapshot: F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]

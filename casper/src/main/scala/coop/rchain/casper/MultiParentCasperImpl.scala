@@ -194,7 +194,7 @@ class MultiParentCasperImpl[F[_]
     } yield ()
   }
 
-  override def getSnapshot(targetMessageOpt: Option[BlockMessage]): F[CasperSnapshot[F]] = {
+  override def getSnapshot: F[CasperSnapshot[F]] = {
     import cats.instances.list._
 
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
