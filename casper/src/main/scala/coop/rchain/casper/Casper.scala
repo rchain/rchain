@@ -93,6 +93,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
     lastFinalizedBlock: BlockHash,
+    lca: BlockHash,
+    tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
     invalidBlocks: Map[Validator, BlockHash],

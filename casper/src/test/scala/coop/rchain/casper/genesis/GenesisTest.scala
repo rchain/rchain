@@ -37,6 +37,8 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
     CasperSnapshot(
       dag,
       ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
       List.empty,
       Set.empty,
       Map.empty,
