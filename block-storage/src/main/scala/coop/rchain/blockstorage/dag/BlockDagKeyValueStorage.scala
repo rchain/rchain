@@ -71,11 +71,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         targetLatestMessages: Map[Validator, BlockHash],
         findLfb: Map[Validator, BlockHash] => F[BlockHash]
     ): F[BlockDagRepresentation[F]] = {
-      val lmAll       = this.latestMessagesMap.values.toSet
-      val lmSeen      = targetLatestMessages.values.toSet
-      val seenSenders = targetLatestMessages.keySet
+      val lmAll                     = this.latestMessagesMap.values.toSet
+      val lmSeen                    = targetLatestMessages.values.toSet
+      val targetEqualLatestView     = lmAll == lmSeen
+      val knownSenders              = this.latestMessagesMap.keySet
+      val seenSenders               = targetLatestMessages.keySet
+      val unknownSender             = targetLatestMessages.keysIterator.find(!knownSenders.contains(_))
+      def noSenderMsg(v: Validator) = s"Error when truncating the DAG: sender ${v.show} unknown."
 
-      for {
+      val doTruncate = for {
         lfb             <- findLfb(targetLatestMessages)
         latestFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
         // for all known latest messages, collect all self justifications until first finalized message found
@@ -122,7 +126,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
           heightMap = truncatedHeightMap,
           invalidBlocksSet = truncatedInvalidSet
         )
-      } yield view
+
+      } yield view.asInstanceOf[BlockDagRepresentation[F]]
+
+      unknownSender match {
+        case None =>
+          if (targetEqualLatestView) this.asInstanceOf[BlockDagRepresentation[F]].pure
+          else doTruncate
+        case Some(v) => new Exception(noSenderMsg(v)).raiseError[F, BlockDagRepresentation[F]]
+      }
     }
 
     override def lastFinalizedBlock: BlockHash = lastFinalizedBlockHash
