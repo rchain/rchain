@@ -55,7 +55,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       (blockHash.size == BlockHash.Length && dagSet.contains(blockHash)).pure[F]
 
     def children(blockHash: BlockHash): F[Option[Set[BlockHash]]] =
-      childMap.get(blockHash).pure[F]
+      childMap.get(blockHash).map(_ intersect dagSet).pure[F]
 
     def latestMessageHash(validator: Validator): F[Option[BlockHash]] =
       latestMessagesMap.get(validator).pure[F]
@@ -71,68 +71,46 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         targetLatestMessages: Map[Validator, BlockHash],
         findLfb: Map[Validator, BlockHash] => F[BlockHash]
     ): F[BlockDagRepresentation[F]] = {
-
       val lmAll       = this.latestMessagesMap.values.toSet
+      val lmSeen      = targetLatestMessages.values.toSet
       val seenSenders = targetLatestMessages.keySet
 
       for {
-        lfb         <- findLfb(targetLatestMessages)
-        lmFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
-        lmSeen      <- targetLatestMessages.values.toList.traverse(this.lookupUnsafe).map(_.toSet)
-
+        lfb             <- findLfb(targetLatestMessages)
+        latestFinalized <- this.latestFinalized(lfb, seenSenders).map(_.valuesIterator.toSet)
         // for all known latest messages, collect all self justifications until first finalized message found
-        toAdjust = {
-          val seenSeqNums = lmSeen.map(m => (m.sender, m.seqNum)).toMap
-          val finSeqNums  = lmFinalized.map(m => (m.sender, m.seqNum)).toMap
-          val seen        = (m: BlockMetadata) => seenSeqNums.get(m.sender).exists(_ >= m.seqNum)
-          val finalized   = (m: BlockMetadata) => finSeqNums.get(m.sender).exists(_ >= m.seqNum)
+        toAdjust <- Stream
+                     .fromIterator(lmAll.iterator)
+                     .flatMap(
+                       this
+                       // message + all self justifications
+                         .fromSenderBelowWith(_, m => (m.blockHash, m.blockNum))
+                         // take while first finalized message is found
+                         .takeWhile {
+                           case (hash, _) => !latestFinalized.contains(hash)
+                         }
+                         .mapAccumulate(init = false) {
+                           case (childIsSeen, (hash, height)) =>
+                             val seen = childIsSeen || lmSeen.contains(hash)
+                             (seen, (hash, height))
+                         }
+                     )
+                     .compile
+                     .toList
 
-          Stream
-            .unfoldLoopEval(lmAll.toVector) { messages =>
-              for {
-                metas                    <- messages.traverse(this.lookupUnsafe).map(_.filterNot(finalized))
-                (toUnfinalize, toRemove) = metas.partition(seen)
+        (u, r) = toAdjust.partition { case (seen, _) => seen }
 
-                parents = metas.flatMap(_.parents).distinct
-                next    = parents.nonEmpty.guard[Option].as(parents)
-                out     = toRemove.map((_, true)) ++ toUnfinalize.map((_, false))
-              } yield (Stream.emits(out.toList), next)
-            }
-            .flatten
-            .fold((Map.empty[Long, Set[BlockHash]], Map.empty[Long, Set[BlockHash]], childMap)) {
-              case ((removeAcc, unfinalizeAcc, childMap), (m, shouldRemove)) =>
-                val height = m.blockNum
-                if (shouldRemove)
-                  (
-                    removeAcc + (height -> (removeAcc.getOrElse(height, Set()) + m.blockHash)),
-                    unfinalizeAcc,
-                    // Remove from children map key for message, adjust keys for parents.
-                    // As some parent might be already removed by previous iterations, use filter.
-                    m.parents.filter(childMap.contains).foldLeft(childMap - m.blockHash) { (a, p) =>
-                      a + (p -> (a(p) - m.blockHash))
-                    }
-                  )
-                else
-                  (
-                    removeAcc,
-                    unfinalizeAcc + (height -> (unfinalizeAcc.getOrElse(height, Set()) + m.blockHash)),
-                    childMap
-                  )
-            }
-            .compile
-            .lastOrError
-        }
+        toUnfinalize = u.map { case (_, (hash, height)) => (hash, height) }
+        toRemove     = r.map { case (_, (hash, height)) => (hash, height) }
 
-        r                                        <- toAdjust
-        (toRemove, toUnfinalize, newChildrenMap) = r
-        excessSet                                = toRemove.flatMap { case (_, hashes) => hashes }.toSet
-        nonFinalizedSet                          = toUnfinalize.flatMap { case (_, hashes) => hashes }.toSet
+        excessSet       = toRemove.map { case (hash, _)     => hash }.toSet
+        nonFinalizedSet = toUnfinalize.map { case (hash, _) => hash }.toSet
 
         // new truncated values
         truncatedDagSet     = this.dagSet diff excessSet
         truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
         truncatedHeightMap = toRemove.foldLeft(this.heightMap) {
-          case (acc, (height, hashes)) => acc.updated(height, acc(height) -- hashes)
+          case (acc, (hash, height)) => acc.updated(height, acc(height) - hash)
         }
         truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
 
@@ -140,7 +118,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
           lastFinalizedBlockHash = lfb,
           finalizedBlocksSet = truncatedFinalizesSet,
           dagSet = truncatedDagSet,
-          childMap = newChildrenMap,
           latestMessagesMap = targetLatestMessages,
           heightMap = truncatedHeightMap,
           invalidBlocksSet = truncatedInvalidSet

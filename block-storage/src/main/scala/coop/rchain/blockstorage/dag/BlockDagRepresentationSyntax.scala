@@ -145,6 +145,8 @@ final class BlockDagRepresentationOps[F[_]](
     dag.lookup(item).map(_.map(v => v.parents)) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 
+  def nonFinalizedBlocks(implicit sync: Sync[F]): F[Set[BlockHash]] = dag.nonFinalizedSet.pure
+
   def descendants(blockHash: BlockHash)(implicit sync: Sync[F]): F[Set[BlockHash]] =
     Stream
       .unfoldLoopEval(List(blockHash)) { lvl =>
@@ -178,9 +180,9 @@ final class BlockDagRepresentationOps[F[_]](
 
   def latestFinalized(lfb: BlockHash, targetSenders: Set[Validator])(
       implicit sync: Sync[F]
-  ): F[Map[Validator, BlockMetadata]] =
+  ): F[Map[Validator, BlockHash]] =
     Stream
-      .unfoldLoopEval((List(lfb), Map.empty[Validator, BlockMetadata])) {
+      .unfoldLoopEval((List(lfb), Map.empty[Validator, BlockHash])) {
         case (lvl, acc) =>
           for {
             metas <- lvl.traverse(this.lookupUnsafe).map(_.distinct)
@@ -188,10 +190,10 @@ final class BlockDagRepresentationOps[F[_]](
               (a, m) =>
                 if (a.contains(m.sender)) a
                 else
-                  a.updated(m.sender, m)
+                  a.updated(m.sender, m.blockHash)
             )
             done = newAcc.keySet == targetSenders
-            next = if (done) none[(List[BlockHash], Map[Validator, BlockMetadata])]
+            next = if (done) none[(List[BlockHash], Map[Validator, BlockHash])]
             else {
               val parents = metas.flatMap(_.parents).distinct
               parents.nonEmpty.guard[Option].as((parents, newAcc))

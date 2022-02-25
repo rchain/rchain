@@ -30,10 +30,10 @@ object DagMerger {
       rejectionCostF: DeployChainIndex => Long
   ): F[(Blake2b256Hash, Seq[ByteString])] =
     for {
+      // all not finalized blocks (conflict set)
+      nonFinalisedBlocks <- dag.nonFinalizedBlocks
       // blocks that see last finalized state
       actualBlocks <- dag.descendants(lfb)
-      // all not finalized blocks (conflict set)
-      nonFinalisedBlocks = dag.nonFinalizedSet
       // blocks that does not see last finalized state
       lateBlocks = nonFinalisedBlocks diff actualBlocks
 
