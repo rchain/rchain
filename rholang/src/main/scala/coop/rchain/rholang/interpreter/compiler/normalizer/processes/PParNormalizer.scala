@@ -11,7 +11,7 @@ object PParNormalizer {
   def normalize[F[_]: Sync](p: PPar, input: ProcVisitInputs)(
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] =
-    Sync[F].suspend {
+    Sync[F].defer {
       for {
         result       <- normalizeMatch[F](p.proc_1, input)
         chainedInput = input.copy(knownFree = result.knownFree, par = result.par)

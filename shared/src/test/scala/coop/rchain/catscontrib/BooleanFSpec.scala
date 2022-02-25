@@ -77,7 +77,7 @@ class BooleanFSpec extends FunSpec with Matchers with ToBooleanF {
     it("NOT should be eager to evaluate argument") {
       traceExecution[Id](true, true, (x, y) => {
         val _ = (~^(x), y.not)
-        true.pure
+        true.pure[Id]
       }) shouldBe (1, 1)
     }
   }

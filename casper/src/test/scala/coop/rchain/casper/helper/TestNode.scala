@@ -493,16 +493,16 @@ object TestNode {
     implicit val spanEff   = new NoopSpan[F]
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
-      kvm                 <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.liftF(KeyValueBlockStore(kvm))
-      blockDagStorage     <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
-      casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
-      rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
-      mStore              <- Resource.liftF(RuntimeManager.mergeableStore(kvm))
-      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore, mStore))
+      kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
+      deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
+      casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
+      rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
+      mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
+      runtimeManager      <- Resource.eval(RuntimeManager(rSpaceStore, mStore))
 
-      node <- Resource.liftF({
+      node <- Resource.eval({
                implicit val bs                         = blockStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage
