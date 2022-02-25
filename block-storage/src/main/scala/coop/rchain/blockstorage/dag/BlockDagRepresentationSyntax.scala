@@ -98,6 +98,18 @@ final class BlockDagRepresentationOps[F[_]](
           .map(_.map(next => (next, next.latestBlockHash)))
     )
 
+  def fromSenderBelowWith[A](start: BlockHash, proj: BlockMetadata => A)(
+      implicit sync: Sync[F]
+  ): Stream[F, A] =
+    Stream.unfoldLoopEval(start)(
+      message =>
+        lookupUnsafe(message)
+          .map { meta =>
+            val selfJustification = meta.justifications.find(_.validator == meta.sender)
+            (proj(meta), selfJustification.map(_.latestBlockHash))
+          }
+    )
+
   def selfJustification(h: BlockHash)(implicit sync: Sync[F]): F[Option[Justification]] =
     selfJustificationChain(h).head.compile.last
 

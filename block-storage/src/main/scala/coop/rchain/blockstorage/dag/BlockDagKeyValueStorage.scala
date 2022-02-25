@@ -90,16 +90,17 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
           Stream
             .unfoldLoopEval(lmAll.toVector) { messages =>
               for {
-                metas <- messages.traverse(this.lookupUnsafe).map(_.filterNot(finalized))
-                out   = metas.map(m => (m, !seen(m)))
+                metas                    <- messages.traverse(this.lookupUnsafe).map(_.filterNot(finalized))
+                (toUnfinalize, toRemove) = metas.partition(seen)
 
                 parents = metas.flatMap(_.parents).distinct
                 next    = parents.nonEmpty.guard[Option].as(parents)
+                out     = toRemove.map((_, true)) ++ toUnfinalize.map((_, false))
               } yield (Stream.emits(out.toList), next)
             }
             .flatten
             .fold((Map.empty[Long, Set[BlockHash]], Map.empty[Long, Set[BlockHash]], childMap)) {
-              case ((removeAcc, unfinalizeAcc, childMapAcc), (m, shouldRemove)) =>
+              case ((removeAcc, unfinalizeAcc, childMap), (m, shouldRemove)) =>
                 val height = m.blockNum
                 if (shouldRemove)
                   (
@@ -107,15 +108,15 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
                     unfinalizeAcc,
                     // Remove from children map key for message, adjust keys for parents.
                     // As some parent might be already removed by previous iterations, use filter.
-                    m.parents.filter(childMapAcc.contains).foldLeft(childMapAcc - m.blockHash) {
-                      case (a, p) => a + (p -> (a(p) - m.blockHash))
+                    m.parents.filter(childMap.contains).foldLeft(childMap - m.blockHash) { (a, p) =>
+                      a + (p -> (a(p) - m.blockHash))
                     }
                   )
                 else
                   (
                     removeAcc,
                     unfinalizeAcc + (height -> (unfinalizeAcc.getOrElse(height, Set()) + m.blockHash)),
-                    childMapAcc
+                    childMap
                   )
             }
             .compile
@@ -131,7 +132,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         truncatedDagSet     = this.dagSet diff excessSet
         truncatedInvalidSet = this.invalidBlocksSet.filter(m => dagSet.contains(m.blockHash))
         truncatedHeightMap = toRemove.foldLeft(this.heightMap) {
-          case (acc, (height, hashes)) => acc.updated(height, acc(height) diff hashes)
+          case (acc, (height, hashes)) => acc.updated(height, acc(height) -- hashes)
         }
         truncatedFinalizesSet = finalizedBlocksSet diff excessSet diff nonFinalizedSet
 
