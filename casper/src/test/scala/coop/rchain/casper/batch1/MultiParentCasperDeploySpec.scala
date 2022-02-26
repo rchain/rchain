@@ -1,6 +1,6 @@
 package coop.rchain.casper.batch1
 
-import coop.rchain.casper.blocks.proposer.Created
+import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.batch2.EngineWithCasper
@@ -36,7 +36,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     }
   }
 
-  it should "not put repeated deploy in a block" in effectTest {
+  it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
@@ -44,8 +44,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         deploy             <- ConstructDeploy.basicDeployData[Effect](0)
         _                  <- node0.propagateBlock(deploy)(node1)
         createBlockResult2 <- node1.createBlock(deploy)
-        Created(b)         = createBlockResult2
-      } yield (b.body.deploys.size shouldBe 0)
+      } yield (createBlockResult2 should be(NoNewDeploys))
     }
   }
 

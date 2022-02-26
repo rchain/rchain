@@ -133,6 +133,21 @@ final class BlockDagRepresentationOps[F[_]](
     dag.lookup(item).map(_.map(v => v.parents)) >>= (_.liftTo(BlockDagInconsistencyError(errMsg)))
   }
 
+  def nonFinalizedBlocks(implicit sync: Sync[F]): F[Set[BlockHash]] =
+    for {
+      tips <- latestMessages.map(_.values.map(_.blockHash).toList)
+      r <- Stream
+            .unfoldLoopEval(tips) { lvl =>
+              for {
+                out  <- lvl.filterA(dag.isFinalized(_).not)
+                next <- out.traverse(dag.lookup(_).map(_.map(_.parents))).map(_.flatten.flatten)
+              } yield (out, next.nonEmpty.guard[Option].as(next))
+            }
+            .flatMap(Stream.emits)
+            .compile
+            .to(Set)
+    } yield r
+
   def descendants(blockHash: BlockHash)(implicit sync: Sync[F]): F[Set[BlockHash]] =
     Stream
       .unfoldLoopEval(List(blockHash)) { lvl =>
@@ -145,11 +160,11 @@ final class BlockDagRepresentationOps[F[_]](
       .compile
       .to(Set)
 
-  def ancestors(start: List[BlockHash], filterF: BlockHash => F[Boolean])(
+  def ancestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
     Stream
-      .unfoldEval(start) { lvl =>
+      .unfoldEval(List(blockHash)) { lvl =>
         val parents = lvl
           .traverse(lookupUnsafe)
           .flatMap(_.flatMap(_.parents).distinct.filterA(filterF))
@@ -162,30 +177,5 @@ final class BlockDagRepresentationOps[F[_]](
   def withAncestors(blockHash: BlockHash, filterF: BlockHash => F[Boolean])(
       implicit sync: Sync[F]
   ): F[Set[BlockHash]] =
-    ancestors(List(blockHash), filterF).map(_ + blockHash)
-
-  def latestFinalized(lfb: BlockHash, targetSenders: Set[Validator])(
-      implicit sync: Sync[F]
-  ): F[Map[Validator, BlockMetadata]] =
-    Stream
-      .unfoldLoopEval((List(lfb), Map.empty[Validator, BlockMetadata])) {
-        case (lvl, acc) =>
-          for {
-            metas <- lvl.traverse(this.lookupUnsafe).map(_.distinct)
-            newAcc = metas.foldLeft(acc)(
-              (a, m) =>
-                if (a.contains(m.sender)) a
-                else
-                  a.updated(m.sender, m)
-            )
-            done = newAcc.keySet == targetSenders
-            next = if (done) none[(List[BlockHash], Map[Validator, BlockMetadata])]
-            else {
-              val parents = metas.flatMap(_.parents).distinct
-              parents.nonEmpty.guard[Option].as((parents, newAcc))
-            }
-          } yield (newAcc, next)
-      }
-      .compile
-      .lastOrError
+    ancestors(blockHash, filterF).map(_ + blockHash)
 }

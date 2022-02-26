@@ -37,6 +37,8 @@ object BlockGenerator {
     CasperSnapshot(
       dag,
       ByteString.EMPTY,
+      ByteString.EMPTY,
+      IndexedSeq.empty,
       List.empty,
       Set.empty,
       Map.empty,

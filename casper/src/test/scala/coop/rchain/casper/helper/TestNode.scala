@@ -231,7 +231,7 @@ case class TestNode[F[_]: Timer](
   def createBlock(deployDatums: Signed[DeployData]*): F[BlockCreatorResult] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot()
+      cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
     } yield createBlockResult
@@ -240,7 +240,7 @@ case class TestNode[F[_]: Timer](
   def createBlockUnsafe(deployDatums: Signed[DeployData]*): F[BlockMessage] =
     for {
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
-      cs                <- casperEff.getSnapshot()
+      cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
       createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {

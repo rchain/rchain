@@ -45,12 +45,6 @@ trait BlockDagRepresentation[F[_]] {
   def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
   def find(truncatedHash: String): F[Option[BlockHash]]
-  def nonFinalizedSet: Set[BlockHash]
-  def truncate(
-      latestMessages: Map[Validator, BlockHash],
-      findLfb: Map[Validator, BlockHash] => F[BlockHash]
-  ): F[BlockDagRepresentation[F]]
-  def reachedAcquiescence: F[Boolean]
 }
 
 trait EquivocationsTracker[F[_]] {

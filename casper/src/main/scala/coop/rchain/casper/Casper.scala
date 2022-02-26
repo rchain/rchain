@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import cats.{Applicative, Monad, Show}
+import cats.{Applicative, Show}
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -24,7 +24,6 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
-import coop.rchain.shared.syntax._
 
 sealed trait DeployError
 final case class ParsingError(details: String)          extends DeployError
@@ -49,7 +48,7 @@ object DeployError {
 }
 
 trait Casper[F[_]] {
-  def getSnapshot(targetBlockOpt: Option[BlockMessage] = None): F[CasperSnapshot[F]]
+  def getSnapshot: F[CasperSnapshot[F]]
   def contains(hash: BlockHash): F[Boolean]
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
@@ -67,42 +66,6 @@ trait Casper[F[_]] {
       dag: BlockDagRepresentation[F]
   ): F[BlockDagRepresentation[F]]
   def getDependencyFreeFromBuffer: F[List[BlockMessage]]
-}
-
-object Casper {
-
-  /**
-    * Casper messages serve only two purposes:
-    * 1. offering state transitions for validation by the network, and
-    * 2. participating in past state transition finalization.
-    * Therefore message producing makes sense and should be allowed only if it is justified by these reasons.
-    *
-    * Given said above here are rules for detecting if propose is justified:
-    * 1. State transition
-    *    a) there is a user deploy to be included in a block, or
-    *    b) parents have different post state, so merge block should be issued.
-    *    Both of these rules can be validated, so offence an be detected.
-    * 2. Finalization (reaching acquiescence)
-    *    There are non finalized messages which do not share post state with some finalized message.
-    *    This rule also can be validated and offence detected.
-    *    TODO this can be narrowed down to "if sender already propagated its weight down to all states known"
-    */
-  def shouldPropose[F[_]: Sync](
-      s: CasperSnapshot[F],
-      deploysWaiting: F[Set[Signed[DeployData]]]
-  ): F[Boolean] = {
-    val hasParentsToMerge = (s.parents.map(_.body.state.postStateHash).distinct.size > 1).pure[F]
-    val hasDeploysToOffer = deploysWaiting.map(_ -- s.deploysInScope).map(_.nonEmpty)
-    val needToSlash       = bondedOffenders(s).map(_.nonEmpty)
-    val noAcquiescence    = s.dag.reachedAcquiescence.not
-    hasDeploysToOffer ||^ hasParentsToMerge ||^ needToSlash ||^ noAcquiescence
-  }
-
-  // Validators that should be slashed because of invalid block, but still active in this state
-  def bondedOffenders[F[_]: Sync](s: CasperSnapshot[F]): F[Iterator[(Validator, BlockHash)]] =
-    s.dag.invalidLatestMessages.map(_.toIterator.filter {
-      case (validator, _) => s.onChainState.bondsMap.getOrElse(validator, 0L) > 0L
-    })
 }
 
 trait MultiParentCasper[F[_]] extends Casper[F] {
@@ -130,6 +93,8 @@ object MultiParentCasper extends MultiParentCasperInstances {
 final case class CasperSnapshot[F[_]](
     dag: BlockDagRepresentation[F],
     lastFinalizedBlock: BlockHash,
+    lca: BlockHash,
+    tips: IndexedSeq[BlockHash],
     parents: List[BlockMessage],
     justifications: Set[Justification],
     invalidBlocks: Map[Validator, BlockHash],

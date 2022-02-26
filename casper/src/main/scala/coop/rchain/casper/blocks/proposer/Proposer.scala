@@ -8,13 +8,12 @@ import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.protocol.{BlockMessage, DeployData}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
@@ -52,8 +51,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
     ) => F[BlockCreatorResult],
     validateBlock: (Casper[F], CasperSnapshot[F], BlockMessage) => F[ValidBlockProcessing],
     proposeEffect: (Casper[F], BlockMessage) => F[Unit],
-    validator: ValidatorIdentity,
-    loadDeploys: F[Set[Signed[DeployData]]]
+    validator: ValidatorIdentity
 ) {
 
   implicit val RuntimeMetricsSource: Source = Metrics.Source(CasperMetricsSource, "proposer")
@@ -67,14 +65,7 @@ class Proposer[F[_]: Concurrent: Log: Span](
         // TODO this genesis should not be here, but required for sync constraint code. Remove
         genesis <- casper.getApprovedBlock
         // check if node is allowed to propose a block
-        chk <- Casper
-                .shouldPropose(s, loadDeploys)
-                .ifM(
-                  checkProposeConstraints(genesis, s),
-                  // TODO re-enable reasons to propose, so blocks are created lazily
-                  //  disabled due to https://github.com/rchain/rchain/pull/3570
-                  checkProposeConstraints(genesis, s) //CheckProposeConstraintsResult.noReasonToPropose.pure[F]
-                )
+        chk <- checkProposeConstraints(genesis, s)
         r <- chk match {
               case v: CheckProposeConstraintsFailure =>
                 (ProposeResult.failure(v), none[BlockMessage]).pure[F]
@@ -82,6 +73,8 @@ class Proposer[F[_]: Concurrent: Log: Span](
                 for {
                   b <- createBlock(s, validator)
                   r <- b match {
+                        case NoNewDeploys =>
+                          (ProposeResult.failure(NoNewDeploys), none[BlockMessage]).pure[F]
                         case Created(b) =>
                           validateBlock(casper, s, b).flatMap {
                             case Right(v) =>
@@ -173,7 +166,7 @@ object Proposer {
       validatorIdentity: ValidatorIdentity,
       dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
-    val getCasperSnapshot = (c: Casper[F]) => c.getSnapshot()
+    val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
       BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
@@ -214,18 +207,15 @@ object Proposer {
         // Publish event
         EventPublisher[F].publish(MultiParentCasperImpl.createdEvent(b))
 
-    val loadDeploys = DeployStorage[F].readAll
-
     new Proposer(
-      getCasperSnapshot,
+      getCasperSnapshotSnapshot,
       checkValidatorIsActive,
       checkEnoughBaseStake,
       checkLastFinalizedHeightConstraint,
       createBlock,
       validateBlock,
       proposeEffect,
-      validatorIdentity,
-      loadDeploys
+      validatorIdentity
     )
   }
 }

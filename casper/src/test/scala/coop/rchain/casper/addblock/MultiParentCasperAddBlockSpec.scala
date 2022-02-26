@@ -5,7 +5,7 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._
-import coop.rchain.casper.blocks.proposer.NoReasonToPropose
+import coop.rchain.casper.blocks.proposer.NoNewDeploys
 import coop.rchain.casper._
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.helper.{BlockUtil, TestNode}
@@ -34,7 +34,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis(buildGenesisParametersWithRandom(validatorsNum = 5))
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -126,23 +126,22 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     }
   }
 
-  // Test does not make sense given attestation messages
-//  it should "not allow empty blocks with multiple parents" in effectTest {
-//    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
-//      for {
-//        deployDatas <- (0 to 1).toList
-//                        .traverse[Effect, Signed[DeployData]](
-//                          i => ConstructDeploy.basicDeployData[Effect](i)
-//                        )
-//        _ <- nodes(0).addBlock(deployDatas(0))
-//        _ <- nodes(1).addBlock(deployDatas(1))
-//        _ <- nodes(1).handleReceive() // receive block1
-//        _ <- nodes(0).handleReceive() // receive block2
-//
-//        status <- nodes(1).createBlock()
-//      } yield (assert(status == NoReasonToPropose))
-//    }
-//  }
+  it should "not allow empty blocks with multiple parents" in effectTest {
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+      for {
+        deployDatas <- (0 to 1).toList
+                        .traverse[Effect, Signed[DeployData]](
+                          i => ConstructDeploy.basicDeployData[Effect](i)
+                        )
+        _ <- nodes(0).addBlock(deployDatas(0))
+        _ <- nodes(1).addBlock(deployDatas(1))
+        _ <- nodes(1).handleReceive() // receive block1
+        _ <- nodes(0).handleReceive() // receive block2
+
+        status <- nodes(1).createBlock()
+      } yield (assert(status == NoNewDeploys))
+    }
+  }
 
   it should "create valid blocks when peek syntax is present in a deploy" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
@@ -557,53 +556,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
           blockThatPointsToInvalidBlock
         )
       } yield block
-    }
-  }
-
-  it should "replay block using truncated dag view as per block's justifications" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 5).use {
-      case nodes @ n0 +: n1 +: n2 +: n3 +: n4 +: _ =>
-        for {
-          deploys <- (genesis.validatorPks zip genesis.genesisVaultsSks).zipWithIndex.toList
-                      .traverse {
-                        case ((_, payerSk), i) => {
-                          ConstructDeploy.basicDeployData[Effect](i, payerSk)
-                        }
-                      }
-          //b0
-          b0 <- n0.createBlockUnsafe(deploys.head)
-          _  <- nodes.toList.traverse(_.processBlock(b0))
-          _  = b0.header.parentsHashList.size shouldBe 1
-          //   b1 b2
-          //b0
-          b1 <- n1.createBlockUnsafe(deploys(1))
-          b2 <- n2.createBlockUnsafe(deploys(2))
-          _  <- nodes.toList.traverse(_.processBlock(b1))
-          _  <- nodes.toList.traverse(_.processBlock(b2))
-          _  = b1.header.parentsHashList.size shouldBe 1
-          _  = b2.header.parentsHashList.size shouldBe 1
-          //         b3 b4
-          //   b1 b2
-          //b0
-          b3 <- n3.createBlockUnsafe(deploys(3))
-          b4 <- n4.createBlockUnsafe(deploys(4))
-          _  = (b3.body.state.preStateHash == b4.body.state.preStateHash) shouldBe true
-          _  <- nodes.toList.traverse(_.processBlock(b3))
-          // after b3 processed by all blocks, b4 processing should not be influenced by b3 (b3 should not be used as parent)
-          _ <- nodes.toList.traverse(_.processBlock(b4))
-          // these are merge blocks that will be inside merge scope gor b5
-          _ = b3.header.parentsHashList.size shouldBe 2
-          _ = b4.header.parentsHashList.size shouldBe 2
-          //b5
-          //         b3 b4 - two merge blocks
-          //   b1 b2
-          //b0
-          d  <- ConstructDeploy.basicDeployData[Effect](0, genesis.genesisVaultsSks.head)
-          b5 <- n0.createBlockUnsafe(d)
-          _  <- nodes.toList.traverse(_.processBlock(b5))
-          // goal of the test is to ensure that v5 is created succesfully
-          _ = b5.header.parentsHashList.size shouldBe 2
-        } yield ()
     }
   }
 }

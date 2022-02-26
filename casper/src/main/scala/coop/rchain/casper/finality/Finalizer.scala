@@ -39,8 +39,6 @@ import fs2.Stream
   */
 object Finalizer {
 
-  val MaxSearchDepth = 100L
-
   private type WeightMap = Map[Validator, Long]
 
   /** Message that is agreed on + weight of this agreement. */
@@ -87,78 +85,63 @@ object Finalizer {
   }
 
   /**
-    * The goal here is to create stream of agreements breadth first, so on each step agreements by all
-    * validator are recorded, and only after that next level of main parents is visited.
-    * @param dag dependency DAG
-    * @param agreeingMessages - messages to compute ageements for
-    * @param lowestHeight - height at which DAG traversal shall be stopped, this height is emitted last
-    * @return Stream of agreements passed down from agreeing messages through main parent chains according to
-    *         dependency DAG. Starts with agreements of message on themselves.
-    */
-  private def agreementsStream[F[_]: Sync](
-      dag: BlockDagRepresentation[F],
-      agreeingMessages: Map[Validator, BlockMetadata],
-      lowestHeight: Long
-  ): Stream[F, MessageAgreement] = {
-    // sort latest messages by agreeing validator to ensure random ordering does not change output
-    val sortedLatestMessages = agreeingMessages.toList.sortBy { case (v, _) => v }
-    Stream
-      .unfoldLoopEval(sortedLatestMessages) { layer =>
-        // output current visits
-        val out = layer
-        // proceed to main parents
-        val nextF = layer
-          .traverse {
-            case (v, message) =>
-              message.parents.headOption.traverse(dag.lookupUnsafe).map { messageMainParent =>
-                (v, messageMainParent)
-              }
-          }
-          // filter out empty results when no main parent and those out of scope
-          .map(_.collect { case (v, Some(meta)) if meta.blockNum >= lowestHeight => (v, meta) })
-
-        nextF.map(next => (out, next.nonEmpty.guard[Option].as(next)))
-      }
-      .evalMap(_.traverse {
-        // map visits to message agreements: validator v agrees on message m
-        case (v, m) =>
-          messageWeightMapF(m, dag).map { messageWeightMap =>
-            recordAgreement(messageWeightMap, v).map { agreement =>
-              MessageAgreement(m, messageWeightMap, Map(agreement))
-            }
-          }
-      })
-      // collect successful agreements (by bonded validators as per message agreed on)
-      .map(_.collect { case Some(v) => v })
-      // flatten in a single stream
-      .map(Stream.emits(_))
-      .flatten
-  }
-
-  /**
-    * Finalize dag: find the last finalized message, invoke all finalization related effects.
+    * Find the highest finalized message.
     * Scope of the search is constrained by the lowest height (height of current last finalized message).
     */
-  def run[F[_]: Sync](
+  def run[F[_]: Concurrent: Metrics: Log: Span](
       dag: BlockDagRepresentation[F],
       faultToleranceThreshold: Float,
       currLFBHeight: Long,
       newLfbFoundEffect: BlockHash => F[Unit]
-  ): F[Option[BlockHash]] =
-    dag.latestMessages
-      .flatMap(findLastFinalizedBlock(dag, _, faultToleranceThreshold, currLFBHeight + 1))
-      .flatMap(_.traverseTap(newLfbFoundEffect))
+  ): F[Option[BlockHash]] = {
 
-  /** Find last finalized block given latest messages and dependency DAG. Search is constrained by lowest height. */
-  def findLastFinalizedBlock[F[_]: Sync](
-      dag: BlockDagRepresentation[F],
-      latestMessagesView: Map[Validator, BlockMetadata],
-      faultToleranceThreshold: Float,
-      lowestHeight: Long
-  ): F[Option[BlockHash]] =
-    // while recording each agreement in agreements map
-    agreementsStream(dag, latestMessagesView, lowestHeight)
-      .mapAccumulate(Map.empty[BlockMetadata, WeightMap]) {
+    /**
+      * Stream of agreements passed down from all latest messages to main parents.
+      * Starts with agreements of latest message on themselves.
+      *
+      * The goal here is to create stream of agreements breadth first, so on each step agreements by all
+      * validator are recorded, and only after that next level of main parents is visited.
+      */
+    val mkAgreementsStream: F[Stream[F, MessageAgreement]] =
+      dag.latestMessages.map { lms =>
+        // sort latest messages by agreeing validator to ensure random ordering does not change output
+        val sortedLatestMessages = lms.toList.sortBy { case (v, _) => v }
+        Stream
+          .unfoldLoopEval(sortedLatestMessages) { layer =>
+            // output current visits
+            val out = layer
+            // proceed to main parents
+            val nextF = layer
+              .traverse {
+                case (v, message) =>
+                  message.parents.headOption.traverse(dag.lookupUnsafe).map { messageMainParent =>
+                    (v, messageMainParent)
+                  }
+              }
+              // filter out empty results when no main parent and those out of scope
+              .map(_.collect { case (v, Some(meta)) if meta.blockNum > currLFBHeight => (v, meta) })
+
+            nextF.map(next => (out, next.nonEmpty.guard[Option].as(next)))
+          }
+          .evalMap(_.traverse {
+            // map visits to message agreements: validator v agrees on message m
+            case (v, m) =>
+              messageWeightMapF(m, dag).map { messageWeightMap =>
+                recordAgreement(messageWeightMap, v).map { agreement =>
+                  MessageAgreement(m, messageWeightMap, Map(agreement))
+                }
+              }
+          })
+          // collect successful agreements (by bonded validators as per message agreed on)
+          .map(_.collect { case Some(v) => v })
+          // flatten in a single stream
+          .map(Stream.emits(_))
+          .flatten
+      }
+
+    mkAgreementsStream.flatMap {
+      // while recording each agreement in agreements map
+      _.mapAccumulate(Map.empty[BlockMetadata, WeightMap]) {
         case (acc, MessageAgreement(message, messageWeightMap, stakeAgreed)) =>
           val curVal = acc.getOrElse(message, Map.empty)
           require(
@@ -169,31 +152,35 @@ object Finalizer {
           (acc.updated(message, newVal), (message, messageWeightMap))
       }
       // output only target message of current agreement
-      .map {
-        case (fullAgreementsMap, (message, messageWeightMap)) =>
-          (message, messageWeightMap, fullAgreementsMap(message))
-      }
-      // filter only messages that cannot be orphaned
-      .filter {
-        case (_, messageWeightMap, agreeingWeightMap) =>
-          cannotBeOrphaned(messageWeightMap, agreeingWeightMap)
-      }
-      // compute fault tolerance
-      .evalMap {
-        case (message, messageWeightMap, agreeingWeightMap) =>
-          CliqueOracle
-            .computeOutput[F](
-              targetMsg = message.blockHash,
-              messageWeightMap = messageWeightMap,
-              agreeingWeightMap = agreeingWeightMap,
-              dag = dag
-            )
-            .map((message, _))
-      }
-      // first candidate that meets finalization criteria is new LFB
-      .filter { case (_, faultTolerance) => faultTolerance > faultToleranceThreshold }
-      .head
-      .map { case (lfb, _) => lfb.blockHash }
-      .compile
-      .last
+        .map {
+          case (fullAgreementsMap, (message, messageWeightMap)) =>
+            (message, messageWeightMap, fullAgreementsMap(message))
+        }
+        // filter only messages that cannot be orphaned
+        .filter {
+          case (_, messageWeightMap, agreeingWeightMap) =>
+            cannotBeOrphaned(messageWeightMap, agreeingWeightMap)
+        }
+        // compute fault tolerance
+        .evalMap {
+          case (message, messageWeightMap, agreeingWeightMap) =>
+            CliqueOracle
+              .computeOutput[F](
+                targetMsg = message.blockHash,
+                messageWeightMap = messageWeightMap,
+                agreeingWeightMap = agreeingWeightMap,
+                dag = dag
+              )
+              .map((message, _))
+        }
+        // first candidate that meets finalization criteria is new LFB
+        .filter { case (_, faultTolerance) => faultTolerance > faultToleranceThreshold }
+        .head
+        .map { case (lfb, _) => lfb.blockHash }
+        // execute finalization effect
+        .evalTap(newLfbFoundEffect)
+        .compile
+        .last
+    }
+  }
 }
