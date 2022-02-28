@@ -48,7 +48,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   def generateDataWithLastNonZeroByte(lastByte: Byte): Array[Byte] =
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toArray
 
-  "Tree with makeActions" should "be built correctly!!!" in withRadixTreeImplAndStore {
+  "tree with makeActions" should "be built correctly!!!" in withRadixTreeImplAndStore {
     (radixTreeImplF, typedStore) ⇒
       for {
         impl       ← radixTreeImplF
@@ -90,7 +90,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Appending leaf in empty tree" should "work" in withRadixTreeImplAndStore { (radixTreeImplF, _) ⇒
+  "appending leaf in empty tree" should "work" in withRadixTreeImplAndStore { (radixTreeImplF, _) ⇒
     for {
       impl ← radixTreeImplF
       item1 ← impl.update(
@@ -111,7 +111,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     } yield ()
   }
 
-  "Appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withRadixTreeImplAndStore {
+  "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl                     ← radixTreeImplF
@@ -154,7 +154,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         _ = printedTree2 shouldBe etalonTree2
       } yield ()
   }
-  "Appending leaf to leaf" should "create node with two leafs" in withRadixTreeImplAndStore {
+  "appending leaf to leaf" should "create node with two leafs" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl ← radixTreeImplF
@@ -189,7 +189,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Updating leaf" should "work correctly" in withRadixTreeImplAndStore { (radixTreeImplF, _) ⇒
+  "updating leaf" should "work correctly" in withRadixTreeImplAndStore { (radixTreeImplF, _) ⇒
     for {
       impl          ← radixTreeImplF
       firstLeafData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
@@ -288,7 +288,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       }
   }
 
-  "Deleting not exising node" should "return none" in withRadixTreeImplAndStore {
+  "deleting not exising data" should "return none" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl ← radixTreeImplF
@@ -309,7 +309,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Deleting leaf from tree with only one leaf" should "destroy tree" in withRadixTreeImplAndStore {
+  "deleting leaf from tree with only one leaf" should "destroy tree" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl ← radixTreeImplF
@@ -335,7 +335,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Deleting leaf from node with two leafs" should "work correctly" in withRadixTreeImplAndStore {
+  "deleting leaf from node with two leafs" should "leave one leaf" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl ← radixTreeImplF
@@ -389,7 +389,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "Deleting data from leaf" should "destroy this leaf" in withRadixTreeImplAndStore {
+  "deleting data from leaf" should "destroy this leaf" in withRadixTreeImplAndStore {
     (radixTreeImplF, _) ⇒
       for {
         impl                     ← radixTreeImplF
@@ -632,16 +632,6 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         _           = nodesCount2 shouldBe 1
       } yield ()
   }
-
-  /*
-  Вот такие наборы проверь:
-   p1: 1,2,3,4,5, p2: 1,2,3,4,5
-   p1: 1,2,3,4,5, p2: 1,2,3
-   p1: 1,2,3,4,5, p2: empty
-   p1: 1,2,3,4,5, p2: 1,2,3,6,7
-   p1: 2,2,3,4,5, p2: 1,2,3,4,5
-   p1: empty, p2: empty
-   */
 
   "function commonPrefix" should "work" in {
     val v12345   = Seq[Byte](1, 2, 3, 4, 5)
