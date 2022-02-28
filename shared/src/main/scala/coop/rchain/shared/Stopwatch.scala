@@ -17,16 +17,7 @@ object Stopwatch {
       _  <- log(s"$tag [${showTime(m)}]")
     } yield a
 
-  def msTime[F[_]: Sync, A](log: String => F[Unit])(block: => F[A]): F[A] =
-    for {
-      t0 <- Sync[F].delay(System.nanoTime)
-      a  <- block
-      t1 = System.nanoTime
-      m  = Duration.fromNanos(t1 - t0).toMillis
-      _  <- log(s"$m")
-    } yield a
-
-  def nsTime[F[_]: Sync, A](block: => F[A]): F[(A, FiniteDuration)] =
+  def durationRaw[F[_]: Sync, A](block: => F[A]): F[(A, FiniteDuration)] =
     for {
       t0 <- Sync[F].delay(System.nanoTime)
       a  <- block

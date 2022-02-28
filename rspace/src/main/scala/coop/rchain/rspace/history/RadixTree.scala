@@ -202,7 +202,7 @@ object RadixTree {
             (pos0Next, node.updated(numItem, item))
           } catch {
             case _: Exception =>
-              assert(assertion = false, "Error during deserialization: out of range")
+              assert(assertion = false, "Error during deserialization: invalid data format")
               (maxSize, emptyNode)
           }
           decodeItem(idx0Next, nodeNext) // Try to decode next item.
@@ -217,22 +217,17 @@ object RadixTree {
     *
     * @return (Common part , rest of b1, rest of b2).
     */
-  def commonPrefix(vL: ByteVector, vR: ByteVector): (ByteVector, ByteVector, ByteVector) = {
-    val lengthL   = vL.length
-    val lengthR   = vR.length
-    val lengthMin = lengthL min lengthR
-
+  def commonPrefix(b1: ByteVector, b2: ByteVector): (ByteVector, ByteVector, ByteVector) = {
     @tailrec
-    def findLastCommonIdx(idx: Long): Long =
-      if (idx >= lengthMin) idx
-      else if (vL(idx) == vR(idx)) findLastCommonIdx(idx + 1)
-      else idx
-
-    val lastCommonIdx = findLastCommonIdx(0)
-    val common        = vL.take(lastCommonIdx)
-    val restL         = vL.drop(lastCommonIdx)
-    val restR         = vR.drop(lastCommonIdx)
-    (common, restL, restR)
+    def go(common: ByteVector, l: ByteVector, r: ByteVector): (ByteVector, ByteVector, ByteVector) =
+      if (r.isEmpty || l.isEmpty) (common, l, r)
+      else {
+        val lHead = l.head
+        val rHead = r.head
+        if (lHead == rHead) go(common :+ lHead, l.tail, r.tail)
+        else (common, l, r)
+      }
+    go(ByteVector.empty, b1, b2)
   }
 
   /**

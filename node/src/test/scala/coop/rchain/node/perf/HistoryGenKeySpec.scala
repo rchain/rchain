@@ -279,7 +279,7 @@ class HistoryGenKeySpec extends FlatSpec with Matchers with BeforeAndAfterAll {
         } yield ()
 
       def nsTime[A](block: F[A]): F[(A, Long)] =
-        Stopwatch.nsTime(block).map(x => (x._1, x._2.toMillis))
+        Stopwatch.durationRaw(block).map(x => (x._1, x._2.toMillis))
 
       def statistic(
           i: Int,
