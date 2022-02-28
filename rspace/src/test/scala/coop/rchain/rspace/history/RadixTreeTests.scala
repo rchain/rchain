@@ -587,7 +587,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
         nodesCount1 = inMemoStore.numRecords()
         printed = println(
-          s"Nodes count after creating tree of 3 leafs (without root) : ${nodesCount1.toString}"
+          s"Nodes count after creating tree of 3 leafs (without root node) : ${nodesCount1.toString}"
         )
 
         printedTree1 ← impl.printTree(rootNode2Opt.get, "TREE1", false)
@@ -597,7 +597,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         committed2   ← impl.commit
         nodesCount2  = inMemoStore.numRecords()
         printed2 = println(
-          s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs : ${nodesCount2.toString}"
+          s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs (without root node): ${nodesCount2.toString}"
         )
         printedTree2 ← impl.printTree(rootNode3Opt.get, "TREE2", false)
 
@@ -619,6 +619,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         saved    = impl.saveNode(node)
         commited ← impl.commit
 
+        //  After saving node numRecords must return 1
         nodesCount2 = inMemoStore.numRecords()
         _           = nodesCount1 shouldBe 0
         _           = nodesCount2 shouldBe 1
