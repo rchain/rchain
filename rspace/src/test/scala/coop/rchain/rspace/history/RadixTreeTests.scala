@@ -1,10 +1,17 @@
 package coop.rchain.rspace.history
 
-import cats.Parallel
+import cats.{Functor, Parallel}
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.RadixTree.{byteToInt, commonPrefix, Item, NodePtr, RadixTreeImpl}
+import coop.rchain.rspace.history.RadixTree.{
+  byteToInt,
+  commonPrefix,
+  ExportDataSettings,
+  Item,
+  NodePtr,
+  RadixTreeImpl
+}
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
@@ -624,6 +631,43 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         _           = nodesCount1 shouldBe 0
         _           = nodesCount2 shouldBe 1
       } yield ()
+  }
+
+  /*
+  Вот такие наборы проверь:
+   p1: 1,2,3,4,5, p2: 1,2,3,4,5
+   p1: 1,2,3,4,5, p2: 1,2,3
+   p1: 1,2,3,4,5, p2: empty
+   p1: 1,2,3,4,5, p2: 1,2,3,6,7
+   p1: 2,2,3,4,5, p2: 1,2,3,4,5
+   p1: empty, p2: empty
+   */
+
+  "function commonPrefix" should "work" in {
+    val v12345   = Seq[Byte](1, 2, 3, 4, 5)
+    val v1245    = Seq[Byte](1, 2, 4, 5)
+    val v123     = Seq[Byte](1, 2, 3)
+    val v12367   = Seq[Byte](1, 2, 3, 6, 7)
+    val v22345   = Seq[Byte](2, 2, 3, 4, 5)
+    val emptyVal = Seq[Byte]()
+    val res1     = HistoryMergingInstances.commonPrefix(v12345, v1245)
+    val res2     = HistoryMergingInstances.commonPrefix(v12345, v123)
+    val res3     = HistoryMergingInstances.commonPrefix(v12345, emptyVal)
+    val res4     = HistoryMergingInstances.commonPrefix(v12345, v12367)
+    val res5     = HistoryMergingInstances.commonPrefix(v22345, v12345)
+    val res6     = HistoryMergingInstances.commonPrefix(emptyVal, emptyVal)
+    println(s"PREFIX (1, 2, 3, 4, 5)(1, 2, 4, 5) should be: $res1")
+    println(s"PREFIX (1, 2, 3, 4, 5)(1, 2, 3) should be: $res2")
+    println(s"PREFIX (1, 2, 3, 4, 5)(empty) should be: $res3")
+    println(s"PREFIX (1, 2, 3, 4, 5)(1, 2, 3, 6, 7) should be: $res4")
+    println(s"PREFIX (2, 2, 3, 4, 5)(1, 2, 3, 4, 5) should be: $res5")
+    println(s"PREFIX (empty)(empty) should be: $res6")
+    res1 shouldBe List(1, 2)
+    res2 shouldBe List(1, 2, 3)
+    res3 shouldBe List()
+    res4 shouldBe List(1, 2, 3)
+    res5 shouldBe List()
+    res6 shouldBe List()
   }
 
   def createInsertActions(
