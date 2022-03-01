@@ -41,7 +41,9 @@ object TransactionBalances {
       transaction: TransactionInfo,
       blockNumber: Long,
       isFinalized: Boolean
-  )
+  ) {
+    val isSucceed: Boolean = transaction.transaction.failReason.isEmpty
+  }
 
   val initialPosStakingVault: RevAccount = RevAccount(
     RevAddress
@@ -136,7 +138,7 @@ object TransactionBalances {
   ): GlobalVaultsInfo = {
     val resultMap = transfers.foldLeft(genesisVault.vaultMaps) {
       case (m, transfer) =>
-        if (transfer.isFinalized && transfer.transaction.transaction.failReason.isEmpty) {
+        if (transfer.isFinalized && transfer.isSucceed) {
           val fromAddr = transfer.transaction.transaction.fromAddr
           val toAddr   = transfer.transaction.transaction.toAddr
           val amount   = transfer.transaction.transaction.amount
