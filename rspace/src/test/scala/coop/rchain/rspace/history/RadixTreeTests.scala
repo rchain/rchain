@@ -36,11 +36,9 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toArray
 
   "tree with makeActions" should "be built correctly!!!" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, typedStore) =>
+    (impl, typedStore) =>
       for {
-        impl       <- radixTreeImplF
-        emptyRHash = RadixHistory.emptyRootHash
-        rootNode   <- impl.loadNode(emptyRHash.bytes, noAssert = true)
+        rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
         keys = List(
           TestData.hexKey("FF00FFF01"),
@@ -77,37 +75,34 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "appending leaf in empty tree" should "work" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
-      for {
-        impl <- radixTreeImplF
-        item1 <- impl.update(
-                  RadixTree.EmptyItem,
-                  TestData.hexKey("FFFFFFF1").toVector,
-                  generateDataWithLastNonZeroByte(0xA.toByte).toVector
-                )
+  "appending leaf in empty tree" should "work" in withRadixTreeImplAndInMemoStore { (impl, _) =>
+    for {
+      item1 <- impl.update(
+                RadixTree.EmptyItem,
+                TestData.hexKey("FFFFFFF1").toVector,
+                generateDataWithLastNonZeroByte(0xA.toByte).toVector
+              )
 
-        newRootNode    <- impl.constructNodeFromItem(item1.get)
-        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
+      newRootNode    <- impl.constructNodeFromItem(item1.get)
+      printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
 
-        etalonTree = Vector(
-          "TREE WITH ONE LEAF: root =>",
-          "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
-        )
+      etalonTree = Vector(
+        "TREE WITH ONE LEAF: root =>",
+        "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
+      )
 
-        _ = printedTreeStr shouldBe etalonTree
-      } yield ()
+      _ = printedTreeStr shouldBe etalonTree
+    } yield ()
   }
 
   "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val commonKeyPartForTwoLeafs = "001122"
+      val keys = Vector[Seq[Byte]](
+        TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+        TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+      )
       for {
-        impl                     <- radixTreeImplF
-        commonKeyPartForTwoLeafs = "001122"
-        keys = Vector[Seq[Byte]](
-          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
-        )
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
                      keys(0),
@@ -143,14 +138,12 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
   "appending leaf to leaf" should "create node with two leafs" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val keys = Vector[Seq[Byte]](
+        TestData.hexKey("00000000"),
+        TestData.hexKey("34564544")
+      )
       for {
-        impl <- radixTreeImplF
-
-        keys = Vector[Seq[Byte]](
-          TestData.hexKey("00000000"),
-          TestData.hexKey("34564544")
-        )
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
                          keys(0),
@@ -177,57 +170,53 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       } yield ()
   }
 
-  "updating leaf" should "work correctly" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
-      for {
-        impl          <- radixTreeImplF
-        firstLeafData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
-        newLeafData   = generateDataWithLastNonZeroByte(0xFF.toByte).toVector
-        leafKey       = TestData.hexKey("0123456F1").toVector
+  "updating leaf" should "work correctly" in withRadixTreeImplAndInMemoStore { (impl, _) =>
+    val firstLeafData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+    val newLeafData   = generateDataWithLastNonZeroByte(0xFF.toByte).toVector
+    val leafKey       = TestData.hexKey("0123456F1").toVector
+    for {
 
-        //  Create tree with one leaf
-        item1Opt <- impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
+      //  Create tree with one leaf
+      item1Opt <- impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
 
-        rootNode1 <- impl.constructNodeFromItem(item1Opt.get)
-        printedTree1 <- impl.printTree(
-                         rootNode1,
-                         "TREE WITH ONE LEAF",
-                         false
-                       )
+      rootNode1 <- impl.constructNodeFromItem(item1Opt.get)
+      printedTree1 <- impl.printTree(
+                       rootNode1,
+                       "TREE WITH ONE LEAF",
+                       false
+                     )
 
-        item2Opt  <- impl.update(item1Opt.get, leafKey, newLeafData)
-        itemIdx   <- Sync[Task].delay(byteToInt(leafKey.head))
-        rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
+      item2Opt  <- impl.update(item1Opt.get, leafKey, newLeafData)
+      itemIdx   <- Sync[Task].delay(byteToInt(leafKey.head))
+      rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
 
-        printedTree2 <- impl.printTree(
-                         rootNode2,
-                         "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
-                         false
-                       )
+      printedTree2 <- impl.printTree(
+                       rootNode2,
+                       "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
+                       false
+                     )
 
-        etalonTree1 = Vector(
-          "TREE WITH ONE LEAF: root =>",
-          "   [00]LEAF: prefix = 123456F1, data = 0000...00CB"
-        )
+      etalonTree1 = Vector(
+        "TREE WITH ONE LEAF: root =>",
+        "   [00]LEAF: prefix = 123456F1, data = 0000...00CB"
+      )
 
-        etalonTree2 = Vector(
-          "TREE WITH ONE LEAF (AFTER CHANGING DATA): root =>",
-          "   [00]LEAF: prefix = 123456F1, data = 0000...00FF"
-        )
+      etalonTree2 = Vector(
+        "TREE WITH ONE LEAF (AFTER CHANGING DATA): root =>",
+        "   [00]LEAF: prefix = 123456F1, data = 0000...00FF"
+      )
 
-        _ = printedTree1 shouldBe etalonTree1
-        _ = printedTree2 shouldBe etalonTree2
-      } yield ()
+      _ = printedTree1 shouldBe etalonTree1
+      _ = printedTree2 shouldBe etalonTree2
+    } yield ()
   }
 
   "RadixTreeImpl" should "not allow to enter keys with different lengths" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val leafData    = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+      val leafKey     = TestData.hexKey("0123456F1").toVector
+      val testLeafKey = TestData.hexKey("112").toVector
       for {
-        impl        <- radixTreeImplF
-        leafData    = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
-        leafKey     = TestData.hexKey("0123456F1").toVector
-        testLeafKey = TestData.hexKey("112").toVector
-
         leafItemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         err         <- impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
       } yield {
@@ -239,14 +228,13 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "RadixTreeImpl" should "not allow to radix key is smaller than NodePtr key" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val commonKeyPartForTwoLeafs = "121122"
+      val keys = Vector[Seq[Byte]](
+        TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+        TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+      )
       for {
-        impl                     <- radixTreeImplF
-        commonKeyPartForTwoLeafs = "121122"
-        keys = Vector[Seq[Byte]](
-          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
-        )
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
                      keys(0),
@@ -277,36 +265,29 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       }
   }
 
-  "deleting not exising data" should "return none" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
-      for {
-        impl <- radixTreeImplF
+  "deleting not exising data" should "return none" in withRadixTreeImplAndInMemoStore { (impl, _) =>
+    val leafData = generateDataWithLastNonZeroByte(0xCC.toByte).toVector
+    val leafKey  = TestData.hexKey("0123456F1").toVector
+    for {
+      //  Create tree with one node
+      itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
+      rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-        //  Create tree with one node
-        leafData = generateDataWithLastNonZeroByte(0xCC.toByte).toVector
-        leafKey  = TestData.hexKey("0123456F1").toVector
+      printedTreeStr <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", false)
 
-        itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
-        rootNode <- impl.constructNodeFromItem(itemOpt.get)
+      //  Trying to delete not existing leaf...
+      del <- impl.delete(itemOpt.get, TestData.hexKey("000").toVector.tail)
 
-        printedTreeStr <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", false)
-
-        //  Trying to delete not existing leaf...
-        del <- impl.delete(itemOpt.get, TestData.hexKey("000").toVector.tail)
-
-        _ = del.map(item => item shouldBe None)
-      } yield ()
+      _ = del.map(item => item shouldBe None)
+    } yield ()
   }
 
   "deleting leaf from tree with only one leaf" should "destroy tree" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val leafData = generateDataWithLastNonZeroByte(0xCC.toByte).toVector
+      val leafKey  = TestData.hexKey("0123456F1").toVector
       for {
-        impl <- radixTreeImplF
-
         //  Create tree with one node
-        leafData = generateDataWithLastNonZeroByte(0xCC.toByte).toVector
-        leafKey  = TestData.hexKey("0123456F1").toVector
-
         itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         rootNode1 <- impl.constructNodeFromItem(itemOpt.get)
 
@@ -325,17 +306,15 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "deleting leaf from node with two leafs" should "leave one leaf" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val keys = Vector[Seq[Byte]](
+        TestData.hexKey("00000000"),
+        TestData.hexKey("34564544")
+      )
+
+      val rootItem1Hash = generateDataWithLastNonZeroByte(0x11.toByte).toVector
+      val rootItem2Hash = generateDataWithLastNonZeroByte(0xAF.toByte).toVector
       for {
-        impl <- radixTreeImplF
-
-        keys = Vector[Seq[Byte]](
-          TestData.hexKey("00000000"),
-          TestData.hexKey("34564544")
-        )
-
-        rootItem1Hash = generateDataWithLastNonZeroByte(0x11.toByte).toVector
-        rootItem2Hash = generateDataWithLastNonZeroByte(0xAF.toByte).toVector
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
                          keys(0),
@@ -379,15 +358,14 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "deleting data from leaf" should "destroy this leaf" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val ptrPrefix                = "FA"
+      val commonKeyPartForTwoLeafs = ptrPrefix + "01122"
+      val keys = Vector[Seq[Byte]](
+        TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
+        TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+      )
       for {
-        impl                     <- radixTreeImplF
-        ptrPrefix                = "FA"
-        commonKeyPartForTwoLeafs = ptrPrefix + "01122"
-        keys = Vector[Seq[Byte]](
-          TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-          TestData.hexKey(commonKeyPartForTwoLeafs + "225")
-        )
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
                      keys(0),
@@ -427,11 +405,10 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "reading data from existing node" should "return data" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val itemData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+      val key      = TestData.hexKey("0123456F1").toVector
       for {
-        impl     <- radixTreeImplF
-        itemData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
-        key      = TestData.hexKey("0123456F1").toVector
         itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
         rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
@@ -443,11 +420,10 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "reading non - existent data" should "return none" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
+    (impl, _) =>
+      val itemData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+      val key      = TestData.hexKey("0123456F1").toVector
       for {
-        impl     <- radixTreeImplF
-        itemData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
-        key      = TestData.hexKey("0123456F1").toVector
         itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
         rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
@@ -460,7 +436,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "collision detecting in KVDB" should "works" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, inMemoStore) =>
+    (impl, inMemoStore) =>
       def copyBVToBuf(bv: ByteVector): ByteBuffer = {
         val arr    = bv.toArray
         val newBuf = ByteBuffer.allocateDirect(arr.length)
@@ -471,9 +447,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       val deleteRecord    = createDeleteActions(List("FF00FFF01"))
       val collisionKVPair = (copyBVToBuf(History.emptyRootHash.bytes), insertRecord(0).hash.bytes)
       for {
-        impl       <- radixTreeImplF
-        emptyRHash = RadixHistory.emptyRootHash
-        rootNode   <- impl.loadNode(emptyRHash.bytes, noAssert = true)
+        rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
         //  process
         newRootNodeOpt1 <- impl.makeActions(rootNode, insertRecord)
@@ -505,44 +479,39 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       }
   }
 
-  "encoding and decoding node" should "work" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, _) =>
-      for {
-        impl <- radixTreeImplF
-        item1 <- impl.update(
-                  RadixTree.EmptyItem,
-                  TestData.hexKey("FFF8AFF1").toVector,
-                  generateDataWithLastNonZeroByte(0xAD.toByte).toVector
-                )
+  "encoding and decoding node" should "work" in withRadixTreeImplAndInMemoStore { (impl, _) =>
+    for {
+      item1 <- impl.update(
+                RadixTree.EmptyItem,
+                TestData.hexKey("FFF8AFF1").toVector,
+                generateDataWithLastNonZeroByte(0xAD.toByte).toVector
+              )
 
-        node           <- impl.constructNodeFromItem(item1.get)
-        printedTreeStr <- impl.printTree(node, "NODE BEFORE DECODING", false)
+      node           <- impl.constructNodeFromItem(item1.get)
+      printedTreeStr <- impl.printTree(node, "NODE BEFORE DECODING", false)
 
-        serializedNode = RadixTree.Codecs.encode(node)
+      serializedNode = RadixTree.Codecs.encode(node)
 
-        deserializedNode = RadixTree.Codecs.decode(serializedNode)
+      deserializedNode = RadixTree.Codecs.decode(serializedNode)
 
-        printedTreeStr <- impl.printTree(node, "NODE AFTER SERIALIZE", false)
+      printedTreeStr <- impl.printTree(node, "NODE AFTER SERIALIZE", false)
 
-        etalonString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
-        printed      = println(s"Serialized vector : ${serializedNode.toString()}")
+      etalonString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
+      printed      = println(s"Serialized vector : ${serializedNode.toString()}")
 
-        _ = deserializedNode shouldBe node
-        _ = serializedNode.toString() shouldBe etalonString
-      } yield ()
+      _ = deserializedNode shouldBe node
+      _ = serializedNode.toString() shouldBe etalonString
+    } yield ()
 
   }
 
   "function makeActions" should "not create artefacts" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, inMemoStore) =>
+    (impl, inMemoStore) =>
       val insertActions = createInsertActions(
         List(("FF00FFF01", 0xAA.toByte), ("FF0012345", 0x11.toByte), ("FF00F5676", 0x16.toByte))
       )
-
       for {
-        impl       <- radixTreeImplF
-        emptyRHash = RadixHistory.emptyRootHash
-        rootNode1  <- impl.loadNode(emptyRHash.bytes, noAssert = true)
+        rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
         rootNode2Opt <- impl.makeActions(rootNode1, insertActions)
 
@@ -558,7 +527,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "function makeActions in work with non-empty tree" should "not create artefacts" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, inMemoStore) =>
+    (impl, inMemoStore) =>
       val insertFirstNodesActions = createInsertActions(
         List(
           ("111122334455", 0xAA.toByte),
@@ -575,7 +544,6 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         )
       )
       for {
-        impl      <- radixTreeImplF
         rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
         //  Create tree with 3 leafs
@@ -604,11 +572,10 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
   }
 
   "function saveNode" should "put node into store" in withRadixTreeImplAndInMemoStore {
-    (radixTreeImplF, inMemoStore) =>
+    (impl, inMemoStore) =>
+      val itemData = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
+      val key      = TestData.hexKey("0123456F1").toVector
       for {
-        impl        <- radixTreeImplF
-        itemData    = generateDataWithLastNonZeroByte(0xCB.toByte).toVector
-        key         = TestData.hexKey("0123456F1").toVector
         itemOpt     <- impl.update(RadixTree.EmptyItem, key, itemData)
         nodesCount1 = inMemoStore.numRecords()
 
@@ -669,13 +636,13 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
   protected def withRadixTreeImplAndInMemoStore(
       f: (
-          Task[RadixTreeImpl[Task]],
+          RadixTreeImpl[Task],
           InMemoryKeyValueStore[Task]
       ) => Task[Unit]
   ): Unit = {
     val store         = InMemoryKeyValueStore[Task]
     val typedStore    = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-    val radixTreeImpl = Sync[Task].delay(new RadixTreeImpl[Task](typedStore))
+    val radixTreeImpl = new RadixTreeImpl[Task](typedStore)
     f(radixTreeImpl, store).runSyncUnsafe(20.seconds)
   }
 };
