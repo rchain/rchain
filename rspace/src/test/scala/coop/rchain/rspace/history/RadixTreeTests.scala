@@ -1,27 +1,14 @@
 package coop.rchain.rspace.history
 
-import cats.{Functor, Parallel}
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Sync}
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.RadixTree.{
-  byteToInt,
-  commonPrefix,
-  ExportDataSettings,
-  Item,
-  NodePtr,
-  RadixTreeImpl
-}
+import coop.rchain.rspace.history.RadixTree.{byteToInt, RadixTreeImpl}
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.sharedSyntaxKeyValueStore
-import coop.rchain.store.{
-  InMemoryKeyValueStore,
-  KeyValueStore,
-  KeyValueStoreOps,
-  KeyValueTypedStore
-}
+import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, KeyValueStoreOps}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
@@ -46,7 +33,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       insertActions = createInsertActions(keysAndData)
 
       newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
-      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", false)
+      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", true)
 
       etalonTree = Vector(
         "TREE1: root =>",
@@ -72,7 +59,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                 )
 
         newRootNode    <- impl.constructNodeFromItem(item1.get)
-        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
+        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", true)
 
         etalonTree = Vector(
           "TREE WITH ONE LEAF: root =>",
@@ -98,7 +85,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                    )
 
         rootNode1    <- impl.constructNodeFromItem(item1Opt.get)
-        printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE LEAF", false)
+        printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE LEAF", true)
 
         etalonTree1 = Vector(
           "TREE WITH ONE LEAF: root =>",
@@ -112,7 +99,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                    )
 
         rootNode2    <- impl.constructNodeFromItem(item2Opt.get)
-        printedTree2 <- impl.printTree(rootNode2, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        printedTree2 <- impl.printTree(rootNode2, "TREE WITH ONE NODE AND 2 LEAFS", true)
 
         etalonTree2 = Vector(
           "TREE WITH ONE NODE AND 2 LEAFS: root =>",
@@ -145,7 +132,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
 
       rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
 
-      printedTreeStr <- impl.printTree(rootNode, "TREE: TWO LEAFS", false)
+      printedTreeStr <- impl.printTree(rootNode, "TREE: TWO LEAFS", true)
 
       etalonTree = Vector(
         "TREE: TWO LEAFS: root =>",
@@ -170,7 +157,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       printedTree1 <- impl.printTree(
                        rootNode1,
                        "TREE WITH ONE LEAF",
-                       false
+                       true
                      )
 
       item2Opt  <- impl.update(item1Opt.get, leafKey, newLeafData)
@@ -180,7 +167,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       printedTree2 <- impl.printTree(
                        rootNode2,
                        "TREE WITH ONE LEAF (AFTER CHANGING DATA)",
-                       false
+                       true
                      )
 
       etalonTree1 = Vector(
@@ -234,7 +221,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                    )
 
         newRootNode    <- impl.constructNodeFromItem(item2Opt.get)
-        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", false)
+        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", true)
 
         rootNodeItem = newRootNode(1)
         err <- impl
@@ -260,7 +247,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      printedTreeStr <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", false)
+      printedTreeStr <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", true)
 
       //  Trying to delete not existing leaf...
       del <- impl.delete(itemOpt.get, TestData.hexKey("000").toVector.tail)
@@ -278,12 +265,12 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         rootNode1 <- impl.constructNodeFromItem(itemOpt.get)
 
-        printedTreeStr <- impl.printTree(rootNode1, "TREE (TEST DELETING ONE LEAF)", false)
+        printedTreeStr <- impl.printTree(rootNode1, "TREE (TEST DELETING ONE LEAF)", true)
 
         //  Trying to delete not existing leaf...
         deletedItem         <- impl.delete(itemOpt.get, leafKey)
         rootNode2           = rootNode1.updated((leafKey.head).toInt, deletedItem.get)
-        printedEmptyTreeStr <- impl.printTree(rootNode2, "EMPTY TREE", false)
+        printedEmptyTreeStr <- impl.printTree(rootNode2, "EMPTY TREE", true)
 
         emptyTreeStr = Vector("EMPTY TREE: root =>")
 
@@ -315,7 +302,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                        )
 
         rootNode1    <- impl.constructNodeFromItem(rootItem2Opt.get)
-        printedTree1 <- impl.printTree(rootNode1, "TREE: TWO LEAFS (BEFORE DELETING)", false)
+        printedTree1 <- impl.printTree(rootNode1, "TREE: TWO LEAFS (BEFORE DELETING)", true)
 
         itemIdx <- Sync[Task].delay(byteToInt(keys(0).head))
 
@@ -326,7 +313,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         printedTree2 <- impl.printTree(
                          rootNode2,
                          "TREE: TWO LEAFS (AFTER DELETING)",
-                         false
+                         true
                        )
 
         etalonTree1 = Vector(
@@ -364,7 +351,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
                  )
 
       rootNode1    <- impl.constructNodeFromItem(item2Opt.get)
-      printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE NODE AND 2 LEAFS", false)
+      printedTree1 <- impl.printTree(rootNode1, "TREE WITH ONE NODE AND 2 LEAFS", true)
 
       etalonTree1 = Vector(
         "TREE WITH ONE NODE AND 2 LEAFS: root =>",
@@ -377,7 +364,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       deletedItem <- impl.delete(rootNode1(0xFA), keys(0).tail)
       rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
 
-      printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", false)
+      printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", true)
 
       etalonTree2 = Vector(
         "TREE (AFTER DELETE): root =>",
@@ -435,14 +422,14 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       //  process
       newRootNodeOpt1 <- impl.makeActions(rootNode, insertRecord)
 
-      printedTree1 <- impl.printTree(newRootNodeOpt1.get, "TREE1", false)
+      printedTree1 <- impl.printTree(newRootNodeOpt1.get, "TREE1", true)
       hashOpt1 <- newRootNodeOpt1.traverse { newRootNode =>
                    val hash      = impl.saveNode(newRootNode)
                    val blakeHash = Blake2b256Hash.fromByteVector(hash)
                    impl.commit.as(blakeHash)
                  }
       clrWriteCache = impl.clearWriteCache()
-      printedTree2  <- impl.printTree(newRootNodeOpt1.get, "TREE2", false)
+      printedTree2  <- impl.printTree(newRootNodeOpt1.get, "TREE2", true)
 
       _ <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
 
@@ -471,13 +458,13 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
               )
 
       node           <- impl.constructNodeFromItem(item1.get)
-      printedTreeStr <- impl.printTree(node, "NODE BEFORE DECODING", false)
+      printedTreeStr <- impl.printTree(node, "NODE BEFORE DECODING", true)
 
       serializedNode = RadixTree.Codecs.encode(node)
 
       deserializedNode = RadixTree.Codecs.decode(serializedNode)
 
-      printedTreeStr <- impl.printTree(node, "NODE AFTER SERIALIZE", false)
+      printedTreeStr <- impl.printTree(node, "NODE AFTER SERIALIZE", true)
 
       etalonString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
 
@@ -500,7 +487,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       hashOpt   = rootNode2Opt.map(rootNode => impl.saveNode(rootNode))
       committed <- impl.commit
 
-      printedTree1 <- impl.printTree(rootNode2Opt.get, "TREE1111", false)
+      printedTree1 <- impl.printTree(rootNode2Opt.get, "TREE1111", true)
 
       _ = inMemoStore.numRecords() shouldBe 3
 
@@ -536,7 +523,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
           s"Nodes count after creating tree of 3 leafs (without root node) : ${nodesCount1.toString}"
         )
 
-        printedTree1 <- impl.printTree(rootNode2Opt.get, "TREE1", false)
+        printedTree1 <- impl.printTree(rootNode2Opt.get, "TREE1", true)
 
         //  Append in existing tree 3 leafs...
         rootNode3Opt <- impl.makeActions(rootNode2Opt.get, insertLastNodesActions)
@@ -545,7 +532,7 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
         printed2 = println(
           s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs (without root node): ${nodesCount2.toString}"
         )
-        printedTree2 <- impl.printTree(rootNode3Opt.get, "TREE2", false)
+        printedTree2 <- impl.printTree(rootNode3Opt.get, "TREE2", true)
 
         _ = nodesCount1 shouldBe 2
         _ = nodesCount2 shouldBe 3
