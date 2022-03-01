@@ -31,19 +31,6 @@ import java.nio.ByteBuffer
 import scala.concurrent.duration._
 import scala.util.Random
 
-trait RadixTreeObject[F[_]] {}
-object RadixTreeObject {
-  def apply[F[_]: Sync: Parallel](
-      store: KeyValueTypedStore[F, ByteVector, ByteVector]
-  ): F[RadixTreeImpl[F]] =
-    for {
-      impl <- Sync[F].delay(new RadixTreeImpl[F](store))
-    } yield impl //RadixTreeObject(store)
-  def create[F[_]: Concurrent: Sync: Parallel](
-      store: KeyValueTypedStore[F, ByteVector, ByteVector]
-  ): F[RadixTreeImpl[F]] = RadixTreeObject(store)
-}
-
 class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
   def generateDataWithLastNonZeroByte(lastByte: Byte): Array[Byte] =
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toArray
@@ -686,10 +673,9 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
           InMemoryKeyValueStore[Task]
       ) => Task[Unit]
   ): Unit = {
-    val store      = InMemoryKeyValueStore[Task]
-    val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-    val radixTreeImpl =
-      RadixTreeObject.create(typedStore)
+    val store         = InMemoryKeyValueStore[Task]
+    val typedStore    = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    val radixTreeImpl = Sync[Task].delay(new RadixTreeImpl[Task](typedStore))
     f(radixTreeImpl, store).runSyncUnsafe(20.seconds)
   }
 };
