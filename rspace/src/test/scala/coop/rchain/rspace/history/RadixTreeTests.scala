@@ -32,32 +32,20 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
-  def createBV32(lastByte: Byte): ByteVector =
-    (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toVector
-
-  "tree with makeActions" should "be built correctly!!!" in withImplAndStore { (impl, typedStore) =>
+  "tree with makeActions" should "be built correctly" in withImplAndStore { (impl, _) =>
     for {
       rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
-      keys = List(
-        TestData.hexKey("FF00FFF01"),
-        TestData.hexKey("FF0000201"),
-        TestData.hexKey("FF002111"),
-        TestData.hexKey("FF002112")
+      keysAndData = List(
+        ("FF00FFF01", 0xA.toByte),
+        ("FF0000201", 0xB.toByte),
+        ("FF002111", 0x1.toByte),
+        ("FF002112", 0x2.toByte)
       )
 
-      lastByteForHashes = List[Byte](0xA, 0xB, 0x1, 0x2)
+      insertActions = createInsertActions(keysAndData)
 
-      //  List
-      dataForHashes = lastByteForHashes.map(byte => createBV32(byte))
-      hashesBlake   = dataForHashes.map(hash => Blake2b256Hash.fromByteVector(hash))
-
-      insertActions2 = InsertAction(keys(0), hashesBlake(0)) ::
-        InsertAction(keys(1), hashesBlake(1)) ::
-        InsertAction(keys(2), hashesBlake(2)) ::
-        InsertAction(keys(3), hashesBlake(3)) :: Nil
-
-      newRootNodeOpt <- impl.makeActions(rootNode, insertActions2)
+      newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
       treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", false)
 
       etalonTree = Vector(
@@ -74,24 +62,25 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     } yield ()
   }
 
-  "appending leaf in empty tree" should "work" in withImplAndStore { (impl, _) =>
-    for {
-      item1 <- impl.update(
-                RadixTree.EmptyItem,
-                TestData.hexKey("FFFFFFF1").toVector,
-                createBV32(0xA.toByte)
-              )
+  "appending leaf in empty tree" should "create tree with one node" in withImplAndStore {
+    (impl, _) =>
+      for {
+        item1 <- impl.update(
+                  RadixTree.EmptyItem,
+                  TestData.hexKey("FFFFFFF1").toVector,
+                  createBV32(0xA.toByte)
+                )
 
-      newRootNode    <- impl.constructNodeFromItem(item1.get)
-      printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
+        newRootNode    <- impl.constructNodeFromItem(item1.get)
+        printedTreeStr <- impl.printTree(newRootNode, "TREE WITH ONE LEAF", false)
 
-      etalonTree = Vector(
-        "TREE WITH ONE LEAF: root =>",
-        "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
-      )
+        etalonTree = Vector(
+          "TREE WITH ONE LEAF: root =>",
+          "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
+        )
 
-      _ = printedTreeStr shouldBe etalonTree
-    } yield ()
+        _ = printedTreeStr shouldBe etalonTree
+      } yield ()
   }
 
   "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withImplAndStore {
@@ -491,7 +480,6 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
       printedTreeStr <- impl.printTree(node, "NODE AFTER SERIALIZE", false)
 
       etalonString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
-      printed      = println(s"Serialized vector : ${serializedNode.toString()}")
 
       _ = deserializedNode shouldBe node
       _ = serializedNode.toString() shouldBe etalonString
@@ -603,6 +591,8 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     res6 shouldBe (ByteVector.empty, ByteVector.empty, ByteVector.empty)
   }
 
+  def createBV32(lastByte: Byte): ByteVector =
+    (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toVector
   def createInsertActions(
       tuplesKeyAndHash: List[(String, Byte)]
   ): List[InsertAction] = {
