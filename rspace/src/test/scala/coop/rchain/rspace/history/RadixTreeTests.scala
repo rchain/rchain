@@ -595,17 +595,12 @@ class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMem
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toVector
   def createInsertActions(
       tuplesKeyAndHash: List[(String, Byte)]
-  ): List[InsertAction] = {
-    val convertedKeysAndDatas = tuplesKeyAndHash.map(
-      keyAndData =>
-        (
-          TestData.hexKey(keyAndData._1),
-          Blake2b256Hash.fromByteVector(createBV32(keyAndData._2))
-        )
-    )
-
-    convertedKeysAndDatas.map(insData => InsertAction(insData._1, insData._2))
-  }
+  ): List[InsertAction] =
+    tuplesKeyAndHash.map { keyAndData =>
+      val key  = TestData.hexKey(keyAndData._1)
+      val data = Blake2b256Hash.fromByteVector(createBV32(keyAndData._2))
+      InsertAction(key, data)
+    }
 
   def createDeleteActions(keys: List[String]): List[DeleteAction] =
     keys.map(key => DeleteAction(TestData.hexKey(key)))
