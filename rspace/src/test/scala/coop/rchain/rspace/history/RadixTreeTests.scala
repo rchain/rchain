@@ -18,7 +18,7 @@ import java.nio.ByteBuffer
 import scala.concurrent.duration._
 import scala.util.Random
 
-class RadixTreeTests extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
   "tree with makeActions" should "be built correctly" in withImplAndStore { (impl, _) =>
     for {
       rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
