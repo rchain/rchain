@@ -8,7 +8,7 @@ import coop.rchain.shared.Base16
 import coop.rchain.store.InMemoryKeyValueStore
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
-import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
+import org.scalatest.{Assertion, FlatSpec, Matchers}
 import scodec.bits.ByteVector
 
 import java.nio.ByteBuffer
@@ -16,11 +16,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 import scala.util.Random
 
-class HistoryActionTests
-    extends FlatSpec
-    with Matchers
-    with OptionValues
-    with InMemoryHistoryTestBase {
+class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTestBase {
 
   "creating and read one record" should "works" in withEmptyHistory { emptyHistoryF =>
     val data = insert(_zeros) :: Nil

@@ -20,7 +20,10 @@ import org.scalatest._
 import scodec.bits.ByteVector
 
 // TODO: Don't works for MergingHistory
-trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, String] {
+class ExportImportTests
+    extends FlatSpec
+    with Matchers
+    with InMemoryExportImportTestsBase[String, Pattern, String, String] {
 
   "export and import of one page" should "works correctly" in fixture {
     (space1, exporter1, importer1, space2, _, importer2) =>
@@ -243,30 +246,9 @@ trait ExportImportTests extends ExportImportTestsBase[String, Pattern, String, S
   }
 }
 
-trait ExportImportTestsBase[C, P, A, K] extends FlatSpec with Matchers {
-
-  def fixture[S](
-      f: (
-          ISpace[Task, C, P, A, K],
-          RSpaceExporter[Task],
-          RSpaceImporter[Task],
-          ISpace[Task, C, P, A, K],
-          RSpaceExporter[Task],
-          RSpaceImporter[Task]
-      ) => Task[S]
-  )(
-      implicit
-      sc: Serialize[C],
-      sp: Serialize[P],
-      sa: Serialize[A],
-      sk: Serialize[K],
-      m: Match[Task, P, A]
-  ): S
-}
-
-trait InMemoryExportImportTestsBase[C, P, A, K] extends ExportImportTestsBase[C, P, A, K] {
+trait InMemoryExportImportTestsBase[C, P, A, K] {
   import SchedulerPools.global
-  override def fixture[S](
+  def fixture[S](
       f: (
           ISpace[Task, C, P, A, K],
           RSpaceExporter[Task],
@@ -339,7 +321,3 @@ trait InMemoryExportImportTestsBase[C, P, A, K] extends ExportImportTestsBase[C,
     } yield { res }).unsafeRunSync
   }
 }
-
-class InMemoryExportImportTests
-    extends InMemoryExportImportTestsBase[String, Pattern, String, String]
-    with ExportImportTests
