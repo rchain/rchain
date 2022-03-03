@@ -27,7 +27,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.{BindPattern, BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
@@ -52,7 +52,9 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[ProposeFunction[F]]
+      triggerPropose: Option[ProposeFunction[F]],
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -69,6 +71,12 @@ object BlockAPI {
         _ <- triggerPropose.traverse(_(casper, true))
       } yield r
 
+    // Check if node is read-only
+    val readOnlyError = new RuntimeException(
+      "Deploy was rejected because node is running in read-only mode."
+    ).raiseError[F, ApiErr[String]]
+    val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
+
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
     val forbiddenKeyError = new RuntimeException(
@@ -77,9 +85,8 @@ object BlockAPI {
     val forbiddenKeyCheck = forbiddenKeyError.whenA(isForbiddenKey)
 
     // Check if deploy has minimum phlo price
-    val minPhloPrice = 1
     val minPriceError = new RuntimeException(
-      s"Phlo price is less than minimum price $minPhloPrice."
+      s"Phlo price ${d.data.phloPrice} is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
@@ -89,7 +96,9 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+      ApiErr[String]
+    ](
       casperDeploy,
       logErrorMessage
     ))
@@ -377,16 +386,12 @@ object BlockAPI {
       ))
   }
 
-  def visualizeDag[
-      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer,
-      R
-  ](
+  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore, R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
-      serialize: G[Graphz[G]] => R
+      visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
+      serialize: F[R]
   ): F[ApiErr[R]] = {
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
@@ -400,9 +405,11 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb   <- casper.lastFinalizedBlock
-        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
-      } yield serialize(graph).asRight[Error]
+        lfb    <- casper.lastFinalizedBlock
+        _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+        result <- serialize
+      } yield result.asRight[Error]
+
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
       Log[F]
@@ -787,6 +794,33 @@ object BlockAPI {
             latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
             latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
           } yield latestMessage.asRight[Error],
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
+  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+      par: Par,
+      blockHash: String,
+      usePreStateHash: Boolean
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+      for {
+        block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+        sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
+        runtimeManager <- casper.getRuntimeManager
+        data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
+      } yield (data.postBlockData, data.getBlock).asRight[Error]
+
+    val errorMessage =
+      "Could not get data at par, casper instance was not available yet."
+
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
+        casperResponse(_),
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )

@@ -1,11 +1,17 @@
 package coop.rchain.casper.batch1
 
+import cats.implicits.catsSyntaxApplicativeError
+import coop.rchain.casper.MultiParentCasper
+import coop.rchain.casper.api.BlockAPI
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
+import coop.rchain.casper.engine.Engine
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.util.ConstructDeploy
-import coop.rchain.casper.MultiParentCasper
+import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Cell
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
@@ -64,6 +70,30 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         r              <- node.createBlock(deployData)
         Created(block) = r
       } yield assert(!block.body.deploys.head.isFailed)
+    }
+  }
+
+  it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
+    TestNode.standaloneEff(genesis).use { node =>
+      import node.logEff
+      implicit val noopSpan: Span[Effect] = NoopSpan[Effect]()
+      val engine                          = new EngineWithCasper[Effect](node.casperEff)
+      Cell.mvarCell[Effect, Engine[Effect]](engine).flatMap { implicit engineCell =>
+        val minPhloPrice   = 10.toLong
+        val phloPrice      = 1.toLong
+        val isNodeReadOnly = false
+        for {
+          deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
+          err <- BlockAPI
+                  .deploy[Effect](deployData, None, minPhloPrice = minPhloPrice, isNodeReadOnly)
+                  .attempt
+        } yield {
+          err.isLeft shouldBe true
+          val ex = err.left.get
+          ex shouldBe a[RuntimeException]
+          ex.getMessage shouldBe s"Phlo price $phloPrice is less than minimum price $minPhloPrice."
+        }
+      }
     }
   }
 }

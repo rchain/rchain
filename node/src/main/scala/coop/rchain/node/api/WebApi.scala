@@ -11,6 +11,7 @@ import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
 import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
@@ -36,7 +37,9 @@ trait WebApi[F[_]] {
   def deploy(request: DeployRequest): F[String]
 
   // Read data (listen)
-  def listenForDataAtName(request: DataRequest): F[DataResponse]
+  def listenForDataAtName(request: DataAtNameRequest): F[DataAtNameResponse]
+
+  def getDataAtPar(request: DataAtNameByBlockHashRequest): F[RhoDataResponse]
 
   // Blocks info
 
@@ -52,7 +55,7 @@ trait WebApi[F[_]] {
       term: String,
       blockHash: Option[String],
       usePreStateHash: Boolean
-  ): F[ExploratoryDeployResponse]
+  ): F[RhoDataResponse]
 
   def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]]
 
@@ -69,7 +72,9 @@ object WebApi {
       cacheTransactionAPI: CacheTransactionAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
       networkId: String,
-      shardId: String
+      shardId: String,
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -92,14 +97,20 @@ object WebApi {
 
     def deploy(request: DeployRequest): F[String] =
       toSignedDeploy(request)
-        .flatMap(BlockAPI.deploy(_, triggerProposeF))
+        .flatMap(BlockAPI.deploy(_, triggerProposeF, minPhloPrice, isNodeReadOnly))
         .flatMap(_.liftToBlockApiErr)
 
-    def listenForDataAtName(req: DataRequest): F[DataResponse] =
+    def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       BlockAPI
         .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit)
         .flatMap(_.liftToBlockApiErr)
-        .map(toDataResponse)
+        .map(toDataAtNameResponse)
+
+    def getDataAtPar(req: DataAtNameByBlockHashRequest): F[RhoDataResponse] =
+      BlockAPI
+        .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
+        .flatMap(_.liftToBlockApiErr)
+        .map(toRhoDataResponse)
 
     def lastFinalizedBlock: F[BlockInfo] =
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
@@ -119,11 +130,11 @@ object WebApi {
         term: String,
         blockHash: Option[String],
         usePreStateHash: Boolean
-    ): F[ExploratoryDeployResponse] =
+    ): F[RhoDataResponse] =
       BlockAPI
         .exploratoryDeploy(term, blockHash, usePreStateHash, devMode)
         .flatMap(_.liftToBlockApiErr)
-        .map(toExploratoryResponse)
+        .map(toRhoDataResponse)
 
     def status: F[ApiStatus] =
       for {
@@ -136,7 +147,8 @@ object WebApi {
         networkId,
         shardId,
         peers.length,
-        nodes.length
+        nodes.length,
+        minPhloPrice
       )
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
@@ -190,7 +202,7 @@ object WebApi {
       usePreStateHash: Boolean
   )
 
-  final case class DataRequest(
+  final case class DataAtNameRequest(
       // For simplicity only one Unforgeable name is allowed
       // instead of the whole RhoExpr (proto Par)
       name: RhoUnforg,
@@ -198,7 +210,13 @@ object WebApi {
       depth: Int
   )
 
-  final case class DataResponse(
+  final case class DataAtNameByBlockHashRequest(
+      name: RhoUnforg,
+      blockHash: String,
+      usePreStateHash: Boolean
+  )
+
+  final case class DataAtNameResponse(
       exprs: List[RhoExprWithBlock],
       length: Int
   )
@@ -209,6 +227,11 @@ object WebApi {
   )
 
   final case class ExploratoryDeployResponse(
+      expr: Seq[RhoExpr],
+      block: LightBlockInfo
+  )
+
+  final case class RhoDataResponse(
       expr: Seq[RhoExpr],
       block: LightBlockInfo
   )
@@ -230,7 +253,8 @@ object WebApi {
       networkId: String,
       shardId: String,
       peers: Int,
-      nodes: Int
+      nodes: Int,
+      minPhloPrice: Long
   )
 
   final case class VersionInfo(api: String, node: String)
@@ -348,10 +372,13 @@ object WebApi {
 
   // Data request/response protobuf wrappers
 
-  private def toPar(req: DataRequest): Par =
+  private def toPar(req: DataAtNameRequest): Par =
     Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
 
-  private def toDataResponse(req: (Seq[DataWithBlockInfo], Int)): DataResponse = {
+  private def toPar(req: DataAtNameByBlockHashRequest): Par =
+    Par(unforgeables = Seq(GUnforgeable(unforgToUnforgProto(req.name))))
+
+  private def toDataAtNameResponse(req: (Seq[DataWithBlockInfo], Int)): DataAtNameResponse = {
     val (dbs, length) = req
     val exprsWithBlock = dbs.foldLeft(List[RhoExprWithBlock]()) { (acc, data) =>
       val exprs = data.postBlockData.flatMap(exprFromParProto)
@@ -360,13 +387,12 @@ object WebApi {
       val block = data.block.get
       RhoExprWithBlock(expr, block) +: acc
     }
-    DataResponse(exprsWithBlock, length)
+    DataAtNameResponse(exprsWithBlock, length)
   }
 
-  private def toExploratoryResponse(data: (Seq[Par], LightBlockInfo)) = {
+  private def toRhoDataResponse(data: (Seq[Par], LightBlockInfo)): RhoDataResponse = {
     val (pars, lightBlockInfo) = data
     val rhoExprs               = pars.flatMap(exprFromParProto)
-    ExploratoryDeployResponse(rhoExprs, lightBlockInfo)
+    RhoDataResponse(rhoExprs, lightBlockInfo)
   }
-
 }

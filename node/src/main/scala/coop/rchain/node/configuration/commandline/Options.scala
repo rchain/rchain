@@ -98,6 +98,11 @@ object Options {
   // We need this conversion because ScallopOption[A] is invariant in A
   implicit def scallopOptionFlagToBoolean(so: ScallopOption[Flag]): ScallopOption[Boolean] =
     so.map(identity)
+
+  // Similar values `api-server.port-grpc-internal` and `api-server.port-grpc-external`
+  // defined in defaults.conf and should be moved to Scala based config
+  val GrpcExternalPort = 40401
+  val GrpcInternalPort = 40402
 }
 
 final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) {
@@ -127,7 +132,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
   val grpcPort = opt[Int](
     short = 'p',
-    default = Some(40401),
+    default = Some(Options.GrpcExternalPort),
     descr = s"Remote gRPC host for client calls. Defaults to 40401."
   )
 
@@ -529,6 +534,12 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val deployerPrivateKey = opt[String](
       descr = "Private key for dummy deploys."
+    )
+
+    // Similar value `casper.min-phlo-price` defined in defaults.conf and should be moved to Scala based config
+    val minPhloPrice = opt[Long](
+      descr = "MinPhloPrice",
+      validate = _ >= 0
     )
 
   }
