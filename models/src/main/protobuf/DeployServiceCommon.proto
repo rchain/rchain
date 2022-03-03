@@ -2,6 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
+
 package casper;
 
 import "CasperMessage.proto";
@@ -31,7 +32,7 @@ message BlockQuery {
 }
 
 message ReportQuery{
-  string hash = 1;
+  string hash      = 1;
   bool forceReplay = 2;
 }
 
@@ -41,12 +42,12 @@ message BlocksQuery {
 
 message BlocksQueryByHeight{
   int64 startBlockNumber = 1;
-  int64 endBlockNumber = 2;
+  int64 endBlockNumber   = 2;
 }
 
 message DataAtNameQuery {
   int32 depth = 1;
-  Par name = 2;
+  Par name    = 2 [(scalapb.field).no_box = true];
 }
 
 message DataAtNameByBlockQuery {
@@ -56,7 +57,7 @@ message DataAtNameByBlockQuery {
 }
 
 message ContinuationAtNameQuery {
-  int32 depth = 1;
+  int32 depth        = 1;
   repeated Par names = 2;
 }
 
@@ -70,9 +71,9 @@ message MachineVerifyQuery {
 }
 
 message PrivateNamePreviewQuery {
-  bytes  user         = 1; // public key a la DeployData
-  int64  timestamp    = 2; // millisecond timestamp
-  int32  nameQty      = 3; // how many names to preview? (max: 1024)
+  bytes  user      = 1; // public key a la DeployData
+  int64  timestamp = 2; // millisecond timestamp
+  int32  nameQty   = 3; // how many names to preview? (max: 1024)
 }
 
 message LastFinalizedBlockQuery {
@@ -87,64 +88,64 @@ message BondStatusQuery {
 }
 
 message ExploratoryDeployQuery{
-  string term = 1;
-  string blockHash = 2;
+  string term          = 1;
+  string blockHash     = 2;
   bool usePreStateHash = 3;
 }
 
 message BondInfo{
   string validator = 1;
-  int64  stake = 2;
+  int64  stake     = 2;
 }
 
 message JustificationInfo{
-  string validator = 1;
+  string validator       = 1;
   string latestBlockHash = 2;
 }
 
 message DeployInfo{
-  string deployer     = 1;
-  string term         = 2;
-  int64  timestamp    = 3;
-  string  sig         = 4;
-  string sigAlgorithm = 5;
-  int64 phloPrice     = 7;
-  int64 phloLimit     = 8;
+  string deployer             = 1;
+  string term                 = 2;
+  int64  timestamp            = 3;
+  string  sig                 = 4;
+  string sigAlgorithm         = 5;
+  int64 phloPrice             = 7;
+  int64 phloLimit             = 8;
   int64 validAfterBlockNumber = 9;
-  uint64 cost         = 10;
-  bool errored         = 11;
-  string systemDeployError = 12;
+  uint64 cost                 = 10;
+  bool errored                = 11;
+  string systemDeployError    = 12;
 }
 
 message LightBlockInfo {
   // BlockMessageProto message
-  string blockHash = 1;
-  string sender = 2;
-  int64 seqNum = 3;
-  string sig = 4;
+  string blockHash    = 1;
+  string sender       = 2;
+  int64 seqNum        = 3;
+  string sig          = 4;
   string sigAlgorithm = 5;
-  string shardId = 6;
-  bytes  extraBytes = 7;
+  string shardId      = 6;
+  bytes  extraBytes   = 7;
 
   // HeaderProto message
-  int64 version = 8;
-  int64 timestamp = 9;
-  bytes headerExtraBytes = 10;
+  int64 version                   = 8;
+  int64 timestamp                 = 9;
+  bytes headerExtraBytes          = 10;
   repeated string parentsHashList = 11;
 
   // BodyProto message
-  int64 blockNumber = 12;
-  string preStateHash = 13;
-  string postStateHash = 14;
-  bytes bodyExtraBytes = 15;
+  int64 blockNumber       = 12;
+  string preStateHash     = 13;
+  string postStateHash    = 14;
+  bytes bodyExtraBytes    = 15;
   repeated BondInfo bonds = 16;
 
   // extra
-  string blockSize = 17;
-  int32 deployCount = 18;
+  string blockSize     = 17;
+  int32 deployCount    = 18;
   float faultTolerance = 19;
 
-  repeated JustificationInfo justifications = 20;
+  repeated JustificationInfo justifications   = 20;
   repeated RejectedDeployInfo rejectedDeploys = 21;
 }
 
@@ -154,47 +155,47 @@ message RejectedDeployInfo{
 
 // For node clients, see BlockMessage for actual Casper protocol Block representation
 message BlockInfo {
-  LightBlockInfo blockInfo = 1;
+  LightBlockInfo blockInfo    = 1 [(scalapb.field).no_box = true];
   repeated DeployInfo deploys = 2;
 }
 
 message DataWithBlockInfo {
   repeated Par postBlockData = 1;
-  LightBlockInfo block = 2;
+  LightBlockInfo block       = 2 [(scalapb.field).no_box = true];
 }
 
 message ContinuationsWithBlockInfo {
   repeated WaitingContinuationInfo postBlockContinuations = 1;
-  LightBlockInfo block = 2;
+  LightBlockInfo block                                    = 2 [(scalapb.field).no_box = true];
 }
 
 message WaitingContinuationInfo {
   repeated BindPattern postBlockPatterns = 1;
-  Par postBlockContinuation = 2;
+  Par postBlockContinuation              = 2 [(scalapb.field).no_box = true];
 }
 
 
 message ReportProduceProto{
   option (scalapb.message).extends = "ReportEventProto";
 
-  Par channel = 1;
-  ListParWithRandom data = 2;
+  Par channel            = 1 [(scalapb.field).no_box = true];
+  ListParWithRandom data = 2 [(scalapb.field).no_box = true];
 }
 
 message ReportConsumeProto{
   option (scalapb.message).extends = "ReportEventProto";
 
-  repeated Par channels = 1;
-  repeated BindPattern patterns=2;
+  repeated Par channels         = 1;
+  repeated BindPattern patterns = 2;
   // disable because can not work and it is not important actually
 //  TaggedContinuation continuation=3;
-  repeated PeekProto peeks=4;
+  repeated PeekProto peeks = 4;
 }
 
 message ReportCommProto{
   option (scalapb.message).extends = "ReportEventProto";
 
-  ReportConsumeProto consume = 1;
+  ReportConsumeProto consume           = 1 [(scalapb.field).no_box = true];
   repeated ReportProduceProto produces = 2;
 }
 
@@ -202,7 +203,7 @@ message ReportProto{
   oneof report {
     ReportProduceProto produce = 1;
     ReportConsumeProto consume = 2;
-    ReportCommProto comm = 3;
+    ReportCommProto comm       = 3;
   }
 }
 
@@ -211,20 +212,20 @@ message SingleReport{
 }
 
 message DeployInfoWithEventData{
-  DeployInfo deployInfo = 1;
-  repeated SingleReport report =2;
+  DeployInfo deployInfo        = 1 [(scalapb.field).no_box = true];
+  repeated SingleReport report = 2;
 }
 
 message SystemDeployInfoWithEventData{
-  SystemDeployDataProto systemDeploy = 1;
-  repeated SingleReport report =2;
+  SystemDeployDataProto systemDeploy = 1 [(scalapb.field).no_box = true];
+  repeated SingleReport report       = 2;
 }
 
 message BlockEventInfo{
-  LightBlockInfo blockInfo = 1;
-  repeated DeployInfoWithEventData deploys= 2;
+  LightBlockInfo blockInfo                             = 1 [(scalapb.field).no_box = true];
+  repeated DeployInfoWithEventData deploys             = 2;
   repeated SystemDeployInfoWithEventData systemDeploys = 3;
-  bytes postStateHash = 4;
+  bytes postStateHash                                  = 4;
 }
 
 message Status {

@@ -46,7 +46,7 @@ object DeployRuntime {
   ): F[Unit] =
     gracefulExit {
       listenAtNameUntilChanges(name) { par: Par =>
-        val request = DataAtNameQuery(Int.MaxValue, Some(par))
+        val request = DataAtNameQuery(Int.MaxValue, par)
         EitherT(DeployService[F].listenForDataAtName(request))
       }.map(kp("")).value
     }

@@ -29,11 +29,11 @@ class ReportingProtoTransformer
     )
 
   override def serializeProduce(rp: RhoReportingProduce): ReportProduceProto =
-    ReportProduceProto(channel = rp.channel.some, data = rp.data.some)
+    ReportProduceProto(channel = rp.channel, data = rp.data)
 
   override def serializeComm(rcm: RhoReportingComm): ReportCommProto =
     ReportCommProto(
-      consume = serializeConsume(rcm.consume).some,
+      consume = serializeConsume(rcm.consume),
       produces = rcm.produces.map(serializeProduce).toList
     )
 

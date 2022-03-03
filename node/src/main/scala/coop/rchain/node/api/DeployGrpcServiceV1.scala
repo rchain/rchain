@@ -170,8 +170,7 @@ object DeployGrpcServiceV1 {
 
       def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         defer(
-          BlockAPI
-            .getListeningNameDataResponse[F](request.depth, request.name.get, apiMaxBlocksLimit)
+          BlockAPI.getListeningNameDataResponse[F](request.depth, request.name, apiMaxBlocksLimit)
         ) { r =>
           import ListeningNameDataResponse.Message
           import ListeningNameDataResponse.Message._
@@ -182,20 +181,16 @@ object DeployGrpcServiceV1 {
           )
         }
 
-      def getDataAtName(
-          request: DataAtNameByBlockQuery
-      ): Task[RhoDataResponse] =
-        defer(
-          BlockAPI
-            .getDataAtPar[F](request.par, request.blockHash, request.usePreStateHash)
-        ) { r =>
-          import RhoDataResponse.Message
-          import RhoDataResponse.Message._
-          RhoDataResponse(
-            r.fold[Message](
-              Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
+      def getDataAtName(request: DataAtNameByBlockQuery): Task[RhoDataResponse] =
+        defer(BlockAPI.getDataAtPar[F](request.par, request.blockHash, request.usePreStateHash)) {
+          r =>
+            import RhoDataResponse.Message
+            import RhoDataResponse.Message._
+            RhoDataResponse(
+              r.fold[Message](
+                Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
+              )
             )
-          )
         }
 
       def listenForContinuationAtName(
@@ -274,7 +269,7 @@ object DeployGrpcServiceV1 {
           import ExploratoryDeployResponse.Message
           import ExploratoryDeployResponse.Message._
           ExploratoryDeployResponse(r.fold[Message](Error, {
-            case (par, block) => Result(DataWithBlockInfo(par, Some(block)))
+            case (par, block) => Result(DataWithBlockInfo(par, block))
           }))
         }
 
