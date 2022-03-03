@@ -56,25 +56,25 @@ object RadixTree {
     * Coding structure for items:
     *   EmptyItem                   - Empty (not encode)
 
-    *   Leaf(prefix,value)    -> [item number] [second byte] [prefix0]..[prefixM] [value0]..[value31]
+    *   Leaf(prefix,value)    -> [item index] [second byte] [prefix0]..[prefixM] [value0]..[value31]
     *                               where is: [second byte] -> bit7 = 0 (Leaf identifier)
     *                                                          bit6..bit0 - prefix length = M (from 0 to 127)
     *
-    *   NodePtr(prefix,ptr)   -> [item number] [second byte] [prefix0]..[prefixM] [ptr0]..[ptr31]
+    *   NodePtr(prefix,ptr)   -> [item index] [second byte] [prefix0]..[prefixM] [ptr0]..[ptr31]
     *                               where is: [second byte] -> bit7 = 1 (NodePtr identifier)
     *                                                          bit6..bit0 - prefix length = M (from 0 to 127)
     *
-    * For example encode this Node which contains 2 non-empty items (number 1 and number 2):
+    * For example encode this Node which contains 2 non-empty items (index 1 and index 2):
     * (0)[Empty] (1)[Leaf(prefix:0xFFFF,value:0x00..0001)] (2)[NodePtr(prefix:empty,value:0xFF..FFFF)] (3)...(255)[Empty].
     * Encoded data = 0x0102FFFF0000000000000000000000000000000000000000000000000000000000000001
     *                  0280FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-    * where: item 1 (number_secondByte_prefix_value) = 01_02_FFFF_00..0001
-    *        item 2 (number_secondByte_prefix_value) = 02_80_empty_FF..FFFF
+    * where: item 1 (index_secondByte_prefix_value) = 01_02_FFFF_00..0001
+    *        item 2 (index_secondByte_prefix_value) = 02_80_empty_FF..FFFF
     * }}}
     */
   object Codecs {
     private val defSize  = 32 // Default size for non-empty item data
-    private val headSize = 2  // 2 bytes: first - item number, second - second byte
+    private val headSize = 2  // 2 bytes: first - item index, second - second byte
 
     /** Serialization [[Node]] to [[ByteVector]]
       */
@@ -114,16 +114,16 @@ object RadixTree {
 
       // Serialization (fill allocated memory)
       @tailrec
-      def putItemIntoArray(numItem: Int, pos0: Int): Array[Byte] =
+      def putItemIntoArray(idxItem: Int, pos0: Int): Array[Byte] =
         if (pos0 == calcSize) arr // Happy end (return serializing data).
         else {
-          node(numItem) match {
+          node(idxItem) match {
             // If current item is empty - just skip serialization of this item
-            case EmptyItem => putItemIntoArray(numItem + 1, pos0) // Loop to the next item.
+            case EmptyItem => putItemIntoArray(idxItem + 1, pos0) // Loop to the next item.
 
             case Leaf(prefix, value) =>
-              // Fill first byte - item number
-              arr(pos0) = numItem.toByte
+              // Fill first byte - item index
+              arr(pos0) = idxItem.toByte
               // Fill second byte - Leaf identifier
               val posSecondByte   = pos0 + 1
               val prefixSize: Int = prefix.size.toInt
@@ -134,11 +134,11 @@ object RadixTree {
               // Fill leafValue
               val posValueStart = posPrefixStart + prefixSize
               for (i <- 0 until defSize) arr(posValueStart + i) = value(i.toLong)
-              putItemIntoArray(numItem + 1, posValueStart + defSize) // Loop to the next item.
+              putItemIntoArray(idxItem + 1, posValueStart + defSize) // Loop to the next item.
 
             case NodePtr(prefix, ptr) =>
-              // Fill first byte - item number
-              arr(pos0) = numItem.toByte
+              // Fill first byte - item index
+              arr(pos0) = idxItem.toByte
               // Fill second byte - NodePtr identifier (most significant bit = 1) and prefixSize (lower 7 bits = size)
               val posSecondByte   = pos0 + 1
               val prefixSize: Int = prefix.size.toInt
@@ -149,7 +149,7 @@ object RadixTree {
               // Fill ptr
               val posPtrStart = posPrefixStart + prefixSize
               for (i <- 0 until defSize) arr(posPtrStart + i) = ptr(i.toLong)
-              putItemIntoArray(numItem + 1, posPtrStart + defSize) // Loop to the next item.
+              putItemIntoArray(idxItem + 1, posPtrStart + defSize) // Loop to the next item.
           }
         }
       ByteVector(putItemIntoArray(0, 0))
@@ -169,10 +169,10 @@ object RadixTree {
       def decodeItem(pos0: Int, node: Node): Node =
         if (pos0 == maxSize) node // End of deserialization
         else {
-          val numItem: Int = byteToInt(arr(pos0)) // Take first byte - it's item's number
+          val idxItem: Int = byteToInt(arr(pos0)) // Take first byte - it's item's index
           assert(
-            node(numItem) == EmptyItem,
-            "Error during deserialization: wrong number of item."
+            node(idxItem) == EmptyItem,
+            "Error during deserialization: wrong index of item."
           )
           val pos1       = pos0 + 1
           val secondByte = arr(pos1) // Take second byte
@@ -196,7 +196,7 @@ object RadixTree {
             if (isLeaf(secondByte)) Leaf(ByteVector(prefix), ByteVector(valOrPtr))
             else NodePtr(ByteVector(prefix), ByteVector(valOrPtr))
 
-          val nodeNext = node.updated(numItem, item)
+          val nodeNext = node.updated(idxItem, item)
 
           decodeItem(pos0Next, nodeNext) // Try to decode next item.
         }
@@ -282,7 +282,7 @@ object RadixTree {
     * {{{
     * prefix - Prefix that describes the path of root to node
     * decoded - Deserialized data (from parsing)
-    * lastItemIndex - Last processed item number
+    * lastItemIndex - Last processed item index
     * }}}
     */
   def sequentialExport[F[_]: Sync](
@@ -352,7 +352,7 @@ object RadixTree {
       *
       * @param node Node to look for
       * @param lastIdxOpt Last found index (if this node was not searched - [[None]])
-      * @return [[Some]](numItem, [[Item]]) if item found, [[None]] if non-empty item not found
+      * @return [[Some]](idxItem, [[Item]]) if item found, [[None]] if non-empty item not found
       */
     @tailrec
     def findNextNonEmptyItem(node: Node, lastIdxOpt: Option[Byte]): Option[(Byte, Item)] =
@@ -843,9 +843,7 @@ object RadixTree {
 
       def clearingDeleteActions(actions: List[HistoryAction], item: Item) = {
         val notExistInsertAction = actions.collectFirst { case _: InsertAction => true }.isEmpty
-        if (item == EmptyItem && notExistInsertAction) actions.collect {
-          case v: InsertAction => v
-        } else actions
+        if (item == EmptyItem && notExistInsertAction) List() else actions
       }
 
       def trimKeys(actions: List[HistoryAction]): List[HistoryAction] =
