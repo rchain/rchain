@@ -227,6 +227,7 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
     emptyHistoryF =>
       val sizeInserts = 10000
       val sizeDeletes = 3000
+      val sizeUpdates = 1000
       val state       = TrieMap[KeyPath, Blake2b256Hash]()
       val inserts     = generateRandomInsert(0)
       for {
@@ -240,10 +241,13 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
               )
             ](emptyHistory, inserts, state) {
               case ((history, inserts, state), _) =>
-                val newInserts = generateRandomInsert(sizeInserts)
-                val newDeletes = generateRandomDeleteFromInsert(sizeDeletes, inserts) ++
+                val newInserts  = generateRandomInsert(sizeInserts)
+                val newUpdates  = generateRandomInsertFromInsert(sizeUpdates, inserts)
+                val updateKey   = newUpdates.map(_.key).toSet
+                val lastInserts = inserts.filterNot(i => updateKey.contains(i.key))
+                val newDeletes = generateRandomDeleteFromInsert(sizeDeletes, lastInserts) ++
                   generateRandomDelete(sizeDeletes)
-                val actions = newInserts ++ newDeletes
+                val actions = newInserts ++ newDeletes ++ newUpdates
                 println(s"process ${actions.size}")
                 for {
 
@@ -300,6 +304,8 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
   def generateRandomDelete(size: Int): List[DeleteAction] = List.fill(size)(delete(randomKey(32)))
   def generateRandomDeleteFromInsert(size: Int, inserts: List[InsertAction]): List[DeleteAction] =
     Random.shuffle(inserts).take(size).map(i => delete(i.key))
+  def generateRandomInsertFromInsert(size: Int, inserts: List[InsertAction]): List[InsertAction] =
+    Random.shuffle(inserts).take(size).map(i => insert(i.key))
 
   def updateState(
       state: TrieMap[KeyPath, Blake2b256Hash],
