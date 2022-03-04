@@ -67,7 +67,7 @@ object GenesisBuilder {
         shardId = "root",
         timestamp = 0L,
         proofOfStake = ProofOfStake(
-          minimumBond = 0L,
+          minimumBond = 1L,
           maximumBond = Long.MaxValue,
           // Epoch length is set to large number to prevent trigger of epoch change
           // in PoS close block method, which causes block merge conflicts

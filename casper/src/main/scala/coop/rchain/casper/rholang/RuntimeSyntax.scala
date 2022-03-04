@@ -604,7 +604,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
        """.stripMargin('#')
 
   private def toValidatorSeq(validatorsPar: Par): Seq[Validator] =
-    validatorsPar.exprs.head.getEListBody.ps.map { validator =>
+    validatorsPar.exprs.head.getESetBody.ps.map { validator =>
       assert(validator.exprs.length == 1, "Validator in bonds map wasn't a single string.")
       validator.exprs.head.getGByteArray
     }.toList
