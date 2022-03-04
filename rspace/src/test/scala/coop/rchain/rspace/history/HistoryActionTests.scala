@@ -223,9 +223,61 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
       }
   }
 
+  "randomly insert or delete" should "return the correct result" in withEmptyHistory {
+    emptyHistoryF =>
+      val sizeInserts = 10000
+      val sizeDeletes = 3000
+      val state       = TrieMap[KeyPath, Blake2b256Hash]()
+      val inserts     = generateRandomInsert(0)
+      for {
+        emptyHistory <- emptyHistoryF
+        _ <- (1 to 10).toList.foldLeftM[
+              Task,
+              (
+                  History[Task],
+                  List[InsertAction],
+                  TrieMap[KeyPath, Blake2b256Hash]
+              )
+            ](emptyHistory, inserts, state) {
+              case ((history, inserts, state), _) =>
+                val newInserts = generateRandomInsert(sizeInserts)
+                val newDeletes = generateRandomDeleteFromInsert(sizeDeletes, inserts) ++
+                  generateRandomDelete(sizeDeletes)
+                val actions = newInserts ++ newDeletes
+                println(s"process ${actions.size}")
+                for {
+
+                  newHistory <- history.process(actions)
+                  newState   = updateState(state, actions)
+                  _          = println(s" The new state size is ${newState.size}")
+                  _ <- newState.toList.traverse {
+                        case (k, value) =>
+                          for {
+                            re <- newHistory.read(k)
+                            _ = re match {
+                              case Some(v) => assert(v == value.bytes)
+                              case _       => fail("Can not get value")
+                            }
+                          } yield ()
+                      }
+                  _ <- newDeletes.traverse(
+                        d =>
+                          for {
+                            re <- newHistory.read(d.key)
+                            _ = re match {
+                              case None => succeed
+                              case _    => fail("got empty pointer after remove")
+                            }
+                          } yield ()
+                      )
+                } yield (newHistory, newInserts, newState)
+            }
+      } yield ()
+  }
+
   protected def withEmptyHistory(f: Task[History[Task]] => Task[Unit]): Unit = {
     val emptyHistory = History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
-    f(emptyHistory).runSyncUnsafe(20.seconds)
+    f(emptyHistory).runSyncUnsafe(1.minute)
   }
 
   protected def withEmptyHistoryAndStore(
@@ -244,9 +296,9 @@ class HistoryActionTests extends FlatSpec with Matchers with InMemoryHistoryTest
 
   def randomKey(size: Int): Seq[Byte] = List.fill(size)((Random.nextInt(256) - 128).toByte)
 
-  def generateRandomInsert(size: Int): Seq[InsertAction] = List.fill(size)(insert(randomKey(32)))
-  def generateRandomDelete(size: Int): Seq[DeleteAction] = List.fill(size)(delete(randomKey(32)))
-  def generateRandomDeleteFromInsert(size: Int, inserts: List[InsertAction]): Seq[DeleteAction] =
+  def generateRandomInsert(size: Int): List[InsertAction] = List.fill(size)(insert(randomKey(32)))
+  def generateRandomDelete(size: Int): List[DeleteAction] = List.fill(size)(delete(randomKey(32)))
+  def generateRandomDeleteFromInsert(size: Int, inserts: List[InsertAction]): List[DeleteAction] =
     Random.shuffle(inserts).take(size).map(i => delete(i.key))
 
   def updateState(
