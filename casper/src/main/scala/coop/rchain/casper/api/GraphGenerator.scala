@@ -1,7 +1,8 @@
 package coop.rchain.casper.api
 
 import cats.{Monad, _}
-import cats.effect.Sync
+import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper._
@@ -23,90 +24,83 @@ object GraphzGenerator {
 
   type ValidatorsBlocks = Map[Long, List[ValidatorBlock]]
 
-  final case class DagInfo[G[_]](
-      validators: Map[String, ValidatorsBlocks] = Map.empty,
-      timeseries: List[Long] = List.empty
+  final case class DagInfo(
+      validators: Map[String, ValidatorsBlocks],
+      timeseries: List[Long]
   )
 
   object DagInfo {
-    def empty[G[_]]: DagInfo[G] = DagInfo[G]()
+    def empty: DagInfo = DagInfo(validators = Map.empty, timeseries = List.empty)
   }
 
-  def dagAsCluster[F[_]: Monad: Sync: Log: BlockStore, G[_]: Monad: GraphSerializer](
+  def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log: BlockStore](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
-      config: GraphConfig
-  ): F[G[Graphz[G]]] =
+      config: GraphConfig,
+      ser: GraphSerializer[F]
+  ): F[Graphz[F]] =
     for {
-      acc <- topoSort.foldM(DagInfo.empty[G])(accumulateDagInfo[F, G](_, _))
-    } yield {
-
-      val timeseries     = acc.timeseries.reverse
-      val firstTs        = timeseries.head
-      val validators     = acc.validators
-      val validatorsList = validators.toList.sortBy(_._1)
-      for {
-        g <- initGraph[G]("dag")
-        allAncestors = validatorsList
-          .flatMap {
-            case (_, blocks) =>
-              blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
+      acc            <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
+      timeseries     = acc.timeseries.reverse
+      firstTs        = timeseries.head
+      validators     = acc.validators
+      validatorsList = validators.toList.sortBy(_._1)
+      g              <- initGraph[F]("dag", ser)
+      allAncestors = validatorsList
+        .flatMap {
+          case (_, blocks) =>
+            blocks.get(firstTs).map(_.flatMap(b => b.parentsHashes)).getOrElse(List.empty[String])
+        }
+        .distinct
+        .sorted
+      // draw ancesotrs first
+      _ <- allAncestors.traverse(
+            ancestor =>
+              g.node(
+                ancestor,
+                style = styleFor(ancestor, lastFinalizedBlockHash),
+                shape = Box
+              )
+          )
+      // create invisible edges from ancestors to first node in each cluster for proper alligment
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              allAncestors.traverse(ancestor => {
+                val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
+                nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
+              })
           }
-          .distinct
-          .sorted
-        // draw ancesotrs first
-        _ <- allAncestors.traverse(
-              ancestor =>
-                g.node(
-                  ancestor,
-                  style = styleFor(ancestor, lastFinalizedBlockHash),
-                  shape = Box
-                )
-            )
-        // create invisible edges from ancestors to first node in each cluster for proper alligment
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                allAncestors.traverse(ancestor => {
-                  val nodes = nodesForTs(id, firstTs, blocks, lastFinalizedBlockHash).keys.toList
-                  nodes.traverse(node => g.edge(ancestor, node, style = Some(Invis)))
-                })
-            }
-        // draw clusters per validator
-        _ <- validatorsList.traverse {
-              case (id, blocks) =>
-                g.subgraph(
-                  validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash)
-                )
-            }
-        // draw parent dependencies
-        _ <- drawParentDependencies[G](g, validatorsList.map(_._2))
-        // draw justification dotted lines
-        _ <- config.showJustificationLines.fold(
-              drawJustificationDottedLines[G](g, validators),
-              ().pure[G]
-            )
-        _ <- g.close
-      } yield g
+      // draw clusters per validator
+      _ <- validatorsList.traverse {
+            case (id, blocks) =>
+              validatorCluster(id, blocks, timeseries, lastFinalizedBlockHash, ser)
+          }
+      // draw parent dependencies
+      _ <- drawParentDependencies[F](g, validatorsList.map(_._2))
+      // draw justification dotted lines
+      _ <- config.showJustificationLines.fold(
+            drawJustificationDottedLines[F](g, validators),
+            ().pure[F]
+          )
+      _ <- g.close
+    } yield g
 
-    }
-
-  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore, G[_]](
-      acc: DagInfo[G],
+  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore](
+      acc: DagInfo,
       blockHashes: Vector[BlockHash]
-  ): F[DagInfo[G]] =
+  ): F[DagInfo] =
     for {
       blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
       timeEntry = blocks.head.body.state.blockNumber
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)
         val blockSenderHash = PrettyPrinter.buildString(b.sender)
-        val parents = b.header.parentsHashList.toList
+        val parents = b.header.parentsHashList
           .map(PrettyPrinter.buildString)
         val justifications = b.justifications
           .map(_.latestBlockHash)
           .map(PrettyPrinter.buildString)
-          .toSet
-          .toList
+          .distinct
         val validatorBlocks =
           Map(timeEntry -> List(ValidatorBlock(blockHash, parents, justifications)))
         Map(blockSenderHash -> validatorBlocks)
@@ -116,51 +110,49 @@ object GraphzGenerator {
       validators = acc.validators |+| Foldable[List].fold(validators)
     )
 
-  private def initGraph[G[_]: Monad: GraphSerializer](name: String): G[Graphz[G]] =
-    Graphz[G](
+  private def initGraph[F[_]: Monad](
+      name: String,
+      ser: GraphSerializer[F]
+  ): F[Graphz[F]] =
+    Graphz[F](
       name,
       DiGraph,
+      ser,
       rankdir = Some(BT),
       splines = Some("false"),
       node = Map("width" -> "0", "height" -> "0", "margin" -> "0.03", "fontsize" -> "8")
     )
 
-  private def drawParentDependencies[G[_]: Applicative](
-      g: Graphz[G],
+  private def drawParentDependencies[F[_]: Applicative](
+      g: Graphz[F],
       validators: List[ValidatorsBlocks]
-  ): G[Unit] =
+  ): F[Unit] =
     validators
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, parentsHashes, _) => {
-          parentsHashes
-            .traverse(p => g.edge(blockHash, p, constraint = Some(false)))
-        }
+        case ValidatorBlock(blockHash, parentsHashes, _) =>
+          parentsHashes.traverse(p => g.edge(blockHash, p, constraint = Some(false)))
       }
       .as(())
 
-  private def drawJustificationDottedLines[G[_]: Applicative](
-      g: Graphz[G],
+  private def drawJustificationDottedLines[F[_]: Applicative](
+      g: Graphz[F],
       validators: Map[String, ValidatorsBlocks]
-  ): G[Unit] =
+  ): F[Unit] =
     validators.values.toList
       .flatMap(_.values.toList.flatten)
       .traverse {
-        case ValidatorBlock(blockHash, _, justifications) => {
-          justifications
-            .traverse(
-              j =>
-                g.edge(
-                  blockHash,
-                  j,
-                  style = Some(Dotted),
-                  constraint = Some(false),
-                  arrowHead = Some(NoneArrow)
-                )
-            )
-
-        }
-
+        case ValidatorBlock(blockHash, _, justifications) =>
+          justifications.traverse(
+            j =>
+              g.edge(
+                blockHash,
+                j,
+                style = Some(Dotted),
+                constraint = Some(false),
+                arrowHead = Some(NoneArrow)
+              )
+          )
       }
       .as(())
 
@@ -172,21 +164,22 @@ object GraphzGenerator {
   ): Map[String, Option[GraphStyle]] =
     blocks.get(ts) match {
       case Some(tsBlocks) =>
-        (tsBlocks.map {
+        tsBlocks.map {
           case ValidatorBlock(blockHash, _, _) =>
-            (blockHash -> styleFor(blockHash, lastFinalizedBlockHash))
-        }).toMap
+            blockHash -> styleFor(blockHash, lastFinalizedBlockHash)
+        }.toMap
       case None => Map(s"${ts.show}_$validatorId" -> Some(Invis))
     }
 
-  private def validatorCluster[G[_]: Monad: GraphSerializer](
+  private def validatorCluster[F[_]: Monad](
       id: String,
       blocks: ValidatorsBlocks,
       timeseries: List[Long],
-      lastFinalizedBlockHash: String
-  ): G[Graphz[G]] =
+      lastFinalizedBlockHash: String,
+      ser: GraphSerializer[F]
+  ): F[Graphz[F]] =
     for {
-      g     <- Graphz.subgraph[G](s"cluster_$id", DiGraph, label = Some(id))
+      g     <- Graphz.subgraph[F](s"cluster_$id", DiGraph, ser, label = Some(id))
       nodes = timeseries.map(ts => nodesForTs(id, ts, blocks, lastFinalizedBlockHash))
       _ <- nodes.traverse(
             ns =>
