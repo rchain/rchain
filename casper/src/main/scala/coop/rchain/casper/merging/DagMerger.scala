@@ -47,28 +47,24 @@ object DagMerger {
             as.map(_.eventLogIndex).toList.combineAll,
             bs.map(_.eventLogIndex).toList.combineAll
           )
-
-      computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
-        for {
-          historyReader <- historyRepository.getHistoryReader(lfbPostState)
-          baseReader    = historyReader.readerBinary
-          baseGetData   = baseReader.getData(_: Blake2b256Hash).map(_.map(_.decoded))
-          overrideTrieAction = (
-              hash: Blake2b256Hash,
-              changes: ChannelChange[ByteVector],
-              numberChs: NumberChannelsDiff
-          ) =>
-            numberChs.get(hash).traverse {
-              RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
-            }
-          actions <- StateChangeMerger.computeTrieActions(
-                      changes,
-                      baseReader,
-                      mergeableChs,
-                      overrideTrieAction
-                    )
-        } yield actions
-      }
+      historyReader <- historyRepository.getHistoryReader(lfbPostState)
+      baseReader    = historyReader.readerBinary
+      baseGetData   = historyReader.getData _
+      overrideTrieAction = (
+          hash: Blake2b256Hash,
+          changes: ChannelChange[ByteVector],
+          numberChs: NumberChannelsDiff
+      ) =>
+        numberChs.get(hash).traverse {
+          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+        }
+      computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) =>
+        StateChangeMerger.computeTrieActions(
+          changes,
+          baseReader,
+          mergeableChs,
+          overrideTrieAction
+        )
 
       applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
         historyRepository.reset(lfbPostState).flatMap(_.doCheckpoint(actions).map(_.root))
@@ -83,7 +79,8 @@ object DagMerger {
             stateChanges = _.stateChanges.pure,
             mergeableChannels = _.eventLogIndex.numberChannelsData,
             computeTrieActions = computeTrieActions,
-            applyTrieActions = applyTrieActions
+            applyTrieActions = applyTrieActions,
+            getData = historyReader.getData
           )
 
       (newState, rejected) = r

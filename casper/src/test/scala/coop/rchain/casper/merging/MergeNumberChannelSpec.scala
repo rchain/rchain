@@ -26,6 +26,8 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest.FlatSpec
 import scodec.bits.ByteVector
 
+final case class DeployTestInfo(term: String, cost: Long, sig: String)
+
 class MergeNumberChannelSpec extends FlatSpec {
 
   val rhoST = """
@@ -46,7 +48,7 @@ class MergeNumberChannelSpec extends FlatSpec {
                 |}
                 |""".stripMargin
 
-  def rhoChange(num: Int) = s"""
+  def rhoChange(num: Long) = s"""
                             |new retCh, out(`rho:io:stdout`) in {
                             |  out!(("Begin change", $num)) |
                             |  @"SET"!(*retCh, $num) |
@@ -71,28 +73,37 @@ class MergeNumberChannelSpec extends FlatSpec {
                          |}
                          |""".stripMargin
 
-  def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log] = {
-    def makeSig(hex: String) = {
-      val bv = ByteVector.fromHex(hex).get
-      ByteString.copyFrom(bv.toArray)
-    }
+  def parRho(ori: String, appendRho: String) = Seq(ori, appendRho).mkString("|")
+
+  def makeSig(hex: String) = {
+    val bv = ByteVector.fromHex(hex).get
+    ByteString.copyFrom(bv.toArray)
+  }
+
+  def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](
+      baseTerms: Seq[String],
+      leftTerms: Seq[DeployTestInfo],
+      rightTerms: Seq[DeployTestInfo],
+      expectedRejected: Set[ByteString],
+      expectedFinalResult: Long
+  ) = {
 
     Resources.mkRuntimeManager[F]("merging-test").use { rm =>
       for {
         runtime <- rm.spawnRuntime
 
         // Run Rholang terms / simulate deploys in a block
-        runRholang = (terms: Seq[(String, Long, String)], preState: Blake2b256Hash) =>
+        runRholang = (terms: Seq[DeployTestInfo], preState: Blake2b256Hash) =>
           for {
             _ <- runtime.reset(preState)
 
             evalResults <- terms.toList.traverse {
-                            case (term, _, _) =>
+                            case deploy =>
                               for {
-                                evalResult <- runtime.evaluate(term)
+                                evalResult <- runtime.evaluate(deploy.term)
                                 _ = assert(
                                   evalResult.errors.isEmpty,
-                                  s"${evalResult.errors}\n$term"
+                                  s"${evalResult.errors}\n ${deploy.term}"
                                 )
                                 // Get final values for mergeable (number) channels
                                 numChanFinal <- runtime
@@ -110,7 +121,7 @@ class MergeNumberChannelSpec extends FlatSpec {
 
             // Create event log indices
             evLogIndices <- logSeq.zip(numChanDiffs).zip(terms).traverse {
-                             case ((cp, numberChanDiff), (_, cost, sig)) =>
+                             case ((cp, numberChanDiff), deploy) =>
                                for {
                                  evLogIndex <- BlockIndex.createEventLogIndex(
                                                 cp.log
@@ -120,23 +131,24 @@ class MergeNumberChannelSpec extends FlatSpec {
                                                 preState,
                                                 numberChanDiff
                                               )
-                                 sigBS = makeSig(sig)
-                               } yield DeployIndex(sigBS, cost, evLogIndex)
+                                 sigBS = makeSig(deploy.sig)
+                               } yield DeployIndex(sigBS, deploy.cost, evLogIndex)
                            }
           } yield (evLogIndices.toSet, endCheckpoint.root)
 
         historyRepo = rm.getHistoryRepo
 
         // Base state
-        baseRes <- runtime.evaluate(rhoST)
-        _       = assert(baseRes.errors.isEmpty, s"BASE: ${baseRes.errors}")
-        baseCp  <- runtime.createCheckpoint
+        _ <- baseTerms.zipWithIndex.toList.traverse {
+              case (term, i) =>
+                for {
+                  baseRes <- runtime.evaluate(term)
+                  _       = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
+                } yield ()
+            }
+        baseCp <- runtime.createCheckpoint
 
         // Branch 1 change
-        leftTerms = Seq(
-          (rhoChange(10), 10L, "0x10"), // +10
-          (rhoChange(-5), 10L, "0x11")  //  -5
-        )
         leftResult                     <- runRholang(leftTerms, baseCp.root)
         (leftEvIndices, leftPostState) = leftResult
 
@@ -146,11 +158,6 @@ class MergeNumberChannelSpec extends FlatSpec {
         )
 
         // Branch 2 change
-        rightTerms = Seq(
-          (rhoChange(15), 10L, "0x20"), // +15
-          (rhoChange(10), 10L, "0x21"), // +10
-          (rhoChange(-20), 10L, "0x22") // -20
-        )
         rightResult                      <- runRholang(rightTerms, baseCp.root)
         (rightEvIndices, rightPostState) = rightResult
 
@@ -213,12 +220,13 @@ class MergeNumberChannelSpec extends FlatSpec {
               stateChanges = r => r.stateChanges.pure,
               mergeableChannels = _.eventLogIndex.numberChannelsData,
               computeTrieActions = computeTrieActions,
-              applyTrieActions = applyTrieActions
+              applyTrieActions = applyTrieActions,
+              getData = baseReader.getData
             )
 
         (finalHash, rejected) = r
-
-        _ = rejected shouldBe empty
+        rejectedSigs          = rejected.flatMap(_.deploysWithCost.map(_.id))
+        _                     = rejectedSigs shouldBe expectedRejected
 
         // Read merged value
 
@@ -226,18 +234,74 @@ class MergeNumberChannelSpec extends FlatSpec {
 
         Number(finalBalance) = res.head
 
-        _ = finalBalance shouldBe 10
+        _ = finalBalance shouldBe expectedFinalResult
 
       } yield ()
     }
   }
-
   implicit val timeEff = new LogicalTime[Task]
   implicit val logEff  = Log.log[Task]
   implicit val spanEff = Span.noop[Task]
 
+  "multiple branches" should "reject deploy when mergeable number channels got negative number" in effectTest {
+    testCase[Task](
+      baseTerms = Seq(rhoST, rhoChange(10)),
+      leftTerms = Seq(
+        DeployTestInfo(rhoChange(-5), 10L, "0x11") //  -5
+      ),
+      rightTerms = Seq(
+        DeployTestInfo(rhoChange(-6), 10L, "0x22") // -20
+      ),
+      expectedRejected = Set(makeSig("0x22")),
+      expectedFinalResult = 5
+    )
+  }
+
+  "multiple branches" should "reject deploy when mergeable number channels got overflow" in effectTest {
+    testCase[Task](
+      baseTerms = Seq(rhoST, rhoChange(10)),
+      leftTerms = Seq(
+        DeployTestInfo(rhoChange(-5), 10L, "0x11") //  -5
+      ),
+      rightTerms = Seq(
+        DeployTestInfo(rhoChange(9223372036854775806L), 10L, "0x22") // + 9223372036854775802, reject this one
+      ),
+      expectedRejected = Set(makeSig("0x22")),
+      expectedFinalResult = 5
+    )
+  }
+
+  "multiple branches with normal rejection" should "choose from normal reject options" in effectTest {
+    testCase[Task](
+      baseTerms = Seq(rhoST, rhoChange(100)),
+      leftTerms = Seq(
+        DeployTestInfo(parRho(rhoChange(-20), "@\"X\"!(1)"), 10L, "0x11"),
+        DeployTestInfo(rhoChange(-10), 10L, "0x12")
+      ),
+      rightTerms = Seq(
+        DeployTestInfo(rhoChange(-60), 10L, "0x22"),
+        DeployTestInfo(parRho(rhoChange(-20), "for(_ <- @\"X\") {Nil}"), 11L, "0x21")
+      ),
+      expectedRejected = Set(makeSig("0x11")),
+      expectedFinalResult = 10
+    )
+  }
+
   "multiple branches" should "merge number channels" in effectTest {
-    testCase[Task]
+    testCase[Task](
+      baseTerms = Seq(rhoST),
+      leftTerms = Seq(
+        DeployTestInfo(rhoChange(10), 10L, "0x10"),
+        DeployTestInfo(rhoChange(-5), 10L, "0x11")
+      ),
+      rightTerms = Seq(
+        DeployTestInfo(rhoChange(15), 10L, "0x20"), // +15
+        DeployTestInfo(rhoChange(10), 10L, "0x21"), // +10
+        DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
+      ),
+      expectedRejected = Set.empty,
+      expectedFinalResult = 10
+    )
   }
 
   "TEMP encode multiple values" should "show stored binary size" in {
