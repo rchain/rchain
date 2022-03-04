@@ -13,15 +13,17 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Expr.ExprInstance
+import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.models.GUnforgeable.UnfInstance
 import coop.rchain.models.Var.{VarInstance, WildcardMsg}
-import coop.rchain.models.syntax._
 import coop.rchain.models._
+import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
+import coop.rchain.node.web.{VersionInfo, _}
 import endpoints4s.{Invalid, Valid}
-import monix.eval.Coeval
 
-import scala.collection.immutable.{BitSet, HashMap, HashSet}
+import scala.Function.const
+import scala.collection.immutable.BitSet
 
 /**
   * JsonSchema derivations for Web API request/response objects (Scala sealed traits and case classes)
@@ -43,7 +45,11 @@ trait JsonSchemaDerivations extends JsonSchemaDerivationsBase {
   implicit lazy val lightBlockInfoSchema  : JsonSchema[LightBlockInfo]               = schemaRecord
   implicit lazy val deployInfoSchema      : JsonSchema[DeployInfo]                   = schemaRecord
   implicit lazy val blockInfoSchema       : JsonSchema[BlockInfo]                    = schemaRecord
-//  implicit lazy val transactionInfoSchema : JsonSchema[TransactionInfo]              = schemaRecord
+  implicit lazy val transactionTypeSchema : JsonSchema[TransactionType]              = schemaTagged
+  implicit lazy val sysTranTypeSchema     : JsonSchema[SystemTransaction]            = schemaTagged
+  implicit lazy val transactionSchema     : JsonSchema[Transaction]                  = schemaRecord
+  implicit lazy val transactionInfoSchema : JsonSchema[TransactionInfo]              = schemaRecord
+  implicit lazy val transactionRespSchema : JsonSchema[TransactionResponse]          = schemaRecord
 
   // Web API Rholang types (subset of protobuf generated types)
   implicit lazy val rhoExprSchema: JsonSchema[RhoExpr] =
@@ -54,95 +60,97 @@ trait JsonSchemaDerivations extends JsonSchemaDerivationsBase {
   implicit lazy val unforgDeploySchema  : JsonSchema[UnforgDeploy]   = schemaRecord
   implicit lazy val unforgDeployerSchema: JsonSchema[UnforgDeployer] = schemaRecord
 
-  // Protobuf generated Rholang types (from models project)
-//  implicit lazy val parSchema: JsonSchema[Par] = lazySchema("ParRef", schemaRecord[Par])
-  /** TODO: add all referenced types in Par type, see [[coop.rchain.node.encode.JsonEncoder]] as example for circe derivations */
+  /* Protobuf generated Rholang types (from models project) */
+
   // Par
-  implicit lazy val parSchema: JsonSchema[Par] = schemaRecord[Par]
+  implicit lazy val parSchema: JsonSchema[Par] = lazySchema("ParRef")(schemaRecord[Par])
 
   // Send
-  implicit val sendSchema: JsonSchema[Send] = schemaRecord[Send]
+  implicit lazy val sendSchema: JsonSchema[Send] = schemaRecord
 
   // Receive
-  implicit val wildcardMsgSchema: JsonSchema[WildcardMsg] = schemaRecord[WildcardMsg]
-  implicit val varInstanceSchema: JsonSchema[VarInstance] = schemaTagged[VarInstance]
-  implicit val varSchema        : JsonSchema[Var]         = schemaRecord[Var]
-  implicit val receiveBindSchema: JsonSchema[ReceiveBind] = schemaRecord[ReceiveBind]
-  implicit val receiveSchema    : JsonSchema[Receive]     = schemaRecord[Receive]
+  implicit lazy val wildcardMsgSchema: JsonSchema[WildcardMsg] = schemaRecord
+  implicit lazy val varInstanceSchema: JsonSchema[VarInstance] = schemaTagged
+  implicit lazy val varSchema        : JsonSchema[Var]         = schemaRecord
+  // TODO: this is useless definition because in schema it only visible as `Option`
+  implicit lazy val optionVarSchema  : JsonSchema[Option[Var]] = genericJsonSchema
+  implicit lazy val receiveBindSchema: JsonSchema[ReceiveBind] = schemaRecord
+  implicit lazy val receiveSchema    : JsonSchema[Receive]     = schemaRecord
 
   // New
-  implicit val newSchema: JsonSchema[New] = schemaRecord[New]
+  implicit lazy val newSchema: JsonSchema[New] = schemaRecord
 
   // Expr
-  implicit val eNotSchema  : JsonSchema[ENot]   = schemaRecord[ENot]
-  implicit val eNegSchema  : JsonSchema[ENeg]   = schemaRecord[ENeg]
-  implicit val eMultSchema : JsonSchema[EMult]  = schemaRecord[EMult]
-  implicit val eDivSchema  : JsonSchema[EDiv]   = schemaRecord[EDiv]
-  implicit val ePlusSchema : JsonSchema[EPlus]  = schemaRecord[EPlus]
-  implicit val eMinusSchema: JsonSchema[EMinus] = schemaRecord[EMinus]
-  implicit val eLtSchema   : JsonSchema[ELt]    = schemaRecord[ELt]
-  implicit val eLteSchema  : JsonSchema[ELte]   = schemaRecord[ELte]
-  implicit val eGtSchema   : JsonSchema[EGt]    = schemaRecord[EGt]
-  implicit val eGteSchema  : JsonSchema[EGte]   = schemaRecord[EGte]
-  implicit val eEqSchema   : JsonSchema[EEq]    = schemaRecord[EEq]
-  implicit val eNeqSchema  : JsonSchema[ENeq]   = schemaRecord[ENeq]
-  implicit val eAndSchema  : JsonSchema[EAnd]   = schemaRecord[EAnd]
-  implicit val eOrSchema   : JsonSchema[EOr]    = schemaRecord[EOr]
-  implicit val eVarSchema  : JsonSchema[EVar]   = schemaRecord[EVar]
-  implicit val eListSchema : JsonSchema[EList]  = schemaRecord[EList]
-  implicit val eTupleSchema: JsonSchema[ETuple] = schemaRecord[ETuple]
-  
-  implicit val hashSetParSchema      : JsonSchema[HashSet[Par]]     = schemaRecord[HashSet[Par]]
-  implicit val listParSchema         : JsonSchema[List[Par]]        = schemaRecord[List[Par]]
-  implicit val sortedParHashSetSchema: JsonSchema[SortedParHashSet] = schemaRecord[SortedParHashSet]
-  implicit val coevalBitSetSchema    : JsonSchema[Coeval[BitSet]]   = schemaRecord[Coeval[BitSet]]
-  implicit val optionVarSchema       : JsonSchema[Option[Var]]      = schemaRecord[Option[Var]]
-  implicit val parSetSchema          : JsonSchema[ParSet]           = schemaRecord[ParSet]
-  
-  implicit val mapParParSchema    : JsonSchema[Map[Par, Par]]     = schemaRecord[Map[Par, Par]]
-  implicit val listParParSchema   : JsonSchema[List[(Par, Par)]]  = schemaRecord[List[(Par, Par)]]
-  implicit val hashMapParParSchema: JsonSchema[HashMap[Par, Par]] = schemaRecord[HashMap[Par, Par]]
-  implicit val sortedParMapSchema : JsonSchema[SortedParMap]      = schemaRecord[SortedParMap]
-  implicit val parMapSchema       : JsonSchema[ParMap]            = schemaRecord[ParMap]
-  
-  // implicit val eSetSchema   : JsonSchema[ESet]    = schemaRecord[ESet]
-  // implicit val eMapSchema   : JsonSchema[EMap]    = schemaRecord[EMap]
-  implicit val eMethodSchema: JsonSchema[EMethod] = schemaRecord[EMethod]
-
-  implicit val eMatchesSchema       : JsonSchema[EMatches]        = schemaRecord[EMatches]
-  implicit val ePercentPercentSchema: JsonSchema[EPercentPercent] = schemaRecord[EPercentPercent]
-  implicit val ePlusPlusSchema      : JsonSchema[EPlusPlus]       = schemaRecord[EPlusPlus]
-  implicit val eMinusMinusSchema    : JsonSchema[EMinusMinus]     = schemaRecord[EMinusMinus]
-  implicit val eModSchema           : JsonSchema[EMod]            = schemaRecord[EMod]
-  implicit val exprInstanceSchema   : JsonSchema[ExprInstance]    = schemaTagged[ExprInstance]
-  implicit val exprSchema           : JsonSchema[Expr]            = schemaRecord[Expr]
+  implicit lazy val eNotSchema  : JsonSchema[ENot]   = schemaRecord
+  implicit lazy val eNegSchema  : JsonSchema[ENeg]   = schemaRecord
+  implicit lazy val eMultSchema : JsonSchema[EMult]  = schemaRecord
+  implicit lazy val eDivSchema  : JsonSchema[EDiv]   = schemaRecord
+  implicit lazy val ePlusSchema : JsonSchema[EPlus]  = schemaRecord
+  implicit lazy val eMinusSchema: JsonSchema[EMinus] = schemaRecord
+  implicit lazy val eLtSchema   : JsonSchema[ELt]    = schemaRecord
+  implicit lazy val eLteSchema  : JsonSchema[ELte]   = schemaRecord
+  implicit lazy val eGtSchema   : JsonSchema[EGt]    = schemaRecord
+  implicit lazy val eGteSchema  : JsonSchema[EGte]   = schemaRecord
+  implicit lazy val eEqSchema   : JsonSchema[EEq]    = schemaRecord
+  implicit lazy val eNeqSchema  : JsonSchema[ENeq]   = schemaRecord
+  implicit lazy val eAndSchema  : JsonSchema[EAnd]   = schemaRecord
+  implicit lazy val eOrSchema   : JsonSchema[EOr]    = schemaRecord
+  implicit lazy val eVarSchema  : JsonSchema[EVar]   = schemaRecord
+  implicit lazy val eListSchema : JsonSchema[EList]  = schemaRecord
+  implicit lazy val eTupleSchema: JsonSchema[ETuple] = schemaRecord
+  // Expr - Set, Map, method
+  implicit lazy val eSetSchema   : JsonSchema[ESet]         = schemaRecord
+  implicit lazy val kvPairSchema : JsonSchema[KeyValuePair] = schemaRecord
+  implicit lazy val eMapSchema   : JsonSchema[EMap]         = schemaRecord
+  implicit lazy val eMethodSchema: JsonSchema[EMethod]      = schemaRecord
+  // Expr - match, binary ops
+  implicit lazy val eMatchesSchema       : JsonSchema[EMatches]        = schemaRecord
+  implicit lazy val ePercentPercentSchema: JsonSchema[EPercentPercent] = schemaRecord
+  implicit lazy val ePlusPlusSchema      : JsonSchema[EPlusPlus]       = schemaRecord
+  implicit lazy val eMinusMinusSchema    : JsonSchema[EMinusMinus]     = schemaRecord
+  implicit lazy val eModSchema           : JsonSchema[EMod]            = schemaRecord
+  implicit lazy val exprInstanceSchema   : JsonSchema[ExprInstance]    = schemaTagged
+  implicit lazy val exprSchema           : JsonSchema[Expr]            = schemaRecord
 
   // Match
-  implicit val matchCaseSchema: JsonSchema[MatchCase] = schemaRecord[MatchCase]
-  implicit val matchSchema    : JsonSchema[Match]     = schemaRecord[Match]
+  implicit lazy val matchCaseSchema: JsonSchema[MatchCase] = schemaRecord
+  implicit lazy val matchSchema    : JsonSchema[Match]     = schemaRecord
 
-  // GUnforgeable
-  implicit val gPrivateSchema     : JsonSchema[GPrivate]      = schemaRecord[GPrivate]
-  implicit val gDeployIdSchema    : JsonSchema[GDeployId]     = schemaRecord[GDeployId]
-  implicit val gDeployerIdSchema  : JsonSchema[GDeployerId]   = schemaRecord[GDeployerId]
-  implicit val gSysAuthTokenSchema: JsonSchema[GSysAuthToken] = schemaRecord[GSysAuthToken]
-  implicit val unfInstanceSchema  : JsonSchema[UnfInstance]   = schemaTagged[UnfInstance]
-  implicit val gUnforgeableSchema : JsonSchema[GUnforgeable]  = schemaRecord[GUnforgeable]
+  // Unforgeable
+  implicit lazy val gPrivateSchema     : JsonSchema[GPrivate]      = schemaRecord
+  implicit lazy val gDeployIdSchema    : JsonSchema[GDeployId]     = schemaRecord
+  implicit lazy val gDeployerIdSchema  : JsonSchema[GDeployerId]   = schemaRecord
+  implicit lazy val gSysAuthTokenSchema: JsonSchema[GSysAuthToken] = schemaRecord
+  implicit lazy val unfInstanceSchema  : JsonSchema[UnfInstance]   = schemaTagged
+  implicit lazy val gUnforgeableSchema : JsonSchema[GUnforgeable]  = schemaRecord
 
   // Bundle
-  implicit val bundleSchema: JsonSchema[Bundle] = schemaRecord[Bundle]
+  implicit lazy val bundleSchema: JsonSchema[Bundle] = schemaRecord
 
   // Connective
-  implicit val varRefSchema            : JsonSchema[VarRef]             = schemaRecord[VarRef]
-  implicit val connectiveBodySchema    : JsonSchema[ConnectiveBody]     = schemaRecord[ConnectiveBody]
-  implicit val connectiveInstanceSchema: JsonSchema[ConnectiveInstance] = schemaTagged[ConnectiveInstance]
-  implicit val connectiveSchema        : JsonSchema[Connective]         = schemaRecord[Connective]
-  
+  implicit lazy val varRefSchema            : JsonSchema[VarRef]             = schemaRecord
+  implicit lazy val connectiveBodySchema    : JsonSchema[ConnectiveBody]     = schemaRecord
+  implicit lazy val connectiveInstanceSchema: JsonSchema[ConnectiveInstance] = schemaTagged
+  implicit lazy val connectiveSchema        : JsonSchema[Connective]         = schemaRecord
+
   // AlwaysEqual[BitSet]
-  implicit val bitSetSchema           : JsonSchema[BitSet]              = schemaTagged[BitSet]
-  implicit val alwaysEqualBitSetSchema: JsonSchema[AlwaysEqual[BitSet]] = schemaRecord[AlwaysEqual[BitSet]]
+  // TODO: this is useless definition because in schema it only visible as `AlwaysEqual`
+  implicit lazy val alwaysEqualBitSetSchema: JsonSchema[AlwaysEqual[BitSet]] = genericJsonSchema
 
   // format: on
+
+  // Json Schema for Rholang Set as Json array of Par's
+  implicit lazy val parSetSchema: JsonSchema[ParSet] =
+    arrayJsonSchema[List, Par].xmap(ParSet(_))(_.ps.sortedPars)
+
+  // Json Schema for Rholang Map as Json object
+  // TODO: solution for keys which cannot be converted to String
+  implicit lazy val parMapSchema: JsonSchema[ParMap] =
+    mapJsonSchema[Par].xmap { x =>
+      import rholang.implicits._
+      val seqParPar = x.toList.map(y => (GString(y._1): Par, y._2))
+      ParMap(seqParPar)
+    }(x => x.ps.toMap.map { case (k, v) => (k.toString, v) })
 
   // Json Schema encoding for ByteString as String base 16
   implicit lazy val byteStringSchema: JsonSchema[ByteString] =
@@ -150,6 +158,10 @@ trait JsonSchemaDerivations extends JsonSchemaDerivationsBase {
       val bytesOpt = str.hexToByteString
       bytesOpt.map(Valid(_)).getOrElse(Invalid(s"Invalid hex format '$str'"))
     }(PrettyPrinter.buildStringNoLimit)
+
+  // Json Schema for BitSet (dummy because it's not important for API)
+  implicit lazy val bitSetSchema: JsonSchema[BitSet] =
+    emptyRecord.xmap(const(BitSet()))(const(()))
 }
 
 /**
