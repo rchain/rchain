@@ -19,7 +19,16 @@ object WebApiDocs
     with openapi.JsonEntitiesFromSchemas {
 
   val public =
-    Seq(status, deploy, exploreDeploy, exploreDeployByBlockHash, dataAtName, getBlocks, getBlock)
+    Seq(
+      status,
+      deploy,
+      exploreDeploy,
+      exploreDeployByBlockHash,
+      dataAtName,
+      getBlocks,
+      getBlock,
+      getTransaction
+    )
 
   val admin = Seq(propose)
 

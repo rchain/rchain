@@ -11,6 +11,7 @@ import coop.rchain.node.api.WebApi.{
 import coop.rchain.node.api.json.JsonSchemaDerivations
 import endpoints4s.algebra
 import cats.syntax.all._
+import coop.rchain.node.web.TransactionResponse
 
 /**
   * Defines the HTTP endpoints description of Web API v1.
@@ -66,10 +67,10 @@ trait WebApiEndpoints
     ok(jsonResponse[BlockInfo])
   )
 
-  //    val getTransaction: Endpoint[String, TransactionResponse] = endpoint(
-  //      get(path / "transactions" / hashString),
-  //      ok(jsonResponse[TransactionResponse])
-  //    )
+  val getTransaction: Endpoint[String, TransactionResponse] = endpoint(
+    get(path / "transactions" / hashString),
+    ok(jsonResponse[TransactionResponse])
+  )
 
   // Segments
 
