@@ -12,6 +12,7 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{
   RichAttempt
 }
 import coop.rchain.shared.Base16
+import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
 import scodec.bits.{BitVector, ByteVector}
 
 import scala.Function.tupled
@@ -348,7 +349,7 @@ object HistoryMergingInstances {
                   .emits(
                     partitions.map(p => fs2.Stream.eval(processSubtree(trieRoot)(p._1, p._2)))
                   )
-                  .parJoin(1)
+                  .parJoinProcBounded
                   .compile
                   .toList
         modified         = roots.flatMap(tupled(extractSubtrieAtIndex))
@@ -363,7 +364,7 @@ object HistoryMergingInstances {
       } yield this.copy(root = newRootHash)
 
     private def hasNoDuplicates(actions: List[HistoryAction]) =
-      actions.map(_.key).toSet.size == actions.size
+      actions.map(_.key).distinct.size == actions.size
 
     private[rspace] def processSubtree(
         start: Trie
@@ -539,7 +540,7 @@ object HistoryMergingInstances {
         case (trie, _) =>
           trie match {
             case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
-            case EmptyPointer          => Applicative[F].pure(none)
+            case EmptyPointer          => Applicative[F].pure(None)
             case _ =>
               Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
 

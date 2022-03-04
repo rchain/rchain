@@ -1,7 +1,11 @@
 package coop.rchain.rspace.history
 
+import cats.Parallel
+import cats.effect.{Concurrent, Sync}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.History._
+import coop.rchain.rspace.history.instances.RadixHistory
+import coop.rchain.store.KeyValueStore
 import scodec.bits.ByteVector
 
 /**
@@ -61,8 +65,17 @@ trait HistoryWithFind[F[_]] extends History[F] {
 }
 
 object History {
+  val emptyRootHash: Blake2b256Hash = RadixHistory.emptyRootHash
+//  val emptyRootHash: Blake2b256Hash = HistoryMergingInstances.emptyRootHash //for MergingHistory
 
-  val emptyRootHash: Blake2b256Hash = HistoryMergingInstances.emptyRootHash
+  def create[F[_]: Concurrent: Sync: Parallel](
+      root: Blake2b256Hash,
+      store: KeyValueStore[F]
+  ): F[RadixHistory[F]] = RadixHistory(root, RadixHistory.createStore(store))
+//  ): F[HistoryWithFind[F]] =
+//    Sync[F].delay(
+//      HistoryMergingInstances.merging(root, HistoryStoreInstances.historyStore[F](store))
+//    ) //for MergingHistory
 
   type KeyPath = Seq[Byte]
 }

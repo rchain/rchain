@@ -17,13 +17,16 @@ object Stopwatch {
       _  <- log(s"$tag [${showTime(m)}]")
     } yield a
 
-  def duration[F[_]: Sync, A](block: => F[A]): F[(A, String)] =
+  def durationRaw[F[_]: Sync, A](block: => F[A]): F[(A, FiniteDuration)] =
     for {
       t0 <- Sync[F].delay(System.nanoTime)
       a  <- block
       t1 = System.nanoTime
       m  = Duration.fromNanos(t1 - t0)
-    } yield (a, showTime(m))
+    } yield (a, m)
+
+  def duration[F[_]: Sync, A](block: => F[A]): F[(A, String)] =
+    durationRaw(block).map(_.map(showTime))
 
   def profile[A](block: => A): (A, String) = {
     val t0 = System.nanoTime
