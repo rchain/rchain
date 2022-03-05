@@ -285,7 +285,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       historyReader <- historyRepository1.getHistoryReader(historyRepository1.root)
       store1 <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](cache1, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](cache1, hr).map(AtomicAny(_))
       }
       space1 = new RSpace[Task, C, P, A, K](
         historyRepository1,
@@ -308,7 +308,7 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       historyReader <- historyRepository2.getHistoryReader(historyRepository2.root)
       store2 <- {
         val hr = historyReader.base
-        HotStore.inMem[Task, C, P, A, K](cache2, hr).map(AtomicAny(_))
+        HotStore[Task, C, P, A, K](cache2, hr).map(AtomicAny(_))
       }
       space2 = new RSpace[Task, C, P, A, K](
         historyRepository2,

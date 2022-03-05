@@ -12,7 +12,7 @@ import coop.rchain.rspace.serializers.ScodecSerialize.{
   RichAttempt
 }
 import coop.rchain.shared.Base16
-import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
+import coop.rchain.shared.syntax._
 import scodec.bits.{BitVector, ByteVector}
 
 import scala.Function.tupled
