@@ -9,8 +9,10 @@ import coop.rchain.casper.util.EventConverter
 import coop.rchain.casper.util.rholang.Resources
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.Span
+import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.RhoType.Number
+import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rholang.syntax._
 import coop.rchain.rspace.HotStoreTrieAction
@@ -31,17 +33,17 @@ final case class DeployTestInfo(term: String, cost: Long, sig: String)
 class MergeNumberChannelSpec extends FlatSpec {
 
   val rhoST = """
-                |new stCh in {
-                |  @("__MERGEABLE__", *stCh)!(0) |
+                |new MergeableTag, stCh  in {
+                |  @(*MergeableTag, *stCh)!(0) |
                 |
                 |  contract @"SET"(ret, @v) = {
-                |    for(@s <- @("__MERGEABLE__", *stCh)) {
-                |      @("__MERGEABLE__", *stCh)!(s + v) | ret!(s, s + v)
+                |    for(@s <- @(*MergeableTag, *stCh)) {
+                |      @(*MergeableTag, *stCh)!(s + v) | ret!(s, s + v)
                 |    }
                 |  } |
                 |
                 |  contract @"READ"(ret) = {
-                |    for(@s <<- @("__MERGEABLE__", *stCh)) {
+                |    for(@s <<- @(*MergeableTag, *stCh)) {
                 |      ret!(s)
                 |    }
                 |  }
@@ -80,6 +82,16 @@ class MergeNumberChannelSpec extends FlatSpec {
     ByteString.copyFrom(bv.toArray)
   }
 
+  def baseRhoSeed: Blake2b512Random = {
+    val bytes: Array[Byte] = Array.fill(128)(1)
+    Blake2b512Random(bytes)
+  }
+
+  val unforgeableNameSeed: Par = {
+    import coop.rchain.models.rholang.implicits._
+    GPrivate(ByteString.copyFrom(baseRhoSeed.next()))
+  }
+
   def testCase[F[_]: Concurrent: ContextShift: Parallel: Span: Log](
       baseTerms: Seq[String],
       leftTerms: Seq[DeployTestInfo],
@@ -88,7 +100,7 @@ class MergeNumberChannelSpec extends FlatSpec {
       expectedFinalResult: Long
   ) = {
 
-    Resources.mkRuntimeManager[F]("merging-test").use { rm =>
+    Resources.mkRuntimeManager[F]("merging-test", unforgeableNameSeed).use { rm =>
       for {
         runtime <- rm.spawnRuntime
 
@@ -141,9 +153,11 @@ class MergeNumberChannelSpec extends FlatSpec {
         // Base state
         _ <- baseTerms.zipWithIndex.toList.traverse {
               case (term, i) =>
+                implicit val r = baseRhoSeed
                 for {
-                  baseRes <- runtime.evaluate(term)
-                  _       = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
+                  baseRes <- runtime
+                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
+                  _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
                 } yield ()
             }
         baseCp <- runtime.createCheckpoint

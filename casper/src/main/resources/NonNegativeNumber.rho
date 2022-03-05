@@ -14,17 +14,17 @@
  9.  | 4,         | registry           | uri = rho:id:hxyadh1ffypra47ry9mk6b8r1i33ar1w9wjsez4khfe9huzrfcytx9
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
-new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
+new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
   contract NonNegativeNumber(@init, return) = {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for(@v <- @("__MERGEABLE__", *valueStore)){
+          for(@v <- @(*MergeableTag, *valueStore)){
             if (v + x >= v) {
-              @("__MERGEABLE__", *valueStore)!(v + x) | success!(true)
+              @(*MergeableTag, *valueStore)!(v + x) | success!(true)
             } else {
               //overflow
-              @("__MERGEABLE__", *valueStore)!(v) | success!(false)
+              @(*MergeableTag, *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -33,11 +33,11 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
       } |
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for(@v <- @("__MERGEABLE__", *valueStore)) {
+          for(@v <- @(*MergeableTag, *valueStore)) {
             if (x <= v) {
-              @("__MERGEABLE__", *valueStore)!(v - x) | success!(true)
+              @(*MergeableTag, *valueStore)!(v - x) | success!(true)
             } else {
-              @("__MERGEABLE__", *valueStore)!(v) | success!(false)
+              @(*MergeableTag, *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -45,17 +45,17 @@ new  NonNegativeNumber, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
         }
       } |
       contract this(@"value", return) = {
-        for(@v <- @("__MERGEABLE__", *valueStore)) {
-          @("__MERGEABLE__", *valueStore)!(v) | return!(v)
+        for(@v <- @(*MergeableTag, *valueStore)) {
+          @(*MergeableTag, *valueStore)!(v) | return!(v)
         }
       } |
       return!(bundle+{*this}) |
       match init { //Initial balance is zero if given is negative on non-integer
         Int => {
-          if (init >= 0) { @("__MERGEABLE__", *valueStore)!(init)  }
-          else           { @("__MERGEABLE__", *valueStore)!(0) }
+          if (init >= 0) { @(*MergeableTag, *valueStore)!(init)  }
+          else           { @(*MergeableTag, *valueStore)!(0) }
         }
-         _ => { @("__MERGEABLE__", *valueStore)!(0) }
+         _ => { @(*MergeableTag, *valueStore)!(0) }
       }
     }
   } |

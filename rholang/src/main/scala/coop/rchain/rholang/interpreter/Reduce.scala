@@ -46,7 +46,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
     urnMap: Map[String, Par],
-    mergeChs: Ref[M, Set[Par]]
+    mergeChs: Ref[M, Set[Par]],
+    mergeableTagName: Par
 ) extends Reduce[M] {
 
   type Application =
@@ -157,9 +158,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
   }
 
   private def isMergeableChannel(chan: Par) = {
-    val tupleElms     = chan.exprs.flatMap(y => y.getETupleBody.ps)
-    val mergeStr: Par = GString("__MERGEABLE__")
-    tupleElms.headOption.contains(mergeStr)
+    val tupleElms = chan.exprs.flatMap(y => y.getETupleBody.ps)
+    tupleElms.headOption.contains(mergeableTagName)
   }
 
   /**

@@ -1,13 +1,18 @@
 package coop.rchain.rholang.interpreter
 
+import cats.Parallel
+import cats.effect.Sync
+import cats.effect.concurrent.Ref
+import com.google.protobuf.ByteString
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Expr.ExprInstance.{EVarBody, GString}
+import coop.rchain.models.GUnforgeable.UnfInstance.GPrivateBody
 import coop.rchain.models.Var.VarInstance.FreeVar
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.Resources.mkRhoISpace
-import coop.rchain.rholang.interpreter.RhoRuntime.RhoISpace
+import coop.rchain.rholang.interpreter.RhoRuntime.{RhoISpace, RhoTuplespace}
 import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors.OutOfPhlogistonsError
 import coop.rchain.rholang.interpreter.storage.{ISpaceStub, _}
@@ -29,6 +34,24 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
   implicit val ms: Metrics.Source     = Metrics.BaseSource
 
   behavior of "Cost accounting in Reducer"
+
+  def createDispatcher[M[_]: Sync: Parallel: _cost](
+      tuplespace: RhoTuplespace[M],
+      dispatchTable: => Map[Long, Seq[ListParWithRandom] => M[Unit]],
+      urnMap: Map[String, Par]
+  ): (Dispatch[M, ListParWithRandom, TaggedContinuation], Reduce[M]) = {
+    val emptyMergeableRef = Ref.unsafe[M, Set[Par]](Set.empty)
+    val dummyMergeableTag = Par(
+      unforgeables = Seq(GUnforgeable(GPrivateBody(GPrivate(id = ByteString.EMPTY))))
+    )
+    RholangAndScalaDispatcher(
+      tuplespace,
+      dispatchTable,
+      urnMap,
+      emptyMergeableRef,
+      dummyMergeableTag
+    )
+  }
 
   it should "charge for the successful substitution" in {
     val term: Expr => Par = expr => Par(bundles = Seq(Bundle(Par(exprs = Seq(expr)))))
@@ -91,7 +114,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
     }
     implicit val rand        = Blake2b512Random(128)
     implicit val cost        = CostAccounting.initialCost[Task](Cost(1000)).runSyncUnsafe(1.second)
-    val (_, chargingReducer) = RholangAndScalaDispatcher(iSpace, Map.empty, Map.empty)
+    val (_, chargingReducer) = createDispatcher(iSpace, Map.empty, Map.empty)
     val send                 = Send(Par(exprs = Seq(GString("x"))), Seq(Par()))
     val test                 = chargingReducer.inj(send).attempt.runSyncUnsafe(1.second)
     assert(test === Left(OutOfPhlogistonsError))
@@ -124,7 +147,7 @@ class CostAccountingReducerTest extends FlatSpec with Matchers with TripleEquals
       implicit val cost = CostAccounting.emptyCost[Task].runSyncUnsafe(1.second)
 
       lazy val (_, reducer) =
-        RholangAndScalaDispatcher(pureRSpace, Map.empty, Map.empty)
+        createDispatcher(pureRSpace, Map.empty, Map.empty)
 
       def plainSendCost(p: Par): Cost = {
         val storageCost      = accounting.storageCostProduce(channel, ListParWithRandom(Seq(p)))

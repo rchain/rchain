@@ -2,6 +2,7 @@ package coop.rchain.casper.helper
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
@@ -146,6 +147,7 @@ class RhoSpec(
         .evalMap(
           RhoRuntime.createRuntime(
             _,
+            Genesis.NonNegativeMergeableTagName,
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )
