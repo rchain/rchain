@@ -1,22 +1,24 @@
 package coop.rchain.rspace.history
 
-import monix.eval.Task
-import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
-import org.scalacheck.Gen
-
-import scala.concurrent.duration._
-import monix.execution.Scheduler.Implicits.global
-import TestData._
-import History.KeyPath
-import scodec.bits.ByteVector
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.history.History.KeyPath
+import coop.rchain.rspace.history.MergingTestData._
 import coop.rchain.shared.Base16
+import monix.eval.Task
+import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
+import scodec.bits.ByteVector
 
 import scala.collection.concurrent.TrieMap
+import scala.concurrent.duration._
 import scala.util.Random
 
-class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
+class MergingHistorySpec
+    extends FlatSpec
+    with Matchers
+    with OptionValues
+    with InMemoryHistoryTestBase {
 
   // Empty                     root
   //                            |
@@ -231,7 +233,8 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
   protected def withEmptyTrie(f: HistoryWithFind[Task] => Task[Unit]): Unit = {
     val emptyHistory =
-      HistoryMergingInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
+      HistoryMergingInstances
+        .merging[Task](HistoryMergingInstances.emptyRootHash, inMemHistoryStore)
     f(emptyHistory).runSyncUnsafe(20.seconds)
   }
 
@@ -259,7 +262,7 @@ class HistorySpec extends FlatSpec with Matchers with OptionValues with InMemory
 
 }
 
-object TestData {
+object MergingTestData {
 
   implicit def toByteVector(bytes: KeyPath): ByteVector = ByteVector(bytes)
 
