@@ -270,7 +270,7 @@ object BlockAPI {
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
         blockInfo <- getLightBlockInfo[F](block)
-      } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
+      } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, blockInfo))
     } else {
       none[DataWithBlockInfo].pure[F]
     }
@@ -285,11 +285,11 @@ object BlockAPI {
       for {
         continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
-          continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
+          continuation => WaitingContinuationInfo(continuation._1, continuation._2)
         )
         blockInfo <- getLightBlockInfo[F](block)
       } yield Option[ContinuationsWithBlockInfo](
-        ContinuationsWithBlockInfo(continuationInfos, Some(blockInfo))
+        ContinuationsWithBlockInfo(continuationInfos, blockInfo)
       )
     } else {
       none[ContinuationsWithBlockInfo].pure[F]
@@ -598,10 +598,7 @@ object BlockAPI {
   ): BlockInfo = {
     val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
     val deploys        = block.body.deploys.map(_.toDeployInfo)
-    BlockInfo(
-      blockInfo = Some(lightBlockInfo),
-      deploys = deploys
-    )
+    BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
   }
 
   private def constructLightBlockInfo(
@@ -813,7 +810,7 @@ object BlockAPI {
         sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
         runtimeManager <- casper.getRuntimeManager
         data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
-      } yield (data.postBlockData, data.getBlock).asRight[Error]
+      } yield (data.postBlockData, data.block).asRight[Error]
 
     val errorMessage =
       "Could not get data at par, casper instance was not available yet."

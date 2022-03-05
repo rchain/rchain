@@ -384,7 +384,7 @@ object WebApi {
       val exprs = data.postBlockData.flatMap(exprFromParProto)
       // Implements semantic of Par with Unit: P | Nil ==> P
       val expr  = if (exprs.size == 1) exprs.head else ExprPar(exprs.toList)
-      val block = data.block.get
+      val block = data.block
       RhoExprWithBlock(expr, block) +: acc
     }
     DataAtNameResponse(exprsWithBlock, length)

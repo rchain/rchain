@@ -49,7 +49,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
       lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
       deploys      = createDeployReport(reportResult.deployReportResult)
       sysDeploys   = createSystemDeployReport(reportResult.systemDeployReportResult)
-      blockEvent   = BlockEventInfo(Some(lightBlock), deploys, sysDeploys, reportResult.postStateHash)
+      blockEvent   = BlockEventInfo(lightBlock, deploys, sysDeploys, reportResult.postStateHash)
     } yield blockEvent
 
   private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage)(
@@ -99,41 +99,34 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
 
   private def createSystemDeployReport(
       result: List[SystemDeployReportResult]
-  ): List[SystemDeployInfoWithEventData] = result.map(
-    sd =>
-      SystemDeployInfoWithEventData(
-        Some(SystemDeployData.toProto(sd.processedSystemDeploy)),
-        sd.events
-          .map(
-            a =>
-              SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-              }))
-          )
-      )
-  )
+  ): List[SystemDeployInfoWithEventData] = result.map { sd =>
+    SystemDeployInfoWithEventData(
+      SystemDeployData.toProto(sd.processedSystemDeploy),
+      sd.events.map { a =>
+        SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+          case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+          case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+          case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+        }))
+      }
+    )
+  }
 
   private def createDeployReport(
       result: List[DeployReportResult]
   ): List[DeployInfoWithEventData] =
-    result
-      .map(
-        p =>
-          DeployInfoWithEventData(
-            deployInfo = p.processedDeploy.toDeployInfo.some,
-            report = p.events
-              .map(
-                a =>
-                  SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                    case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                    case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                    case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                  }))
-              )
-          )
+    result.map { p =>
+      DeployInfoWithEventData(
+        deployInfo = p.processedDeploy.toDeployInfo,
+        report = p.events.map { a =>
+          SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+            case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+            case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+            case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+          }))
+        }
       )
+    }
 
 }
 

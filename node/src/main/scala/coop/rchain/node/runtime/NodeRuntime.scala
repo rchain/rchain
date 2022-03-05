@@ -470,7 +470,7 @@ object NodeRuntime {
           fa: TaskEnv[A],
           fb: TaskEnv[B]
       ): TaskEnv[Either[(A, Fiber[TaskEnv, B]), (Fiber[TaskEnv, A], B)]] = c.racePair(fa, fb)
-      override def suspend[A](thunk: => TaskEnv[A]): TaskEnv[A]          = c.suspend(thunk)
+      override def suspend[A](thunk: => TaskEnv[A]): TaskEnv[A]          = c.defer(thunk)
       override def bracketCase[A, B](acquire: TaskEnv[A])(use: A => TaskEnv[B])(
           release: (A, ExitCase[Throwable]) => TaskEnv[Unit]
       ): TaskEnv[B]                                        = c.bracketCase(acquire)(use)(release)
