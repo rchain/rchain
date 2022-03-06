@@ -13,7 +13,7 @@ trait MonadTransTests[MT[_[_], _]] extends Laws {
 
   def monadTrans[G[_]: Monad, A: Arbitrary: Eq, B: Eq](
       implicit
-      MonadMTG: Monad[MT[G, ?]],
+      MonadMTG: Monad[MT[G, *]],
       ArbGA: Arbitrary[G[A]],
       ArbGB: Arbitrary[G[B]],
       CogenA: Cogen[A],

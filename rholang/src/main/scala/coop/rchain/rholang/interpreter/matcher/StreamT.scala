@@ -82,12 +82,12 @@ trait StreamTInstances0 extends StreamTInstances1 {
     override def liftM[G[_]: Monad, A](a: G[A]): StreamT[G, A] =
       StreamT.liftF(a)
 
-    implicit override def apply[G[_]: Monad]: Monad[StreamT[G, ?]] =
+    implicit override def apply[G[_]: Monad]: Monad[StreamT[G, *]] =
       streamTMonad[G]
   }
 
-  implicit def streamTAlternative[F[_]: Monad]: Alternative[StreamT[F, ?]] =
-    new Alternative[StreamT[F, ?]] with StreamTMonad[F] {
+  implicit def streamTAlternative[F[_]: Monad]: Alternative[StreamT[F, *]] =
+    new Alternative[StreamT[F, *]] with StreamTMonad[F] {
 
       override val F = Monad[F]
 
@@ -103,18 +103,18 @@ trait StreamTInstances0 extends StreamTInstances1 {
 
     }
 
-  private[matcher] def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, ?]] =
+  private[matcher] def streamTMonad[F[_]](implicit F0: Monad[F]): Monad[StreamT[F, *]] =
     new StreamTMonad[F]() {
       implicit val F = F0
     }
 
 }
 
-private trait StreamTMonad[F[_]] extends Monad[StreamT[F, ?]] {
+private trait StreamTMonad[F[_]] extends Monad[StreamT[F, *]] {
 
   implicit def F: Monad[F]
 
-  private lazy val effectMonoid = MonoidK[StreamT[F, ?]]
+  private lazy val effectMonoid = MonoidK[StreamT[F, *]]
 
   override def pure[A](x: A): StreamT[F, A] =
     StreamT.pure[F, A](x)
@@ -141,12 +141,12 @@ trait StreamTInstances1 extends StreamTInstances2 {
 
   implicit def catsDataMonadErrorForStreamT[F[_], E](
       implicit F0: MonadError[F, E]
-  ): MonadError[StreamT[F, ?], E] =
+  ): MonadError[StreamT[F, *], E] =
     new StreamTMonadError[F, E] { implicit val F = F0 }
 
 }
 
-private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, ?], E] with StreamTMonad[F] {
+private trait StreamTMonadError[F[_], E] extends MonadError[StreamT[F, *], E] with StreamTMonad[F] {
 
   override def F: MonadError[F, E]
 
@@ -164,7 +164,7 @@ trait StreamTInstances2 {
 
   implicit def catsDataMonadErrorMonadForStreamT[F[_]](
       implicit F0: Monad[F]
-  ): MonadError[StreamT[F, ?], Unit] =
+  ): MonadError[StreamT[F, *], Unit] =
     new StreamTMonadErrorMonad[F] { implicit val F = F0 }
 
   implicit final def streamMonadLayerControl[M[_]](
@@ -195,9 +195,9 @@ trait StreamTInstances2 {
 
   implicit def streamTSync[F[_]](
       implicit F0: Sync[F],
-      M0: Monad[StreamT[F, ?]],
-      AL0: Alternative[StreamT[F, ?]]
-  ): Sync[StreamT[F, ?]] =
+      M0: Monad[StreamT[F, *]],
+      AL0: Alternative[StreamT[F, *]]
+  ): Sync[StreamT[F, *]] =
     new StreamTSync[F]() {
       implicit val F  = F0
       implicit val M  = M0
@@ -205,10 +205,10 @@ trait StreamTInstances2 {
     }
 }
 
-private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadError[F, Throwable] {
+private trait StreamTSync[F[_]] extends Sync[StreamT[F, *]] with StreamTMonadError[F, Throwable] {
   implicit def F: Sync[F]
-  implicit def M: Monad[StreamT[F, ?]]
-  implicit def AL: Alternative[StreamT[F, ?]]
+  implicit def M: Monad[StreamT[F, *]]
+  implicit def AL: Alternative[StreamT[F, *]]
 
   import cats.effect.ExitCase
 
@@ -244,7 +244,7 @@ private trait StreamTSync[F[_]] extends Sync[StreamT[F, ?]] with StreamTMonadErr
 }
 
 private trait StreamTMonadErrorMonad[F[_]]
-    extends MonadError[StreamT[F, ?], Unit]
+    extends MonadError[StreamT[F, *], Unit]
     with StreamTMonad[F] {
   implicit def F: Monad[F]
 

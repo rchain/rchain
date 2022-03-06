@@ -25,7 +25,7 @@ object ListenAtName {
 
   private def buildPar[G[_]: BuildPar](name: G[Name]) = implicitly[BuildPar[G]].build(name)
 
-  implicit def buildParF[F[_]: MonadError[?[_], Throwable]] = new BuildPar[λ[A => F[Id[A]]]] {
+  implicit def buildParF[F[_]: MonadError[*[_], Throwable]] = new BuildPar[λ[A => F[Id[A]]]] {
     override def build(f: F[Name]) =
       for {
         name <- f
@@ -33,13 +33,13 @@ object ListenAtName {
       } yield res
   }
 
-  implicit def buildParListF[F[_]: MonadError[?[_], Throwable]] =
+  implicit def buildParListF[F[_]: MonadError[*[_], Throwable]] =
     new BuildPar[λ[A => F[List[A]]]] {
       override def build(f: F[List[Name]]): F[List[Par]] =
         f.flatMap(_.traverse(buildParId[F]))
     }
 
-  private def buildParId[F[_]: MonadError[?[_], Throwable]](name: Name): F[Par] = {
+  private def buildParId[F[_]: MonadError[*[_], Throwable]](name: Name): F[Par] = {
     import coop.rchain.models.rholang.implicits._
 
     val par: Either[Throwable, Par] = name match {

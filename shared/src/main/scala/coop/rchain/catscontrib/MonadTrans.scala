@@ -7,7 +7,7 @@ trait MonadTrans[F[_[_], _]] {
   def liftM[G[_]: Monad, A](a: G[A]): F[G, A]
 
   /** The [[Monad]] implied by this transformer. */
-  implicit def apply[G[_]: Monad]: Monad[F[G, ?]]
+  implicit def apply[G[_]: Monad]: Monad[F[G, *]]
 }
 
 object MonadTrans {

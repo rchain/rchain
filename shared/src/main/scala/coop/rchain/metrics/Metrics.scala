@@ -70,8 +70,8 @@ object Metrics extends MetricsInstances {
 }
 
 sealed abstract class MetricsInstances {
-  def readerTMetrics[F[_], E](m: Metrics[F]): Metrics[ReaderT[F, E, ?]] =
-    new Metrics[ReaderT[F, E, ?]] {
+  def readerTMetrics[F[_], E](m: Metrics[F]): Metrics[ReaderT[F, E, *]] =
+    new Metrics[ReaderT[F, E, *]] {
       override def incrementCounter(name: String, delta: Long)(
           implicit ev: Source
       ): ReaderT[F, E, Unit] =

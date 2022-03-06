@@ -213,7 +213,7 @@ object SpatialMatcher extends SpatialMatcherInstances {
     } yield ()
   }
 
-  private def isolateState[H[_]: MonadState[?[_], S], S](f: H[_]): H[S] = {
+  private def isolateState[H[_]: MonadState[*[_], S], S](f: H[_]): H[S] = {
     implicit val M = MonadState[H, S].monad
     for {
       initState   <- MonadState[H, S].get

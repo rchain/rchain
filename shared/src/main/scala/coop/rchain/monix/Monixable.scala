@@ -26,8 +26,8 @@ object Monixable {
 
   // FunctorK (specific to ReaderT)
   implicit class MonixMapKOps[F[_]](val m: Monixable[F]) extends AnyVal {
-    def mapK[S](nt: F ~> ReaderT[F, S, ?], s: S): Monixable[ReaderT[F, S, ?]] =
-      new Monixable[ReaderT[F, S, ?]] {
+    def mapK[S](nt: F ~> ReaderT[F, S, *], s: S): Monixable[ReaderT[F, S, *]] =
+      new Monixable[ReaderT[F, S, *]] {
         override def toTask[A](t: ReaderT[F, S, A]): Task[A]   = m.toTask(t.run(s))
         override def fromTask[A](t: Task[A]): ReaderT[F, S, A] = nt(m.fromTask(t))
       }

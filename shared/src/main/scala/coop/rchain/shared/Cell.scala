@@ -19,8 +19,8 @@ trait Cell[F[_], S] {
 object Cell {
   def apply[F[_], S](implicit ev: Cell[F, S]): Cell[F, S] = ev
 
-  def readerT[F[_], E, S](cell: Cell[F, S]): Cell[ReaderT[F, E, ?], S] =
-    new Cell[ReaderT[F, E, ?], S] {
+  def readerT[F[_], E, S](cell: Cell[F, S]): Cell[ReaderT[F, E, *], S] =
+    new Cell[ReaderT[F, E, *], S] {
       override def modify(f: S => S): ReaderT[F, E, Unit] = ReaderT.liftF(cell.modify(f))
 
       override def flatModify(f: S => ReaderT[F, E, S]): ReaderT[F, E, Unit] =
