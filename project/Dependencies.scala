@@ -85,6 +85,7 @@ object Dependencies {
   val nettyTcnative       = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier osClassifier
   val nettyTcnativeLinux  = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64"
   val nettyTcnativeFedora = "io.netty"                    % "netty-tcnative"            % "2.0.36.Final" classifier "linux-x86_64-fedora"
+  val scalaCompat         = "org.scala-lang.modules"     %% "scala-collection-compat"   % "2.6.0"
   val scalatest           = "org.scalatest"              %% "scalatest"                 % "3.0.5" % "test"
   val scallop             = "org.rogach"                 %% "scallop"                   % "3.1.4"
   val scodecCore          = "org.scodec"                 %% "scodec-core"               % "1.11.7"
@@ -107,6 +108,7 @@ object Dependencies {
     shapeless,
     scalacheck,
     scodecBits,
+    scalaCompat,
     slf4j,
     kamonCore,
     "org.typelevel" % "jawn-parser_2.12" % "1.0.1",
@@ -170,5 +172,5 @@ object Dependencies {
     http4sDependencies ++ circeDependencies
 
   val commonDependencies: Seq[ModuleID] =
-    logging ++ testing :+ kindProjector :+ macroParadise
+    logging ++ testing :+ kindProjector :+ macroParadise :+ scalaCompat
 }
