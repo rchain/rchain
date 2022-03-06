@@ -53,7 +53,7 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.4.6",
+  scapegoatVersion in ThisBuild := "1.4.11",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
