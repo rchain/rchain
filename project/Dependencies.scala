@@ -8,6 +8,7 @@ object Dependencies {
   val catsEffectVersion = "2.5.4"
   val catsMtlVersion    = "0.7.1"
   val fs2Version        = "2.5.10"
+  val monixVersion      = "3.4.0"
   val http4sVersion     = "0.21.24"
   val endpointsVersion  = "1.4.0"
   val circeVersion      = "0.13.0"
@@ -67,7 +68,7 @@ object Dependencies {
   val logstashLogback     = "net.logstash.logback"        % "logstash-logback-encoder"  % "6.6"
   val lz4                 = "org.lz4"                     % "lz4-java"                  % "1.7.1"
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
-  val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
+  val monix               = "io.monix"                   %% "monix"                     % monixVersion
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
   val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.4"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
