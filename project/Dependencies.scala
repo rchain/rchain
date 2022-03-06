@@ -129,7 +129,9 @@ object Dependencies {
     "com.typesafe"             % "config"                  % "1.4.0"
   )
 
-  private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
+  private val kindProjector = compilerPlugin(
+    "org.typelevel" %% "kind-projector" % "0.13.2" cross CrossVersion.full
+  )
 
   // In Scala 2.13, the plugin's functionality has been included in the compiler directly under the -Ymacro-annotations flag.
   // https://github.com/scalamacros/paradise
