@@ -26,7 +26,7 @@ object Dependencies {
   val catsMtl             = "org.typelevel"              %% "cats-mtl-core"             % catsMtlVersion
   val catsMtlLawsTest     = "org.typelevel"              %% "cats-mtl-laws"             % catsMtlVersion % "test"
   val catsRetry           = "com.github.cb372"           %% "cats-retry"                % "2.1.0"
-  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.12"
+  val catsTagless         = "org.typelevel"              %% "cats-tagless-macros"       % "0.14.0"
   val circeCore           = "io.circe"                   %% "circe-core"                % circeVersion
   val circeGeneric        = "io.circe"                   %% "circe-generic"             % circeVersion
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
@@ -69,7 +69,7 @@ object Dependencies {
   val magnolia            = "com.propensive"             %% "magnolia"                  % "0.17.0"
   val monix               = "io.monix"                   %% "monix"                     % "3.3.0"
   val pureconfig          = "com.github.pureconfig"      %% "pureconfig"                % "0.14.0"
-  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.2"
+  val scalaLogging        = "com.typesafe.scala-logging" %% "scala-logging"             % "3.9.4"
   val scalaUri            = "io.lemonlabs"               %% "scala-uri"                 % "3.0.0"
   val scalacheck          = "org.scalacheck"             %% "scalacheck"                % "1.15.2"
   val scalacheckShapeless = "com.github.alexarchambault" %% "scalacheck-shapeless_1.14" % "1.2.5" % "test"
@@ -106,28 +106,23 @@ object Dependencies {
     shapeless,
     scalacheck,
     scodecBits,
-    // Added to resolve conflicts with kamon, cats, http4s
     slf4j,
     kamonCore,
     "org.typelevel" % "jawn-parser_2.12" % "1.0.1",
     // Added to resolve conflicts in scalapb plugin v0.10.8
-    "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
-    "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
-    "org.scala-lang.modules" %% "scala-collection-compat"   % "2.2.0",
+    "com.google.protobuf" % "protobuf-java" % "3.12.0",
     // Strange version conflict, it requires the same version but in square brackets (range?).
     // e.g. io.grpc:grpc-core:1.30.2 ([1.30.2] wanted)
     // https://stackoverflow.com/questions/59423185/strange-versions-conflict-in-sbt-strict-mode
     "io.grpc"  % "grpc-api"          % "1.30.2",
     "io.grpc"  % "grpc-core"         % "1.30.2",
     "io.netty" % "netty-codec-http2" % "4.1.48.Final",
-    //overrides for transitive dependencies (we don't use them directly, hence no val-s)
-    "com.github.jnr"           % "jnr-ffi"                 % "2.1.15",
-    "com.google.errorprone"    % "error_prone_annotations" % "2.3.4",
-    "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
-    "com.lihaoyi"              %% "geny"                   % "0.6.10",
-    "com.lihaoyi"              %% "sourcecode"             % "0.2.1",
-    "org.scala-lang.modules"   %% "scala-xml"              % "1.3.0",
-    "com.typesafe"             % "config"                  % "1.4.0"
+    // Overrides for transitive dependencies (we don't use them directly, hence no val-s)
+    "com.github.jnr"         % "jnr-ffi"     % "2.1.15",
+    "com.lihaoyi"            %% "geny"       % "0.6.10",
+    "com.lihaoyi"            %% "sourcecode" % "0.2.1",
+    "org.scala-lang.modules" %% "scala-xml"  % "1.3.0",
+    "com.typesafe"           % "config"      % "1.4.0"
   )
 
   private val kindProjector = compilerPlugin(
