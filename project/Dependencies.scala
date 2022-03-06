@@ -108,6 +108,7 @@ object Dependencies {
     scodecBits,
     // Added to resolve conflicts with kamon, cats, http4s
     slf4j,
+    kamonCore,
     "org.typelevel" % "jawn-parser_2.12" % "1.0.1",
     // Added to resolve conflicts in scalapb plugin v0.10.8
     "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
