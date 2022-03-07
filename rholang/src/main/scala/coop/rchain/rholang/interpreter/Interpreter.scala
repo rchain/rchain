@@ -8,7 +8,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.RholangMetricsSource
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.{
   AggregateError,
   InterpreterError,
@@ -50,8 +50,8 @@ class InterpreterImpl[F[_]: Sync: Span](implicit C: _cost[F]) extends Interprete
       _ <- Span[F].traceI("set-initial-cost") { C.set(initialPhlo) }
       _ <- Span[F].traceI("charge-parsing-cost") { charge[F](parsingCost) }
       parsed <- Span[F].traceI("build-normalized-term") {
-                 ParBuilder[F]
-                   .buildNormalizedTerm(term, normalizerEnv)
+                 Compiler[F]
+                   .sourceToADT(term, normalizerEnv)
                    .handleErrorWith {
                      case err: InterpreterError => ParserError(err).raiseError[F, Par]
                    }

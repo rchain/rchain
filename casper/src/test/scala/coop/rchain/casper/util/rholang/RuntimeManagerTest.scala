@@ -23,6 +23,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil}
 import coop.rchain.rspace.syntax._
@@ -232,7 +233,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   "computeState" should "capture rholang errors" in effectTest {
-    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
+    val badRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManagerResource.use(
@@ -339,7 +340,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   it should "capture rholang parsing errors and charge for parsing" in effectTest {
-    val badRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
+    val badRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManagerResource.use(
@@ -351,7 +352,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   }
 
   it should "charge for parsing and execution" in effectTest {
-    val correctRholang = """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
+    val correctRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(2) }"""
 
     runtimeManagerResource
       .use {
@@ -363,7 +364,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             runtime       <- runtimeManager.spawnRuntime
             _             <- runtime.cost.set(initialPhlo)
-            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.data.term)
+            term          <- Compiler[Task].sourceToADT(deploy.data.term)
             _             <- runtime.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft
@@ -491,7 +492,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                             #     revVaultCh in {
                                                             #   rl!(`rho:rchain:revVault`, *revVaultCh) |
                                                             #   revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
-                                                            #   for(@userRevAddress <- revAddressCh; @(_, revVault) <- revVaultCh){
+                                                            #   for(@userRevAddress <- revAddressCh & @(_, revVault) <- revVaultCh){
                                                             #     new userVaultCh in {
                                                             #       @revVault!("findOrCreate", userRevAddress, *userVaultCh) |
                                                             #       for(@(true, userVault) <- userVaultCh){
@@ -543,7 +544,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       for {
         deploy0 <- ConstructDeploy.sourceDeployNowF(""" for(@x <- @"w") { @"z"!("Got x") } """)
         deploy1 <- ConstructDeploy.sourceDeployNowF(
-                    """ for(@x <- @"x"; @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
+                    """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
@@ -750,9 +751,9 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val term =
       """
         |new a, b, c, d in {
-        |  for (_ <- a; _ <- b) { Nil } |
-        |  for (_ <- a; _ <- c) { Nil } |
-        |  for (_ <- a; _ <- d) { Nil }
+        |  for (_ <- a & _ <- b) { Nil } |
+        |  for (_ <- a & _ <- c) { Nil } |
+        |  for (_ <- a & _ <- d) { Nil }
         |}
         |""".stripMargin
 

@@ -16,8 +16,8 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{
   ProcVarWildcard
 }
 import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  LevelContext,
+  FreeContext,
+  FreeMap,
   ProcSort,
   SourcePosition,
   VarSort
@@ -27,8 +27,8 @@ import coop.rchain.rholang.interpreter.errors.UnexpectedReuseOfProcContextFree
 object RemainderNormalizeMatcher {
   def handleProcVar[F[_]: Sync](
       pv: ProcVar,
-      knownFree: DeBruijnLevelMap[VarSort]
-  ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
+      knownFree: FreeMap[VarSort]
+  ): F[(Option[Var], FreeMap[VarSort])] =
     pv match {
       case pvw: ProcVarWildcard =>
         (
@@ -41,7 +41,7 @@ object RemainderNormalizeMatcher {
           case None =>
             val newBindingsPair = knownFree.put((pvv.var_, ProcSort, sourcePosition))
             (Option(Var(FreeVar(knownFree.nextLevel))), newBindingsPair).pure[F]
-          case Some(LevelContext(_, _, firstSourcePosition)) =>
+          case Some(FreeContext(_, _, firstSourcePosition)) =>
             Sync[F].raiseError(
               UnexpectedReuseOfProcContextFree(pvv.var_, firstSourcePosition, sourcePosition)
             )
@@ -50,8 +50,8 @@ object RemainderNormalizeMatcher {
 
   def normalizeMatchProc[F[_]: Sync](
       r: ProcRemainder,
-      knownFree: DeBruijnLevelMap[VarSort]
-  ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
+      knownFree: FreeMap[VarSort]
+  ): F[(Option[Var], FreeMap[VarSort])] =
     r match {
       case _: ProcRemainderEmpty => (None: Option[Var], knownFree).pure[F]
       case pr: ProcRemainderVar =>
@@ -60,8 +60,8 @@ object RemainderNormalizeMatcher {
 
   def normalizeMatchName[F[_]: Sync](
       nr: NameRemainder,
-      knownFree: DeBruijnLevelMap[VarSort]
-  ): F[(Option[Var], DeBruijnLevelMap[VarSort])] =
+      knownFree: FreeMap[VarSort]
+  ): F[(Option[Var], FreeMap[VarSort])] =
     nr match {
       case _: NameRemainderEmpty => (None: Option[Var], knownFree).pure[F]
       case nr: NameRemainderVar =>

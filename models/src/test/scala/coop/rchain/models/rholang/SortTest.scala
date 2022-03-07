@@ -69,6 +69,16 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     check[Send]
     check[Var]
   }
+  // Specific Match terms created from previous test failed on CI (freeCount was not part of sorting)
+  // https://github.com/rchain/rchain/pull/3616
+  it should "sort different Match terms (MatchCase.freeCount)" in {
+    val nil = Par(locallyFree = AlwaysEqual(BitSet()))
+
+    val match1 = Match(nil, List(MatchCase(nil, nil, 0)))
+    val match2 = Match(nil, List(MatchCase(nil, nil, 1)))
+
+    match1 == match2 shouldBe sort(match1).score == sort(match2).score
+  }
 
   it should "sort so that whenever scores or result terms differ then the initial terms differ and the other way around" in {
     def check[A: Sortable: Arbitrary]: Unit =

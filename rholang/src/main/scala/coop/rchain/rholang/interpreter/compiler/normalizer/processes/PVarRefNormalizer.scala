@@ -6,7 +6,7 @@ import coop.rchain.models.Connective.ConnectiveInstance.VarRefBody
 import coop.rchain.models.{Connective, VarRef}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
-  IndexContext,
+  BoundContext,
   NameSort,
   ProcSort,
   ProcVisitInputs,
@@ -22,18 +22,21 @@ import coop.rchain.rholang.ast.rholang_mercury.Absyn.{PVarRef, VarRefKindName, V
 
 object PVarRefNormalizer {
   def normalize[F[_]: Sync](p: PVarRef, input: ProcVisitInputs): F[ProcVisitOutputs] =
-    input.env.find(p.var_) match {
+    input.boundMapChain.find(p.var_) match {
       case None =>
         Sync[F].raiseError(UnboundVariableRef(p.var_, p.line_num, p.col_num))
-      case Some((IndexContext(idx, kind, sourcePosition), depth)) =>
+      case Some((BoundContext(idx, kind, sourcePosition), depth)) =>
         kind match {
           case ProcSort =>
             p.varrefkind_ match {
               case _: VarRefKindProc =>
                 ProcVisitOutputs(
                   input.par
-                    .prepend(Connective(VarRefBody(VarRef(idx, depth))), input.env.depth),
-                  input.knownFree
+                    .prepend(
+                      Connective(VarRefBody(VarRef(idx, depth))),
+                      input.boundMapChain.depth
+                    ),
+                  input.freeMap
                 ).pure[F]
               case _ =>
                 Sync[F].raiseError(
@@ -49,8 +52,8 @@ object PVarRefNormalizer {
               case _: VarRefKindName =>
                 ProcVisitOutputs(
                   input.par
-                    .prepend(Connective(VarRefBody(VarRef(idx, depth))), input.env.depth),
-                  input.knownFree
+                    .prepend(Connective(VarRefBody(VarRef(idx, depth))), input.boundMapChain.depth),
+                  input.freeMap
                 ).pure[F]
               case _ =>
                 Sync[F].raiseError(

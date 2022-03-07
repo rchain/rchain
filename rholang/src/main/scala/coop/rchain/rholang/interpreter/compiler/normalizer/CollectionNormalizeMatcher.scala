@@ -26,7 +26,7 @@ object CollectionNormalizeMatcher {
       implicit env: Map[String, Par]
   ): F[CollectVisitOutputs] = {
     def foldMatch[T](
-        knownFree: DeBruijnLevelMap[VarSort],
+        knownFree: FreeMap[VarSort],
         listproc: List[Proc],
         constructor: (Seq[Par], AlwaysEqual[BitSet], Boolean) => T
     )(implicit toExpr: T => Expr): F[CollectVisitOutputs] = {
@@ -34,11 +34,11 @@ object CollectionNormalizeMatcher {
       listproc
         .foldM(init) { (acc, proc) =>
           ProcNormalizeMatcher
-            .normalizeMatch[F](proc, ProcVisitInputs(VectorPar(), input.env, acc._2))
+            .normalizeMatch[F](proc, ProcVisitInputs(VectorPar(), input.boundMapChain, acc._2))
             .map { result =>
               (
                 result.par +: acc._1,
-                result.knownFree,
+                result.freeMap,
                 acc._3 | result.par.locallyFree,
                 acc._4 || result.par.connectiveUsed
               )
@@ -54,7 +54,7 @@ object CollectionNormalizeMatcher {
     }
 
     def foldMatchMap(
-        knownFree: DeBruijnLevelMap[VarSort],
+        knownFree: FreeMap[VarSort],
         remainder: Option[Var],
         listProc: List[AbsynKeyValuePair]
     ): F[CollectVisitOutputs] = {
@@ -66,15 +66,15 @@ object CollectionNormalizeMatcher {
               for {
                 keyResult <- ProcNormalizeMatcher.normalizeMatch[F](
                               e.proc_1,
-                              ProcVisitInputs(VectorPar(), input.env, acc._2)
+                              ProcVisitInputs(VectorPar(), input.boundMapChain, acc._2)
                             )
                 valResult <- ProcNormalizeMatcher.normalizeMatch[F](
                               e.proc_2,
-                              ProcVisitInputs(VectorPar(), input.env, keyResult.knownFree)
+                              ProcVisitInputs(VectorPar(), input.boundMapChain, keyResult.freeMap)
                             )
               } yield (
                 Vector((keyResult.par, valResult.par)) ++ acc._1,
-                valResult.knownFree,
+                valResult.freeMap,
                 acc._3 | keyResult.par.locallyFree | valResult.par.locallyFree,
                 acc._4 || keyResult.par.connectiveUsed || valResult.par.connectiveUsed
               )
@@ -101,7 +101,7 @@ object CollectionNormalizeMatcher {
     c match {
       case cl: CollectList =>
         RemainderNormalizeMatcher
-          .normalizeMatchProc[F](cl.procremainder_, input.knownFree)
+          .normalizeMatchProc[F](cl.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => EList =
@@ -121,11 +121,11 @@ object CollectionNormalizeMatcher {
           case ts: TupleSingle   => Seq(ts.proc_)
           case tm: TupleMultiple => Seq(tm.proc_) ++ tm.listproc_.toList
         }
-        foldMatch(input.knownFree, ps.toList, ETuple.apply)
+        foldMatch(input.freeMap, ps.toList, ETuple.apply)
 
       case cs: CollectSet =>
         RemainderNormalizeMatcher
-          .normalizeMatchProc[F](cs.procremainder_, input.knownFree)
+          .normalizeMatchProc[F](cs.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               val constructor: Option[Var] => (Seq[Par], AlwaysEqual[BitSet], Boolean) => ParSet =
@@ -143,7 +143,7 @@ object CollectionNormalizeMatcher {
 
       case cm: CollectMap =>
         RemainderNormalizeMatcher
-          .normalizeMatchProc[F](cm.procremainder_, input.knownFree)
+          .normalizeMatchProc[F](cm.procremainder_, input.freeMap)
           .flatMap {
             case (optionalRemainder, knownFree) =>
               foldMatchMap(knownFree, optionalRemainder, cm.listkeyvaluepair_.toList)

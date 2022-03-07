@@ -162,7 +162,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       import node._
 
       def basicDeployData: Signed[DeployData] =
-        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
+        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }")
 
       for {
         block <- node.addBlock(basicDeployData)

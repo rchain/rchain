@@ -12,8 +12,8 @@ import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.ParBuilderUtil
 import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  IndexMapChain,
+  BoundMapChain,
+  FreeMap,
   NameSort,
   ProcNormalizeMatcher,
   ProcSort,
@@ -26,13 +26,13 @@ import monix.eval.Coeval
 class CollectMatcherSpec extends FlatSpec with Matchers {
   val inputs = ProcVisitInputs(
     Par(),
-    IndexMapChain
+    BoundMapChain
       .empty[VarSort]
       .put(List(("P", ProcSort, SourcePosition(0, 0)), ("x", NameSort, SourcePosition(0, 0)))),
-    DeBruijnLevelMap.empty[VarSort]
+    FreeMap.empty[VarSort]
   )
   implicit val normalizerEnv: Map[String, Par] = Map.empty
-  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.buildNormalizedTerm[Coeval](rho).value()
+  def getNormalizedPar(rho: String): Par       = ParBuilderUtil.mkTerm(rho).right.get
   def assertEqualNormalized(rho1: String, rho2: String): Assertion =
     assert(getNormalizedPar(rho1) == getNormalizedPar(rho2))
 
@@ -53,7 +53,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
         0
       )
     )
-    result.knownFree should be(inputs.knownFree)
+    result.freeMap should be(inputs.freeMap)
   }
   "List" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!([{1 | 2}])", "@0!([{2 | 1}])")
@@ -101,8 +101,8 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
         0
       )
     )
-    result.knownFree should be(
-      inputs.knownFree.put(
+    result.freeMap should be(
+      inputs.freeMap.put(
         List(("Q", ProcSort, SourcePosition(0, 0)), ("y", NameSort, SourcePosition(0, 0)))
       )
     )
@@ -148,7 +148,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       ("R", ProcSort, SourcePosition(0, 0)),
       ("Q", ProcSort, SourcePosition(0, 0))
     )
-    result.knownFree should be(inputs.knownFree.put(newBindings))
+    result.freeMap should be(inputs.freeMap.put(newBindings))
   }
   "Set" should "sort the insides of their elements" in {
     assertEqualNormalized("@0!(Set({1 | 2}))", "@0!(Set({2 | 1}))")
@@ -183,7 +183,7 @@ class CollectMatcherSpec extends FlatSpec with Matchers {
       ("Z", ProcSort, SourcePosition(0, 0)),
       ("Q", NameSort, SourcePosition(0, 0))
     )
-    result.knownFree should be(inputs.knownFree.put(newBindings))
+    result.freeMap should be(inputs.freeMap.put(newBindings))
   }
   "Map" should "sort the insides of their keys" in {
     assertEqualNormalized("@0!({{1 | 2} : 0})", "@0!({{2 | 1} : 0})")

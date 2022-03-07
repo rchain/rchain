@@ -27,8 +27,8 @@ object ProcNormalizeMatcher {
         .map(
           subResult =>
             ProcVisitOutputs(
-              input.par.prepend(constructor(subResult.par), input.env.depth),
-              subResult.knownFree
+              input.par.prepend(constructor(subResult.par), input.boundMapChain.depth),
+              subResult.freeMap
             )
         )
 
@@ -42,11 +42,11 @@ object ProcNormalizeMatcher {
         leftResult <- normalizeMatch[F](subProcLeft, input.copy(par = VectorPar()))
         rightResult <- normalizeMatch[F](
                         subProcRight,
-                        input.copy(par = VectorPar(), knownFree = leftResult.knownFree)
+                        input.copy(par = VectorPar(), freeMap = leftResult.freeMap)
                       )
       } yield ProcVisitOutputs(
-        input.par.prepend(constructor(leftResult.par, rightResult.par), input.env.depth),
-        rightResult.knownFree
+        input.par.prepend(constructor(leftResult.par, rightResult.par), input.boundMapChain.depth),
+        rightResult.freeMap
       )
 
     p match {
@@ -74,7 +74,7 @@ object ProcNormalizeMatcher {
       case p: PVarRef =>
         PVarRefNormalizer.normalize(p, input)
 
-      case _: PNil => ProcVisitOutputs(input.par, input.knownFree).pure[F]
+      case _: PNil => ProcVisitOutputs(input.par, input.freeMap).pure[F]
 
       case p: PEval =>
         PEvalNormalizer.normalize(p, input)
@@ -113,6 +113,9 @@ object ProcNormalizeMatcher {
       case p: PSend =>
         PSendNormalizer.normalize(p, input)
 
+      case p: PSendSynch =>
+        PSendSynchNormalizer.normalize(p, input)
+
       case p: PContr =>
         PContrNormalizer.normalize(p, input)
 
@@ -127,6 +130,9 @@ object ProcNormalizeMatcher {
 
       case b: PBundle =>
         PBundleNormalizer.normalize(b, input)
+
+      case p: PLet =>
+        PLetNormalizer.normalize(p, input)
 
       case p: PMatch =>
         PMatchNormalizer.normalize(p, input)
@@ -158,17 +164,17 @@ object ProcNormalizeMatcher {
   */
 final case class ProcVisitInputs(
     par: Par,
-    env: IndexMapChain[VarSort],
-    knownFree: DeBruijnLevelMap[VarSort]
+    boundMapChain: BoundMapChain[VarSort],
+    freeMap: FreeMap[VarSort]
 )
 // Returns the update Par and an updated map of free variables.
-final case class ProcVisitOutputs(par: Par, knownFree: DeBruijnLevelMap[VarSort])
+final case class ProcVisitOutputs(par: Par, freeMap: FreeMap[VarSort])
 
-final case class NameVisitInputs(env: IndexMapChain[VarSort], knownFree: DeBruijnLevelMap[VarSort])
-final case class NameVisitOutputs(chan: Par, knownFree: DeBruijnLevelMap[VarSort])
+final case class NameVisitInputs(boundMapChain: BoundMapChain[VarSort], freeMap: FreeMap[VarSort])
+final case class NameVisitOutputs(par: Par, freeMap: FreeMap[VarSort])
 
 final case class CollectVisitInputs(
-    env: IndexMapChain[VarSort],
-    knownFree: DeBruijnLevelMap[VarSort]
+    boundMapChain: BoundMapChain[VarSort],
+    freeMap: FreeMap[VarSort]
 )
-final case class CollectVisitOutputs(expr: Expr, knownFree: DeBruijnLevelMap[VarSort])
+final case class CollectVisitOutputs(expr: Expr, freeMap: FreeMap[VarSort])

@@ -29,9 +29,9 @@ in {
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-  for (@(_, MakeMint) <- MakeMintCh;
-       @(_, AuthKey)  <- AuthKeyCh;
-       @(_, Either)   <- EitherCh;
+  for (@(_, MakeMint) <- MakeMintCh &
+       @(_, AuthKey)  <- AuthKeyCh &
+       @(_, Either)   <- EitherCh &
        TreeHashMap    <- TreeHashMapCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
