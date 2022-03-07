@@ -1,6 +1,5 @@
 package coop.rchain.casper.genesis.contracts
 
-import cats.syntax.all._
 import coop.rchain.casper.helper.RhoSpec
 import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.crypto.PublicKey

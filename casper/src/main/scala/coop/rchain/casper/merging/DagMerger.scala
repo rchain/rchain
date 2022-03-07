@@ -7,11 +7,14 @@ import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.HotStoreTrieAction
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.merger.{MergingLogic, StateChange, StateChangeMerger}
+import coop.rchain.rspace.merger.MergingLogic.NumberChannelsDiff
+import coop.rchain.rspace.merger.{ChannelChange, MergingLogic, StateChange, StateChangeMerger}
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared.Log
+import scodec.bits.ByteVector
 
 object DagMerger {
 
@@ -39,39 +42,45 @@ object DagMerger {
       lateSet <- lateBlocks.toList.traverse(index).map(_.flatten.toSet)
 
       branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-        MergingLogic.areConflicting(
-          as.map(_.eventLogIndex).toList.combineAll,
-          bs.map(_.eventLogIndex).toList.combineAll
+        (as.flatMap(_.deploysWithCost.map(_.id)) intersect bs.flatMap(_.deploysWithCost.map(_.id))).nonEmpty ||
+          MergingLogic.areConflicting(
+            as.map(_.eventLogIndex).toList.combineAll,
+            bs.map(_.eventLogIndex).toList.combineAll
+          )
+      historyReader <- historyRepository.getHistoryReader(lfbPostState)
+      baseReader    = historyReader.readerBinary
+      baseGetData   = historyReader.getData _
+      overrideTrieAction = (
+          hash: Blake2b256Hash,
+          changes: ChannelChange[ByteVector],
+          numberChs: NumberChannelsDiff
+      ) =>
+        numberChs.get(hash).traverse {
+          RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+        }
+      computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) =>
+        StateChangeMerger.computeTrieActions(
+          changes,
+          baseReader,
+          mergeableChs,
+          overrideTrieAction
         )
 
-      computeTrieActions = (baseState: Blake2b256Hash, changes: StateChange) => {
-        for {
-          historyReader <- historyRepository.getHistoryReader(baseState)
-          baseReader    = historyReader.readerBinary
-          joinsPointerForChannel = (channel: Blake2b256Hash) =>
-            historyRepository.getJoinMapping(Seq(channel)).map(_.head)
-          actions <- StateChangeMerger.computeTrieActions(
-                      changes,
-                      baseReader,
-                      joinsPointerForChannel
-                    )
-        } yield actions
-      }
-
-      applyTrieActions = (baseState: Blake2b256Hash, actions: Seq[HotStoreTrieAction]) =>
-        historyRepository.reset(baseState).flatMap(_.doCheckpoint(actions).map(_.root))
+      applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
+        historyRepository.reset(lfbPostState).flatMap(_.doCheckpoint(actions).map(_.root))
 
       r <- ConflictSetMerger.merge[F, DeployChainIndex](
-            baseState = lfbPostState,
             actualSet = actualSet,
             lateSet = lateSet,
             depends =
               (target, source) => MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
             conflicts = branchesAreConflicting,
             cost = rejectionCostF,
-            stateChanges = r => r.stateChanges.pure,
+            stateChanges = _.stateChanges.pure,
+            mergeableChannels = _.eventLogIndex.numberChannelsData,
             computeTrieActions = computeTrieActions,
-            applyTrieActions = applyTrieActions
+            applyTrieActions = applyTrieActions,
+            getData = historyReader.getData
           )
 
       (newState, rejected) = r

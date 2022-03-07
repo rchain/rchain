@@ -63,14 +63,13 @@ trait StorageTestsBase[F[_], C, P, A, K] extends FlatSpec with Matchers with Opt
     val kvm = InMemoryStoreManager[F]
 
     run(for {
-      stores                                      <- kvm.rSpaceStores
-      RSpaceStore(history, roots, cold, channels) = stores
+      stores                            <- kvm.rSpaceStores
+      RSpaceStore(history, roots, cold) = stores
       historyRepository <- HistoryRepositoryInstances
                             .lmdbRepository[F, C, P, A, K](
                               history,
                               roots,
-                              cold,
-                              channels
+                              cold
                             )
       cache         <- Ref[F].of(HotStoreState[C, P, A, K]())
       historyReader <- historyRepository.getHistoryReader(historyRepository.root)

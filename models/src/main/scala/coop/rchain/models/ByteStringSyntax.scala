@@ -4,6 +4,7 @@ import cats.Show
 import com.google.protobuf.ByteString
 import coop.rchain.shared.Base16
 import scodec.bits.ByteVector
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 import java.nio.ByteBuffer
 
@@ -35,5 +36,7 @@ final class ByteStringOps(
   def toHexString: String = Base16.encode(bs.toByteArray)
 
   def toByteVector: ByteVector = ByteVector(bs.toByteArray)
+
+  def toBlake2b256Hash: Blake2b256Hash = Blake2b256Hash.fromByteString(bs)
 
 }

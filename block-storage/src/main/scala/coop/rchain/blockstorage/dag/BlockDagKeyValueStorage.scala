@@ -19,9 +19,9 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
-import coop.rchain.shared.syntax._
 import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log, LogSource}
+import coop.rchain.shared.syntax._
+import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 
 import scala.collection.immutable.SortedMap

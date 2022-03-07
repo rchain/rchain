@@ -6,14 +6,9 @@ import cats.syntax.all._
 import com.typesafe.scalalogging.Logger
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.hashing.ChannelHash.{
-  hashContinuationsChannels,
-  hashDataChannel,
-  hashJoinsChannel
-}
-import coop.rchain.rspace.history.ColdStoreInstances.ColdKeyValueStore
+import coop.rchain.rspace.hashing.{Blake2b256Hash, StableHashProvider}
+import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.instances.RSpaceHistoryReaderImpl
 import coop.rchain.rspace.serializers.ScodecSerialize._
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceImporter}
@@ -27,9 +22,6 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
     leafStore: ColdKeyValueStore[F],
     rspaceExporter: RSpaceExporter[F],
     rspaceImporter: RSpaceImporter[F],
-    // Map channel hash in event log -> channel hash in history
-    // We need to maintain this for event log merge
-    channelHashesStore: ChannelStore[F, C],
     serializeC: Serialize[C],
     serializeP: Serialize[P],
     serializeA: Serialize[A],
@@ -37,20 +29,6 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
 ) extends HistoryRepository[F, C, P, A, K] {
 
   implicit val ms = Metrics.Source(RSpaceMetricsSource, "history")
-
-  override def getChannelHash(hash: Blake2b256Hash): F[Option[ChannelHash]] =
-    channelHashesStore.getChannelHash(hash)
-
-  override def putChannelHash(channel: C): F[Unit] = channelHashesStore.putChannelHash(channel)
-
-  override def putContinuationHash(channels: Seq[C]): F[Unit] =
-    channelHashesStore.putContinuationHash(channels)
-
-  override def putChannelHashes(channels: Seq[C]): F[Unit] =
-    channelHashesStore.putChannelHashes(channels)
-
-  override def putContinuationHashes(conts: Seq[Seq[C]]): F[Unit] =
-    channelHashesStore.putContinuationHashes(conts)
 
   type CacheAction = Blake2b256Hash => F[Unit]
   type ColdAction  = (Blake2b256Hash, Option[PersistedData])
@@ -70,122 +48,116 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
   private def computeMeasure(actions: List[HotStoreAction]): List[String] =
     actions.par.map {
       case i: InsertData[C, A] =>
-        val key  = hashDataChannel(i.channel, serializeC).bytes
+        val key  = StableHashProvider.hash(i.channel)(serializeC).bytes
         val data = encodeDatums(i.data)(serializeA)
         s"${key.toHex};insert-data;${data.length};${i.data.length}"
       case i: InsertContinuations[C, P, K] =>
-        val key  = hashContinuationsChannels(i.channels, serializeC).bytes
+        val key  = StableHashProvider.hash(i.channels)(serializeC).bytes
         val data = encodeContinuations(i.continuations)(serializeP, serializeK)
         s"${key.toHex};insert-continuation;${data.length};${i.continuations.length}"
       case i: InsertJoins[C] =>
-        val key  = hashJoinsChannel(i.channel, serializeC).bytes
+        val key  = StableHashProvider.hash(i.channel)(serializeC).bytes
         val data = encodeJoins(i.joins)(serializeC)
         s"${key.toHex};insert-join;${data.length}"
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel, serializeC).bytes
+        val key = StableHashProvider.hash(d.channel)(serializeC).bytes
         s"${key.toHex};delete-data;0"
       case d: DeleteContinuations[C] =>
-        val key = hashContinuationsChannels(d.channels, serializeC).bytes
+        val key = StableHashProvider.hash(d.channels)(serializeC).bytes
         s"${key.toHex};delete-continuation;0"
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel, serializeC).bytes
+        val key = StableHashProvider.hash(d.channel)(serializeC).bytes
         s"${key.toHex};delete-join;0"
     }.toList
 
-  private def storeChannels(action: List[HotStoreAction]) = {
-    val insertChans = action.collect {
-      case i: InsertData[C, A] => i.channel
-      case i: InsertJoins[C]   => i.channel
-      case d: DeleteData[C]    => d.channel
-      case d: DeleteJoins[C]   => d.channel
-    }
-    val insertConts = action.collect {
-      case i: InsertContinuations[C, P, K] => i.channels
-      case d: DeleteContinuations[C]       => d.channels
-    }
-    for {
-      _ <- channelHashesStore.putContinuationHashes(insertConts)
-      _ <- channelHashesStore.putChannelHashes(insertChans)
-    } yield ()
-  }
+  private def calculateStorageActions(action: HotStoreTrieAction): Result = {
+    import HistoryRepositoryInstances.{PREFIX_DATUM, PREFIX_JOINS, PREFIX_KONT}
 
-  private def calculateStorageActions(action: HotStoreTrieAction): Result =
     action match {
       case i: TrieInsertProduce[A] =>
-        val data     = encodeDatums(i.data)(serializeA)
-        val dataLeaf = DataLeaf(data)
-        val dataHash = Blake2b256Hash.create(data)
+        val data            = encodeDatums(i.data)(serializeA)
+        val dataLeaf        = DataLeaf(data)
+        val dataLeafEncoded = codecPersistedData.encode(dataLeaf).getUnsafe.toByteVector
+        val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
         )
       case i: TrieInsertConsume[P, K] =>
         val data              = encodeContinuations(i.continuations)(serializeP, serializeK)
         val continuationsLeaf = ContinuationsLeaf(data)
-        val continuationsHash = Blake2b256Hash.create(data)
+        val continuationsLeafEncoded =
+          codecPersistedData.encode(continuationsLeaf).getUnsafe.toByteVector
+        val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
         )
       case i: TrieInsertJoins[C] =>
-        val data      = encodeJoins(i.joins)(serializeC)
-        val joinsLeaf = JoinsLeaf(data)
-        val joinsHash = Blake2b256Hash.create(data)
+        val data             = encodeJoins(i.joins)(serializeC)
+        val joinsLeaf        = JoinsLeaf(data)
+        val joinsLeafEncoded = codecPersistedData.encode(joinsLeaf).getUnsafe.toByteVector
+        val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
         )
       case i: TrieInsertBinaryProduce =>
-        val data     = encodeDatumsBinary(i.data)
-        val dataLeaf = DataLeaf(data)
-        val dataHash = Blake2b256Hash.create(data)
+        val data            = encodeDatumsBinary(i.data)
+        val dataLeaf        = DataLeaf(data)
+        val dataLeafEncoded = codecPersistedData.encode(dataLeaf).getUnsafe.toByteVector
+        val dataHash        = Blake2b256Hash.create(dataLeafEncoded)
         (
           (dataHash, Some(dataLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, dataHash)
+          InsertAction(PREFIX_DATUM +: i.hash.bytes.toSeq.toList, dataHash)
         )
       case i: TrieInsertBinaryConsume =>
         val data              = encodeContinuationsBinary(i.continuations)
         val continuationsLeaf = ContinuationsLeaf(data)
-        val continuationsHash = Blake2b256Hash.create(data)
+        val continuationsLeafEncoded =
+          codecPersistedData.encode(continuationsLeaf).getUnsafe.toByteVector
+        val continuationsHash = Blake2b256Hash.create(continuationsLeafEncoded)
         (
           (continuationsHash, Some(continuationsLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, continuationsHash)
+          InsertAction(PREFIX_KONT +: i.hash.bytes.toSeq.toList, continuationsHash)
         )
       case i: TrieInsertBinaryJoins =>
-        val data      = encodeJoinsBinary(i.joins)
-        val joinsLeaf = JoinsLeaf(data)
-        val joinsHash = Blake2b256Hash.create(data)
+        val data             = encodeJoinsBinary(i.joins)
+        val joinsLeaf        = JoinsLeaf(data)
+        val joinsLeafEncoded = codecPersistedData.encode(joinsLeaf).getUnsafe.toByteVector
+        val joinsHash        = Blake2b256Hash.create(joinsLeafEncoded)
         (
           (joinsHash, Some(joinsLeaf)),
-          InsertAction(i.hash.bytes.toSeq.toList, joinsHash)
+          InsertAction(PREFIX_JOINS +: i.hash.bytes.toSeq.toList, joinsHash)
         )
       case d: TrieDeleteProduce =>
-        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(PREFIX_DATUM +: d.hash.bytes.toSeq.toList))
       case d: TrieDeleteConsume =>
-        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(PREFIX_KONT +: d.hash.bytes.toSeq.toList))
       case d: TrieDeleteJoins =>
-        ((d.hash, None), DeleteAction(d.hash.bytes.toSeq.toList))
+        ((d.hash, None), DeleteAction(PREFIX_JOINS +: d.hash.bytes.toSeq.toList))
     }
+  }
 
   private def transform(hotStoreAction: HotStoreAction): HotStoreTrieAction =
     hotStoreAction match {
       case i: InsertData[C, A] =>
-        val key = hashDataChannel(i.channel, serializeC)
+        val key = StableHashProvider.hash(i.channel)(serializeC)
         TrieInsertProduce(key, i.data)
       case i: InsertContinuations[C, P, K] =>
-        val key = hashContinuationsChannels(i.channels, serializeC)
+        val key = StableHashProvider.hash(i.channels)(serializeC)
         TrieInsertConsume(key, i.continuations)
       case i: InsertJoins[C] =>
-        val key = hashJoinsChannel(i.channel, serializeC)
+        val key = StableHashProvider.hash(i.channel)(serializeC)
         TrieInsertJoins(key, i.joins)
       case d: DeleteData[C] =>
-        val key = hashDataChannel(d.channel, serializeC)
+        val key = StableHashProvider.hash(d.channel)(serializeC)
         TrieDeleteProduce(key)
       case d: DeleteContinuations[C] =>
-        val key = hashContinuationsChannels(d.channels, serializeC)
+        val key = StableHashProvider.hash(d.channels)(serializeC)
         TrieDeleteConsume(key)
       case d: DeleteJoins[C] =>
-        val key = hashJoinsChannel(d.channel, serializeC)
+        val key = StableHashProvider.hash(d.channel)(serializeC)
         TrieDeleteJoins(key)
     }
 
@@ -220,17 +192,13 @@ final case class HistoryRepositoryImpl[F[_]: Concurrent: Parallel: Log: Span, C,
                      .collect { case Right(history) => history }
                      .compile
                      .lastOrError
-    } yield this.copy[F, C, P, A, K](
-      currentHistory = newHistory,
-      channelHashesStore = channelHashesStore
-    )
+    } yield this.copy[F, C, P, A, K](currentHistory = newHistory)
   }
 
   override def checkpoint(actions: List[HotStoreAction]): F[HistoryRepository[F, C, P, A, K]] = {
     val trieActions = actions.par.map(transform).toList
     for {
       r <- doCheckpoint(trieActions)
-      _ <- storeChannels(actions)
       _ <- measure(actions)
     } yield r
   }

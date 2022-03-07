@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.kernel.Monoid
 import cats.syntax.all._
-import coop.rchain.rspace.merger.MergingLogic.{combineProducesCopiedByPeek, producesCreated}
+import coop.rchain.rspace.merger.MergingLogic.{combineProducesCopiedByPeek, NumberChannelsDiff}
 import coop.rchain.rspace.trace.{COMM, Consume, Event, Produce}
 import coop.rchain.shared.syntax._
 
@@ -19,14 +19,20 @@ final case class EventLogIndex(
     producesTouchingBaseJoins: Set[Produce],
     consumesLinearAndPeeks: Set[Consume],
     consumesPersistent: Set[Consume],
-    consumesProduced: Set[Consume]
+    consumesProduced: Set[Consume],
+    // Mergeable (number) channels data
+    producesMergeable: Set[Produce],
+    consumesMergeable: Set[Consume],
+    numberChannelsData: NumberChannelsDiff
 )
 
 object EventLogIndex {
+
   def apply[F[_]: Concurrent](
       eventLog: List[Event],
       produceExistsInPreState: Produce => F[Boolean],
-      produceTouchPreStateJoin: Produce => F[Boolean]
+      produceTouchPreStateJoin: Produce => F[Boolean],
+      mergeableChs: NumberChannelsDiff
   ): F[EventLogIndex] =
     for {
       producesLinearRef     <- Ref.of[F, Set[Produce]](Set.empty)
@@ -103,6 +109,13 @@ object EventLogIndex {
       producesCopiedByPeek   <- producesCopiedByPeekRef.get
       producesTouchingJoins  <- producesTouchingJoinsRef.get
 
+      // Calculate mergeable channels
+      allProduces       = producesLinear ++ producesPersistent ++ producesConsumed ++ producesPeeked
+      mergeableProduces = allProduces.filter(p => mergeableChs.contains(p.channelsHash))
+
+      allConsumes       = consumesLinearAndPeeks ++ consumesPersistent ++ consumesCommed
+      mergeableConsumes = allConsumes.filter(_.channelsHashes.exists(mergeableChs.contains))
+
     } yield EventLogIndex(
       producesLinear = producesLinear,
       producesPersistent = producesPersistent,
@@ -112,7 +125,11 @@ object EventLogIndex {
       producesTouchingBaseJoins = producesTouchingJoins,
       consumesLinearAndPeeks = consumesLinearAndPeeks,
       consumesPersistent = consumesPersistent,
-      consumesProduced = consumesCommed
+      consumesProduced = consumesCommed,
+      // Mergeable produces
+      producesMergeable = mergeableProduces,
+      consumesMergeable = mergeableConsumes,
+      mergeableChs
     )
 
   implicit val monoid: Monoid[EventLogIndex] = new Monoid[EventLogIndex] {
@@ -132,7 +149,10 @@ object EventLogIndex {
       Set.empty,
       Set.empty,
       Set.empty,
-      Set.empty
+      Set.empty,
+      Set.empty,
+      Set.empty,
+      Map.empty
     )
 
   def combine(x: EventLogIndex, y: EventLogIndex): EventLogIndex = EventLogIndex(
@@ -145,6 +165,11 @@ object EventLogIndex {
     Seq(x, y).map(_.producesTouchingBaseJoins).reduce(_ ++ _),
     Seq(x, y).map(_.consumesLinearAndPeeks).reduce(_ ++ _),
     Seq(x, y).map(_.consumesPersistent).reduce(_ ++ _),
-    Seq(x, y).map(_.consumesProduced).reduce(_ ++ _)
+    Seq(x, y).map(_.consumesProduced).reduce(_ ++ _),
+    // Combine mergeable produces
+    x.producesMergeable |+| y.producesMergeable,
+    x.consumesMergeable |+| y.consumesMergeable,
+    // Merge number channels (add differences)
+    x.numberChannelsData |+| y.numberChannelsData
   )
 }

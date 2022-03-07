@@ -251,8 +251,7 @@ object RSpace {
   final case class RSpaceStore[F[_]](
       history: KeyValueStore[F],
       roots: KeyValueStore[F],
-      cold: KeyValueStore[F],
-      channels: KeyValueStore[F]
+      cold: KeyValueStore[F]
   )
 
   /**
@@ -332,8 +331,7 @@ object RSpace {
       historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
                       store.history,
                       store.roots,
-                      store.cold,
-                      store.channels
+                      store.cold
                     )
       historyReader <- historyRepo.getHistoryReader(historyRepo.root)
       hotStore      <- HotStore(historyReader.base)

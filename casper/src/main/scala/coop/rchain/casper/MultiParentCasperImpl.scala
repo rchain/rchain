@@ -26,8 +26,11 @@ import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.internal
 import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 
 // format: off
 class MultiParentCasperImpl[F[_]
@@ -115,14 +118,21 @@ class MultiParentCasperImpl[F[_]
     def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
       finalizedSet.toList.traverse { h =>
         for {
-          block          <- BlockStore[F].getUnsafe(h)
-          deploys        = block.body.deploys.map(_.deploy)
-          deploysRemoved <- DeployStorage[F].remove(deploys)
-          _ <- Log[F].info(
-                s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                  .buildString(finalizedSet)}."
-              )
+          block   <- BlockStore[F].getUnsafe(h)
+          deploys = block.body.deploys.map(_.deploy)
+
+          // Remove block deploys from persistent store
+          deploysRemoved   <- DeployStorage[F].remove(deploys)
+          finalizedSetStr  = PrettyPrinter.buildString(finalizedSet)
+          removedDeployMsg = s"Removed $deploysRemoved deploys from deploy history as we finalized block $finalizedSetStr."
+          _                <- Log[F].info(removedDeployMsg)
+
+          // Remove block index from cache
           _ <- BlockIndex.cache.remove(h).pure
+
+          // Remove block post-state mergeable channels from persistent store
+          stateHash = block.body.state.postStateHash.toBlake2b256Hash.bytes
+          _         <- RuntimeManager[F].getMergeableStore.delete(stateHash)
         } yield ()
       }.void
 
@@ -319,13 +329,20 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
+    val blockPreState  = b.body.state.preStateHash
+    val blockPostState = b.body.state.postStateHash
+    val blockSender    = b.sender.toByteArray
     val indexBlock = for {
-      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
+
+      index <- BlockIndex(
                 b.blockHash,
                 b.body.deploys,
-                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                RuntimeManager[F].getHistoryRepo
+                b.body.systemDeploys,
+                blockPreState.toBlake2b256Hash,
+                blockPostState.toBlake2b256Hash,
+                RuntimeManager[F].getHistoryRepo,
+                mergeableChs
               )
       _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
     } yield ()

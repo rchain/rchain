@@ -30,25 +30,20 @@ final case class StateValidationError(message: String) extends Exception(message
 }
 
 object RSpaceImporter {
-  def validateStateItems[F[_]: Concurrent, C, P, A, K](
+  def validateStateItems[F[_]: Concurrent](
       historyItems: Seq[(Blake2b256Hash, ByteVector)],
       dataItems: Seq[(Blake2b256Hash, ByteVector)],
       startPath: Seq[(Blake2b256Hash, Option[Byte])],
       chunkSize: Int,
       skip: Int,
       getFromHistory: Blake2b256Hash => F[Option[ByteVector]]
-  )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
+  ): F[Unit] = {
     import cats.instances.list._
 
     def receivedHistorySize = historyItems.size
     def isEnd               = receivedHistorySize < chunkSize
 
     def raiseError[T](msg: String): F[T] = new StateValidationError(msg).raiseError[F, T]
-    def raiseErrorEx[T](msg: String, cause: Throwable): F[T] =
-      new StateValidationError(msg, cause).raiseError[F, T]
-
-    def decodeData(bytes: ByteVector) =
-      ColdStoreInstances.codecPersistedData.decodeValue(bytes.bits).toEitherThrowable
 
     // Validate history items size
     def validateHistorySize[T]: F[Unit] = {
@@ -77,34 +72,10 @@ object RSpaceImporter {
         .covary[F]
         .parEvalMapUnordered(64) {
           case (hash, valueBytes) =>
-            for {
-              persistedData <- decodeData(valueBytes).liftTo.handleErrorWith { ex: Throwable =>
-                                raiseErrorEx(s"Decode value of key ${hash.bytes.toHex} failed.", ex)
-                              }
-              dataHash = Blake2b256Hash.create(persistedData.bytes)
-              _ <- if (hash == dataHash) {
-                    // When hash matches we also need to check if variance of PersistedData if correct
-                    //  because we don't have the hash of concrete type holding hashed binary value.
-                    Sync[F]
-                      .delay {
-                        persistedData match {
-                          case JoinsLeaf(bytes)         => decodeJoins[C](bytes)
-                          case DataLeaf(bytes)          => decodeDatums[A](bytes)
-                          case ContinuationsLeaf(bytes) => decodeContinuations[P, K](bytes)
-                        }
-                      }
-                      .void
-                      .handleErrorWith { ex: Throwable =>
-                        raiseErrorEx(
-                          s"Decode inner class of key: ${hash.bytes.toHex} failed for ${persistedData.getClass.getSimpleName}.",
-                          ex
-                        )
-                      }
-                  } else
-                    raiseError[Unit](
-                      s"Data hash does not match decoded data, key: ${hash.bytes.toHex}, decoded: ${dataHash.bytes.toHex}."
-                    )
-            } yield ()
+            val dataHash = Blake2b256Hash.create(valueBytes)
+            raiseError[Unit](
+              s"Data hash does not match decoded data, key: ${hash.bytes.toHex}, decoded: ${dataHash.bytes.toHex}."
+            ).whenA(hash != dataHash)
         }
 
     def nodeHashNotFoundError(h: Blake2b256Hash) =

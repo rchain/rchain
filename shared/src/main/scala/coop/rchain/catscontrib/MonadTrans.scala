@@ -1,12 +1,12 @@
 package coop.rchain.catscontrib
 
-import cats._, cats.data._, cats.syntax.all._
+import cats.Monad
 
 trait MonadTrans[F[_[_], _]] {
 
   def liftM[G[_]: Monad, A](a: G[A]): F[G, A]
 
-  /** The [[scalaz.Monad]] implied by this transformer. */
+  /** The [[Monad]] implied by this transformer. */
   implicit def apply[G[_]: Monad]: Monad[F[G, ?]]
 }
 
