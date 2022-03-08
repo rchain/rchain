@@ -11,7 +11,10 @@ object ParMapTypeMapper {
 
   private[models] def parMapToEMap(parMap: ParMap): EMap =
     EMap(
-      parMap.ps.sortedList.map(t => zip(t._1, t._2)),
+      // Convert to Vector because with Scala 2.12.15 deserialized empty List (Nil)
+      //  throws exception when mapping in `emapToParMap` !!
+      //  e.g. `emap.kvs.map(x => x)` although `emap.kvs == Nil`
+      parMap.ps.sortedList.map(t => zip(t._1, t._2)).toVector,
       parMap.locallyFree.value,
       parMap.connectiveUsed,
       parMap.remainder
