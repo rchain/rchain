@@ -194,7 +194,7 @@ in {
                 new ret1, ret2, ret3 in {
                   TreeHashMap!("set", map, "category", "object", *ret1) |
                   TreeHashMap!("set", map, "category", "morphism", *ret2) |
-                  for (_ <- ret1; _ <- ret2) {
+                  for (_ <- ret1 & _ <- ret2) {
                     TreeHashMap!("get", map, "category", *ret3) |
                     for (@val3 <- ret3) {
                       out!("info", [n, val3]) |

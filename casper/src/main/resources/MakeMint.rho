@@ -45,7 +45,7 @@ in {
                     // Checks that this purse has been provided with the correct decr.
                     decrCh!(bundle0{*decr}) |
                     thisPurse!("decr", *thisPurseDecrCh) |
-                    for (@thisPurseDecr <- thisPurseDecrCh;
+                    for (@thisPurseDecr <- thisPurseDecrCh &
                          @decrBundle    <- decrCh) {
                       for (logCh <<- logStore) {
                         if (thisPurseDecr == decrBundle) {
@@ -107,7 +107,7 @@ in {
                 // Checks if mints match.
                 thisPurse!("decr", *thisDecrCh) |
                 @src!("decr", *srcDecrCh) |
-                for (@thisDecr <- thisDecrCh;
+                for (@thisDecr <- thisDecrCh &
                      @srcDecr  <- srcDecrCh) {
                   for (logCh <<- logStore) {
                     new bd(`rho:block:data`), bdCh in {

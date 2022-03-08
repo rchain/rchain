@@ -14,13 +14,13 @@ in {
 
   ch1 ! (1) |
   ch2 ! (2) |
-  for (x <- ch1; y <- ch2) {
+  for (x <- ch1 & y <- ch2) {
     assert!("not equal vars are not equal", 1, (*x, "==", *y), "should not be equal", *ack4) |
     assert!("var not equal to constant", 1, (*x, "==", 0), "var should not equal const", *ack5) |
     assert!("cost not equal to var", 1, (0, "==", *x), "const should not equal var", *ack6)
   } |
 
-  for (_ <- ack1; _<- ack2; _ <- ack3; _ <- ack4; _ <- ack5) {
+  for (_ <- ack1 & _<- ack2 & _ <- ack3 & _ <- ack4 & _ <- ack5) {
     testCompleted!(true)
   }
 }

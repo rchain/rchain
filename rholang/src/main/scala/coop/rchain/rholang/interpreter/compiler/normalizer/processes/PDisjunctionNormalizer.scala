@@ -7,7 +7,7 @@ import coop.rchain.models.{Connective, ConnectiveBody, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
+  FreeMap,
   ProcVisitInputs,
   ProcVisitOutputs,
   SourcePosition
@@ -23,11 +23,11 @@ object PDisjunctionNormalizer {
     for {
       leftResult <- normalizeMatch[F](
                      p.proc_1,
-                     ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
+                     ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
                    )
       rightResult <- normalizeMatch[F](
                       p.proc_2,
-                      ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
+                      ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
                     )
       lp = leftResult.par
       resultConnective = lp.singleConnective() match {
@@ -37,8 +37,8 @@ object PDisjunctionNormalizer {
           Connective(ConnOrBody(ConnectiveBody(Vector(lp, rightResult.par))))
       }
     } yield ProcVisitOutputs(
-      input.par.prepend(resultConnective, input.env.depth),
-      input.knownFree
+      input.par.prepend(resultConnective, input.boundMapChain.depth),
+      input.freeMap
         .addConnective(
           resultConnective.connectiveInstance,
           SourcePosition(p.line_num, p.col_num)

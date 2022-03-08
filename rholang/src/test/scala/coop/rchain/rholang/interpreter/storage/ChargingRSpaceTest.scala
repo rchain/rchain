@@ -87,7 +87,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   it should "charge COMM on a join properly when parts of the join are deployed separately" in {
     // first deploy:
-    // for(x <- @x; y <- @y) { P }
+    // for(x <- @x & y <- @y) { P }
     // second deploy:
     // @x!(data)
     // third deploy:
@@ -193,7 +193,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
     // idea for the test is that we have persistent and non persistent produce in first deploy:
     // @"x"!!(1) | @"y"!(10)
     // and consume on joined channels in another:
-    // for(x <- @"x"; y <- @"y") { … }
+    // for(x <- @"x" & y <- @"y") { … }
     // In this case we shouldn't charge for storing consume and refund for removing produce on @"y"
 
     val TestFixture(chargingRSpace, cost) = fixture
@@ -269,7 +269,7 @@ class ChargingRSpaceTest extends fixture.FlatSpec with TripleEqualsSupport with 
 
   it should "refund for clearing tuplespace" in { fixture =>
     // first deploy:
-    // @x!(100) | @y!(10) | for(x <- @x; y <- @y; z <- @z) { P }
+    // @x!(100) | @y!(10) | for(x <- @x & y <- @y & z <- @z) { P }
     // second deploy:
     // @z!(1)
     // since second deploy triggers continuation we should refund with the cost of storing first deploy

@@ -5,7 +5,7 @@ import cats.effect.Sync
 import coop.rchain.models.{Par, Receive, ReceiveBind}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
+  FreeMap,
   NameVisitInputs,
   NameVisitOutputs,
   ProcNormalizeMatcher,
@@ -33,9 +33,9 @@ object PContrNormalizer {
       nameMatchResult <- NameNormalizeMatcher
                           .normalizeMatch[F](
                             p.name_,
-                            NameVisitInputs(input.env, input.knownFree)
+                            NameVisitInputs(input.boundMapChain, input.freeMap)
                           )
-      initAcc = (Vector[Par](), DeBruijnLevelMap.empty[VarSort], BitSet())
+      initAcc = (Vector[Par](), FreeMap.empty[VarSort], BitSet())
       // Note that we go over these in the order they were given and reverse
       // down below. This is because it makes more sense to number the free
       // variables in the order given, rather than in reverse.
@@ -44,11 +44,11 @@ object PContrNormalizer {
                            NameNormalizeMatcher
                              .normalizeMatch[F](
                                n,
-                               NameVisitInputs(input.env.push, acc._2)
+                               NameVisitInputs(input.boundMapChain.push, acc._2)
                              )
                              .flatMap { res =>
                                Utils
-                                 .failOnInvalidConnective(input, input.env.depth, res)
+                                 .failOnInvalidConnective(input, res)
                                  .fold(
                                    err => Sync[F].raiseError[NameVisitOutputs](err),
                                    _.pure[F]
@@ -57,21 +57,21 @@ object PContrNormalizer {
                              .map(
                                result =>
                                  (
-                                   result.chan +: acc._1,
-                                   result.knownFree,
+                                   result.par +: acc._1,
+                                   result.freeMap,
                                    acc._3 | ParLocallyFree
-                                     .locallyFree(result.chan, input.env.depth + 1)
+                                     .locallyFree(result.par, input.boundMapChain.depth + 1)
                                  )
                              )
                          }
                        )
       remainderResult <- RemainderNormalizeMatcher
                           .normalizeMatchName[F](p.nameremainder_, formalsResults._2)
-      newEnv     = input.env.absorbFree(remainderResult._2)
+      newEnv     = input.boundMapChain.absorbFree(remainderResult._2)
       boundCount = remainderResult._2.countNoWildcards
       bodyResult <- ProcNormalizeMatcher.normalizeMatch[F](
                      p.proc_,
-                     ProcVisitInputs(VectorPar(), newEnv, nameMatchResult.knownFree)
+                     ProcVisitInputs(VectorPar(), newEnv, nameMatchResult.freeMap)
                    )
     } yield ProcVisitOutputs(
       input.par.prepend(
@@ -79,7 +79,7 @@ object PContrNormalizer {
           binds = List(
             ReceiveBind(
               formalsResults._1.reverse,
-              nameMatchResult.chan,
+              nameMatchResult.par,
               remainderResult._1,
               boundCount
             )
@@ -89,15 +89,15 @@ object PContrNormalizer {
           peek = false,
           bindCount = boundCount,
           locallyFree = ParLocallyFree
-            .locallyFree(nameMatchResult.chan, input.env.depth) | formalsResults._3
+            .locallyFree(nameMatchResult.par, input.boundMapChain.depth) | formalsResults._3
             | (bodyResult.par.locallyFree
               .from(boundCount)
               .map(x => x - boundCount)),
           connectiveUsed = ParLocallyFree
-            .connectiveUsed(nameMatchResult.chan) || bodyResult.par.connectiveUsed
+            .connectiveUsed(nameMatchResult.par) || bodyResult.par.connectiveUsed
         )
       ),
-      bodyResult.knownFree
+      bodyResult.freeMap
     )
 
 }

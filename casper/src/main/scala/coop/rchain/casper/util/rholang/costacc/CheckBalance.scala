@@ -34,7 +34,7 @@ class CheckBalance(pk: PublicKey, rand: Blake2b512Random) extends SystemDeploy(r
       #     revVaultCh in {
       #   rl!(`rho:rchain:revVault`, *revVaultCh) |
       #   revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
-      #   for(@userRevAddress <- revAddressCh; @(_, revVault) <- revVaultCh){
+      #   for(@userRevAddress <- revAddressCh & @(_, revVault) <- revVaultCh){
       #     new userVaultCh in {
       #       @revVault!("findOrCreate", userRevAddress, *userVaultCh) |
       #       for(@(true, userVault) <- userVaultCh){

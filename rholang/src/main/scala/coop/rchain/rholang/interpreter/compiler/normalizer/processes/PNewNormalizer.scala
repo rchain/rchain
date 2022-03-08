@@ -38,10 +38,10 @@ object PNewNormalizer {
     val sortBindings = newTaggedBindings.sortBy(row => row._1)
     val newBindings  = sortBindings.map(row => (row._2, row._3, SourcePosition(row._4, row._5)))
     val uris         = sortBindings.flatMap(row => row._1)
-    val newEnv       = input.env.put(newBindings.toList)
-    val newCount     = newEnv.count - input.env.count
+    val newEnv       = input.boundMapChain.put(newBindings.toList)
+    val newCount     = newEnv.count - input.boundMapChain.count
 
-    normalizeMatch[F](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.knownFree)).map {
+    normalizeMatch[F](p.proc_, ProcVisitInputs(VectorPar(), newEnv, input.freeMap)).map {
       bodyResult =>
         val resultNew = New(
           bindCount = newCount,
@@ -50,7 +50,7 @@ object PNewNormalizer {
           injections = env,
           locallyFree = bodyResult.par.locallyFree.from(newCount).map(x => x - newCount)
         )
-        ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.knownFree)
+        ProcVisitOutputs(input.par.prepend(resultNew), bodyResult.freeMap)
     }
 
   }

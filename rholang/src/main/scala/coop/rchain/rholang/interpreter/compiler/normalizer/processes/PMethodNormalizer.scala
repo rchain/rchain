@@ -20,7 +20,7 @@ object PMethodNormalizer {
       target       = targetResult.par
       initAcc = (
         List[Par](),
-        ProcVisitInputs(Par(), input.env, targetResult.knownFree),
+        ProcVisitInputs(Par(), input.boundMapChain, targetResult.freeMap),
         BitSet(),
         false
       )
@@ -29,7 +29,7 @@ object PMethodNormalizer {
                        procMatchResult =>
                          (
                            procMatchResult.par +: acc._1,
-                           ProcVisitInputs(Par(), input.env, procMatchResult.knownFree),
+                           ProcVisitInputs(Par(), input.boundMapChain, procMatchResult.freeMap),
                            acc._3 | procMatchResult.par.locallyFree,
                            acc._4 || procMatchResult.par.connectiveUsed
                          )
@@ -44,8 +44,8 @@ object PMethodNormalizer {
           target.locallyFree | argResults._3,
           target.connectiveUsed || argResults._4
         ),
-        input.env.depth
+        input.boundMapChain.depth
       ),
-      argResults._2.knownFree
+      argResults._2.freeMap
     )
 }

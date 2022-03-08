@@ -63,11 +63,11 @@ class RuntimeSpec extends FlatSpec with Matchers {
         |   @"3"!!(3)|
         |   @42!!("1")|
         |   for (@t <- a){Nil}|
-        |   for (@num <- @"3";@num2 <- @1){10}|
+        |   for (@num <- @"3"&@num2 <- @1){10}|
         |   for (@_ <= @"4"){"3"}|
-        |   for (@_ <= @"5"; @num3 <= @5){Nil}|
+        |   for (@_ <= @"5"& @num3 <= @5){Nil}|
         |   for (@3 <- @44){new g in {Nil}}|
-        |   for (@_ <- @"55"; @num3 <- @55){Nil}
+        |   for (@_ <- @"55"& @num3 <- @55){Nil}
         | }
         |""".stripMargin
 

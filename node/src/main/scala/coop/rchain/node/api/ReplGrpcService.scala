@@ -8,7 +8,7 @@ import coop.rchain.monix.Monixable
 import coop.rchain.node.model.repl._
 import coop.rchain.rholang.interpreter.Interpreter._
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.interpreter.{RhoRuntime, _}
@@ -23,8 +23,8 @@ object ReplGrpcService {
       def exec(source: String, printUnmatchedSendsOnly: Boolean = false): F[ReplResponse] =
         Sync[F]
           .attempt(
-            ParBuilder[F]
-              .buildNormalizedTerm(source, Map.empty[String, Par])
+            Compiler[F]
+              .sourceToADT(source, Map.empty[String, Par])
           )
           .flatMap {
             case Left(er) =>

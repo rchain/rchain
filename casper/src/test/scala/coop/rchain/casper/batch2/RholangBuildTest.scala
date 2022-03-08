@@ -36,7 +36,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |    @ListOps!("map", [2, 3, 5, 7], *double, *doubleRet)
           |  } |
           |  getBlockData!(*timeRtn) |
-          |  for (@_, @timestamp, @_ <- timeRtn; @doubles <- doubleRet) {
+          |  for (@_, @timestamp, @_ <- timeRtn & @doubles <- doubleRet) {
           |    testRet!((doubles, "The timestamp is ${timestamp}" %% {"timestamp" : timestamp}))
           |  }
           |}

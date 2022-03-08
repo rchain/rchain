@@ -5,11 +5,7 @@ import cats.effect.Sync
 import coop.rchain.models.{EMatches, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.{FreeMap, ProcVisitInputs, ProcVisitOutputs}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.PMatches
 
 object PMatchesNormalizer {
@@ -27,12 +23,12 @@ object PMatchesNormalizer {
                       p.proc_2,
                       ProcVisitInputs(
                         VectorPar(),
-                        input.env.push,
-                        DeBruijnLevelMap.empty
+                        input.boundMapChain.push,
+                        FreeMap.empty
                       )
                     )
     } yield ProcVisitOutputs(
-      input.par.prepend(EMatches(leftResult.par, rightResult.par), input.env.depth),
-      leftResult.knownFree
+      input.par.prepend(EMatches(leftResult.par, rightResult.par), input.boundMapChain.depth),
+      leftResult.freeMap
     )
 }

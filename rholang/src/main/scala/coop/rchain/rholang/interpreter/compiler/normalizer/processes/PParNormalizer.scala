@@ -14,7 +14,7 @@ object PParNormalizer {
     Sync[F].defer {
       for {
         result       <- normalizeMatch[F](p.proc_1, input)
-        chainedInput = input.copy(knownFree = result.knownFree, par = result.par)
+        chainedInput = input.copy(freeMap = result.freeMap, par = result.par)
         chainedRes   <- normalizeMatch[F](p.proc_2, chainedInput)
       } yield chainedRes
     }

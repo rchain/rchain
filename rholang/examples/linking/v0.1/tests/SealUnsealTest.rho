@@ -1,7 +1,7 @@
 import MakeBrandPair, TestSet in {
   new p1, p2, identity, mismatch in {
     MakeBrandPair(p1) | MakeBrandPair(p2) |
-    for(r1 <- p1; r2 <- p2) {
+    for(r1 <- p1 & r2 <- p2) {
       match [r1, r2] with [[seal, unseal], [otherSeal, otherUnseal]] => {
         //seal composed with unseal == identity (modulo that it is now a single element list)
         contract identity(input, return) = {

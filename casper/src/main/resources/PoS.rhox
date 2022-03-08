@@ -89,9 +89,9 @@ in {
   registryLookup!(`rho:lang:listOps`, *listOpsCh) |
   registryLookup!(`rho:lang:treeHashMap`, *treeHashMapCh) |
   registryLookup!(`rho:rchain:multiSigRevVault`, *multiSigRevVaultCh) |
-  for (@(_, RevVault)         <- revVaultCh;
-       @(_, ListOps)          <- listOpsCh;
-       TreeHashMap            <- treeHashMapCh;
+  for (@(_, RevVault)         <- revVaultCh &
+       @(_, ListOps)          <- listOpsCh &
+       TreeHashMap            <- treeHashMapCh &
        @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh, 
         initialActiveCh, pendingRewardsMapCh, createUnfVault, moveInitialBondCh, posAuthKeyCh
@@ -310,7 +310,7 @@ in {
                 in {
                   runMVar!(*stateCh, *processCh, *returnCh) |
                   getUser!(deployerId, *userCh) |
-                  for (@state, resultCh <- processCh;
+                  for (@state, resultCh <- processCh &
                        @userPk          <- userCh) {
                     if (state.get("allBonds").contains(userPk)) {
                       resultCh!(state, (false, "Public key is already bonded."))
@@ -346,8 +346,8 @@ in {
                   runMVar!(*stateCh, *processCh, *returnCh) |
                   getBlockData!(*blockDataCh) |
                   getUser!(deployerId, *userCh) |
-                  for (@state, resultCh   <- processCh;
-                       @userPk            <- userCh;
+                  for (@state, resultCh   <- processCh &
+                       @userPk            <- userCh &
                        @blockNumber, _, _ <- blockDataCh) {
                     if (state.get("allBonds").contains(userPk)) {
                       // The withdrawal goes into effect at the start of the next epoch.
@@ -444,8 +444,8 @@ in {
                           getInvalidBlocks!(*invalidBlocksCh) |
                           getUser!(deployerId, *userCh) |
                           runMVar!(*stateCh, *stateProcessCh, *returnCh) |
-                          for (@invalidBlocks        <- invalidBlocksCh;
-                               @userPk               <- userCh;
+                          for (@invalidBlocks        <- invalidBlocksCh &
+                               @userPk               <- userCh &
                                @state, stateUpdateCh <- stateProcessCh) {
                                 new toBeSlashed, valBondCh, valRewardCh in {
                                   // Flow of logic:
@@ -623,7 +623,7 @@ in {
                 new userCh, mvarCh in {
                   getUser!(deployerId, *userCh) |
                   runMVar!(*stateCh, *mvarCh, *ackCh) |
-                  for (@validator       <- userCh;
+                  for (@validator       <- userCh &
                        @state, resultCh <- mvarCh) {
                     if (state.get("randomImages").contains(validator)) {
                       resultCh!(state, (false, "Image already committed"))
@@ -640,8 +640,8 @@ in {
                   getUser!(deployerId, *userCh) |
                   runMVar!(*stateCh, *mvarCh, *ackCh) |
                   computeHash!(random, *hashCh) |
-                  for (@validator       <- userCh;
-                       @state, resultCh <- mvarCh;
+                  for (@validator       <- userCh &
+                       @state, resultCh <- mvarCh &
                        @hash            <- hashCh) {
                     if (state.get("randomImages").contains(validator)) {
                       if (hash == state.get("randomImages").get(validator)) {
@@ -666,7 +666,7 @@ in {
           in {
             @RevVault!("deployerAuthKey", deployerId, *authKeyCh) |
             revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-            for (@authKey        <- authKeyCh;
+            for (@authKey        <- authKeyCh &
                  @fromRevAddress <- revAddressCh) {
               @RevVault!("findOrCreate", fromRevAddress, *vaultCh) |
               for (@(true, fromVault) <- vaultCh) {
