@@ -19,7 +19,7 @@ object DeployerIdContract {
     message match {
       case isContractCall(
           produce,
-          Seq(RhoType.String("deployerId"), RhoType.ByteArray(pk), ackCh)
+          Seq(ackCh, RhoType.String("deployerId"), RhoType.ByteArray(pk))
           ) =>
         for {
           _ <- produce(Seq(RhoType.DeployerId(pk)), ackCh)

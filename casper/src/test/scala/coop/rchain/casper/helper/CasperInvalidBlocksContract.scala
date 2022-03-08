@@ -17,7 +17,7 @@ object CasperInvalidBlocksContract {
     message match {
       case isContractCall(
           produce,
-          Seq(newInvalidBlocks, ackCh)
+          Seq(ackCh, newInvalidBlocks)
           ) =>
         for {
           _ <- ctx.invalidBlocks.setParams(newInvalidBlocks)

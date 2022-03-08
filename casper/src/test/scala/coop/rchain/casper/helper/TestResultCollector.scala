@@ -13,16 +13,16 @@ import coop.rchain.rholang.interpreter.{ContractCall, RhoType}
 object IsAssert {
   def unapply(
       p: Seq[Par]
-  ): Option[(String, Long, Par, String, Par)] =
+  ): Option[(Par, String, Long, Par, String)] =
     p match {
       case Seq(
+          ackChannel,
           RhoType.String(testName),
           RhoType.Number(attempt),
           assertion,
-          RhoType.String(clue),
-          ackChannel
+          RhoType.String(clue)
           ) =>
-        Some((testName, attempt, assertion, clue, ackChannel))
+        Some((ackChannel, testName, attempt, assertion, clue))
       case _ => None
     }
 }
@@ -97,7 +97,7 @@ class TestResultCollector[F[_]: Concurrent: Span](result: Ref[F, TestResult]) {
     val isContractCall = new ContractCall[F](ctx.space, ctx.dispatcher)
 
     message match {
-      case isContractCall(produce, IsAssert(testName, attempt, assertion, clue, ackChannel)) =>
+      case isContractCall(produce, IsAssert(ackChannel, testName, attempt, assertion, clue)) =>
         assertion match {
           case IsComparison(expected, "==", actual) =>
             val assertion = RhoAssertEquals(testName, expected, actual, clue)
