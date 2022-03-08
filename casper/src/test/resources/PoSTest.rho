@@ -458,9 +458,9 @@ match (
                         @PoS!("getActiveValidators", *initialActiveCh) |
                         for (@initialPosBalance   <- initialPosBalanceCh &
                              @initialUser1Balance <- initialUser1BalanceCh &
-                             @initialRewards      <- initialRewardsCh;
-                             @initialBonds <- initialBondsCh;
-                             @initialActives <- initialActiveCh) {
+                             @initialRewards      <- initialRewardsCh &
+                             @initialBonds        <- initialBondsCh &
+                             @initialActives      <- initialActiveCh) {
                           stdlog!("info", ("bonding distribution and actives before precharge and refund", initialBonds, initialActives, initialRewards)) |
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *retCh0) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *retCh1) |
