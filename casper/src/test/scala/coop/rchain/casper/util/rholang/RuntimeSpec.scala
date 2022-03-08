@@ -82,7 +82,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
       expectedHash = Blake2b256Hash.fromHex(
-        "30cd98a5f066fb4c7441db2150198108f5b5d5fe9f751ceec7dc7cc4e1af784a"
+        "10cce029738696f1e120a6bad4bdf3f18adca25ccf36133bd4916f607a6a50c0"
       )
       stateHash = checkpoint.root
     } yield expectedHash shouldEqual stateHash
