@@ -1,14 +1,11 @@
 package coop.rchain.rholang.interpreter.matcher
 
-import cats.data._
 import cats.effect._
-import cats.effect.implicits._
-import cats.syntax.all._
 import cats.mtl._
 import cats.mtl.implicits._
-import cats.{FlatMap, Functor, Monad, MonoidK, Eval => _}
+import cats.syntax.all._
+import cats.{FlatMap, Monad, MonoidK, Eval => _}
 import coop.rchain.catscontrib._
-import coop.rchain.catscontrib.mtl.implicits._
 import coop.rchain.models.Connective.ConnectiveInstance
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
@@ -17,9 +14,7 @@ import coop.rchain.models.Var.VarInstance.{FreeVar, Wildcard}
 import coop.rchain.models._
 import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.rholang.interpreter._
-import coop.rchain.rholang.interpreter.Splittable
-import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.errors.{BugFoundError, OutOfPhlogistonsError}
+import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.matcher.ParSpatialMatcherUtils.{noFrees, subPars}
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher._
 import coop.rchain.rholang.interpreter.matcher.StreamT._

@@ -261,6 +261,7 @@ object SystemProcesses {
 
           produce(Seq(errorMessage), ack)
 
+        // TODO: Invalid type for address should throw error!
         case isContractCall(produce, Seq(RhoType.String("validate"), _, ack)) =>
           produce(Seq(Par()), ack)
 

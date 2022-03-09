@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
+import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
@@ -48,7 +48,7 @@ final class PreChargeDeploy(chargeAmount: Long, pk: PublicKey, rand: Blake2b512R
 
   protected def processResult(
       value: (Boolean, Either[String, Unit])
-  ): Either[SystemDeployFailure, Unit] =
+  ): Either[SystemDeployUserError, Unit] =
     value match {
       case (true, _)               => Right(())
       case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))

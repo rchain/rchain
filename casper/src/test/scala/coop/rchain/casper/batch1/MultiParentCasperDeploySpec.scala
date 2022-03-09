@@ -1,10 +1,9 @@
 package coop.rchain.casper.batch1
 
-import cats.implicits.catsSyntaxApplicativeError
+import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.MultiParentCasper
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.blocks.proposer.{Created, NoNewDeploys}
 import coop.rchain.casper.engine.Engine
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._

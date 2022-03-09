@@ -16,6 +16,7 @@ import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -44,7 +45,8 @@ import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
-import coop.rchain.shared.{Base16, _}
+import coop.rchain.shared._
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -150,15 +152,18 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        // Use channels map only in block-merging (multi parents)
-        val useChannelsMap = conf.casper.maxNumberOfParents > 1
-        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
+        for {
+          rStores    <- rnodeStoreManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rm <- RuntimeManager
+                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
+        } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory
 
@@ -167,7 +172,7 @@ object Setup {
         implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }

@@ -1,5 +1,7 @@
 package coop.rchain.models.rholang
 
+import com.google.protobuf.ByteString
+import coop.rchain.shared.Base16
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -123,6 +125,14 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Receive]
     checkScoreEquality[Send]
     checkScoreEquality[Var]
+  }
+  it should "score in different ByteString should be unequal" in {
+    // ci failing case https://github.com/rchain/rchain/runs/2268175723
+    // a is Expr(GByteArray(<ByteString@65e14bdc size=1 contents="\200">))
+    // b is Expr(GByteArray(<ByteString@2f125f4b size=1 contents="\331">))
+    val a = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("80"))))
+    val b = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("d9"))))
+    assert(sort(a).score != sort(b).score)
   }
   it should "sort so that unequal New have unequal scores" in {
     val new1 = New(

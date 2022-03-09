@@ -1,8 +1,7 @@
 package coop.rchain.p2p.effects
 
-import cats._
 import cats.syntax.all._
-import coop.rchain.catscontrib._
+import cats.{Applicative, ApplicativeError, FlatMap}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.{CommError, PeerNode}
 import coop.rchain.shared._
@@ -19,7 +18,7 @@ object PacketHandler {
   def pf[F[_]](pfForPeer: (PeerNode) => PartialFunction[Packet, F[Unit]])(
       implicit ev1: FlatMap[F],
       ev2: Log[F],
-      errorHandler: ApplicativeError_[F, CommError]
+      errorHandler: ApplicativeError[F, CommError]
   ): PacketHandler[F] =
     new PacketHandler[F] {
       def handlePacket(peer: PeerNode, packet: Packet): F[Unit] = {

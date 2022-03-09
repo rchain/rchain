@@ -55,7 +55,7 @@ class ExportImportTests
         dataItems    = exportData._2.items.toVector
 
         // Validate exporting page
-        _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
+        _ <- RSpaceImporter.validateStateItems[Task](
               historyItems,
               dataItems,
               initStartPath,
@@ -112,7 +112,7 @@ class ExportImportTests
               lastPath         = exportData._1.lastPath
 
               // Validate exporting page
-              _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
+              _ <- RSpaceImporter.validateStateItems[Task](
                     historyItemsPage,
                     dataItemsPage,
                     startPath,
@@ -193,7 +193,7 @@ class ExportImportTests
               dataItemsPage    = exportData._2.items
 
               // Validate exporting page
-              _ <- RSpaceImporter.validateStateItems[Task, String, Pattern, String, String](
+              _ <- RSpaceImporter.validateStateItems[Task](
                     historyItemsPage,
                     dataItemsPage,
                     startPath,
@@ -271,15 +271,13 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
     implicit val kvm: InMemoryStoreManager[Task] = InMemoryStoreManager[Task]
 
     (for {
-      roots1    <- kvm.store("roots1")
-      cold1     <- kvm.store("cold1")
-      history1  <- kvm.store("history1")
-      channels1 <- kvm.store("channels1")
+      roots1   <- kvm.store("roots1")
+      cold1    <- kvm.store("cold1")
+      history1 <- kvm.store("history1")
       historyRepository1 <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
                              roots1,
                              cold1,
-                             history1,
-                             channels1
+                             history1
                            )
       cache1        <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
       historyReader <- historyRepository1.getHistoryReader(historyRepository1.root)
@@ -294,15 +292,13 @@ trait InMemoryExportImportTestsBase[C, P, A, K] {
       exporter1 <- historyRepository1.exporter
       importer1 <- historyRepository1.importer
 
-      roots2    <- kvm.store("roots2")
-      cold2     <- kvm.store("cold2")
-      history2  <- kvm.store("history2")
-      channels2 <- kvm.store("channels2")
+      roots2   <- kvm.store("roots2")
+      cold2    <- kvm.store("cold2")
+      history2 <- kvm.store("history2")
       historyRepository2 <- HistoryRepositoryInstances.lmdbRepository[Task, C, P, A, K](
                              roots2,
                              cold2,
-                             history2,
-                             channels2
+                             history2
                            )
       cache2        <- Ref.of[Task, HotStoreState[C, P, A, K]](HotStoreState[C, P, A, K]())
       historyReader <- historyRepository2.getHistoryReader(historyRepository2.root)

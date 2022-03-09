@@ -80,6 +80,15 @@ class MergingHistorySpec
     } yield ()
   }
 
+  "deletion of a non existing leaf" should "not throw error" in withEmptyTrie { emptyHistory =>
+    val changes1 = insert(hexKey("0011")) :: Nil
+    val changes2 = delete(hexKey("0011")) +: delete(hexKey("0012")) +: Nil
+    for {
+      historyOne <- emptyHistory.process(changes1)
+      historyTwo <- historyOne.process(changes2)
+    } yield ()
+  }
+
   //          root                                                 root
   //           |                                                    |
   //          Skip                                                 Skip

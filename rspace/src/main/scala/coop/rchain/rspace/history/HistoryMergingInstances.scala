@@ -300,6 +300,9 @@ object HistoryMergingInstances {
               case EmptyPointer      => Applicative[F].pure(None.asRight) // removed path
             }
 
+          // path has empty trie, last node deleted
+          case (_, EmptyTrie) => Applicative[F].pure(None.asRight)
+
           case _ => Sync[F].raiseError(MalformedTrieError)
         }
 
@@ -684,7 +687,7 @@ sealed trait NonEmptyTrie extends Trie
 case object EmptyTrie extends Trie
 
 final case class Skip(affix: ByteVector, ptr: ValuePointer) extends NonEmptyTrie {
-  lazy val encoded: BitVector = codecSkip.encode(this).getUnsafe
+  lazy val encoded: BitVector = codecTrie.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 
@@ -700,7 +703,7 @@ final case class PointerBlock private (toVector: Vector[TriePointer]) extends No
 
   def countNonEmpty: Int = toVector.count(_ != EmptyPointer)
 
-  lazy val encoded: BitVector = codecPointerBlock.encode(this).getUnsafe
+  lazy val encoded: BitVector = codecTrie.encode(this).getUnsafe
 
   lazy val hash: Blake2b256Hash = Blake2b256Hash.create(encoded.toByteVector)
 

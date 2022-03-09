@@ -1,6 +1,9 @@
 package coop.rchain.casper.util.rholang
 
+import cats.effect.Sync
+import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.casper.util.rholang.SystemDeployPlatformFailure.UnexpectedResult
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
@@ -9,7 +12,6 @@ import shapeless.Witness
 
 abstract class SystemDeploy(initialRand: Blake2b512Random) {
 
-  import SystemDeployPlatformFailure._
   import coop.rchain.models._
   import GUnforgeable.UnfInstance.GPrivateBody
   import rholang.{implicits => toPar}
@@ -48,12 +50,8 @@ abstract class SystemDeploy(initialRand: Blake2b512Random) {
 
   val source: String
 
-  final def extractResult(output: Par): Either[SystemDeployFailure, Result] =
-    extractor
-      .unapply(output)
-      .fold[Either[SystemDeployFailure, Result]](Left(UnexpectedResult(List(output))))(
-        processResult
-      )
+  final def extractResult[F[_]: Sync](output: Par): F[Either[SystemDeployUserError, Result]] =
+    extractor.unapply(output).map(processResult).liftTo(UnexpectedResult(Seq(output)))
 
-  protected def processResult(value: extractor.ScalaType): Either[SystemDeployFailure, Result]
+  protected def processResult(value: extractor.ScalaType): Either[SystemDeployUserError, Result]
 }

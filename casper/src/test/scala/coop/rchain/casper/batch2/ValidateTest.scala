@@ -19,6 +19,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
@@ -762,8 +763,9 @@ class ValidateTest
       for {
         _              <- blockDagStorage.insert(genesis, false, approved = true)
         kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store          <- kvm.rSpaceStores
-        runtimeManager <- RuntimeManager[Task](store)
+        rStore         <- kvm.rSpaceStores
+        mStore         <- RuntimeManager.mergeableStore(kvm)
+        runtimeManager <- RuntimeManager[Task](rStore, mStore, Genesis.NonNegativeMergeableTagName)
         dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)

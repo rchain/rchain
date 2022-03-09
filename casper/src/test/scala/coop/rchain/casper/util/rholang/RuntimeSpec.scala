@@ -1,5 +1,6 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -25,7 +26,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
     for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store)
+      runtime <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
 
       /**
         * Root hashes compatible with RChain main net network
@@ -76,13 +77,15 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
     for {
       store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store)
+      runtime    <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
       r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
-      stateHash  = Base16.encode(checkpoint.root.toByteString.toByteArray)
-      _          = "d13c1b889fd2444876224e8aaade7858165c3b2b49120d844d59a76ade20672d" should be(stateHash)
-    } yield ()
+      expectedHash = Blake2b256Hash.fromHex(
+        "10cce029738696f1e120a6bad4bdf3f18adca25ccf36133bd4916f607a6a50c0"
+      )
+      stateHash = checkpoint.root
+    } yield expectedHash shouldEqual stateHash
   }
 
 }

@@ -16,6 +16,7 @@ import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
@@ -499,7 +500,10 @@ object TestNode {
       deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
       rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
-      runtimeManager      <- Resource.eval(RuntimeManager(rSpaceStore))
+      mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
+      runtimeManager <- Resource.eval(
+                         RuntimeManager(rSpaceStore, mStore, Genesis.NonNegativeMergeableTagName)
+                       )
 
       node <- Resource.eval({
                implicit val bs                         = blockStore
