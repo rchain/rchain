@@ -21,8 +21,7 @@ new
 in {
 
   stdlog!("info", "Starting EitherTest") |
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
     @RhoSpec!("testSuite",
       [
         ("fromNillable <- should return given value or default value", *test_from_nillable_arrow),
@@ -41,86 +40,87 @@ in {
       ])
   } |
 
-  contract double(@x, ret) = { ret!(2 * x) } |
-  contract divide(@x, @y, ret) = {
+  contract double(ret, @x) = { ret!(2 * x) } |
+  contract divide(ret, @x, @y) = {
     if(y == 0) { ret!((false, "Div by zero!")) }
     else { ret!((true, x / y)) }
   } |
-  contract divide10By(@divisor, ret) = { divide!(10, divisor, *ret)} |
-  contract divide8By(@divisor, ret) = { divide! (8, divisor, *ret)} |
-  contract mult(@x, @y, ret) = { ret!(x * y) } |
+  contract divide10By(ret, @divisor) = { divide!(*ret, 10, divisor)} |
+  contract divide8By(ret, @divisor) = { divide! (*ret, 8, divisor)} |
+  contract mult(ret, @x, @y) = { ret!(x * y) } |
 
-  rl!(`rho:lang:either`, *EitherCh) |
-  for(@(_, Either) <- EitherCh) {
-    contract test_from_nillable_arrow(rhoSpec, _, ackCh) = {
+  for(@(_, Either) <- rl!?(`rho:lang:either`)) {
+    stdlog!("info", ("found ether"))|
+    contract test_from_nillable_arrow(ackCh, rhoSpec, _) = {
+      stdlog!("info", ("running tests"))|
       new ch1, ch2, ch1ret, ch2ret in {
         ch1!(Nil) | ch2!("Not Nil") |
-        @Either!("fromNillable <-", *ch1, "If Nil", *ch1ret) |
-        @Either!("fromNillable <-", *ch2, "If Nil", *ch2ret) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1ret, "fromNillable <-", *ch1, "If Nil") |
+        @Either!(*ch2ret, "fromNillable <-", *ch2, "If Nil") |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "If Nil"), "== <-", *ch1ret), "Uses default value when Nil"),
             (((true, "Not Nil"), "== <-", *ch2ret), "Uses given value when not Nil")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_from_boolean_arrow(rhoSpec, _, ackCh) = {
+    contract test_from_boolean_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch1ret, ch2ret in {
         ch1!(false) | ch2!(true) |
-        @Either!("fromBoolean <-", *ch1, "If false", *ch1ret) |
-        @Either!("fromBoolean <-", *ch2, "If false", *ch2ret) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1ret, "fromBoolean <-", *ch1, "If false") |
+        @Either!(*ch2ret, "fromBoolean <-", *ch2, "If false") |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "If false"), "== <-", *ch1ret), "Uses default value when false"),
             (((true, Nil), "== <-", *ch2ret), "Uses given value when true")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_from_singleton_list_arrow(rhoSpec, _, ackCh) = {
+    contract test_from_singleton_list_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch3, ch1ret, ch2ret, ch3ret in {
         ch1!([]) | ch2!(["Not empty"]) | ch3!(["Too", "long"]) |
-        @Either!("fromSingletonList <-", *ch1, "If empty", *ch1ret) |
-        @Either!("fromSingletonList <-", *ch2, "If empty", *ch2ret) |
-        @Either!("fromSingletonList <-", *ch3, "If empty", *ch3ret) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1ret, "fromSingletonList <-", *ch1, "If empty") |
+        @Either!(*ch2ret, "fromSingletonList <-", *ch2, "If empty") |
+        @Either!(*ch3ret, "fromSingletonList <-", *ch3, "If empty") |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "If empty"), "== <-", *ch1ret), "Uses default value when empty"),
             (((true, "Not empty"), "== <-", *ch2ret), "Uses given value when singleton"),
             (((false, "Invalid argument, expected a list of at most 1 element"), "== <-", *ch3ret), "Returns error when too long"),
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_from_nillable_error_arrow(rhoSpec, _, ackCh) = {
+    contract test_from_nillable_error_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch1ret, ch2ret in {
         ch1!(Nil) | ch2!("Not Nil") |
-        @Either!("fromNillableError <-", *ch1, "If not Nil", *ch1ret) |
-        @Either!("fromNillableError <-", *ch2, "If not Nil", *ch2ret) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1ret, "fromNillableError <-", *ch1, "If not Nil") |
+        @Either!(*ch2ret, "fromNillableError <-", *ch2, "If not Nil") |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((true, Nil), "== <-", *ch1ret), "Uses Nil when Nil"),
             (((false, "If not Nil"), "== <-", *ch2ret), "Uses given error when not Nil")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_product_r_arrow(rhoSpec, _, ackCh) = {
+    contract test_product_r_arrow(ackCh, rhoSpec, _) = {
       new a1, b1, ret1, a2, b2, ret2 in {
         a1!((false, "Error")) | b1!((true, "Value")) |
         a2!((true, "A value")) | b2!((true, "B value")) |
-        @Either!("productR <-", *a1, *b1, *ret1) |
-        @Either!("productR <-", *a2, *b2, *ret2) |
-        rhoSpec!("assertMany",
+        @Either!(*ret1, "productR <-", *a1, *b1) |
+        @Either!(*ret2, "productR <-", *a2, *b2) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "Error"), "== <-", *ret1), "Uses error message when Left"),
             (((true, "B value"), "== <-", *ret2), "Uses B value when Right")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_map2_arrow(rhoSpec, _, ackCh) = {
+    contract test_map2_arrow(ackCh, rhoSpec, _) = {
       new ch1a, ch2a, reta,
           ch1b, ch2b, retb,
           ch1c, ch2c, retc,
@@ -128,19 +128,19 @@ in {
         ch1a!((false, 1)) | ch2a!((true, 2)) |
         ch1b!((true, 3)) | ch2b!((false, 4)) |
         ch1c!((true, 5)) | ch2c!((true, 6)) |
-        @Either!("map2 <-", *ch1a, *ch2a, for (@x, @y, r <- f) { r!(x + y) }, *reta) |
-        @Either!("map2 <-", *ch1b, *ch2b, for (@x, @y, r <- f) { r!(x + y) }, *retb) |
-        @Either!("map2 <-", *ch1c, *ch2c, for (@x, @y, r <- f) { r!(x + y) }, *retc) |
-        rhoSpec!("assertMany",
+        @Either!(*reta, "map2 <-", *ch1a, *ch2a, for (r, @x, @y  <- f) { r!(x + y) }) |
+        @Either!(*retb, "map2 <-", *ch1b, *ch2b, for (r, @x, @y  <- f) { r!(x + y) }) |
+        @Either!(*retc, "map2 <-", *ch1c, *ch2c, for (r, @x, @y  <- f) { r!(x + y) }) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, 1), "== <-", *reta), "If a is Left, return a"),
             (((false, 4), "== <-", *retb), "If a is Right and b is Left, return b"),
             (((true, 11), "== <-", *retc), "If a and b are Right, apply f")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_map2_clean_arrow(rhoSpec, _, ackCh) = {
+    contract test_map2_clean_arrow(ackCh, rhoSpec, _) = {
       new ch1a, ch2a, reta,
           ch1b, ch2b, retb,
           ch1c, ch2c, retc,
@@ -148,107 +148,107 @@ in {
         ch1a!((false, 1)) | ch2a!((true, 2)) |
         ch1b!((true, 3)) | ch2b!((false, 4)) |
         ch1c!((true, 5)) | ch2c!((true, 6)) |
-        @Either!("map2Clean <-", *ch1a, *ch2a, for (@state, @x, @y, r <- f) { r!(x + y + state) }, 7, *reta) |
-        @Either!("map2Clean <-", *ch1b, *ch2b, for (@state, @x, @y, r <- f) { r!(x + y + state) }, 7, *retb) |
-        @Either!("map2Clean <-", *ch1c, *ch2c, for (@state, @x, @y, r <- f) { r!(x + y + state) }, 7, *retc) |
-        rhoSpec!("assertMany",
+        @Either!(*reta, "map2Clean <-", *ch1a, *ch2a, for (r, @state, @x, @y  <- f) { r!(x + y + state) }, 7) |
+        @Either!(*retb, "map2Clean <-", *ch1b, *ch2b, for (r, @state, @x, @y  <- f) { r!(x + y + state) }, 7) |
+        @Either!(*retc, "map2Clean <-", *ch1c, *ch2c, for (r, @state, @x, @y <- f) { r!(x + y + state) }, 7) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, 1), "== <-", *reta), "If a is Left, return a"),
             (((false, 4), "== <-", *retb), "If a is Right and b is Left, return b"),
             (((true, 5 + 6 + 7), "== <-", *retc), "If a and b are Right, apply f")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_flat_map_arrow(rhoSpec, _, ackCh) = {
+    contract test_flat_map_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch3, ret1, ret2, ret3 in {
         ch1!((false, "message")) |
         ch2!((true, 2)) |
         ch3!((true, 0)) |
-        @Either!("flatMap <-", *ch1, *divide10By, *ret1) |
-        @Either!("flatMap <-", *ch2, *divide10By, *ret2) |
-        @Either!("flatMap <-", *ch3, *divide10By, *ret3) |
-        rhoSpec!("assertMany",
+        @Either!(*ret1, "flatMap <-", *ch1, *divide10By) |
+        @Either!(*ret2, "flatMap <-", *ch2, *divide10By) |
+        @Either!(*ret3, "flatMap <-", *ch3, *divide10By) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "message"), "== <-", *ret1), "Left values are not affected by flatMap"),
             (((true, 5), "== <-", *ret2), "Right values are changed by flatMap"),
             (((false, "Div by zero!"), "== <-", *ret3), "Left values are returned on failure")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_flat_map_clean_arrow(rhoSpec, _, ackCh) = {
+    contract test_flat_map_clean_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch3, ret1, ret2, ret3 in {
         ch1!((false, "message")) |
         ch2!((true, 2)) |
         ch3!((true, 0)) |
-        @Either!("flatMapClean <-", *ch1, *divide, 10, *ret1) |
-        @Either!("flatMapClean <-", *ch2, *divide, 10, *ret2) |
-        @Either!("flatMapClean <-", *ch3, *divide, 10, *ret3) |
-        rhoSpec!("assertMany",
+        @Either!(*ret1, "flatMapClean <-", *ch1, *divide, 10) |
+        @Either!(*ret2, "flatMapClean <-", *ch2, *divide, 10) |
+        @Either!(*ret3, "flatMapClean <-", *ch3, *divide, 10) |
+        rhoSpec!(*ackCh,"assertMany",
           [
             (((false, "message"), "== <-", *ret1), "Left values are not affected by flatMap"),
             (((true, 5), "== <-", *ret2), "Right values are changed by flatMap"),
             (((false, "Div by zero!"), "== <-", *ret3), "Left values are returned on failure")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_map_arrow(rhoSpec, _, ackCh) = {
+    contract test_map_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ret1, ret2 in {
         ch1!((false, "message")) | ch2!((true, 3)) |
-        @Either!("map <-", *ch1, *double, *ret1) |
-        @Either!("map <-", *ch2, *double, *ret2) |
-        rhoSpec!("assertMany",
+        @Either!(*ret1, "map <-", *ch1, *double) |
+        @Either!(*ret2, "map <-", *ch2, *double) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "message"), "== <-", *ret1), "Left values are not affected by map"),
             (((true, 6), "== <-", *ret2), "Right values are changed by map")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_map_clean_arrow(rhoSpec, _, ackCh) = {
+    contract test_map_clean_arrow(ackCh, rhoSpec, _) = {
       new ch1, ch2, ret1, ret2 in {
         ch1!((false, "message")) | ch2!((true, 3)) |
-        @Either!("mapClean <-", *ch1, *mult, 2, *ret1) |
-        @Either!("mapClean <-", *ch2, *mult, 2, *ret2) |
-        rhoSpec!("assertMany",
+        @Either!(*ret1, "mapClean <-", *ch1, *mult, 2) |
+        @Either!(*ret2, "mapClean <-", *ch2, *mult, 2) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((false, "message"), "== <-", *ret1), "Left values are not affected by map"),
             (((true, 6), "== <-", *ret2), "Right values are changed by map")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_compose(rhoSpec, _, ackCh) = {
+    contract test_compose(ackCh, rhoSpec, _) = {
       new ch1, ch2, ch3, ch4 in {
-        @Either!("compose", 1, [], *ch1) |
-        @Either!("compose", 5, [*divide10By], *ch2) |
-        @Either!("compose", 5, [*divide10By, *divide8By], *ch3) |
-        @Either!("compose", 0, [*divide10By, *divide8By], *ch4) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1, "compose", 1, []) |
+        @Either!(*ch2, "compose", 5, [*divide10By]) |
+        @Either!(*ch3, "compose", 5, [*divide10By, *divide8By]) |
+        @Either!(*ch4, "compose", 0, [*divide10By, *divide8By]) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((true, 1), "== <-", *ch1), "empty function list behaves like pure"),
             (((true, 2), "== <-", *ch2), "Composing one function behaves like fmap . pure"),
             (((true, 4), "== <-", *ch3), "Composing two functions behaves like flatMap . pure"),
             (((false, "Div by zero!"), "== <-", *ch4), "Left values are propagated through compose")
-          ], *ackCh)
+          ])
       }
     } |
 
     contract test_compose_clean(rhoSpec, _, ackCh) = {
       new ch1, ch2, ch3, ch4 in {
-        @Either!("composeClean", 1, [], *ch1) |
-        @Either!("composeClean", 5, [(*divide, 10)], *ch2) |
-        @Either!("composeClean", 5, [(*divide, 10), (*divide, 8)], *ch3) |
-        @Either!("composeClean", 0, [(*divide, 10), (*divide, 8)], *ch4) |
-        rhoSpec!("assertMany",
+        @Either!(*ch1, "composeClean", 1, []) |
+        @Either!(*ch2, "composeClean", 5, [(*divide, 10)]) |
+        @Either!(*ch3, "composeClean", 5, [(*divide, 10), (*divide, 8)]) |
+        @Either!(*ch4, "composeClean", 0, [(*divide, 10), (*divide, 8)]) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             (((true, 1), "== <-", *ch1), "empty function list behaves like pure"),
             (((true, 2), "== <-", *ch2), "Composing one function behaves like fmap . pure"),
             (((true, 4), "== <-", *ch3), "Composing two functions behaves like flatMap . pure"),
             (((false, "Div by zero!"), "== <-", *ch4), "Left values are propagated through compose")
-          ], *ackCh)
+          ])
       }
     }
   }

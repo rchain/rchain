@@ -5,10 +5,9 @@ new
   rl(`rho:registry:lookup`), RhoSpecCh, NonNegativeNumberCh,
   test_initialize_with_negative_value, test_initialize_with_nonnegative_value,
   test_operations_with_negative_numbers, test_subtract_too_much, test_add_successful,
-  test_subtract_successful, test_fail_on_overflow
+  test_subtract_successful, test_fail_on_overflow, stdlog(`rho:io:stdlog`)
 in {
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
     @RhoSpec!("testSuite",
       [
         ("Initially negative balances are be converted to 0.", *test_initialize_with_negative_value),
@@ -21,103 +20,85 @@ in {
       ])
   } |
 
-  rl!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberCh) |
-  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
-    contract test_initialize_with_negative_value(rhoSpec, _, ackCh) = {
+  for(@(_, NonNegativeNumber) <- rl!?(`rho:lang:nonNegativeNumber`)) {
+    contract test_initialize_with_negative_value(ackCh, rhoSpec, _) = {
+      stdlog!("info", "log")|
       new ch1 in {
-        @NonNegativeNumber!(-1, *ch1) |
-        for (v1 <- ch1) {
-          v1!("value", *ch1) |
-          rhoSpec!("assert", (0, "== <-", *ch1), "-1 is converted to 0", *ackCh)
+        for (v1 <- @NonNegativeNumber!?(-1)) {
+          v1!(*ch1, "value") |
+          rhoSpec!(*ackCh, "assert", (0, "== <-", *ch1), "-1 is converted to 0")
         }
       }
     } |
 
-    contract test_initialize_with_nonnegative_value(rhoSpec, _, ackCh) = {
+    contract test_initialize_with_nonnegative_value(ackCh, rhoSpec, _) = {
       new ch1, ch2 in {
-        @NonNegativeNumber!(0, *ch1) |
-        @NonNegativeNumber!(1, *ch2) |
-        for (v1 <- ch1 & v2 <- ch2) {
-          v1!("value", *ch1) |
-          v2!("value", *ch2) |
-          rhoSpec!("assertMany",
+        for (v1 <- @NonNegativeNumber!?(0) & v2 <- @NonNegativeNumber!?(1)) {
+          v1!(*ch1, "value") |
+          v2!(*ch2, "value") |
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((0, "== <-", *ch1), "0 stays the same"),
               ((1, "== <-", *ch2), "1 stays the same"),
-            ],
-            *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_operations_with_negative_numbers(rhoSpec, _, ackCh) = {
-      new ch, ch1, ch2 in {
-        @NonNegativeNumber!(0, *ch) |
-        for (v <- ch) {
-          v!("add", -1, *ch1) |
-          v!("sub", -1, *ch2) |
-          rhoSpec!("assertMany",
+    contract test_operations_with_negative_numbers(ackCh, rhoSpec, _) = {
+      new ch1, ch2 in {
+        for (v <- @NonNegativeNumber!?(0)) {
+          v!(*ch1, "add", -1) |
+          v!(*ch2, "sub", -1) |
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((false, "== <-", *ch1), "Adding a negative number fails"),
               ((false, "== <-", *ch2), "Subtracting a negative number fails"),
-            ],
-            *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_subtract_too_much(rhoSpec, _, ackCh) = {
+    contract test_subtract_too_much(ackCh, rhoSpec, _) = {
       new ch in {
-        @NonNegativeNumber!(0, *ch) |
-        for (v <- ch) {
-          v!("sub", 1, *ch) |
-          rhoSpec!("assert", (false, "== <-", *ch), "subtracting fails", *ackCh)
+        for (v <- @NonNegativeNumber!?(0)) {
+          v!(*ch, "sub", 1) |
+          rhoSpec!(*ackCh, "assert", (false, "== <-", *ch), "subtracting fails")
         }
       }
     } |
 
-    contract test_add_successful(rhoSpec, _, ackCh) = {
+    contract test_add_successful(ackCh, rhoSpec, _) = {
       new ch in {
-        @NonNegativeNumber!(0, *ch) |
-        for (nn <- ch) {
-          nn!("add", 1, *ch) |
-          for (@result <- ch) {
-            nn!("value", *ch) |
-            rhoSpec!("assertMany",
-              [
-                ((true, "==", result), "add succeeds"),
-                ((1, "== <-", *ch), "result is correct"),
-              ],
-              *ackCh)
-          }
+        for (nn <- @NonNegativeNumber!?(0); @result <- nn!?("add", 1)) {
+          nn!(*ch, "value") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((true, "==", result), "add succeeds"),
+              ((1, "== <-", *ch), "result is correct"),
+            ])
         }
       }
     } |
 
-    contract test_subtract_successful(rhoSpec, _, ackCh) = {
+    contract test_subtract_successful(ackCh, rhoSpec, _) = {
       new ch in {
-        @NonNegativeNumber!(2, *ch) |
-        for (nn <- ch) {
-          nn!("sub", 1, *ch) |
-          for (@result <- ch) {
-            nn!("value", *ch) |
-            rhoSpec!("assertMany",
-              [
-                ((true, "==", result), "sub succeeds"),
-                ((1, "== <-", *ch), "result is correct"),
-              ],
-              *ackCh)
-          }
+        for (nn <- @NonNegativeNumber!?(2); @result <- nn!?("sub", 1)) {
+          nn!(*ch, "value") |
+          rhoSpec!(*ackCh,"assertMany",
+            [
+              ((true, "==", result), "sub succeeds"),
+              ((1, "== <-", *ch), "result is correct"),
+            ])
         }
       }
     } |
 
-    contract test_fail_on_overflow(rhoSpec, _, ackCh) = {
+    contract test_fail_on_overflow(ackCh, rhoSpec, _) = {
       new ch in {
-        @NonNegativeNumber!(9223372036854775757, *ch) |
-        for (nn <- ch) {
-          nn!("add", 9223372036854775757, *ch) |
-          rhoSpec!("assert", (false, "== <-", *ch), "add fails", *ackCh)
+        for (nn <- @NonNegativeNumber!?(9223372036854775757)) {
+          nn!(*ch, "add", 9223372036854775757) |
+          rhoSpec!(*ackCh, "assert", (false, "== <-", *ch), "add fails")
         }
       }
     }

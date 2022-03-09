@@ -15,9 +15,9 @@
  ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
  */
 new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`), uriOut in {
-  contract NonNegativeNumber(@init, return) = {
+  contract NonNegativeNumber(return, @init) = {
     new this, valueStore in {
-      contract this(@"add", @x, success) = {
+      contract this(success, @"add", @x) = {
         if (x >= 0) {
           for(@v <- @(*MergeableTag, *valueStore)){
             if (v + x >= v) {
@@ -31,7 +31,7 @@ new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`),
           success!(false)
         }
       } |
-      contract this(@"sub", @x, success) = {
+      contract this(success, @"sub", @x) = {
         if (x >= 0) {
           for(@v <- @(*MergeableTag, *valueStore)) {
             if (x <= v) {
@@ -44,7 +44,7 @@ new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`),
           success!(false)
         }
       } |
-      contract this(@"value", return) = {
+      contract this(return, @"value") = {
         for(@v <- @(*MergeableTag, *valueStore)) {
           @(*MergeableTag, *valueStore)!(v) | return!(v)
         }
@@ -61,9 +61,9 @@ new  NonNegativeNumber, MergeableTag, rs(`rho:registry:insertSigned:secp256k1`),
   } |
 
   rs!(
+    *uriOut,
     "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),
     (9223372036854775807, bundle+{*NonNegativeNumber}),
     "304402202b27c904bcecd83a7355db7f235fbe447c692079325deeefacba62c8ee236eb9022077b97df4e21784897e6da490b4b60c420a1db64b5807ad98acefa0a38c7f6f22".hexToBytes(),
-    *uriOut
   )
 }

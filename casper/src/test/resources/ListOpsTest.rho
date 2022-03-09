@@ -13,8 +13,7 @@ new
   test_exists_clean, test_exists_clean_shortcircuit,
   test_filter_clean
 in {
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
     @RhoSpec!("testSuite",
       [
         ("ListOps.sum works", *test_sum),
@@ -31,125 +30,120 @@ in {
         ("ListOps.filterClean works", *test_filter_clean),
       ])
   } |
-  rl!(`rho:lang:listOps`, *ListOpsCh) |
-  for(@(_, ListOps) <- ListOpsCh) {
+  for(@(_, ListOps) <- rl!?(`rho:lang:listOps`)) {
 
-    contract test_sum(rhoSpec, _, ackCh) = {
+    contract test_sum(ackCh, rhoSpec, _) = {
       new ch0, ch1 in {
-        @ListOps!("sum", [], *ch0) |
-        @ListOps!("sum", [1, 2], *ch1) |
+        @ListOps!(*ch0, "sum", []) |
+        @ListOps!(*ch1, "sum", [1, 2]) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((0, "== <-", *ch0), "sum for empty lists is zero"),
             ((3, "== <-", *ch1), "")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_forall(rhoSpec, _, ackCh) = {
+    contract test_forall(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2, ch3, ch4 in {
 
-        @ListOps!("forall", [], *greaterThan1, *ch0) |
-        @ListOps!("forall", [1], *greaterThan1, *ch1) |
-        @ListOps!("forall", [2], *greaterThan1, *ch2) |
-        @ListOps!("forall", [3, 4], *greaterThan1, *ch3) |
-        @ListOps!("forall", [1, 2, 3, 4], *greaterThan1, *ch4) |
+        @ListOps!(*ch0, "forall", [], *greaterThan1) |
+        @ListOps!(*ch1, "forall", [1], *greaterThan1) |
+        @ListOps!(*ch2, "forall", [2], *greaterThan1) |
+        @ListOps!(*ch3, "forall", [3, 4], *greaterThan1) |
+        @ListOps!(*ch4, "forall", [1, 2, 3, 4], *greaterThan1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((true, "== <-", *ch0), "forall is successful for empty lists"),
             ((false, "== <-", *ch1), "[1]"),
             ((true, "== <-", *ch2), "[2]"),
             ((true, "== <-", *ch3), "[3, 4]"),
             ((false, "== <-", *ch4), "[1, 2, 3, 4]")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_forall_shortcircuit(rhoSpec, _, ackCh) = {
-      new callCountCh, greaterThan1WithCount, resultCh in {
+    contract test_forall_shortcircuit(ackCh, rhoSpec, _) = {
+      new callCountCh, greaterThan1WithCount in {
         callCountCh!(0) |
-        contract greaterThan1WithCount(@x, returnCh) = {
+        contract greaterThan1WithCount(returnCh, @x ) = {
           for (@count <- callCountCh) {
             callCountCh!(count + 1) |
             returnCh!(x > 1)
           }
         } |
 
-        @ListOps!("forall", [2, 1, 0], *greaterThan1WithCount, *resultCh) |
-
-        for (@result <- resultCh) {
-          rhoSpec!("assertMany",
+        for (@result <- @ListOps!?( "forall", [2, 1, 0], *greaterThan1WithCount)) {
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((false, "==", result), "second item doesn't satisfy the predicate"),
               ((2, "== <-", *callCountCh), "after the first failure no more calls should happen"),
-            ], *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_exists(rhoSpec, _, ackCh) = {
+    contract test_exists(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2, ch3, ch4 in {
 
-        @ListOps!("exists", [], *greaterThan1, *ch0) |
-        @ListOps!("exists", [1], *greaterThan1, *ch1) |
-        @ListOps!("exists", [2], *greaterThan1, *ch2) |
-        @ListOps!("exists", [3, 4], *greaterThan1, *ch3) |
-        @ListOps!("exists", [1, 2, 3, 4], *greaterThan1, *ch4) |
+        @ListOps!(*ch0, "exists", [], *greaterThan1) |
+        @ListOps!(*ch1, "exists", [1], *greaterThan1) |
+        @ListOps!(*ch2, "exists", [2], *greaterThan1) |
+        @ListOps!(*ch3, "exists", [3, 4], *greaterThan1) |
+        @ListOps!(*ch4, "exists", [1, 2, 3, 4], *greaterThan1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((false, "== <-", *ch0), "exists returns false for empty lists"),
             ((false, "== <-", *ch1), "[1]"),
             ((true, "== <-", *ch2), "[2]"),
             ((true, "== <-", *ch3), "[3, 4]"),
             ((true, "== <-", *ch4), "[1, 2, 3, 4]")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_exists_shortcircuit(rhoSpec, _, ackCh) = {
-      new callCountCh, greaterThan1WithCount, resultCh in {
+    contract test_exists_shortcircuit(ackCh, rhoSpec, _) = {
+      new callCountCh, greaterThan1WithCount in {
         callCountCh!(0) |
-        contract greaterThan1WithCount(@x, returnCh) = {
+        contract greaterThan1WithCount(returnCh, @x) = {
           for (@count <- callCountCh) {
             callCountCh!(count + 1) |
             returnCh!(x > 1)
           }
         } |
 
-        @ListOps!("exists", [2, 1, 0], *greaterThan1WithCount, *resultCh) |
-
-        for (@result <- resultCh) {
-          rhoSpec!("assertMany",
+        for (@result <- @ListOps!?("exists", [2, 1, 0], *greaterThan1WithCount)) {
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((true, "==", result), "first item satisfies the predicate"),
               ((1, "== <-", *callCountCh), "after the first success no more calls should happen"),
-            ], *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_filter(rhoSpec, _, ackCh) = {
+    contract test_filter(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2 in {
-        @ListOps!("filter", [], *greaterThan1, *ch0) |
-        @ListOps!("filter", [2, 3], *greaterThan1, *ch1) |
-        @ListOps!("filter", [1, 2], *greaterThan1, *ch2) |
+        @ListOps!(*ch0, "filter", [], *greaterThan1) |
+        @ListOps!(*ch1, "filter", [2, 3], *greaterThan1) |
+        @ListOps!(*ch2, "filter", [1, 2], *greaterThan1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             (([], "== <-", *ch0), "filter works on empty lists"),
             (([2,3], "== <-", *ch1), "all items satisfy the predicate"),
             (([2], "== <-", *ch2), "part of the items satisfy the predicate"),
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_partial_fold_clean(rhoSpec, _, ackCh) = {
+    contract test_partial_fold_clean(ackCh, rhoSpec, _) = {
       new combinatorAndCondition, ret, ret2 in {
         // Add up numbers less than state
-        contract combinatorAndCondition(@state, @head, @accumulatedValue, result) = {
+        contract combinatorAndCondition(result, @state, @head, @accumulatedValue) = {
           if (head < state) {
             result!(false, accumulatedValue + head)
           } else {
@@ -159,114 +153,110 @@ in {
         for (@_, @val <- ret2) {
           ret!(val)
         } |
-        @ListOps!("partialFoldClean", [0, 1, 2, 3, 4, 5, 6], 0, *combinatorAndCondition, 5, *ret2) |
-        rhoSpec!("assertMany",
+        @ListOps!(*ret2, "partialFoldClean", [0, 1, 2, 3, 4, 5, 6], 0, *combinatorAndCondition, 5) |
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((10, "== <-", *ret), "compute partial sum correctly"),
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_forall_clean(rhoSpec, _, ackCh) = {
+    contract test_forall_clean(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2, ch3, ch4 in {
 
-        @ListOps!("forallClean", [], *greaterThan, 1, *ch0) |
-        @ListOps!("forallClean", [1], *greaterThan, 1, *ch1) |
-        @ListOps!("forallClean", [2], *greaterThan, 1, *ch2) |
-        @ListOps!("forallClean", [3, 4], *greaterThan, 1, *ch3) |
-        @ListOps!("forallClean", [1, 2, 3, 4], *greaterThan, 1, *ch4) |
+        @ListOps!(*ch0, "forallClean", [], *greaterThan, 1) |
+        @ListOps!(*ch1, "forallClean", [1], *greaterThan, 1) |
+        @ListOps!(*ch2, "forallClean", [2], *greaterThan, 1) |
+        @ListOps!(*ch3, "forallClean", [3, 4], *greaterThan, 1) |
+        @ListOps!(*ch4, "forallClean", [1, 2, 3, 4], *greaterThan, 1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((true, "== <-", *ch0), "forall is successful for empty lists"),
             ((false, "== <-", *ch1), "[1]"),
             ((true, "== <-", *ch2), "[2]"),
             ((true, "== <-", *ch3), "[3, 4]"),
             ((false, "== <-", *ch4), "[1, 2, 3, 4]")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_forall_clean_shortcircuit(rhoSpec, _, ackCh) = {
+    contract test_forall_clean_shortcircuit(ackCh, rhoSpec, _) = {
       new callCountCh, greaterThanWithCount, resultCh in {
         callCountCh!(0) |
-        contract greaterThanWithCount(@bound, @x, returnCh) = {
+        contract greaterThanWithCount(returnCh, @bound, @x) = {
           for (@count <- callCountCh) {
             callCountCh!(count + 1) |
             returnCh!(x > bound)
           }
         } |
 
-        @ListOps!("forallClean", [2, 1, 0], *greaterThanWithCount, 1, *resultCh) |
-
-        for (@result <- resultCh) {
-          rhoSpec!("assertMany",
+        for (@result <- @ListOps!?("forallClean", [2, 1, 0], *greaterThanWithCount, 1)) {
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((false, "==", result), "second item doesn't satisfy the predicate"),
               ((2, "== <-", *callCountCh), "after the first failure no more calls should happen"),
-            ], *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_exists_clean(rhoSpec, _, ackCh) = {
+    contract test_exists_clean(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2, ch3, ch4 in {
 
-        @ListOps!("existsClean", [], *greaterThan, 1, *ch0) |
-        @ListOps!("existsClean", [1], *greaterThan, 1, *ch1) |
-        @ListOps!("existsClean", [2], *greaterThan, 1, *ch2) |
-        @ListOps!("existsClean", [3, 4], *greaterThan, 1, *ch3) |
-        @ListOps!("existsClean", [1, 2, 3, 4], *greaterThan, 1, *ch4) |
+        @ListOps!(*ch0, "existsClean", [], *greaterThan, 1) |
+        @ListOps!(*ch1, "existsClean", [1], *greaterThan, 1) |
+        @ListOps!(*ch2, "existsClean", [2], *greaterThan, 1) |
+        @ListOps!(*ch3, "existsClean", [3, 4], *greaterThan, 1) |
+        @ListOps!(*ch4, "existsClean", [1, 2, 3, 4], *greaterThan, 1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((false, "== <-", *ch0), "exists returns false for empty lists"),
             ((false, "== <-", *ch1), "[1]"),
             ((true, "== <-", *ch2), "[2]"),
             ((true, "== <-", *ch3), "[3, 4]"),
             ((true, "== <-", *ch4), "[1, 2, 3, 4]")
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract test_exists_clean_shortcircuit(rhoSpec, _, ackCh) = {
+    contract test_exists_clean_shortcircuit(ackCh, rhoSpec, _) = {
       new callCountCh, greaterThanWithCount, resultCh in {
         callCountCh!(0) |
-        contract greaterThanWithCount(@bound, @x, returnCh) = {
+        contract greaterThanWithCount(returnCh, @bound, @x) = {
           for (@count <- callCountCh) {
             callCountCh!(count + 1) |
             returnCh!(x > bound)
           }
         } |
 
-        @ListOps!("existsClean", [2, 1, 0], *greaterThanWithCount, 1, *resultCh) |
-
-        for (@result <- resultCh) {
-          rhoSpec!("assertMany",
+        for (@result <- @ListOps!?("existsClean", [2, 1, 0], *greaterThanWithCount, 1)) {
+          rhoSpec!(*ackCh, "assertMany",
             [
               ((true, "==", result), "first item satisfies the predicate"),
               ((1, "== <-", *callCountCh), "after the first success no more calls should happen"),
-            ], *ackCh)
+            ])
         }
       }
     } |
 
-    contract test_filter_clean(rhoSpec, _, ackCh) = {
+    contract test_filter_clean(ackCh, rhoSpec, _) = {
       new ch0, ch1, ch2 in {
-        @ListOps!("filterClean", [], *greaterThan, 1, *ch0) |
-        @ListOps!("filterClean", [2, 3], *greaterThan, 1, *ch1) |
-        @ListOps!("filterClean", [1, 2], *greaterThan, 1, *ch2) |
+        @ListOps!(*ch0, "filterClean", [], *greaterThan, 1) |
+        @ListOps!(*ch1, "filterClean", [2, 3], *greaterThan, 1) |
+        @ListOps!(*ch2, "filterClean", [1, 2], *greaterThan, 1) |
 
-        rhoSpec!("assertMany",
+        rhoSpec!(*ackCh,"assertMany",
           [
             (([], "== <-", *ch0), "filter works on empty lists"),
             (([2,3], "== <-", *ch1), "all items satisfy the predicate"),
             (([2], "== <-", *ch2), "part of the items satisfy the predicate"),
-          ], *ackCh)
+          ])
       }
     } |
 
-    contract greaterThan(@bound, @x, retCh) = { retCh!(x > bound) } |
-    contract greaterThan1(@x, retCh) = { retCh!(x > 1) }
+    contract greaterThan(retCh, @bound, @x) = { retCh!(x > bound) } |
+    contract greaterThan1(retCh, @x) = { retCh!(x > 1) }
   }
 }

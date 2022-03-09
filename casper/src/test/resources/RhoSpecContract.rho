@@ -24,26 +24,22 @@ new
   testSuiteCompleted(`rho:test:testSuiteCompleted`),
   uriOut
 in {
-  stdlog!("debug", "Loading RhoSpec") |
-  rl!(`rho:lang:listOps`, *ListOpsCh) |
-  for(@(_, ListOps) <- ListOpsCh) {
-
+  stdlog!("info", "Loading RhoSpec") |
+  for(@(_, ListOps) <- rl!?(`rho:lang:listOps`)) {
     contract RhoSpec(@"testSuite", @tests) = {
       new dummySetup in {
-        contract dummySetup(_, returnCh) = {
+        contract dummySetup(returnCh, _) = {
           returnCh!(Nil)
         } |
-
         RhoSpec!("testSuite", *dummySetup, tests)
       }
     } |
 
     contract RhoSpec(@"testSuite", setup, @tests) = {
       new dummyTeardown in {
-        contract dummyTeardown(_, _, ackCh) = {
+        contract dummyTeardown(ackCh, _, _) = {
           ackCh!(Nil)
         } |
-
         RhoSpec!("testSuite", *setup, *dummyTeardown, tests)
       }
     } |
@@ -51,66 +47,60 @@ in {
     contract RhoSpec(@"testSuite", setup, teardown, @tests) = {
       stdlog!("info", ("Defining the testSuite:", tests)) |
       new runTest, runTestOnce, retCh in {
-        contract runTestOnce(@(testName, testBody), @attempt, testAckCh) = {
-          stdlog!("debug", "Running test: " ++ testName ++ " attempt " ++ "${attempt}" %% {"attempt": attempt}) |
+        contract runTestOnce(testAckCh, @(testName, testBody), @attempt) = {
+          stdlog!("info", "Running test: " ++ testName ++ " attempt " ++ "${attempt}" %% {"attempt": attempt}) |
           new rhoSpecImpl, privateAssert in {
-            contract privateAssert(@assertion, @clue, ackCh) = {
-              stdlog!("debug", "asserting: " ++ clue) |
+            contract privateAssert(ackCh, @assertion, @clue) = {
+              stdlog!("info", "asserting: " ++ clue) |
               match assertion {
                 (expected, "== <-", actualCh) => {
                   for (@actual <- @actualCh) {
                     stdlog!("info", {"actual": actual, "expected": expected}) |
-                    assert!(testName, attempt, (expected, "==", actual), clue, *ackCh)
+                    assert!(*ackCh, testName, attempt, (expected, "==", actual), clue)
                   }
                 }
                 (unexpected, "!= <-", actualCh) => {
                   for (@actual <- @actualCh) {
                     stdlog!("info", {"actual": actual, "unexpected": unexpected}) |
-                    assert!(testName, attempt, (unexpected, "!=", actual), clue, *ackCh)
+                    assert!(*ackCh, testName, attempt, (unexpected, "!=", actual), clue)
                   }
                 }
                 assertion => {
-                  assert!(testName, attempt, assertion, clue, *ackCh)
+                  assert!(*ackCh, testName, attempt, assertion, clue)
                 }
               }
             } |
 
-            contract rhoSpecImpl(@"assert", @assertion, @clue, ackCh) = {
-              privateAssert!(assertion, clue, *ackCh)
+            contract rhoSpecImpl(ackCh, @"assert", @assertion, @clue) = {
+              privateAssert!(*ackCh, assertion, clue)
             } |
 
-            contract rhoSpecImpl(@"assertMany", @assertions, ackCh) = {
+            contract rhoSpecImpl(ackCh, @"assertMany", @assertions) = {
               match assertions {
                 [] => { ackCh!(true) }
 
                 [(assertion, clue) ...tail] => {
 
-                  new privateAck in {
-                    privateAssert!(assertion, clue, *privateAck) |
-
-                    for (@v <- privateAck) {
-                      if (v) {
-                        rhoSpecImpl!("assertMany", tail, *ackCh)
-                      }
-                      else {
-                        ackCh!(false)
-                      }
+                  for (@v <- privateAssert!?(assertion, clue)) {
+                    if (v) {
+                      rhoSpecImpl!(*ackCh, "assertMany", tail)
                     }
-                  }
+                    else {
+                      ackCh!(false)
+                    }
+                    }
                 }
               }
             } |
 
-            new setupCh, testBodyAckCh, testTearDownAckCh in {
-              setup!(testName, bundle+{*setupCh}) |
+            new setupCh in {
+              setup!(bundle+{*setupCh}, testName) |
               for (@setupResult <- setupCh) {
-                stdlog!("debug", ("Setup successful for ", testName, " result: ", setupResult)) |
-                @testBody ! (*rhoSpecImpl, setupResult, *testBodyAckCh) |
-                for (@testBodyResult <- testBodyAckCh) {
+                stdlog!("info", ("Setup successful for ", testName, " result: ", setupResult)) |
+                for (@testBodyResult <- @testBody !? (*rhoSpecImpl, setupResult)) {
                   stdlog!("info", ("Test ", testName, " finished with result: ", testBodyResult)) |
-                  teardown!(testName, setupResult, *testTearDownAckCh) |
-                  for (_ <- testTearDownAckCh) {
-                    stdlog!("debug", ("Teardown finished for ", testName)) |
+                  for (_ <- teardown!?(testName, setupResult)) {
+                    stdlog!("info", ("Teardown finished for ", testName)) |
                     testAckCh!(testBodyResult)
                   }
                 }
@@ -120,27 +110,26 @@ in {
         } |
 
 
-        contract runTest(@(testName, testBody), ackCh) = {
+        contract runTest(ackCh, @(testName, testBody)) = {
           stdlog!("info", "Running test: " ++ testName) |
-          runTest!((testName, testBody, 1), *ackCh)
+          runTest!(*ackCh, (testName, testBody, 1) )
         } |
 
-        contract runTest(@(testName, testBody, attempts), ackCh) = {
+        contract runTest(ackCh, @(testName, testBody, attempts)) = {
           stdlog!("info", "Calling runTest") |
 
           new retCh, runTestImpl in {
-            contract runTestImpl(@attempt, retCh) = {
-              runTestOnce!((testName, testBody), attempt, *retCh)
+            contract runTestImpl(retCh, @attempt) = {
+              runTestOnce!(*retCh, (testName, testBody), attempt)
             } |
 
-            @ListOps!("range", 1, attempts + 1, *retCh) |
-            for(@range <- retCh) {
-              @ListOps!("foreach", range, *runTestImpl, *ackCh)
+            for(@range <- @ListOps!?("range", 1, attempts + 1)) {
+              @ListOps!(*ackCh, "foreach", range, *runTestImpl)
             }
           }
         } |
 
-        @ListOps!("foreach", tests, *runTest, *retCh) |
+        @ListOps!(*retCh, "foreach", tests, *runTest ) |
         for (@v <- retCh) {
           testSuiteCompleted!(true)
         }
@@ -149,9 +138,9 @@ in {
   } |
 
   rs!(
+    *uriOut,
     "0401f5d998c9be9b1a753771920c6e968def63fe95b20c71a163a7f7311b6131ac65a49f796b5947fa9d94b0542895e7b7ebe8b91eefcbc5c7604aaf281922ccac".hexToBytes(),
     (9223372036854775807, bundle+{*RhoSpec}),
     "3045022100da7b26ef5f88fa5fd52f01d58a5b8d997b82fd8850a4f8a1683d0474a80203ed02205d95090a6915f45c8e4241558775831049d48b8a9d9103a0c0a3e34ede4a007c".hexToBytes(),
-    *uriOut
   )
 }

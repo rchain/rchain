@@ -12,9 +12,7 @@ new rl(`rho:registry:lookup`),
     testSetupTeardown
 in {
   setupHistoryCh!({"setups":[], "teardowns":[]}) |
-
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
   @RhoSpec!("testSuite", *setup, *teardown,
     [
       ("setup runs correctly", *testSetup),
@@ -30,119 +28,109 @@ in {
     ])
   } |
 
-  contract setup(@testName, returnCh) = {
+  contract setup(returnCh, @testName) = {
     for (@setupHistory <- setupHistoryCh) {
       returnCh!("self value") |
       setupHistoryCh!(setupHistory.set("setups", setupHistory.get("setups") ++ [testName]))
     }
   } |
 
-  contract teardown(@testName, self, ackCh) = {
+  contract teardown(ackCh, @testName, self) = {
     for (@setupHistory <- setupHistoryCh) {
       ackCh!(Nil) |
       setupHistoryCh!(setupHistory.set("teardowns", setupHistory.get("teardowns") ++ [testName]))
     }
   } |
 
-  contract testSetup(rhoSpec, self, ackCh) = {
-    rhoSpec ! ("assert",
+  contract testSetup(ackCh, rhoSpec, self) = {
+    rhoSpec ! (*ackCh, "assert",
       ("self value", "==", *self),
       "self should equal the value returned by testsuite setup",
-      *ackCh)
+      )
   } |
 
-  contract testAssertEquals(rhoSpec, self, ackCh) = {
-    new privateAck in {
-      rhoSpec ! ("assert", ("abc", "==", "abc"), "strings should be equal", *privateAck) |
-
-      for( _ <- privateAck) {
-        rhoSpec ! ("assert", (1, "==", 1), "ints should be equal", *ackCh)
-      }
-    }
+  contract testAssertEquals(ackCh, rhoSpec, self) = {
+    rhoSpec !? ( "assert", ("abc", "==", "abc"), "strings should be equal");
+    rhoSpec ! (*ackCh, "assert", (1, "==", 1), "ints should be equal")
   } |
 
-  contract testAssertNotEquals(rhoSpec, self, ackCh) = {
+  contract testAssertNotEquals(ackCh,  rhoSpec, self) = {
     stdlog ! ("info", "testing nonequality") |
-    new privateAck in {
-      rhoSpec ! ("assert", ("abc", "!=", "xyz"), "strings should be not equal", *privateAck) |
-
-      for( _ <- privateAck) {
-        rhoSpec ! ("assert", (1, "!=", 0), "ints should not be equal", *ackCh)
-      }
-    }
+    rhoSpec !? ("assert", ("abc", "!=", "xyz"), "strings should be not equal");
+    rhoSpec ! ( *ackCh, "assert", (1, "!=", 0), "ints should not be equal")
   } |
 
-  contract testAssertTrue(rhoSpec, self, ackCh) = {
-    rhoSpec ! ("assert", true, "boolean assertions should work", *ackCh)
+  contract testAssertTrue(ackCh, rhoSpec, self) = {
+    rhoSpec ! (*ackCh, "assert", true, "boolean assertions should work")
   } |
 
-  contract testAssertMany(rhoSpec, self, ackCh) = {
-    rhoSpec ! ("assertMany",
+  contract testAssertMany(ackCh, rhoSpec, self) = {
+    rhoSpec ! (*ackCh, "assertMany",
       [
         (true, "assert boolean"),
         ((1, "==", 1), "assert equals")
       ],
-      *ackCh)
+      )
   } |
 
-  contract testAssertEqualsFromChannel(rhoSpec, self, ackCh) = {
+  contract testAssertEqualsFromChannel(ackCh, rhoSpec, self) = {
     new ch in {
       ch ! (1) |
-      rhoSpec ! ("assert", (1, "== <-", *ch), "assert equals from channel", *ackCh)
+      rhoSpec!(*ackCh, "assert", (1, "== <-", *ch), "assert equals from channel")
     }
   } |
 
-  contract testAssertNotEqualsFromChannel(rhoSpec, self, ackCh) = {
+  contract testAssertNotEqualsFromChannel(ackCh, rhoSpec, self) = {
     stdlog ! ("info", "testing nonequality from channel") |
     new ch in {
       ch ! (1) |
-      rhoSpec ! ("assert", (0, "!= <-", *ch), "assert not equals from channel", *ackCh)
+      rhoSpec!(*ackCh, "assert", (0, "!= <-", *ch), "assert not equals from channel")
     }
   } |
 
-  contract testAssertEqualsForVariables(rhoSpec, self, ackCh) = {
+  contract testAssertEqualsForVariables(ackCh, rhoSpec, self) = {
     new ch1, ch2 in {
       ch1 ! (1) | ch2 ! (1) |
       for (x <- ch1 & y <- ch2) {
-        rhoSpec ! ("assertMany",
+        rhoSpec!(*ackCh, "assertMany",
           [
             ((*x, "==", *y), "assert var equals var"),
             ((*x, "==", 1), "assert var equals const"),
             ((1, "==", *x), "assert const equals var"),
-          ],
-          *ackCh)
+          ]
+          )
       }
     }
   } |
 
-  contract testAssertManyEqualsFromChannel(rhoSpec, self, ackCh) = {
+  contract testAssertManyEqualsFromChannel(ackCh, rhoSpec, self) = {
     new ch1, ch2 in {
       ch1 ! (1) |
       ch2 ! (2) |
-      rhoSpec ! ("assertMany",
+      rhoSpec!(*ackCh, "assertMany",
         [
           ((1, "== <-", *ch1), "first assert"),
           ((2, "== <-", *ch2) , "second assert")
-        ],
-        *ackCh)
+        ]
+        )
     }
   } |
 
-  contract testMultipleAttempts(rhoSpec, self, ackCh) = {
-    rhoSpec!("assert", true, "should always be successful", *ackCh)
+  contract testMultipleAttempts(ackCh, rhoSpec, self) = {
+    rhoSpec!(*ackCh, "assert", true, "should always be successful", )
   } |
 
-  contract testSetupTeardown(rhoSpec, self, ackCh) = {
+  contract testSetupTeardown(ackCh, rhoSpec, self) = {
     for(@setupHistory <- setupHistoryCh) {
       setupHistoryCh!(setupHistory) |
-      rhoSpec!("assertMany",
+      rhoSpec!(*ackCh, "assertMany",
         [
           ((19, "==", setupHistory.get("setups").length()),
             "setups history should also include this test and also the one repeated 10 times (testMultipleAttempts)"),
           ((18, "==", setupHistory.get("teardowns").length()),
             "teardowns history should not include this test but includes the repeated ones")
         ],
-        *ackCh)
+        )
     }
   }
 }

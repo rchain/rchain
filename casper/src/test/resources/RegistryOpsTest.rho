@@ -4,8 +4,7 @@ new
   test_buildUri,
   test_buildUriIllegalArgument
 in {
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
     @RhoSpec!("testSuite",
       [
         ("buildUri should work", *test_buildUri),
@@ -13,17 +12,17 @@ in {
     ])
   } |
 
-  contract test_buildUri(rhoSpec, _, ackCh) = {
+  contract test_buildUri(ackCh, rhoSpec, _) = {
     new retCh in {
-      registryOps!("buildUri", "foo".toByteArray(), *retCh) |
-      rhoSpec!("assert", (`rho:id:5zsti8g1zpshouu8f7dm1dmqmte3wreeb1abf5dj51h1dds1cjizja`, "== <-", *retCh), "Expecting an uri", *ackCh)
+      registryOps!(*retCh, "buildUri", "foo".toByteArray()) |
+      rhoSpec!(*ackCh, "assert", (`rho:id:5zsti8g1zpshouu8f7dm1dmqmte3wreeb1abf5dj51h1dds1cjizja`, "== <-", *retCh), "Expecting an uri")
     }
   } |
 
-  contract test_buildUriIllegalArgument(rhoSpec, _, ackCh) = {
+  contract test_buildUriIllegalArgument(ackCh, rhoSpec, _) = {
     new retCh, name in {
-      registryOps!("buildUri", *name, *retCh) |
-      rhoSpec!("assert", (Nil, "== <-", *retCh), "Expecting Nil", *ackCh)
+      registryOps!(*retCh, "buildUri", *name) |
+      rhoSpec!(*ackCh, "assert", (Nil, "== <-", *retCh), "Expecting Nil")
     }
   }
 }

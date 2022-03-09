@@ -12,8 +12,7 @@ new
   test_contains_after_set_to_nil,
   test_contention
 in {
-  rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
-  for(@(_, RhoSpec) <- RhoSpecCh) {
+  for(@(_, RhoSpec) <- rl!?(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`)) {
     @RhoSpec!("testSuite",
       [
         ("Get before set returns Nil", *test_get_before_set),
@@ -29,191 +28,157 @@ in {
       ])
   } |
 
-  new TreeHashMapCh in {
-    rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-    for(TreeHashMap <- TreeHashMapCh) {
-      contract test_get_before_set(rhoSpec, _, ackCh) = {
-        new ret, ch in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("get", thm, "no such key", *ch) |
-            rhoSpec!("assertMany",
-              [
-                ((Nil, "== <-", *ch), "Getting with an unused key returns Nil")
-              ], *ackCh)
-          }
+  for(TreeHashMap <- rl!?(`rho:lang:treeHashMap`)) {
+    contract test_get_before_set(ackCh, rhoSpec, _) = {
+      new ch in {
+        for (@thm <- TreeHashMap!?("init", 3)) {
+          TreeHashMap!( *ch, "get", thm, "no such key") |
+          rhoSpec!( *ackCh, "assertMany",
+            [
+              ((Nil, "== <-", *ch), "Getting with an unused key returns Nil")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_get_after_update_nil(rhoSpec, _, ackCh) = {
-        new thmCh, ack, ch, update in {
-          TreeHashMap!("init", 3, *thmCh) |
-          contract update(@val, ret) = {
-            ret!(val + 1)
-          } |
-          for (@thm <- thmCh) {
-            TreeHashMap!("update", thm, "no such key", *update, *ack) |
-            for (_ <- ack) {
-              TreeHashMap!("get", thm, "no such key", *ch) |
-              rhoSpec!("assertMany",
-                [
-                  ((Nil, "== <-", *ch), "Getting after updating with an unused key returns Nil")
-                ], *ackCh)
-            }
-          }
+    contract test_get_after_update_nil(ackCh, rhoSpec, _) = {
+      new ack, ch, update in {
+        contract update(ret, @val) = {
+          ret!(val + 1)
+        } |
+        for (@thm <- TreeHashMap!?("init", 3);
+             _ <- TreeHashMap!?("update", thm, "no such key", *update)) {
+          TreeHashMap!(*ch, "get", thm, "no such key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((Nil, "== <-", *ch), "Getting after updating with an unused key returns Nil")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_get_after_update(rhoSpec, _, ackCh) = {
-        new thmCh, ack1, ack2, ch, update in {
-          TreeHashMap!("init", 3, *thmCh) |
-          contract update(@val, ret) = {
-            ret!(val + 1)
-          } |
-          for (@thm <- thmCh) {
-            TreeHashMap!("set", thm, "key", 0, *ack1) |
-            for (_ <- ack1) {
-              TreeHashMap!("update", thm, "key", *update, *ack2) |
-              for (_ <- ack2) {
-                TreeHashMap!("get", thm, "key", *ch) |
-                rhoSpec!("assertMany",
-                  [
-                    ((1, "== <-", *ch), "Getting after updating after setting returns the right value")
-                  ], *ackCh)
-              }
-            }
-          }
+    contract test_get_after_update(ackCh, rhoSpec, _) = {
+      new ch, update in {
+        contract update(ret, @val) = {
+          ret!(val + 1)
+        } |
+        for (@thm <- TreeHashMap!?("init", 3) ;
+             _ <- TreeHashMap!?("set", thm, "key", 0); 
+             _ <- TreeHashMap!?("update", thm, "key", *update)) {
+          TreeHashMap!(*ch, "get", thm, "key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((1, "== <-", *ch), "Getting after updating after setting returns the right value")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_get_after_set(rhoSpec, _, ackCh) = {
-        new ret, ch1, ch2 in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("set", thm, "some key", "some val", *ch1) |
-            for (_ <- ch1) {
-              TreeHashMap!("get", thm, "some key", *ch1) |
-              TreeHashMap!("get", thm, "some other key", *ch2) |
-              rhoSpec!("assertMany",
-                [
-                  (("some val", "== <-", *ch1), "Getting with the proper key returns the correct value"),
-                  ((Nil, "== <-", *ch2), "Getting with a different key returns Nil")
-                ], *ackCh)
-            }
-          }
+    contract test_get_after_set(ackCh, rhoSpec, _) = {
+      new ch1, ch2 in {
+        for (@thm <- TreeHashMap!?("init", 3);
+             _ <- TreeHashMap!?("set", thm, "some key", "some val")) {
+          TreeHashMap!(*ch1, "get", thm, "some key") |
+          TreeHashMap!(*ch2, "get", thm, "some other key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              (("some val", "== <-", *ch1), "Getting with the proper key returns the correct value"),
+              ((Nil, "== <-", *ch2), "Getting with a different key returns Nil")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_fast_unsafe_get_after_set(rhoSpec, _, ackCh) = {
-        new ret, ch1, ch2 in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("set", thm, "some key", "some val", *ch1) |
-            for (_ <- ch1) {
-              TreeHashMap!("fastUnsafeGet", thm, "some key", *ch2) |
-              rhoSpec!("assertMany",
-                [
-                  (("some val", "== <-", *ch2), "Getting with the proper key returns the correct value"),
-                ], *ackCh)
-            }
-          }
+    contract test_fast_unsafe_get_after_set(ackCh, rhoSpec, _) = {
+      new ch2 in {
+        for (@thm <- TreeHashMap!?("init", 3);_ <- TreeHashMap!?("set", thm, "some key", "some val") ) {
+          TreeHashMap!(*ch2, "fastUnsafeGet", thm, "some key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              (("some val", "== <-", *ch2), "Getting with the proper key returns the correct value"),
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_contains_before_set(rhoSpec, _, ackCh) = {
-        new ret, ch in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("contains", thm, "no such key", *ch) |
-            rhoSpec!("assertMany",
-              [
-                ((false, "== <-", *ch), "Getting with an unused key returns false")
-              ], *ackCh)
-          }
+    contract test_contains_before_set(ackCh, rhoSpec, _) = {
+      new ch in {
+        for (@thm <- TreeHashMap!?("init", 3)) {
+          TreeHashMap!(*ch, "contains", thm, "no such key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((false, "== <-", *ch), "Getting with an unused key returns false")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_contains_after_set(rhoSpec, _, ackCh) = {
-        new ret, ch1, ch2, ch3 in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("set", thm, "some key", "some val", *ch1) |
-            for (_ <- ch1) {
-              TreeHashMap!("contains", thm, "some key", *ch2) |
-              TreeHashMap!("contains", thm, "some other key", *ch3) |
-              rhoSpec!("assertMany",
-                [
-                  ((true, "== <-", *ch2), "Getting with the proper key returns true"),
-                  ((false, "== <-", *ch3), "Getting with a different key returns false")
-                ], *ackCh)
-            }
-          }
+    contract test_contains_after_set(ackCh, rhoSpec, _) = {
+      new ch2, ch3 in {
+        for (@thm <- TreeHashMap!?("init", 3);
+             _ <- TreeHashMap!?("set", thm, "some key", "some val")) {
+          TreeHashMap!(*ch2, "contains", thm, "some key") |
+          TreeHashMap!(*ch3, "contains", thm, "some other key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((true, "== <-", *ch2), "Getting with the proper key returns true"),
+              ((false, "== <-", *ch3), "Getting with a different key returns false")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_get_after_set_to_nil(rhoSpec, _, ackCh) = {
-        new ret, ch1, ch2 in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("set", thm, "some key", Nil, *ch1) |
-            for (_ <- ch1) {
-              TreeHashMap!("get", thm, "some key", *ch2) |
-              rhoSpec!("assertMany",
-                [
-                  ((Nil, "== <-", *ch2), "Getting with the proper key returns the correct value"),
-                ], *ackCh)
-            }
-          }
+    contract test_get_after_set_to_nil(ackCh, rhoSpec, _) = {
+      new ch2 in {
+        for (@thm <- TreeHashMap!?("init", 3); 
+             _ <- TreeHashMap!?("set", thm, "some key", Nil)) {
+          TreeHashMap!(*ch2, "get", thm, "some key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((Nil, "== <-", *ch2), "Getting with the proper key returns the correct value"),
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_contains_after_set_to_nil(rhoSpec, _, ackCh) = {
-        new ret, ch1, ch2, ch3 in {
-          TreeHashMap!("init", 3, *ret) |
-          for (@thm <- ret) {
-            TreeHashMap!("set", thm, "some key", Nil, *ch1) |
-            for (_ <- ch1) {
-              TreeHashMap!("contains", thm, "some key", *ch2) |
-              TreeHashMap!("contains", thm, "some other key", *ch3) |
-              rhoSpec!("assertMany",
-                [
-                  ((true, "== <-", *ch2), "Getting with the proper key returns true"),
-                  ((false, "== <-", *ch3), "Getting with a different key returns false")
-                ], *ackCh)
-            }
-          }
+    contract test_contains_after_set_to_nil(ackCh, rhoSpec, _) = {
+      new ret, ch1, ch2, ch3 in {
+        for (@thm <- TreeHashMap!?("init", 3); _ <- TreeHashMap!?("set", thm, "some key", Nil) ) {
+          TreeHashMap!(*ch2, "contains", thm, "some key") |
+          TreeHashMap!(*ch3, "contains", thm, "some other key") |
+          rhoSpec!(*ackCh, "assertMany",
+            [
+              ((true, "== <-", *ch2), "Getting with the proper key returns true"),
+              ((false, "== <-", *ch3), "Getting with a different key returns false")
+            ])
         }
-      } |
+      }
+    } |
 
-      contract test_contention(rhoSpec, _, ackCh) = {
-        new tryIt in {
-          contract tryIt(@n, @flag) = {
-            new out(`rho:io:stdlog`), mapCh in {
-              TreeHashMap!("init", 3, *mapCh) |
-              for (@map <- mapCh) {
-                new ret1, ret2, ret3 in {
-                  TreeHashMap!("set", map, "category", "object", *ret1) |
-                  TreeHashMap!("set", map, "category", "morphism", *ret2) |
-                  for (_ <- ret1 & _ <- ret2) {
-                    TreeHashMap!("get", map, "category", *ret3) |
-                    for (@val3 <- ret3) {
-                      out!("info", [n, val3]) |
-                      if (n == 9) {
-                        rhoSpec!("assertMany",
-                        [
-                          ((flag, "==", true), "Placeholder")
-                        ], *ackCh)
-                      } else {
-                        tryIt!(n+1, flag and (val3 != Nil))
-                      }
-                    }
+    contract test_contention(ackCh, rhoSpec, _) = {
+      new tryIt in {
+        contract tryIt(@n, @flag) = {
+          new out(`rho:io:stdlog`) in {
+            for (@map <- TreeHashMap!?("init", 3)) {
+              new ret3 in {
+                for (_ <- TreeHashMap!?("set", map, "category", "object") ;
+                     _ <- TreeHashMap!?("set", map, "category", "morphism"); 
+                     @val3 <- TreeHashMap!?("get", map, "category")) {
+                  out!("info", [n, val3]) |
+                  if (n == 9) {
+                    rhoSpec!(*ackCh, "assertMany",
+                    [
+                      ((flag, "==", true), "Placeholder")
+                    ])
+                  } else {
+                    tryIt!(n+1, flag and (val3 != Nil))
                   }
                 }
               }
             }
-          } |
-          tryIt!(0, true)
-        }
+          }
+        } |
+        tryIt!(0, true)
       }
     }
   }
