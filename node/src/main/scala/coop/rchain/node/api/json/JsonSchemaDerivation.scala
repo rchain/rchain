@@ -32,24 +32,29 @@ trait JsonSchemaDerivations extends JsonSchemaDerivationsBase {
 
   // format: off
 
-  implicit lazy val deployDataSchema      : JsonSchema[DeployData]                   = schemaRecord
-  implicit lazy val deployRequestSchema   : JsonSchema[DeployRequest]                = schemaRecord
-  implicit lazy val versionInfoSchema     : JsonSchema[VersionInfo]                  = schemaRecord
-  implicit lazy val apiStatusSchema       : JsonSchema[ApiStatus]                    = schemaRecord
-  implicit lazy val exploreDeployReqSchema: JsonSchema[ExploreDeployRequest]         = schemaRecord
-  implicit lazy val dataAtNameReqSchema   : JsonSchema[DataAtNameByBlockHashRequest] = schemaRecord
-  implicit lazy val rhoResponseSchema     : JsonSchema[RhoDataResponse]              = schemaRecord
-  implicit lazy val bondInfoSchema        : JsonSchema[BondInfo]                     = schemaRecord
-  implicit lazy val justInfoSchema        : JsonSchema[JustificationInfo]            = schemaRecord
-  implicit lazy val rejectedInfoSchema    : JsonSchema[RejectedDeployInfo]           = schemaRecord
-  implicit lazy val lightBlockInfoSchema  : JsonSchema[LightBlockInfo]               = schemaRecord
-  implicit lazy val deployInfoSchema      : JsonSchema[DeployInfo]                   = schemaRecord
-  implicit lazy val blockInfoSchema       : JsonSchema[BlockInfo]                    = schemaRecord
-  implicit lazy val transactionTypeSchema : JsonSchema[TransactionType]              = schemaTagged
-  implicit lazy val sysTranTypeSchema     : JsonSchema[SystemTransaction]            = schemaTagged
-  implicit lazy val transactionSchema     : JsonSchema[Transaction]                  = schemaRecord
-  implicit lazy val transactionInfoSchema : JsonSchema[TransactionInfo]              = schemaRecord
-  implicit lazy val transactionRespSchema : JsonSchema[TransactionResponse]          = schemaRecord
+  implicit lazy val deployDataSchema               : JsonSchema[DeployData]                   = schemaRecord
+  implicit lazy val deployRequestSchema            : JsonSchema[DeployRequest]                = schemaRecord
+  implicit lazy val versionInfoSchema              : JsonSchema[VersionInfo]                  = schemaRecord
+  implicit lazy val apiStatusSchema                : JsonSchema[ApiStatus]                    = schemaRecord
+  implicit lazy val exploreDeployReqSchema         : JsonSchema[ExploreDeployRequest]         = schemaRecord
+  implicit lazy val dataAtNameByBlockHashReqSchema : JsonSchema[DataAtNameByBlockHashRequest] = schemaRecord
+  implicit lazy val rhoResponseSchema              : JsonSchema[RhoDataResponse]              = schemaRecord
+  implicit lazy val bondInfoSchema                 : JsonSchema[BondInfo]                     = schemaRecord
+  implicit lazy val justInfoSchema                 : JsonSchema[JustificationInfo]            = schemaRecord
+  implicit lazy val rejectedInfoSchema             : JsonSchema[RejectedDeployInfo]           = schemaRecord
+  implicit lazy val lightBlockInfoSchema           : JsonSchema[LightBlockInfo]               = schemaRecord
+  implicit lazy val deployInfoSchema               : JsonSchema[DeployInfo]                   = schemaRecord
+  implicit lazy val blockInfoSchema                : JsonSchema[BlockInfo]                    = schemaRecord
+  implicit lazy val transactionTypeSchema          : JsonSchema[TransactionType]              = schemaTagged
+  implicit lazy val sysTranTypeSchema              : JsonSchema[SystemTransaction]            = schemaTagged
+  implicit lazy val transactionSchema              : JsonSchema[Transaction]                  = schemaRecord
+  implicit lazy val transactionInfoSchema          : JsonSchema[TransactionInfo]              = schemaRecord
+  implicit lazy val transactionRespSchema          : JsonSchema[TransactionResponse]          = schemaRecord
+  implicit lazy val prepareRespSchema              : JsonSchema[PrepareResponse]              = schemaRecord
+  implicit lazy val prepareReqSchema               : JsonSchema[PrepareRequest]               = schemaRecord
+  implicit lazy val dataAtNameReqSchema            : JsonSchema[DataAtNameRequest]            = schemaRecord
+  implicit lazy val rhoExprWithBlockSchema         : JsonSchema[RhoExprWithBlock]             = schemaRecord
+  implicit lazy val dataAtNameRespSchema           : JsonSchema[DataAtNameResponse]           = schemaRecord
 
   // Web API Rholang types (subset of protobuf generated types)
   implicit lazy val rhoExprSchema: JsonSchema[RhoExpr] =
