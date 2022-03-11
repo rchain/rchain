@@ -1,12 +1,8 @@
 package coop.rchain.rspace.history.syntax
 
-import cats.effect.Sync
-import cats.syntax.all._
-import coop.rchain.rspace.channelStore.{ChannelStore, DataJoinHash}
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history._
 import coop.rchain.rspace.serializers.ScodecSerialize.{DatumB, JoinsB, WaitingContinuationB}
-import coop.rchain.rspace.internal
 
 trait HistoryReaderSyntax {
   implicit final def rspaceSyntaxHistoryReader[F[_], C, P, A, K](
@@ -37,37 +33,4 @@ final class HistoryReaderOps[F[_], C, P, A, K](
       override def getJoins(key: Blake2b256Hash): F[Seq[JoinsB[C]]] =
         historyReader.getJoinsProj(key)(JoinsB(_, _))
     }
-
-  /**
-    * Get from channel hash written in event log (TODO to be removed)
-    */
-  def getDataFromChannelHash(
-      channelHash: Blake2b256Hash
-  )(implicit channelStore: ChannelStore[F, C], sync: Sync[F]): F[Seq[internal.Datum[A]]] =
-    for {
-      maybeDataHash <- channelStore.getChannelHash(channelHash)
-      dataHash <- maybeDataHash match {
-                   case Some(DataJoinHash(dataHash, _)) => dataHash.pure[F]
-                   case _ =>
-                     Sync[F].raiseError[Blake2b256Hash](
-                       new Exception(s"not found data hash for $channelHash in channel store")
-                     )
-                 }
-      data <- historyReader.getData(dataHash)
-    } yield data
-
-  def getJoinsFromChannelHash(
-      channelHash: Blake2b256Hash
-  )(implicit channelStore: ChannelStore[F, C], sync: Sync[F]): F[Seq[Seq[C]]] =
-    for {
-      maybeJoinHash <- channelStore.getChannelHash(channelHash)
-      joinHash <- maybeJoinHash match {
-                   case Some(DataJoinHash(_, joinHash)) => joinHash.pure[F]
-                   case _ =>
-                     Sync[F].raiseError[Blake2b256Hash](
-                       new Exception(s"not found join hash for $channelHash in channel store")
-                     )
-                 }
-      data <- historyReader.getJoins(joinHash)
-    } yield data
 }

@@ -2,18 +2,18 @@ new testResult, philosopher1, philosopher2 in {
   new north, south, knife, spoon in {
     north!(*knife) |
     south!(*spoon) |
-    for (@knf <- north; @spn <- south) {
+    for (@knf <- north & @spn <- south) {
       philosopher1!(true) |
       north!(knf) |
       south!(spn)
     } |
-    for (@spn <- south; @knf <- north) {
+    for (@spn <- south & @knf <- north) {
       philosopher2!(true) |
       north!(knf) |
       south!(spn)
     }
   } |
-  for(_ <- philosopher1; _ <- philosopher2) {
+  for(_ <- philosopher1 & _ <- philosopher2) {
     testResult!(true)
   }
 }

@@ -2,7 +2,7 @@ package coop.rchain.casper
 
 import scala.util.{Random, Try}
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.syntax._

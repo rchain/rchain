@@ -6,12 +6,13 @@ import cats.{Applicative, Parallel}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.rnodeDbMapping
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.models.Validator.Validator
 import coop.rchain.rholang.Resources.mkTempDir
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoHistoryRepository
@@ -44,13 +45,19 @@ object Resources {
   }
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
-      prefix: String
+      prefix: String,
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
-    mkTempDir[F](prefix).evalMap(mkTestRNodeStoreManager[F]).evalMap(mkRuntimeManagerAt[F])
+    mkTempDir[F](prefix)
+      .evalMap(mkTestRNodeStoreManager[F])
+      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
-  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](kvm: KeyValueStoreManager[F])(
+  def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
+      kvm: KeyValueStoreManager[F],
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+  )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
     implicit val log               = Log.log[F]
@@ -58,8 +65,9 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      store          <- kvm.rSpaceStores
-      runtimeManager <- RuntimeManager(store)
+      rStore         <- kvm.rSpaceStores
+      mStore         <- RuntimeManager.mergeableStore(kvm)
+      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName)
     } yield runtimeManager
   }
 
@@ -73,8 +81,13 @@ object Resources {
     implicit val noopSpan: Span[F] = NoopSpan[F]()
 
     for {
-      store                     <- kvm.rSpaceStores
-      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(store)
+      rStore <- kvm.rSpaceStores
+      mStore <- RuntimeManager.mergeableStore(kvm)
+      runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
+                                    rStore,
+                                    mStore,
+                                    Genesis.NonNegativeMergeableTagName
+                                  )
     } yield runtimeManagerWithHistory
   }
 
@@ -105,6 +118,8 @@ object Resources {
 
       override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
 
+      override def find(truncatedHash: String): F[Option[BlockHash]] = ???
+
       override def topoSort(
           startBlockNumber: Long,
           maybeEndBlockNumber: Option[Long]
@@ -128,7 +143,7 @@ object Resources {
       0,
       Map.empty,
       OnChainCasperState(
-        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+        CasperShardConf(0, "", "", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         Map.empty,
         Seq.empty
       )

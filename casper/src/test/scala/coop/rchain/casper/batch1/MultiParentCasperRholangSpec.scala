@@ -5,9 +5,9 @@ import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.util.rholang.{RegistrySigGen, RuntimeManager}
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil, RSpaceUtil}
 import coop.rchain.casper.{MultiParentCasper, MultiParentCasperImpl}
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
+import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}

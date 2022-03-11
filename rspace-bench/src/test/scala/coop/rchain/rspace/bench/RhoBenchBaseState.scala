@@ -1,6 +1,6 @@
 package coop.rchain.rspace.bench
 
-import coop.rchain.rholang.interpreter.{ParBuilderUtil, ReplayRhoRuntime, RhoRuntime, RholangCLI}
+import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime, RholangCLI}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.metrics
@@ -8,6 +8,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Par
 import coop.rchain.rholang.Resources
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.shared.Log
 import monix.eval.{Coeval, Task}
 import monix.execution.Scheduler
@@ -61,17 +62,13 @@ abstract class RhoBenchBaseState {
   def doSetup(): Unit = {
     deleteOldStorage(dbDir)
     setupTerm = setupRho.flatMap { p =>
-      ParBuilderUtil
-        .buildNormalizedTerm[Coeval](p)
-        .runAttempt match {
+      Compiler[Coeval].sourceToADT(p).runAttempt match {
         case Right(par) => Some(par)
         case Left(err)  => throw err
       }
     }
 
-    term = ParBuilderUtil
-      .buildNormalizedTerm[Coeval](testedRho)
-      .runAttempt match {
+    term = Compiler[Coeval].sourceToADT(testedRho).runAttempt match {
       case Right(par) => par
       case Left(err)  => throw err
     }

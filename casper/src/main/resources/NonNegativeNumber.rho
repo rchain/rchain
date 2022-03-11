@@ -16,6 +16,7 @@
  */
 new
   NonNegativeNumber,
+  MergeableTag,
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut
 in {
@@ -27,14 +28,14 @@ in {
       // Adds `x` to the value if no overflow occurs, returns success message on success
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for (@v <- valueStore){
+          for (@v <- @(*MergeableTag, *valueStore)){
             if (v + x >= v) {
               // Happy path
-              valueStore!(v + x) |
+              @(*MergeableTag, *valueStore)!(v + x) |
               success!(true)
             } else {
               // Overflow
-              valueStore!(v) |
+              @(*MergeableTag, *valueStore)!(v) |
               success!(false)
             }
           }
@@ -46,13 +47,13 @@ in {
       // Subtracts `x` from the value if smaller than value, returns success message on success
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for (@v <- valueStore) {
+          for (@v <- @(*MergeableTag, *valueStore)) {
             if (x <= v) {
-              valueStore!(v - x) |
-              success!(true)
+              @(*MergeableTag, *valueStore)!(v - x) |
+               success!(true)
             } else {
-              valueStore!(v) |
-              success!(false)
+              @(*MergeableTag, *valueStore)!(v) |
+               success!(false)
             }
           }
         } else {
@@ -60,20 +61,20 @@ in {
         }
       } |
       // Returns the value on ret
-      contract this(@"value", ret) = {
-        for (@v <- valueStore) {
-          valueStore!(v) |
-          ret!(v)
+      contract this(@"value", return) = {
+        for(@v <- @(*MergeableTag, *valueStore)) {
+          @(*MergeableTag, *valueStore)!(v) |
+          return!(v)
         }
       } |
       // Provides `this` as a write-only channel on return
       return!(bundle+{*this}) |
       match init { // Initial balance is 0 if given negative number or non-integer
         Int => {
-          if (init > 0) { valueStore!(init) }
-          else          { valueStore!(0) }
+          if (init > 0) { @(*MergeableTag, *valueStore)!(init)  }
+          else           { @(*MergeableTag, *valueStore)!(0) }
         }
-         _ => { valueStore!(0) }
+         _ => { @(*MergeableTag, *valueStore)!(0) }
       }
     }
   } |
@@ -85,5 +86,3 @@ in {
     *uriOut
   )
 }
-  
-  

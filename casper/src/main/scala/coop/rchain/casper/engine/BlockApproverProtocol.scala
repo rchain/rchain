@@ -3,7 +3,7 @@ package coop.rchain.casper.engine
 import cats.MonadError
 import cats.data.EitherT
 import cats.effect.Concurrent
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.ValidatorIdentity
 import coop.rchain.casper.genesis.Genesis

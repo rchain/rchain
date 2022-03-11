@@ -105,8 +105,8 @@ class PeekSpec extends FlatSpec with Matchers {
     mkRuntime[Task](tmpPrefix)
       .use { runtime =>
         for {
-          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
-          _  <- evaluate[Task](runtime, """for (_ <<- @0; _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """for (_ <<- @0 & _ <<- @1) { @2!(0) }""")
+          _  <- evaluate[Task](runtime, """for (_ <<- @0 & _ <<- @1) { @2!(0) }""")
           _  <- evaluate[Task](runtime, """@1!!(1)""")
           _  <- evaluate[Task](runtime, """@0!(0)""")
           r1 <- runtime.getData(GInt(0L)).map(_.size)

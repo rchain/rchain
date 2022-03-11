@@ -160,6 +160,7 @@ object ServersInstances {
                                 nodeConf.apiServer.host,
                                 nodeConf.apiServer.portAdminHttp,
                                 nodeConf.apiServer.maxConnectionIdle,
+                                webApi,
                                 adminWebApi,
                                 reportingRoutes
                               )

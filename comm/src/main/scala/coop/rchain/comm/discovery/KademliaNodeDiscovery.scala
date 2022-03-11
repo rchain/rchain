@@ -4,7 +4,7 @@ import scala.collection.mutable
 import scala.util.Random
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 import coop.rchain.comm._
 

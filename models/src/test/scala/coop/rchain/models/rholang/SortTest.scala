@@ -1,5 +1,7 @@
 package coop.rchain.models.rholang
 
+import com.google.protobuf.ByteString
+import coop.rchain.shared.Base16
 import coop.rchain.models.Connective.ConnectiveInstance._
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
@@ -69,6 +71,16 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     check[Send]
     check[Var]
   }
+  // Specific Match terms created from previous test failed on CI (freeCount was not part of sorting)
+  // https://github.com/rchain/rchain/pull/3616
+  it should "sort different Match terms (MatchCase.freeCount)" in {
+    val nil = Par(locallyFree = AlwaysEqual(BitSet()))
+
+    val match1 = Match(nil, List(MatchCase(nil, nil, 0)))
+    val match2 = Match(nil, List(MatchCase(nil, nil, 1)))
+
+    match1 == match2 shouldBe sort(match1).score == sort(match2).score
+  }
 
   it should "sort so that whenever scores or result terms differ then the initial terms differ and the other way around" in {
     def check[A: Sortable: Arbitrary]: Unit =
@@ -113,6 +125,14 @@ class ScoredTermSpec extends FlatSpec with PropertyChecks with Matchers {
     checkScoreEquality[Receive]
     checkScoreEquality[Send]
     checkScoreEquality[Var]
+  }
+  it should "score in different ByteString should be unequal" in {
+    // ci failing case https://github.com/rchain/rchain/runs/2268175723
+    // a is Expr(GByteArray(<ByteString@65e14bdc size=1 contents="\200">))
+    // b is Expr(GByteArray(<ByteString@2f125f4b size=1 contents="\331">))
+    val a = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("80"))))
+    val b = Expr(GByteArray(ByteString.copyFrom(Base16.unsafeDecode("d9"))))
+    assert(sort(a).score != sort(b).score)
   }
   it should "sort so that unequal New have unequal scores" in {
     val new1 = New(

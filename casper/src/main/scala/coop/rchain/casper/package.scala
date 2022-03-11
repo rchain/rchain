@@ -1,10 +1,11 @@
 package coop.rchain
 
 import coop.rchain.casper.blocks.proposer.ProposerResult
+import coop.rchain.casper.rholang.{RuntimeReplaySyntax, RuntimeSyntax}
 import coop.rchain.casper.util.comm.CommUtilSyntax
+import coop.rchain.casper.util.rholang.RuntimeManagerSyntax
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.casper.util.rholang.RhoRuntimeSyntax
 
 package object casper {
   type TopoSort             = Vector[Vector[BlockHash]]
@@ -22,7 +23,9 @@ package object casper {
       extends AllSyntaxCasper
       with AllSyntaxComm
       with AllSyntaxBlockStorage
-      with RhoRuntimeSyntax
+      with RuntimeManagerSyntax
+      with RuntimeSyntax
+      with RuntimeReplaySyntax
 }
 
 // Casper syntax

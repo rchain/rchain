@@ -2,8 +2,8 @@ package coop.rchain.casper.engine
 
 import cats.Applicative
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.effect.{Concurrent, Sync, Timer}
+import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
@@ -25,7 +25,7 @@ import fs2.concurrent.Queue
 
 // format: off
 class GenesisValidator[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager

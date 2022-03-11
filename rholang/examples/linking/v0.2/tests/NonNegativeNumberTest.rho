@@ -3,7 +3,7 @@ import NonNegativeNumber, TestSet in {
   NonNegativeNumber!(15, "properBal") |
   NonNegativeNumber!(100, "addTest") |
   NonNegativeNumber!(100, "subTest") |
-  for(@negBal <- @"negBal"; @properBal <- @"properBal"; @addTest <- @"addTest"; @subTest <- @"subTest") {
+  for(@negBal <- @"negBal" & @properBal <- @"properBal" & @addTest <- @"addTest" & @subTest <- @"subTest") {
     TestSet!(
       "Initially negative balances are be converted to 0.",
       [

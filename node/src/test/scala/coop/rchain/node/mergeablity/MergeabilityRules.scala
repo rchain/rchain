@@ -22,7 +22,8 @@ import org.scalatest.exceptions.TestFailedException
 
 object RhoState {
   implicit val stateAdditionMonoid: Monoid[State] = new Monoid[State] {
-    def empty: State                       = State(Seq.empty, Seq.empty, Seq.empty)
+    def empty: State = State(Seq.empty, Seq.empty, Seq.empty)
+
     def combine(x: State, y: State): State = x ++ y
   }
 
@@ -79,14 +80,17 @@ object RhoState {
       case _ => false
     }
   }
+
   val emptyState: State = Monoid[State].empty
 }
 
 object OperationOn0Ch {
+
   case class Rho(
       value: String
   ) {
-    val rstate: State      = state.runSyncUnsafe()
+    val rstate: State = state.runSyncUnsafe()
+
     def |(other: Rho): Rho = Rho(s"$value | ${other.value}")
 
     def state: Task[State] = {
@@ -107,6 +111,7 @@ object OperationOn0Ch {
       }
     }
   }
+
   object Nil extends Rho("Nil")
 
   // Sends (linear sends)
@@ -135,12 +140,12 @@ object OperationOn0Ch {
   val S0on1 = Rho("@1!(0)")
   val S1on1 = Rho("@1!(1)")
 
-  val J_  = Rho("for (_ <- @0;_ <- @1) { 0 }")
-  val J0  = Rho("for (@0 <- @0;@0 <- @1) { 0 }")
-  val J1  = Rho("for (@1 <- @0;@1 <- @1) { 0 }")
-  val JC_ = Rho("for (_ <= @0;_ <= @1) { 0 }")
-  val JC0 = Rho("for (@0 <= @0;@0 <= @1) { 0 }")
-  val JC1 = Rho("for (@1 <= @0;@1 <= @1) { 0 }")
+  val J_  = Rho("for (_ <- @0&_ <- @1) { 0 }")
+  val J0  = Rho("for (@0 <- @0&@0 <- @1) { 0 }")
+  val J1  = Rho("for (@1 <- @0&@1 <- @1) { 0 }")
+  val JC_ = Rho("for (_ <= @0&_ <= @1) { 0 }")
+  val JC0 = Rho("for (@0 <= @0&@0 <= @1) { 0 }")
+  val JC1 = Rho("for (@1 <= @0&@1 <= @1) { 0 }")
 
 }
 
@@ -192,11 +197,11 @@ trait BasicMergeabilityRules extends ComputeMerge {
     * pattern matching on merging right now, this is conflict now.
     *
     * Cases like below
-    *                   MergedBlock
-    *                 /               \
+    * MergedBlock
+    * /               \
     * B2 Rho("for (@1 <- @0) { 0 }")     B3 Rho("@0!(0)")
-    *                 \              /
-    *    B1             Rho("Nil")
+    * \              /
+    * B1             Rho("Nil")
     */
   def CurrentConflictMergeableCase(left: Rho*)(
       right: Rho*
@@ -265,18 +270,18 @@ trait BasicMergeabilityRules extends ComputeMerge {
                                             mergedRoot
                                           )
           errMsg = s""" FAILED
-                  | base = ${baseDeploy}
-                  | left   = ${leftDeploy}
-                  | right   = ${rightDeploy}
-                  | Conflict: ${rejectedDeploys.nonEmpty} should be ${isConflict} with ${rejectedDeploys}
-                  | isRejectRight: ${rejectRight}
-                  | Merged state
-                  | ${dataContinuationAtMergedState}
-                  | should be
-                  | ${mergedStateResult}
-                  |
-                  | conflicts found: ${mergedState._2.size}
-                  | """.stripMargin
+             | base    = ${baseDeploy.data.term}
+             | left    = ${leftDeploy.data.term}
+             | right   = ${rightDeploy.data.term}
+             | Conflict: ${rejectedDeploys.nonEmpty} should be ${isConflict} with ${rejectedDeploys}
+             | isRejectRight: ${rejectRight}
+             | Merged state
+             | ${dataContinuationAtMergedState}
+             | should be
+             | ${mergedStateResult}
+             |
+             | conflicts found: ${mergedState._2.size}
+             | """.stripMargin
           _ <- Sync[Task]
                 .raiseError(new Exception(errMsg))
                 .whenA(rejectedDeploys.isEmpty == isConflict)

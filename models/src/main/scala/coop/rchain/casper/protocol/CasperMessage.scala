@@ -75,8 +75,7 @@ final case class ApprovedBlockCandidate(block: BlockMessage, requiredSigs: Int)
 object ApprovedBlockCandidate {
   def from(abc: ApprovedBlockCandidateProto): Either[String, ApprovedBlockCandidate] =
     for {
-      blockProto <- abc.block.toRight("Block not available")
-      block      <- BlockMessage.from(blockProto)
+      block <- BlockMessage.from(abc.block)
     } yield ApprovedBlockCandidate(block, abc.requiredSigs)
 }
 
@@ -95,8 +94,7 @@ final case class UnapprovedBlock(
 object UnapprovedBlock {
   def from(ub: UnapprovedBlockProto): Either[String, UnapprovedBlock] =
     for {
-      candidateProto <- ub.candidate.toRight("Candidate not available")
-      candidate      <- ApprovedBlockCandidate.from(candidateProto)
+      candidate <- ApprovedBlockCandidate.from(ub.candidate)
     } yield UnapprovedBlock(candidate, ub.timestamp, ub.duration)
 }
 
@@ -111,10 +109,8 @@ final case class BlockApproval(candidate: ApprovedBlockCandidate, sig: Signature
 object BlockApproval {
   def from(ba: BlockApprovalProto): Either[String, BlockApproval] =
     for {
-      candidateProto <- ba.candidate.toRight("Candidate not available")
-      candidate      <- ApprovedBlockCandidate.from(candidateProto)
-      sig            <- ba.sig.toRight("Sig not available")
-    } yield BlockApproval(candidate, sig)
+      candidate <- ApprovedBlockCandidate.from(ba.candidate)
+    } yield BlockApproval(candidate, ba.sig)
 }
 
 final case class ApprovedBlock(candidate: ApprovedBlockCandidate, sigs: List[Signature])
@@ -128,8 +124,7 @@ final case class ApprovedBlock(candidate: ApprovedBlockCandidate, sigs: List[Sig
 object ApprovedBlock {
   def from(ba: ApprovedBlockProto): Either[String, ApprovedBlock] =
     for {
-      candidateProto <- ba.candidate.toRight("Candidate not available")
-      candidate      <- ApprovedBlockCandidate.from(candidateProto)
+      candidate <- ApprovedBlockCandidate.from(ba.candidate)
     } yield ApprovedBlock(candidate, ba.sigs.toList)
 }
 
@@ -186,11 +181,10 @@ object BlockMessage {
 
   def from(bm: BlockMessageProto): Either[String, BlockMessage] =
     for {
-      header <- bm.header.toRight("Header not available").map(Header.from)
-      body   <- bm.body.toRight("Body not available") >>= (Body.from)
+      body <- Body.from(bm.body)
     } yield BlockMessage(
       bm.blockHash,
-      header,
+      Header.from(bm.header),
       body,
       bm.justifications.toList.map(Justification.from),
       bm.sender,
@@ -246,8 +240,8 @@ final case class RejectedDeploy(
 )
 
 object RejectedDeploy {
-  def from(r: RejectedDeployProto): Either[String, RejectedDeploy] =
-    Right(RejectedDeploy(r.sig))
+  def from(r: RejectedDeployProto): RejectedDeploy =
+    RejectedDeploy(r.sig)
 
   def toProto(r: RejectedDeploy): RejectedDeployProto =
     RejectedDeployProto().withSig(r.sig)
@@ -266,11 +260,10 @@ final case class Body(
 object Body {
   def from(b: BodyProto): Either[String, Body] =
     for {
-      state           <- b.state.toRight("RChainState not available").map(RChainState.from)
       deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
       systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
-      rejectedDeploys <- b.rejectedDeploys.toList.traverse(RejectedDeploy.from)
-    } yield Body(state, deploys, rejectedDeploys, systemDeploys, b.extraBytes)
+      rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
+    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys, b.extraBytes)
 
   def toProto(b: Body): BodyProto =
     BodyProto()
@@ -355,13 +348,11 @@ object ProcessedDeploy {
     ProcessedDeploy(deploy, PCost(), List.empty, isFailed = false)
   def from(pd: ProcessedDeployProto): Either[String, ProcessedDeploy] =
     for {
-      ddProto   <- pd.deploy.toRight("DeployData not available")
-      dd        <- DeployData.from(ddProto)
-      cost      <- pd.cost.toRight("Cost not available")
+      dd        <- DeployData.from(pd.deploy)
       deployLog <- pd.deployLog.toList.traverse(Event.from)
     } yield ProcessedDeploy(
       dd,
-      cost,
+      pd.cost,
       deployLog,
       pd.errored,
       if (pd.systemDeployError.isEmpty()) None else Some(pd.systemDeployError)
@@ -455,7 +446,7 @@ object ProcessedSystemDeploy {
           if (psd.errorMsg.isEmpty) {
             Succeeded(
               deployLog,
-              psd.systemDeploy.map(SystemDeployData.fromProto).getOrElse(SystemDeployData.empty)
+              SystemDeployData.fromProto(psd.systemDeploy)
             )
           } else Failed(deployLog, psd.errorMsg)
       )
@@ -507,7 +498,7 @@ object DeployData {
       signed <- Signed
                  .fromSignedData(fromProto(dd), PublicKey(dd.deployer), dd.sig, algorithm)
                  .toRight("Invalid signature")
-    } yield (signed)
+    } yield signed
 
   private def toProto(dd: DeployData): DeployDataProto =
     DeployDataProto()
@@ -557,11 +548,9 @@ object Event {
     e.eventInstance match {
       case EventProto.EventInstance.Produce(pe) => fromProduceEvent(pe).asRight[String]
       case EventProto.EventInstance.Consume(ce) => fromConsumeEvent(ce).asRight[String]
-      case EventProto.EventInstance.Comm(CommEventProto(Some(ce), pes, pks)) =>
+      case EventProto.EventInstance.Comm(CommEventProto(ce, pes, pks)) =>
         CommEvent(fromConsumeEvent(ce), pes.toList.map(fromProduceEvent), pks.toList.map(Peek.from))
           .asRight[String]
-      case EventProto.EventInstance.Comm(CommEventProto(None, _, _)) =>
-        "CommEvent does not have a consume event in it".asLeft[Event]
       case EventProto.EventInstance.Empty => "Received malformed Event: Empty".asLeft[Event]
     }
 
@@ -572,7 +561,7 @@ object Event {
       EventProto(
         EventProto.EventInstance.Comm(
           CommEventProto(
-            Some(toConsumeEventProto(cme.consume)),
+            toConsumeEventProto(cme.consume),
             cme.produces.map(toProduceEventProto),
             cme.peeks.map(_.toProto)
           )

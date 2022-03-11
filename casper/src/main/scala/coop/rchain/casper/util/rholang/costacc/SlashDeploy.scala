@@ -1,6 +1,6 @@
 package coop.rchain.casper.util.rholang.costacc
 
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure, SystemDeployUserError}
+import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.BlockHash._
@@ -33,7 +33,7 @@ final case class SlashDeploy(
   protected override val envsReturnChannel = Contains[Env, `sys:casper:return`]
   protected override val toEnvMap          = ToEnvMap[Env]
   protected override val normalizerEnv = new NormalizerEnv(
-    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.base16String)) :: mkSysAuthToken :: mkReturnChannel :: HNil
+    mkDeployerId(pk) :: ("sys:casper:invalidBlockHash" ->> GString(invalidBlockHash.toHexString)) :: mkSysAuthToken :: mkReturnChannel :: HNil
   )
 
   override val source: String =
@@ -54,7 +54,7 @@ final case class SlashDeploy(
 
   protected def processResult(
       value: (Boolean, Either[String, Unit])
-  ): Either[SystemDeployFailure, Unit] =
+  ): Either[SystemDeployUserError, Unit] =
     value match {
       case (true, _)               => Right(())
       case (false, Left(errorMsg)) => Left(SystemDeployUserError(errorMsg))

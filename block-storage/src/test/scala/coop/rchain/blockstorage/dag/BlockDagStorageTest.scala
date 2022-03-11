@@ -1,7 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.models.BlockMetadata

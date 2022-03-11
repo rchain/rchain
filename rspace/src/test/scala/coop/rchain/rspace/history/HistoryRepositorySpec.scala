@@ -3,10 +3,9 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.metrics.{NoopSpan, Span}
-import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace._
-import coop.rchain.rspace.channelStore.{ChannelHash, ChannelStore}
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.hashing.Blake2b256Hash.codecPureBlake2b256Hash
 import coop.rchain.rspace.history.ColdStoreInstances.{codecPersistedData, ColdKeyValueStore}
 import coop.rchain.rspace.history.TestData.{randomBlake, zerosBlake}
 import coop.rchain.rspace.internal.{Datum, WaitingContinuation}
@@ -40,10 +39,11 @@ class HistoryRepositorySpec
     val testDatum = datum(1)
     val data      = InsertData[String, String](testChannelDataPrefix, testDatum :: Nil)
     for {
-      nextRepo <- repo.checkpoint(data :: Nil)
-      data     <- nextRepo.getHistoryReader(nextRepo.root).base.getData(testChannelDataPrefix)
-      fetched  = data.head
-      _        = fetched shouldBe testDatum
+      nextRepo      <- repo.checkpoint(data :: Nil)
+      historyReader <- nextRepo.getHistoryReader(nextRepo.root)
+      data          <- historyReader.base.getData(testChannelDataPrefix)
+      fetched       = data.head
+      _             = fetched shouldBe testDatum
     } yield ()
   }
 
@@ -64,7 +64,8 @@ class HistoryRepositorySpec
 
       for {
         nextRepo            <- repo.checkpoint(data :: joins :: continuations :: Nil)
-        reader              = nextRepo.getHistoryReader(nextRepo.root).base
+        historyReader       <- nextRepo.getHistoryReader(nextRepo.root)
+        reader              = historyReader.base
         fetchedData         <- reader.getData(channel)
         fetchedContinuation <- reader.getContinuations(channel :: Nil)
         fetchedJoins        <- reader.getJoins(channel)
@@ -92,10 +93,11 @@ class HistoryRepositorySpec
     val deleteElements: Vector[HotStoreAction] = dataDelete ++ joinsDelete ++ contsDelete
 
     for {
-      nextRepo    <- repo.checkpoint(elems.toList)
-      nextReader  = nextRepo.getHistoryReader(nextRepo.root).base
-      fetchedData <- data.traverse(d => nextReader.getData(d.channel))
-      _           = fetchedData shouldBe data.map(_.data)
+      nextRepo      <- repo.checkpoint(elems.toList)
+      historyReader <- nextRepo.getHistoryReader(nextRepo.root)
+      nextReader    = historyReader.base
+      fetchedData   <- data.traverse(d => nextReader.getData(d.channel))
+      _             = fetchedData shouldBe data.map(_.data)
 
       fetchedContinuations <- conts.traverse(d => nextReader.getContinuations(d.channels))
       _                    = fetchedContinuations shouldBe conts.map(_.continuations)
@@ -106,7 +108,8 @@ class HistoryRepositorySpec
       _             = allJoins should contain theSameElementsAs expectedJoins
 
       deletedRepo   <- nextRepo.checkpoint(deleteElements.toList)
-      deletedReader = deletedRepo.getHistoryReader(deletedRepo.root).base
+      historyReader <- deletedRepo.getHistoryReader(deletedRepo.root)
+      deletedReader = historyReader.base
 
       fetchedData <- data.traverse(d => nextReader.getData(d.channel))
       _           = fetchedData shouldBe data.map(_.data)
@@ -171,20 +174,19 @@ class HistoryRepositorySpec
     Datum[String]("data-" + s, false, Produce(randomBlake, randomBlake, false))
 
   protected def withEmptyRepository(f: TestHistoryRepository => Task[Unit]): Unit = {
-    val emptyHistory              = HistoryInstances.merging[Task](History.emptyRootHash, inMemHistoryStore)
     val pastRoots                 = rootRepository
     implicit val log: Log[Task]   = new NOPLog()
     implicit val span: Span[Task] = new NoopSpan[Task]()
 
     (for {
-      _ <- pastRoots.commit(History.emptyRootHash)
+      emptyHistory <- History.create(History.emptyRootHash, InMemoryKeyValueStore[Task])
+      _            <- pastRoots.commit(History.emptyRootHash)
       repo = HistoryRepositoryImpl[Task, String, String, String, String](
         emptyHistory,
         pastRoots,
         inMemColdStore,
         emptyExporter,
         emptyImporter,
-        noOpChannelStore,
         stringSerialize,
         stringSerialize,
         stringSerialize,
@@ -200,17 +202,7 @@ object RuntimeException {
 }
 
 trait InMemoryHistoryRepositoryTestBase extends InMemoryHistoryTestBase {
-  def noOpChannelStore = new ChannelStore[Task, String] {
-    override def getChannelHash(hash: Blake2b256Hash): Task[Option[ChannelHash]] = none.pure[Task]
 
-    override def putChannelHash(channel: String): Task[Unit] = ().pure[Task]
-
-    override def putContinuationHash(channels: Seq[String]): Task[Unit] = ().pure[Task]
-
-    override def putChannelHashes(channels: Seq[String]): Task[Unit] = ().pure[Task]
-
-    override def putContinuationHashes(conts: Seq[Seq[String]]): Task[Unit] = ().pure[Task]
-  }
   def inmemRootsStore =
     new RootsStore[Task] {
       var roots: Set[Blake2b256Hash]               = Set.empty

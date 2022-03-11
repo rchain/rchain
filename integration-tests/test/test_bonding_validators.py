@@ -112,5 +112,5 @@ def test_bonding_validators(command_line_options: CommandLineOptions, random_gen
 
                 wait_for_node_sees_block(context, bonded_validator, b5)
 
-                vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY, 100000, 1)
+                _, vault_remain = get_vault_balance(context, joining_validator, JOINING_VALIDATOR_KEY.get_public_key().get_rev_address(), JOINING_VALIDATOR_KEY, 100000, 1)
                 assert vault_remain < 50000000 - bond_amount

@@ -8,8 +8,9 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.{GPrivate, Par}
 
 final case class Genesis(
     shardId: String,
@@ -21,6 +22,16 @@ final case class Genesis(
 )
 
 object Genesis {
+
+  val NonNegativeMergeableTagName: Par = {
+    val rand = Tools.unforgeableNameRng(
+      StandardDeploys.nonNegativeNumber.pk,
+      StandardDeploys.nonNegativeNumber.data.timestamp
+    )
+    import coop.rchain.models.rholang.implicits._
+    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
+    GPrivate(ByteString.copyFrom(unforgeableByte))
+  }
 
   def defaultBlessedTerms(
       timestamp: Long,

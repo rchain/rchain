@@ -20,9 +20,6 @@ object RNodeKeyValueStoreManager {
   // RSpace
   private val rspaceHistoryEnvConfig = LmdbEnvConfig(name = "rspace/history", maxEnvSize = 1 * tb)
   private val rspaceColdEnvConfig    = LmdbEnvConfig(name = "rspace/cold", maxEnvSize = 1 * tb)
-  // Temporary channel store, remove in hard fork
-  private val rspaceChannelsMapEnvConfig =
-    LmdbEnvConfig(name = "rspace/channels", maxEnvSize = 1 * tb)
   // RSpace evaluator
   private val evalHistoryEnvConfig = LmdbEnvConfig(name = "eval/history", maxEnvSize = 1 * tb)
   private val evalColdEnvConfig    = LmdbEnvConfig(name = "eval/cold", maxEnvSize = 1 * tb)
@@ -33,6 +30,7 @@ object RNodeKeyValueStoreManager {
   // Temporary storage / cache
   private val casperBufferEnvConfig = LmdbEnvConfig(name = "casperbuffer")
   private val reportingEnvConfig    = LmdbEnvConfig(name = "reporting", maxEnvSize = 10 * tb)
+  private val transactionEnvConfig  = LmdbEnvConfig(name = "transaction")
 
   // Legacy RSpace paths
   val legacyRSpacePathPrefix = "rspace/casper/v2"
@@ -53,6 +51,8 @@ object RNodeKeyValueStoreManager {
       (Db("invalid-blocks"), dagStorageEnvConfig),
       (Db("deploy-index"), dagStorageEnvConfig),
       (Db("last-finalized-block"), dagStorageEnvConfig),
+      // Runtime mergeable store (cache of mergeable channels for block-merge)
+      (Db("mergeable-channel-cache"), dagStorageEnvConfig),
       // Deploy storage
       (Db("deploy_storage"), deployStorageEnvConfig),
       // Reporting (trace) cache
@@ -62,7 +62,9 @@ object RNodeKeyValueStoreManager {
       // Rholang evaluator store
       (Db("eval-history"), evalHistoryEnvConfig),
       (Db("eval-roots"), evalHistoryEnvConfig),
-      (Db("eval-cold"), evalColdEnvConfig)
+      (Db("eval-cold"), evalColdEnvConfig),
+      // transaction store
+      (Db("transaction"), transactionEnvConfig)
     ) ++ (
       // RSpace
       if (!legacyRSpacePaths) {
@@ -70,9 +72,7 @@ object RNodeKeyValueStoreManager {
         Seq(
           (Db("rspace-history"), rspaceHistoryEnvConfig),
           (Db("rspace-roots"), rspaceHistoryEnvConfig),
-          (Db("rspace-cold"), rspaceColdEnvConfig),
-          // TEMP: remove after hard fork
-          (Db("rspace-channels"), rspaceChannelsMapEnvConfig)
+          (Db("rspace-cold"), rspaceColdEnvConfig)
         )
       } else
         // Legacy config has the same database name for all maps

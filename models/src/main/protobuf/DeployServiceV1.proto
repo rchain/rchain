@@ -2,6 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
+
 package casper.v1;
 
 import "CasperMessage.proto";
@@ -14,6 +15,9 @@ import "DeployServiceCommon.proto";
 // make a scalapb directory in this file's location and place it inside
 
 import "scalapb/scalapb.proto";
+import "RhoTypes.proto";
+
+import "google/protobuf/empty.proto";
 
 option (scalapb.options) = {
   package_name: "coop.rchain.casper.protocol.deploy.v1"
@@ -40,7 +44,10 @@ service DeployService {
   // Get a summary of blocks on the blockchain.
   rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
   // Find data sent to a name.
+  // OBSOLETE: Use getDataAtName instead. This method will be removed in the future version of RNode.
   rpc listenForDataAtName(DataAtNameQuery) returns (ListeningNameDataResponse) {}
+  // Find data sent to a name.
+  rpc getDataAtName(DataAtNameByBlockQuery) returns (RhoDataResponse) {}
   // Find processes receiving on a name.
   rpc listenForContinuationAtName(ContinuationAtNameQuery) returns (ContinuationAtNameResponse) {}
   // Find block containing a deploy.
@@ -60,6 +67,8 @@ service DeployService {
   rpc getBlocksByHeights(BlocksQueryByHeight) returns (stream BlockInfoResponse){}
   // temporary api for testing
   rpc getEventByHash(ReportQuery) returns (EventInfoResponse){}
+  // Get node status
+  rpc status(google.protobuf.Empty) returns (StatusResponse){}
 }
 
 message EventInfoResponse{
@@ -129,6 +138,19 @@ message ListeningNameDataPayload {
   int32 length                         = 2;
 }
 
+// listenForDataAtPar
+message RhoDataResponse {
+  oneof message {
+    ServiceError error     = 1;
+    RhoDataPayload payload = 2;
+  }
+}
+
+message RhoDataPayload {
+  repeated Par par     = 1;
+  LightBlockInfo block = 2 [(scalapb.field).no_box = true];
+}
+
 // listenForContinuationAtName
 message ContinuationAtNameResponse {
   oneof message {
@@ -182,5 +204,12 @@ message BondStatusResponse {
   oneof message {
     ServiceError error = 1;
     bool isBonded   = 2;
+  }
+}
+
+message StatusResponse {
+  oneof message {
+    ServiceError error  = 1;
+    Status status = 2;
   }
 }

@@ -216,27 +216,29 @@ class RSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, K](
 
   override def createCheckpoint(): F[Checkpoint] = spanF.withMarks("create-checkpoint") {
     for {
-      changes <- spanF.withMarks("changes") { storeAtom.get().changes() }
+      changes <- spanF.withMarks("changes") { storeAtom.get().changes }
       nextHistory <- spanF.withMarks("history-checkpoint") {
                       historyRepositoryAtom.get().checkpoint(changes.toList)
                     }
-      _   = historyRepositoryAtom.set(nextHistory)
-      log = eventLog.take()
-      _   = eventLog.put(Seq.empty)
-      _   = produceCounter.take()
-      _   = produceCounter.put(Map.empty.withDefaultValue(0))
-      _   <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
-      _   <- restoreInstalls()
+      _             = historyRepositoryAtom.set(nextHistory)
+      log           = eventLog.take()
+      _             = eventLog.put(Seq.empty)
+      _             = produceCounter.take()
+      _             = produceCounter.put(Map.empty.withDefaultValue(0))
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      _             <- createNewHotStore(historyReader)
+      _             <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, log)
   }
 
   def spawn: F[ISpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRepo <- Sync[F].delay(historyRepositoryAtom.get())
-      nextHistory <- historyRepo.reset(historyRepo.history.root)
-      hotStore    <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).base)
-      rSpace      <- RSpace(nextHistory, hotStore)
-      _           <- rSpace.restoreInstalls()
+      historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
+      nextHistory   <- historyRepo.reset(historyRepo.history.root)
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      hotStore      <- HotStore(historyReader.base)
+      rSpace        <- RSpace(nextHistory, hotStore)
+      _             <- rSpace.restoreInstalls()
     } yield rSpace
   }
 }
@@ -249,8 +251,7 @@ object RSpace {
   final case class RSpaceStore[F[_]](
       history: KeyValueStore[F],
       roots: KeyValueStore[F],
-      cold: KeyValueStore[F],
-      channels: KeyValueStore[F]
+      cold: KeyValueStore[F]
   )
 
   /**
@@ -309,10 +310,9 @@ object RSpace {
       // Play
       space <- RSpace(historyRepo, store)
       // Replay
-      replayStore <- HotStore.empty(
-                      historyRepo.getHistoryReader(historyRepo.root).base
-                    )
-      replay <- ReplayRSpace(historyRepo, replayStore)
+      historyReader <- historyRepo.getHistoryReader(historyRepo.root)
+      replayStore   <- HotStore(historyReader.base)
+      replay        <- ReplayRSpace(historyRepo, replayStore)
     } yield (space, replay)
 
   /**
@@ -331,10 +331,10 @@ object RSpace {
       historyRepo <- HistoryRepositoryInstances.lmdbRepository[F, C, P, A, K](
                       store.history,
                       store.roots,
-                      store.cold,
-                      store.channels
+                      store.cold
                     )
-      hotStore <- HotStore.empty(historyRepo.getHistoryReader(historyRepo.root).base)
+      historyReader <- historyRepo.getHistoryReader(historyRepo.root)
+      hotStore      <- HotStore(historyReader.base)
     } yield (historyRepo, hotStore)
   }
 }

@@ -4,14 +4,16 @@ object Dependencies {
 
   val osClassifier: String = Detector.detect(Seq("fedora")).osClassifier
 
+  val catsVersion       = "2.7.0"
+  val catsEffectVersion = "2.5.4"
+  val catsMtlVersion    = "0.7.1"
+  val fs2Version        = "2.5.10"
+  val http4sVersion     = "0.21.24"
+  val endpointsVersion  = "1.4.0"
   val circeVersion      = "0.13.0"
   val enumeratumVersion = "1.5.13"
-  val http4sVersion     = "0.21.15"
-  val kamonVersion      = "1.1.5"
-  val catsVersion       = "2.3.1"
-  val catsEffectVersion = "2.3.1"
-  val catsMtlVersion    = "0.7.1"
-  val slf4jVersion      = "1.7.25"
+  val slf4jVersion      = "1.7.30"
+  val kamonVersion      = "1.1.6"
 
   // format: off
   val bouncyProvCastle    = "org.bouncycastle"            % "bcprov-jdk15on"            % "1.68"
@@ -30,10 +32,17 @@ object Dependencies {
   val circeGenericExtras  = "io.circe"                   %% "circe-generic-extras"      % circeVersion
   val circeLiteral        = "io.circe"                   %% "circe-literal"             % circeVersion
   val circeParser         = "io.circe"                   %% "circe-parser"              % circeVersion
-  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.1.3"
+  val disciplineCore      = "org.typelevel"              %% "discipline-core"           % "1.4.0"
   val enumeratum          = "com.beachape"               %% "enumeratum"                % enumeratumVersion
-  val fs2Core             = "co.fs2"                     %% "fs2-core"                  % "2.5.0"
-  val fs2Io               = "co.fs2"                     %% "fs2-io"                    % "2.5.0"
+  val endpoints           = "org.endpoints4s"            %% "algebra"                   % endpointsVersion
+  val endpointsAlgCirce   = "org.endpoints4s"            %% "algebra-circe"             % endpointsVersion
+  val endpointsAlgJson    = "org.endpoints4s"            %% "algebra-json-schema"       % endpointsVersion
+  val endpointsGeneric    = "org.endpoints4s"            %% "json-schema-generic"       % endpointsVersion
+  val endpointsCirce      = "org.endpoints4s"            %% "json-schema-circe"         % endpointsVersion
+  val endpointsHttp4s     = "org.endpoints4s"            %% "http4s-server"             % "6.0.0"
+  val endpointsOpenApi    = "org.endpoints4s"            %% "openapi"                   % "3.0.0"
+  val fs2Core             = "co.fs2"                     %% "fs2-core"                  % fs2Version
+  val fs2Io               = "co.fs2"                     %% "fs2-io"                    % fs2Version
   val guava               = "com.google.guava"            % "guava"                     % "30.1-jre"
   val hasher              = "com.roundeights"            %% "hasher"                    % "1.2.0"
   val http4sBlazeClient   = "org.http4s"                 %% "http4s-blaze-client"       % http4sVersion
@@ -82,7 +91,7 @@ object Dependencies {
   val scodecBits          = "org.scodec"                 %% "scodec-bits"               % "1.1.23"
   // see https://jitpack.io/#rchain/secp256k1-java
   val secp256k1Java       = "com.github.rchain"           % "secp256k1-java"            % "0.1"
-  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.3"
+  val shapeless           = "com.chuusai"                %% "shapeless"                 % "2.3.8"
   val slf4j               = "org.slf4j"                   % "slf4j-api"                 % slf4jVersion
   val weupnp              = "org.bitlet"                  % "weupnp"                    % "0.1.4"
   // format: on
@@ -91,15 +100,15 @@ object Dependencies {
     catsCore,
     catsEffect,
     catsLawsTest,
-    disciplineCore,
     fs2Core,
+    fs2Io,
     guava,
+    shapeless,
     scalacheck,
     scodecBits,
-    shapeless,
     // Added to resolve conflicts with kamon, cats, http4s
     slf4j,
-    "org.typelevel" % "jawn-parser_2.12" % "1.0.0",
+    "org.typelevel" % "jawn-parser_2.12" % "1.0.1",
     // Added to resolve conflicts in scalapb plugin v0.10.8
     "org.codehaus.mojo"      % "animal-sniffer-annotations" % "1.18",
     "com.google.protobuf"    % "protobuf-java"              % "3.12.0",
@@ -114,6 +123,7 @@ object Dependencies {
     "com.github.jnr"           % "jnr-ffi"                 % "2.1.15",
     "com.google.errorprone"    % "error_prone_annotations" % "2.3.4",
     "com.google.code.findbugs" % "jsr305"                  % "3.0.2",
+    "com.lihaoyi"              %% "geny"                   % "0.6.10",
     "com.lihaoyi"              %% "sourcecode"             % "0.2.1",
     "org.scala-lang.modules"   %% "scala-xml"              % "1.3.0",
     "com.typesafe"             % "config"                  % "1.4.0"
@@ -121,6 +131,8 @@ object Dependencies {
 
   private val kindProjector = compilerPlugin("org.typelevel" %% "kind-projector" % "0.10.3")
 
+  // In Scala 2.13, the plugin's functionality has been included in the compiler directly under the -Ymacro-annotations flag.
+  // https://github.com/scalamacros/paradise
   private val macroParadise = compilerPlugin(
     "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.full
   )
@@ -132,8 +144,19 @@ object Dependencies {
   private val circeDependencies: Seq[ModuleID] =
     Seq(circeGeneric, circeParser)
 
+  private val endpointsDependencies: Seq[ModuleID] =
+    Seq(
+      endpoints,
+      endpointsAlgCirce,
+      endpointsAlgJson,
+      endpointsGeneric,
+      endpointsCirce,
+      endpointsHttp4s,
+      endpointsOpenApi
+    )
+
   private val http4sDependencies: Seq[ModuleID] =
-    Seq(http4sDSL, http4sBlazeServer, http4sCirce)
+    Seq(http4sDSL, http4sBlazeServer, http4sCirce) ++ endpointsDependencies
 
   val protobufDependencies: Seq[ModuleID] =
     Seq(scalapbRuntime)

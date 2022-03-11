@@ -113,10 +113,7 @@ object StreamHandler {
         .foldWhileLeftL(init) {
           case (
               stmd,
-              Chunk(
-                Chunk.Content
-                  .Header(ChunkHeader(Some(sender), typeId, compressed, cl, nid))
-              )
+              Chunk(Chunk.Content.Header(ChunkHeader(sender, typeId, compressed, cl, nid)))
               ) =>
             val newStmd = stmd.copy(
               header = Some(Header(ProtocolHelper.toPeerNode(sender), typeId, cl, nid, compressed))

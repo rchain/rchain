@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats.effect.Sync
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.catscontrib._
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, Span}

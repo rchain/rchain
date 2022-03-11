@@ -4,9 +4,8 @@ import org.scalacheck._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Matchers, PropSpec}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.rholang.interpreter.util.codec.Base58
-import coop.rchain.shared.EqualitySpecUtils
+import coop.rchain.shared.{Base16, EqualitySpecUtils}
 
 class AddressToolsSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
   implicit val propertyCheckConfiguration =

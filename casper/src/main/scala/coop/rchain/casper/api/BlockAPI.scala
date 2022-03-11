@@ -3,7 +3,7 @@ package coop.rchain.casper.api
 import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
@@ -20,7 +20,6 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
@@ -28,11 +27,12 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BlockMetadata, Par}
+import coop.rchain.models.{BindPattern, BlockMetadata, Par}
 import coop.rchain.rspace.ReportingRspace.ReportingEvent
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
-import coop.rchain.shared.Log
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 
 import scala.collection.immutable
 
@@ -52,7 +52,9 @@ object BlockAPI {
 
   def deploy[F[_]: Concurrent: EngineCell: Log: Span](
       d: Signed[DeployData],
-      triggerPropose: Option[ProposeFunction[F]]
+      triggerPropose: Option[ProposeFunction[F]],
+      minPhloPrice: Long,
+      isNodeReadOnly: Boolean
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -69,6 +71,12 @@ object BlockAPI {
         _ <- triggerPropose.traverse(_(casper, true))
       } yield r
 
+    // Check if node is read-only
+    val readOnlyError = new RuntimeException(
+      "Deploy was rejected because node is running in read-only mode."
+    ).raiseError[F, ApiErr[String]]
+    val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
+
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
     val forbiddenKeyError = new RuntimeException(
@@ -77,9 +85,8 @@ object BlockAPI {
     val forbiddenKeyCheck = forbiddenKeyError.whenA(isForbiddenKey)
 
     // Check if deploy has minimum phlo price
-    val minPhloPrice = 1
     val minPriceError = new RuntimeException(
-      s"Phlo price is less than minimum price $minPhloPrice."
+      s"Phlo price ${d.data.phloPrice} is less than minimum price $minPhloPrice."
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
@@ -89,7 +96,9 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[ApiErr[String]](
+    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+      ApiErr[String]
+    ](
       casperDeploy,
       logErrorMessage
     ))
@@ -119,7 +128,7 @@ object BlockAPI {
                     // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
                     //  Fix to use structured result with transport errors/codes.
                     // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
-                    val blockHashHex = block.blockHash.base16String
+                    val blockHashHex = block.blockHash.toHexString
                     logSucess(s"Success! Block $blockHashHex created and added.")
                 }
           } yield r,
@@ -143,7 +152,7 @@ object BlockAPI {
                          )
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }
@@ -156,7 +165,7 @@ object BlockAPI {
                 result <- resultDef.get
                 msg = result._2 match {
                   case Some(block) =>
-                    s"Success! Block ${block.blockHash.base16String} created and added."
+                    s"Success! Block ${block.blockHash.toHexString} created and added."
                       .asRight[Error]
                   case None => s"${result._1.proposeStatus.show}".asLeft[String]
                 }
@@ -256,12 +265,13 @@ object BlockAPI {
       sortedListeningName: Par,
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
+    // TODO: For Produce it doesn't make sense to have multiple names
     if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
         blockInfo <- getLightBlockInfo[F](block)
-      } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, Some(blockInfo)))
+      } yield Option[DataWithBlockInfo](DataWithBlockInfo(data, blockInfo))
     } else {
       none[DataWithBlockInfo].pure[F]
     }
@@ -276,11 +286,11 @@ object BlockAPI {
       for {
         continuations <- runtimeManager.getContinuation(stateHash)(sortedListeningNames)
         continuationInfos = continuations.map(
-          continuation => WaitingContinuationInfo(continuation._1, Some(continuation._2))
+          continuation => WaitingContinuationInfo(continuation._1, continuation._2)
         )
         blockInfo <- getLightBlockInfo[F](block)
       } yield Option[ContinuationsWithBlockInfo](
-        ContinuationsWithBlockInfo(continuationInfos, Some(blockInfo))
+        ContinuationsWithBlockInfo(continuationInfos, blockInfo)
       )
     } else {
       none[ContinuationsWithBlockInfo].pure[F]
@@ -298,7 +308,8 @@ object BlockAPI {
       serializedLog.map(EventConverter.toRspaceEvent)
     log.exists {
       case Produce(channelHash, _, _) =>
-        channelHash == StableHashProvider.hash(sortedListeningName)
+        assert(sortedListeningName.size == 1, "Produce can have only one channel")
+        channelHash == StableHashProvider.hash(sortedListeningName.head)
       case Consume(channelsHashes, _, _) =>
         channelsHashes.toList.sorted == sortedListeningName
           .map(StableHashProvider.hash(_))
@@ -377,16 +388,12 @@ object BlockAPI {
       ))
   }
 
-  def visualizeDag[
-      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore,
-      G[_]: Monad: GraphSerializer,
-      R
-  ](
+  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore, R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
-      visualizer: (Vector[Vector[BlockHash]], String) => F[G[Graphz[G]]],
-      serialize: G[Graphz[G]] => R
+      visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
+      serialize: F[R]
   ): F[ApiErr[R]] = {
     val errorMessage = "visual dag failed"
     def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[R]] =
@@ -400,9 +407,11 @@ object BlockAPI {
                         startBlockNum - depth,
                         Some(startBlockNum)
                       )
-        lfb   <- casper.lastFinalizedBlock
-        graph <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
-      } yield serialize(graph).asRight[Error]
+        lfb    <- casper.lastFinalizedBlock
+        _      <- visualizer(topoSortDag, PrettyPrinter.buildString(lfb.blockHash))
+        result <- serialize
+      } yield result.asRight[Error]
+
     EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
       casperResponse(_),
       Log[F]
@@ -512,9 +521,7 @@ object BlockAPI {
               .raiseError[F, ApiErr[BlockInfo]]
               .whenA(hash.length < 6)
         // Check if hash string is in Base16 encoding and convert to ByteString
-        hashByteString <- Base16
-                           .decode(hash)
-                           .map(ByteString.copyFrom)
+        hashByteString <- hash.hexToByteString
                            .liftTo[F](
                              BlockRetrievalError(
                                s"Input hash value is not valid hex string: $hash"
@@ -593,10 +600,7 @@ object BlockAPI {
   ): BlockInfo = {
     val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
     val deploys        = block.body.deploys.map(_.toDeployInfo)
-    BlockInfo(
-      blockInfo = Some(lightBlockInfo),
-      deploys = deploys
-    )
+    BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
   }
 
   private def constructLightBlockInfo(
@@ -631,15 +635,20 @@ object BlockAPI {
 
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
-  private def findBlockFromStore[F[_]: Monad: BlockStore](
+  private def findBlockFromStore[F[_]: Monad: EngineCell: BlockStore](
       hash: String
   ): F[Option[BlockMessage]] =
-    for {
-      findResult <- BlockStore[F].find(h => Base16.encode(h.toByteArray).startsWith(hash), 1)
-    } yield findResult.headOption match {
-      case Some((_, block)) => Some(block)
-      case None             => none[BlockMessage]
-    }
+    EngineCell[F].read >>= (
+      _.withCasper[Option[BlockMessage]](
+        implicit casper =>
+          for {
+            dag          <- casper.blockDag
+            blockHashOpt <- dag.find(hash)
+            message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
+          } yield message,
+        none[BlockMessage].pure[F]
+      )
+    )
 
   def previewPrivateNames[F[_]: Monad: Log](
       deployer: ByteString,
@@ -677,7 +686,7 @@ object BlockAPI {
         implicit casper =>
           for {
             dag            <- casper.blockDag
-            givenBlockHash = ProtoUtil.stringToByteString(hash)
+            givenBlockHash = hash.unsafeHexToByteString
             result         <- dag.isFinalized(givenBlockHash)
           } yield result.asRight[Error],
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
@@ -732,9 +741,9 @@ object BlockAPI {
                                          casper.lastFinalizedBlock.map(_.some)
                                        else
                                          for {
-                                           hashByteString <- Base16
-                                                              .decode(blockHash.getOrElse(""))
-                                                              .map(ByteString.copyFrom)
+                                           hashByteString <- blockHash
+                                                              .getOrElse("")
+                                                              .hexToByteString
                                                               .liftTo[F](
                                                                 BlockRetrievalError(
                                                                   s"Input hash value is not valid hex string: $blockHash"
@@ -784,6 +793,33 @@ object BlockAPI {
             latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
             latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
           } yield latestMessage.asRight[Error],
+        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
+      )
+    )
+  }
+
+  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+      par: Par,
+      blockHash: String,
+      usePreStateHash: Boolean
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
+
+    def casperResponse(
+        implicit casper: MultiParentCasper[F]
+    ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+      for {
+        block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+        sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
+        runtimeManager <- casper.getRuntimeManager
+        data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
+      } yield (data.postBlockData, data.block).asRight[Error]
+
+    val errorMessage =
+      "Could not get data at par, casper instance was not available yet."
+
+    EngineCell[F].read >>= (
+      _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
+        casperResponse(_),
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )

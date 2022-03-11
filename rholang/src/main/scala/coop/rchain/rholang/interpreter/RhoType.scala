@@ -7,7 +7,7 @@ import coop.rchain.models.GUnforgeable.UnfInstance.{
   GSysAuthTokenBody
 }
 import coop.rchain.models.{ETuple, Expr, GDeployerId, GPrivate, GSysAuthToken, GUnforgeable, Par}
-import coop.rchain.shared.ByteStringOps._
+import coop.rchain.models.syntax._
 
 object RhoType {
   import coop.rchain.models.rholang.implicits._

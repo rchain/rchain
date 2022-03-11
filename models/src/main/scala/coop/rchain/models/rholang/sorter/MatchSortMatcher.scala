@@ -9,11 +9,12 @@ private[sorter] object MatchSortMatcher extends Sortable[Match] {
 
     def sortCase(matchCase: MatchCase): F[ScoredTerm[MatchCase]] =
       for {
-        sortedPattern <- Sortable.sortMatch(matchCase.pattern)
-        sortedBody    <- Sortable.sortMatch(matchCase.source)
+        sortedPattern  <- Sortable.sortMatch(matchCase.pattern)
+        sortedBody     <- Sortable.sortMatch(matchCase.source)
+        freeCountScore = Leaf(matchCase.freeCount.toLong)
       } yield ScoredTerm(
         MatchCase(sortedPattern.term, sortedBody.term, matchCase.freeCount),
-        Node(Seq(sortedPattern.score) ++ Seq(sortedBody.score))
+        Node(Seq(sortedPattern.score, sortedBody.score, freeCountScore))
       )
     for {
       sortedValue         <- Sortable.sortMatch(m.target)

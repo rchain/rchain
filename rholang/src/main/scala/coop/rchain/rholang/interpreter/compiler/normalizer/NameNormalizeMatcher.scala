@@ -7,8 +7,8 @@ import coop.rchain.models.rholang.implicits.{VectorPar, _}
 import coop.rchain.models.{EVar, Par, Var}
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Name, NameQuote, NameVar, NameWildcard}
 import coop.rchain.rholang.interpreter.compiler.{
-  IndexContext,
-  LevelContext,
+  BoundContext,
+  FreeContext,
   NameSort,
   NameVisitInputs,
   NameVisitOutputs,
@@ -29,25 +29,25 @@ object NameNormalizeMatcher {
     n match {
       case wc: NameWildcard =>
         val wildcardBindResult =
-          input.knownFree.addWildcard(SourcePosition(wc.line_num, wc.col_num))
+          input.freeMap.addWildcard(SourcePosition(wc.line_num, wc.col_num))
         NameVisitOutputs(EVar(Wildcard(Var.WildcardMsg())), wildcardBindResult).pure[F]
       case n: NameVar =>
-        input.env.get(n.var_) match {
-          case Some(IndexContext(level, NameSort, _)) => {
-            NameVisitOutputs(EVar(BoundVar(level)), input.knownFree).pure[F]
+        input.boundMapChain.get(n.var_) match {
+          case Some(BoundContext(level, NameSort, _)) => {
+            NameVisitOutputs(EVar(BoundVar(level)), input.freeMap).pure[F]
           }
-          case Some(IndexContext(_, ProcSort, sourcePosition)) => {
+          case Some(BoundContext(_, ProcSort, sourcePosition)) => {
             Sync[F].raiseError(
               UnexpectedNameContext(n.var_, sourcePosition, SourcePosition(n.line_num, n.col_num))
             )
           }
           case None => {
-            input.knownFree.get(n.var_) match {
+            input.freeMap.get(n.var_) match {
               case None =>
                 val newBindingsPair =
-                  input.knownFree.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
-                NameVisitOutputs(EVar(FreeVar(input.knownFree.nextLevel)), newBindingsPair).pure[F]
-              case Some(LevelContext(_, _, sourcePosition)) =>
+                  input.freeMap.put((n.var_, NameSort, SourcePosition(n.line_num, n.col_num)))
+                NameVisitOutputs(EVar(FreeVar(input.freeMap.nextLevel)), newBindingsPair).pure[F]
+              case Some(FreeContext(_, _, sourcePosition)) =>
                 Sync[F].raiseError(
                   UnexpectedReuseOfNameContextFree(
                     n.var_,
@@ -61,9 +61,12 @@ object NameNormalizeMatcher {
 
       case n: NameQuote => {
         ProcNormalizeMatcher
-          .normalizeMatch[F](n.proc_, ProcVisitInputs(VectorPar(), input.env, input.knownFree))
+          .normalizeMatch[F](
+            n.proc_,
+            ProcVisitInputs(VectorPar(), input.boundMapChain, input.freeMap)
+          )
           .map(
-            procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.knownFree)
+            procVisitResult => NameVisitOutputs(procVisitResult.par, procVisitResult.freeMap)
           )
       }
     }

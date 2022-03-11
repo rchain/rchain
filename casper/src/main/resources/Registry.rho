@@ -36,7 +36,7 @@ in {
   //       TreeHashMap!("set", map, "some key", "some val", *ret1) |
   //       TreeHashMap!("set", map, "monkey", "some other val", *ret2) |
   //       TreeHashMap!("set", map, "donkey", Nil, *ret3) |
-  //       for (_ <- ret1; _ <- ret2; _ <- ret3) {
+  //       for (_ <- ret1 & _ <- ret2 & _ <- ret3) {
   //         o!("Value set, getting") |
   //         TreeHashMap!("get", map, "some key", *ret1) |             // "some val"
   //         TreeHashMap!("fastUnsafeGet", map, "monkey", *ret2) |     // "some other val"
@@ -45,7 +45,7 @@ in {
   //         TreeHashMap!("contains", map, "donkey", *ret5) |          // true
   //         TreeHashMap!("contains", map, "monkey", *ret6) |          // true
   //         TreeHashMap!("contains", map, "some unused key", *ret7) | // false
-  //         for (@val1 <- ret1; @val2 <- ret2; @val3 <- ret3; @val4 <- ret4; @val5 <- ret5; @val6 <- ret6; @val7 <- ret7) {
+  //         for (@val1 <- ret1 & @val2 <- ret2 & @val3 <- ret3 & @val4 <- ret4 & @val5 <- ret5 & @val6 <- ret6 & @val7 <- ret7) {
   //           o!(["Got these from the map: ", val1, val2, val3, val4, val5, val6, val7])
   //         }
   //       }

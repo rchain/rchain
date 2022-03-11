@@ -1,6 +1,6 @@
 package coop.rchain.casper.engine
 
-import cats.effect.Concurrent
+import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import coop.rchain.blockstorage.BlockStore
@@ -37,7 +37,7 @@ import scala.concurrent.duration._
   * */
 // format: off
 class Initializing[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
@@ -89,6 +89,9 @@ class Initializing[F[_]
       disableStateExporter: Boolean
   ): F[Unit] = {
     val senderIsBootstrap = RPConfAsk[F].ask.map(_.bootstrap.exists(_ == sender))
+    val receivedShard     = approvedBlock.candidate.block.shardId
+    val expectedShard     = casperShardConf.shardName
+    val shardNameIsValid  = receivedShard == expectedShard
 
     def handleApprovedBlock = {
       val block = approvedBlock.candidate.block
@@ -124,11 +127,19 @@ class Initializing[F[_]
     for {
       // TODO resolve validation of approved block - we should be sure that bootstrap is not lying
       // Might be Validate.approvedBlock is enough but have to check
-      isValid <- senderIsBootstrap &&^ Validate.approvedBlock[F](approvedBlock)
+      isValid <- senderIsBootstrap &&^ shardNameIsValid.pure &&^
+                  Validate.approvedBlock[F](approvedBlock)
 
       _ <- Log[F].info("Received approved block from bootstrap node.").whenA(isValid)
 
       _ <- Log[F].info("Invalid LastFinalizedBlock received; refusing to add.").whenA(!isValid)
+
+      _ <- Log[F]
+            .info(
+              s"Connected to the wrong shard. Approved block received from bootstrap is in shard " +
+                s"'${receivedShard}' but expected is '${expectedShard}'. Check configuration option shard-name."
+            )
+            .whenA(!shardNameIsValid)
 
       // Start only once, when state is true and approved block is valid
       start <- startRequester.modify {
@@ -163,19 +174,7 @@ class Initializing[F[_]
                            )
 
       // Request tuple space state for Last Finalized State
-      stateValidator = {
-        implicit val codecPar  = storage.serializePar
-        implicit val codecBind = storage.serializeBindPattern
-        implicit val codecPars = storage.serializePars
-        implicit val codecCont = storage.serializeTaggedContinuation
-        RSpaceImporter.validateStateItems[
-          F,
-          Par,
-          BindPattern,
-          ListParWithRandom,
-          TaggedContinuation
-        ] _
-      }
+      stateValidator = RSpaceImporter.validateStateItems[F] _
       tupleSpaceStream <- LfsTupleSpaceRequester.stream(
                            approvedBlock,
                            tupleSpaceQueue,
@@ -193,7 +192,7 @@ class Initializing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
-        populateDag(approvedBlock.candidate.block, minBlockNumberForDeployLifespan, st.heightMap)
+        populateDag(approvedBlock.candidate.block, st.lowerBound, st.heightMap)
       }
 
       // Run both streams in parallel until tuple space and all needed blocks are received
@@ -215,21 +214,10 @@ class Initializing[F[_]
 
   private def populateDag(
       startBlock: BlockMessage,
-      initialMinHeight: Long,
+      minHeight: Long,
       heightMap: SortedMap[Long, Set[BlockHash]]
   ): F[Unit] = {
     import cats.instances.list._
-
-    def getMinBlockHeight: F[Long] = {
-      val blockHashes = startBlock.justifications.map(_.latestBlockHash)
-      for {
-        blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
-        minHeight = if (blocks.isEmpty) 0L else blocks.map(ProtoUtil.blockNumber).min
-        // We need parent of oldest latest block, that's why -1.
-        // The same condition is also applied when downloading.
-        // https://github.com/rchain/rchain/blob/0a09467628/casper/src/main/scala/coop/rchain/casper/engine/LastFinalizedStateBlockRequester.scala#L154
-      } yield Math.min(minHeight - 1, initialMinHeight)
-    }
 
     def addBlockToDag(block: BlockMessage, isInvalid: Boolean): F[Unit] =
       Log[F].info(
@@ -247,7 +235,6 @@ class Initializing[F[_]
         .toSet
 
       // Add sorted DAG in order from approved block to oldest
-      minHeight <- getMinBlockHeight
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
               block <- BlockStore[F].getUnsafe(hash)

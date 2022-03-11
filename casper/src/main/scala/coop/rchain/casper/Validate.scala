@@ -12,7 +12,6 @@ import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
@@ -20,7 +19,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.shared._
+import coop.rchain.shared.{Base16, _}
 
 import scala.util.{Success, Try}
 
@@ -640,4 +639,17 @@ object Validate {
         } yield BlockError.BlockException(ex).asLeft[ValidBlock]
     }
   }
+
+  /**
+    * All of deploys must have greater or equal phloPrice then minPhloPrice
+    */
+  def phloPrice[F[_]: Log: Concurrent](
+      b: BlockMessage,
+      minPhloPrice: Long
+  ): F[ValidBlockProcessing] =
+    if (b.body.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
+      BlockStatus.valid.asRight[BlockError].pure
+    } else {
+      BlockStatus.lowDeployCost.asLeft[ValidBlock].pure
+    }
 }

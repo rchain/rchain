@@ -7,7 +7,7 @@ import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.accounting._
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.storage.StoragePrinter
 import coop.rchain.rholang.syntax._
@@ -71,7 +71,7 @@ object RholangCLI {
 
     val runtime = (for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime[Task](store)
+      runtime <- RhoRuntime.createRuntime[Task](store, Par())
     } yield runtime).unsafeRunSync
 
     val problems = try {
@@ -209,8 +209,8 @@ object RholangCLI {
 
     val source = reader(fileName)
 
-    ParBuilder[Coeval]
-      .buildNormalizedTerm(source, Map.empty[String, Par])
+    Compiler[Coeval]
+      .sourceToADT(source, Map.empty[String, Par])
       .runAttempt
       .fold(Failure(_), processTerm)
 
@@ -218,8 +218,8 @@ object RholangCLI {
 
   def evaluate(runtime: RhoRuntime[Task], source: String): Task[Unit] =
     runtime.evaluate(source).map {
-      case EvaluateResult(_, Vector()) =>
-      case EvaluateResult(_, errors) =>
+      case EvaluateResult(_, Vector(), _) =>
+      case EvaluateResult(_, errors, _) =>
         errors.foreach {
           case ie: InterpreterError =>
             // we don't want to print stack trace for user errors
@@ -234,7 +234,7 @@ object RholangCLI {
   def waitForSuccess(evaluatorFuture: CancelableFuture[EvaluateResult]): Unit =
     try {
       Await.ready(evaluatorFuture, 5.seconds).value match {
-        case Some(Success(EvaluateResult(cost, errors))) =>
+        case Some(Success(EvaluateResult(cost, errors, _))) =>
           printCost(cost)
           printErrors(errors)
         case Some(Failure(e)) => throw e

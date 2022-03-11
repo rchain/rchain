@@ -36,9 +36,9 @@ in {
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-  for (@(_, MakeMint) <- MakeMintCh;
-       @(_, AuthKey)  <- AuthKeyCh;
-       @(_, Either)   <- EitherCh;
+  for (@(_, MakeMint) <- MakeMintCh &
+       @(_, AuthKey)  <- AuthKeyCh &
+       @(_, Either)   <- EitherCh &
        TreeHashMap    <- TreeHashMapCh) {
     // Each invocation of the RevVault contract uses a different mint
     new
@@ -316,7 +316,7 @@ in {
               RevAddress!("validate", toRevAddress, *revAddressValid) |
               @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
               // `amount` is verified
-              @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+              @Either!("fromBoolean", amount >= 0, "Amount must be positive value", *amountNonNegative) |
               // `authkey` is validated
               @AuthKey!("check", *authKey, (*_revVault, fromRevAddress), *authKeyValidCh) |
               @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |

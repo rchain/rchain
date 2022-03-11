@@ -2,8 +2,9 @@ package coop.rchain.node.runtime
 
 import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
-import cats.effect.{Concurrent, ContextShift, Sync}
+import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
+import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
@@ -15,19 +16,21 @@ import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.state.instances.{BlockStateManagerImpl, ProposerState}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.util.comm.{CasperPacketHandler, CommUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.ConnectionsCell
 import coop.rchain.comm.rp.RPConf
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.crypto.PrivateKey
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Par
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api.AdminWebApi.AdminWebApiImpl
 import coop.rchain.node.api.WebApi.WebApiImpl
@@ -36,20 +39,21 @@ import coop.rchain.node.configuration.NodeConf
 import coop.rchain.node.diagnostics
 import coop.rchain.node.runtime.NodeRuntime._
 import coop.rchain.node.state.instances.RNodeStateManagerImpl
-import coop.rchain.node.web.ReportingRoutes
 import coop.rchain.node.web.ReportingRoutes.ReportingHttpRoutes
+import coop.rchain.node.web.{ReportingRoutes, Transaction}
 import coop.rchain.p2p.effects.PacketHandler
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
+import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 import java.nio.file.Files
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: TransportLayer: LocalEnvironment: Log: EventLog: Metrics](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
@@ -148,15 +152,18 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        // Use channels map only in block-merging (multi parents)
-        val useChannelsMap = conf.casper.maxNumberOfParents > 1
-        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
+        for {
+          rStores    <- rnodeStoreManager.rSpaceStores
+          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
+          rm <- RuntimeManager
+                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
+        } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory
 
@@ -165,7 +172,7 @@ object Setup {
         implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
-          rnodeStoreManager.rSpaceStores(useChannelsMap = false).map(ReportingCasper.rhoReporter(_))
+          rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
         } else
           ReportingCasper.noop.pure[F]
       }
@@ -204,9 +211,7 @@ object Setup {
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
         val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey =
-          if (dummyDeployerKeyOpt.isEmpty) None
-          else PrivateKey(Base16.decode(dummyDeployerKeyOpt.get).get).some
+        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
@@ -267,6 +272,9 @@ object Setup {
       apiServers = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
         implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)         = (rpConfAsk, rpConnections)
+        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+
         APIServers.build[F](
           evalRuntime,
           triggerProposeFOpt,
@@ -275,7 +283,11 @@ object Setup {
           conf.devMode,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
           else none[ProposeFunction[F]],
-          blockReportAPI
+          blockReportAPI,
+          conf.protocolServer.networkId,
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          isNodeReadOnly
         )
       }
       reportingRoutes = {
@@ -305,13 +317,26 @@ object Setup {
       runtimeCleanup = NodeRuntime.cleanup(
         rnodeStoreManager
       )
+      transactionAPI = Transaction[F](
+        blockReportAPI,
+        Par(unforgeables = Seq(Transaction.transferUnforgeable))
+      )
+      cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
         implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
+        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
+        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,
           conf.devMode,
+          cacheTransactionAPI,
           if (conf.autopropose && conf.dev.deployerPrivateKey.isDefined) triggerProposeFOpt
-          else none[ProposeFunction[F]]
+          else none[ProposeFunction[F]],
+          conf.protocolServer.networkId,
+          conf.casper.shardName,
+          conf.casper.minPhloPrice,
+          isNodeReadOnly
         )
       }
       adminWebApi = {

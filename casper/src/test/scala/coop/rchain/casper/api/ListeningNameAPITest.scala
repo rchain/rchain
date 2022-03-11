@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
@@ -162,7 +162,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       import node._
 
       def basicDeployData: Signed[DeployData] =
-        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 }; @1 <- @{ 2 | 1 }) { 0 }")
+        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }")
 
       for {
         block <- node.addBlock(basicDeployData)
@@ -176,7 +176,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
             BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(1))))), None, 0),
             BindPattern(Vector(Par().copy(exprs = Vector(Expr(GInt(0))))), None, 0)
           ),
-          Some(Par().copy(exprs = Vector(Expr(GInt(0)))))
+          Par().copy(exprs = Vector(Expr(GInt(0))))
         )
         listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,

@@ -17,12 +17,12 @@ object PCollectNormalizer {
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] =
     CollectionNormalizeMatcher
-      .normalizeMatch[F](p.collection_, CollectVisitInputs(input.env, input.knownFree))
+      .normalizeMatch[F](p.collection_, CollectVisitInputs(input.boundMapChain, input.freeMap))
       .map(
         collectResult =>
           ProcVisitOutputs(
-            input.par.prepend(collectResult.expr, input.env.depth),
-            collectResult.knownFree
+            input.par.prepend(collectResult.expr, input.boundMapChain.depth),
+            collectResult.freeMap
           )
       )
 }

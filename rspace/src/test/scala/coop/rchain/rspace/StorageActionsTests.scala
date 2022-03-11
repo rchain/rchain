@@ -37,7 +37,7 @@ trait StorageActionsTests[F[_]]
       cont       <- store.getContinuations(key)
       _          = cont shouldBe Nil
       _          = r shouldBe None
-      insertData <- store.changes().map(collectActions[InsertData[String, String]])
+      insertData <- store.changes.map(collectActions[InsertData[String, String]])
       //store is not empty - we have 'A' stored
       _ = insertData.size shouldBe 1
       _ = insertData.map(_.channel) should contain only channel
@@ -65,7 +65,7 @@ trait StorageActionsTests[F[_]]
       wc2        <- store.getContinuations(key)
       _          = wc2 shouldBe Nil
       _          = r2 shouldBe None
-      insertData <- store.changes().map(collectActions[InsertData[String, String]])
+      insertData <- store.changes.map(collectActions[InsertData[String, String]])
       //store is not empty - we have 2 As stored
       _ = insertData.size shouldBe 1
       _ = insertData.map(_.channel) should contain only channel
@@ -86,8 +86,7 @@ trait StorageActionsTests[F[_]]
       c1 <- store.getContinuations(key)
       _  = c1 should not be empty
       _  = r shouldBe None
-      insertContinuations <- store
-                              .changes()
+      insertContinuations <- store.changes
                               .map(
                                 collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
                               )
@@ -109,8 +108,7 @@ trait StorageActionsTests[F[_]]
       c1 <- store.getContinuations(key)
       _  = c1 should not be empty
       _  = r shouldBe None
-      insertContinuations <- store
-                              .changes()
+      insertContinuations <- store.changes
                               .map(
                                 collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
                               )
@@ -141,7 +139,7 @@ trait StorageActionsTests[F[_]]
       _             = r2 shouldBe defined
       _             = runK(unpackOption(r2))
       _             = getK(r2).continuation.results should contain theSameElementsAs List(List("datum"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -173,7 +171,7 @@ trait StorageActionsTests[F[_]]
       _             = r2 shouldBe defined
       _             = runK(unpackOption(r2))
       _             = getK(r2).continuation.results should contain theSameElementsAs List(List("datum"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -203,7 +201,7 @@ trait StorageActionsTests[F[_]]
       _             = r2 shouldBe defined
       _             = runK(unpackOption(r2))
       _             = getK(r2).continuation.results should contain theSameElementsAs List(List("datum"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions should have size 0
     } yield ()
   }
@@ -232,7 +230,7 @@ trait StorageActionsTests[F[_]]
         _             = r2 shouldBe defined
         _             = runK(unpackOption(r2))
         _             = getK(r2).continuation.results should contain theSameElementsAs List(List("datum"))
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions should have size 0
       } yield ()
   }
@@ -261,7 +259,7 @@ trait StorageActionsTests[F[_]]
         _ = getK(r6).continuation.results should contain oneOf (List("datum1"), List("datum2"), List(
           "datum3"
         ))
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
       } yield ()
   }
@@ -304,7 +302,7 @@ trait StorageActionsTests[F[_]]
       _ = getK(r3).continuation.results should contain theSameElementsAs List(
         List("datum1", "datum2")
       )
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -356,7 +354,7 @@ trait StorageActionsTests[F[_]]
       _ = getK(r4).continuation.results should contain theSameElementsAs List(
         List("datum1", "datum2", "datum3")
       )
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -389,7 +387,7 @@ trait StorageActionsTests[F[_]]
         List("datum2"),
         List("datum1")
       )
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
     } yield ()
   }
@@ -424,7 +422,7 @@ trait StorageActionsTests[F[_]]
         _             = getK(r1).continuation.results shouldNot contain theSameElementsAs getK(r2).continuation.results
         _             = getK(r1).continuation.results shouldNot contain theSameElementsAs getK(r3).continuation.results
         _             = getK(r2).continuation.results shouldNot contain theSameElementsAs getK(r3).continuation.results
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
       } yield ()
   }
@@ -466,7 +464,7 @@ trait StorageActionsTests[F[_]]
       _             = getK(r1).continuation.results shouldBe List(List("datum1"))
       _             = getK(r2).continuation.results shouldBe List(List("datum2"))
       _             = getK(r3).continuation.results shouldBe List(List("datum3"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
   }
 
@@ -491,7 +489,7 @@ trait StorageActionsTests[F[_]]
       _ = getK(r3).continuation.results should contain theSameElementsAs List(
         List("datum1", "datum2")
       )
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
 
   }
@@ -517,7 +515,7 @@ trait StorageActionsTests[F[_]]
 
       _             = runK(unpackOption(r3))
       _             = getK(r3).continuation.results shouldBe List(List("datum1", "datum1"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
   }
 
@@ -561,7 +559,7 @@ trait StorageActionsTests[F[_]]
       _ = getK(r6).continuation.results should contain theSameElementsAs List(
         List("datum1", "datum2")
       )
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
 
   }
@@ -591,7 +589,7 @@ trait StorageActionsTests[F[_]]
       j2 <- store.getJoins("ch2")
       _  = j2 shouldBe List(List("ch1", "ch2"))
 
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions should not be empty)
 
   }
@@ -625,7 +623,7 @@ trait StorageActionsTests[F[_]]
 
       _             = getK(r3).continuation.results should contain theSameElementsAs List(List("datum1"))
       _             = getK(r4).continuation.results should contain theSameElementsAs List(List("datum2"))
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield (insertActions shouldBe empty)
   }
 
@@ -659,7 +657,7 @@ trait StorageActionsTests[F[_]]
         //ensure that joins are cleaned-up after all
         _             <- store.getJoins("ch1").map(_ shouldBe List(List("ch1", "ch2")))
         _             <- store.getJoins("ch2").map(_ shouldBe List(List("ch1", "ch2")))
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
       } yield (insertActions should not be empty)
     }
 
@@ -678,7 +676,7 @@ trait StorageActionsTests[F[_]]
       // Data exists so the write will not "stick"
       r2            <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
       _             = r2 shouldBe defined
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
 
       _ = runK(unpackOption(r2))
@@ -706,7 +704,7 @@ trait StorageActionsTests[F[_]]
         // Matching data exists so the write will not "stick"
         r2            <- space.consume(key, List(Wildcard), new StringsCaptor, persist = true)
         _             = r2 shouldBe defined
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
 
         _ = runK(unpackOption(r2))
@@ -764,7 +762,7 @@ trait StorageActionsTests[F[_]]
       // A matching continuation exists so the write will not "stick"
       r2            <- space.produce("ch1", "datum1", persist = true)
       _             = r2 shouldBe defined
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
       _             = insertActions shouldBe empty
 
       _ = runK(unpackOption(r2))
@@ -788,7 +786,7 @@ trait StorageActionsTests[F[_]]
         // A matching continuation exists so the write will not "stick"
         r2            <- space.produce("ch1", "datum1", persist = true)
         _             = r2 shouldBe defined
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
 
         _ = runK(unpackOption(r2))
@@ -876,7 +874,7 @@ trait StorageActionsTests[F[_]]
 
         // Matching data exists so the write will not "stick"
         r6            <- space.consume(List("ch1"), List(Wildcard), new StringsCaptor, persist = true)
-        insertActions <- store.changes().map(collectActions[InsertAction])
+        insertActions <- store.changes.map(collectActions[InsertAction])
         _             = insertActions shouldBe empty
         _             = r6 shouldBe defined
 
@@ -944,7 +942,7 @@ trait StorageActionsTests[F[_]]
       _                  <- space.consume(key1, patterns, new StringsCaptor, persist = false)
       _                  <- space.createCheckpoint()
       store0             = storeAtom.get()
-      checkpoint0Changes <- store0.changes()
+      checkpoint0Changes <- store0.changes
       _                  = checkpoint0Changes.length shouldBe 0
     } yield ()
   }
@@ -959,8 +957,7 @@ trait StorageActionsTests[F[_]]
         r                    <- space.consume(key, patterns, new StringsCaptor, persist = false)
         _                    = r shouldBe None
         postCheckpoint0Store = storeAtom.get()
-        checkpoint0Changes <- postCheckpoint0Store
-                               .changes()
+        checkpoint0Changes <- postCheckpoint0Store.changes
                                .map(
                                  collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
                                )
@@ -969,7 +966,7 @@ trait StorageActionsTests[F[_]]
 
         _              <- space.reset(checkpoint0.root)
         postResetStore = storeAtom.get()
-        resetChanges   <- postResetStore.changes()
+        resetChanges   <- postResetStore.changes
         _              = resetChanges.isEmpty shouldBe true
         _              = resetChanges.length shouldBe 0
 
@@ -1039,7 +1036,7 @@ trait StorageActionsTests[F[_]]
       err           = res.left.get
       _             = err shouldBe an[IllegalArgumentException]
       _             = err.getMessage shouldBe "channels.length must equal patterns.length"
-      insertActions <- store.changes().map(collectActions[InsertAction])
+      insertActions <- store.changes.map(collectActions[InsertAction])
     } yield insertActions shouldBe empty
   }
 
@@ -1067,11 +1064,11 @@ trait StorageActionsTests[F[_]]
         // create a soft checkpoint
         s <- space.createSoftCheckpoint()
         // assert that the snapshot contains the continuation
-        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        _ = s.cacheSnapshot.continuations.values should contain only expectedContinuation
         // consume again
         _ <- space.consume(channels, patterns, continuation, persist = false)
         // assert that the snapshot contains only the first continuation
-        _ = s.cacheSnapshot.cache.continuations.values should contain only expectedContinuation
+        _ = s.cacheSnapshot.continuations.values should contain only expectedContinuation
       } yield ()
   }
 
@@ -1097,13 +1094,13 @@ trait StorageActionsTests[F[_]]
       // create a soft checkpoint
       s1 <- space.createSoftCheckpoint()
       // assert that the snapshot contains the continuation
-      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
+      _ = s1.cacheSnapshot.continuations.values should contain only Seq(expectedContinuation)
       // produce thus removing the continuation
       _  <- space.produce(channel, datum, persist = false)
       s2 <- space.createSoftCheckpoint()
       // assert that the first snapshot still contains the first continuation
-      _ = s1.cacheSnapshot.cache.continuations.values should contain only Seq(expectedContinuation)
-      _ = s2.cacheSnapshot.cache.continuations(channels) shouldBe empty
+      _ = s1.cacheSnapshot.continuations.values should contain only Seq(expectedContinuation)
+      _ = s2.cacheSnapshot.continuations(channels) shouldBe empty
     } yield ()
   }
 
@@ -1146,7 +1143,7 @@ trait StorageActionsTests[F[_]]
         _ <- space.consume(channels, patterns, continuation, persist = false)
         changes <- storeAtom
                     .get()
-                    .changes()
+                    .changes
                     .map(
                       collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
                     )
@@ -1155,7 +1152,7 @@ trait StorageActionsTests[F[_]]
         _ <- space.revertToSoftCheckpoint(s1)
         changes <- storeAtom
                     .get()
-                    .changes()
+                    .changes
                     .map(
                       collectActions[InsertContinuations[String, Pattern, StringsCaptor]]
                     )

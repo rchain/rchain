@@ -76,9 +76,11 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
                      stores
                    )
       (space, replay) = hrstores
-      rhoRuntime      <- RhoRuntime.createRhoRuntime[F](space, initRegistry, additionalSystemProcesses)
+      rhoRuntime <- RhoRuntime
+                     .createRhoRuntime[F](space, Par(), initRegistry, additionalSystemProcesses)
       replayRhoRuntime <- RhoRuntime.createReplayRhoRuntime[F](
                            replay,
+                           Par(),
                            additionalSystemProcesses,
                            initRegistry
                          )
@@ -171,7 +173,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
             remainder /= 4
             joins += f"_ ${arrow} @${ch}"
           }
-          val joinStr = joins.mkString("; ")
+          val joinStr = joins.mkString(" & ")
           result += f"for (${joinStr}) { 0 }"
           nonlinearRecv ||= (arrow == "<=")
         }
@@ -190,7 +192,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     ("@0!!(0) | for (x <- @0) { 0 }", 342L),
     ("@0!!(0) | for (@0 <- @0) { 0 }", 336L),
     ("@0!!(0) | @0!!(0) | for (_ <- @0) { 0 }", 443L),
-    ("@0!!(0) | @1!!(1) | for (_ <- @0;_ <- @1) { 0 }", 594L),
+    ("@0!!(0) | @1!!(1) | for (_ <- @0 & _ <- @1) { 0 }", 596L),
     ("@0!(0) | for (_ <- @0) { 0 }", 333L),
     ("@0!(0) | for (x <- @0) { 0 }", 333L),
     ("@0!(0) | for (@0 <- @0) { 0 }", 327L),
@@ -232,9 +234,9 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   "Total cost of evaluation" should "be equal to the sum of all costs in the log" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
       {
-        val initialPhlo       = 10000L
-        val (result, costLog) = evaluateWithCostLog(initialPhlo, contract)
-        result shouldBe EvaluateResult(Cost(expectedTotalCost), Vector.empty)
+        val initialPhlo                             = 10000L
+        val (EvaluateResult(cost, err, _), costLog) = evaluateWithCostLog(initialPhlo, contract)
+        (cost, err) shouldBe ((Cost(expectedTotalCost), Vector.empty))
         costLog.map(_.value).toList.sum shouldEqual expectedTotalCost
       }
     }
@@ -258,7 +260,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
     assert(result1._1.errors.isEmpty)
     assert(result1._2.errors.isEmpty)
     assert(result1._1.cost == result1._2.cost)
-    // Try contract fromLong(510661906) = @1!(0) | @1!(0) | for (_ <= @1; _ <= @1) { 0 }
+    // Try contract fromLong(510661906) = @1!(0) | @1!(0) | for (_ <= @1 & _ <= @1) { 0 }
     // because of bug RCHAIN-3917
     val result2 = evaluateAndReplay(Cost(Integer.MAX_VALUE), fromLong(510661906))
     assert(result2._1.errors.isEmpty)
@@ -322,7 +324,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
       initialPhlo: Long,
       expectedCosts: Seq[Cost]
   ): Assertion = {
-    val (EvaluateResult(totalCost, errors), costLog) = evaluateWithCostLog(initialPhlo, contract)
+    val (EvaluateResult(totalCost, errors, _), costLog) = evaluateWithCostLog(initialPhlo, contract)
     withClue("We must not expect more costs than initialPhlo allows (duh!):\n") {
       expectedCosts.map(_.value).sum should be <= initialPhlo
     }
@@ -340,7 +342,7 @@ class CostAccountingSpec extends FlatSpec with Matchers with PropertyChecks with
   it should "stop the evaluation of all execution branches when one of them runs out of phlo with a more sophisiticated contract" in {
     forAll(contracts) { (contract: String, expectedTotalCost: Long) =>
       check(forAllNoShrink(Gen.choose(1L, expectedTotalCost - 1)) { initialPhlo =>
-        val (EvaluateResult(_, errors), costLog) =
+        val (EvaluateResult(_, errors, _), costLog) =
           evaluateWithCostLog(initialPhlo, contract)
         errors shouldBe List(OutOfPhlogistonsError)
         val costs = costLog.map(_.value).toList
