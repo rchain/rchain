@@ -125,7 +125,6 @@ in {
                       vaultCh,
                       getVaultCh
                     in {
-                      new stdlog(`rho:io:stdlog`) in {stdlog!("info", ("get in findOrCreate"))}|
                       TreeHashMap!("get", vaultMap, revAddress, *getVaultCh) |
                       for (@res <- getVaultCh) {
                         match res {
@@ -183,7 +182,6 @@ in {
                 match eitherVault {
                   (true, vault) => {
                     // map `revAddress` to `(revAddress, vault, *logCh)`
-                    new stdlog(`rho:io:stdlog`) in {stdlog!("info", ("_create get"))}|
                     TreeHashMap!("set", vaultMap, revAddress, (revAddress, vault, *logCh), *ackCh) |
                     for (_ <- ackCh) {
                       retCh!(eitherVault)
@@ -233,14 +231,12 @@ in {
             contract revVault(@"transfer", @toRevAddress, @amount, authKey, ret) = {
               new ret2 in {
                 _transferTemplate!(fromRevAddress, *purse, toRevAddress, amount, *authKey, *ret2) |
-                new stdlog(`rho:io:stdlog`) in {stdlog!("info", ("transfer template"))}|
                 for (@result <- ret2) {
                   if (result.nth(0)) {
                     new
                       bd(`rho:block:data`),
                       bdCh
                     in {
-                      new stdlog(`rho:io:stdlog`) in {stdlog!("info", ("record history ", result))}|
                       bd!(*bdCh) |
                       for (@blockNumber, @timestamp, @sender <- bdCh) {
                         // Log the transfer in both vault logs with the same unique id
@@ -259,14 +255,12 @@ in {
                                 fromLogRet,
                                 toLogRet
                               in {
-                                new stdlog(`rho:io:stdlog`) in {stdlog!("info", (" history get", entryTuple))}|
                                 // Lookup vault associated with `toRevAddress`
                                 TreeHashMap!("get", vaultMap, toRevAddress, *toLogRet) |
                                 // Lookup log channel associated with `fromRevAddress`
                                 TreeHashMap!("get", vaultMap, fromRevAddress, *fromLogRet) |
-                                for (@(_, _, *fromLogCh) <- fromLogRet &
+                                for (@(_, _, *fromLogCh) <- fromLogRet;
                                      @(_, _, *toLogCh)   <- toLogRet) {
-                                  new stdlog(`rho:io:stdlog`) in {stdlog!("info", (" history get done"))}|
                                   // Put the entry in both logs and return `result` on `ret`
                                   fromLogCh!(entryTuple) |
                                   toLogCh!(entryTuple) |
@@ -289,7 +283,6 @@ in {
             contract revVault(@"readLogEntry", ret) = {
               new thmRet in {
                 // Lookup the log channel associated with `fromRevAddress`
-                new stdlog(`rho:io:stdlog`) in {stdlog!("info", ("record log get"))}|
                 TreeHashMap!("get", vaultMap, fromRevAddress, *thmRet) |
                 for (@(_, _, *logCh) <- thmRet) {
                   // Read a transfer entry and return it on `ret`

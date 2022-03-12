@@ -38,8 +38,7 @@ match (
       testLogging,
       withVaultAndIdentityOf,
       transfer,
-      assertBalances,
-      stdlog(`rho:io:stdlog`)
+      assertBalances
     in {
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -47,13 +46,13 @@ match (
           [
             ("Create genesis vault with expected balance", *testFindOrCreateGenesisVault),
             ("Return an error for invalid public key", *testCreateVaultFail),
-            // ("Create vault and see that it is secured", *testCreateVault),
-            // ("Transfer from genesis to Alice", *testTransfer),
-            // ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
-            // ("Transfer to own account successfully", *testTransferToSelf),
-            // ("Fail the tranfer if the amount to transfer is negative", *testAmountNegative),
-            // ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
-            // ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
+            ("Create vault and see that it is secured", *testCreateVault),
+            ("Transfer from genesis to Alice", *testTransfer),
+            ("Return the existing wallet when calling testFindOrCreate", *testFindOrCreate),
+            ("Transfer to own account successfully", *testTransferToSelf),
+            ("Fail the tranfer if the amount to transfer is negative", *testAmountNegative),
+            ("Fail the transfer if there are insufficient funds", *testInsufficeintFunds),
+            ("Fail the transfer if the destination addresss is not a valid RevAddress", *testInvalidRevAddress),
             ("Transfer from unforgeable name bound vault", *testUnfBoundVault),
             ("Transfer log entries are recorded in both vault logs", *testLogging)
           ])
@@ -185,27 +184,18 @@ match (
             unf, unfRevAddrCh, unfAuthKeyCh, unfVaultCh,
             genesisVaultCh, initTransferCh, transferCh
         in {
-          stdlog!("info", ("start"))|
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           // Get unforgeable channel REV address
           RevAddress!("fromUnforgeable", *unf, *unfRevAddrCh) |
           for (@unfRevAddress <- unfRevAddrCh; genesisVault, genesisVaultKey <- genesisVaultCh) {
-            stdlog!("info", ("create addr"))|
             // Transfer initial funds to unforgeable vault
             genesisVault!("transfer", unfRevAddress, 100, *genesisVaultKey, *initTransferCh) |
             // Teting transfer from unforgeable bound vault
             RevVault!("findOrCreate", unfRevAddress, *unfVaultCh) |
             RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
-            for (@(true, unfVault) <- unfVaultCh) {
-              stdlog!("info", ("create unf suc"))|
-              for (unfAuthKey <- unfAuthKeyCh){
-                stdlog!("info", ("create auth"))|
-                for ( _ <- initTransferCh){
-                  stdlog!("info", ("create unf"))|
-                  @unfVault!("transfer", genesisRevAddress, 1, *unfAuthKey, *transferCh) |
-                  rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
-                }
-              }
+            for (@(true, unfVault) <- unfVaultCh; unfAuthKey <- unfAuthKeyCh; _ <- initTransferCh) {
+              @unfVault!("transfer", genesisRevAddress, 1, *unfAuthKey, *transferCh) |
+              rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
             }
           }
         }
