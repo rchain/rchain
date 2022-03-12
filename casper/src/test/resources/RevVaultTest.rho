@@ -189,13 +189,15 @@ match (
           RevAddress!("fromUnforgeable", *unf, *unfRevAddrCh) |
           for (@unfRevAddress <- unfRevAddrCh; genesisVault, genesisVaultKey <- genesisVaultCh) {
             // Transfer initial funds to unforgeable vault
-            genesisVault!("transfer", unfRevAddress, 100, *genesisVaultKey, *initTransferCh) |
             // Teting transfer from unforgeable bound vault
             RevVault!("findOrCreate", unfRevAddress, *unfVaultCh) |
             RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
-            for (@(true, unfVault) <- unfVaultCh; unfAuthKey <- unfAuthKeyCh; _ <- initTransferCh) {
-              @unfVault!("transfer", genesisRevAddress, 1, *unfAuthKey, *transferCh) |
-              rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
+            for (@(true, unfVault) <- unfVaultCh; unfAuthKey <- unfAuthKeyCh) {
+              genesisVault!("transfer", unfRevAddress, 100, *genesisVaultKey, *initTransferCh) |
+              for ( _ <- initTransferCh){
+                @unfVault!("transfer", genesisRevAddress, 1, *unfAuthKey, *transferCh) |
+                rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
+              }
             }
           }
         }
