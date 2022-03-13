@@ -49,7 +49,7 @@ object Converter {
       val optMap  = s.toMap
       val typeOpt = optMap.get("type").orElse(optMap.get("t"))
 
-      typeOpt.traverse[Either[String, ?], List[String] => A] {
+      typeOpt.traverse[Either[String, *], List[String] => A] {
         case "priv" :: _ => Right(onPriv)
         case "pub" :: _  => Right(onPub)
         case _           => Left("Bad option value. Use \"pub\" or \"priv\"")

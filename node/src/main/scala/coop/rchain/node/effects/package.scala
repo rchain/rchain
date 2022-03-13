@@ -101,9 +101,9 @@ package object effects {
 
   def readerTApplicativeAsk[F[_]: Monad, E, B](
       askF: ApplicativeAsk[F, B]
-  ): ApplicativeAsk[ReaderT[F, E, ?], B] =
-    new ApplicativeAsk[ReaderT[F, E, ?], B] {
-      override val applicative: Applicative[ReaderT[F, E, ?]] = Applicative[ReaderT[F, E, ?]]
+  ): ApplicativeAsk[ReaderT[F, E, *], B] =
+    new ApplicativeAsk[ReaderT[F, E, *], B] {
+      override val applicative: Applicative[ReaderT[F, E, *]] = Applicative[ReaderT[F, E, *]]
 
       override def ask: ReaderT[F, E, B] = ReaderT.liftF(askF.ask)
 
@@ -112,9 +112,9 @@ package object effects {
 
   def readerTMonadState[F[_]: Monad: Sync, E, S](
       stateF: MonadState[F, S]
-  ): MonadState[ReaderT[F, E, ?], S] =
-    new MonadState[ReaderT[F, E, ?], S] {
-      override val monad: Monad[ReaderT[F, E, ?]] = Monad[ReaderT[F, E, ?]]
+  ): MonadState[ReaderT[F, E, *], S] =
+    new MonadState[ReaderT[F, E, *], S] {
+      override val monad: Monad[ReaderT[F, E, *]] = Monad[ReaderT[F, E, *]]
 
       override def get: ReaderT[F, E, S] = ReaderT.liftF(stateF.get)
 

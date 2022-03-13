@@ -15,12 +15,12 @@ package object matcher {
 
   type FreeMap = Map[Int, Par]
 
-  type MatcherMonadT[F[_], A] = StateT[StreamT[F, ?], FreeMap, A]
+  type MatcherMonadT[F[_], A] = StateT[StreamT[F, *], FreeMap, A]
 
   import coop.rchain.rholang.interpreter.matcher.StreamT
 
-  implicit def matcherMonadCostLog[F[_]: Monad: Sync: _cost](): _cost[MatcherMonadT[F, ?]] =
-    λ[F ~> MatcherMonadT[F, ?]](fa => StateT.liftF(StreamT.liftF(fa)))
+  implicit def matcherMonadCostLog[F[_]: Monad: Sync: _cost](): _cost[MatcherMonadT[F, *]] =
+    λ[F ~> MatcherMonadT[F, *]](fa => StateT.liftF(StreamT.liftF(fa)))
 
   // The naming convention means: this is an effect-type alias.
   // Will be used similarly to capabilities, but for more generic and probably low-level/implementation stuff.

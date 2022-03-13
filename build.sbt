@@ -13,7 +13,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.11",
+  scalaVersion := "2.12.15",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -53,11 +53,8 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.4.6",
+  scapegoatVersion in ThisBuild := "1.4.11",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
-  dependencyOverrides ++= Seq(
-    "io.kamon" %% "kamon-core" % kamonVersion
-  ),
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
   Test / parallelExecution := false,
@@ -182,7 +179,6 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
       nettyBoringSsl,

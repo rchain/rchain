@@ -443,7 +443,7 @@ object NodeRuntime {
 
     /**
       * Implementation for ConcurrentEffect for ReaderT cannot be constructed automatically so it's
-      * wired up here from existing Concurrent[ReaderT[F, S, ?]] and ConcurrentEffect[F] implementations.
+      * wired up here from existing Concurrent[ReaderT[F, S, *]] and ConcurrentEffect[F] implementations.
       *
       * `runCancelable` and `runAsync` are newly provided.
       */

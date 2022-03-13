@@ -14,8 +14,8 @@ class EitherTApplicativeAsk[F[_], E, Err](
     implicit
     ev1: ApplicativeAsk[F, E],
     ev2: Monad[F]
-) extends ApplicativeAsk[EitherT[F, Err, ?], E] {
-  val applicative: Applicative[EitherT[F, Err, ?]] = Applicative[EitherT[F, Err, ?]]
+) extends ApplicativeAsk[EitherT[F, Err, *], E] {
+  val applicative: Applicative[EitherT[F, Err, *]] = Applicative[EitherT[F, Err, *]]
 
   def ask: EitherT[F, Err, E] = EitherT(ev1.ask.map(Right(_)))
 
