@@ -42,7 +42,8 @@ final case class BlockApproverProtocol private (
 
   def unapprovedBlockPacketHandler[F[_]: Concurrent: TransportLayer: Log: Time: RPConfAsk: RuntimeManager](
       peer: PeerNode,
-      u: UnapprovedBlock
+      u: UnapprovedBlock,
+      shardId: String
   ): F[Unit] = {
     val candidate = u.candidate
     Log[F].info(s"Received expected genesis block candidate from $peer. Verifying...") >>
@@ -57,7 +58,8 @@ final case class BlockApproverProtocol private (
           maximumBond,
           epochLength,
           quarantineLength,
-          numberOfActiveValidators
+          numberOfActiveValidators,
+          shardId
         )
         .flatMap {
           case Right(_) =>
@@ -135,7 +137,8 @@ object BlockApproverProtocol {
       maximumBond: Long,
       epochLength: Int,
       quarantineLength: Int,
-      numberOfActiveValidators: Int
+      numberOfActiveValidators: Int,
+      shardId: String
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
@@ -170,7 +173,8 @@ object BlockApproverProtocol {
             timestamp,
             posParams,
             vaults,
-            Long.MaxValue
+            Long.MaxValue,
+            shardId
           )
         blockDeploys = block.body.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)

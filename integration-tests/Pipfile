@@ -16,7 +16,7 @@ ecdsa = "*"
 cryptography = "==3.3.2"
 eth-hash = "*"
 pycryptodome = "*"
-pyrchain = "==0.3.10"
+pyrchain = "==0.3.13a0"
 requests = "*"
 importlib-metadata = "*"
 

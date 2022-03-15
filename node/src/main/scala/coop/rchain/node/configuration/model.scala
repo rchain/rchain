@@ -106,7 +106,8 @@ final case class Deploy(
     validAfterBlock: Long,
     privateKey: Option[PrivateKey],
     privateKeyPath: Option[Path],
-    location: String
+    location: String,
+    shardId: String
 ) extends Command
 final case class FindDeploy(id: Array[Byte])                               extends Command
 final case class Propose(printUnmatchedSends: Boolean)                     extends Command

@@ -21,7 +21,8 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis()
+  val genesis          = buildGenesis()
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
@@ -41,7 +42,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
-        deploy             <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy             <- ConstructDeploy.basicDeployData[Effect](0, shardId = genesis.genesisBlock.shardId)
         _                  <- node0.propagateBlock(deploy)(node1)
         createBlockResult2 <- node1.createBlock(deploy)
       } yield (createBlockResult2 should be(NoNewDeploys))
@@ -82,9 +83,20 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         val phloPrice      = 1.toLong
         val isNodeReadOnly = false
         for {
-          deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
+          deployData <- ConstructDeploy
+                         .sourceDeployNowF[Effect](
+                           "Nil",
+                           phloPrice = phloPrice,
+                           shardId = genesis.genesisBlock.shardId
+                         )
           err <- BlockAPI
-                  .deploy[Effect](deployData, None, minPhloPrice = minPhloPrice, isNodeReadOnly)
+                  .deploy[Effect](
+                    deployData,
+                    None,
+                    minPhloPrice = minPhloPrice,
+                    isNodeReadOnly,
+                    shardId = SHARD_ID
+                  )
                   .attempt
         } yield {
           err.isLeft shouldBe true

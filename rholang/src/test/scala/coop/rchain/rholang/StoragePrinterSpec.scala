@@ -21,6 +21,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
   private val deployerSk = PrivateKey(
     Base16.unsafeDecode("17f242c34491ff8187ec94ec1508fed8b487b872f2bb97b437f4d4e44345cee6")
   )
+  private val SHARD_ID = "root-shard"
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -51,7 +52,8 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
         phloPrice = 0,
         phloLimit = 0,
         validAfterBlockNumber = 0,
-        term = term
+        term = term,
+        shardId = SHARD_ID
       ),
       Secp256k1,
       deployerSk
@@ -68,10 +70,10 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
                              List(deploy1, deploy2, deploy3).map(mkDeploy),
                              runtime
                            )
-          result = """Deploy 30450221008aaf85500ad932038afaea985e21a112dfd9c1cbad0a4888383205f8406300f402206988d6c1613875d6726b39268f2be042d90a7da9a5b0a59c4675c6441b0f73fe:
+          result = """Deploy 304302205f0ca86c04a9614b474372e38e3d92c173690ffb864989f555720e004e96da72021f1f2243e6d33e5cd444f5321533b1afb52bfe830fc2f78aab77e0f7e6130669:
               |@{1}!(Nil)
               |
-              |Deploy 3045022100cc80e7d7cf0582ad9fb650fd481b7c55ff3120cd641e791feb1cad9da919459f0220782c7a8048a6ad8c302d66b4711cf8024bc15746a20fa6b8175a81166dce6807:
+              |Deploy 3045022100c126afae3a9c135ab08812bafb6fe54353f80f77c7b628b93a738891518197b5022031e220e1a3d4b859752ebe80153148223a0d75308c8b49bf6c922c5dd51129a1:
               |@{2}!(Nil)""".stripMargin
           _      = assert(unmatchedSends == result)
         } yield ()

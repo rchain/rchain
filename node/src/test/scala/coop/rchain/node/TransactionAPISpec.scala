@@ -35,7 +35,8 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
                    term,
                    sec = deployKey,
                    phloLimit = phloLimit,
-                   phloPrice = phloPrice
+                   phloPrice = phloPrice,
+                   shardId = this.genesis.genesisBlock.shardId
                  )
         transactionAPI = Transaction[Task](
           blockReportAPI,
