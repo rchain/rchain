@@ -90,10 +90,11 @@ object DeployGrpcServiceV1 {
               })
             },
             dd => {
-              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice, isNodeReadOnly)) { r =>
-                import DeployResponse.Message
-                import DeployResponse.Message._
-                DeployResponse(r.fold[Message](Error, Result))
+              defer(BlockAPI.deploy[F](dd, triggerProposeF, minPhloPrice, isNodeReadOnly, shardId)) {
+                r =>
+                  import DeployResponse.Message
+                  import DeployResponse.Message._
+                  DeployResponse(r.fold[Message](Error, Result))
               }
             }
           )

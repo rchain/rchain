@@ -65,8 +65,18 @@ class BondedStatusAPITest
     TestNode.networkEff(genesisContext, networkSize = 4).use {
       case nodes @ n1 +: n2 +: n3 +: n4 +: _ =>
         for {
-          produceDeploys <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
-          bondDeploy     <- BondingUtil.bondingDeploy[Task](1000, n4.validatorId.get.privateKey)
+          produceDeploys <- (0 until 3).toList.traverse(
+                             i =>
+                               basicDeployData[Task](
+                                 i,
+                                 shardId = genesisContext.genesisBlock.shardId
+                               )
+                           )
+          bondDeploy <- BondingUtil.bondingDeploy[Task](
+                         1000,
+                         n4.validatorId.get.privateKey,
+                         shardId = genesisContext.genesisBlock.shardId
+                       )
 
           _  <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)

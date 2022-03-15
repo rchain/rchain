@@ -16,6 +16,8 @@ import org.scalatest.FlatSpec
 import scala.util.Random
 
 class RhoTrieTraverserTest extends FlatSpec {
+  private val SHARD_ID = "root-shard"
+
   "traverse the TreeHashMap" should "work" in {
     val total     = 100
     val trieDepth = 2
@@ -62,7 +64,7 @@ class RhoTrieTraverserTest extends FlatSpec {
         for {
           hash1 <- runtime.emptyStateHash
           _     <- runtime.reset(Blake2b256Hash.fromByteString(hash1))
-          rd    <- runtime.processDeploy(StandardDeploys.registry)
+          rd    <- runtime.processDeploy(StandardDeploys.registry(SHARD_ID))
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
           initialTrie <- runtime.processDeploy(

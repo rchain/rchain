@@ -34,7 +34,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis()
+  val genesis          = buildGenesis()
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -77,7 +78,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deploy      <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy      <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         signedBlock <- node.addBlock(deploy)
         dag         <- node.casperEff.blockDag
         estimate    <- node.casperEff.estimator(dag)
@@ -90,11 +91,15 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       implicit val rm = node.runtimeManager
 
       for {
-        deploy1 <- ConstructDeploy
-                    .sourceDeployNowF("contract @\"add\"(@x, @y, ret) = { ret!(x + y) }")
+        deploy1 <- ConstructDeploy.sourceDeployNowF(
+                    "contract @\"add\"(@x, @y, ret) = { ret!(x + y) }",
+                    shardId = SHARD_ID
+                  )
         signedBlock1 <- node.addBlock(deploy1)
-        deploy2 <- ConstructDeploy
-                    .sourceDeployNowF("new unforgable in { @\"add\"!(5, 7, *unforgable) }")
+        deploy2 <- ConstructDeploy.sourceDeployNowF(
+                    "new unforgable in { @\"add\"!(5, 7, *unforgable) }",
+                    shardId = SHARD_ID
+                  )
         signedBlock2 <- node.addBlock(deploy2)
         dag          <- node.casperEff.blockDag
         estimate     <- node.casperEff.estimator(dag)
@@ -119,7 +124,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.standaloneEff(genesis).use { node =>
       val source = " for(@x <- @0){ @0!(x) } | @0!(0) "
       for {
-        deploys  <- List(source, source).traverse(ConstructDeploy.sourceDeployNowF[Effect](_))
+        deploys <- List(source, source)
+                    .traverse(ConstructDeploy.sourceDeployNowF[Effect](_, shardId = SHARD_ID))
         block    <- node.addBlock(deploys: _*)
         deployed <- node.contains(block.blockHash)
       } yield deployed shouldBe true
@@ -131,7 +137,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       for {
         deployDatas <- (0 to 1).toList
                         .traverse[Effect, Signed[DeployData]](
-                          i => ConstructDeploy.basicDeployData[Effect](i)
+                          i => ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)
                         )
         _ <- nodes(0).addBlock(deployDatas(0))
         _ <- nodes(1).addBlock(deployDatas(1))
@@ -147,7 +153,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     TestNode.standaloneEff(genesis).use { node =>
       val source = " for(@x <<- @0){ Nil } | @0!(0) "
       for {
-        deploy  <- ConstructDeploy.sourceDeployNowF[Effect](source)
+        deploy  <- ConstructDeploy.sourceDeployNowF[Effect](source, shardId = SHARD_ID)
         block   <- node.addBlock(deploy)
         created <- node.contains(block.blockHash)
       } yield created shouldBe true
@@ -159,7 +165,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       TestNode.networkEff(genesis, networkSize = 1).use { nodes =>
         for {
           deploy <- ConstructDeploy.sourceDeployNowF[Effect](
-                     "for(_ <<- @0) { Nil } | @0!(0) | for(_ <- @0) { Nil }"
+                     "for(_ <<- @0) { Nil } | @0!(0) | for(_ <- @0) { Nil }",
+                     shardId = SHARD_ID
                    )
           block <- nodes(0).addBlock(deploy)
           added <- nodes(0).contains(block.blockHash)
@@ -237,7 +244,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "propose blocks it adds to peers" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
-        deployData  <- ConstructDeploy.basicDeployData[Effect](0)
+        deployData  <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         signedBlock <- nodes(0).publishBlock(deployData)(nodes: _*)
         proposed    <- nodes(1).knowsAbout(signedBlock.blockHash)
       } yield proposed shouldBe true
@@ -247,7 +254,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
   it should "add a valid block from peer" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
-        deployData            <- ConstructDeploy.basicDeployData[Effect](1)
+        deployData            <- ConstructDeploy.basicDeployData[Effect](1, shardId = SHARD_ID)
         signedBlock1Prime     <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                     <- nodes(1).syncWith(nodes(0)) // should receive BlockMessage here
         maybeHash             <- nodes(1).blockStore.get(signedBlock1Prime.blockHash)
@@ -431,7 +438,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
     val (_, validatorPks) = validatorKeyPairs.unzip
 
     def deployment(ts: Long) =
-      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts)
+      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
 
     def deploy(
         node: TestNode[Effect],

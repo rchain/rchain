@@ -47,6 +47,7 @@ class ValidateTest
   import ValidBlock._
 
   implicit override val log: LogStub[Task] = new LogStub[Task]
+  private val SHARD_ID                     = "root-shard"
 
   def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
     CasperSnapshot(
@@ -687,10 +688,10 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds)
-        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds)
-        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds, shardId = SHARD_ID)
         _ <- (0 to 4).toList.forallM[Task](
               i =>
                 for {
@@ -731,11 +732,20 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1)
-        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2)
-        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2)
-        b5 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b4), v0, bonds, 1, invalid = true)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2, shardId = SHARD_ID)
+        b5 <- createValidatorBlock[Task](
+               Seq(b0),
+               b0,
+               Seq(b3, b4),
+               v0,
+               bonds,
+               1,
+               invalid = true,
+               shardId = SHARD_ID
+             )
 
         justificationsWithInvalidBlock = Seq(
           Justification(v0, b5.blockHash),

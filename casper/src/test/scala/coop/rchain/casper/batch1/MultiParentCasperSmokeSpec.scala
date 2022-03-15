@@ -19,7 +19,9 @@ class MultiParentCasperSmokeSpec extends FlatSpec with Matchers with Inspectors 
 
   it should "perform the most basic deploy successfully" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      ConstructDeploy.sourceDeployNowF("new x in { x!(0) }") >>= (node.addBlock(_))
+      ConstructDeploy
+        .sourceDeployNowF("new x in { x!(0) }", shardId = genesis.genesisBlock.shardId) >>= (node
+        .addBlock(_))
     }
   }
 

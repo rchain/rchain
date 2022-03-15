@@ -144,6 +144,7 @@ message DeployDataProto {
   int64 phloPrice     = 7; //phlo price
   int64 phloLimit     = 8; //phlo limit for the deployment
   int64 validAfterBlockNumber = 10;
+  string shardId              = 11;//shard ID to prevent replay of deploys between shards
 }
 
 message ProcessedDeployProto {

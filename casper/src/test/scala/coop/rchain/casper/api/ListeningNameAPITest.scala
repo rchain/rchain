@@ -24,7 +24,10 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       import node._
 
       for {
-        block <- ConstructDeploy.sourceDeployNowF("@{ 3 | 2 | 1 }!(0)") >>= (node.addBlock(_))
+        block <- ConstructDeploy.sourceDeployNowF(
+                  "@{ 3 | 2 | 1 }!(0)",
+                  shardId = this.genesis.genesisBlock.shardId
+                ) >>= (node.addBlock(_))
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -57,7 +60,9 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       for {
         deployDatas <- (0 to 7).toList
                         .traverse[Effect, Signed[DeployData]](
-                          _ => ConstructDeploy.basicDeployData[Effect](0)
+                          _ =>
+                            ConstructDeploy
+                              .basicDeployData[Effect](0, shardId = genesis.genesisBlock.shardId)
                         )
 
         block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)

@@ -169,6 +169,10 @@ object Validate {
       _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
       _ <- EitherT(Validate.timestamp(block))
+      _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
+      _ <- EitherT(Validate.shardIdentifier(block, shardId))
+      _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
+      _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
       _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
@@ -184,9 +188,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
       _ <- EitherT(Validate.sequenceNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-justification-regression-validation"))
-      _ <- EitherT(Validate.justificationRegressions(block, s))
-      _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
-      s <- EitherT(Validate.shardIdentifier(block, shardId))
+      s <- EitherT(Validate.justificationRegressions(block, s))
     } yield s).value
 
   /**
@@ -430,6 +432,19 @@ object Validate {
         _ <- Log[F].warn(
               ignore(b, s"got shard identifier ${b.shardId} while $shardId was expected.")
             )
+      } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
+    }
+
+  // Validator should only process deploys from its own shard
+  def deploysShardIdentifier[F[_]: Monad: Log](
+      b: BlockMessage,
+      shardId: String
+  ): F[ValidBlockProcessing] =
+    if (b.body.deploys.forall(_.deploy.data.shardId == shardId)) {
+      BlockStatus.valid.asRight[BlockError].pure
+    } else {
+      for {
+        _ <- Log[F].warn(ignore(b, s"not for all deploys shard identifier is $shardId."))
       } yield BlockStatus.invalidShardId.asLeft[ValidBlock]
     }
 

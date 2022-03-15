@@ -34,10 +34,11 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         kvm             <- Resources.mkTestRNodeStoreManager[Effect](node.dataDir)
         rspaceStore     <- kvm.rSpaceStores
         reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore)
-        deploy          = ConstructDeploy.sourceDeployNow(correctRholang)
-        signedBlock     <- node.addBlock(deploy)
-        _               = logEff.warns.isEmpty should be(true)
-        trace           <- reportingCasper.trace(signedBlock)
+        deploy = ConstructDeploy
+          .sourceDeployNow(correctRholang, shardId = this.genesis.genesisBlock.shardId)
+        signedBlock <- node.addBlock(deploy)
+        _           = logEff.warns.isEmpty should be(true)
+        trace       <- reportingCasper.trace(signedBlock)
         // only the comm events should be equal
         // it is possible that there are additional produce or consume in persistent mode
         reportingCommEventsNum = trace.deployReportResult.head.processedDeploy.deployLog.collect {

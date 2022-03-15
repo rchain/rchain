@@ -39,7 +39,11 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
       }
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
+        deployDatas <- (0 to 7).toList.traverse(
+                        i =>
+                          ConstructDeploy
+                            .basicDeployData[Effect](i, shardId = genesis.genesisBlock.shardId)
+                      )
 
         block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
         block2 <- nodes(1).propagateBlock(deployDatas(1))(nodes: _*)
