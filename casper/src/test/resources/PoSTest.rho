@@ -39,15 +39,15 @@ match (
       rl!(`rho:lang:listOps`, *ListOpsCh) |
       rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
       makeSysAuthToken!(*sysAuthTokenCh) |
-      for(@(_, RhoSpec)  <- RhoSpecCh;
-          @(_, PoS)      <- PoSCh;
-          @(_, RevVault) <- RevVaultCh;
-          @posRevAddress <- posRevAddressCh;
-          @(_, ListOps)  <- ListOpsCh;
+      for(@(_, RhoSpec)  <- RhoSpecCh &
+          @(_, PoS)      <- PoSCh &
+          @(_, RevVault) <- RevVaultCh &
+          @posRevAddress <- posRevAddressCh &
+          @(_, ListOps)  <- ListOpsCh &
           @sysAuthToken  <- sysAuthTokenCh) {
         stdlog!("info", {"posRevAddress" : posRevAddress}) |
         @PoS!("getInitialPosVault", *posVaultCh) |
-        for (@posVault <- posVaultCh) {
+        for (@(posAddr, posVault) <- posVaultCh) {
           @RhoSpec!("testSuite", *setup,
             [
               ("PoS is created with empty rewards", *test_make_pos_succeeds),
@@ -62,6 +62,7 @@ match (
               ("bonding fails if already bonded", *test_bonding_fails_if_already_bonded),
               ("bonding fails if bond is too small", *test_bonding_fails_if_bond_too_small),
               ("payment is not distributed to inactive validators", *test_dont_reward_inactive_validators),
+              // TODO we should reimplement the random test in the future when it is available
               ("commited random matches its image", *test_commit_random),
               ("Slashing transfers funds appropriately", *test_slashing_vaults_and_state)
             ]
@@ -78,7 +79,7 @@ match (
             in {
               revAddressOps!("fromPublicKey", pk.hexToBytes(), *revAddrCh) |
               makeDeployerId!("deployerId", pk.hexToBytes(), *deployerIdCh) |
-              for (@revAddress <- revAddrCh;
+              for (@revAddress <- revAddrCh &
                    @deployerId <- deployerIdCh) {
                 @RevVault!("findOrCreate", revAddress, *vaultCh) |
                 for (@(true, vault) <- vaultCh) {
@@ -92,7 +93,7 @@ match (
             new bondsCh, rewardsCh, rewardsZeroCh, rewardsZeroPred in {
               @PoS!("getBonds", *bondsCh) |
               @PoS!("getRewards", *rewardsCh) |
-              for (@bonds   <- bondsCh;
+              for (@bonds   <- bondsCh &
                    @rewards <- rewardsCh) {
                 @ListOps!("forall", rewards.toList(), *rewardsZeroPred, *rewardsZeroCh) |
                 contract rewardsZeroPred(@(_, reward), resultCh) = {
@@ -101,7 +102,6 @@ match (
                 rhoSpec!("assertMany",
                   [
                     (bonds.size() >= 0, "some bonds map should be received"),
-                    ((0, "==", rewards.size()), "the rewards map is initially empty"),
                     ((true, "== <-", *rewardsZeroCh), "no rewards yet")
                   ],
                   *ackCh
@@ -152,9 +152,9 @@ match (
                 getCoopBalance!(*initialCoopBalanceCh) |
                 @userVault!("balance", *initialUserBalanceCh) |
                 @PoS!("getBonds", *initialBondsCh) |
-                for (@initialPosBalance  <- initialPosBalanceCh;
-                     @initialUserBalance <- initialUserBalanceCh;
-                     @initialCoopBalance <- initialCoopBalanceCh;
+                for (@initialPosBalance  <- initialPosBalanceCh &
+                     @initialUserBalance <- initialUserBalanceCh &
+                     @initialCoopBalance <- initialCoopBalanceCh &
                      @initialBonds       <- initialBondsCh) {
                   match 100 {
                     bondAmt => {
@@ -165,10 +165,10 @@ match (
                         getCoopBalance!(*finalCoopBalanceCh) |
                         @userVault!("balance", *finalUserBalanceCh) |
                         @PoS!("getRewards", *rewardsCh) |
-                        for (@finalPosBalance  <- finalPosBalanceCh;
-                             @finalUserBalance <- finalUserBalanceCh;
-                             @finalCoopBalance <- finalCoopBalanceCh;
-                             @finalBonds       <- finalBondsCh;
+                        for (@finalPosBalance  <- finalPosBalanceCh &
+                             @finalUserBalance <- finalUserBalanceCh &
+                             @finalCoopBalance <- finalCoopBalanceCh &
+                             @finalBonds       <- finalBondsCh &
                              @rewards          <- rewardsCh) {
                           rhoSpec!("assertMany",
                             [
@@ -211,43 +211,43 @@ match (
                 @PoS!("getRewards", *initialRewardsCh) |
                 @PoS!("getQuarantineLength", *quarantineCh) |
                 @PoS!("getEpochLength", *epochCh) |
-                for (@initialPosBalance  <- initialPosBalanceCh;
-                     @initialUserBalance <- initialUserBalanceCh;
-                     @initialBonds       <- initialBondsCh;
-                     @initialRewards     <- initialRewardsCh;
-                     @epochLength        <- epochCh;
+                for (@initialPosBalance  <- initialPosBalanceCh &
+                     @initialUserBalance <- initialUserBalanceCh &
+                     @initialBonds       <- initialBondsCh &
+                     @initialRewards     <- initialRewardsCh &
+                     @epochLength        <- epochCh &
                      @quarantineLength   <- quarantineCh) {
                   // block number is set for after a quarantine period so this validator will appear in the initial and final bonds map in test_validator_is_paid_after_withdraw
                   match (100, 2 * epochLength * quarantineLength) {
                     (bondAmt, blockNumber) => {
                       @PoS!("bond", userDeployerId, bondAmt, *bondCh) |
                       setBlockData!("blockNumber", blockNumber, *blockDataCh) |
-                      for (@(true, _) <- bondCh;
+                      for (@(true, _) <- bondCh &
                            _          <- blockDataCh) {
                         @PoS!("withdraw", userDeployerId, *withdrawCh) |
                         for (_ <- withdrawCh) {
                           closeBlock!(*closeBlockCh) |
-                          for (_ <- closeBlockCh) {
+                          for (@(true, _) <- closeBlockCh) {
                             @PoS!("getBonds", *finalBondsCh) |
                             getPosBalance!(*finalPosBalanceCh) |
                             @userVault!("balance", *finalUserBalanceCh) |
                             @PoS!("getRewards", *finalRewardsCh) |
                             @PoS!("getWithdrawers", *withdrawersCh) |
                             quarantinePeriodCh!(quarantineLength + epochLength * (1 + blockNumber / epochLength)) |
-                            for (@finalPosBalance  <- finalPosBalanceCh;
-                                 @finalUserBalance <- finalUserBalanceCh;
-                                 @finalBonds       <- finalBondsCh;
-                                 @finalRewards     <- finalRewardsCh;
-                                 @withdrawers      <- withdrawersCh;
+                            for (@finalPosBalance  <- finalPosBalanceCh &
+                                 @finalUserBalance <- finalUserBalanceCh &
+                                 @finalBonds       <- finalBondsCh &
+                                 @finalRewards     <- finalRewardsCh &
+                                 @withdrawers      <- withdrawersCh &
                                  @quarantinePeriod <- quarantinePeriodCh) {
                               rhoSpec!("assertMany",
                                 [
-                                  ((finalBonds, "==", initialBonds.set(userPubKey, bondAmt)), "user is correctly added to the bond map"),
-                                  ((finalRewards, "==", initialRewards), "rewards don't change for bonding"),
+                                  ((finalBonds, "==", initialBonds), "user is not in the bond map after withdraw"),
+                                  ((finalRewards, "==", initialRewards.set(userPubKey, 0)), "rewards don't change for bonding"),
                                   ((finalUserBalance, "==", initialUserBalance - bondAmt), "user balance should change by bond amount"),
                                   ((finalPosBalance, "==", initialPosBalance + bondAmt), "pos balance should change by bond amount"),
                                   ((true, "==", withdrawers.contains(userPubKey)), "withdrawer is moved to withdrawers map"),
-                                  ((quarantinePeriod, "==", withdrawers.get(userPubKey)), "withdrawer has correct quarantine finish block")
+                                  (((bondAmt, quarantinePeriod), "==", withdrawers.get(userPubKey)), "withdrawer state has correct quarantine period and bonds after withdrawing from pos")
                                 ],
                                 *ackCh
                               )
@@ -279,47 +279,54 @@ match (
                 @PoS!("getBonds", *initialBondsCh) |
                 @PoS!("getQuarantineLength", *quarantineCh) |
                 @PoS!("getEpochLength", *epochCh) |
-                for (@initialValidatorBalance <- initialValidatorBalanceCh;
-                     @initialBonds            <- initialBondsCh;
-                     @epochLength             <- epochCh;
+                for (@initialValidatorBalance <- initialValidatorBalanceCh &
+                     @initialBonds            <- initialBondsCh &
+                     @epochLength             <- epochCh &
                      @quarantineLength        <- quarantineCh) {
                   match (100, 100, 0, 1) {
                     (bondAmt, chargeAmt, refundAmt, blockNumber) => {
                       @PoS!("bond", validatorDeployerId, bondAmt, *bondCh) |
                       for (@(true, _) <- bondCh) {
+                        stdlog!("info", ("successfully bond.")) |
                         closeBlock!(*closeBlockCh) |
                         for (_ <- closeBlockCh) {
                           prepareUser!("cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", *setupCh) |
                           for (@userPubKey, _, @userVault, @userDeployerId <- setupCh) {
                             @PoS!("chargeDeploy", userDeployerId, chargeAmt, sysAuthToken, *chargeCh) |
                             @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
-                            for (@(true, _) <- chargeCh;
+                            for (@(true, _) <- chargeCh &
                                  @(true, _) <- refundCh){
                               closeBlock!(*closeBlockCh) |
                               for (_ <- closeBlockCh) {
                                 @PoS!("getRewards", *rewardsCh) |
                                 for (@rewards <- rewardsCh) {
+                                  stdlog!("info", ("After precharge and refund of the rewards", rewards)) |
                                   validatorRewardCh!(rewards.getOrElse(validatorPubKey, 0)) |
                                   for (@validatorReward <- validatorRewardCh) {
                                     setBlockData!("blockNumber", blockNumber, *blockDataCh) |
+                                    stdlog!("info", ("Successfully set block number",  blockNumber)) |
                                     @PoS!("getWithdrawers", *withdrawersCh) |
-                                    for (_                   <- blockDataCh;
+                                    for (_                   <- blockDataCh &
                                          @initialWithdrawers <- withdrawersCh) {
                                       @PoS!("withdraw", validatorDeployerId, *withdrawCh) |
-                                      for (_ <- withdrawCh) {
+                                      for (@(true, _) <- withdrawCh) {
+                                        stdlog!("info", ("Successfully withdraw bbbb....")) |
                                         match quarantineLength + epochLength * (1 + blockNumber / epochLength) {
                                           quarantinePeriod => {
                                             setBlockData!("blockNumber", quarantinePeriod - 1, *blockDataCh) |
                                             for (_ <- blockDataCh) {
-                                              @PoS!("getWithdrawers", *withdrawersCh) |
+                                              stdlog!("info", ("Successfully set block number",  quarantinePeriod - 1)) |
+                                              @PoS!("getPendingWithdrawer", *withdrawersCh) |
                                               @validatorVault!("balance", *intermediateValidatorBalanceCh) |
-                                              for (@intermediateWithdrawers      <- withdrawersCh;
+                                              for (@intermediateWithdrawers      <- withdrawersCh &
                                                    @intermediateValidatorBalance <- intermediateValidatorBalanceCh) {
                                                 // Sets blockNumber to the soonest epoch change after quarantine period is finished.
                                                 if (quarantineLength % epochLength == 0) {
-                                                  setBlockData!("blockNumber", quarantinePeriod, *blockDataCh)
+                                                  setBlockData!("blockNumber", quarantinePeriod, *blockDataCh) |
+                                                  stdlog!("info", ("Set block number",  quarantinePeriod))
                                                 } else {
-                                                  setBlockData!("blockNumber", quarantinePeriod + epochLength - (quarantineLength % epochLength), *blockDataCh)
+                                                  setBlockData!("blockNumber", quarantinePeriod + epochLength - (quarantineLength % epochLength), *blockDataCh)|
+                                                  stdlog!("info", ("Set block number not 0",  quarantinePeriod + epochLength - (quarantineLength % epochLength)))
                                                 } |
                                                 for (_ <- blockDataCh) {
                                                   closeBlock!(*closeBlockCh) |
@@ -327,9 +334,10 @@ match (
                                                     @validatorVault!("balance", *finalValidatorBalanceCh) |
                                                     @PoS!("getBonds", *finalBondsCh) |
                                                     @PoS!("getWithdrawers", *withdrawersCh) |
-                                                    for (@finalBonds            <- finalBondsCh;
-                                                         @finalWithdrawers      <- withdrawersCh;
+                                                    for (@finalBonds            <- finalBondsCh &
+                                                         @finalWithdrawers      <- withdrawersCh &
                                                          @finalValidatorBalance <- finalValidatorBalanceCh) {
+                                                      stdlog!("info", ("validator rewards", validatorReward, finalValidatorBalance, initialValidatorBalance)) |
                                                       rhoSpec!("assertMany",
                                                         [
                                                           ((finalBonds, "==", initialBonds), "bonds don't change after the same user bonds and withdraws successfully"),
@@ -377,9 +385,9 @@ match (
                 getCoopBalance!(*initialCoopBalanceCh) |
                 @PoS!("getBonds", *initialBondsCh) |
                 @user1Vault!("balance", *initialUser1BalanceCh) |
-                for (@initialPosBalance   <- initialPosBalanceCh;
-                     @initialUser1Balance <- initialUser1BalanceCh;
-                     @initialCoopBalance  <- initialCoopBalanceCh;
+                for (@initialPosBalance   <- initialPosBalanceCh &
+                     @initialUser1Balance <- initialUser1BalanceCh &
+                     @initialCoopBalance  <- initialCoopBalanceCh &
                      @initialBonds        <- initialBondsCh) {
                   match (100, 200) {
                     (user1Bond, user2Bond) => {
@@ -397,10 +405,10 @@ match (
                               getCoopBalance!(*finalCoopBalanceCh) |
                               @user1Vault!("balance", *finalUser1BalanceCh) |
                               @user2Vault!("balance", *finalUser2BalanceCh) |
-                              for (@finalPosBalance   <- finalPosBalanceCh;
-                                   @finalUser1Balance <- finalUser1BalanceCh;
-                                   @finalUser2Balance <- finalUser2BalanceCh;
-                                   @finalCoopBalance  <- finalCoopBalanceCh;
+                              for (@finalPosBalance   <- finalPosBalanceCh &
+                                   @finalUser1Balance <- finalUser1BalanceCh &
+                                   @finalUser2Balance <- finalUser2BalanceCh &
+                                   @finalCoopBalance  <- finalCoopBalanceCh &
                                    @finalBonds        <- finalBondsCh) {
                                 rhoSpec!("assertMany",
                                   [
@@ -431,7 +439,7 @@ match (
                 initialUser1BalanceCh, finalUser1BalanceCh,
                 initialRewardsCh, finalRewardsCh,
                 computeDelta, deltaRewardsCh, deltaSumCh, sumDelta,
-                isPositive, allRewardsPositiveCh
+                isPositive, allRewardsPositiveCh, initialBondsCh, initialActiveCh
             in {
               prepareUser!("4444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444", *setupCh) |
               for (@validatorPubKey, _, _, @validatorDeployerId <- setupCh) {
@@ -441,26 +449,32 @@ match (
                     for (@(true, _) <- setupCh) {
                       closeBlock!(*closeBlockCh) |
                       prepareUser!("5555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555", *setupCh) |
-                      for (_, _, @userVault, @userDeployerId <- setupCh;
+                      for (_, _, @userVault, @userDeployerId <- setupCh &
                            _                                 <- closeBlockCh) {
                         getPosBalance!(*initialPosBalanceCh) |
                         @userVault!("balance", *initialUser1BalanceCh) |
                         @PoS!("getRewards", *initialRewardsCh) |
-                        for (@initialPosBalance   <- initialPosBalanceCh;
-                             @initialUser1Balance <- initialUser1BalanceCh;
-                             @initialRewards      <- initialRewardsCh) {
+                        @PoS!("getBonds", *initialBondsCh) |
+                        @PoS!("getActiveValidators", *initialActiveCh) |
+                        for (@initialPosBalance   <- initialPosBalanceCh &
+                             @initialUser1Balance <- initialUser1BalanceCh &
+                             @initialRewards      <- initialRewardsCh &
+                             @initialBonds        <- initialBondsCh &
+                             @initialActives      <- initialActiveCh) {
+                          stdlog!("info", ("bonding distribution and actives before precharge and refund", initialBonds, initialActives, initialRewards)) |
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *retCh0) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *retCh1) |
-                          for (@(true, _) <- retCh0;
+                          for (@(true, _) <- retCh0 &
                                @(true, _) <- retCh1) {
                             closeBlock!(*closeBlockCh) |
                             for (_ <- closeBlockCh) {
                               getPosBalance!(*finalPosBalanceCh) |
                               @userVault!("balance", *finalUser1BalanceCh) |
                               @PoS!("getRewards", *finalRewardsCh) |
-                              for (@finalPosBalance   <- finalPosBalanceCh;
-                                   @finalUser1Balance <- finalUser1BalanceCh;
+                              for (@finalPosBalance   <- finalPosBalanceCh &
+                                   @finalUser1Balance <- finalUser1BalanceCh &
                                    @finalRewards      <- finalRewardsCh) {
+                                stdlog!("info", ("Final rewards", finalRewards)) |
                                 @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                                 contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
                                   resultCh!(acc.set(pk, finalReward - initialRewards.getOrElse(pk, 0)))
@@ -481,7 +495,7 @@ match (
                                       //TODO: active validator stake-weighted reward
                                       ((19, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                       //TODO use arbitrary precision numbers instead of long ints
-                                      ((96, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                      ((98, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                       ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
                                     ],
                                     *ackCh
@@ -519,25 +533,25 @@ match (
                     for (@(true, _) <- bondAck) {
                       closeBlock!(*closeBlockAck) |
                       prepareUser!("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", *prepareUserAck) |
-                      for (_, _, @userVault, @userDeployerId <- prepareUserAck;
+                      for (_, _, @userVault, @userDeployerId <- prepareUserAck &
                            _                                 <- closeBlockAck) {
                         getPosBalance!(*posBalanceCh) |
                         @userVault!("balance", *userBalanceCh) |
                         @PoS!("getRewards", *rewardsCh) |
-                        for (@initialPosBalance  <- posBalanceCh;
-                             @initialUserBalance <- userBalanceCh;
+                        for (@initialPosBalance  <- posBalanceCh &
+                             @initialUserBalance <- userBalanceCh &
                              @initialRewards     <- rewardsCh) {
                           @PoS!("chargeDeploy", userDeployerId, userCharge, sysAuthToken, *chargeDeployAck) |
                           @PoS!("refundDeploy", userRefund, sysAuthToken, *refundDeployAck) |
-                          for (@(true, _) <- chargeDeployAck;
+                          for (@(true, _) <- chargeDeployAck &
                                @(true, _) <- refundDeployAck) {
                             closeBlock!(*closeBlockAck) |
                             for (_ <- closeBlockAck) {
                               getPosBalance!(*posBalanceCh) |
                               @userVault!("balance", *userBalanceCh) |
                               @PoS!("getRewards", *rewardsCh) |
-                              for (@finalPosBalance  <- posBalanceCh;
-                                   @finalUserBalance <- userBalanceCh;
+                              for (@finalPosBalance  <- posBalanceCh &
+                                   @finalUserBalance <- userBalanceCh &
                                    @finalRewards     <- rewardsCh) {
                                 @ListOps!("fold", finalRewards.toList(), {}, *computeDelta, *deltaRewardsCh) |
                                 contract computeDelta(@(pk, finalReward), @acc, resultCh) = {
@@ -559,7 +573,7 @@ match (
                                       //TODO: active validator stake-weighted reward
                                       ((8, "==", finalRewards.get(validatorPubKey)), "the validator's finalRewards is as expected"),
                                       //TODO use arbitrary precision numbers instead of long ints
-                                      ((48, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
+                                      ((50, "== <-", *deltaSumCh), "the sum difference should equal the payment"),
                                       ((true, "== <-", *allRewardsPositiveCh), "the rewards can only grow")
                                     ],
                                     *ackCh
@@ -597,7 +611,7 @@ match (
                     for (@(bond1Result, _) <- bond1Ch) {
                       @PoS!("getBonds", *initialBondsCh) |
                       @PoS!("getRewards", *initialRewardsCh) |
-                      for (@initialBonds   <- initialBondsCh;
+                      for (@initialBonds   <- initialBondsCh &
                            @initialRewards <- initialRewardsCh) {
                         @PoS!("bond", userDeployerId, userBond2, *bond2Ch) |
                         for (@(bond2Result, msg2) <- bond2Ch) {
@@ -629,7 +643,7 @@ match (
               for (_, _, _, @deployerId <- setupCh) {
                 @PoS!("getBonds", *bondsCh) |
                 @PoS!("getRewards", *initialRewardsCh) |
-                for (@initialBonds   <- bondsCh;
+                for (@initialBonds   <- bondsCh &
                      @initialRewards <- initialRewardsCh) {
                   @PoS!("bond", deployerId, transferAmount, *retCh) |
                   for (@(result, msg) <- retCh) {
@@ -662,7 +676,7 @@ match (
                   for (@user1PubKey, _, @user1Vault, @user1DeployerId <- setupCh) {
                     @PoS!("chargeDeploy", user1DeployerId, 100, sysAuthToken, *chargeCh) |
                     @PoS!("refundDeploy", 10, sysAuthToken, *refundCh) |
-                    for (@(true, _) <- chargeCh;
+                    for (@(true, _) <- chargeCh &
                          @(true, _) <- refundCh) {
                       closeBlock!(*closeBlockCh) |
                       for (_ <- closeBlockCh) {
@@ -670,7 +684,7 @@ match (
                         for(@finalRewards <- finalRewardsCh) {
                           rhoSpec!("assertMany",
                             [
-                              ((Nil, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
+                              ((0, "==", finalRewards.get(validatorPubKey)), "the new validator should have no reward")
                             ],
                             *ackCh
                           )
@@ -684,35 +698,20 @@ match (
           } |
 
           contract getPosBalance(retCh) = {
-            new accBalances, vaultsCh, posVaultBalanceCh in {
-              contract accBalances(@(_, _, vault), @acc, resultCh) = {
-                new balanceCh in {
-                  @vault!("balance", *balanceCh) |
-                  for (@balance <- balanceCh) {
-                    resultCh!(acc + balance)
-                  }
-                }
-              } |
-              @posVault!("balance", *posVaultBalanceCh) |
-              for (@posVaultBalance <- posVaultBalanceCh) {
-                @PoS!("getActiveValidatorVaults", *vaultsCh) |
-                for (@vaults <- vaultsCh) {
-                  @ListOps!("fold", vaults, posVaultBalance, *accBalances, *retCh)
-                }
-              }
-            }
+              @posVault!("balance", *retCh) 
           } |
 
           contract closeBlock(ackCh) = {
             new ackCh0, activeValidatorsCh, setBlockData(`rho:test:block:data:set`), blockDataSet in {
               @PoS!("closeBlock", sysAuthToken, *ackCh0) |
-              @PoS!("getActiveValidators", *activeValidatorsCh) |
-              for (@ack              <- ackCh0;
-                   @activeValidators <- activeValidatorsCh) {
-                // For testing we need one of the active validators to be the block sender
-                setBlockData!("sender", activeValidators.nth(0), *blockDataSet) |
-                for (_ <- blockDataSet) {
-                  ackCh!(ack)
+              for (@ack              <- ackCh0) {
+                @PoS!("getActiveValidators", *activeValidatorsCh) |
+                for (@activeValidators <- activeValidatorsCh){
+                  // For testing we need one of the active validators to be the block sender
+                  setBlockData!("sender", activeValidators.toList().nth(0), *blockDataSet) |
+                  for (_ <- blockDataSet) {
+                    ackCh!(ack)
+                  }
                 }
               }
             }
@@ -738,8 +737,8 @@ match (
                 computeHash!("00".hexToBytes(), *hash00Ch) |
                 computeHash!("FF".hexToBytes(), *hashFFCh) |
 
-                for (@result0 <- retCh;
-                     @hash00 <- hash00Ch;
+                for (@result0 <- retCh &
+                     @hash00 <- hash00Ch &
                      @hashFF <- hashFFCh) {
                   @PoS!("commitRandomImage", validatorDeployerId, hash00, *retCh) |
                   for (@result1 <- retCh) {
@@ -784,16 +783,16 @@ match (
                 @PoS!("getActiveValidators", *activeValidatorsCh) |
                 @PoS!("getBonds", *initialBondsCh) |
                 getCoopBalance!(*initialCoopBalanceCh) |
-                for (@activeValidators   <- activeValidatorsCh;
-                     @initialBonds       <- initialBondsCh;
+                for (@activeValidators   <- activeValidatorsCh &
+                     @initialBonds       <- initialBondsCh &
                      @initialCoopBalance <- initialCoopBalanceCh) {
                   match (100, 0) {
                     (chargeAmt, refundAmt) => {
                       @PoS!("chargeDeploy", userDeployerId, chargeAmt, sysAuthToken, *chargeCh) |
                       @PoS!("refundDeploy", refundAmt, sysAuthToken, *refundCh) |
-                      for (@(true, _) <- chargeCh;
+                      for (@(true, _) <- chargeCh &
                            @(true, _) <- refundCh) {
-                        match activeValidators.nth(1) {
+                        match activeValidators.toList().nth(3) {
                           slashedValidator => {
                             computeHash!(slashedValidator, *hashCh) |
                             for (@hash <- hashCh) {
@@ -801,9 +800,9 @@ match (
                               @PoS!("getRewards", *initialRewardsCh) |
                               @userVault!("balance", *initialUserBalanceCh) |
                               setInvalidBlocks!({hash : slashedValidator}, *invalidBlocksSetCh) |
-                              for (_                   <- invalidBlocksSetCh;
-                                   @initialUserBalance <- initialUserBalanceCh;
-                                   @initialRewards     <- initialRewardsCh;
+                              for (_                   <- invalidBlocksSetCh &
+                                   @initialUserBalance <- initialUserBalanceCh &
+                                   @initialRewards     <- initialRewardsCh &
                                    @initialPosBalance  <- initialPosBalanceCh) {
                                 @PoS!("slash", userDeployerId, hash, sysAuthToken, *slashCh) |
                                 for (@(true, _) <- slashCh) {
@@ -813,19 +812,19 @@ match (
                                   @PoS!("getRewards", *finalRewardsCh) |
                                   @PoS!("getWithdrawers", *withdrawersCh) |
                                   getCoopBalance!(*finalCoopBalanceCh) |
-                                  for (@finalPosBalance  <- finalPosBalanceCh;
-                                       @finalUserBalance <- finalUserBalanceCh;
-                                       @finalBonds       <- finalBondsCh;
-                                       @finalRewards     <- finalRewardsCh;
-                                       @withdrawers      <- withdrawersCh;
+                                  for (@finalPosBalance  <- finalPosBalanceCh &
+                                       @finalUserBalance <- finalUserBalanceCh &
+                                       @finalBonds       <- finalBondsCh &
+                                       @finalRewards     <- finalRewardsCh &
+                                       @withdrawers      <- withdrawersCh &
                                        @finalCoopBalance <- finalCoopBalanceCh) {
+                                    stdlog!("info", (initialBonds, finalBonds,slashedValidator)) |
                                     rhoSpec!("assertMany",
                                       [
                                         ((finalBonds, "==", initialBonds.set(slashedValidator, 0)), "Slashed validator's bond is reduced to 0"),
                                         ((0, "==", finalRewards.get(slashedValidator)), "Slashed validator's rewards are reduced to 0"),
-                                        ((true, "==", withdrawers.contains(slashedValidator)), "Slashed validator is immediately moved to withdrawers map"),
-                                        ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator) - initialRewards.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
-                                        ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator) + initialRewards.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
+                                        ((finalPosBalance, "==", initialPosBalance - initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred out of the PoS vault"),
+                                        ((finalCoopBalance, "==", initialCoopBalance + initialBonds.get(slashedValidator)), "Slashed validator's funds are transferred to the Coop vault")
                                       ],
                                       *ackCh
                                     )

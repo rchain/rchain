@@ -1,14 +1,14 @@
 package coop.rchain.casper.util.rholang
 
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.syntax._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.Metrics.MetricsNOP
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.accounting.Cost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.scalatestcontrib.effectTest
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -26,7 +26,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
     for {
       store   <- kvm.rSpaceStores
-      runtime <- RhoRuntime.createRuntime(store)
+      runtime <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
 
       /**
         * Root hashes compatible with RChain main net network
@@ -63,11 +63,11 @@ class RuntimeSpec extends FlatSpec with Matchers {
         |   @"3"!!(3)|
         |   @42!!("1")|
         |   for (@t <- a){Nil}|
-        |   for (@num <- @"3";@num2 <- @1){10}|
+        |   for (@num <- @"3"&@num2 <- @1){10}|
         |   for (@_ <= @"4"){"3"}|
-        |   for (@_ <= @"5"; @num3 <= @5){Nil}|
+        |   for (@_ <= @"5"& @num3 <= @5){Nil}|
         |   for (@3 <- @44){new g in {Nil}}|
-        |   for (@_ <- @"55"; @num3 <- @55){Nil}
+        |   for (@_ <- @"55"& @num3 <- @55){Nil}
         | }
         |""".stripMargin
 
@@ -77,15 +77,15 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
     for {
       store      <- kvm.rSpaceStores
-      runtime    <- RhoRuntime.createRuntime(store)
+      runtime    <- RhoRuntime.createRuntime(store, Genesis.NonNegativeMergeableTagName)
       r          <- runtime.evaluate(contract, Cost.UNSAFE_MAX, Map.empty)
       _          = r.errors should be(Vector.empty)
       checkpoint <- runtime.createCheckpoint
-      stateHash  = Base16.encode(checkpoint.root.toByteString.toByteArray)
-      _ = "9ff69faea28024a50ddcee894066ec31233e5b95f0f2bbd87af06def2ad94e7c" should be(
-        stateHash
+      expectedHash = Blake2b256Hash.fromHex(
+        "10cce029738696f1e120a6bad4bdf3f18adca25ccf36133bd4916f607a6a50c0"
       )
-    } yield ()
+      stateHash = checkpoint.root
+    } yield expectedHash shouldEqual stateHash
   }
 
 }

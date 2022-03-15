@@ -2,9 +2,10 @@ package coop.rchain.node.revvaultexport.mainnet1
 
 import cats.effect._
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.models.{GPrivate, Par}
 import coop.rchain.node.revvaultexport.StateBalances
+import coop.rchain.shared.Base16
+import coop.rchain.models.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -58,9 +59,7 @@ object StateBalanceMain {
   // The way to get this Unforgeable name needs reporting casper to get all the concrete comm events.
   // Anyway, as long as RevVault.rho and genesis doesn't change, this value would be fixed.
   val genesisVaultMapPar: Par = GPrivate(
-    ByteString.copyFrom(
-      Base16.unsafeDecode("2dea7213bab34c96d4d3271f9b9dcb0b50a242de7de2177da615d9de23106afd")
-    )
+    "5e8200d74ba8689013cf86f075775a18a42f1bd3a5ea122e82dfca9ba485a924".unsafeHexToByteString
   )
 
   @SuppressWarnings(Array("org.wartremover.warts.NonUnitStatements"))

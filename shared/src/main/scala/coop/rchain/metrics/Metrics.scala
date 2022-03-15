@@ -2,7 +2,7 @@ package coop.rchain.metrics
 
 import cats._
 import cats.data.ReaderT
-import cats.implicits._
+import cats.syntax.all._
 import coop.rchain.metrics.Metrics.Source
 
 trait Span[F[_]] {
@@ -70,8 +70,8 @@ object Metrics extends MetricsInstances {
 }
 
 sealed abstract class MetricsInstances {
-  def readerTMetrics[F[_], E](m: Metrics[F]): Metrics[ReaderT[F, E, ?]] =
-    new Metrics[ReaderT[F, E, ?]] {
+  def readerTMetrics[F[_], E](m: Metrics[F]): Metrics[ReaderT[F, E, *]] =
+    new Metrics[ReaderT[F, E, *]] {
       override def incrementCounter(name: String, delta: Long)(
           implicit ev: Source
       ): ReaderT[F, E, Unit] =

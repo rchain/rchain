@@ -65,11 +65,13 @@ class RhoTrieTraverserTest extends FlatSpec {
           rd    <- runtime.processDeploy(StandardDeploys.registry)
           check <- runtime.createCheckpoint
           _     <- runtime.reset(check.root)
-          initialTrie <- runtime.processDeploy(
-                          ConstructDeploy.sourceDeploy(trieInitializedRho, 1L, phloLimit = 50000000)
-                        )
-          _      = assert(!initialTrie.isFailed)
-          check2 <- runtime.createCheckpoint
+          initialTrieRes <- runtime.processDeploy(
+                             ConstructDeploy
+                               .sourceDeploy(trieInitializedRho, 1L, phloLimit = 50000000)
+                           )
+          (initialTrie, _) = initialTrieRes
+          _                = assert(!initialTrie.isFailed)
+          check2           <- runtime.createCheckpoint
           trieMapHandleR <- runtime.playExploratoryDeploy(
                              getTrieMapHandleRho,
                              check2.root.toByteString

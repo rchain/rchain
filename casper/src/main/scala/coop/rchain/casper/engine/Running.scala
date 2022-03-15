@@ -284,10 +284,6 @@ class Running[F[_]
       )
     case b: BlockMessage =>
       for {
-        _ <- Log[F].debug(
-              s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
-                s"from ${peer.endpoint.host}"
-            )
         _ <- casper.getValidator.flatMap {
               case None => ().pure[F]
               case Some(id) =>
@@ -298,7 +294,16 @@ class Running[F[_]
                   )
                 )
             }
-        _ <- blockProcessingQueue.enqueue1(casper, b)
+        _ <- ignoreCasperMessage(b.blockHash).ifM(
+              Log[F].debug(
+                s"Ignoring BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                  s"from ${peer.endpoint.host}"
+              ),
+              blockProcessingQueue.enqueue1(casper, b) <* Log[F].debug(
+                s"Incoming BlockMessage ${PrettyPrinter.buildString(b, short = true)} " +
+                  s"from ${peer.endpoint.host}"
+              )
+            )
       } yield ()
 
     case br: BlockRequest => handleBlockRequest(peer, br)

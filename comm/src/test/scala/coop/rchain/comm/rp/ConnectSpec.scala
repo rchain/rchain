@@ -5,7 +5,7 @@ import org.scalatest._
 import coop.rchain.comm.protocol.routing._
 import coop.rchain.comm._, CommError._
 import coop.rchain.p2p.effects._
-import cats.{catsInstancesForId => _, _}, cats.data._, cats.implicits._
+import cats.{catsInstancesForId => _, _}, cats.data._, cats.syntax.all._
 import cats.effect._
 import coop.rchain.catscontrib._, Catscontrib._, ski._
 import coop.rchain.catscontrib.effect.implicits._
@@ -15,12 +15,7 @@ import coop.rchain.p2p.EffectsTestInstances._
 import coop.rchain.shared._
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-class ConnectSpec
-    extends FunSpec
-    with Matchers
-    with BeforeAndAfterEach
-    with AppendedClues
-    with ApplicativeError_Instances {
+class ConnectSpec extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {
 
   val defaultTimeout: FiniteDuration = FiniteDuration(1, MILLISECONDS)
   val src: PeerNode                  = peerNode("src", 40400)

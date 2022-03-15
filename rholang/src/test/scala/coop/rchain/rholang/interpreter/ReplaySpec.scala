@@ -32,7 +32,7 @@ class ReplaySpec extends FlatSpec with Matchers {
     val term =
       """
         |new x in {
-        |  x!() | for(<- x; <- x) { 0 } | x!()
+        |  x!() | for(<- x & <- x) { 0 } | x!()
         |}
         |""".stripMargin
     testRholangTerm(term, 500, 30.seconds)
@@ -42,7 +42,7 @@ class ReplaySpec extends FlatSpec with Matchers {
     val term =
       """
         |new x in {
-        |  x!() | x!() | for(<- x; <- x) { 0 } | x!() | x!()
+        |  x!() | x!() | for(<- x & <- x) { 0 } | x!() | x!()
         |}
         |""".stripMargin
     testRholangTerm(term, 500, 30.seconds)

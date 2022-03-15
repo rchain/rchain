@@ -19,6 +19,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
+import coop.rchain.models.syntax._
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
@@ -75,6 +76,21 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def isFinalized(blockHash: BlockHash): F[Boolean] =
       finalizedBlocksSet.contains(blockHash).pure[F]
 
+    override def find(truncatedHash: String): F[Option[BlockHash]] = Sync[F].delay {
+      if (truncatedHash.length % 2 == 0) {
+        val truncatedByteString = truncatedHash.unsafeHexToByteString
+        dagSet.find(hash => hash.startsWith(truncatedByteString))
+      } else {
+        // if truncatedHash is odd length string we cannot convert it to ByteString with 8 bit resolution
+        // because each symbol has 4 bit resolution. Need to make a string of even length by removing the last symbol,
+        // then find all the matching hashes and choose one that matches the full truncatedHash string
+        val truncatedByteString = truncatedHash.dropRight(1).unsafeHexToByteString
+        dagSet
+          .filter(_.startsWith(truncatedByteString))
+          .find(_.toHexString.startsWith(truncatedHash))
+      }
+    }
+
     def topoSort(
         startBlockNumber: Long,
         maybeEndBlockNumber: Option[Long]
@@ -97,7 +113,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     }
 
     def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] =
-      deployIndex.get(deployId)
+      deployIndex.get1(deployId)
   }
 
   private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
@@ -167,7 +183,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     def shouldAddAsLatest: F[Boolean] =
       latestMessagesIndex
       // Try get sender's latest message
-        .get(block.sender)
+        .get1(block.sender)
         // Get metadata from index
         .flatMap(_.traverse(blockMetadataIndex.getUnsafe))
         // Check if seq number is greater that existing

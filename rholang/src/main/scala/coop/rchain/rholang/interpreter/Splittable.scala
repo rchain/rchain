@@ -44,8 +44,8 @@ object Splittable extends SplittableInstancesLowPriority {
 
 trait SplittableInstancesLowPriority {
 
-  implicit def streamTSplittable[F[_]: Monad]: Splittable[StreamT[F, ?]] =
-    new Splittable[StreamT[F, ?]] {
+  implicit def streamTSplittable[F[_]: Monad]: Splittable[StreamT[F, *]] =
+    new Splittable[StreamT[F, *]] {
       override def takeFirst[A](fa: StreamT[F, A]): StreamT[F, A] = StreamT.dropTail(fa)
     }
 

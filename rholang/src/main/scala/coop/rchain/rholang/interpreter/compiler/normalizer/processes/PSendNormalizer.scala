@@ -21,11 +21,11 @@ object PSendNormalizer {
     for {
       nameMatchResult <- NameNormalizeMatcher.normalizeMatch[F](
                           p.name_,
-                          NameVisitInputs(input.env, input.knownFree)
+                          NameVisitInputs(input.boundMapChain, input.freeMap)
                         )
       initAcc = (
         Vector[Par](),
-        ProcVisitInputs(VectorPar(), input.env, nameMatchResult.knownFree),
+        ProcVisitInputs(VectorPar(), input.boundMapChain, nameMatchResult.freeMap),
         BitSet(),
         false
       )
@@ -37,8 +37,8 @@ object PSendNormalizer {
                               procMatchResult.par +: acc._1,
                               ProcVisitInputs(
                                 VectorPar(),
-                                input.env,
-                                procMatchResult.knownFree
+                                input.boundMapChain,
+                                procMatchResult.freeMap
                               ),
                               acc._3 | procMatchResult.par.locallyFree,
                               acc._4 || procMatchResult.par.connectiveUsed
@@ -53,14 +53,14 @@ object PSendNormalizer {
     } yield ProcVisitOutputs(
       input.par.prepend(
         Send(
-          nameMatchResult.chan,
+          nameMatchResult.par,
           dataResults._1,
           persistent,
           ParLocallyFree
-            .locallyFree(nameMatchResult.chan, input.env.depth) | dataResults._3,
-          ParLocallyFree.connectiveUsed(nameMatchResult.chan) || dataResults._4
+            .locallyFree(nameMatchResult.par, input.boundMapChain.depth) | dataResults._3,
+          ParLocallyFree.connectiveUsed(nameMatchResult.par) || dataResults._4
         )
       ),
-      dataResults._2.knownFree
+      dataResults._2.freeMap
     )
 }

@@ -1,7 +1,7 @@
 package coop.rchain.casper
 
 import cats.data.EitherT
-import cats.effect.{Concurrent, Sync}
+import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -26,12 +26,15 @@ import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.internal
 import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 
 // format: off
 class MultiParentCasperImpl[F[_]
-  /* Execution */   : Concurrent: Time
+  /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
@@ -115,20 +118,27 @@ class MultiParentCasperImpl[F[_]
     def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
       finalizedSet.toList.traverse { h =>
         for {
-          block          <- BlockStore[F].getUnsafe(h)
-          deploys        = block.body.deploys.map(_.deploy)
-          deploysRemoved <- DeployStorage[F].remove(deploys)
-          _ <- Log[F].info(
-                s"Removed $deploysRemoved deploys from deploy history as we finalized block ${PrettyPrinter
-                  .buildString(finalizedSet)}."
-              )
+          block   <- BlockStore[F].getUnsafe(h)
+          deploys = block.body.deploys.map(_.deploy)
+
+          // Remove block deploys from persistent store
+          deploysRemoved   <- DeployStorage[F].remove(deploys)
+          finalizedSetStr  = PrettyPrinter.buildString(finalizedSet)
+          removedDeployMsg = s"Removed $deploysRemoved deploys from deploy history as we finalized block $finalizedSetStr."
+          _                <- Log[F].info(removedDeployMsg)
+
+          // Remove block index from cache
           _ <- BlockIndex.cache.remove(h).pure
+
+          // Remove block post-state mergeable channels from persistent store
+          stateHash = block.body.state.postStateHash.toBlake2b256Hash.bytes
+          _         <- RuntimeManager[F].getMergeableStore.delete(stateHash)
         } yield ()
       }.void
 
     def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
       BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
-        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.base16String))
+        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
 
     implicit val ms = CasperMetricsSource
 
@@ -299,19 +309,40 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT(
               EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
-        _      <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+        _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
+
+        // This validation is only to punish validator which accepted lower price deploys.
+        // And this can happen if not configured correctly.
+        minPhloPrice = casperShardConf.minPhloPrice
+        _ <- EitherT(Validate.phloPrice(b, minPhloPrice)).recoverWith {
+              case _ =>
+                val warnToLog = EitherT.liftF[F, BlockError, Unit](
+                  Log[F].warn(s"One or more deploys has phloPrice lower than $minPhloPrice")
+                )
+                val asValid = EitherT.rightT[F, BlockError](BlockStatus.valid)
+                warnToLog *> asValid
+            }
+        _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
+
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
         status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
+    val blockPreState  = b.body.state.preStateHash
+    val blockPostState = b.body.state.postStateHash
+    val blockSender    = b.sender.toByteArray
     val indexBlock = for {
-      index <- BlockIndex[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
+      mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
+
+      index <- BlockIndex(
                 b.blockHash,
                 b.body.deploys,
-                Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                RuntimeManager[F].getHistoryRepo
+                b.body.systemDeploys,
+                blockPreState.toBlake2b256Hash,
+                blockPostState.toBlake2b256Hash,
+                RuntimeManager[F].getHistoryRepo,
+                mergeableChs
               )
       _ = BlockIndex.cache.putIfAbsent(b.blockHash, index)
     } yield ()
@@ -445,15 +476,15 @@ object MultiParentCasperImpl {
 
   private def blockEvent(block: BlockMessage) = {
 
-    val blockHash = block.blockHash.base16String
+    val blockHash = block.blockHash.toHexString
     val parentHashes =
-      block.header.parentsHashList.map(_.base16String)
+      block.header.parentsHashList.map(_.toHexString)
     val justificationHashes =
       block.justifications.toList
-        .map(j => (j.validator.base16String, j.latestBlockHash.base16String))
+        .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
     val deployIds: List[String] =
       block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
-    val creator = block.sender.base16String
+    val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)
   }

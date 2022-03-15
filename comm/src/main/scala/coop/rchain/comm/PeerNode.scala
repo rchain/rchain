@@ -1,11 +1,10 @@
 package coop.rchain.comm
 
 import java.net.InetSocketAddress
-
 import coop.rchain.comm.protocol.routing.Node
+import coop.rchain.shared.Base16
 
 import scala.util.control.NonFatal
-import coop.rchain.crypto.codec.Base16
 import io.lemonlabs.uri.{Uri, Url}
 
 import scala.util.Try

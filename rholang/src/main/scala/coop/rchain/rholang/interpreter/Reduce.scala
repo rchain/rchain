@@ -1,18 +1,18 @@
 package coop.rchain.rholang.interpreter
 
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Parallel, Eval => _}
 import com.google.protobuf.ByteString
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.Expr.ExprInstance._
 import coop.rchain.models.TaggedContinuation.TaggedCont.ParBody
 import coop.rchain.models.Var.VarInstance
 import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
+import coop.rchain.models._
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.models.serialization.implicits._
-import coop.rchain.models.{Match, MatchCase, _}
 import coop.rchain.rholang.interpreter.RhoRuntime.RhoTuplespace
 import coop.rchain.rholang.interpreter.RholangAndScalaDispatcher.RhoDispatch
 import coop.rchain.rholang.interpreter.Substitute.{charge => _, _}
@@ -20,7 +20,8 @@ import coop.rchain.rholang.interpreter.accounting._
 import coop.rchain.rholang.interpreter.errors._
 import coop.rchain.rholang.interpreter.matcher.SpatialMatcher.spatialMatchResult
 import coop.rchain.rspace.util.unpackOptionWithPeek
-import coop.rchain.shared.Serialize
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Serialize}
 import monix.eval.Coeval
 import scalapb.GeneratedMessage
 
@@ -44,7 +45,9 @@ trait Reduce[M[_]] {
 class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
     space: RhoTuplespace[M],
     dispatcher: => RhoDispatch[M],
-    urnMap: Map[String, Par]
+    urnMap: Map[String, Par],
+    mergeChs: Ref[M, Set[Par]],
+    mergeableTagName: Par
 ) extends Reduce[M] {
 
   type Application =
@@ -64,7 +67,8 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       data: ListParWithRandom,
       persistent: Boolean
   ): M[Unit] =
-    space.produce(chan, data, persist = persistent) >>= { produceResult =>
+    updateMergeableChannels(chan) *>
+      space.produce(chan, data, persist = persistent) >>= { produceResult =>
       continue(
         unpackOptionWithPeek(produceResult),
         produce(chan, data, persistent),
@@ -86,13 +90,15 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
       peek: Boolean
   ): M[Unit] = {
     val (patterns: Seq[BindPattern], sources: Seq[Par]) = binds.unzip
-    space.consume(
-      sources.toList,
-      patterns.toList,
-      TaggedContinuation(ParBody(body)),
-      persist = persistent,
-      if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
-    ) >>= { consumeResult =>
+
+    sources.toList.traverse(updateMergeableChannels) *>
+      space.consume(
+        sources.toList,
+        patterns.toList,
+        TaggedContinuation(ParBody(body)),
+        persist = persistent,
+        if (peek) SortedSet(sources.indices: _*) else SortedSet.empty[Int]
+      ) >>= { consumeResult =>
       continue(
         unpackOptionWithPeek(consumeResult),
         consume(binds, body, persistent, peek),
@@ -142,6 +148,19 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
         case (chan, _, removedData, _) =>
           produce(chan, removedData, persistent = false)
       }
+
+  /* Collect mergeable channels */
+
+  private def updateMergeableChannels(chan: Par) = Sync[M].defer {
+    val isMergeable = isMergeableChannel(chan)
+
+    mergeChs.update(_ + chan).whenA(isMergeable)
+  }
+
+  private def isMergeableChannel(chan: Par) = {
+    val tupleElms = chan.exprs.flatMap(y => y.getETupleBody.ps)
+    tupleElms.headOption.contains(mergeableTagName)
+  }
 
   /**
     * The evaluation of a Par is at the mercy of `Parallel` instance passed to `DebruijnInterpreter`. Therefore, if a
@@ -381,6 +400,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
 
       def addUrn(newEnv: Env[Par], urn: String): Either[InterpreterError, Env[Par]] =
         if (!urnMap.contains(urn))
+          /** TODO: Injections (from normalizer) are not used currently, see [[NormalizerEnv]]. */
           // If `urn` can't be found in `urnMap`, it must be referencing an injection
           neu.injections
             .get(urn)
@@ -848,7 +868,7 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             for {
               _ <- charge[M](hexToBytesCost(encoded))
               res <- Sync[M]
-                      .delay(ByteString.copyFrom(Base16.unsafeDecode(encoded)))
+                      .delay(encoded.unsafeHexToByteString)
                       .handleErrorWith { ex =>
                         ReduceError(
                           s"Error: exception was thrown when decoding input string to hexadecimal: ${ex.getMessage}"

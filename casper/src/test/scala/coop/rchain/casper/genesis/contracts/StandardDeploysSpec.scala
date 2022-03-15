@@ -1,6 +1,6 @@
 package coop.rchain.casper.genesis.contracts
 
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.shared.Base16
 import org.scalatest.FlatSpec
 
 class StandardDeploysSpec extends FlatSpec {

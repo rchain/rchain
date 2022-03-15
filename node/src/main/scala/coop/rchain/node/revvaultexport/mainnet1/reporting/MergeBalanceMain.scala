@@ -7,13 +7,13 @@ import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.syntax._
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.shared.Log
+import coop.rchain.models.syntax._
+import coop.rchain.shared.{Base16, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -142,7 +142,7 @@ object MergeBalanceMain {
   ) =
     for {
       result  <- runtime.playExploratoryDeploy(getBalanceRholang(revAddress), stateHash)
-      balance = result(0).exprs(0).getGInt
+      balance = result.head.exprs.head.getGInt
       _       <- Log[F].info(s"Got balance ${balance} from ${revAddress}")
     } yield balance
 
@@ -173,31 +173,33 @@ object MergeBalanceMain {
                    store
                  )
       (rSpacePlay, rSpaceReplay) = spaces
-      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty)
+      runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
-      blockOpt                   <- blockStore.get(ByteString.copyFrom(Base16.unsafeDecode(blockHash)))
+      blockOpt                   <- blockStore.get(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
       postStateHash              = block.body.state.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {
-                               balance <- getBalanceFromRholang[Task](
-                                           account.address,
-                                           rhoRuntime,
-                                           postStateHash
-                                         )
+                               _ <- Log[Task].info(s"account is not correct ${account}")
+                               balance <- if (account.address != "unknown")
+                                           getBalanceFromRholang[Task](
+                                             account.address,
+                                             rhoRuntime,
+                                             postStateHash
+                                           )
+                                         else 0L.pure[Task]
                                adjustAccount = account.copy(
                                  adjustedStateBalance = balance
                                )
                                _ <- Log[Task]
                                      .info(
-                                       s"Should Before adjusted ${account} after ${adjustAccount}"
+                                       s"Should Before adjusted after ${adjustAccount}"
                                      )
                              } yield acc :+ adjustAccount
                              else {
                                val adjustAccount =
                                  account.copy(adjustedStateBalance = account.stateBalance)
-                               println(s"Not before adjusted ${account} after ${adjustAccount}")
                                acc :+ adjustAccount
                              }.pure[Task]
                          }

@@ -17,13 +17,16 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.NormalizerEnv.ToEnvMap
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rholang.interpreter.compiler.ParBuilder
+import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
+import retry._
 
 import scala.collection.Seq
 
@@ -43,11 +46,11 @@ object InterpreterUtil {
   def mkTerm[Env](rho: String, normalizerEnv: NormalizerEnv[Env])(
       implicit ev: ToEnvMap[Env]
   ): Either[Throwable, Par] =
-    ParBuilder[Coeval].buildNormalizedTerm(rho, normalizerEnv.toEnv).runAttempt
+    Compiler[Coeval].sourceToADT(rho, normalizerEnv.toEnv).runAttempt
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
       block: BlockMessage,
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F]
@@ -96,7 +99,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: BlockStore](
+  private def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -117,13 +120,34 @@ object InterpreterUtil {
         _         <- Span[F].mark("before-process-pre-state-hash")
         blockData = BlockData.fromBlock(block)
         isGenesis = block.header.parentsHashList.isEmpty
-        replayResult <- runtimeManager.replayComputeState(initialStateHash)(
-                         internalDeploys,
-                         internalSystemDeploys,
-                         blockData,
-                         invalidBlocks,
-                         isGenesis
-                       )
+        replayResultF = runtimeManager.replayComputeState(initialStateHash)(
+          internalDeploys,
+          internalSystemDeploys,
+          blockData,
+          invalidBlocks,
+          isGenesis
+        )
+        replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
+                         RetryPolicies.limitRetries(3), {
+                           case Right(stateHash) => stateHash == block.body.state.postStateHash
+                           case _                => false
+                         },
+                         (e, retryDetails) =>
+                           e match {
+                             case Right(stateHash) =>
+                               Log[F].error(
+                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} with " +
+                                   s"${PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash)} " +
+                                   s"got tuple space mismatch error with error hash ${PrettyPrinter
+                                     .buildStringNoLimit(stateHash)}, retries details: ${retryDetails}"
+                               )
+                             case Left(replayError) =>
+                               Log[F].error(
+                                 s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} got " +
+                                   s"error ${replayError}, retries details: ${retryDetails}"
+                               )
+                           }
+                       )(replayResultF)
       } yield replayResult
     }
 
@@ -256,15 +280,25 @@ object InterpreterUtil {
           val blockIndexF = (v: BlockHash) => {
             val cached = BlockIndex.cache.get(v).map(_.pure)
             cached.getOrElse {
-              BlockStore[F].getUnsafe(v).flatMap { b =>
-                BlockIndex(
-                  b.blockHash,
-                  b.body.deploys,
-                  Blake2b256Hash.fromByteString(b.body.state.preStateHash),
-                  Blake2b256Hash.fromByteString(b.body.state.postStateHash),
-                  runtimeManager.getHistoryRepo
-                )
-              }
+              for {
+                b         <- BlockStore[F].getUnsafe(v)
+                preState  = b.body.state.preStateHash
+                postState = b.body.state.postStateHash
+                sender    = b.sender.toByteArray
+                seqNum    = b.seqNum
+
+                mergeableChs <- runtimeManager.loadMergeableChannels(postState, sender, seqNum)
+
+                blockIndex <- BlockIndex(
+                               b.blockHash,
+                               b.body.deploys,
+                               b.body.systemDeploys,
+                               preState.toBlake2b256Hash,
+                               postState.toBlake2b256Hash,
+                               runtimeManager.getHistoryRepo,
+                               mergeableChs
+                             )
+              } yield blockIndex
             }
           }
           for {

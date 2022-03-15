@@ -2,6 +2,7 @@
  * The main API is `DeployService`.
  */
 syntax = "proto3";
+
 package casper;
 
 // If you are building for other languages "scalapb.proto"
@@ -22,17 +23,17 @@ option (scalapb.options) = {
 
 message HasBlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  bytes  hash       = 1;
+  bytes  hash = 1;
 }
 
 message HasBlockProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  bytes  hash       = 1;
+  bytes  hash = 1;
 }
 
 message BlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  bytes  hash       = 1;
+  bytes  hash = 1;
 }
 
 message ForkChoiceTipRequestProto {
@@ -42,13 +43,13 @@ message ForkChoiceTipRequestProto {
 // ---------- Signing Protocol ---------
 message ApprovedBlockCandidateProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  BlockMessageProto block        = 1;
-  int32        requiredSigs = 2;
+  BlockMessageProto block  = 1 [(scalapb.field).no_box = true];
+  int32 requiredSigs       = 2;
 }
 
 message UnapprovedBlockProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1;
+  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
   int64                       timestamp = 2;
   int64                       duration  = 3;
 }
@@ -61,25 +62,25 @@ message Signature {
 
 message BlockApprovalProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1;
-  Signature              sig       = 2;
+  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
+  Signature sig                         = 2 [(scalapb.field).no_box = true];
 }
 
 message ApprovedBlockProto  {
   option (scalapb.message).extends = "CasperMessageProto";
-  ApprovedBlockCandidateProto candidate = 1;
-  repeated Signature     sigs      = 2;
+  ApprovedBlockCandidateProto candidate = 1 [(scalapb.field).no_box = true];
+  repeated Signature sigs               = 2;
 }
 
 message ApprovedBlockRequestProto {
   option (scalapb.message).extends = "CasperMessageProto";
   string identifier = 1;
-  bool trimState = 2;
+  bool trimState    = 2;
 }
 
 message NoApprovedBlockAvailableProto {
   option (scalapb.message).extends = "CasperMessageProto";
-  string identifier = 1;
+  string identifier    = 1;
   string nodeIdentifer = 2;
 }
 
@@ -89,8 +90,8 @@ message NoApprovedBlockAvailableProto {
 message BlockMessageProto {
   option (scalapb.message).extends = "CasperMessageProto";
   bytes                       blockHash      = 1; // obtained by hashing the information in the header
-  HeaderProto                 header         = 2;
-  BodyProto                   body           = 3;
+  HeaderProto                 header         = 2 [(scalapb.field).no_box = true];
+  BodyProto                   body           = 3 [(scalapb.field).no_box = true];
   repeated JustificationProto justifications = 4; // map of all validators to latest blocks based on current view
   bytes                       sender         = 5; // public key of the validator that created the block
   int32                       seqNum         = 6; // number of blocks created by the validator
@@ -111,22 +112,22 @@ message BlockMetadataInternal {
   // bonds.
   option (scalapb.message).type = "coop.rchain.models.BlockMetadata";
 
-  bytes blockHash                       = 1;
-  repeated bytes parents                = 2 [(scalapb.field).collection_type="collection.immutable.List"];
-  bytes sender                          = 3;
+  bytes blockHash                            = 1;
+  repeated bytes parents                     = 2 [(scalapb.field).collection_type="collection.immutable.List"];
+  bytes sender                               = 3;
   repeated JustificationProto justifications = 4 [(scalapb.field).collection_type="collection.immutable.List"];
   repeated BondProto bonds                   = 5 [(scalapb.field).collection_type="collection.immutable.List"];
-  int64 blockNum                        = 6;
-  int32 seqNum                          = 7;
-  bool invalid                          = 8; // whether the block was marked as invalid
-  bool directlyFinalized                = 9; // whether the block has been last finalized block (LFB)
-  bool finalized                        = 10;// whether the block is finalized
+  int64 blockNum                             = 6;
+  int32 seqNum                               = 7;
+  bool invalid                               = 8; // whether the block was marked as invalid
+  bool directlyFinalized                     = 9; // whether the block has been last finalized block (LFB)
+  bool finalized                             = 10;// whether the block is finalized
 }
 
 message HeaderProto {
   repeated bytes parentsHashList = 1; //list of parent block hashes
-  int64 timestamp = 5;
-  int64 version = 6;
+  int64 timestamp  = 5;
+  int64 version    = 6;
   bytes extraBytes = 7;
 }
 
@@ -136,22 +137,22 @@ message HeaderProto {
  * **TODO**: details of signatures and payment. See RHOL-781
  */
 message DeployDataProto {
-  bytes  deployer     = 1; //public key
-  string term         = 2; //rholang source code to deploy (will be parsed into `Par`)
-  int64  timestamp    = 3; //millisecond timestamp
-  bytes  sig          = 4; //signature of (hash(term) + timestamp) using private key
-  string sigAlgorithm = 5; //name of the algorithm used to sign
-  int64 phloPrice     = 7; //phlo price
-  int64 phloLimit     = 8; //phlo limit for the deployment
+  bytes  deployer             = 1; //public key
+  string term                 = 2; //rholang source code to deploy (will be parsed into `Par`)
+  int64  timestamp            = 3; //millisecond timestamp
+  bytes  sig                  = 4; //signature of (hash(term) + timestamp) using private key
+  string sigAlgorithm         = 5; //name of the algorithm used to sign
+  int64 phloPrice             = 7; //phlo price
+  int64 phloLimit             = 8; //phlo limit for the deployment
   int64 validAfterBlockNumber = 10;
 }
 
 message ProcessedDeployProto {
-    DeployDataProto deploy = 1;
-    PCost cost = 2 ;
+    DeployDataProto deploy        = 1 [(scalapb.field).no_box = true];
+    PCost cost                    = 2 [(scalapb.field).no_box = true];
     repeated EventProto deployLog = 3; //the new terms and comm. rule reductions from this deploy
-    bool errored = 5; //true if deploy encountered a user error
-    string systemDeployError = 6;
+    bool errored                  = 5; //true if deploy encountered a user error
+    string systemDeployError      = 6;
 }
 
 message SlashSystemDeployDataProto {
@@ -170,17 +171,17 @@ message SystemDeployDataProto{
 }
 
 message ProcessedSystemDeployProto {
-    SystemDeployDataProto systemDeploy = 1;
-    repeated EventProto deployLog = 2;
-    string errorMsg = 3;
+    SystemDeployDataProto systemDeploy = 1 [(scalapb.field).no_box = true];
+    repeated EventProto deployLog      = 2;
+    string errorMsg                    = 3;
 }
 
 message BodyProto {
-  RChainStateProto              state    = 1;
-  repeated ProcessedDeployProto deploys      = 2;
+  RChainStateProto state                            = 1 [(scalapb.field).no_box = true];
+  repeated ProcessedDeployProto deploys             = 2;
   repeated ProcessedSystemDeployProto systemDeploys = 3;
-  bytes                    extraBytes   = 4;
-  repeated RejectedDeployProto rejectedDeploys = 5;
+  bytes extraBytes                                  = 4;
+  repeated RejectedDeployProto rejectedDeploys      = 5;
 }
 
 message RejectedDeployProto{
@@ -193,40 +194,40 @@ message JustificationProto {
 }
 
 message RChainStateProto {
-  bytes preStateHash = 1; //hash of the tuplespace contents before new deploys
+  bytes preStateHash  = 1; //hash of the tuplespace contents before new deploys
   bytes postStateHash = 2; //hash of the tuplespace contents after new deploys
 
   //Internals of what will be the "blessed" PoS contract
   //(which will be part of the tuplespace in the real implementation).
-  repeated BondProto bonds        = 3;
-  int64         blockNumber  = 4;
+  repeated BondProto bonds = 3;
+  int64 blockNumber        = 4;
 }
 
 message EventProto {
   oneof event_instance {
     ProduceEventProto produce = 1;
     ConsumeEventProto consume = 2;
-    CommEventProto comm = 3;
+    CommEventProto comm       = 3;
   }
 }
 
 message ProduceEventProto {
-  bytes channelsHash = 1;
-  bytes hash = 2;
-  bool persistent = 3;
+  bytes channelsHash  = 1;
+  bytes hash          = 2;
+  bool persistent     = 3;
   int32 timesRepeated = 4;
 }
 
 message ConsumeEventProto {
   repeated bytes channelsHashes = 1;
-  bytes hash = 2;
-  bool persistent = 3;
+  bytes hash                    = 2;
+  bool persistent               = 3;
 }
 
 message CommEventProto {
-  ConsumeEventProto consume = 1;
+  ConsumeEventProto consume           = 1 [(scalapb.field).no_box = true];
   repeated ProduceEventProto produces = 2;
-  repeated PeekProto peeks = 3;
+  repeated PeekProto peeks            = 3;
 }
 
 message PeekProto {

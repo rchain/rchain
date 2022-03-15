@@ -107,7 +107,7 @@ in {
                 // Checks if mints match.
                 thisPurse!("decr", *thisDecrCh) |
                 @src!("decr", *srcDecrCh) |
-                for (@thisDecr <- thisDecrCh;
+                for (@thisDecr <- thisDecrCh &
                      @srcDecr  <- srcDecrCh) {
                   new bd(`rho:block:data`), bdCh in {
                     if (thisDecr == srcDecr) {

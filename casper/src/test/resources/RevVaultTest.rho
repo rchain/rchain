@@ -93,9 +93,9 @@ match (
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
           //as per `setup`, the deployer is `genesis` and shouldn't be able to access the vault
           RevVault!("deployerAuthKey", *deployerId, *genesisAuthKeyCh) |
-          for (@(true, aliceVault) <- aliceVaultCh; genesisAuthKey <- genesisAuthKeyCh) {
+          for (@(true, aliceVault) <- aliceVaultCh & genesisAuthKey <- genesisAuthKeyCh) {
             @aliceVault!("balance", *balanceCh) |
-            @aliceVault!("transfer", genesisRevAddress, 0, *genesisAuthKey, *transferCh) |
+            @aliceVault!("transfer", genesisRevAddress, 1, *genesisAuthKey, *transferCh) |
             rhoSpec!("assertMany",
               [
                 ((0, "== <-", *balanceCh), "balance should be 0"),
@@ -110,7 +110,7 @@ match (
         new genesisVaultCh, aliceVaultCh, ret, transferSuccessful  in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
-          for (genesisVault, @genesisVaultKey <- genesisVaultCh; @(true, aliceVault) <- aliceVaultCh) {
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh & @(true, aliceVault) <- aliceVaultCh) {
             genesisVault!("transfer", aliceRevAddress, 1000, genesisVaultKey, *ret) |
             rhoSpec!("assert", ((true, Nil), "== <-", *ret), "transfer successful", *transferSuccessful) |
             assertBalances!(*transferSuccessful, [(*genesisVault, 8999000), (aliceVault, 1000)], *rhoSpec, *ackCh)
@@ -123,7 +123,7 @@ match (
           //the below attempts to create a wallet are going to fetch the ones created in previous tests.
           RevVault!("findOrCreate", genesisRevAddress, *genesisVaultCh) |
           RevVault!("findOrCreate", aliceRevAddress, *aliceVaultCh) |
-          for (@(true, g) <- genesisVaultCh; @(true, a) <- aliceVaultCh) {
+          for (@(true, g) <- genesisVaultCh & @(true, a) <- aliceVaultCh) {
             now!(Nil) |
             assertBalances!(*now, [(g, 8999000), (a, 1000)], *rhoSpec, *ackCh)
           }
@@ -150,7 +150,7 @@ match (
             now!(Nil) |
             assertBalances!(*now, [(aliceVault, 1000)], *rhoSpec, *balanceOk) |
             transfer!(*balanceOk, aliceVault, bobRevAddress, -1, aliceVaultKey, *transferResult) |
-            rhoSpec!("assert", ((false, "Amount must be non-negative"), "== <-", *transferResult), "transfer failed", *transferOk) |
+            rhoSpec!("assert", ((false, "Amount must be positive value"), "== <-", *transferResult), "transfer failed", *transferOk) |
             assertBalances!(*transferOk, [(aliceVault, 1000)], *rhoSpec, *ackCh)
           }
         }
@@ -179,13 +179,21 @@ match (
       } |
 
       contract testUnfBoundVault(rhoSpec, RevVault, ackCh) = {
-        new unf, RevAddress(`rho:rev:address`), revAddrCh, unfAuthKeyCh, vaultCh, transferCh in {
-          RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
-          for (@unfRevAddress <- revAddrCh) {
-            RevVault!("findOrCreate", unfRevAddress, *vaultCh) |
+        new RevAddress(`rho:rev:address`), deployerId(`rho:rchain:deployerId`),
+            unf, unfRevAddrCh, unfAuthKeyCh, unfVaultCh,
+            genesisVaultCh, initTransferCh, transferCh
+        in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+          // Get unforgeable channel REV address
+          RevAddress!("fromUnforgeable", *unf, *unfRevAddrCh) |
+          for (@unfRevAddress <- unfRevAddrCh; genesisVault, genesisVaultKey <- genesisVaultCh) {
+            // Transfer initial funds to unforgeable vault
+            genesisVault!("transfer", unfRevAddress, 100, *genesisVaultKey, *initTransferCh) |
+            // Teting transfer from unforgeable bound vault
+            RevVault!("findOrCreate", unfRevAddress, *unfVaultCh) |
             RevVault!("unforgeableAuthKey", *unf, *unfAuthKeyCh) |
-            for (@(true, vault) <- vaultCh; unfAuthKey <- unfAuthKeyCh) {
-              @vault!("transfer", genesisRevAddress, 0, *unfAuthKey, *transferCh) |
+            for (@(true, unfVault) <- unfVaultCh; unfAuthKey <- unfAuthKeyCh; _ <- initTransferCh) {
+              @unfVault!("transfer", genesisRevAddress, 1, *unfAuthKey, *transferCh) |
               rhoSpec!("assert", ((true, Nil), "== <-", *transferCh), "transfer succeeded", *ackCh)
             }
           }
@@ -202,7 +210,7 @@ match (
               RevAddress!("fromPublicKey", pubKey, *revAddrCh) |
               for (@revAddr <- revAddrCh) {
                 @RevVault!("findOrCreate", revAddr, *vaultCh) |
-                for (@(true, vault) <- vaultCh; deployerId <- deployerIdCh) {
+                for (@(true, vault) <- vaultCh & deployerId <- deployerIdCh) {
                   @RevVault!("deployerAuthKey", *deployerId, *authKeyCh) |
                   for (@authKey <- authKeyCh) {
                     ret!(vault, authKey)

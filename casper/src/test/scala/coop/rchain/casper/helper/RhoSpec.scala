@@ -2,6 +2,7 @@ package coop.rchain.casper.helper
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.TestUtil
 import coop.rchain.casper.genesis.contracts.TestUtil.eval
 import coop.rchain.casper.protocol.DeployData
@@ -17,6 +18,7 @@ import coop.rchain.models.NormalizerEnv
 import coop.rchain.rholang.build.CompiledRholangSource
 import coop.rchain.rholang.interpreter.{PrettyPrinter, RhoRuntime, SystemProcesses}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
+import coop.rchain.models.syntax._
 import coop.rchain.shared.Log
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
@@ -145,6 +147,7 @@ class RhoSpec(
         .evalMap(
           RhoRuntime.createRuntime(
             _,
+            Genesis.NonNegativeMergeableTagName,
             additionalSystemProcesses = testFrameworkContracts(testResultCollector)
           )
         )
@@ -189,9 +192,7 @@ class RhoSpec(
 
   private val rhoSpecDeploy: Signed[DeployData] = {
     val sk = PrivateKey(
-      ProtoUtil.stringToByteString(
-        "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6"
-      )
+      "abaa20c1d578612b568a7c3d9b16e81c68d73b931af92cf79727e02011c558c6".unsafeHexToByteString
     )
 
     Signed(

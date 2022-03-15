@@ -4,8 +4,13 @@ import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Applicative, FlatMap}
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.History.{commonPrefix, toByte, toInt, KeyPath}
-import coop.rchain.rspace.history.HistoryInstances.MalformedTrieError
+import coop.rchain.rspace.history.History.KeyPath
+import coop.rchain.rspace.history.HistoryMergingInstances.{
+  commonPrefix,
+  toByte,
+  toInt,
+  MalformedTrieError
+}
 import scodec.bits.ByteVector
 
 import scala.Ordering.Implicits.seqDerivedOrdering
@@ -13,7 +18,8 @@ import scala.Ordering.Implicits.seqDerivedOrdering
 final case class SimplisticHistory[F[_]: Sync](
     root: Blake2b256Hash,
     historyStore: HistoryStore[F]
-) extends History[F] {
+) extends HistoryWithFind[F] {
+  override type HistoryF = HistoryWithFind[F]
 
   def skip(path: History.KeyPath, ptr: ValuePointer): (TriePointer, Option[Trie]) =
     if (path.isEmpty) {
@@ -221,7 +227,7 @@ final case class SimplisticHistory[F[_]: Sync](
     FlatMap[F].tailRecM((fullPath, trieNodesOnPath, none[Trie]))(go)
   }
 
-  def process(actions: List[HistoryAction]): F[History[F]] =
+  def process(actions: List[HistoryAction]): F[HistoryWithFind[F]] =
     // TODO this is an intermediate step to reproduce all the trie behavior
     // will evolve to a fold based implementation with partial tries
     actions
@@ -306,11 +312,25 @@ final case class SimplisticHistory[F[_]: Sync](
     case (trie, path) => (trie, path.nodes)
   }
 
-  def reset(root: Blake2b256Hash): History[F] = this.copy(root = root)
+  def read(key: ByteVector): F[Option[ByteVector]] =
+    find(key.toArray.toList).flatMap {
+      case (trie, _) =>
+        trie match {
+          case LeafPointer(dataHash) => dataHash.bytes.some.pure[F]
+          case EmptyPointer          => Applicative[F].pure(none)
+          case _ =>
+            Sync[F].raiseError(new RuntimeException(s"unexpected data at key $key, data: $trie"))
 
+        }
+    }
+
+  def reset(root: Blake2b256Hash): F[HistoryWithFind[F]] = Sync[F].delay(this.copy(root = root))
 }
 
 object SimplisticHistory {
-  def noMerging[F[_]: Sync](root: Blake2b256Hash, historyStore: HistoryStore[F]): History[F] =
+  def noMerging[F[_]: Sync](
+      root: Blake2b256Hash,
+      historyStore: HistoryStore[F]
+  ): HistoryWithFind[F] =
     new SimplisticHistory[F](root, historyStore)
 }

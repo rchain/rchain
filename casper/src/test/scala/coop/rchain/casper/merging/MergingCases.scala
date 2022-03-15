@@ -1,20 +1,20 @@
 package coop.rchain.casper.merging
 
 import cats.syntax.all._
-import cats.effect.{Concurrent, Resource}
-import coop.rchain.casper.PrettyPrinter
+import cats.effect.Resource
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.rholang.costacc.CloseBlockDeploy
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager, SystemDeployUtil}
-import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
+import coop.rchain.models.syntax.modelsSyntaxByteString
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.merger.{EventLogIndex, MergingLogic}
 import coop.rchain.rspace.merger.MergingLogic.computeRelatedSets
-import coop.rchain.shared.{EventLog, Log, Time}
+import coop.rchain.shared.{Log, Time}
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.scalatestcontrib.effectTest
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
@@ -29,8 +29,8 @@ class MergingCases extends FlatSpec with Matchers {
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] = for {
     dir <- Resources.copyStorage[Task](genesisContext.storageDirectory)
-    kvm <- Resource.liftF(Resources.mkTestRNodeStoreManager[Task](dir))
-    rm  <- Resource.liftF(Resources.mkRuntimeManagerAt[Task](kvm))
+    kvm <- Resource.eval(Resources.mkTestRNodeStoreManager[Task](dir))
+    rm  <- Resource.eval(Resources.mkRuntimeManagerAt[Task](kvm))
   } yield rm
 
   /**
@@ -72,15 +72,24 @@ class MergingCases extends FlatSpec with Matchers {
                 blockData,
                 invalidBlocks
               )
-          (_, processedDeploys, _) = r
-          _                        = processedDeploys.size shouldBe 2
-          idxs <- processedDeploys.toList.traverse(
-                   BlockIndex.createEventLogIndex(
-                     _,
-                     runtimeManager.getHistoryRepo,
-                     Blake2b256Hash.fromByteString(baseState)
-                   )
-                 )
+          (postStateHash, processedDeploys, _) = r
+          _                                    = processedDeploys.size shouldBe 2
+
+          blkSender    = stateTransitionCreator.bytes
+          mergeableChs <- runtimeManager.loadMergeableChannels(postStateHash, blkSender, seqNum)
+
+          // Combine processed deploys with cached mergeable channels data
+          processedDeploysWithMergeable = processedDeploys.toVector.zip(mergeableChs)
+
+          idxs <- processedDeploysWithMergeable.traverse {
+                   case (d, mergeChs) =>
+                     BlockIndex.createEventLogIndex(
+                       d.deployLog,
+                       runtimeManager.getHistoryRepo,
+                       baseState.toBlake2b256Hash,
+                       mergeChs
+                     )
+                 }
           firstDepends  = MergingLogic.depends(idxs.head, idxs(1))
           secondDepends = MergingLogic.depends(idxs(1), idxs.head)
           conflicts     = MergingLogic.areConflicting(idxs.head, idxs(1))
@@ -93,9 +102,9 @@ class MergingCases extends FlatSpec with Matchers {
           // first deploy does not depend on the second
           _ = firstDepends shouldBe false
           // second deploy depends on the first, as it consumes produce put by first one when updating per validator vault balance
-          _ = secondDepends shouldBe true
-          // deploys should be be put in a single deploy chain
-          _ = deployChains.size shouldBe 1
+          _ = secondDepends shouldBe false
+          // deploys should be be put in separate deploy chains
+          _ = deployChains.size shouldBe 2
         } yield ()
       }
     }

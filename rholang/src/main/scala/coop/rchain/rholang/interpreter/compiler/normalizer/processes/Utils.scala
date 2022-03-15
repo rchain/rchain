@@ -8,13 +8,12 @@ import coop.rchain.rholang.interpreter.errors.{InterpreterError, PatternReceiveE
 object Utils {
   def failOnInvalidConnective(
       input: ProcVisitInputs,
-      depth: Int,
       nameRes: NameVisitOutputs
   ): Either[InterpreterError, NameVisitOutputs] =
-    if (input.env.depth == 0) {
+    if (input.boundMapChain.depth == 0) {
       Either
         .fromOption(
-          nameRes.knownFree.connectives
+          nameRes.freeMap.connectives
             .collectFirst {
               case (_: ConnOrBody, sourcePosition) =>
                 PatternReceiveError(s"\\/ (disjunction) at $sourcePosition")

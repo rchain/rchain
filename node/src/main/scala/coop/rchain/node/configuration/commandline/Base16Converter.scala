@@ -1,6 +1,6 @@
 package coop.rchain.node.configuration.commandline
 
-import coop.rchain.crypto.codec.Base16
+import coop.rchain.models.syntax._
 import org.rogach.scallop.{ArgType, ValueConverter}
 
 object Base16Converter extends ValueConverter[Array[Byte]] {
@@ -9,8 +9,7 @@ object Base16Converter extends ValueConverter[Array[Byte]] {
       case (name, strings) => strings.map((name, _))
     } match {
       case List((name, v)) =>
-        Base16
-          .decode(v.toLowerCase)
+        v.decodeHex
           .toRight(s"Error parsing $name. Invalid base16 encoding.")
           .map(Some(_))
       case List() => Right(None)

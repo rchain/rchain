@@ -6,11 +6,7 @@ import cats.effect.Sync
 import coop.rchain.models.{Match, MatchCase, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
-import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
-  ProcVisitInputs,
-  ProcVisitOutputs
-}
+import coop.rchain.rholang.interpreter.compiler.{FreeMap, ProcVisitInputs, ProcVisitOutputs}
 import coop.rchain.rholang.interpreter.errors.UnrecognizedNormalizerError
 import coop.rchain.rholang.ast.rholang_mercury.Absyn.{Case, CaseImpl, PMatch, Proc}
 
@@ -32,7 +28,7 @@ object PMatchNormalizer {
       targetResult <- normalizeMatch[F](p.proc_, input.copy(par = VectorPar()))
       cases        <- p.listcase_.toList.traverse(liftCase)
 
-      initAcc = (Vector[MatchCase](), targetResult.knownFree, BitSet(), false)
+      initAcc = (Vector[MatchCase](), targetResult.freeMap, BitSet(), false)
       casesResult <- cases.foldM(initAcc)(
                       (acc, caseImpl) =>
                         caseImpl match {
@@ -42,19 +38,19 @@ object PMatchNormalizer {
                                                 pattern,
                                                 ProcVisitInputs(
                                                   VectorPar(),
-                                                  input.env.push,
-                                                  DeBruijnLevelMap.empty
+                                                  input.boundMapChain.push,
+                                                  FreeMap.empty
                                                 )
                                               )
-                              caseEnv    = input.env.absorbFree(patternResult.knownFree)
-                              boundCount = patternResult.knownFree.countNoWildcards
+                              caseEnv    = input.boundMapChain.absorbFree(patternResult.freeMap)
+                              boundCount = patternResult.freeMap.countNoWildcards
                               caseBodyResult <- normalizeMatch[F](
                                                  caseBody,
                                                  ProcVisitInputs(VectorPar(), caseEnv, acc._2)
                                                )
                             } yield (
                               MatchCase(patternResult.par, caseBodyResult.par, boundCount) +: acc._1,
-                              caseBodyResult.knownFree,
+                              caseBodyResult.freeMap,
                               acc._3 | patternResult.par.locallyFree | caseBodyResult.par.locallyFree
                                 .from(boundCount)
                                 .map(x => x - boundCount),

@@ -18,7 +18,7 @@ import scala.language.higherKinds
 class GenerateCertificateIfAbsent[F[_]: Sync](implicit log: Log[F]) {
   import log.{error, info}
 
-  def apply[A: Iso[?, TlsConf]](a: A): F[Unit] = {
+  def apply[A: Iso[*, TlsConf]](a: A): F[Unit] = {
     val tls = Iso[A, TlsConf].to(a)
 
     // Generate certificate if not provided as option or in the data dir

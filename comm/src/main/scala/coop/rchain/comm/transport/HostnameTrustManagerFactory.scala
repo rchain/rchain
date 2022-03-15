@@ -3,11 +3,11 @@ package coop.rchain.comm.transport
 import java.net.Socket
 import java.security.KeyStore
 import java.security.cert.{CertificateException, X509Certificate}
-
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.util.CertificateHelper
+import coop.rchain.shared.Base16
 import io.netty.handler.ssl.util.SimpleTrustManagerFactory
 import io.netty.util.internal.EmptyArrays
+
 import javax.net.ssl._
 
 class HostnameTrustManagerFactory private () extends SimpleTrustManagerFactory {

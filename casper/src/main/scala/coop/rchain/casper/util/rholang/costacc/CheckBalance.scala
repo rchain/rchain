@@ -1,7 +1,7 @@
 package coop.rchain.casper.util.rholang.costacc
 
 import cats.syntax.all._
-import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployFailure}
+import coop.rchain.casper.util.rholang.{SystemDeploy, SystemDeployUserError}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.hash.Blake2b512Random
 import coop.rchain.models.NormalizerEnv.{Contains, ToEnvMap}
@@ -34,7 +34,7 @@ class CheckBalance(pk: PublicKey, rand: Blake2b512Random) extends SystemDeploy(r
       #     revVaultCh in {
       #   rl!(`rho:rchain:revVault`, *revVaultCh) |
       #   revAddressOps!("fromDeployerId", *deployerId, *revAddressCh) |
-      #   for(@userRevAddress <- revAddressCh; @(_, revVault) <- revVaultCh){
+      #   for(@userRevAddress <- revAddressCh & @(_, revVault) <- revVaultCh){
       #     new userVaultCh in {
       #       @revVault!("findOrCreate", userRevAddress, *userVaultCh) |
       #       for(@(true, userVault) <- userVaultCh){
@@ -45,5 +45,5 @@ class CheckBalance(pk: PublicKey, rand: Blake2b512Random) extends SystemDeploy(r
       # }
       #""".stripMargin('#')
 
-  protected def processResult(value: Long): Either[SystemDeployFailure, Result] = value.asRight
+  protected def processResult(value: Long): Either[SystemDeployUserError, Result] = value.asRight
 }

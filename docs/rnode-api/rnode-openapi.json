@@ -731,6 +731,118 @@
         },
         "deprecated": false
       }
+    },
+    "/transactions/{hash}": {
+      "get": {
+        "externalDocs": {
+          "description": "WebApi.scala",
+          "url": "https://github.com/rchain/rchain/blob/dev/node/src/main/scala/coop/rchain/node/api/WebApi.scala"
+        },
+        "tags": [
+          "blocks"
+        ],
+        "operationId": "getTransactions-string",
+        "produces": [
+          "application/json"
+        ],
+        "parameters": [
+          {
+            "name": "hash",
+            "in": "path",
+            "required": true,
+            "format": "string",
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "full details about requested block including results of transactions",
+            "examples": {
+              "application/json": {
+                "data": [
+                  {
+                    "transaction": {
+                      "fromAddr": "1111jQZNZp5RdUdANnjM5X2DvZGg7hmXZix8RpxohcwpqPiykw3r6",
+                      "toAddr": "11119LqBoAQP7zV3LXXbjRL7kaR1DLWSfn2xGsvPxTw6zh5weNFBN",
+                      "amount": 100,
+                      "retUnforgeable": {
+                        "sends": [],
+                        "receives": [],
+                        "news": [],
+                        "exprs": [],
+                        "matches": [],
+                        "unforgeables": [
+                          {
+                            "unfInstance": {
+                              "GPrivateBody": {
+                                "value": {
+                                  "id": "e0f899d3390a7eb162d5bb2b81c4680dd39ef77d01d5d90ab113895c0347b53c"
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "bundles": [],
+                        "connectives": [],
+                        "locallyFree": {},
+                        "connectiveUsed": false
+                      },
+                      "failReason": null
+                    },
+                    "transactionType": {
+                      "PreCharge": {
+                        "deployId": "3044022072817b2687ddb282bd51e78b2a518a635217bf242d26d12cfaa8f848dfb02831022021690dc328e48fc685a661e63a012cb2456eb2a783d4fe702b8a722898186ca9"
+                      }
+                    }
+                  },
+                  {
+                    "transaction": {
+                      "fromAddr": "11119LqBoAQP7zV3LXXbjRL7kaR1DLWSfn2xGsvPxTw6zh5weNFBN",
+                      "toAddr": "1111jQZNZp5RdUdANnjM5X2DvZGg7hmXZix8RpxohcwpqPiykw3r6",
+                      "amount": 55,
+                      "retUnforgeable": {
+                        "sends": [],
+                        "receives": [],
+                        "news": [],
+                        "exprs": [],
+                        "matches": [],
+                        "unforgeables": [
+                          {
+                            "unfInstance": {
+                              "GPrivateBody": {
+                                "value": {
+                                  "id": "9bfab55e2ec8506a324b36c72a36c3f8a9927ab6c170cff08fbe4dc662e03b71"
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "bundles": [],
+                        "connectives": [],
+                        "locallyFree": {},
+                        "connectiveUsed": false
+                      },
+                      "failReason": null
+                    },
+                    "transactionType": {
+                      "Refund": {
+                        "deployId": "3044022072817b2687ddb282bd51e78b2a518a635217bf242d26d12cfaa8f848dfb02831022021690dc328e48fc685a661e63a012cb2456eb2a783d4fe702b8a722898186ca9"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/TransactionResponse"
+              }
+            }
+          }
+        },
+        "deprecated": false
+      }
     }
   },
   "definitions": {
@@ -1421,6 +1533,87 @@
         }
       },
       "description": "ExprTuple"
+    },
+    "Transaction": {
+      "type": "object",
+      "properties": {
+        "transaction": {
+          "$ref": "#/definitions/TransactionDetail"
+        },
+        "transactionType": {
+          "$ref": "#/definitions/TransactionType"
+        }
+      }
+    },
+    "TransactionType": {
+      "type": "object",
+      "properties": {
+        "PreCharge": {
+          "$ref": "#/definitions/DeployId"
+        },
+        "Refund": {
+          "$ref": "#/definitions/DeployId"
+        },
+        "UserDeploy": {
+          "$ref": "#/definitions/DeployId"
+        },
+        "CloseBlock": {
+          "$ref": "#/definitions/BlockHash"
+        },
+        "SlashingDeploy": {
+          "$ref": "#/definitions/BlockHash"
+        }
+      }
+    },
+    "DeployId": {
+      "type": "object",
+      "properties": {
+        "deployId": {
+          "type": "string"
+        }
+      }
+    },
+    "BlockHash": {
+      "type": "object",
+      "properties": {
+        "blockHash": {
+          "type": "string"
+        }
+      }
+    },
+    "TransactionDetail": {
+      "type": "object",
+      "properties": {
+        "fromAddr": {
+          "type": "string"
+        },
+        "amount": {
+          "type": "integer"
+        },
+        "toAddr": {
+          "type": "string"
+        },
+        "failReason": {
+          "type": "string"
+        },
+        "unforgeables": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/RhoUnforg"
+          }
+        }
+      }
+    },
+    "TransactionResponse": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Transaction"
+          }
+        }
+      }
     }
   }
 }

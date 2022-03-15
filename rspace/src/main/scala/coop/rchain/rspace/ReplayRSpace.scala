@@ -244,11 +244,12 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
 
   override def createCheckpoint(): F[Checkpoint] = checkReplayData >> syncF.defer {
     for {
-      changes     <- storeAtom.get().changes()
-      nextHistory <- historyRepositoryAtom.get().checkpoint(changes.toList)
-      _           = historyRepositoryAtom.set(nextHistory)
-      _           <- createNewHotStore(nextHistory.getHistoryReader(nextHistory.root))
-      _           <- restoreInstalls()
+      changes       <- storeAtom.get().changes
+      nextHistory   <- historyRepositoryAtom.get().checkpoint(changes.toList)
+      _             = historyRepositoryAtom.set(nextHistory)
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      _             <- createNewHotStore(historyReader)
+      _             <- restoreInstalls()
     } yield Checkpoint(nextHistory.history.root, Seq.empty)
   }
 
@@ -313,11 +314,12 @@ class ReplayRSpace[F[_]: Concurrent: ContextShift: Log: Metrics: Span, C, P, A, 
 
   def spawn: F[IReplaySpace[F, C, P, A, K]] = spanF.withMarks("spawn") {
     for {
-      historyRepo  <- Sync[F].delay(historyRepositoryAtom.get())
-      nextHistory  <- historyRepo.reset(historyRepo.history.root)
-      hotStore     <- HotStore.empty(nextHistory.getHistoryReader(nextHistory.root).base)
-      rSpaceReplay <- ReplayRSpace(nextHistory, hotStore)
-      _            <- rSpaceReplay.restoreInstalls()
+      historyRepo   <- Sync[F].delay(historyRepositoryAtom.get())
+      nextHistory   <- historyRepo.reset(historyRepo.history.root)
+      historyReader <- nextHistory.getHistoryReader(nextHistory.root)
+      hotStore      <- HotStore(historyReader.base)
+      rSpaceReplay  <- ReplayRSpace(nextHistory, hotStore)
+      _             <- rSpaceReplay.restoreInstalls()
     } yield rSpaceReplay
   }
 }

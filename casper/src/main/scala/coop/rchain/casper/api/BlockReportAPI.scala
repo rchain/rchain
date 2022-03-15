@@ -29,10 +29,9 @@ import coop.rchain.casper.protocol.{
   SystemDeployData,
   SystemDeployInfoWithEventData
 }
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
@@ -50,7 +49,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
       lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
       deploys      = createDeployReport(reportResult.deployReportResult)
       sysDeploys   = createSystemDeployReport(reportResult.systemDeployReportResult)
-      blockEvent   = BlockEventInfo(Some(lightBlock), deploys, sysDeploys, reportResult.postStateHash)
+      blockEvent   = BlockEventInfo(lightBlock, deploys, sysDeploys, reportResult.postStateHash)
     } yield blockEvent
 
   private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage)(
@@ -61,7 +60,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
       lock      = blockLockMap.getOrElseUpdate(b.blockHash, semaphore)
       result <- lock.withPermit(
                  for {
-                   cached <- reportStore.get(b.blockHash)
+                   cached <- reportStore.get1(b.blockHash)
                    res <- if (cached.isEmpty || forceReplay)
                            replayBlock(b).flatTap(reportStore.put(b.blockHash, _))
                          else
@@ -70,11 +69,11 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
                )
     } yield result
 
-  def blockReport(hash: String, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
+  def blockReport(hash: BlockHash, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
     def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
       implicit val c = casper
       for {
-        maybeBlock <- BlockStore[F].get(ByteString.copyFrom(Base16.unsafeDecode(hash)))
+        maybeBlock <- BlockStore[F].get(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
     }
@@ -100,41 +99,34 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
 
   private def createSystemDeployReport(
       result: List[SystemDeployReportResult]
-  ): List[SystemDeployInfoWithEventData] = result.map(
-    sd =>
-      SystemDeployInfoWithEventData(
-        Some(SystemDeployData.toProto(sd.processedSystemDeploy)),
-        sd.events
-          .map(
-            a =>
-              SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-              }))
-          )
-      )
-  )
+  ): List[SystemDeployInfoWithEventData] = result.map { sd =>
+    SystemDeployInfoWithEventData(
+      SystemDeployData.toProto(sd.processedSystemDeploy),
+      sd.events.map { a =>
+        SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+          case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+          case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+          case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+        }))
+      }
+    )
+  }
 
   private def createDeployReport(
       result: List[DeployReportResult]
   ): List[DeployInfoWithEventData] =
-    result
-      .map(
-        p =>
-          DeployInfoWithEventData(
-            deployInfo = p.processedDeploy.toDeployInfo.some,
-            report = p.events
-              .map(
-                a =>
-                  SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
-                    case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
-                    case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
-                    case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
-                  }))
-              )
-          )
+    result.map { p =>
+      DeployInfoWithEventData(
+        deployInfo = p.processedDeploy.toDeployInfo,
+        report = p.events.map { a =>
+          SingleReport(events = a.map(reportTransformer.transformEvent(_) match {
+            case rc: ReportConsumeProto => ReportProto(ReportProto.Report.Consume(rc))
+            case rp: ReportProduceProto => ReportProto(ReportProto.Report.Produce(rp))
+            case rcm: ReportCommProto   => ReportProto(ReportProto.Report.Comm(rcm))
+          }))
+        }
       )
+    }
 
 }
 

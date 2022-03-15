@@ -7,7 +7,7 @@ import scala.concurrent.duration._
 
 import cats._
 import cats.effect.Timer
-import cats.implicits._
+import cats.syntax.all._
 
 import coop.rchain.comm._
 import coop.rchain.grpc.Server

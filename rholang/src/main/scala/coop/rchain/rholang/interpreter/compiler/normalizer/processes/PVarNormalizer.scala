@@ -6,8 +6,8 @@ import coop.rchain.models.Var.VarInstance.{BoundVar, FreeVar, Wildcard}
 import coop.rchain.models.{EVar, Var}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.{
-  IndexContext,
-  LevelContext,
+  BoundContext,
+  FreeContext,
   NameSort,
   ProcSort,
   ProcVisitInputs,
@@ -24,13 +24,13 @@ object PVarNormalizer {
   def normalize[F[_]: Sync](p: PVar, input: ProcVisitInputs): F[ProcVisitOutputs] =
     p.procvar_ match {
       case pvv: ProcVarVar =>
-        input.env.get(pvv.var_) match {
-          case Some(IndexContext(level, ProcSort, _)) =>
+        input.boundMapChain.get(pvv.var_) match {
+          case Some(BoundContext(level, ProcSort, _)) =>
             ProcVisitOutputs(
-              input.par.prepend(EVar(BoundVar(level)), input.env.depth),
-              input.knownFree
+              input.par.prepend(EVar(BoundVar(level)), input.boundMapChain.depth),
+              input.freeMap
             ).pure[F]
-          case Some(IndexContext(_, NameSort, sourcePosition)) =>
+          case Some(BoundContext(_, NameSort, sourcePosition)) =>
             Sync[F].raiseError(
               UnexpectedProcContext(
                 pvv.var_,
@@ -39,19 +39,19 @@ object PVarNormalizer {
               )
             )
           case None =>
-            input.knownFree.get(pvv.var_) match {
+            input.freeMap.get(pvv.var_) match {
               case None =>
                 val newBindingsPair =
-                  input.knownFree.put(
+                  input.freeMap.put(
                     (pvv.var_, ProcSort, SourcePosition(pvv.line_num, pvv.col_num))
                   )
                 ProcVisitOutputs(
                   input.par
-                    .prepend(EVar(FreeVar(input.knownFree.nextLevel)), input.env.depth)
+                    .prepend(EVar(FreeVar(input.freeMap.nextLevel)), input.boundMapChain.depth)
                     .withConnectiveUsed(true),
                   newBindingsPair
                 ).pure[F]
-              case Some(LevelContext(_, _, firstSourcePosition)) =>
+              case Some(FreeContext(_, _, firstSourcePosition)) =>
                 Sync[F].raiseError(
                   UnexpectedReuseOfProcContextFree(
                     pvv.var_,
@@ -64,9 +64,9 @@ object PVarNormalizer {
       case _: ProcVarWildcard =>
         ProcVisitOutputs(
           input.par
-            .prepend(EVar(Wildcard(Var.WildcardMsg())), input.env.depth)
+            .prepend(EVar(Wildcard(Var.WildcardMsg())), input.boundMapChain.depth)
             .withConnectiveUsed(true),
-          input.knownFree.addWildcard(SourcePosition(p.line_num, p.col_num))
+          input.freeMap.addWildcard(SourcePosition(p.line_num, p.col_num))
         ).pure[F]
     }
 }

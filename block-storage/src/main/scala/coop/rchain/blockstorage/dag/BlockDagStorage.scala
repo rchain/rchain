@@ -44,6 +44,7 @@ trait BlockDagRepresentation[F[_]] {
   // DAG representation has to have finalized block, or it does not make sense
   def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
+  def find(truncatedHash: String): F[Option[BlockHash]]
 }
 
 trait EquivocationsTracker[F[_]] {

@@ -14,8 +14,8 @@ object PGroundNormalizer {
       .map(
         expr =>
           ProcVisitOutputs(
-            input.par.prepend(expr, input.env.depth),
-            input.knownFree
+            input.par.prepend(expr, input.boundMapChain.depth),
+            input.freeMap
           )
       )
 }

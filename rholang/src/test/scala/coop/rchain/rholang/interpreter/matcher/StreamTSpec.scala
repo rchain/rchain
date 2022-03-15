@@ -2,7 +2,7 @@ package coop.rchain.rholang.interpreter.matcher
 
 import cats.arrow.FunctionK
 import cats.data.{EitherT, WriterT}
-import cats.implicits._
+import cats.syntax.all._
 import cats.effect.laws.discipline.{BracketTests, SyncTests}
 import cats.laws.discipline.{AlternativeTests, MonadErrorTests, MonadTests}
 import cats.mtl.laws.discipline.MonadLayerControlTests
@@ -69,19 +69,19 @@ class StreamTSpec extends FlatSpec with Matchers {
     assert(StreamT.run(huge).value() == reference)
   }
 
-  it must "be stacksafe for a stacksafe F when calling Monad[StreamT[F, ?]].flatMap" in {
+  it must "be stacksafe for a stacksafe F when calling Monad[StreamT[F, *]].flatMap" in {
 
     def hugeFlatMap[F[_]: Monad](n: Int): F[Int] = n match {
       case 0 => n.pure[F]
       case _ => n.pure[F].flatMap(x => hugeFlatMap[F](x - 1))
     }
 
-    val huge = hugeFlatMap[StreamT[Coeval, ?]](maxDepth)
+    val huge = hugeFlatMap[StreamT[Coeval, *]](maxDepth)
 
     assert(StreamT.run(huge).value() == Stream(0))
   }
 
-  it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, ?]].combineK" in {
+  it must "be stacksafe for a stacksafe F when calling MonoidK[StreamT[F, *]].combineK" in {
     type StreamTCoeval[A] = StreamT[Coeval, A]
 
     val huge: StreamTCoeval[Int] = hugeStream(maxDepth - 1, StreamT.pure(maxDepth))
@@ -188,11 +188,11 @@ class StreamTLawsSpec
 
   test("StreamT.SyncLaws.from") {
     val fromEffect =
-      λ[Effect ~> StreamTEffect[?]](
+      λ[Effect ~> StreamTEffect[*]](
         e => StreamT.liftF(e)
       )
     checkProps(
-      BracketTests[StreamTEffect[?], Throwable]
+      BracketTests[StreamTEffect[*], Throwable]
         .bracketTrans[Effect, Int, Int](
           fromEffect
         )

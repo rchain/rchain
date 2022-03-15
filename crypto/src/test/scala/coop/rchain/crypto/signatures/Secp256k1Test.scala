@@ -1,7 +1,7 @@
 package coop.rchain.crypto.signatures
-import coop.rchain.crypto.codec.Base16
 import coop.rchain.crypto.hash.Sha256
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.shared.Base16
 import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 
 class Secp256k1Test extends FunSpec with Matchers with BeforeAndAfterEach with AppendedClues {

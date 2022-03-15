@@ -2,7 +2,7 @@ import LinkedList in {
   LinkedList!("range", [0, 10], "myList") |
   for(@myList <- @"myList") {
     LinkedList!("head", [myList], "headResult") | LinkedList!("tail", [myList], "tailResult") |
-    for(@h <- @"headResult"; @t <- @"tailResult") {
+    for(@h <- @"headResult" & @t <- @"tailResult") {
       LinkedList!("prepend", [h, t], "newList") | for(@l <- @"newList") {
         @"head/tail/prepend test"!(l == myList)
       }

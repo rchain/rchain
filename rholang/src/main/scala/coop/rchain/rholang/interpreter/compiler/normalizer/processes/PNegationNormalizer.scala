@@ -7,7 +7,7 @@ import coop.rchain.models.{Connective, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{
-  DeBruijnLevelMap,
+  FreeMap,
   ProcVisitInputs,
   ProcVisitOutputs,
   SourcePosition
@@ -20,12 +20,12 @@ object PNegationNormalizer {
   ): F[ProcVisitOutputs] =
     normalizeMatch[F](
       p.proc_,
-      ProcVisitInputs(VectorPar(), input.env, DeBruijnLevelMap.empty)
+      ProcVisitInputs(VectorPar(), input.boundMapChain, FreeMap.empty)
     ).map(
       bodyResult =>
         ProcVisitOutputs(
-          input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.env.depth),
-          input.knownFree
+          input.par.prepend(Connective(ConnNotBody(bodyResult.par)), input.boundMapChain.depth),
+          input.freeMap
             .addConnective(
               ConnNotBody(bodyResult.par),
               SourcePosition(p.line_num, p.col_num)

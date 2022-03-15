@@ -31,8 +31,8 @@ in {
   rl!(`rho:lang:listOps`, *ListOpsCh) |
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:rchain:revVault`, *RevVaultCh) |
-  for(@(_, ListOps)  <- ListOpsCh;
-      @(_, AuthKey)  <- AuthKeyCh;
+  for(@(_, ListOps) <- ListOpsCh &
+      @(_, AuthKey) <- AuthKeyCh &
       @(_, RevVault) <- RevVaultCh) {
     // Creates a sealer/unsealer pair and return on `ret`
     contract MultiSigRevVault(@"makeSealerUnsealer", ret) = {
@@ -103,8 +103,8 @@ in {
           RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
           @RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
           @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
-          for (@revAddr         <- revAddrCh;       // revAddr         = Rev address of the multisig vault
-               @revVaultAuthKey <- authKeyCh;       // revVaultAuthKey = auth key for the multisig Rev vault
+          for (@revAddr         <- revAddrCh&       // revAddr         = Rev address of the multisig vault
+               @revVaultAuthKey <- authKeyCh&       // revVaultAuthKey = auth key for the multisig Rev vault
                @authPubKeys     <- authPubKeysCh) { // authPubKeys     = list of each public key's auth key
             new
               multiSig,
@@ -157,10 +157,10 @@ in {
                     contract multiSig(@"transfer", @targetRevAddress, @amount, @auth, ret) = {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh;
+                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh&
                              @unsealed, @info <- unsealedCh) {
                           if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
-                            for (@nonce <- @(*multiSig, *nonceStore); @nonceMap <- @(*multiSig, *nonceMapStore)) {
+                            for (@nonce <- @(*multiSig, *nonceStore) & @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
                               if (quorumSize == 1) {
                                 @(*multiSig, *nonceMapStore)!(nonceMap.set(nonce, Nil)) |
@@ -204,7 +204,7 @@ in {
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
                       new idxAuthPubKeysCh, unsealedCh in {
                         verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh;
+                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh&
                              @unsealed, @info <- unsealedCh) {
                           if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {

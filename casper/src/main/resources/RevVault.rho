@@ -38,9 +38,9 @@ in {
   rl!(`rho:rchain:authKey`, *AuthKeyCh) |
   rl!(`rho:lang:either`, *EitherCh) |
   rl!(`rho:lang:treeHashMap`, *TreeHashMapCh) |
-  for (@(_, MakeMint) <- MakeMintCh;
-       @(_, AuthKey)  <- AuthKeyCh;
-       @(_, Either)   <- EitherCh;
+  for (@(_, MakeMint) <- MakeMintCh &
+       @(_, AuthKey)  <- AuthKeyCh &
+       @(_, Either)   <- EitherCh &
        TreeHashMap    <- TreeHashMapCh) {
     // Each invocation of the RevVault contract uses a different mint.
     new mintCh, vaultMapStore, initVault in {
@@ -191,10 +191,10 @@ in {
               contract revVault(@"balance", ret) = {
                 purse!("getBalance", *ret)
               } |
-              // Transfers from vault at revAddress to revVault.
-              contract revVault(@"transfer", @revAddress, @amount, authKey, ret) = {
+              // Transfers from revVault to toRevAddress.
+              contract revVault(@"transfer", @targetAddress, @amount, authKey, ret) = {
                 new ret2 in {
-                  _transferTemplate!(ownRevAddress, *purse, revAddress, amount, *authKey, *ret2) |
+                  _transferTemplate!(ownRevAddress, *purse, targetAddress, amount, *authKey, *ret2) |
                   for (@result <- ret2) {
                     ret!(result) |
                     for (logCh <<- logStore) {
@@ -202,7 +202,7 @@ in {
                         new bd(`rho:block:data`), bdCh in {
                           bd!(*bdCh) |
                           for (@blockNumber, @timestamp, @sender <- bdCh) {
-                            logCh!(["transfer", revAddress, amount, result, blockNumber, timestamp, sender])
+                            logCh!(["transfer", targetAddress, amount, result, blockNumber, timestamp, sender])
                           }
                         }
                       }
@@ -239,16 +239,16 @@ in {
             }
           } |
           // Checks all necessary validation and authentication prerequisites. If everything checks out,
-          // amount is transferred from vault at revAddress to vault at ownRevAddress.
-          contract _transferTemplate(@ownRevAddress, purse, @revAddress, @amount, authKey, ret) = {
+          // amount is transferred from purse (ownRevAddress) to vault at targetAddress.
+          contract _transferTemplate(@ownRevAddress, purse, @targetAddress, @amount, authKey, ret) = {
             new revAddressValid, revAddressValidEither, amountNonNegative,
                 authKeyValidCh, authKeyValidEitherCh,
                 parametersOkCh, parametersAndAuthOkCh,
                 split, eitherPurseCh, doDeposit
             in {
-              RevAddress!("validate", revAddress, *revAddressValid) |
+              RevAddress!("validate", targetAddress, *revAddressValid) |
               @Either!("fromNillableError <-", *revAddressValid, *revAddressValidEither) |
-              @Either!("fromBoolean", amount >= 0, "Amount must be non-negative", *amountNonNegative) |
+              @Either!("fromBoolean", amount > 0, "Amount must be positive value", *amountNonNegative) |
               @AuthKey!("check", *authKey, (*_revVault, ownRevAddress), *authKeyValidCh) |
               @Either!("fromBoolean <-", *authKeyValidCh, "Invalid AuthKey", *authKeyValidEitherCh) |
               @Either!("productR <-", *revAddressValidEither, *amountNonNegative, *parametersOkCh) |
@@ -262,17 +262,17 @@ in {
               } |
               @Either!("flatMap <-", *eitherPurseCh, *doDeposit, *ret) |
               for (@p, retCh <- doDeposit) {
-                @{revAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
+                @{targetAddress | bundle0{*_revVault}}!("_deposit", p, *retCh)
               }
             }
           } |
           // Deposits the entire balance in the fromPurse to the toPurse.
-          contract _depositTemplate(toPurse, fromPurse, retCh) = {
+          contract _depositTemplate(fromPurse, toPurse, retCh) = {
             new amountCh, depositSuccessCh in {
-              fromPurse!("getBalance", *amountCh) |
+              toPurse!("getBalance", *amountCh) |
               for (@amount <- amountCh) {
                 // Calls purse deposit method in MakeMint contract; adds amount to toPurse and subtracts from fromPurse.
-                toPurse!("deposit", amount, *fromPurse, *depositSuccessCh) |
+                fromPurse!("deposit", amount, *toPurse, *depositSuccessCh) |
                 @Either!("fromBoolean <-", *depositSuccessCh, "BUG FOUND: purse deposit failed", *retCh)
               }
             }

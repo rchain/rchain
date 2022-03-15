@@ -16,12 +16,12 @@ import java.nio.file.Path
 
 object RSpaceExporterDisk {
 
-  def writeToDisk[F[_]: Concurrent: Log, C, P, A, K](
+  def writeToDisk[F[_]: Concurrent: Log](
       exporter: RSpaceExporter[F],
       root: Blake2b256Hash,
       dirPath: Path,
       chunkSize: Int
-  )(implicit sc: Serialize[C], sp: Serialize[P], sa: Serialize[A], sk: Serialize[K]): F[Unit] = {
+  ): F[Unit] = {
     type Param = (Seq[(Blake2b256Hash, Option[Byte])], Int)
     def writeChunkRec(historyStore: KeyValueStore[F], dataStore: KeyValueStore[F])(
         p: Param
@@ -39,7 +39,7 @@ object RSpaceExporterDisk {
 
         // Validate items
         validationProcess = Stopwatch.time(Log[F].info(_))("Validate state items")(
-          RSpaceImporter.validateStateItems[F, C, P, A, K](
+          RSpaceImporter.validateStateItems[F](
             historyItems,
             dataItems,
             startPath,

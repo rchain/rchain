@@ -13,12 +13,12 @@ object PEvalNormalizer {
       implicit env: Map[String, Par]
   ): F[ProcVisitOutputs] =
     NameNormalizeMatcher
-      .normalizeMatch[F](p.name_, NameVisitInputs(input.env, input.knownFree))
+      .normalizeMatch[F](p.name_, NameVisitInputs(input.boundMapChain, input.freeMap))
       .map(
         nameMatchResult =>
           ProcVisitOutputs(
-            input.par ++ nameMatchResult.chan,
-            nameMatchResult.knownFree
+            input.par ++ nameMatchResult.par,
+            nameMatchResult.freeMap
           )
       )
 }

@@ -6,7 +6,7 @@ import coop.rchain.models.{BundleOps, Par}
 import coop.rchain.models.rholang.implicits._
 import coop.rchain.rholang.interpreter.compiler.ProcNormalizeMatcher.normalizeMatch
 import coop.rchain.rholang.interpreter.compiler.{
-  LevelContext,
+  FreeContext,
   ProcVisitInputs,
   ProcVisitOutputs,
   SourcePosition
@@ -29,9 +29,9 @@ object PBundleNormalizer {
       val errMsg = {
         def at(variable: String, sourcePosition: SourcePosition): String =
           s"$variable at $sourcePosition"
-        val wildcardsPositions = targetResult.knownFree.wildcards.map(at("", _))
-        val freeVarsPositions = targetResult.knownFree.levelBindings.map {
-          case (n, LevelContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
+        val wildcardsPositions = targetResult.freeMap.wildcards.map(at("", _))
+        val freeVarsPositions = targetResult.freeMap.levelBindings.map {
+          case (n, FreeContext(_, _, sourcePosition)) => at(s"`$n`", sourcePosition)
         }
         val errMsgWildcards =
           if (wildcardsPositions.nonEmpty)
@@ -65,14 +65,14 @@ object PBundleNormalizer {
                   s"Illegal top level connective in bundle at position: line: ${b.line_num}, column: ${b.col_num}."
                 )
               )
-            } else if (targetResult.knownFree.wildcards.nonEmpty || targetResult.knownFree.levelBindings.nonEmpty) {
+            } else if (targetResult.freeMap.wildcards.nonEmpty || targetResult.freeMap.levelBindings.nonEmpty) {
               error(targetResult)
             } else {
               val newBundle: Bundle = targetResult.par.singleBundle() match {
                 case Some(single) => outermostBundle.merge(single)
                 case None         => outermostBundle
               }
-              ProcVisitOutputs(input.par.prepend(newBundle), input.knownFree).pure[F]
+              ProcVisitOutputs(input.par.prepend(newBundle), input.freeMap).pure[F]
             }
     } yield res
   }

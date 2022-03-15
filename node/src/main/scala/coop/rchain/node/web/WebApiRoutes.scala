@@ -11,6 +11,7 @@ import coop.rchain.node.api.WebApi._
 import coop.rchain.shared.Log
 import io.circe.generic.semiauto._
 import org.http4s.{HttpRoutes, Response}
+import coop.rchain.node.encode.JsonEncoder._
 
 object WebApiRoutes {
 
@@ -86,21 +87,24 @@ object WebApiRoutes {
     implicit val encodeLightBlockInfo: Encoder[LightBlockInfo] = deriveEncoder[LightBlockInfo]
 
     implicit val encodeBlockInfo: Encoder[BlockInfo] = deriveEncoder[BlockInfo]
+
     // Encoders
-    implicit val stringEncoder     = jsonEncoderOf[F, String]
-    implicit val booleanEncode     = jsonEncoderOf[F, Boolean]
-    implicit val apiStatusEncoder  = jsonEncoderOf[F, ApiStatus]
-    implicit val blockInfoEncoder  = jsonEncoderOf[F, BlockInfo]
-    implicit val lightBlockEncoder = jsonEncoderOf[F, LightBlockInfo]
-    implicit val lightBlockListEnc = jsonEncoderOf[F, List[LightBlockInfo]]
-    implicit val dataRespEncoder   = jsonEncoderOf[F, DataResponse]
-    implicit val prepareEncoder    = jsonEncoderOf[F, PrepareResponse]
-    implicit val explRespEncoder   = jsonEncoderOf[F, ExploratoryDeployResponse]
+    implicit val stringEncoder              = jsonEncoderOf[F, String]
+    implicit val booleanEncode              = jsonEncoderOf[F, Boolean]
+    implicit val apiStatusEncoder           = jsonEncoderOf[F, ApiStatus]
+    implicit val blockInfoEncoder           = jsonEncoderOf[F, BlockInfo]
+    implicit val lightBlockEncoder          = jsonEncoderOf[F, LightBlockInfo]
+    implicit val lightBlockListEnc          = jsonEncoderOf[F, List[LightBlockInfo]]
+    implicit val dataAtNameRespEncoder      = jsonEncoderOf[F, DataAtNameResponse]
+    implicit val dataAtParRespEncoder       = jsonEncoderOf[F, RhoDataResponse]
+    implicit val prepareEncoder             = jsonEncoderOf[F, PrepareResponse]
+    implicit val transactionResponseEncoder = jsonEncoderOf[F, TransactionResponse]
     // Decoders
-    implicit val deployRequestDecoder = jsonOf[F, DeployRequest]
-    implicit val dataRequestDecoder   = jsonOf[F, DataRequest]
-    implicit val prepareDecoder       = jsonOf[F, PrepareRequest]
-    implicit val ExploreDeployRequest = jsonOf[F, ExploreDeployRequest]
+    implicit val deployRequestDecoder     = jsonOf[F, DeployRequest]
+    implicit val dataAtNameRequestDecoder = jsonOf[F, DataAtNameRequest]
+    implicit val dataAtParRequestDecoder  = jsonOf[F, DataAtNameByBlockHashRequest]
+    implicit val prepareDecoder           = jsonOf[F, PrepareRequest]
+    implicit val ExploreDeployRequest     = jsonOf[F, ExploreDeployRequest]
 
     HttpRoutes.of[F] {
       case GET -> Root / "status" =>
@@ -120,12 +124,12 @@ object WebApiRoutes {
         req.handle[DeployRequest, String](webApi.deploy)
 
       case req @ POST -> Root / "explore-deploy" =>
-        req.handle[String, ExploratoryDeployResponse](
+        req.handle[String, RhoDataResponse](
           term => webApi.exploratoryDeploy(term, none[String], usePreStateHash = false)
         )
 
       case req @ POST -> Root / "explore-deploy-by-block-hash" =>
-        req.handle[ExploreDeployRequest, ExploratoryDeployResponse](
+        req.handle[ExploreDeployRequest, RhoDataResponse](
           req =>
             if (req.blockHash.isEmpty)
               webApi.exploratoryDeploy(req.term, none[String], req.usePreStateHash)
@@ -136,7 +140,10 @@ object WebApiRoutes {
       // Get data
 
       case req @ POST -> Root / "data-at-name" =>
-        req.handle[DataRequest, DataResponse](webApi.listenForDataAtName)
+        req.handle[DataAtNameRequest, DataAtNameResponse](webApi.listenForDataAtName)
+
+      case req @ POST -> Root / "data-at-name-by-block-hash" =>
+        req.handle[DataAtNameByBlockHashRequest, RhoDataResponse](webApi.getDataAtPar)
 
       // Blocks
 
@@ -160,6 +167,9 @@ object WebApiRoutes {
 
       case GET -> Root / "is-finalized" / hash =>
         webApi.isFinalized(hash).handle
+
+      case GET -> Root / "transactions" / hash =>
+        webApi.getTransaction(hash).handle
     }
   }
 

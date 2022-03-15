@@ -17,6 +17,7 @@
 
 new
   NonNegativeNumberDispatcher,
+  MergeableTag,
   NonNegativeNumber,
   NonNegativeNumberLoc,
   rb(`rho:registry:insertBlessed`),
@@ -27,12 +28,12 @@ in {
     new this, valueStore in {
       contract this(@"add", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore){
+          for(@v <- @(*MergeableTag, *valueStore)){
             if (v + x >= v) {
-              valueStore!(v + x) | success!(true)
+              @(*MergeableTag, *valueStore)!(v + x) | success!(true)
             } else {
               //overflow
-              valueStore!(v) | success!(false)
+              @(*MergeableTag, *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -41,11 +42,11 @@ in {
       } |
       contract this(@"sub", @x, success) = {
         if (x >= 0) {
-          for(@v <- valueStore) {
+          for(@v <- @(*MergeableTag, *valueStore)) {
             if (x <= v) {
-              valueStore!(v - x) | success!(true)
+              @(*MergeableTag, *valueStore)!(v - x) | success!(true)
             } else {
-              valueStore!(v) | success!(false)
+              @(*MergeableTag, *valueStore)!(v) | success!(false)
             }
           }
         } else {
@@ -53,20 +54,17 @@ in {
         }
       } |
       contract this(@"value", return) = {
-        for(@v <- valueStore) {
-          valueStore!(v) | return!(v)
+        for(@v <- @(*MergeableTag, *valueStore)) {
+          @(*MergeableTag, *valueStore)!(v) | return!(v)
         }
       } |
       return!(bundle+{*this}) |
       match init { //Initial balance is zero if given is negative on non-integer
         Int => {
-          if (init > 0) {
-            valueStore!(init)
-          } else {
-            valueStore!(0)
-          }
+          if (init >= 0) { @(*MergeableTag, *valueStore)!(init)  }
+          else           { @(*MergeableTag, *valueStore)!(0) }
         }
-         _ => { valueStore!(0) }
+         _ => { @(*MergeableTag, *valueStore)!(0) }
       }
     }
   } |
@@ -134,5 +132,3 @@ in {
     *uriOut
   )
 }
-  
-  

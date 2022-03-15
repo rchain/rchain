@@ -13,7 +13,7 @@ Global / dependencyOverrides := Dependencies.overrides
 
 lazy val projectSettings = Seq(
   organization := "coop.rchain",
-  scalaVersion := "2.12.11",
+  scalaVersion := "2.12.15",
   version := "0.1.0-SNAPSHOT",
   resolvers ++= Seq(
     Resolver.sonatypeRepo("releases"),
@@ -53,11 +53,8 @@ lazy val projectSettings = Seq(
     Wart.AnyVal
   ),
   scalafmtOnCompile := !sys.env.contains("CI"), // disable in CI environments
-  scapegoatVersion in ThisBuild := "1.4.6",
+  scapegoatVersion in ThisBuild := "1.4.11",
   testOptions in Test += Tests.Argument("-oD"), //output test durations
-  dependencyOverrides ++= Seq(
-    "io.kamon" %% "kamon-core" % kamonVersion
-  ),
   javacOptions ++= Seq("-source", "11", "-target", "11"),
   Test / fork := true,
   Test / parallelExecution := false,
@@ -133,6 +130,7 @@ lazy val shared = (project in file("shared"))
       catsLawsTest,
       catsLawsTestkitTest,
       enumeratum,
+      jaxb
     )
   )
 
@@ -181,7 +179,6 @@ lazy val comm = (project in file("comm"))
   .settings(commonSettings: _*)
   .settings(
     version := "0.1",
-    dependencyOverrides += "org.slf4j" % "slf4j-api" % "1.7.25",
     libraryDependencies ++= commonDependencies ++ kamonDependencies ++ protobufDependencies ++ Seq(
       grpcNetty,
       nettyBoringSsl,
@@ -212,7 +209,6 @@ lazy val crypto = (project in file("crypto"))
       bouncyProvCastle,
       scalacheck,
       kalium,
-      jaxb,
       secp256k1Java,
       scodecBits
     ),
@@ -263,6 +259,7 @@ lazy val node = (project in file("node"))
         scallop,
         scalaUri,
         scalapbRuntimegGrpc,
+        circeParser,
         circeGenericExtras,
         pureconfig
       ),
@@ -337,6 +334,8 @@ lazy val node = (project in file("node"))
         ExecCmd("CMD", "run")
       )
     },
+    // Replace unsupported character `+`
+    version in Docker := { version.value.replace("+", "__") },
     mappings in Docker ++= {
       val base = (defaultLinuxInstallLocation in Docker).value
       directory((baseDirectory in rholang).value / "examples")

@@ -1,8 +1,8 @@
 import MakeMint, TestSet in {
   MakeMint!("mintA") | MakeMint!("mintB") |
-  for(mintA <- @"mintA"; mintB <- @"mintB") {
+  for(mintA <- @"mintA" & mintB <- @"mintB") {
     mintA!("makePurse", [100], "aliceAPurse") | mintB!("makePurse", [50], "bobBPurse") |
-    for(@aliceAPurse <- @"aliceAPurse"; @bobBPurse <- @"bobBPurse") {
+    for(@aliceAPurse <- @"aliceAPurse" & @bobBPurse <- @"bobBPurse") {
       TestSet!(
         "Purses should be created with the given balance.",
         [
@@ -22,7 +22,7 @@ import MakeMint, TestSet in {
       @[*TestSet, "after"]!("Cross-currency deposits should fail.", {
         @aliceAPurse!("sprout", [], "bobAPurse") |
         @bobBPurse!("sprout", [], "aliceBPurse") |
-        for(@aliceBPurse <- @"aliceBPurse"; @bobAPurse <- @"bobAPurse") {
+        for(@aliceBPurse <- @"aliceBPurse" & @bobAPurse <- @"bobAPurse") {
           TestSet!(
             "Deposit should work as expected.",
             [

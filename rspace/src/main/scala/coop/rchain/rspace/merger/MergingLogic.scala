@@ -2,16 +2,33 @@ package coop.rchain.rspace.merger
 
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.trace.{Consume, Produce}
+import fs2.Stream
 
 import scala.Function.tupled
 import scala.annotation.tailrec
 
 object MergingLogic {
 
+  /**
+    * Map used to represent mergeable (numeric) channels with intermediate values
+    */
+  type NumberChannelsEndVal = Map[Blake2b256Hash, Long]
+
+  type NumberChannelsDiff = Map[Blake2b256Hash, Long]
+
   /** If target depends on source. */
-  def depends(target: EventLogIndex, source: EventLogIndex): Boolean =
-    (producesCreatedAndNotDestroyed(source) intersect target.producesConsumed).nonEmpty ||
-      (consumesCreatedAndNotDestroyed(source) intersect target.consumesProduced).nonEmpty
+  def depends(target: EventLogIndex, source: EventLogIndex): Boolean = {
+    val producesSource = producesCreatedAndNotDestroyed(source) diff source.producesMergeable
+    val producesTarget = target.producesConsumed diff source.producesMergeable
+
+    val consumesSource = consumesCreatedAndNotDestroyed(source)
+    val consumesTarget = target.consumesProduced
+
+    val producesDepends = producesSource intersect producesTarget
+    val consumesDepends = consumesSource intersect consumesTarget
+
+    producesDepends.nonEmpty || consumesDepends.nonEmpty
+  }
 
   /** If two event logs are conflicting. */
   def areConflicting(a: EventLogIndex, b: EventLogIndex): Boolean =
@@ -27,12 +44,17 @@ object MergingLogic {
       *
       * Produce is considered destroyed in COMM if it is not persistent and been consumed without peek.
       * Consume is considered destroyed in COMM when it is not persistent.
+      *
+      * If produces/consumes are mergeable in both indices, they are not considered as conflicts.
       */
     val racesForSameIOEvent = {
-      val consumeRaces =
-        (a.consumesProduced intersect b.consumesProduced).toIterator.filterNot(_.persistent)
-      val produceRaces =
-        (a.producesConsumed intersect b.producesConsumed).toIterator.filterNot(_.persistent)
+      val sharedConsumes    = a.consumesProduced intersect b.consumesProduced
+      val mergeableConsumes = a.consumesMergeable intersect b.consumesMergeable
+      val consumeRaces      = (sharedConsumes diff mergeableConsumes).toIterator.filterNot(_.persistent)
+
+      val sharedProduces    = a.producesConsumed intersect b.producesConsumed
+      val mergeableProduces = a.producesMergeable intersect b.producesMergeable
+      val produceRaces      = (sharedProduces diff mergeableProduces).toIterator.filterNot(_.persistent)
 
       consumeRaces.flatMap(_.channelsHashes) ++ produceRaces.map(_.channelsHash)
     }
@@ -88,7 +110,7 @@ object MergingLogic {
   /** Produces that are affected by event log - locally created + external destroyed. */
   def producesAffected(e: EventLogIndex): Set[Produce] = {
     def externalProducesDestroyed(e: EventLogIndex): Set[Produce] =
-      e.producesConsumed diff producesCreated(e)
+      (e.producesConsumed diff producesCreated(e)).filterNot(_.persistent)
 
     producesCreatedAndNotDestroyed(e) ++ externalProducesDestroyed(e)
   }
@@ -96,7 +118,7 @@ object MergingLogic {
   /** Consumes that are affected by event log - locally created + external destroyed. */
   def consumesAffected(e: EventLogIndex): Set[Consume] = {
     def externalConsumesDestroyed(e: EventLogIndex): Set[Consume] =
-      e.consumesProduced diff consumesCreated(e)
+      (e.consumesProduced diff consumesCreated(e)).filterNot(_.persistent)
 
     consumesCreatedAndNotDestroyed(e) ++ externalConsumesDestroyed(e)
   }
@@ -147,23 +169,44 @@ object MergingLogic {
 
   /** Given conflicts map, output possible rejection options. */
   def computeRejectionOptions[A](conflictMap: Map[A, Set[A]]): Set[Set[A]] = {
-    @tailrec
-    def process(newSet: Set[A], acc: Set[A], reject: Boolean): Set[A] = {
-      // stop if all new dependencies are already in set
-      val next = if (reject) (acc ++ newSet) else acc
-      val stop = if (reject) next == acc else false
-      if (stop)
-        acc
-      else {
-        val n = newSet.flatMap(v => conflictMap.getOrElse(v, Set.empty))
-        process(n, next, !reject)
-      }
-    }
-    // each rejection option is defined by decision not to reject a key in rejection map
-    conflictMap
+    // Set of rejection paths with corresponding remaining conflicts map
+    final case class RejectionOption(rejectedSoFar: Set[A], remainingConflictsMap: Map[A, Set[A]])
+
+    def gatherRejOptions(conflictsMap: Map[A, Set[A]]): Set[RejectionOption] =
+      conflictsMap.iterator.map {
+        // keeping each key - reject conflicting values
+        case (_, toReject) =>
+          val remainingConflictsMap =
+            conflictsMap
+              .filterKeys(!toReject.contains(_)) // remove rejected key
+              .mapValues(_ -- toReject)          // remove rejected amongst values
+              .filter { case (_, v) => v.nonEmpty } // remove keys that do not conflict with anything now
+          RejectionOption(toReject, remainingConflictsMap)
+      }.toSet
+
     // only keys that have conflicts associated should be examined
-      .filter { case (_, conflicts) => conflicts.nonEmpty }
-      .keySet
-      .map(k => process(conflictMap(k), Set.empty, reject = true))
+    val conflictsOnlyMap = conflictMap.filter {
+      case (_, conflicts) => conflicts.nonEmpty
+    }
+
+    // start with rejecting nothing and full conflicts map
+    val start = RejectionOption(Set.empty[A], conflictsOnlyMap)
+    Stream
+      .unfoldLoop(Set(start)) { rejections =>
+        val (out, next) = rejections
+          .flatMap {
+            case RejectionOption(rejectedAcc, remainingConflictsMap) =>
+              gatherRejOptions(remainingConflictsMap).map { v =>
+                v.copy(rejectedSoFar = rejectedAcc ++ v.rejectedSoFar)
+              }
+          }
+          // emit rejection option that do not have more conflicts, pass others further into the loop
+          .partition { case RejectionOption(_, cMap) => cMap.values.flatten.isEmpty }
+
+        (out.map(_.rejectedSoFar).toList, if (next.nonEmpty) Some(next) else None)
+      }
+      .flatMap(Stream.emits)
+      .toList
+      .toSet
   }
 }

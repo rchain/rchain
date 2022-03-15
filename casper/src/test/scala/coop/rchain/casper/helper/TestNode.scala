@@ -1,6 +1,5 @@
 package coop.rchain.casper.helper
 
-import cats.data.State
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
@@ -17,13 +16,14 @@ import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
-import coop.rchain.casper.util.comm.{CasperPacketHandler, _}
+import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.casper.{Casper, ValidBlock, _}
+import coop.rchain.casper._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -33,7 +33,7 @@ import coop.rchain.comm.rp.HandleMessages.handle
 import coop.rchain.comm.transport.CommunicationResponse
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
-import coop.rchain.graphz.{Graphz, StringSerializer}
+import coop.rchain.graphz.StringSerializer
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances._
@@ -152,7 +152,8 @@ case class TestNode[F[_]: Timer](
     bondMinimum = 0,
     bondMaximum = Long.MaxValue,
     epochLength = 10000,
-    quarantineLength = 20000
+    quarantineLength = 20000,
+    minPhloPrice = 1
   )
 
   implicit val casperEff = new MultiParentCasperImpl[F](
@@ -346,29 +347,24 @@ case class TestNode[F[_]: Timer](
 
   def shutoff() = transportLayerEff.clear(local)
 
-  def visualizeDag(startBlockNumber: Int): F[String] = {
-
-    type G[A] = State[StringBuffer, A]
-    import cats.mtl.implicits._
-
-    implicit val serializer = new StringSerializer[G]
-    val serialize: G[Graphz[G]] => String =
-      _.runS(new StringBuffer("")).value.toString
-
-    val result: F[Either[String, String]] = BlockAPI.visualizeDag[F, G, String](
-      Int.MaxValue,
-      apiMaxBlocksLimit,
-      startBlockNumber,
-      (ts, lfb) =>
-        GraphzGenerator.dagAsCluster[F, G](
-          ts,
-          lfb,
-          GraphConfig(showJustificationLines = true)
-        ),
-      serialize
-    )
-    result.map(_.right.get)
-  }
+  def visualizeDag(startBlockNumber: Int): F[String] =
+    for {
+      ref <- Ref[F].of(new StringBuffer(""))
+      ser = new StringSerializer(ref)
+      result <- BlockAPI.visualizeDag[F, String](
+                 Int.MaxValue,
+                 apiMaxBlocksLimit,
+                 startBlockNumber,
+                 (ts, lfb) =>
+                   GraphzGenerator.dagAsCluster[F](
+                     ts,
+                     lfb,
+                     GraphConfig(showJustificationLines = true),
+                     ser
+                   ),
+                 ref.get.map(_.toString)
+               )
+    } yield result.right.get
 
   /**
     * Prints a uri on stdout that, when clicked, visualizes the current dag state using ttps://dreampuf.github.io.
@@ -498,15 +494,18 @@ object TestNode {
     implicit val spanEff   = new NoopSpan[F]
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
-      kvm                 <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.liftF(KeyValueBlockStore(kvm))
-      blockDagStorage     <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
-      casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
-      rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
-      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore))
+      kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
+      deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
+      casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
+      rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
+      mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
+      runtimeManager <- Resource.eval(
+                         RuntimeManager(rSpaceStore, mStore, Genesis.NonNegativeMergeableTagName)
+                       )
 
-      node <- Resource.liftF({
+      node <- Resource.eval({
                implicit val bs                         = blockStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage

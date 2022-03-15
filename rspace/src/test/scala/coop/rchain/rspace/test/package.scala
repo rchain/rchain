@@ -1,7 +1,7 @@
 package coop.rchain.rspace
 
 import cats._
-import cats.implicits._
+import cats.syntax.all._
 
 import scodec.bits.BitVector
 import scodec.{Attempt, Codec, DecodeResult}
@@ -22,6 +22,6 @@ package object test {
 
   implicit class StoreOps[F[_]: Functor, C, P, A, K](val store: HotStore[F, C, P, A, K]) {
     def isEmpty(): F[Boolean] =
-      store.changes().map(collectActions[InsertAction]).map(_.isEmpty)
+      store.changes.map(collectActions[InsertAction]).map(_.isEmpty)
   }
 }
