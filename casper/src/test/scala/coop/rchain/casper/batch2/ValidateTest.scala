@@ -19,6 +19,7 @@ import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.{InterpreterUtil, RuntimeManager}
 import coop.rchain.casper._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
 import coop.rchain.models.BlockHash.BlockHash
@@ -47,6 +48,7 @@ class ValidateTest
   import ValidBlock._
 
   implicit override val log: LogStub[Task] = new LogStub[Task]
+  private val SHARD_ID                     = "root-shard"
 
   def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
     CasperSnapshot(
@@ -327,7 +329,7 @@ class ValidateTest
   "Future deploy validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = -1),
@@ -345,7 +347,7 @@ class ValidateTest
   "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = Long.MaxValue),
@@ -363,7 +365,7 @@ class ValidateTest
   "Deploy expiration validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
         block <- createGenesis[Task](
                   deploys = Seq(deploy)
                 )
@@ -375,7 +377,7 @@ class ValidateTest
   "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = Long.MinValue),
@@ -456,7 +458,7 @@ class ValidateTest
   it should "not accept blocks with a repeated deploy" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
+        deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
         genesis <- createGenesis[Task](deploys = Seq(deploy))
         block1 <- createBlock[Task](
                    Seq(genesis.blockHash),
@@ -507,7 +509,7 @@ class ValidateTest
     ): F[BlockMessage] =
       for {
         current <- Time[F].currentMillis
-        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
+        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt, shardId = SHARD_ID)
         block <- createBlock[F](
                   parents.map(_.blockHash),
                   genesis,
@@ -687,10 +689,10 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds)
-        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds)
-        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b1), b0, Seq(b1, b0), v0, bonds, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b2, b0), v1, bonds, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b3), b0, Seq(b2, b3), v1, bonds, shardId = SHARD_ID)
         _ <- (0 to 4).toList.forallM[Task](
               i =>
                 for {
@@ -731,11 +733,20 @@ class ValidateTest
 
       for {
         b0 <- createGenesis[Task](bonds = bonds)
-        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1)
-        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1)
-        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2)
-        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2)
-        b5 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b4), v0, bonds, 1, invalid = true)
+        b1 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b0, b0), v0, bonds, 1, shardId = SHARD_ID)
+        b2 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b0), v1, bonds, 1, shardId = SHARD_ID)
+        b3 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b1, b2), v0, bonds, 2, shardId = SHARD_ID)
+        b4 <- createValidatorBlock[Task](Seq(b0), b0, Seq(b3, b2), v1, bonds, 2, shardId = SHARD_ID)
+        b5 <- createValidatorBlock[Task](
+               Seq(b0),
+               b0,
+               Seq(b3, b4),
+               v0,
+               bonds,
+               1,
+               invalid = true,
+               shardId = SHARD_ID
+             )
 
         justificationsWithInvalidBlock = Seq(
           Justification(v0, b5.blockHash),
@@ -760,11 +771,17 @@ class ValidateTest
       val storageDirectory = Files.createTempDirectory(s"hash-set-casper-test-genesis-")
 
       for {
-        _              <- blockDagStorage.insert(genesis, false, approved = true)
-        kvm            <- mkTestRNodeStoreManager[Task](storageDirectory)
-        store          <- kvm.rSpaceStores
-        runtimeManager <- RuntimeManager[Task](store)
-        dag            <- blockDagStorage.getRepresentation
+        _      <- blockDagStorage.insert(genesis, false, approved = true)
+        kvm    <- mkTestRNodeStoreManager[Task](storageDirectory)
+        rStore <- kvm.rSpaceStores
+        mStore <- RuntimeManager.mergeableStore(kvm)
+        runtimeManager <- RuntimeManager[Task](
+                           rStore,
+                           mStore,
+                           Genesis.NonNegativeMergeableTagName,
+                           shardId = SHARD_ID
+                         )
+        dag <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
         _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)

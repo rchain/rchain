@@ -4,7 +4,11 @@ import coop.rchain.node.mergeablity.OperationOn0Ch._
 import coop.rchain.node.mergeablity.RhoState.emptyState
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class BaseMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
+class BaseMergeability(shardName: String)
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with BasicMergeabilityRules {
   it should "!X !X" in MergeableCase(S0)(S0)(Nil)(S0.rstate ++ S0.rstate)
   it should "!X !4" in MergeableCase(S0)(F1)(S1)(S0.rstate)
   it should "!X (!4)" in MergeableCase(S0)(S0, F_)(Nil)(S0.rstate)
@@ -266,4 +270,6 @@ class BaseMergeability extends FlatSpec with Matchers with Inspectors with Basic
   // it should   "C!! C!!"      in InfiniteLoop(R0)(R1)(C1, C0)(C1.rstate ++ C0.rstate)
   it should "(C!!) C!!" in CoveredBy("(!!C) C!!")
   it should "(C!!) (C!!)" in CoveredBy("(!!C) (C!!)")
+
+  override def shardId: String = shardName
 }

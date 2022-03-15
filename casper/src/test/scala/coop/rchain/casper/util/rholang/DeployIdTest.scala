@@ -23,23 +23,30 @@ import scala.concurrent.duration._
 class DeployIdTest extends FlatSpec with Matchers {
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
+  private val SHARD_ID = "root-shard"
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deploy-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deploy-id-runtime-manager-test", shardId = SHARD_ID)
 
   private val sk = ConstructDeploy.defaultSec
 
   private def deploy(
       deployer: PrivateKey,
       rho: String,
-      timestamp: Long = System.currentTimeMillis()
+      timestamp: Long = System.currentTimeMillis(),
+      shardId: String
   ): Signed[DeployData] = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
-    sec = deployer
+    sec = deployer,
+    shardId = shardId
   )
 
   "Deploy id" should "be equal to deploy signature" in {
-    val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
+    val d = deploy(
+      sk,
+      s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""",
+      shardId = SHARD_ID
+    )
     val result =
       runtimeManager
         .use(
@@ -60,14 +67,16 @@ class DeployIdTest extends FlatSpec with Matchers {
   it should "be resolved during normalization" in effectTest {
     val contract = deploy(
       sk,
-      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}"""
+      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}""",
+      shardId = SHARD_ID
     )
     val contractCall = deploy(
       sk,
-      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }"""
+      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }""",
+      shardId = SHARD_ID
     )
 
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager

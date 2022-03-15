@@ -38,7 +38,8 @@ class RhoSpec(
   implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-  private val printer = PrettyPrinter()
+  private val printer  = PrettyPrinter()
+  private val SHARD_ID = "root-shard"
 
   def mkTest(test: (String, Map[Long, List[RhoTestAssertion]])): Unit =
     test match {
@@ -199,7 +200,8 @@ class RhoSpec(
         term = CompiledRholangSource("RhoSpecContract.rho", NormalizerEnv.Empty).code,
         phloLimit = Long.MaxValue,
         phloPrice = 0,
-        validAfterBlockNumber = 0
+        validAfterBlockNumber = 0,
+        shardId = SHARD_ID
       ),
       Secp256k1,
       sk

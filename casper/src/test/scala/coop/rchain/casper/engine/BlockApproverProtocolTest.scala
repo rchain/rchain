@@ -20,6 +20,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
   implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+  private val SHARD_ID                      = "root-shard"
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     createProtocol.flatMap {
@@ -28,7 +29,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved)
+          _ <- approver
+                .unapprovedBlockPacketHandler[Effect](node.local, unapproved, shardId = SHARD_ID)
 
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
@@ -53,11 +55,13 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         for {
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved1
+                differentUnapproved1,
+                shardId = SHARD_ID
               )
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved2
+                differentUnapproved2,
+                shardId = SHARD_ID
               )
 
           _ = node.logEff.warns
@@ -90,7 +94,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID
               )
         } yield r shouldBe Right(())
     }
@@ -113,7 +118,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID
               )
         } yield r shouldBe (Left("Block bonds don't match expected."))
     }
@@ -138,7 +144,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID
               )
         } yield r shouldBe (Left(
           "Mismatch between number of candidate deploys and expected number of deploys."
@@ -166,7 +173,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond - 1,
                 epochLength = approver.epochLength + 1,
                 quarantineLength = approver.quarantineLength + 1,
-                numberOfActiveValidators = approver.numberOfActiveValidators + 1
+                numberOfActiveValidators = approver.numberOfActiveValidators + 1,
+                shardId = SHARD_ID
               )
         } yield r.isLeft shouldBe true
     }
@@ -174,6 +182,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 }
 
 object BlockApproverProtocolTest {
+  private val SHARD_ID: String = "root-shard"
+
   def createUnapproved(requiredSigs: Int, block: BlockMessage): UnapprovedBlock =
     UnapprovedBlock(ApprovedBlockCandidate(block, requiredSigs), 0L, 0L)
 
@@ -188,7 +198,7 @@ object BlockApproverProtocolTest {
     val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1
 
-    TestNode.networkEff(context, networkSize = 1).use { nodes =>
+    TestNode.networkEff(context, networkSize = 1, shardId = SHARD_ID).use { nodes =>
       val node = nodes.head
       BlockApproverProtocol
         .of[Effect](

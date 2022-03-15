@@ -22,8 +22,10 @@ class DeployerIdTest extends FlatSpec with Matchers {
   implicit val time           = new LogicalTime[Task]
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
+  val genesisContext   = buildGenesis(buildGenesisParameters())
+  private val SHARD_ID = genesisContext.genesisBlock.shardId
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deployer-id-runtime-manager-test")
+    mkRuntimeManager[Task]("deployer-id-runtime-manager-test", shardId = SHARD_ID)
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(
@@ -34,7 +36,8 @@ class DeployerIdTest extends FlatSpec with Matchers {
       for {
         deploy <- ConstructDeploy.sourceDeployNowF(
                    s"""new return, auth(`rho:rchain:deployerId`) in { return!(*auth) }""",
-                   sec = sk
+                   sec = sk,
+                   shardId = SHARD_ID
                  )
         emptyStateHash = RuntimeManager.emptyStateHashFixed
         result         <- mgr.captureResults(emptyStateHash, deploy)
@@ -43,8 +46,6 @@ class DeployerIdTest extends FlatSpec with Matchers {
       } yield ()
     }
   }
-
-  val genesisContext = buildGenesis(buildGenesisParameters())
 
   it should "make drain vault attacks impossible" in effectTest {
     val deployer = ConstructDeploy.defaultSec
@@ -75,15 +76,20 @@ class DeployerIdTest extends FlatSpec with Matchers {
          |  }
          |} """.stripMargin
 
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       for {
-        contract        <- ConstructDeploy.sourceDeployNowF(checkDeployerDefinition, sec = deployer)
-        block           <- node.addBlock(contract)
-        stateHash       = ProtoUtil.postStateHash(block)
-        checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)
-        result          <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
-        _               = assert(result.size == 1)
-        _               = assert(result.head == (GBool(isAccessGranted): Par))
+        contract <- ConstructDeploy
+                     .sourceDeployNowF(checkDeployerDefinition, sec = deployer, shardId = SHARD_ID)
+        block     <- node.addBlock(contract)
+        stateHash = ProtoUtil.postStateHash(block)
+        checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(
+                            checkDeployerCall,
+                            sec = contractUser,
+                            shardId = SHARD_ID
+                          )
+        result <- node.runtimeManager.captureResults(stateHash, checkAuthDeploy)
+        _      = assert(result.size == 1)
+        _      = assert(result.head == (GBool(isAccessGranted): Par))
       } yield ()
     }
   }

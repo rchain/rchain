@@ -36,19 +36,20 @@ class BlockQueryResponseAPITest
   implicit val timeEff = new LogicalTime[Task]
   implicit val spanEff = NoopSpan[Task]()
   implicit val log     = Log.log[Task]
-  private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("block-query-response-api-test")
 
   val tooShortQuery    = "12345"
   val badTestHashQuery = "1234acd"
   val invalidHexQuery  = "No such a hash"
 
   val genesisBlock: BlockMessage = getRandomBlock()
+  private val SHARD_ID           = genesisBlock.shardId
+  private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
+    mkRuntimeManager[Task]("block-query-response-api-test", shardId = SHARD_ID)
 
   val deployCount = 10
   val randomDeploys =
     (0 until deployCount).toList
-      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i))
+      .traverse(i => ConstructDeploy.basicProcessedDeploy[Task](i, shardId = SHARD_ID))
       .unsafeRunSync(scheduler)
 
   val senderString: String =

@@ -16,6 +16,7 @@ import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.BlockRetriever._
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.engine._
+import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.ProtoUtil
@@ -233,7 +234,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, shardId = shardId)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -242,7 +243,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, shardId = shardId)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -383,12 +384,13 @@ case class TestNode[F[_]: Timer](
 object TestNode {
   type Effect[A] = Task[A]
 
-  def standaloneEff(genesis: GenesisContext)(
+  def standaloneEff(genesis: GenesisContext, shardId: String)(
       implicit scheduler: Scheduler
   ): Resource[Effect, TestNode[Effect]] =
     networkEff(
       genesis,
-      networkSize = 1
+      networkSize = 1,
+      shardId = shardId
     ).map(_.head)
 
   def networkEff(
@@ -397,7 +399,8 @@ object TestNode {
       synchronyConstraintThreshold: Double = 0d,
       maxNumberOfParents: Int = Estimator.UnlimitedParents,
       maxParentDepth: Option[Int] = None,
-      withReadOnlySize: Int = 0
+      withReadOnlySize: Int = 0,
+      shardId: String
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
     implicit val c = Concurrent[Effect]
     implicit val n = TestNetwork.empty[Effect]
@@ -409,7 +412,8 @@ object TestNode {
       synchronyConstraintThreshold,
       maxNumberOfParents,
       maxParentDepth,
-      withReadOnlySize
+      withReadOnlySize,
+      shardId
     )
   }
 
@@ -420,7 +424,8 @@ object TestNode {
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
-      withReadOnlySize: Int
+      withReadOnlySize: Int,
+      shardId: String
   )(implicit s: Scheduler): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n           = sks.length
     val names       = (1 to n).map(i => if (i <= (n - withReadOnlySize)) s"node-$i" else s"readOnly-$i")
@@ -446,7 +451,8 @@ object TestNode {
               synchronyConstraintThreshold,
               maxNumberOfParents,
               maxParentDepth,
-              isReadOnly
+              isReadOnly,
+              shardId
             )
         }
         .map(_.toVector)
@@ -484,7 +490,8 @@ object TestNode {
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
-      isReadOnly: Boolean
+      isReadOnly: Boolean,
+      shardId: String
   )(implicit s: Scheduler): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -493,15 +500,23 @@ object TestNode {
     implicit val spanEff   = new NoopSpan[F]
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
-      kvm                 <- Resource.liftF(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.liftF(KeyValueBlockStore(kvm))
-      blockDagStorage     <- Resource.liftF(BlockDagKeyValueStorage.create(kvm))
-      deployStorage       <- Resource.liftF(KeyValueDeployStorage[F](kvm))
-      casperBufferStorage <- Resource.liftF(CasperBufferKeyValueStorage.create[F](kvm))
-      rSpaceStore         <- Resource.liftF(kvm.rSpaceStores)
-      runtimeManager      <- Resource.liftF(RuntimeManager(rSpaceStore))
+      kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
+      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
+      deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
+      casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
+      rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
+      mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
+      runtimeManager <- Resource.eval(
+                         RuntimeManager(
+                           rSpaceStore,
+                           mStore,
+                           Genesis.NonNegativeMergeableTagName,
+                           shardId
+                         )
+                       )
 
-      node <- Resource.liftF({
+      node <- Resource.eval({
                implicit val bs                         = blockStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage
@@ -534,7 +549,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi).some
+                   case Some(vi) => Proposer[F](vi, shardId = shardId).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous

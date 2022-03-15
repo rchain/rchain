@@ -31,7 +31,8 @@ class BondedStatusAPITest
     defaultValidatorKeyPairs.take(3) :+ ConstructDeploy.defaultKeyPair,
     createBonds(defaultValidatorPks.take(3))
   )
-  val genesisContext = buildGenesis(genesisParameters)
+  val genesisContext   = buildGenesis(genesisParameters)
+  private val SHARD_ID = genesisContext.genesisBlock.shardId
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
@@ -46,7 +47,7 @@ class BondedStatusAPITest
   }
 
   "bondStatus" should "return true for bonded validator" in effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 3).use {
+    TestNode.networkEff(genesisContext, networkSize = 3, shardId = SHARD_ID).use {
       case n1 +: n2 +: n3 +: _ =>
         (bondedStatus(n1.validatorId.get.publicKey)(n1) shouldBeF true) >>
           (bondedStatus(n2.validatorId.get.publicKey)(n1) shouldBeF true) >>
@@ -55,18 +56,23 @@ class BondedStatusAPITest
   }
 
   "bondStatus" should "return false for not bonded validators" in effectTest {
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       val (_, publicKey) = Secp256k1.newKeyPair
       bondedStatus(publicKey)(node) shouldBeF false
     }
   }
 
   "bondStatus" should "return true for newly bonded validator" in effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 4).use {
+    TestNode.networkEff(genesisContext, networkSize = 4, shardId = SHARD_ID).use {
       case nodes @ n1 +: n2 +: n3 +: n4 +: _ =>
         for {
-          produceDeploys <- (0 until 3).toList.traverse(i => basicDeployData[Task](i))
-          bondDeploy     <- BondingUtil.bondingDeploy[Task](1000, n4.validatorId.get.privateKey)
+          produceDeploys <- (0 until 3).toList
+                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
+          bondDeploy <- BondingUtil.bondingDeploy[Task](
+                         1000,
+                         n4.validatorId.get.privateKey,
+                         shardId = SHARD_ID
+                       )
 
           _  <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)

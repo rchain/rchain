@@ -478,8 +478,8 @@ final case class DeployData(
     timestamp: Long,
     phloPrice: Long,
     phloLimit: Long,
-    validAfterBlockNumber: Long /*,
-    shardId: String*/
+    validAfterBlockNumber: Long,
+    shardId: String
 ) {
   def totalPhloCharge = phloLimit * phloPrice
 }
@@ -499,8 +499,8 @@ object DeployData {
       proto.timestamp,
       proto.phloPrice,
       proto.phloLimit,
-      proto.validAfterBlockNumber /*,
-      proto.shardId*/
+      proto.validAfterBlockNumber,
+      proto.shardId
     )
 
   def from(dd: DeployDataProto): Either[String, Signed[DeployData]] =

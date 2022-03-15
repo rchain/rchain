@@ -67,7 +67,7 @@ object GenesisBuilder {
         shardId = "root",
         timestamp = 0L,
         proofOfStake = ProofOfStake(
-          minimumBond = 0L,
+          minimumBond = 1L,
           maximumBond = Long.MaxValue,
           // Epoch length is set to large number to prevent trigger of epoch change
           // in PoS close block method, which causes block merge conflicts
@@ -141,8 +141,10 @@ object GenesisBuilder {
 
     (for {
       kvsManager      <- mkTestRNodeStoreManager[Task](storageDirectory)
-      store           <- kvsManager.rSpaceStores
-      runtimeManager  <- RuntimeManager(store)
+      rStore          <- kvsManager.rSpaceStores
+      mStore          <- RuntimeManager.mergeableStore(kvsManager)
+      shardId         = genesisParameters.shardId
+      runtimeManager  <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName, shardId)
       genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
       blockStore      <- KeyValueBlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)

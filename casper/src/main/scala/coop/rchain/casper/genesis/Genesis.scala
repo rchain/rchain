@@ -8,8 +8,9 @@ import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.ProtoUtil.{blockHeader, unsignedBlockProto}
 import coop.rchain.casper.util.Sorting.byteArrayOrdering
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
-import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
 import coop.rchain.crypto.signatures.Signed
+import coop.rchain.models.{GPrivate, Par}
 
 final case class Genesis(
     shardId: String,
@@ -22,11 +23,22 @@ final case class Genesis(
 
 object Genesis {
 
+  val NonNegativeMergeableTagName: Par = {
+    val rand = Tools.unforgeableNameRng(
+      StandardDeploys.nonNegativeNumberPubKey,
+      StandardDeploys.nonNegativeNumberTimestamp
+    )
+    import coop.rchain.models.rholang.implicits._
+    val unforgeableByte = Iterator.continually(rand.next()).drop(1).next()
+    GPrivate(ByteString.copyFrom(unforgeableByte))
+  }
+
   def defaultBlessedTerms(
       timestamp: Long,
       posParams: ProofOfStake,
       vaults: Seq[Vault],
-      supply: Long
+      supply: Long,
+      shardId: String
   ): Seq[Signed[DeployData]] = {
     // Splits initial vaults creation in multiple deploys (batches)
     val vaultBatches = vaults.grouped(100).toSeq
@@ -36,22 +48,23 @@ object Genesis {
           batchVaults,
           supply,
           timestamp = 1565818101792L + idx,
-          isLastBatch = 1 + idx == vaultBatches.size
+          isLastBatch = 1 + idx == vaultBatches.size,
+          shardId
         )
     }
 
     // Order of deploys is important for Registry to work correctly
     // - dependencies must be defined first in the list
-    StandardDeploys.registry +:
-      StandardDeploys.listOps +:
-      StandardDeploys.either +:
-      StandardDeploys.nonNegativeNumber +:
-      StandardDeploys.makeMint +:
-      StandardDeploys.authKey +:
-      StandardDeploys.revVault +:
-      StandardDeploys.multiSigRevVault +:
+    StandardDeploys.registry(shardId) +:
+      StandardDeploys.listOps(shardId) +:
+      StandardDeploys.either(shardId) +:
+      StandardDeploys.nonNegativeNumber(shardId) +:
+      StandardDeploys.makeMint(shardId) +:
+      StandardDeploys.authKey(shardId) +:
+      StandardDeploys.revVault(shardId) +:
+      StandardDeploys.multiSigRevVault(shardId) +:
       vaultDeploys :+
-      StandardDeploys.poSGenerator(posParams)
+      StandardDeploys.poSGenerator(posParams, shardId)
   }
 
   def createGenesisBlock[F[_]: Concurrent](
@@ -64,7 +77,8 @@ object Genesis {
       timestamp,
       proofOfStake,
       vaults,
-      supply = Long.MaxValue
+      supply = Long.MaxValue,
+      shardId = genesis.shardId
     )
 
     runtimeManager

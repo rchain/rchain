@@ -6,6 +6,8 @@ import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{Matchers, PropSpec}
 
 class DeployDataSpec extends PropSpec with GeneratorDrivenPropertyChecks with Matchers {
+  private val SHARD_ID = "root-shard"
+
   implicit val ddArb: Arbitrary[DeployData] = Arbitrary(
     for {
       term                  <- arbString.arbitrary
@@ -18,7 +20,8 @@ class DeployDataSpec extends PropSpec with GeneratorDrivenPropertyChecks with Ma
       timestamp,
       phloPrice,
       phloLimit,
-      validAfterBlockNumber
+      validAfterBlockNumber,
+      shardId = SHARD_ID
     )
   )
 

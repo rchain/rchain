@@ -38,7 +38,8 @@ object BlockCreator {
   def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None
+      dummyDeployOpt: Option[(PrivateKey, String)] = None,
+      shardId: String
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -86,24 +87,26 @@ object BlockCreator {
               )
         } yield slashingDeploys
 
-      def prepareDummyDeploy(blockNumber: Long): Seq[Signed[DeployData]] = dummyDeployOpt match {
-        case Some((privateKey, term)) =>
-          Seq(
-            ConstructDeploy.sourceDeployNow(
-              source = term,
-              sec = privateKey,
-              vabn = blockNumber - 1
+      def prepareDummyDeploy(blockNumber: Long, shardId: String): Seq[Signed[DeployData]] =
+        dummyDeployOpt match {
+          case Some((privateKey, term)) =>
+            Seq(
+              ConstructDeploy.sourceDeployNow(
+                source = term,
+                sec = privateKey,
+                vabn = blockNumber - 1,
+                shardId = shardId
+              )
             )
-          )
-        case None => Seq.empty[Signed[DeployData]]
-      }
+          case None => Seq.empty[Signed[DeployData]]
+        }
 
       val createBlockProcess = for {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
         userDeploys     <- prepareUserDeploys(nextBlockNum)
-        dummyDeploys    = prepareDummyDeploy(nextBlockNum)
+        dummyDeploys    = prepareDummyDeploy(nextBlockNum, shardId)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(

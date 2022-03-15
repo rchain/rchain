@@ -75,8 +75,9 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
   implicit val spanEff: Span[Task] = NoopSpan[Task]
   implicit val metrics             = new MetricsNOP[Task]()
 
+  private val SHARD_ID = "root-shard"
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("block-query-response-api-test")
+    mkRuntimeManager[Task]("block-query-response-api-test", shardId = SHARD_ID)
 
   it should "reject to propose if proposer is not active validator" in withStorage {
     implicit blockStore => implicit blockDagStorage =>

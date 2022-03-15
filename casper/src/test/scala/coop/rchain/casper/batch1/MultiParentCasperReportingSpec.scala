@@ -22,11 +22,12 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
   val genesis: GenesisContext = buildGenesis()
+  private val SHARD_ID        = genesis.genesisBlock.shardId
 
   "ReportingCasper" should "behave the same way as MultiParentCasper" in effectTest {
     val correctRholang =
       """ for(@a <- @"1"){ Nil } | @"1"!("x") """
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       import node._
       import coop.rchain.rholang.interpreter.storage._
 
@@ -34,7 +35,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
         kvm             <- Resources.mkTestRNodeStoreManager[Effect](node.dataDir)
         rspaceStore     <- kvm.rSpaceStores
         reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore)
-        deploy          = ConstructDeploy.sourceDeployNow(correctRholang)
+        deploy          = ConstructDeploy.sourceDeployNow(correctRholang, shardId = SHARD_ID)
         signedBlock     <- node.addBlock(deploy)
         _               = logEff.warns.isEmpty should be(true)
         trace           <- reportingCasper.trace(signedBlock)
