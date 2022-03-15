@@ -65,8 +65,13 @@ object HashSetCasperActions {
       node.addBlock(signed)
     )
 
-  def deployment(i: Int, ts: Long = System.currentTimeMillis()): Signed[DeployData] =
-    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts)
+  def deployment(
+      i: Int,
+      ts: Long = System.currentTimeMillis()
+  ): Signed[DeployData] =
+    ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", ts, shardId = SHARD_ID)
+
+  private val SHARD_ID = "root-shard"
 
   implicit class EffectOps[A](f: Effect[A]) {
     def result: A = f.unsafeRunSync
@@ -97,7 +102,11 @@ object HashSetCasperSpecification extends Commands {
     val genesisContext = context(state.size)
 
     val nodesResource = TestNode
-      .networkEff(genesisContext, networkSize = state.size)
+      .networkEff(
+        genesisContext,
+        networkSize = state.size,
+        shardId = genesisContext.genesisBlock.shardId
+      )
       .map(_.toList)
 
     print(":")

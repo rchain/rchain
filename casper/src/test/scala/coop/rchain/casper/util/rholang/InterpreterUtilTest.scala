@@ -53,8 +53,9 @@ class InterpreterUtilTest
   implicit val logSource: LogSource      = LogSource(this.getClass)
   implicit private val timeEff           = new DiscreteTime
 
-  val genesisContext = GenesisBuilder.buildGenesis()
-  val genesis        = genesisContext.genesisBlock
+  val genesisContext   = GenesisBuilder.buildGenesis()
+  val genesis          = genesisContext.genesisBlock
+  private val SHARD_ID = genesis.shardId
   def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
     CasperSnapshot(
       dag,
@@ -113,20 +114,20 @@ class InterpreterUtilTest
       "@1!(1)",
       "@2!(2)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 1))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 1, shardId = SHARD_ID))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 2))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 2, shardId = SHARD_ID))
 
     val b2Deploys = Vector(
       "for(@a <- @123 & @b <- @456){ @1!(a + b) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 3))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 3, shardId = SHARD_ID))
 
     val b3Deploys = Vector(
       "@7!(7)"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 4))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 4, shardId = SHARD_ID))
 
     /*
      * DAG Looks like this:
@@ -142,7 +143,7 @@ class InterpreterUtilTest
      *          genesis
      */
     val genesisContext = buildGenesis(buildGenesisParameters())
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       implicit val runtimeManager = node.runtimeManager
       for {
         b0 <- node.addBlock(b0Deploys: _*)
@@ -168,16 +169,16 @@ class InterpreterUtilTest
       "@5!(5)",
       "@2!(2)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2))
+    ).map(ConstructDeploy.sourceDeployNow(_, ConstructDeploy.defaultSec2, shardId = SHARD_ID))
 
     val b2Deploys = Vector(
       "@1!(1)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(ConstructDeploy.sourceDeployNow(_))
+    ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
 
     val b3Deploys = Vector(
       "for(@a <- @123 & @b <- @456){ @1!(a + b) }"
-    ).map(ConstructDeploy.sourceDeployNow(_))
+    ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
 
     /*
      * DAG Looks like this:
@@ -189,7 +190,7 @@ class InterpreterUtilTest
      *         genesis
      */
 
-    TestNode.networkEff(genesisContext, networkSize = 2).use {
+    TestNode.networkEff(genesisContext, networkSize = 2, shardId = SHARD_ID).use {
       case node1 +: node2 +: _ =>
         implicit val runtimeManager = node1.runtimeManager
         for {
@@ -233,7 +234,7 @@ class InterpreterUtilTest
   """.stripMargin
 
   def prepareDeploys(v: Vector[String], c: PCost) = {
-    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow(_))
+    val genesisDeploys = v.map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
     genesisDeploys.map(d => ProcessedDeploy(d, c, List.empty, false))
   }
 
@@ -341,9 +342,12 @@ class InterpreterUtilTest
     //deploy each Rholang program separately and record its cost
 
     for {
-      deploy1 <- ConstructDeploy.sourceDeployNowF("@1!(Nil)")
-      deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])")
-      deploy3 <- ConstructDeploy.sourceDeployNowF("for(@x <- @0) { @4!(x.toByteArray()) }")
+      deploy1 <- ConstructDeploy.sourceDeployNowF("@1!(Nil)", shardId = SHARD_ID)
+      deploy2 <- ConstructDeploy.sourceDeployNowF("@3!([1,2,3,4])", shardId = SHARD_ID)
+      deploy3 <- ConstructDeploy.sourceDeployNowF(
+                  "for(@x <- @0) { @4!(x.toByteArray()) }",
+                  shardId = SHARD_ID
+                )
 
       dag          <- blockDagStorage.getRepresentation
       cost1        <- computeDeployCosts(runtimeManager, dag, deploy1)
@@ -360,8 +364,8 @@ class InterpreterUtilTest
         implicit blockStore => implicit blockDagStorage =>
           runtimeManager =>
             //deploy each Rholang program separately and record its cost
-            val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)")
-            val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])")
+            val deploy1 = ConstructDeploy.sourceDeployNow("@1!(Nil)", shardId = SHARD_ID)
+            val deploy2 = ConstructDeploy.sourceDeployNow("@2!([1,2,3,4])", shardId = SHARD_ID)
             for {
               dag <- blockDagStorage.getRepresentation
 
@@ -370,7 +374,7 @@ class InterpreterUtilTest
 
               accCostsSep = cost1 ++ cost2
 
-              deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)")
+              deployErr    = ConstructDeploy.sourceDeployNow("@3!(\"a\" + 3)", shardId = SHARD_ID)
               accCostBatch <- computeDeployCosts(runtimeManager, dag, deploy1, deploy2, deployErr)
             } yield accCostBatch should contain theSameElementsAs accCostsSep
       }
@@ -378,11 +382,11 @@ class InterpreterUtilTest
 
   "validateBlockCheckpoint" should "not return a checkpoint for an invalid block" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
-      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_))
+      val deploys = Vector("@1!(1)").map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
       val processedDeploys =
         deploys.map(d => ProcessedDeploy(d, PCost(1L), List.empty, false))
       val invalidHash = ByteString.EMPTY
-      mkRuntimeManager[Task]("interpreter-util-test").use { runtimeManager =>
+      mkRuntimeManager[Task]("interpreter-util-test", shardId = SHARD_ID).use { runtimeManager =>
         for {
           block <- createGenesis[Task](deploys = processedDeploys, tsHash = invalidHash)
           dag   <- blockDagStorage.getRepresentation
@@ -409,7 +413,7 @@ class InterpreterUtilTest
         "@2!(5)",
         "for (@x <- @1) { @2!(x) }",
         "for (@x <- @2) { @3!(x) }"
-      ).map(ConstructDeploy.sourceDeployNow(_))
+      ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
     for {
       dag1 <- blockDagStorage.getRepresentation
       deploysCheckpoint <- computeDeploysCheckpoint[Task](
@@ -460,7 +464,7 @@ class InterpreterUtilTest
         |} |
         |@"recursionTest"!([1,2])
       """.stripMargin
-      ).map(ConstructDeploy.sourceDeployNow(_))
+      ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
       for {
         dag1 <- blockDagStorage.getRepresentation
         deploysCheckpoint <- computeDeploysCheckpoint[Task](
@@ -518,7 +522,7 @@ class InterpreterUtilTest
               for (_ <- x & @14 <- y) { Nil }
              }
           """)
-          .map(ConstructDeploy.sourceDeployNow(_))
+          .map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
 
       for {
         dag1 <- blockDagStorage.getRepresentation
@@ -574,7 +578,7 @@ class InterpreterUtilTest
           |  } |
           |  loop!([Nil, 7, 7 | 8, 9 | Nil, 9 | 10, Nil, 9])
           |}""".stripMargin
-        ).map(ConstructDeploy.sourceDeployNow(_))
+        ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
 
       for {
         dag1 <- blockDagStorage.getRepresentation
@@ -622,7 +626,7 @@ class InterpreterUtilTest
             |   }
             | } | @"loop"!(["a","b","c","d"])
             |""".stripMargin
-          ).map(ConstructDeploy.sourceDeployNow(_))
+          ).map(ConstructDeploy.sourceDeployNow(_, shardId = SHARD_ID))
 
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -659,7 +663,10 @@ class InterpreterUtilTest
   it should "return None for logs containing extra comm events" in withGenesis(genesisContext) {
     implicit blockStore => implicit blockDagStorage => runtimeManager =>
       val deploys =
-        (0 until 1).map(i => ConstructDeploy.sourceDeployNow(s"for(_ <- @$i){ Nil } | @$i!($i)"))
+        (0 until 1).map(
+          i =>
+            ConstructDeploy.sourceDeployNow(s"for(_ <- @$i){ Nil } | @$i!($i)", shardId = SHARD_ID)
+        )
 
       for {
         dag1 <- blockDagStorage.getRepresentation
@@ -713,7 +720,7 @@ class InterpreterUtilTest
             """
             |@"store"!("2")
           """.stripMargin
-          ).map(s => ConstructDeploy.sourceDeployNow(s))
+          ).map(s => ConstructDeploy.sourceDeployNow(s, shardId = SHARD_ID))
 
         for {
           dag1 <- blockDagStorage.getRepresentation
@@ -771,9 +778,14 @@ class InterpreterUtilTest
         |  }
         |""".stripMargin
     val deploy =
-      ConstructDeploy.sourceDeploy(sampleTerm, System.currentTimeMillis, phloLimit = 3000)
+      ConstructDeploy.sourceDeploy(
+        sampleTerm,
+        System.currentTimeMillis,
+        phloLimit = 3000,
+        shardId = SHARD_ID
+      )
 
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1
@@ -805,10 +817,11 @@ class InterpreterUtilTest
         multiBranchSampleTermWithError,
         System.currentTimeMillis,
         // Not enough phlo
-        phloLimit = 20000
+        phloLimit = 20000,
+        shardId = SHARD_ID
       )
 
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1
@@ -823,10 +836,11 @@ class InterpreterUtilTest
         multiBranchSampleTermWithError,
         System.currentTimeMillis,
         // Enough phlo
-        phloLimit = 300000
+        phloLimit = 300000,
+        shardId = SHARD_ID
       )
 
-    TestNode.standaloneEff(genesisContext).use { node =>
+    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1

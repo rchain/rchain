@@ -58,14 +58,15 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   implicit val metricsEff: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
   implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
 
-  val genesisContext = GenesisBuilder.buildGenesis()
-  val genesis        = genesisContext.genesisBlock
+  val genesisContext   = GenesisBuilder.buildGenesis()
+  val genesis          = genesisContext.genesisBlock
+  private val SHARD_ID = genesis.shardId
 
   val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
     Resources
       .copyStorage[Task](genesisContext.storageDirectory)
       .evalMap(Resources.mkTestRNodeStoreManager[Task])
-      .evalMap(Resources.mkRuntimeManagerAt[Task](_))
+      .evalMap(Resources.mkRuntimeManagerAt[Task](_, shardId = SHARD_ID))
 
   private def computeState[F[_]: Functor](
       runtimeManager: RuntimeManager[F],
@@ -112,15 +113,16 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                             #""".stripMargin('#')
       // TODO: Prohibit negative gas prices and gas limits in deploys.
       // TODO: Make minimum maximum yield for deploy parameter of node.
-      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 100000) >>= { deploy =>
-        computeState(runtimeManager, deploy, genPostState) >>= {
-          case (playStateHash1, processedDeploy) =>
-            replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
-              case Right(replayStateHash1) =>
-                assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
-              case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
-            }
-        }
+      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = 100000, shardId = SHARD_ID) >>= {
+        deploy =>
+          computeState(runtimeManager, deploy, genPostState) >>= {
+            case (playStateHash1, processedDeploy) =>
+              replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+                case Right(replayStateHash1) =>
+                  assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+                case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
+              }
+          }
       }
     }
   }
@@ -283,7 +285,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "computeState" should "capture rholang errors" in effectTest {
     val badRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) } | @"x"!(1) | @"y"!("hi") """
     for {
-      deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
+      deploy <- ConstructDeploy.sourceDeployNowF(badRholang, shardId = SHARD_ID)
       result <- runtimeManagerResource.use(
                  computeState(_, deploy, genesis.body.state.postStateHash)
                )
@@ -301,12 +303,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val s1 = "@2!(2)"
     val s2 = "for(@a <- @1){ @123!(5 * a) }"
 
-    val deploys0F = Vector(s0, s1, s2).traverse(ConstructDeploy.sourceDeployNowF(_))
+    val deploys0F =
+      Vector(s0, s1, s2).traverse(ConstructDeploy.sourceDeployNowF(_, shardId = SHARD_ID))
 
     val s3 = "@1!(1)"
     val s4 = "for(@a <- @2){ @456!(5 * a) }"
 
-    val deploys1F = Vector(s3, s4).traverse(ConstructDeploy.sourceDeployNowF(_))
+    val deploys1F = Vector(s3, s4).traverse(ConstructDeploy.sourceDeployNowF(_, shardId = SHARD_ID))
 
     runtimeManagerResource.use { runtimeManager =>
       for {
@@ -390,7 +393,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   it should "capture rholang parsing errors and charge for parsing" in effectTest {
     val badRholang = """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!("hi") """
     for {
-      deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
+      deploy <- ConstructDeploy.sourceDeployNowF(badRholang, shardId = SHARD_ID)
       result <- runtimeManagerResource.use(
                  computeState(_, deploy, genesis.body.state.postStateHash)
                )
@@ -408,7 +411,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           implicit val rand: Blake2b512Random = Blake2b512Random(Array.empty[Byte])
           val initialPhlo                     = Cost.UNSAFE_MAX
           for {
-            deploy <- ConstructDeploy.sourceDeployNowF(correctRholang)
+            deploy <- ConstructDeploy.sourceDeployNowF(correctRholang, shardId = SHARD_ID)
 
             runtime       <- runtimeManager.spawnRuntime
             _             <- runtime.cost.set(initialPhlo)
@@ -439,12 +442,14 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                       |  for(@(_, NonNegativeNumber) <- NonNegativeNumberCh) {
                       |    @NonNegativeNumber!($purseValue, "nn")
                       |  }
-                      |}""".stripMargin
+                      |}""".stripMargin,
+                    shardId = SHARD_ID
                   )
         result0 <- computeState(mgr, deploy0, genesis.body.state.postStateHash)
         hash    = result0._1
         deploy1 <- ConstructDeploy.sourceDeployNowF(
-                    s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """
+                    s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """,
+                    shardId = SHARD_ID
                   )
         result1 <- mgr.captureResults(hash, deploy1)
 
@@ -459,8 +464,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     val returns     = (1 to n).map(i => s""" return!($i) """).mkString("|")
     val term        = s""" new return in { $returns } """
     val termNoRes   = s""" new x, return in { $returns } """
-    val deploy      = ConstructDeploy.sourceDeploy(term, timestamp = 0)
-    val deployNoRes = ConstructDeploy.sourceDeploy(termNoRes, timestamp = 0)
+    val deploy      = ConstructDeploy.sourceDeploy(term, timestamp = 0, shardId = SHARD_ID)
+    val deployNoRes = ConstructDeploy.sourceDeploy(termNoRes, timestamp = 0, shardId = SHARD_ID)
     val manyResults =
       runtimeManagerResource
         .use(
@@ -492,7 +497,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "captureResult" should "throw error if execution fails" in {
     val term   = s""" new return in { return.undefined() } """
-    val deploy = ConstructDeploy.sourceDeploy(term, timestamp = 0)
+    val deploy = ConstructDeploy.sourceDeploy(term, timestamp = 0, shardId = SHARD_ID)
     val task =
       runtimeManagerResource
         .use(
@@ -509,7 +514,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "emptyStateHash" should "not remember previous hot store state" in effectTest {
     implicit val timeEff: LogicalTime[Id] = new LogicalTime[Id]
 
-    val term = ConstructDeploy.basicDeployData[Id](0)
+    val term = ConstructDeploy.basicDeployData[Id](0, shardId = SHARD_ID)
 
     def run: Task[StateHash] =
       runtimeManagerResource
@@ -549,7 +554,8 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                             #     }
                                                             #   }
                                                             # }
-                                                            #""".stripMargin('#')
+                                                            #""".stripMargin('#'),
+                   shardId = SHARD_ID
                  )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
@@ -590,9 +596,13 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     runtimeManagerResource.use { mgr =>
       for {
-        deploy0 <- ConstructDeploy.sourceDeployNowF(""" for(@x <- @"w") { @"z"!("Got x") } """)
+        deploy0 <- ConstructDeploy.sourceDeployNowF(
+                    """ for(@x <- @"w") { @"z"!("Got x") } """,
+                    shardId = SHARD_ID
+                  )
         deploy1 <- ConstructDeploy.sourceDeployNowF(
-                    """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
+                    """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """,
+                    shardId = SHARD_ID
                   )
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
@@ -725,16 +735,19 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
           #  d9!(2)
           #}
           #""".stripMargin('#')
-      ConstructDeploy.sourceDeployNowF(source = source, phloLimit = Int.MaxValue - 2) >>= {
-        deploy =>
-          computeState(runtimeManager, deploy, genPostState) >>= {
-            case (playStateHash1, processedDeploy) =>
-              replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
-                case Right(replayStateHash1) =>
-                  assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
-                case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
-              }
-          }
+      ConstructDeploy.sourceDeployNowF(
+        source = source,
+        phloLimit = Int.MaxValue - 2,
+        shardId = SHARD_ID
+      ) >>= { deploy =>
+        computeState(runtimeManager, deploy, genPostState) >>= {
+          case (playStateHash1, processedDeploy) =>
+            replayComputeState(runtimeManager)(genPostState, processedDeploy) map {
+              case Right(replayStateHash1) =>
+                assert(playStateHash1 != genPostState && replayStateHash1 == playStateHash1)
+              case Left(replayFailure) => fail(s"Unexpected replay failure: $replayFailure")
+            }
+        }
       }
     }
   }
@@ -742,7 +755,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   private def invalidReplay(source: String): Task[Either[ReplayFailure, StateHash]] =
     runtimeManagerResource.use { runtimeManager =>
       for {
-        deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
+        deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000, shardId = SHARD_ID)
         time          <- timeF.currentMillis
         genPostState  = genesis.body.state.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
@@ -807,7 +820,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     val genPostState = genesis.body.state.postStateHash
     for {
-      deploy <- ConstructDeploy.sourceDeployNowF(term)
+      deploy <- ConstructDeploy.sourceDeployNowF(term, shardId = SHARD_ID)
       result <- runtimeManagerResource.use { rm =>
                  for {
                    time          <- timeF.currentMillis

@@ -17,14 +17,16 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import GenesisBuilder._
 
-  val genesis = buildGenesis()
+  val genesis          = buildGenesis()
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       import node._
 
       for {
-        block <- ConstructDeploy.sourceDeployNowF("@{ 3 | 2 | 1 }!(0)") >>= (node.addBlock(_))
+        block <- ConstructDeploy
+                  .sourceDeployNowF("@{ 3 | 2 | 1 }!(0)", shardId = SHARD_ID) >>= (node.addBlock(_))
 
         listeningName = Par().copy(exprs = Seq(Expr(GInt(2)), Expr(GInt(1)), Expr(GInt(3))))
         resultData    = Par().copy(exprs = Seq(Expr(GInt(0))))
@@ -47,7 +49,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
       implicit val nodeEngineCell             = nodes(0).engineCell
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -57,7 +59,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
       for {
         deployDatas <- (0 to 7).toList
                         .traverse[Effect, Signed[DeployData]](
-                          _ => ConstructDeploy.basicDeployData[Effect](0)
+                          _ => ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
                         )
 
         block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
@@ -158,11 +160,14 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       import node._
 
       def basicDeployData: Signed[DeployData] =
-        ConstructDeploy.sourceDeployNow("for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }")
+        ConstructDeploy.sourceDeployNow(
+          "for (@0 <- @{ 3 | 2 | 1 } & @1 <- @{ 2 | 1 }) { 0 }",
+          shardId = SHARD_ID
+        )
 
       for {
         block <- node.addBlock(basicDeployData)

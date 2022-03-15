@@ -19,16 +19,17 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  val genesis = buildGenesis()
+  val genesis          = buildGenesis()
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    TestNode.standaloneEff(genesis).use { implicit node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { implicit node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
-        deploy  <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy  <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         block   <- node.createBlockUnsafe(deploy)
         deploys = block.body.deploys.map(_.deploy)
         parents = ProtoUtil.parentHashes(block)
@@ -44,7 +45,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =
@@ -74,14 +75,15 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         )
 
       for {
-        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource)
+        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource, shardId = SHARD_ID)
         block0         <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
                        calculateUnforgeableName(registerDeploy.data.timestamp)
                      )
-        callDeploy <- ConstructDeploy.sourceDeployNowF(callSource(registryId.head))
-        block1     <- node.addBlock(callDeploy)
+        callDeploy <- ConstructDeploy
+                       .sourceDeployNowF(callSource(registryId.head), shardId = SHARD_ID)
+        block1 <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
                  calculateUnforgeableName(callDeploy.data.timestamp)

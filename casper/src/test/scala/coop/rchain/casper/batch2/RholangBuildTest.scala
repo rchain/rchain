@@ -18,10 +18,11 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   implicit val scheduler = RChainScheduler.interpreterScheduler
   val genesis            = buildGenesis()
+  private val SHARD_ID   = genesis.genesisBlock.shardId
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     TestNode
-      .standaloneEff(genesis)
+      .standaloneEff(genesis, shardId = SHARD_ID)
       .use { node =>
         import node._
 
@@ -42,7 +43,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin
         for {
-          deploy      <- ConstructDeploy.sourceDeployNowF(code)
+          deploy      <- ConstructDeploy.sourceDeployNowF(code, shardId = SHARD_ID)
           signedBlock <- node.addBlock(deploy)
           _           = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](
@@ -72,7 +73,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val (keyPairs, genesisVaults, genesis) = buildGenesisParameters()
     val genesisParams                      = (keyPairs, genesisVaults, genesis.copy(vaults = vaults))
     TestNode
-      .standaloneEff(buildGenesis(genesisParams))
+      .standaloneEff(buildGenesis(genesisParams), shardId = SHARD_ID)
       .use { node =>
         import node._
         (logEff.warns should be(Nil)).pure[Effect]

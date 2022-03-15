@@ -162,7 +162,12 @@ object Setup {
           rStores    <- rnodeStoreManager.rSpaceStores
           mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
           rm <- RuntimeManager
-                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
+                 .createWithHistory[F](
+                   rStores,
+                   mergeStore,
+                   Genesis.NonNegativeMergeableTagName,
+                   conf.casper.shardName
+                 )
         } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory
@@ -214,7 +219,7 @@ object Setup {
         val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
+        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")), conf.casper.shardName)
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer

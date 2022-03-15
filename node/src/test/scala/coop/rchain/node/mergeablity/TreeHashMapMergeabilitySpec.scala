@@ -73,6 +73,8 @@ class TreeHashMapMergeabilitySpec
         kvs => kvs.map(_.key).distinct.length == kvs.length
     )
 
+  private val SHARD_ID = "root-shard"
+
   /**
     * This is a mergeable example with depth=1 which would get 2 nybble nodes.
     *
@@ -432,7 +434,8 @@ class TreeHashMapMergeabilitySpec
     for {
       treeMapHandleR <- runtime.playExploratoryDeploy(
                          getTreeHashMapHandle,
-                         stateHash.toByteString
+                         stateHash.toByteString,
+                         shardId = SHARD_ID
                        )
       treeMapHandle = treeMapHandleR.head
       maps          <- RhoTrieTraverser.traverseTrie(depth, treeMapHandle, runtime)
@@ -472,16 +475,19 @@ class TreeHashMapMergeabilitySpec
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
-    val baseDeploy                         = ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value)
-    val leftDeploy                         = ConstructDeploy.sourceDeploy(left, 2L, phloLimit = Cost.UNSAFE_MAX.value)
+    val baseDeploy =
+      ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value, shardId = SHARD_ID)
+    val leftDeploy =
+      ConstructDeploy.sourceDeploy(left, 2L, phloLimit = Cost.UNSAFE_MAX.value, shardId = SHARD_ID)
     val rightDeploy = ConstructDeploy.sourceDeploy(
       right,
       3L,
       phloLimit = Cost.UNSAFE_MAX.value,
-      sec = ConstructDeploy.defaultSec2
+      sec = ConstructDeploy.defaultSec2,
+      shardId = SHARD_ID
     )
     computeMergeCase[Task](
-      Seq(StandardDeploys.registry, baseDeploy),
+      Seq(StandardDeploys.registry(SHARD_ID), baseDeploy),
       Seq(leftDeploy),
       Seq(rightDeploy),
       (runtime, _, mergedState) =>

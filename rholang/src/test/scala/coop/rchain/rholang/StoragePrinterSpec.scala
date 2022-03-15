@@ -21,6 +21,7 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
   private val deployerSk = PrivateKey(
     Base16.unsafeDecode("17f242c34491ff8187ec94ec1508fed8b487b872f2bb97b437f4d4e44345cee6")
   )
+  private val SHARD_ID = "root-shard"
 
   implicit val logF: Log[Task]            = new Log.NOPLog[Task]
   implicit val noopMetrics: Metrics[Task] = new metrics.Metrics.MetricsNOP[Task]
@@ -51,7 +52,8 @@ class StoragePrinterSpec extends FlatSpec with Matchers {
         phloPrice = 0,
         phloLimit = 0,
         validAfterBlockNumber = 0,
-        term = term
+        term = term,
+        shardId = SHARD_ID
       ),
       Secp256k1,
       deployerSk

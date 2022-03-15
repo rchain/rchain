@@ -58,7 +58,7 @@ class GenesisValidator[F[_]
               s"Dropping repeated message."
           ),
           ack(ub.candidate.block.blockHash) >> blockApprover
-            .unapprovedBlockPacketHandler(peer, ub) >> {
+            .unapprovedBlockPacketHandler(peer, ub, casperShardConf.shardName) >> {
             Engine
               .transitionToInitializing(
                 blockProcessingQueue,

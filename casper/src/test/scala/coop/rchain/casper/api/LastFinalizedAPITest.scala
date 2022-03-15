@@ -31,6 +31,7 @@ class LastFinalizedAPITest
     with BlockDagStorageFixture {
   val genesisParameters = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
   val genesisContext    = buildGenesis(genesisParameters)
+  private val SHARD_ID  = genesisContext.genesisBlock.shardId
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
@@ -69,12 +70,13 @@ class LastFinalizedAPITest
    *         genesis
    */
   "isFinalized" should "return true for ancestors of last finalized block" ignore effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 3).use {
+    TestNode.networkEff(genesisContext, networkSize = 3, shardId = SHARD_ID).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
+          produceDeploys <- (0 until 7).toList
+                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
 
           b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.publishBlock(produceDeploys(1))()
@@ -115,12 +117,13 @@ class LastFinalizedAPITest
    *         genesis
    */
   it should "return false for children, uncles and cousins of last finalized block" in effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 3).use {
+    TestNode.networkEff(genesisContext, networkSize = 3, shardId = SHARD_ID).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
+          produceDeploys <- (0 until 7).toList
+                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
 
           b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(1))(n1)

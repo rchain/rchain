@@ -46,17 +46,19 @@ object Resources {
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName,
+      shardId: String
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
-      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
+      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName, shardId))
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName,
+      shardId: String
   )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -67,12 +69,13 @@ object Resources {
     for {
       rStore         <- kvm.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvm)
-      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName)
+      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName, shardId)
     } yield runtimeManager
   }
 
   def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
-      kvm: KeyValueStoreManager[F]
+      kvm: KeyValueStoreManager[F],
+      shardId: String
   )(
       implicit scheduler: Scheduler
   ): F[(RuntimeManager[F], RhoHistoryRepository[F])] = {
@@ -86,7 +89,8 @@ object Resources {
       runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
                                     rStore,
                                     mStore,
-                                    Genesis.NonNegativeMergeableTagName
+                                    Genesis.NonNegativeMergeableTagName,
+                                    shardId
                                   )
     } yield runtimeManagerWithHistory
   }

@@ -54,6 +54,10 @@ final case class TransationOptions(arguments: Seq[String]) extends ScallopConf(a
     descr = "Genesis bonds path.",
     required = true
   )
+  val shardId = opt[String](
+    descr = "The name of the shard",
+    required = false
+  )
 
   verify()
 
@@ -67,6 +71,7 @@ object TransactionBalanceMain {
     val walletPath = options.walletPath()
     val bondsPath  = options.bondPath()
     val outputDir  = options.outputDir()
+    val shardId    = options.shardId()
     if (!Files.exists(outputDir)) {
       Files.createDirectory(outputDir)
     }
@@ -81,7 +86,8 @@ object TransactionBalanceMain {
                  dataDir,
                  walletPath,
                  bondsPath,
-                 blockHash
+                 blockHash,
+                 shardId
                )
       (transactionBalances, history) = result
       _ = {

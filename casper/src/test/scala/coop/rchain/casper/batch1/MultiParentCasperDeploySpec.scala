@@ -21,15 +21,16 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis = buildGenesis()
+  val genesis          = buildGenesis()
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deploy   <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy   <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         res      <- MultiParentCasper[Effect].deploy(deploy)
         deployId = res.right.get
       } yield deployId shouldBe deploy.sig
@@ -38,10 +39,10 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
-    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2, shardId = SHARD_ID).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
-        deploy             <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy             <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
         _                  <- node0.propagateBlock(deploy)(node1)
         createBlockResult2 <- node1.createBlock(deploy)
       } yield (createBlockResult2 should be(NoNewDeploys))
@@ -49,11 +50,12 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "fail when deploying with insufficient phlos" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
+        deployData <- ConstructDeploy
+                       .sourceDeployNowF[Effect]("Nil", phloLimit = 1, shardId = SHARD_ID)
         r              <- node.createBlock(deployData)
         Created(block) = r
       } yield assert(block.body.deploys.head.isFailed)
@@ -61,11 +63,12 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "succeed if given enough phlos for deploy" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
+        deployData <- ConstructDeploy
+                       .sourceDeployNowF[Effect]("Nil", phloLimit = 100, shardId = SHARD_ID)
         r              <- node.createBlock(deployData)
         Created(block) = r
       } yield assert(!block.body.deploys.head.isFailed)
@@ -73,7 +76,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
+    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
       import node.logEff
       implicit val noopSpan: Span[Effect] = NoopSpan[Effect]()
       val engine                          = new EngineWithCasper[Effect](node.casperEff)
@@ -82,7 +85,8 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         val phloPrice      = 1.toLong
         val isNodeReadOnly = false
         for {
-          deployData <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
+          deployData <- ConstructDeploy
+                         .sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice, shardId = SHARD_ID)
           err <- BlockAPI
                   .deploy[Effect](deployData, None, minPhloPrice = minPhloPrice, isNodeReadOnly)
                   .attempt

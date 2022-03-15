@@ -44,7 +44,7 @@ object blockImplicits {
     validator       = ByteString.copyFrom(byteArray.toArray)
   } yield Justification(validator, latestBlockHash)
 
-  val signedDeployDataGen: Gen[Signed[DeployData]] =
+  def signedDeployDataGen(shardId: String): Gen[Signed[DeployData]] =
     for {
       termLength <- Gen.choose(32, 1024)
       term       <- listOfN(termLength, Gen.alphaNumChar).map(_.mkString)
@@ -56,16 +56,17 @@ object blockImplicits {
           timestamp = timestamp,
           phloLimit = 90000,
           phloPrice = 1L,
-          validAfterBlockNumber = 0
+          validAfterBlockNumber = 0,
+          shardId = shardId
         ),
         signatures.Secp256k1,
         sec
       )
     } yield deployData
 
-  val processedDeployGen: Gen[ProcessedDeploy] =
+  def processedDeployGen(shardId: String): Gen[ProcessedDeploy] =
     for {
-      deployData <- signedDeployDataGen
+      deployData <- signedDeployDataGen(shardId)
     } yield ProcessedDeploy(
       deploy = deployData,
       cost = PCost(0L),
@@ -82,8 +83,8 @@ object blockImplicits {
   val arbitraryJustification: Arbitrary[Justification] = Arbitrary(
     justificationGen
   )
-  val arbitraryProcessedDeploy: Arbitrary[ProcessedDeploy] = Arbitrary(
-    processedDeployGen
+  def arbitraryProcessedDeploy(shardId: String): Arbitrary[ProcessedDeploy] = Arbitrary(
+    processedDeployGen(shardId)
   )
   val arbitraryJustifications: Arbitrary[Seq[Justification]] =
     Arbitrary.arbContainer[Seq, Justification](
@@ -91,9 +92,9 @@ object blockImplicits {
       Buildable.buildableCanBuildFrom,
       identity
     )
-  val arbitraryProcessedDeploys: Arbitrary[Seq[ProcessedDeploy]] =
+  def arbitraryProcessedDeploys(shardId: String): Arbitrary[Seq[ProcessedDeploy]] =
     Arbitrary.arbContainer[Seq, ProcessedDeploy](
-      arbitraryProcessedDeploy,
+      arbitraryProcessedDeploy(shardId),
       Buildable.buildableCanBuildFrom,
       identity
     )
@@ -145,8 +146,9 @@ object blockImplicits {
       justifications <- if (setJustifications.isEmpty)
                          arbitrary[Seq[Justification]](arbitraryJustifications)
                        else Gen.const(setJustifications.get)
+      shardId = if (setShardId.isEmpty) "root" else setShardId.get
       deploys <- if (setDeploys.isEmpty)
-                  arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys)
+                  arbitrary[Seq[ProcessedDeploy]](arbitraryProcessedDeploys(shardId))
                 else Gen.const(setDeploys.get)
       // 10 random validators in bonds list
       bonds <- if (setBonds.isEmpty) Gen.containerOfN[List, Bond](10, bondGen)
@@ -159,7 +161,6 @@ object blockImplicits {
                   else Gen.const(setValidator.get)
       version   = if (setVersion.isEmpty) 1L else setVersion.get
       timestamp <- if (setTimestamp.isEmpty) arbitrary[Long] else Gen.const(setTimestamp.get)
-      shardId   = if (setShardId.isEmpty) "root" else setShardId.get
       block = BlockMessage(
         blockHash = ByteString.EMPTY,
         header = Header(

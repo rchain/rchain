@@ -15,16 +15,22 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesisParams = buildGenesisParameters(validatorsNum = 3)
-  val genesis       = buildGenesis(genesisParams)
+  val genesisParams    = buildGenesisParameters(validatorsNum = 3)
+  val genesis          = buildGenesis(genesisParams)
+  private val SHARD_ID = genesis.genesisBlock.shardId
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
-        deployData0 <- ConstructDeploy.basicDeployData[Effect](0, sec = ConstructDeploy.defaultSec2)
-        deployData1 <- ConstructDeploy.sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }")
-        deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deployData0 <- ConstructDeploy.basicDeployData[Effect](
+                        0,
+                        sec = ConstructDeploy.defaultSec2,
+                        shardId = SHARD_ID
+                      )
+        deployData1 <- ConstructDeploy
+                        .sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }", shardId = SHARD_ID)
+        deployData2 <- ConstructDeploy.basicDeployData[Effect](2, shardId = SHARD_ID)
         deploys = Vector(
           deployData0,
           deployData1,
@@ -134,14 +140,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |}
       """.stripMargin
 
-    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
-      val short  = ConstructDeploy.sourceDeploy("new x in { x!(0) }", 1L)
-      val time   = ConstructDeploy.sourceDeploy(timeRho, 3L)
-      val tuples = ConstructDeploy.sourceDeploy(tuplesRho, 2L)
-      val reg    = ConstructDeploy.sourceDeploy(registryRho, 4L)
+      val short  = ConstructDeploy.sourceDeploy("new x in { x!(0) }", 1L, shardId = SHARD_ID)
+      val time   = ConstructDeploy.sourceDeploy(timeRho, 3L, shardId = SHARD_ID)
+      val tuples = ConstructDeploy.sourceDeploy(tuplesRho, 2L, shardId = SHARD_ID)
+      val reg    = ConstructDeploy.sourceDeploy(registryRho, 4L, shardId = SHARD_ID)
       for {
         b1n3 <- n3.addBlock(short)
         b1n2 <- n2.addBlock(time)
@@ -153,20 +159,22 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not merge blocks that touch the same channel involving joins" ignore effectTest {
-    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2, shardId = SHARD_ID).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(
           "@1!(47)",
           current0,
-          sec = ConstructDeploy.defaultSec2
+          sec = ConstructDeploy.defaultSec2,
+          shardId = SHARD_ID
         )
         current1 <- timeEff.currentMillis
         deploy1 = ConstructDeploy.sourceDeploy(
           "for(@x <- @1 & @y <- @2){ @1!(x) }",
-          current1
+          current1,
+          shardId = SHARD_ID
         )
-        deploy2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deploy2 <- ConstructDeploy.basicDeployData[Effect](2, shardId = SHARD_ID)
         deploys = Vector(
           deploy0,
           deploy1,

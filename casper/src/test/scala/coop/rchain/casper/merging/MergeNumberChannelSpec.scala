@@ -32,6 +32,8 @@ final case class DeployTestInfo(term: String, cost: Long, sig: String)
 
 class MergeNumberChannelSpec extends FlatSpec {
 
+  private val SHARD_ID = "root-shard"
+
   val rhoST = """
                 |new MergeableTag, stCh  in {
                 |  @(*MergeableTag, *stCh)!(0) |
@@ -97,160 +99,163 @@ class MergeNumberChannelSpec extends FlatSpec {
       leftTerms: Seq[DeployTestInfo],
       rightTerms: Seq[DeployTestInfo],
       expectedRejected: Set[ByteString],
-      expectedFinalResult: Long
+      expectedFinalResult: Long,
+      shardId: String
   ) = {
 
-    Resources.mkRuntimeManager[F]("merging-test", unforgeableNameSeed).use { rm =>
-      for {
-        runtime <- rm.spawnRuntime
+    Resources.mkRuntimeManager[F]("merging-test", unforgeableNameSeed, shardId = SHARD_ID).use {
+      rm =>
+        for {
+          runtime <- rm.spawnRuntime
 
-        // Run Rholang terms / simulate deploys in a block
-        runRholang = (terms: Seq[DeployTestInfo], preState: Blake2b256Hash) =>
-          for {
-            _ <- runtime.reset(preState)
+          // Run Rholang terms / simulate deploys in a block
+          runRholang = (terms: Seq[DeployTestInfo], preState: Blake2b256Hash) =>
+            for {
+              _ <- runtime.reset(preState)
 
-            evalResults <- terms.toList.traverse {
-                            case deploy =>
-                              for {
-                                evalResult <- runtime.evaluate(deploy.term)
-                                _ = assert(
-                                  evalResult.errors.isEmpty,
-                                  s"${evalResult.errors}\n ${deploy.term}"
-                                )
-                                // Get final values for mergeable (number) channels
-                                numChanFinal <- runtime
-                                                 .getNumberChannelsData(evalResult.mergeable)
+              evalResults <- terms.toList.traverse {
+                              case deploy =>
+                                for {
+                                  evalResult <- runtime.evaluate(deploy.term)
+                                  _ = assert(
+                                    evalResult.errors.isEmpty,
+                                    s"${evalResult.errors}\n ${deploy.term}"
+                                  )
+                                  // Get final values for mergeable (number) channels
+                                  numChanFinal <- runtime
+                                                   .getNumberChannelsData(evalResult.mergeable)
 
-                                softPoint <- runtime.createSoftCheckpoint
-                              } yield (softPoint, numChanFinal)
-                          }
-            // Create checkpoint with state hash
-            endCheckpoint <- runtime.createCheckpoint
+                                  softPoint <- runtime.createSoftCheckpoint
+                                } yield (softPoint, numChanFinal)
+                            }
+              // Create checkpoint with state hash
+              endCheckpoint <- runtime.createCheckpoint
 
-            (logSeq, numChanAbs) = evalResults.unzip
+              (logSeq, numChanAbs) = evalResults.unzip
 
-            numChanDiffs <- rm.convertNumberChannelsToDiff(numChanAbs, preState)
+              numChanDiffs <- rm.convertNumberChannelsToDiff(numChanAbs, preState)
 
-            // Create event log indices
-            evLogIndices <- logSeq.zip(numChanDiffs).zip(terms).traverse {
-                             case ((cp, numberChanDiff), deploy) =>
-                               for {
-                                 evLogIndex <- BlockIndex.createEventLogIndex(
-                                                cp.log
-                                                  .map(EventConverter.toCasperEvent)
-                                                  .toList,
-                                                rm.getHistoryRepo,
-                                                preState,
-                                                numberChanDiff
-                                              )
-                                 sigBS = makeSig(deploy.sig)
-                               } yield DeployIndex(sigBS, deploy.cost, evLogIndex)
-                           }
-          } yield (evLogIndices.toSet, endCheckpoint.root)
+              // Create event log indices
+              evLogIndices <- logSeq.zip(numChanDiffs).zip(terms).traverse {
+                               case ((cp, numberChanDiff), deploy) =>
+                                 for {
+                                   evLogIndex <- BlockIndex.createEventLogIndex(
+                                                  cp.log
+                                                    .map(EventConverter.toCasperEvent)
+                                                    .toList,
+                                                  rm.getHistoryRepo,
+                                                  preState,
+                                                  numberChanDiff
+                                                )
+                                   sigBS = makeSig(deploy.sig)
+                                 } yield DeployIndex(sigBS, deploy.cost, evLogIndex)
+                             }
+            } yield (evLogIndices.toSet, endCheckpoint.root)
 
-        historyRepo = rm.getHistoryRepo
+          historyRepo = rm.getHistoryRepo
 
-        // Base state
-        _ <- baseTerms.zipWithIndex.toList.traverse {
-              case (term, i) =>
-                implicit val r = baseRhoSeed
-                for {
-                  baseRes <- runtime
-                              .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
-                  _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
-                } yield ()
-            }
-        baseCp <- runtime.createCheckpoint
+          // Base state
+          _ <- baseTerms.zipWithIndex.toList.traverse {
+                case (term, i) =>
+                  implicit val r = baseRhoSeed
+                  for {
+                    baseRes <- runtime
+                                .evaluate(term, Cost.UNSAFE_MAX, Map.empty[String, Par])
+                    _ = assert(baseRes.errors.isEmpty, s"BASE $i: ${baseRes.errors}")
+                  } yield ()
+              }
+          baseCp <- runtime.createCheckpoint
 
-        // Branch 1 change
-        leftResult                     <- runRholang(leftTerms, baseCp.root)
-        (leftEvIndices, leftPostState) = leftResult
+          // Branch 1 change
+          leftResult                     <- runRholang(leftTerms, baseCp.root)
+          (leftEvIndices, leftPostState) = leftResult
 
-        leftDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
-          leftEvIndices,
-          (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
-
-        // Branch 2 change
-        rightResult                      <- runRholang(rightTerms, baseCp.root)
-        (rightEvIndices, rightPostState) = rightResult
-
-        rightDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
-          rightEvIndices,
-          (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
-        )
-
-        // Calculate deploy chains / deploy dependency
-
-        leftDeployChains <- leftDeployIndices.toList.traverse(
-                             DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
-                           )
-        rightDeployChains <- rightDeployIndices.toList.traverse(
-                              DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
-                            )
-
-        _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
-        _ = println(s"DEPLOY_CHAINS RIGHT: ${rightDeployChains.size}")
-
-        // Detect rejections / number channel overflow/negative
-
-        branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
-          MergingLogic.areConflicting(
-            as.map(_.eventLogIndex).toList.combineAll,
-            bs.map(_.eventLogIndex).toList.combineAll
+          leftDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
+            leftEvIndices,
+            (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
           )
 
-        // Base state reader
-        baseReader       <- rm.getHistoryRepo.getHistoryReader(baseCp.root)
-        baseReaderBinary = baseReader.readerBinary
-        baseGetData      = baseReader.getData _
+          // Branch 2 change
+          rightResult                      <- runRholang(rightTerms, baseCp.root)
+          (rightEvIndices, rightPostState) = rightResult
 
-        // Merging handler for number channels
-        overrideTrieAction = (
-            hash: Blake2b256Hash,
-            changes: ChannelChange[ByteVector],
-            numberChs: NumberChannelsDiff
-        ) =>
-          numberChs.get(hash).traverse {
-            RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
-          }
+          rightDeployIndices = MergingLogic.computeRelatedSets[DeployIndex](
+            rightEvIndices,
+            (x, y) => MergingLogic.depends(x.eventLogIndex, y.eventLogIndex)
+          )
 
-        // Create store actions / uses handler for number channels
-        computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
-          StateChangeMerger
-            .computeTrieActions(changes, baseReaderBinary, mergeableChs, overrideTrieAction)
-        }
+          // Calculate deploy chains / deploy dependency
 
-        applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
-          rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
+          leftDeployChains <- leftDeployIndices.toList.traverse(
+                               DeployChainIndex(_, baseCp.root, leftPostState, historyRepo)
+                             )
+          rightDeployChains <- rightDeployIndices.toList.traverse(
+                                DeployChainIndex(_, baseCp.root, rightPostState, historyRepo)
+                              )
 
-        r <- ConflictSetMerger.merge[F, DeployChainIndex](
-              actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet,
-              lateSet = Set(),
-              depends = (target, source) =>
-                MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
-              conflicts = branchesAreConflicting,
-              cost = DagMerger.costOptimalRejectionAlg,
-              stateChanges = r => r.stateChanges.pure,
-              mergeableChannels = _.eventLogIndex.numberChannelsData,
-              computeTrieActions = computeTrieActions,
-              applyTrieActions = applyTrieActions,
-              getData = baseReader.getData
+          _ = println(s"DEPLOY_CHAINS LEFT : ${leftDeployChains.size}")
+          _ = println(s"DEPLOY_CHAINS RIGHT: ${rightDeployChains.size}")
+
+          // Detect rejections / number channel overflow/negative
+
+          branchesAreConflicting = (as: Set[DeployChainIndex], bs: Set[DeployChainIndex]) =>
+            MergingLogic.areConflicting(
+              as.map(_.eventLogIndex).toList.combineAll,
+              bs.map(_.eventLogIndex).toList.combineAll
             )
 
-        (finalHash, rejected) = r
-        rejectedSigs          = rejected.flatMap(_.deploysWithCost.map(_.id))
-        _                     = rejectedSigs shouldBe expectedRejected
+          // Base state reader
+          baseReader       <- rm.getHistoryRepo.getHistoryReader(baseCp.root)
+          baseReaderBinary = baseReader.readerBinary
+          baseGetData      = baseReader.getData _
 
-        // Read merged value
+          // Merging handler for number channels
+          overrideTrieAction = (
+              hash: Blake2b256Hash,
+              changes: ChannelChange[ByteVector],
+              numberChs: NumberChannelsDiff
+          ) =>
+            numberChs.get(hash).traverse {
+              RholangMergingLogic.calculateNumberChannelMerge(hash, _, changes, baseGetData)
+            }
 
-        res <- runtime.playExploratoryDeploy(rhoExploreRead, finalHash.toByteString)
+          // Create store actions / uses handler for number channels
+          computeTrieActions = (changes: StateChange, mergeableChs: NumberChannelsDiff) => {
+            StateChangeMerger
+              .computeTrieActions(changes, baseReaderBinary, mergeableChs, overrideTrieAction)
+          }
 
-        Number(finalBalance) = res.head
+          applyTrieActions = (actions: Seq[HotStoreTrieAction]) =>
+            rm.getHistoryRepo.reset(baseCp.root).flatMap(_.doCheckpoint(actions).map(_.root))
 
-        _ = finalBalance shouldBe expectedFinalResult
+          r <- ConflictSetMerger.merge[F, DeployChainIndex](
+                actualSet = leftDeployChains.toSet ++ rightDeployChains.toSet,
+                lateSet = Set(),
+                depends = (target, source) =>
+                  MergingLogic.depends(target.eventLogIndex, source.eventLogIndex),
+                conflicts = branchesAreConflicting,
+                cost = DagMerger.costOptimalRejectionAlg,
+                stateChanges = r => r.stateChanges.pure,
+                mergeableChannels = _.eventLogIndex.numberChannelsData,
+                computeTrieActions = computeTrieActions,
+                applyTrieActions = applyTrieActions,
+                getData = baseReader.getData
+              )
 
-      } yield ()
+          (finalHash, rejected) = r
+          rejectedSigs          = rejected.flatMap(_.deploysWithCost.map(_.id))
+          _                     = rejectedSigs shouldBe expectedRejected
+
+          // Read merged value
+
+          res <- runtime
+                  .playExploratoryDeploy(rhoExploreRead, finalHash.toByteString, shardId = shardId)
+
+          Number(finalBalance) = res.head
+
+          _ = finalBalance shouldBe expectedFinalResult
+
+        } yield ()
     }
   }
   implicit val timeEff = new LogicalTime[Task]
@@ -267,7 +272,8 @@ class MergeNumberChannelSpec extends FlatSpec {
         DeployTestInfo(rhoChange(-6), 10L, "0x22") // -20
       ),
       expectedRejected = Set(makeSig("0x22")),
-      expectedFinalResult = 5
+      expectedFinalResult = 5,
+      shardId = SHARD_ID
     )
   }
 
@@ -281,7 +287,8 @@ class MergeNumberChannelSpec extends FlatSpec {
         DeployTestInfo(rhoChange(9223372036854775806L), 10L, "0x22") // + 9223372036854775802, reject this one
       ),
       expectedRejected = Set(makeSig("0x22")),
-      expectedFinalResult = 5
+      expectedFinalResult = 5,
+      shardId = SHARD_ID
     )
   }
 
@@ -297,7 +304,8 @@ class MergeNumberChannelSpec extends FlatSpec {
         DeployTestInfo(parRho(rhoChange(-20), "for(_ <- @\"X\") {Nil}"), 11L, "0x21")
       ),
       expectedRejected = Set(makeSig("0x11")),
-      expectedFinalResult = 10
+      expectedFinalResult = 10,
+      shardId = SHARD_ID
     )
   }
 
@@ -314,7 +322,8 @@ class MergeNumberChannelSpec extends FlatSpec {
         DeployTestInfo(rhoChange(-20), 10L, "0x22") // -20
       ),
       expectedRejected = Set.empty,
-      expectedFinalResult = 10
+      expectedFinalResult = 10,
+      shardId = SHARD_ID
     )
   }
 
