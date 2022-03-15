@@ -109,6 +109,18 @@ lazy val profilerSettings = Seq(
 
 lazy val commonSettings = projectSettings ++ coverageSettings ++ compilerSettings ++ profilerSettings
 
+lazy val sdk = (project in file("sdk"))
+  .settings(commonSettings: _*)
+  .settings(
+    version := "0.1",
+    libraryDependencies ++= commonDependencies ++ Seq(
+      catsCore,
+      catsEffect,
+      catsTagless,
+      fs2Core
+    )
+  )
+
 lazy val shared = (project in file("shared"))
   .settings(commonSettings: _*)
   .settings(
@@ -133,6 +145,7 @@ lazy val shared = (project in file("shared"))
       jaxb
     )
   )
+  .dependsOn(sdk)
 
 lazy val graphz = (project in file("graphz"))
   .settings(commonSettings: _*)
