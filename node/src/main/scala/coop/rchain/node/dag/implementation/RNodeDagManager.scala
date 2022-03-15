@@ -1,0 +1,57 @@
+package coop.rchain.node.dag.implementation
+
+import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Sync}
+import coop.rchain.sdk.dag.data.{DagManager, DagView}
+import fs2.Stream
+
+object RNodeDagManager {
+  def apply[F[_]: Concurrent, M, MId, S, SId](
+      st: Ref[F, Map[MId, M]],
+      requestMsg: MId => F[Unit],
+      msgInput: Stream[F, M]
+  ): F[RNodeDagManager[F, M, MId, S, SId]] =
+    Sync[F].delay(new RNodeDagManager(st, requestMsg, msgInput))
+}
+
+final case class RNodeDagManager[F[_]: Concurrent, M, MId, S, SId] private (
+    /**
+      * DagManager internal in-memory state.
+      */
+    st: Ref[F, Map[MId, M]],
+    /**
+      * Request external module for required messages.
+      */
+    requestMsg: MId => F[Unit],
+    /**
+      * Receiving stream of messages.
+      */
+    messagesInput: Stream[F, M]
+) extends DagManager[F, M, MId, S, SId] {
+
+  /**
+    * Returns DAG read-only representation starting with specified latest messages.
+    *
+    * NOTE: Getting view for invalid latest messages should throw error.
+    */
+  override def getDagView(seenBy: MId): F[DagView[F, M, MId, S, SId]] = ???
+
+  /**
+    * Latest messages (tips) seen in the whole DAG (not specific sender).
+    */
+  override def latestMessages: F[Map[S, Set[M]]] = ???
+
+  /**
+    * Thread safe function to insert new message to the DAG.
+    */
+  override def insert(msg: M): F[Unit] = ???
+
+  /**
+    * Thread safe function to update finalized nodes of the DAG seen by specific message.
+    */
+  override def finalize(by: MId, finalized: Set[MId]): F[Unit] = ???
+
+  override def loadMessage(mid: MId): F[M] = ???
+
+  override def loadSender(sid: SId): F[M] = ???
+}
