@@ -17,16 +17,16 @@ in {
   for(@(_, RhoSpec) <- RhoSpecCh) {
     @RhoSpec!("testSuite",
       [
-        // ("Get before set returns Nil", *test_get_before_set),
-        // ("Get after set returns the new value", *test_get_after_set),
-        // ("Get after updating a nonexistent key should return Nil", *test_get_after_update_nil),
-        // ("Get after updating an existing key should return the right value", *test_get_after_update),
-        // ("Fast unsafe get after set returns the new value", *test_fast_unsafe_get_after_set),
-        // ("Contains before set returns false", *test_contains_before_set),
-        // ("Contains after set returns true", *test_contains_after_set),
-        // ("Get after set to Nil returns Nil", *test_get_after_set_to_nil),
-        // ("Contains after set to Nil returns true", *test_contains_after_set_to_nil),
-        // ("Works under contention", *test_contention),
+        ("Get before set returns Nil", *test_get_before_set),
+        ("Get after set returns the new value", *test_get_after_set),
+        ("Get after updating a nonexistent key should return Nil", *test_get_after_update_nil),
+        ("Get after updating an existing key should return the right value", *test_get_after_update),
+        ("Fast unsafe get after set returns the new value", *test_fast_unsafe_get_after_set),
+        ("Contains before set returns false", *test_contains_before_set),
+        ("Contains after set returns true", *test_contains_after_set),
+        ("Get after set to Nil returns Nil", *test_get_after_set_to_nil),
+        ("Contains after set to Nil returns true", *test_contains_after_set_to_nil),
+        ("Works under contention", *test_contention),
         ("Get and set on the same key at the same time", *test_set_and_get_on_same_key)
       ])
   } |
@@ -217,6 +217,8 @@ in {
           tryIt!(0, true)
         }
       } |
+      // introduce this test because of https://github.com/rchain/rchain/pull/3629
+      // get and set and the same time would throw exception
       contract test_set_and_get_on_same_key(rhoSpec, _, ackCh) = {
         new tryIt in {
           contract tryIt(@n, @flag) = {
@@ -227,6 +229,7 @@ in {
                   TreeHashMap!("set", map, "XspL2n7hsd", "object", *ret1) |
                   out!("info", "get and set in the same key")|
                   for (_ <- ret1) {
+                    // create a lot of set and get operation to increase the possibility of reproducing the bug
                     TreeHashMap!("set", map, "VbqWeRbRoT", "object", *ret3) |
                     TreeHashMap!("get", map, "VbqWeRbRoT", *ret4)|
                     TreeHashMap!("get", map, "VbqWeRbRoT", *ret5)|
