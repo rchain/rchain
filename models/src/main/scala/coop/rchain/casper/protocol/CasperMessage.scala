@@ -509,6 +509,7 @@ object DeployData {
       .withPhloPrice(dd.phloPrice)
       .withPhloLimit(dd.phloLimit)
       .withValidAfterBlockNumber(dd.validAfterBlockNumber)
+      .withShardId(dd.shardId)
 
   def toProto(dd: Signed[DeployData]): DeployDataProto =
     toProto(dd.data)
