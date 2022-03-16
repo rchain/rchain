@@ -21,7 +21,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   private val SHARD_ID = genesis.genesisBlock.shardId
 
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deploy1 <- ConstructDeploy
                     .sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)", shardId = SHARD_ID)
@@ -97,7 +97,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         _ <- nodes(2).shutoff() //nodes(2) misses this block
       } yield ()
 
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         _ <- stepSplit(nodes) // blocks a1 a2
         _ <- stepSplit(nodes) // blocks b1 b2
@@ -125,7 +125,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   // and why on earth does it test logs?
   it should "handle a long chain of block requests appropriately" ignore effectTest {
     TestNode
-      .networkEff(genesis, networkSize = 2, shardId = SHARD_ID)
+      .networkEff(genesis, networkSize = 2)
       .use { nodes =>
         for {
           _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>

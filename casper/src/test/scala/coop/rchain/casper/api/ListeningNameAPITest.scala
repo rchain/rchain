@@ -21,7 +21,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   private val SHARD_ID = genesis.genesisBlock.shardId
 
   "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       for {
@@ -49,7 +49,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   it should "work across a chain" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeEngineCell             = nodes(0).engineCell
       implicit val nodeZeroSafetyOracleEffect = nodes(0).cliqueOracleEffect
       implicit val nodeZeroLogEffect          = nodes(0).logEff
@@ -160,7 +160,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
   }
 
   "getListeningNameContinuationResponse" should "work with unsorted channels" in {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
 
       def basicDeployData: Signed[DeployData] =

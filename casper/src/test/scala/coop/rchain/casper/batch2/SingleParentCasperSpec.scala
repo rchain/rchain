@@ -23,7 +23,7 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
   private val SHARD_ID = genesis.genesisBlock.shardId
 
   "SingleParentCasper" should "create blocks with a single parent" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1, shardId = SHARD_ID).use {
+    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1).use {
       case n1 +: n2 +: _ =>
         for {
           deployDatas <- (0 to 2).toList
@@ -42,7 +42,7 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
   }
 
   it should "reject multi-parent blocks" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1, shardId = SHARD_ID).use {
+    TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1).use {
       case n1 +: n2 +: _ =>
         for {
           deployDatas <- (0 to 2).toList

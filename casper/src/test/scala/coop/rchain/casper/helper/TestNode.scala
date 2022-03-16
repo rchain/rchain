@@ -234,7 +234,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get, shardId = shardId)
+      createBlockResult <- BlockCreator.create(cs, vid.get)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -243,7 +243,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get, shardId = shardId)
+      createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -384,13 +384,12 @@ case class TestNode[F[_]: Timer](
 object TestNode {
   type Effect[A] = Task[A]
 
-  def standaloneEff(genesis: GenesisContext, shardId: String)(
+  def standaloneEff(genesis: GenesisContext)(
       implicit scheduler: Scheduler
   ): Resource[Effect, TestNode[Effect]] =
     networkEff(
       genesis,
-      networkSize = 1,
-      shardId = shardId
+      networkSize = 1
     ).map(_.head)
 
   def networkEff(
@@ -399,8 +398,7 @@ object TestNode {
       synchronyConstraintThreshold: Double = 0d,
       maxNumberOfParents: Int = Estimator.UnlimitedParents,
       maxParentDepth: Option[Int] = None,
-      withReadOnlySize: Int = 0,
-      shardId: String
+      withReadOnlySize: Int = 0
   )(implicit scheduler: Scheduler): Resource[Effect, IndexedSeq[TestNode[Effect]]] = {
     implicit val c = Concurrent[Effect]
     implicit val n = TestNetwork.empty[Effect]
@@ -412,8 +410,7 @@ object TestNode {
       synchronyConstraintThreshold,
       maxNumberOfParents,
       maxParentDepth,
-      withReadOnlySize,
-      shardId
+      withReadOnlySize
     )
   }
 
@@ -424,8 +421,7 @@ object TestNode {
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
-      withReadOnlySize: Int,
-      shardId: String
+      withReadOnlySize: Int
   )(implicit s: Scheduler): Resource[F, IndexedSeq[TestNode[F]]] = {
     val n           = sks.length
     val names       = (1 to n).map(i => if (i <= (n - withReadOnlySize)) s"node-$i" else s"readOnly-$i")
@@ -451,8 +447,7 @@ object TestNode {
               synchronyConstraintThreshold,
               maxNumberOfParents,
               maxParentDepth,
-              isReadOnly,
-              shardId
+              isReadOnly
             )
         }
         .map(_.toVector)
@@ -490,8 +485,7 @@ object TestNode {
       synchronyConstraintThreshold: Double,
       maxNumberOfParents: Int,
       maxParentDepth: Option[Int],
-      isReadOnly: Boolean,
-      shardId: String
+      isReadOnly: Boolean
   )(implicit s: Scheduler): Resource[F, TestNode[F]] = {
     val tle                = new TransportLayerTestImpl[F]()
     val tls                = new TransportLayerServerTestImpl[F](currentPeerNode)
@@ -512,7 +506,7 @@ object TestNode {
                            rSpaceStore,
                            mStore,
                            Genesis.NonNegativeMergeableTagName,
-                           shardId
+                           genesis.shardId
                          )
                        )
 

@@ -182,8 +182,6 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
 }
 
 object BlockApproverProtocolTest {
-  private val SHARD_ID: String = "root-shard"
-
   def createUnapproved(requiredSigs: Int, block: BlockMessage): UnapprovedBlock =
     UnapprovedBlock(ApprovedBlockCandidate(block, requiredSigs), 0L, 0L)
 
@@ -198,7 +196,7 @@ object BlockApproverProtocolTest {
     val bonds        = genesisParams.proofOfStake.validators.map(v => v.pk -> v.stake).toMap
     val requiredSigs = bonds.size - 1
 
-    TestNode.networkEff(context, networkSize = 1, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(context, networkSize = 1).use { nodes =>
       val node = nodes.head
       BlockApproverProtocol
         .of[Effect](

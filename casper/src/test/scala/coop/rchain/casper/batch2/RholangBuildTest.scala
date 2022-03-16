@@ -22,7 +22,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
 
   "Our build system" should "allow import of rholang sources into scala code" in effectTest {
     TestNode
-      .standaloneEff(genesis, shardId = SHARD_ID)
+      .standaloneEff(genesis)
       .use { node =>
         import node._
 
@@ -73,7 +73,7 @@ class RholangBuildTest extends FlatSpec with Matchers {
     val (keyPairs, genesisVaults, genesis) = buildGenesisParameters()
     val genesisParams                      = (keyPairs, genesisVaults, genesis.copy(vaults = vaults))
     TestNode
-      .standaloneEff(buildGenesis(genesisParams), shardId = SHARD_ID)
+      .standaloneEff(buildGenesis(genesisParams))
       .use { node =>
         import node._
         (logEff.warns should be(Nil)).pure[Effect]

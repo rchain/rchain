@@ -20,7 +20,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   private val SHARD_ID = genesis.genesisBlock.shardId
 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
       for {
         deployData0 <- ConstructDeploy.basicDeployData[Effect](
@@ -140,7 +140,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
         |}
       """.stripMargin
 
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       val n1     = nodes(0)
       val n2     = nodes(1)
       val n3     = nodes(2)
@@ -159,7 +159,7 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   }
 
   it should "not merge blocks that touch the same channel involving joins" ignore effectTest {
-    TestNode.networkEff(genesis, networkSize = 2, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       for {
         current0 <- timeEff.currentMillis
         deploy0 = ConstructDeploy.sourceDeploy(

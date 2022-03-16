@@ -76,7 +76,7 @@ class DeployIdTest extends FlatSpec with Matchers {
       shardId = SHARD_ID
     )
 
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         block <- node.addBlock(contract)
         result <- node.runtimeManager

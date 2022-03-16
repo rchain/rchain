@@ -26,7 +26,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   private val SHARD_ID = genesis.genesisBlock.shardId
 
   "MultiParentCasper" should "accept a deploy and return it's id" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
 
@@ -40,7 +40,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
 
   it should "not create a block with a repeated deploy" in effectTest {
     implicit val timeEff = new LogicalTime[Effect]
-    TestNode.networkEff(genesis, networkSize = 2, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
         deploy             <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
@@ -51,7 +51,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "fail when deploying with insufficient phlos" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
@@ -64,7 +64,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "succeed if given enough phlos for deploy" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
@@ -77,7 +77,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
   }
 
   it should "reject deploy with phloPrice lower than minPhloPrice" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node.logEff
       implicit val noopSpan: Span[Effect] = NoopSpan[Effect]()
       val engine                          = new EngineWithCasper[Effect](node.casperEff)
