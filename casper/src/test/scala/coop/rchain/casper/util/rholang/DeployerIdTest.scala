@@ -25,7 +25,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
   val genesisContext   = buildGenesis(buildGenesisParameters())
   private val SHARD_ID = genesisContext.genesisBlock.shardId
   val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deployer-id-runtime-manager-test", shardId = SHARD_ID)
+    mkRuntimeManager[Task]("deployer-id-runtime-manager-test")
 
   "Deployer id" should "be equal to the deployer's public key" in effectTest {
     val sk = PrivateKey(

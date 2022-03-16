@@ -434,8 +434,7 @@ class TreeHashMapMergeabilitySpec
     for {
       treeMapHandleR <- runtime.playExploratoryDeploy(
                          getTreeHashMapHandle,
-                         stateHash.toByteString,
-                         shardId = SHARD_ID
+                         stateHash.toByteString
                        )
       treeMapHandle = treeMapHandleR.head
       maps          <- RhoTrieTraverser.traverseTrie(depth, treeMapHandle, runtime)

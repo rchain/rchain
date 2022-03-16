@@ -44,7 +44,7 @@ class BlockQueryResponseAPITest
   val genesisBlock: BlockMessage = getRandomBlock()
   private val SHARD_ID           = genesisBlock.shardId
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("block-query-response-api-test", shardId = SHARD_ID)
+    mkRuntimeManager[Task]("block-query-response-api-test")
 
   val deployCount = 10
   val randomDeploys =

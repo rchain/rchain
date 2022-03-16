@@ -93,8 +93,7 @@ object TransactionBalances {
 
   def getPerValidatorVaults[F[_]: Sync: Span: Log](
       runtime: RhoRuntime[F],
-      block: BlockMessage,
-      shardId: String
+      block: BlockMessage
   ): F[Seq[RevAddr]] = {
     val contract = """new return, rl(`rho:registry:lookup`),
                     |  poSCh
@@ -107,8 +106,7 @@ object TransactionBalances {
     for {
       perValidatorVaults <- runtime.playExploratoryDeploy(
                              contract,
-                             block.body.state.postStateHash,
-                             shardId
+                             block.body.state.postStateHash
                            )
       perValidatorVaultAddr = perValidatorVaults.head.exprs.head.getEListBody.ps
         .map(p => p.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
@@ -172,13 +170,12 @@ object TransactionBalances {
       walletPath: Path,
       bondsPath: Path,
       runtime: RhoRuntime[F],
-      block: BlockMessage,
-      shardId: String
+      block: BlockMessage
   ): F[GlobalVaultsInfo] =
     for {
       vaultMap  <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
       coopVault = RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
-      perValidatorVaults <- getPerValidatorVaults(runtime, block, shardId).map(
+      perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
                                addrs.map(
                                  addr =>
@@ -216,8 +213,7 @@ object TransactionBalances {
       dataDir: Path,
       walletPath: Path,
       bondPath: Path,
-      targetBlockHash: String,
-      shardId: String
+      targetBlockHash: String
   )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
@@ -247,7 +243,7 @@ object TransactionBalances {
       targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeHexToByteString)
       targetBlock        = targetBlockOpt.get
       _                  <- log.info(s"Getting balance from $targetBlock")
-      genesisVaultMap    <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock, shardId)
+      genesisVaultMap    <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)
       transactionStore   <- Transaction.store(rnodeStoreManager)
       allTransactionsMap <- transactionStore.toMap
       allTransactions    = allTransactionsMap.values.flatMap(_.data)

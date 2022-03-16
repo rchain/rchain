@@ -102,10 +102,7 @@ object HashSetCasperSpecification extends Commands {
     val genesisContext = context(state.size)
 
     val nodesResource = TestNode
-      .networkEff(
-        genesisContext,
-        networkSize = state.size
-      )
+      .networkEff(genesisContext, networkSize = state.size)
       .map(_.toList)
 
     print(":")

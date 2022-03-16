@@ -25,7 +25,7 @@ class DeployIdTest extends FlatSpec with Matchers {
 
   private val SHARD_ID = "root-shard"
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager[Task]("deploy-id-runtime-manager-test", shardId = SHARD_ID)
+    mkRuntimeManager[Task]("deploy-id-runtime-manager-test")
 
   private val sk = ConstructDeploy.defaultSec
 
