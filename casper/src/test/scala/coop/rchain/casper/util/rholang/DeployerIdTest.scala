@@ -76,7 +76,7 @@ class DeployerIdTest extends FlatSpec with Matchers {
          |  }
          |} """.stripMargin
 
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         contract <- ConstructDeploy
                      .sourceDeployNowF(checkDeployerDefinition, sec = deployer, shardId = SHARD_ID)

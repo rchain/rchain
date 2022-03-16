@@ -12,10 +12,9 @@ import org.scalatest.FlatSpec
 class VaultBalanceGetterTest extends FlatSpec {
   val genesis               = buildGenesis()
   val genesisInitialBalance = 9000000
-  private val SHARD_ID      = genesis.genesisBlock.shardId
 
   "Get balance from VaultPar" should "return balance" in {
-    val t = TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
         Blake2b256Hash.fromByteString(genesis.genesisBlock.body.state.postStateHash)
       val genesisVaultAddr = RevAddress.fromPublicKey(genesis.genesisVaults.toList(0)._2).get
@@ -45,7 +44,7 @@ class VaultBalanceGetterTest extends FlatSpec {
   }
 
   "Get all vault" should "return all vault balance" in {
-    val t = TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
         Blake2b256Hash.fromByteString(genesis.genesisBlock.body.state.postStateHash)
       for {

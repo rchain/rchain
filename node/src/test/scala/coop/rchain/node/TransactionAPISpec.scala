@@ -22,34 +22,33 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
   private val SHARD_ID        = genesis.genesisBlock.shardId
 
   def checkTransactionAPI(term: String, phloLimit: Long, phloPrice: Long, deployKey: PrivateKey) =
-    TestNode.networkEff(genesis, networkSize = 1, withReadOnlySize = 1, shardId = SHARD_ID).use {
-      nodes =>
-        val validator = nodes(0)
-        val readonly  = nodes(1)
-        import readonly._
-        for {
-          kvm             <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
-          rspaceStore     <- kvm.rSpaceStores
-          reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
-          reportingStore  <- ReportStore.store[Task](kvm)
-          blockReportAPI  = BlockReportAPI[Task](reportingCasper, reportingStore)
-          deploy <- ConstructDeploy.sourceDeployNowF(
-                     term,
-                     sec = deployKey,
-                     phloLimit = phloLimit,
-                     phloPrice = phloPrice,
-                     shardId = SHARD_ID
-                   )
-          transactionAPI = Transaction[Task](
-            blockReportAPI,
-            Par(unforgeables = Seq(Transaction.transferUnforgeable))
-          )
-          transferBlock <- validator.addBlock(deploy)
-          _             <- readonly.processBlock(transferBlock)
-          transactions <- transactionAPI
-                           .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
+    TestNode.networkEff(genesis, networkSize = 1, withReadOnlySize = 1).use { nodes =>
+      val validator = nodes(0)
+      val readonly  = nodes(1)
+      import readonly._
+      for {
+        kvm             <- Resources.mkTestRNodeStoreManager[Task](readonly.dataDir)
+        rspaceStore     <- kvm.rSpaceStores
+        reportingCasper = ReportingCasper.rhoReporter[Task](rspaceStore)
+        reportingStore  <- ReportStore.store[Task](kvm)
+        blockReportAPI  = BlockReportAPI[Task](reportingCasper, reportingStore)
+        deploy <- ConstructDeploy.sourceDeployNowF(
+                   term,
+                   sec = deployKey,
+                   phloLimit = phloLimit,
+                   phloPrice = phloPrice,
+                   shardId = SHARD_ID
+                 )
+        transactionAPI = Transaction[Task](
+          blockReportAPI,
+          Par(unforgeables = Seq(Transaction.transferUnforgeable))
+        )
+        transferBlock <- validator.addBlock(deploy)
+        _             <- readonly.processBlock(transferBlock)
+        transactions <- transactionAPI
+                         .getTransaction(Blake2b256Hash.fromByteString(transferBlock.blockHash))
 
-        } yield (transactions, transferBlock)
+      } yield (transactions, transferBlock)
     }
 
   "transfer rev" should "be gotten in transaction api" in {

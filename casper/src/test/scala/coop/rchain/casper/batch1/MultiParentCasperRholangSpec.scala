@@ -25,7 +25,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   //put a new casper instance at the start of each
   //test since we cannot reset it
   "MultiParentCasper" should "create blocks based on deploys" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { implicit node =>
+    TestNode.standaloneEff(genesis).use { implicit node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
@@ -45,7 +45,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
   }
 
   it should "be able to use the registry" in effectTest {
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       val registerSource =

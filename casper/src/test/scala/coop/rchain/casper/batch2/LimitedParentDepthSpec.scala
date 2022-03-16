@@ -19,7 +19,7 @@ class LimitedParentDepthSpec extends FlatSpec with Matchers {
 
   "Estimator" should "obey present parent depth limitation" in {
     TestNode
-      .networkEff(genesisContext, networkSize = 2, maxParentDepth = Some(2), shardId = SHARD_ID)
+      .networkEff(genesisContext, networkSize = 2, maxParentDepth = Some(2))
       .use {
         case nodes @ n1 +: n2 +: Seq() =>
           for {
@@ -38,7 +38,7 @@ class LimitedParentDepthSpec extends FlatSpec with Matchers {
 
   it should "obey absent parent depth limitation" in {
     TestNode
-      .networkEff(genesisContext, networkSize = 2, maxParentDepth = None, shardId = SHARD_ID)
+      .networkEff(genesisContext, networkSize = 2, maxParentDepth = None)
       .use {
         case nodes @ n1 +: n2 +: Seq() =>
           for {

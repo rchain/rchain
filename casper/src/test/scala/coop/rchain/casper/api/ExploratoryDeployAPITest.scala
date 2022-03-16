@@ -57,7 +57,7 @@ class ExploratoryDeployAPITest
    */
   it should "exploratoryDeploy get data from the read only node" in effectTest {
     TestNode
-      .networkEff(genesisContext, networkSize = 3, withReadOnlySize = 1, shardId = SHARD_ID)
+      .networkEff(genesisContext, networkSize = 3, withReadOnlySize = 1)
       .use {
         case nodes @ n1 +: n2 +: _ +: readOnly +: Seq() =>
           import readOnly.{blockStore, cliqueOracleEffect, logEff}
@@ -95,7 +95,7 @@ class ExploratoryDeployAPITest
   }
 
   it should "exploratoryDeploy return error on bonded validator" in effectTest {
-    TestNode.networkEff(genesisContext, networkSize = 1, shardId = SHARD_ID).use {
+    TestNode.networkEff(genesisContext, networkSize = 1).use {
       case nodes @ n1 +: Seq() =>
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)

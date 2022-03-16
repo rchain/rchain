@@ -27,7 +27,7 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
   "ReportingCasper" should "behave the same way as MultiParentCasper" in effectTest {
     val correctRholang =
       """ for(@a <- @"1"){ Nil } | @"1"!("x") """
-    TestNode.standaloneEff(genesis, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesis).use { node =>
       import node._
       import coop.rchain.rholang.interpreter.storage._
 

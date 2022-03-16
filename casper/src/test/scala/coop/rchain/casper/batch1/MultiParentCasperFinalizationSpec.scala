@@ -38,7 +38,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
           // by testing the **old** state (twice)
         }
       }
-    TestNode.networkEff(genesis, networkSize = 3, shardId = SHARD_ID).use { nodes =>
+    TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
         deployDatas <- (0 to 7).toList.traverse(
                         i => ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)

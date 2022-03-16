@@ -143,7 +143,7 @@ class InterpreterUtilTest
      *          genesis
      */
     val genesisContext = buildGenesis(buildGenesisParameters())
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       implicit val runtimeManager = node.runtimeManager
       for {
         b0 <- node.addBlock(b0Deploys: _*)
@@ -190,7 +190,7 @@ class InterpreterUtilTest
      *         genesis
      */
 
-    TestNode.networkEff(genesisContext, networkSize = 2, shardId = SHARD_ID).use {
+    TestNode.networkEff(genesisContext, networkSize = 2).use {
       case node1 +: node2 +: _ =>
         implicit val runtimeManager = node1.runtimeManager
         for {
@@ -785,7 +785,7 @@ class InterpreterUtilTest
         shardId = SHARD_ID
       )
 
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1
@@ -821,7 +821,7 @@ class InterpreterUtilTest
         shardId = SHARD_ID
       )
 
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1
@@ -840,7 +840,7 @@ class InterpreterUtilTest
         shardId = SHARD_ID
       )
 
-    TestNode.standaloneEff(genesisContext, shardId = SHARD_ID).use { node =>
+    TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
         _ = b.body.deploys.size shouldBe 1
