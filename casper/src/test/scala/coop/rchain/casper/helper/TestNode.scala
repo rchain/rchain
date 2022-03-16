@@ -543,7 +543,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi, shardId = shardId).some
+                   case Some(vi) => Proposer[F](vi).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous

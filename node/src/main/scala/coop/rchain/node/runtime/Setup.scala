@@ -219,7 +219,7 @@ object Setup {
         val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
-        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")), conf.casper.shardName)
+        Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
       }
 
       // Propose request is a tuple - Casper, async flag and deferred proposer result that will be resolved by proposer

@@ -38,8 +38,7 @@ object BlockCreator {
   def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None,
-      shardId: String
+      dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -105,6 +104,7 @@ object BlockCreator {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
+        shardId         = s.onChainState.shardConf.shardName
         userDeploys     <- prepareUserDeploys(nextBlockNum)
         dummyDeploys    = prepareDummyDeploy(nextBlockNum, shardId)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
@@ -137,7 +137,6 @@ object BlockCreator {
                 )             = checkpointData
                 newBonds      <- runtimeManager.computeBonds(postStateHash)
                 _             <- Span[F].mark("before-packing-block")
-                shardId       = s.onChainState.shardConf.shardName
                 casperVersion = s.onChainState.shardConf.casperVersion
                 // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(
