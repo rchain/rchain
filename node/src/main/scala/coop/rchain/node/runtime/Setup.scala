@@ -162,12 +162,7 @@ object Setup {
           rStores    <- rnodeStoreManager.rSpaceStores
           mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
           rm <- RuntimeManager
-                 .createWithHistory[F](
-                   rStores,
-                   mergeStore,
-                   Genesis.NonNegativeMergeableTagName,
-                   conf.casper.shardName
-                 )
+                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
         } yield rm
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory

@@ -37,10 +37,8 @@ class BlocksResponseAPITest
   val v2Bond = Bond(v2, 20)
   val v3Bond = Bond(v3, 15)
   val bonds  = Seq(v1Bond, v2Bond, v3Bond)
-
-  private val SHARD_ID = "root-shard"
   private val runtimeManagerResource: Resource[Task, RuntimeManager[Task]] =
-    mkRuntimeManager("block-response-api-test", shardId = SHARD_ID)
+    mkRuntimeManager("block-response-api-test")
   val maxBlockLimit = 50
 
   private def createDagWith8Blocks(

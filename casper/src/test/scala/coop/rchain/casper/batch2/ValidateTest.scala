@@ -778,8 +778,7 @@ class ValidateTest
         runtimeManager <- RuntimeManager[Task](
                            rStore,
                            mStore,
-                           Genesis.NonNegativeMergeableTagName,
-                           shardId = SHARD_ID
+                           Genesis.NonNegativeMergeableTagName
                          )
         dag <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil

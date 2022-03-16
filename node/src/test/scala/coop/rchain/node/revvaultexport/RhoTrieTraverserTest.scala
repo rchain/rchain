@@ -81,8 +81,7 @@ class RhoTrieTraverserTest extends FlatSpec {
           check2           <- runtime.createCheckpoint
           trieMapHandleR <- runtime.playExploratoryDeploy(
                              getTrieMapHandleRho,
-                             check2.root.toByteString,
-                             shardId = SHARD_ID
+                             check2.root.toByteString
                            )
           _             <- runtime.reset(check2.root)
           trieMapHandle = trieMapHandleR(0)

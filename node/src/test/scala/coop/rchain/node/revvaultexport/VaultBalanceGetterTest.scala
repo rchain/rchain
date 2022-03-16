@@ -12,7 +12,6 @@ import org.scalatest.FlatSpec
 class VaultBalanceGetterTest extends FlatSpec {
   val genesis               = buildGenesis()
   val genesisInitialBalance = 9000000
-
   "Get balance from VaultPar" should "return balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =

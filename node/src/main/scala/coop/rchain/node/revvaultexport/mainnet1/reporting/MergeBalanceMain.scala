@@ -62,10 +62,6 @@ final case class MergeBalanceOptions(arguments: Seq[String]) extends ScallopConf
     descr = s"Transaction balance file.",
     required = true
   )
-  val shardId = opt[String](
-    descr = "The name of the shard",
-    required = false
-  )
   verify()
 }
 
@@ -142,11 +138,10 @@ object MergeBalanceMain {
   def getBalanceFromRholang[F[_]: Sync: Span: Log](
       revAddress: String,
       runtime: RhoRuntime[F],
-      stateHash: ByteString,
-      shardId: String
+      stateHash: ByteString
   ) =
     for {
-      result  <- runtime.playExploratoryDeploy(getBalanceRholang(revAddress), stateHash, shardId)
+      result  <- runtime.playExploratoryDeploy(getBalanceRholang(revAddress), stateHash)
       balance = result.head.exprs.head.getGInt
       _       <- Log[F].info(s"Got balance ${balance} from ${revAddress}")
     } yield balance
@@ -159,7 +154,6 @@ object MergeBalanceMain {
     val blockHash              = options.blockHash()
     val outputDir              = options.outputDir()
     val mergeFile              = outputDir.resolve("mergeBalances.csv")
-    val shardId                = options.shardId()
 
     val oldRSpacePath                              = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                     = Files.exists(oldRSpacePath)
@@ -192,8 +186,7 @@ object MergeBalanceMain {
                                            getBalanceFromRholang[Task](
                                              account.address,
                                              rhoRuntime,
-                                             postStateHash,
-                                             shardId
+                                             postStateHash
                                            )
                                          else 0L.pure[Task]
                                adjustAccount = account.copy(

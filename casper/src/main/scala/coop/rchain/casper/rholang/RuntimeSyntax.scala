@@ -446,7 +446,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
   /**
     * Evaluates exploratory (read-only) deploy
     */
-  def playExploratoryDeploy(term: String, hash: StateHash, shardId: String): F[Seq[Par]] = {
+  def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] = {
     // Create a deploy with newly created private key
     val (privKey, _) = Secp256k1.newKeyPair
 
@@ -457,7 +457,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       // Hardcoded phlogiston limit / 1 REV if phloPrice=1
       phloLimit = 100 * 1000 * 1000,
       sec = privKey,
-      shardId = shardId
+      shardId = ""
     )
 
     // Create return channel as first private name created in deploy term
@@ -559,8 +559,8 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
 
   /* Read only Rholang evaluator helpers */
 
-  def getActiveValidators(startHash: StateHash, shardId: String): F[Seq[Validator]] =
-    playExploratoryDeploy(activateValidatorQuerySource, startHash, shardId)
+  def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
+    playExploratoryDeploy(activateValidatorQuerySource, startHash)
       .ensureOr(
         validatorsPar =>
           new IllegalArgumentException(
@@ -570,9 +570,9 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       )(validatorsPar => validatorsPar.size == 1)
       .map(validatorsPar => toValidatorSeq(validatorsPar.head))
 
-  def computeBonds(hash: StateHash, shardId: String): F[Seq[Bond]] =
+  def computeBonds(hash: StateHash): F[Seq[Bond]] =
     // Create a deploy with newly created private key
-    playExploratoryDeploy(bondsQuerySource, hash, shardId)
+    playExploratoryDeploy(bondsQuerySource, hash)
       .ensureOr(
         bondsPar =>
           new IllegalArgumentException(

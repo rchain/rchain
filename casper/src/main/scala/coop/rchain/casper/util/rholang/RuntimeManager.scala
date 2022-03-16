@@ -78,8 +78,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     replaySpace: RhoReplayISpace[F],
     historyRepo: RhoHistoryRepository[F],
     mergeableStore: MergeableStore[F],
-    mergeableTagName: Par,
-    shardId: String
+    mergeableTagName: Par
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -178,7 +177,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
   ): F[Seq[Par]] = spawnRuntime.flatMap(_.captureResults(start, deploy))
 
   def getActiveValidators(startHash: StateHash): F[Seq[Validator]] =
-    spawnRuntime.flatMap(_.getActiveValidators(startHash, shardId))
+    spawnRuntime.flatMap(_.getActiveValidators(startHash))
 
   def computeBonds(hash: StateHash): F[Seq[Bond]] =
     spawnRuntime.flatMap { runtime =>
@@ -201,13 +200,13 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       retryingOnAllErrors[Seq[Bond]](
         RetryPolicies.limitRetries[F](5),
         onError = logError
-      )(runtime.computeBonds(hash, shardId))
+      )(runtime.computeBonds(hash))
     }
 
   // Executes deploy as user deploy with immediate rollback
   // - InterpreterError is rethrown
   def playExploratoryDeploy(term: String, hash: StateHash): F[Seq[Par]] =
-    spawnRuntime.flatMap(_.playExploratoryDeploy(term, hash, shardId))
+    spawnRuntime.flatMap(_.playExploratoryDeploy(term, hash))
 
   def getData(hash: StateHash)(channel: Par): F[Seq[Par]] =
     spawnRuntime.flatMap { runtime =>
@@ -248,33 +247,23 @@ object RuntimeManager {
       replayRSpace: RhoReplayISpace[F],
       historyRepo: RhoHistoryRepository[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par,
-      shardId: String
+      mergeableTagName: Par
   ): F[RuntimeManagerImpl[F]] =
     Sync[F].delay(
-      RuntimeManagerImpl(
-        rSpace,
-        replayRSpace,
-        historyRepo,
-        mergeableStore,
-        mergeableTagName,
-        shardId
-      )
+      RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore, mergeableTagName)
     )
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par,
-      shardId: String
+      mergeableTagName: Par
   )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore, mergeableTagName, shardId).map(_._1)
+    createWithHistory(store, mergeableStore, mergeableTagName).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       store: RSpaceStore[F],
       mergeableStore: MergeableStore[F],
-      mergeableTagName: Par,
-      shardId: String
+      mergeableTagName: Par
   )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -284,14 +273,8 @@ object RuntimeManager {
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](
-            rSpacePlay,
-            rSpaceReplay,
-            historyRepo,
-            mergeableStore,
-            mergeableTagName,
-            shardId
-          ).map((_, historyRepo))
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore, mergeableTagName)
+            .map((_, historyRepo))
       }
   }
 

@@ -502,12 +502,7 @@ object TestNode {
       rSpaceStore         <- Resource.eval(kvm.rSpaceStores)
       mStore              <- Resource.eval(RuntimeManager.mergeableStore(kvm))
       runtimeManager <- Resource.eval(
-                         RuntimeManager(
-                           rSpaceStore,
-                           mStore,
-                           Genesis.NonNegativeMergeableTagName,
-                           genesis.shardId
-                         )
+                         RuntimeManager(rSpaceStore, mStore, Genesis.NonNegativeMergeableTagName)
                        )
 
       node <- Resource.eval({

@@ -46,19 +46,17 @@ object Resources {
 
   def mkRuntimeManager[F[_]: Concurrent: Parallel: ContextShift: Log](
       prefix: String,
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName,
-      shardId: String
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
   )(implicit scheduler: Scheduler): Resource[F, RuntimeManager[F]] =
     mkTempDir[F](prefix)
       .evalMap(mkTestRNodeStoreManager[F])
-      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName, shardId))
+      .evalMap(mkRuntimeManagerAt[F](_, mergeableTagName))
 
   // TODO: This is confusing to create another instances for Log, Metrics and Span.
   //   Investigate if it can be removed or define it as parameters. Similar for [[mkRuntimeManagerWithHistoryAt]].
   def mkRuntimeManagerAt[F[_]: Concurrent: Parallel: ContextShift](
       kvm: KeyValueStoreManager[F],
-      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName,
-      shardId: String
+      mergeableTagName: Par = Genesis.NonNegativeMergeableTagName
   )(
       implicit scheduler: Scheduler
   ): F[RuntimeManager[F]] = {
@@ -69,13 +67,12 @@ object Resources {
     for {
       rStore         <- kvm.rSpaceStores
       mStore         <- RuntimeManager.mergeableStore(kvm)
-      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName, shardId)
+      runtimeManager <- RuntimeManager(rStore, mStore, mergeableTagName)
     } yield runtimeManager
   }
 
   def mkRuntimeManagerWithHistoryAt[F[_]: Concurrent: Parallel: ContextShift](
-      kvm: KeyValueStoreManager[F],
-      shardId: String
+      kvm: KeyValueStoreManager[F]
   )(
       implicit scheduler: Scheduler
   ): F[(RuntimeManager[F], RhoHistoryRepository[F])] = {
@@ -89,8 +86,7 @@ object Resources {
       runtimeManagerWithHistory <- RuntimeManager.createWithHistory(
                                     rStore,
                                     mStore,
-                                    Genesis.NonNegativeMergeableTagName,
-                                    shardId
+                                    Genesis.NonNegativeMergeableTagName
                                   )
     } yield runtimeManagerWithHistory
   }
