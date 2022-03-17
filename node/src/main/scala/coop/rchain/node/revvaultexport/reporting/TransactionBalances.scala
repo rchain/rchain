@@ -173,16 +173,22 @@ object TransactionBalances {
       block: BlockMessage
   ): F[GlobalVaultsInfo] =
     for {
-      vaultMap  <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
-      coopVault = RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+      vaultMap <- generateRevAccountFromWalletAndBond(walletPath, bondsPath)
+      coopVault = vaultMap.getOrElse(
+        CoopVaultAddr,
+        RevAccount(RevAddress.parse(CoopVaultAddr).right.get, 0, CoopPosMultiSigVault)
+      )
       perValidatorVaults <- getPerValidatorVaults(runtime, block).map(
                              addrs =>
                                addrs.map(
                                  addr =>
-                                   RevAccount(
-                                     RevAddress.parse(addr).right.get,
-                                     0,
-                                     PerValidatorVault
+                                   vaultMap.getOrElse(
+                                     addr,
+                                     RevAccount(
+                                       RevAddress.parse(addr).right.get,
+                                       0,
+                                       PerValidatorVault
+                                     )
                                    )
                                )
                            )
