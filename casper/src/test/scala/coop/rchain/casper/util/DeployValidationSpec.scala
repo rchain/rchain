@@ -29,6 +29,7 @@ class DeployValidationSpec extends FlatSpec with Matchers {
       .withPhloPrice(signed.data.phloPrice)
       .withPhloLimit(signed.data.phloLimit)
       .withValidAfterBlockNumber(signed.data.validAfterBlockNumber)
+      .withShardId(signed.data.shardId)
     DeployData.from(deployProto)
   }
 
