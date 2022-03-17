@@ -220,40 +220,36 @@ in {
       // introduce this test because of https://github.com/rchain/rchain/pull/3629
       // get and set and the same time would throw exception
       contract test_set_and_get_on_same_key(rhoSpec, _, ackCh) = {
-        new tryIt in {
-          contract tryIt(@n, @flag) = {
-            new out(`rho:io:stdlog`), mapCh, dummyCh in {
-              TreeHashMap!("init", 1, *mapCh) |
-              for (@map <- mapCh) {
-                new ret1, ret2, ret3, ret4, ret5, ret6, ret7, ret8, ret9, ret10, ret11, ret12 in {
-                  TreeHashMap!("set", map, "XspL2n7hsd", "object", *ret1) |
-                  out!("info", "get and set in the same key")|
-                  for (_ <- ret1) {
-                    // create a lot of set and get operation to increase the possibility of reproducing the bug
-                    TreeHashMap!("set", map, "VbqWeRbRoT", "object", *ret3) |
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret4)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret5)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret6)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret7)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret8)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret9)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret10)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret11)|
-                    TreeHashMap!("get", map, "VbqWeRbRoT", *ret12)|
-                    for (_ <- ret4& _ <- ret5& _ <- ret6& _ <- ret7){
-                      rhoSpec!("assertMany",
-                          [
-                            ((true, "==", true), "not happen")
-                          ], *ackCh)
-                    }
+          new out(`rho:io:stdlog`), mapCh in {
+            TreeHashMap!("init", 1, *mapCh) |
+            for (@map <- mapCh) {
+              new ret1, ret2, ret3, ret4, ret5, ret6, ret7, ret8, ret9, ret10, ret11, ret12 in {
+                TreeHashMap!("set", map, "XspL2n7hsd", "object", *ret1) |
+                out!("info", "get and set in the same key")|
+                for (_ <- ret1) {
+                  // create a lot of set and get operation to increase the possibility of reproducing the bug
+                  TreeHashMap!("set", map, "VbqWeRbRoT", "object", *ret3) |
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret4)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret5)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret6)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret7)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret8)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret9)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret10)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret11)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret12)|
+                  for (_ <- ret3 & _ <- ret4 & _ <- ret5 & _ <- ret6 & _ <- ret7 & _ <- ret8 & 
+                       _ <- ret9 &  _ <- ret10 & _ <- ret11 & _ <- ret12 ){
+                    rhoSpec!("assertMany",
+                        [
+                          ((true, "==", true), "not happen")
+                        ], *ackCh)
                   }
                 }
               }
             }
-          } |
-          tryIt!(0, true)
-        }
-      }
+          }
+        } 
     }
   }
 }
