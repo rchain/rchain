@@ -540,5 +540,6 @@ lazy val rchain = (project in file("."))
     rholangCLI,
     rspace,
     rspaceBench,
-    shared
+    shared,
+    sdk
   )
