@@ -703,10 +703,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   def createInsertActions(
       tuplesKeyAndHash: List[(String, Byte)]
   ): List[InsertAction] =
-    tuplesKeyAndHash.map { keyAndData =>
-      val key  = TestData.hexKey(keyAndData._1)
-      val data = Blake2b256Hash.fromByteVector(createBV32(keyAndData._2))
-      InsertAction(key, data)
+    tuplesKeyAndHash.map {
+      case (key, data) =>
+        InsertAction(TestData.hexKey(key), Blake2b256Hash.fromByteVector(createBV32(data)))
     }
 
   def createDeleteActions(keys: List[String]): List[DeleteAction] =
