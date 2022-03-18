@@ -88,7 +88,13 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
           deployData <- ConstructDeploy
                          .sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice, shardId = SHARD_ID)
           err <- BlockAPI
-                  .deploy[Effect](deployData, None, minPhloPrice = minPhloPrice, isNodeReadOnly)
+                  .deploy[Effect](
+                    deployData,
+                    None,
+                    minPhloPrice = minPhloPrice,
+                    isNodeReadOnly,
+                    shardId = SHARD_ID
+                  )
                   .attempt
         } yield {
           err.isLeft shouldBe true
