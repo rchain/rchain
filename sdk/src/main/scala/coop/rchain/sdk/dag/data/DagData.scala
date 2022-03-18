@@ -11,6 +11,8 @@ package coop.rchain.sdk.dag.data
 trait DagData[M, MId, S, SId] {
   /* Message */
 
+  def mid(s: M): MId
+
   def seqNum(m: M): Long
 
   def blockNum(m: M): Long
@@ -23,5 +25,5 @@ trait DagData[M, MId, S, SId] {
 
   /* Sender */
 
-  def stake(s: S): Long
+  def sid(s: S): SId
 }

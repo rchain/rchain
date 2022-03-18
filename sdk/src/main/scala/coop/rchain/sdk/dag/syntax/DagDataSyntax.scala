@@ -16,6 +16,7 @@ trait DagDataSyntax {
 
 final class DagDataMessageOps[M, MId, S, SId](private val m: M) extends AnyVal {
   /* Boilerplate code to enable field like access to M type */
+  def mid(implicit dagData: DagData[M, MId, S, SId]): MId       = dagData.mid(m)
   def seqNum(implicit dagData: DagData[M, MId, S, SId]): Long   = dagData.seqNum(m)
   def blockNum(implicit dagData: DagData[M, MId, S, SId]): Long = dagData.blockNum(m)
   def justifications(implicit dagData: DagData[M, MId, S, SId]): Set[MId] =
@@ -26,5 +27,5 @@ final class DagDataMessageOps[M, MId, S, SId](private val m: M) extends AnyVal {
 
 final class DagDataSenderOps[M, MId, S, SId](private val s: S) extends AnyVal {
   /* Boilerplate code to enable field like access to S type */
-  def stake(implicit dagData: DagData[M, MId, S, SId]): Long = dagData.stake(s)
+  def sid(implicit dagData: DagData[M, MId, S, SId]): SId = dagData.sid(s)
 }
