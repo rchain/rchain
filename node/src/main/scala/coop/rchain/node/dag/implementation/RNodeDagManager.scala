@@ -42,14 +42,9 @@ final case class RNodeDagManager[F[_]: Concurrent, M, MId, S, SId] private (
   override def latestMessages: F[Map[S, Set[M]]] = ???
 
   /**
-    * Thread safe function to insert new message to the DAG.
+    * Thread safe function to insert new message to the DAG with corresponding finalized messages.
     */
-  override def insert(msg: M): F[Unit] = ???
-
-  /**
-    * Thread safe function to update finalized nodes of the DAG seen by specific message.
-    */
-  override def finalize(by: MId, finalized: Set[MId]): F[Unit] = ???
+  override def insert(msg: M, finalized: Set[MId], provisionallyFinalized: Boolean): F[Unit] = ???
 
   override def loadMessage(mid: MId): F[M] = ???
 

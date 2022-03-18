@@ -21,14 +21,9 @@ trait DagManager[F[_], M, MId, S, SId] {
   def latestMessages: F[Map[S, Set[M]]]
 
   /**
-    * Thread safe function to insert new message to the DAG.
+    * Thread safe function to insert new message to the DAG with corresponding finalized messages.
     */
-  def insert(msg: M): F[Unit]
-
-  /**
-    * Thread safe function to update finalized nodes of the DAG seen by specific message.
-    */
-  def finalize(by: MId, finalized: Set[MId]): F[Unit]
+  def insert(msg: M, finalized: Set[MId], provisionallyFinalized: Boolean): F[Unit]
 
   /* Basic loading operations */
 
