@@ -80,9 +80,9 @@ object BlockAPI {
 
     // Check if deploy's shardId equals to node shardId
     val shardIdError = new RuntimeException(
-      "Deploy was rejected because its shard is not equal node shard"
+      s"Deploy shardId '${d.data.shardId}' is not as expected network shard '$shardId'."
     ).raiseError[F, ApiErr[String]]
-    val shardIdCheck = shardIdError.whenA((d.data.shardId != shardId))
+    val shardIdCheck = shardIdError.whenA(d.data.shardId != shardId)
 
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
