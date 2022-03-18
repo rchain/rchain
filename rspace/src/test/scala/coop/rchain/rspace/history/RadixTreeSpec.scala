@@ -149,7 +149,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "updating leaf" should "work correctly" in withImplAndStore { (impl, _) =>
+  "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
     val firstLeafData = createBV32(0xCB.toByte)
     val newLeafData   = createBV32(0xFF.toByte)
     val leafKey       = TestData.hexKey("0123456F1").toVector
@@ -411,7 +411,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "collision detecting in KVDB" should "works" in withImplAndStore { (impl, inMemoStore) =>
+  "collisions in KVDB" should "be detected" in withImplAndStore { (impl, inMemoStore) =>
     def copyBVToBuf(bv: ByteVector): ByteBuffer = {
       val arr    = bv.toArray
       val newBuf = ByteBuffer.allocateDirect(arr.length)
@@ -454,7 +454,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     }
   }
 
-  "encoding and decoding node" should "work" in withImplAndStore { (impl, _) =>
+  "encode and decode" should "give initial node" in withImplAndStore { (impl, _) =>
     for {
       item1 <- impl.update(
                 RadixTree.EmptyItem,
@@ -677,7 +677,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "function commonPrefix" should "work" in {
+  "function commonPrefix" should "return correct prefixes" in {
     val v12345 = ByteVector(1, 2, 3, 4, 5)
     val v1245  = ByteVector(1, 2, 4, 5)
     val v123   = ByteVector(1, 2, 3)
