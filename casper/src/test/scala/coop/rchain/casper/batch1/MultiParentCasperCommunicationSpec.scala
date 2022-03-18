@@ -17,20 +17,18 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
+  val genesis = buildGenesis()
 
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deploy1 <- ConstructDeploy
-                    .sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)", shardId = SHARD_ID)
+        deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
 
         signedBlock1 <- nodes(0).addBlock(deploy1)
         _            <- nodes(1).handleReceive()
         _            <- nodes(2).shutoff() //nodes(2) misses this block
 
-        deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)", shardId = SHARD_ID)
+        deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
         signedBlock2 <- nodes(0).addBlock(deploy2)
 
         _ <- nodes(2).addBlock(signedBlock2)
@@ -76,8 +74,7 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
     def makeDeploy(i: Int): Effect[Signed[DeployData]] =
       ConstructDeploy.sourceDeployNowF(
         Vector("@2!(2)", "@1!(1)")(i),
-        sec = if (i == 0) ConstructDeploy.defaultSec else ConstructDeploy.defaultSec2,
-        shardId = SHARD_ID
+        sec = if (i == 0) ConstructDeploy.defaultSec else ConstructDeploy.defaultSec2
       )
 
     def stepSplit(nodes: Seq[TestNode[Effect]]) =
@@ -130,12 +127,12 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
         for {
           _ <- (0 to 9).toList.traverse_[Effect, Unit] { i =>
                 for {
-                  deploy <- ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)
+                  deploy <- ConstructDeploy.basicDeployData[Effect](i)
                   block  <- nodes(0).addBlock(deploy)
                   _      <- nodes(1).shutoff() //nodes(1) misses this block
                 } yield ()
               }
-          deployData10 <- ConstructDeploy.basicDeployData[Effect](10, shardId = SHARD_ID)
+          deployData10 <- ConstructDeploy.basicDeployData[Effect](10)
           block11      <- nodes(0).addBlock(deployData10)
 
           // Cycle of requesting and passing blocks until block #3 from nodes(0) to nodes(1)

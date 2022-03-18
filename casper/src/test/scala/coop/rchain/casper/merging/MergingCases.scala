@@ -24,7 +24,6 @@ class MergingCases extends FlatSpec with Matchers {
 
   val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
   val genesis                    = genesisContext.genesisBlock
-  private val SHARD_ID           = genesis.shardId
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]
 
@@ -50,8 +49,8 @@ class MergingCases extends FlatSpec with Matchers {
         val blockNum               = 1L
 
         for {
-          d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key, shardId = SHARD_ID)
-          d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key, shardId = SHARD_ID)
+          d1          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer1Key)
+          d2          <- ConstructDeploy.sourceDeployNowF("Nil", sec = payer2Key)
           userDeploys = Seq(d1, d2)
           systemDeploys = CloseBlockDeploy(
             SystemDeployUtil

@@ -15,13 +15,11 @@ class MultiParentCasperSmokeSpec extends FlatSpec with Matchers with Inspectors 
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  private val genesis  = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
+  private val genesis = buildGenesis()
 
   it should "perform the most basic deploy successfully" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
-      ConstructDeploy.sourceDeployNowF("new x in { x!(0) }", shardId = SHARD_ID) >>= (node
-        .addBlock(_))
+      ConstructDeploy.sourceDeployNowF("new x in { x!(0) }") >>= (node.addBlock(_))
     }
   }
 

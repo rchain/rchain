@@ -239,18 +239,15 @@ trait BasicMergeabilityRules extends ComputeMerge {
   ): Task[Unit] = {
 
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
-    val shardId = ""
-    val baseDeploy =
-      ConstructDeploy.sourceDeploy(base.value, 1L, phloLimit = 500, shardId = shardId)
-    val leftDeploy =
-      ConstructDeploy.sourceDeploy(left.value, 2L, phloLimit = 500, shardId = shardId)
+
+    val baseDeploy = ConstructDeploy.sourceDeploy(base.value, 1L, phloLimit = 500)
+    val leftDeploy = ConstructDeploy.sourceDeploy(left.value, 2L, phloLimit = 500)
     val rightDeploy =
       ConstructDeploy.sourceDeploy(
         right.value,
         3L,
         phloLimit = 500,
-        sec = ConstructDeploy.defaultSec2,
-        shardId = shardId
+        sec = ConstructDeploy.defaultSec2
       )
     implicit val metricsEff: Metrics[Task] = new Metrics.MetricsNOP[Task]
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()

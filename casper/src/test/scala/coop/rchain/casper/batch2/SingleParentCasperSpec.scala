@@ -19,8 +19,7 @@ import org.scalatest.{FlatSpec, Inspectors, Matchers}
 class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
+  val genesis = buildGenesis()
 
   "SingleParentCasper" should "create blocks with a single parent" in effectTest {
     TestNode.networkEff(genesis, networkSize = 2, maxNumberOfParents = 1).use {
@@ -28,7 +27,7 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
         for {
           deployDatas <- (0 to 2).toList
                           .traverse[Effect, Signed[DeployData]](
-                            i => ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)
+                            i => ConstructDeploy.basicDeployData[Effect](i)
                           )
           b1 <- n1.addBlock(deployDatas(0))
           b2 <- n2.addBlock(deployDatas(1))
@@ -47,7 +46,7 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
         for {
           deployDatas <- (0 to 2).toList
                           .traverse[Effect, Signed[DeployData]](
-                            i => ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)
+                            i => ConstructDeploy.basicDeployData[Effect](i)
                           )
           b1 <- n1.addBlock(deployDatas(0))
           b2 <- n2.addBlock(deployDatas(1))

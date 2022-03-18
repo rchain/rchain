@@ -475,15 +475,14 @@ class TreeHashMapMergeabilitySpec
     implicit val noopSpan: Span[Task]      = NoopSpan[Task]()
     implicit val logger: Log[Task]         = Log.log[Task]
     val baseDeploy =
-      ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value, shardId = SHARD_ID)
+      ConstructDeploy.sourceDeploy(base, 1L, phloLimit = Cost.UNSAFE_MAX.value)
     val leftDeploy =
-      ConstructDeploy.sourceDeploy(left, 2L, phloLimit = Cost.UNSAFE_MAX.value, shardId = SHARD_ID)
+      ConstructDeploy.sourceDeploy(left, 2L, phloLimit = Cost.UNSAFE_MAX.value)
     val rightDeploy = ConstructDeploy.sourceDeploy(
       right,
       3L,
       phloLimit = Cost.UNSAFE_MAX.value,
-      sec = ConstructDeploy.defaultSec2,
-      shardId = SHARD_ID
+      sec = ConstructDeploy.defaultSec2
     )
     computeMergeCase[Task](
       Seq(StandardDeploys.registry(SHARD_ID), baseDeploy),

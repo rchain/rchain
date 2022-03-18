@@ -31,7 +31,6 @@ class LastFinalizedAPITest
     with BlockDagStorageFixture {
   val genesisParameters = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
   val genesisContext    = buildGenesis(genesisParameters)
-  private val SHARD_ID  = genesisContext.genesisBlock.shardId
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
@@ -75,8 +74,7 @@ class LastFinalizedAPITest
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 7).toList
-                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
+          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
           b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.publishBlock(produceDeploys(1))()
@@ -122,8 +120,7 @@ class LastFinalizedAPITest
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 7).toList
-                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
+          produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
 
           b1 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(1))(n1)

@@ -19,7 +19,6 @@ import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
   val genesis: GenesisContext = buildGenesis()
-  private val SHARD_ID        = genesis.genesisBlock.shardId
 
   def checkTransactionAPI(term: String, phloLimit: Long, phloPrice: Long, deployKey: PrivateKey) =
     TestNode.networkEff(genesis, networkSize = 1, withReadOnlySize = 1).use { nodes =>
@@ -36,8 +35,7 @@ class TransactionAPISpec extends FlatSpec with Matchers with Inspectors {
                    term,
                    sec = deployKey,
                    phloLimit = phloLimit,
-                   phloPrice = phloPrice,
-                   shardId = SHARD_ID
+                   phloPrice = phloPrice
                  )
         transactionAPI = Transaction[Task](
           blockReportAPI,

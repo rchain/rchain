@@ -19,7 +19,6 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
   val genesis = buildGenesis(
     buildGenesisParameters(bondsFunction = _.map(pk => pk -> 10L).toMap)
   )
-  private val SHARD_ID = genesis.genesisBlock.shardId
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -40,9 +39,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
       }
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deployDatas <- (0 to 7).toList.traverse(
-                        i => ConstructDeploy.basicDeployData[Effect](i, shardId = SHARD_ID)
-                      )
+        deployDatas <- (0 to 7).toList.traverse(i => ConstructDeploy.basicDeployData[Effect](i))
 
         block1 <- nodes(0).propagateBlock(deployDatas(0))(nodes: _*)
         block2 <- nodes(1).propagateBlock(deployDatas(1))(nodes: _*)

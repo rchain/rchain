@@ -23,7 +23,6 @@ import scala.concurrent.duration._
 class DeployIdTest extends FlatSpec with Matchers {
   implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
-  private val SHARD_ID = "root-shard"
   private val runtimeManager: Resource[Task, RuntimeManager[Task]] =
     mkRuntimeManager[Task]("deploy-id-runtime-manager-test")
 
@@ -32,21 +31,15 @@ class DeployIdTest extends FlatSpec with Matchers {
   private def deploy(
       deployer: PrivateKey,
       rho: String,
-      timestamp: Long = System.currentTimeMillis(),
-      shardId: String
+      timestamp: Long = System.currentTimeMillis()
   ): Signed[DeployData] = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
-    sec = deployer,
-    shardId = shardId
+    sec = deployer
   )
 
   "Deploy id" should "be equal to deploy signature" in {
-    val d = deploy(
-      sk,
-      s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""",
-      shardId = SHARD_ID
-    )
+    val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
     val result =
       runtimeManager
         .use(
@@ -67,13 +60,11 @@ class DeployIdTest extends FlatSpec with Matchers {
   it should "be resolved during normalization" in effectTest {
     val contract = deploy(
       sk,
-      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}""",
-      shardId = SHARD_ID
+      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}"""
     )
     val contractCall = deploy(
       sk,
-      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }""",
-      shardId = SHARD_ID
+      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }"""
     )
 
     TestNode.standaloneEff(genesisContext).use { node =>

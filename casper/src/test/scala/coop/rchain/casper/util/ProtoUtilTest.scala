@@ -32,15 +32,13 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
 
   implicit val timeEff = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
+  val genesis = buildGenesis()
 
   "unseenBlockHashes" should "return empty for a single block dag" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       import node.blockStore
       for {
-        signedBlock <- ConstructDeploy
-                        .basicDeployData[Effect](0, shardId = SHARD_ID) >>= (node.addBlock(_))
+        signedBlock       <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
         dag               <- node.casperEff.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, signedBlock)
         _                 = unseenBlockHashes should be(Set.empty[BlockHash])
@@ -54,10 +52,8 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        block0 <- ConstructDeploy
-                   .basicDeployData[Effect](0, shardId = SHARD_ID) >>= (node.addBlock(_))
-        block1 <- ConstructDeploy
-                   .basicDeployData[Effect](1, shardId = SHARD_ID) >>= (node.addBlock(_))
+        block0            <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
+        block1            <- ConstructDeploy.basicDeployData[Effect](1) >>= (node.addBlock(_))
         dag               <- node.casperEff.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, block0)
         _                 = unseenBlockHashes should be(Set(block1.blockHash))

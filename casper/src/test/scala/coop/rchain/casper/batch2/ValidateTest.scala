@@ -329,7 +329,7 @@ class ValidateTest
   "Future deploy validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = -1),
@@ -347,7 +347,7 @@ class ValidateTest
   "Future deploy validation" should "not accept blocks with a deploy for a future block number" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = Long.MaxValue),
@@ -365,7 +365,7 @@ class ValidateTest
   "Deploy expiration validation" should "work" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
+        deploy <- ConstructDeploy.basicProcessedDeploy[Task](0)
         block <- createGenesis[Task](
                   deploys = Seq(deploy)
                 )
@@ -377,7 +377,7 @@ class ValidateTest
   "Deploy expiration validation" should "not accept blocks with a deploy that is expired" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
+        deploy     <- ConstructDeploy.basicProcessedDeploy[Task](0)
         deployData = deploy.deploy.data
         updatedDeployData = Signed(
           deployData.copy(validAfterBlockNumber = Long.MinValue),
@@ -458,7 +458,7 @@ class ValidateTest
   it should "not accept blocks with a repeated deploy" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0, shardId = SHARD_ID)
+        deploy  <- ConstructDeploy.basicProcessedDeploy[Task](0)
         genesis <- createGenesis[Task](deploys = Seq(deploy))
         block1 <- createBlock[Task](
                    Seq(genesis.blockHash),
@@ -509,7 +509,7 @@ class ValidateTest
     ): F[BlockMessage] =
       for {
         current <- Time[F].currentMillis
-        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt, shardId = SHARD_ID)
+        deploy  <- ConstructDeploy.basicProcessedDeploy[F](current.toInt)
         block <- createBlock[F](
                   parents.map(_.blockHash),
                   genesis,

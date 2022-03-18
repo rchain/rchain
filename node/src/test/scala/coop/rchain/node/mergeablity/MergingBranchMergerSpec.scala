@@ -37,7 +37,6 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
 
   val genesisContext             = GenesisBuilder.buildGenesis(validatorsNum = 5)
   val genesis                    = genesisContext.genesisBlock
-  private val SHARD_ID           = genesis.shardId
   implicit val logEff            = Log.log[Task]
   implicit val timeF: Time[Task] = new LogicalTime[Task]
 
@@ -90,8 +89,7 @@ class MergingBranchMergerSpec extends FlatSpec with Matchers {
     for {
       txDeploy <- ConstructDeploy.sourceDeployNowF(
                    txRho(payerAddr, payeeAddr),
-                   sec = payerKey,
-                   shardId = SHARD_ID
+                   sec = payerKey
                  )
       userDeploys = txDeploy :: Nil
       systemDeploys = CloseBlockDeploy(
