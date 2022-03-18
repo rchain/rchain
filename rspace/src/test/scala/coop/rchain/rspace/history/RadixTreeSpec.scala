@@ -590,9 +590,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       hash         = rootNode2Opt.map(node => impl.saveNode(node))
       committed1   <- impl.commit
 
-      store1                  = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-      exported                <- sequentialExport(hash.get, None, 0, 100, store1.get1, exportSettings)
-      (exportData, vectorOpt) = exported
+      store1          = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      exported        <- sequentialExport(hash.get, None, 0, 100, store1.get1, exportSettings)
+      (exportData, _) = exported
 
       (nodeKeys, nodeValues, leafValues) = (
         exportData.nodeKeys.map(_.toString()),
