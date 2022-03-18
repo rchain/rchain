@@ -754,7 +754,10 @@ object RadixTree {
             (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
 
           case Leaf(leafPrefix, leafValue) =>
-            assert(leafPrefix.size == insPrefix.size, "All Radix keys should be same length.")
+            assert(
+              leafPrefix.size == insPrefix.size,
+              "The length of all prefixes in the subtree must be the same."
+            )
             if (leafPrefix == insPrefix) {
               if (insValue == leafValue) none[Item].pure
               else (Leaf(insPrefix, insValue): Item).some.pure

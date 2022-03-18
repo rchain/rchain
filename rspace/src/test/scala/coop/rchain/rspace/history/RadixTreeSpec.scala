@@ -190,7 +190,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "RadixTreeImpl" should "not allow to enter keys with different lengths" in withImplAndStore {
+  "RadixTreeImpl" should "not allow to enter keys with different lengths in the subtree" in withImplAndStore {
     (impl, _) =>
       val leafData    = createBV32(0xCB.toByte)
       val leafKey     = TestData.hexKey("0123456F1").toVector
@@ -202,7 +202,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         err.isLeft shouldBe true
         val ex = err.left.get
         ex shouldBe a[AssertionError]
-        ex.getMessage shouldBe s"assertion failed: All Radix keys should be same length."
+        ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
       }
   }
 
