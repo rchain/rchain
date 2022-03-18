@@ -239,7 +239,7 @@ trait BasicMergeabilityRules extends ComputeMerge {
   ): Task[Unit] = {
 
     case class MergingNode(index: BlockIndex, isFinalized: Boolean, postState: Blake2b256Hash)
-
+    val shardId = ""
     val baseDeploy =
       ConstructDeploy.sourceDeploy(base.value, 1L, phloLimit = 500, shardId = shardId)
     val leftDeploy =
@@ -294,6 +294,4 @@ trait BasicMergeabilityRules extends ComputeMerge {
         new TestFailedException(e, failedCodeStackDepth = 5).severedAtStackDepth
     }
   }
-
-  def shardId: String
 }

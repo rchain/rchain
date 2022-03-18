@@ -3,11 +3,7 @@ package coop.rchain.node.mergeablity
 import coop.rchain.node.mergeablity.OperationOn0Ch._
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
-class JoinMergeability(shardName: String)
-    extends FlatSpec
-    with Matchers
-    with Inspectors
-    with BasicMergeabilityRules {
+class JoinMergeability extends FlatSpec with Matchers with Inspectors with BasicMergeabilityRules {
   it should "J S S" in ConflictingCase(S0)(S1)(J_)(J_.rstate ++ S0.rstate)(
     J_.rstate ++ S1.rstate
   )
@@ -114,6 +110,4 @@ class JoinMergeability(shardName: String)
   it should "N J R" in ConflictingCase(R0)(J_)(Nil)(R0.rstate)(J_.rstate)
   it should "N J P" in MergeableCase(P1)(J_)(Nil)(J_.rstate ++ P1.rstate)
   it should "N J N" in MergeableCase(Nil)(J_)(Nil)(J_.rstate)
-
-  override def shardId: String = shardName
 }
