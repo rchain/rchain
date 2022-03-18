@@ -54,7 +54,8 @@ object BlockAPI {
       d: Signed[DeployData],
       triggerPropose: Option[ProposeFunction[F]],
       minPhloPrice: Long,
-      isNodeReadOnly: Boolean
+      isNodeReadOnly: Boolean,
+      shardId: String
   ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
 
     def casperDeploy(casper: MultiParentCasper[F]): F[ApiErr[String]] =
@@ -77,6 +78,12 @@ object BlockAPI {
     ).raiseError[F, ApiErr[String]]
     val readOnlyCheck = readOnlyError.whenA(isNodeReadOnly)
 
+    // Check if deploy's shardId equals to node shardId
+    val shardIdError = new RuntimeException(
+      "Deploy was rejected because its shard is not equal node shard"
+    ).raiseError[F, ApiErr[String]]
+    val shardIdCheck = shardIdError.whenA((d.data.shardId != shardId))
+
     // Check if deploy is signed with system keys
     val isForbiddenKey = StandardDeploys.systemPublicKeys.contains(d.pk)
     val forbiddenKeyError = new RuntimeException(
@@ -96,7 +103,7 @@ object BlockAPI {
       .warn(errorMessage)
       .as(s"Error: $errorMessage".asLeft[String])
 
-    readOnlyCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
+    readOnlyCheck >> shardIdCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
       ApiErr[String]
     ](
       casperDeploy,
