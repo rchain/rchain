@@ -72,8 +72,7 @@ class RhoTrieTraverserTest extends FlatSpec {
                                .sourceDeploy(
                                  trieInitializedRho,
                                  1L,
-                                 phloLimit = 50000000,
-                                 shardId = SHARD_ID
+                                 phloLimit = 50000000
                                )
                            )
           (initialTrie, _) = initialTrieRes

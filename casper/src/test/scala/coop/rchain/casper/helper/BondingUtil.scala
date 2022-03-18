@@ -11,8 +11,7 @@ import coop.rchain.shared.Time
 object BondingUtil {
   def bondingDeploy[F[_]: Functor: Time](
       amount: Long,
-      privateKey: PrivateKey,
-      shardId: String
+      privateKey: PrivateKey
   ): F[Signed[DeployData]] =
     ConstructDeploy
       .sourceDeployNowF(
@@ -23,7 +22,6 @@ object BondingUtil {
          |    @PoS!("bond", *deployerId, 1000, *retCh)
          |  }
          |}
-         |""".stripMargin,
-        shardId = shardId
+         |""".stripMargin
       )
 }

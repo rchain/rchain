@@ -19,8 +19,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
 
   implicit val timeEff: LogicalTime[Effect] = new LogicalTime[Effect]
 
-  val genesis          = buildGenesis()
-  private val SHARD_ID = genesis.genesisBlock.shardId
+  val genesis = buildGenesis()
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
@@ -29,7 +28,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
       implicit val rm: RuntimeManager[Effect] = node.runtimeManager
 
       for {
-        deploy  <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
+        deploy  <- ConstructDeploy.basicDeployData[Effect](0)
         block   <- node.createBlockUnsafe(deploy)
         deploys = block.body.deploys.map(_.deploy)
         parents = ProtoUtil.parentHashes(block)
@@ -75,15 +74,14 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         )
 
       for {
-        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource, shardId = SHARD_ID)
+        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource)
         block0         <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
                        calculateUnforgeableName(registerDeploy.data.timestamp)
                      )
-        callDeploy <- ConstructDeploy
-                       .sourceDeployNowF(callSource(registryId.head), shardId = SHARD_ID)
-        block1 <- node.addBlock(callDeploy)
+        callDeploy <- ConstructDeploy.sourceDeployNowF(callSource(registryId.head))
+        block1     <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
                  calculateUnforgeableName(callDeploy.data.timestamp)

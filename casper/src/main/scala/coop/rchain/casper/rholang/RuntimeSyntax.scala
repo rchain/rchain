@@ -456,8 +456,7 @@ final class RuntimeOps[F[_]: Sync: Span: Log](
       timestamp = System.currentTimeMillis,
       // Hardcoded phlogiston limit / 1 REV if phloPrice=1
       phloLimit = 100 * 1000 * 1000,
-      sec = privKey,
-      shardId = ""
+      sec = privKey
     )
 
     // Create return channel as first private name created in deploy term

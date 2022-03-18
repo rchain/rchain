@@ -29,7 +29,7 @@ object ConstructDeploy {
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec,
       vabn: Long = 0,
-      shardId: String
+      shardId: String = ""
   ): Signed[DeployData] = {
     val data =
       DeployData(
@@ -48,7 +48,7 @@ object ConstructDeploy {
       source: String,
       sec: PrivateKey = defaultSec,
       vabn: Long = 0,
-      shardId: String
+      shardId: String = ""
   ): Signed[DeployData] =
     sourceDeploy(
       source = source,
@@ -64,7 +64,7 @@ object ConstructDeploy {
       phloPrice: Long = 1L,
       sec: PrivateKey = defaultSec,
       vabn: Long = 0,
-      shardId: String
+      shardId: String = ""
   ): F[Signed[DeployData]] =
     Time[F].nanoTime.map {
       sourceDeploy(
@@ -82,24 +82,24 @@ object ConstructDeploy {
   def basicDeployData[F[_]: Monad: Time](
       id: Int,
       sec: PrivateKey = defaultSec,
-      shardId: String
+      shardId: String = ""
   ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"@$id!($id)", sec = sec, shardId = shardId)
 
   def basicSendDeployData[F[_]: Monad: Time](
       id: Int,
-      shardId: String
+      shardId: String = ""
   ): F[Signed[DeployData]] = basicDeployData[F](id, shardId = shardId)
 
   def basicReceiveDeployData[F[_]: Monad: Time](
       id: Int,
-      shardId: String
+      shardId: String = ""
   ): F[Signed[DeployData]] =
     sourceDeployNowF(source = s"for(_ <- @$id){ Nil }", shardId = shardId)
 
   def basicProcessedDeploy[F[_]: Monad: Time](
       id: Int,
-      shardId: String
+      shardId: String = ""
   ): F[ProcessedDeploy] =
     basicDeployData[F](id, shardId = shardId).map(
       deploy => ProcessedDeploy(deploy = deploy, cost = PCost(0L), List.empty, false)

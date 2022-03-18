@@ -29,7 +29,6 @@ class ExploratoryDeployAPITest
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
   val genesisParameters   = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
   val genesisContext      = buildGenesis(genesisParameters)
-  private val SHARD_ID    = genesisContext.genesisBlock.shardId
 
   def exploratoryDeploy(term: String)(engineCell: Cell[Task, Engine[Task]])(
       implicit blockStore: BlockStore[Task],
@@ -56,42 +55,36 @@ class ExploratoryDeployAPITest
    *         genesis
    */
   it should "exploratoryDeploy get data from the read only node" in effectTest {
-    TestNode
-      .networkEff(genesisContext, networkSize = 3, withReadOnlySize = 1)
-      .use {
-        case nodes @ n1 +: n2 +: _ +: readOnly +: Seq() =>
-          import readOnly.{blockStore, cliqueOracleEffect, logEff}
-          val engine     = new EngineWithCasper[Task](readOnly.casperEff)
-          val storedData = "data"
-          for {
-            produceDeploys <- (0 until 2).toList
-                               .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
-            putDataDeploy <- sourceDeployNowF[Task](
-                              s"""@"store"!("$storedData")""",
-                              shardId = SHARD_ID
-                            )
-            _  <- n1.propagateBlock(putDataDeploy)(nodes: _*)
-            b2 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
-            _  <- n2.propagateBlock(produceDeploys(1))(nodes: _*)
+    TestNode.networkEff(genesisContext, networkSize = 3, withReadOnlySize = 1).use {
+      case nodes @ n1 +: n2 +: _ +: readOnly +: Seq() =>
+        import readOnly.{blockStore, cliqueOracleEffect, logEff}
+        val engine     = new EngineWithCasper[Task](readOnly.casperEff)
+        val storedData = "data"
+        for {
+          produceDeploys <- (0 until 2).toList.traverse(i => basicDeployData[Task](i))
+          putDataDeploy  <- sourceDeployNowF[Task](s"""@"store"!("$storedData")""")
+          _              <- n1.propagateBlock(putDataDeploy)(nodes: _*)
+          b2             <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
+          _              <- n2.propagateBlock(produceDeploys(1))(nodes: _*)
 
-            engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-            result <- exploratoryDeploy(
-                       "new return in { for (@data <- @\"store\") {return!(data)}}"
-                     )(
-                       engineCell
-                     ).map(_.right.value)
-            (par, lastFinalizedBlock) = result
-            _                         = lastFinalizedBlock.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
-            _ = par match {
-              case Seq(Par(_, _, _, Seq(expr), _, _, _, _, _, _)) =>
-                expr match {
-                  case Expr(GString(data)) => data shouldBe storedData
-                  case _                   => fail("Could not get data from exploretory api")
-                }
-            }
+          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
+          result <- exploratoryDeploy(
+                     "new return in { for (@data <- @\"store\") {return!(data)}}"
+                   )(
+                     engineCell
+                   ).map(_.right.value)
+          (par, lastFinalizedBlock) = result
+          _                         = lastFinalizedBlock.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
+          _ = par match {
+            case Seq(Par(_, _, _, Seq(expr), _, _, _, _, _, _)) =>
+              expr match {
+                case Expr(GString(data)) => data shouldBe storedData
+                case _                   => fail("Could not get data from exploretory api")
+              }
+          }
 
-          } yield ()
-      }
+        } yield ()
+    }
   }
 
   it should "exploratoryDeploy return error on bonded validator" in effectTest {
@@ -100,9 +93,8 @@ class ExploratoryDeployAPITest
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 1).toList
-                             .traverse(i => basicDeployData[Task](i, shardId = SHARD_ID))
-          _ <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
+          produceDeploys <- (0 until 1).toList.traverse(i => basicDeployData[Task](i))
+          _              <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           result <- exploratoryDeploy("new return in { return!(1) }")(

@@ -30,7 +30,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deploy   <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
+        deploy   <- ConstructDeploy.basicDeployData[Effect](0)
         res      <- MultiParentCasper[Effect].deploy(deploy)
         deployId = res.right.get
       } yield deployId shouldBe deploy.sig
@@ -42,7 +42,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
-        deploy             <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
+        deploy             <- ConstructDeploy.basicDeployData[Effect](0)
         _                  <- node0.propagateBlock(deploy)(node1)
         createBlockResult2 <- node1.createBlock(deploy)
       } yield (createBlockResult2 should be(NoNewDeploys))
@@ -54,8 +54,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy
-                       .sourceDeployNowF[Effect]("Nil", phloLimit = 1, shardId = SHARD_ID)
+        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 1)
         r              <- node.createBlock(deployData)
         Created(block) = r
       } yield assert(block.body.deploys.head.isFailed)
@@ -67,8 +66,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
       implicit val timeEff = new LogicalTime[Effect]
 
       for {
-        deployData <- ConstructDeploy
-                       .sourceDeployNowF[Effect]("Nil", phloLimit = 100, shardId = SHARD_ID)
+        deployData     <- ConstructDeploy.sourceDeployNowF[Effect]("Nil", phloLimit = 100)
         r              <- node.createBlock(deployData)
         Created(block) = r
       } yield assert(!block.body.deploys.head.isFailed)
@@ -86,7 +84,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         val isNodeReadOnly = false
         for {
           deployData <- ConstructDeploy
-                         .sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice, shardId = SHARD_ID)
+                         .sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
           err <- BlockAPI
                   .deploy[Effect](
                     deployData,
