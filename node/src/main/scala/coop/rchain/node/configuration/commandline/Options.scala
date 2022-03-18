@@ -651,13 +651,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = false
     )
 
-    val location = trailArg[String](required = true)
-
     val shardId = opt[String](
       descr = "The name of the shard",
-      required = false
+      required = false,
+      default = Some("")
     )
 
+    val location = trailArg[String](required = true)
   }
   addSubcommand(deploy)
 
