@@ -17,7 +17,6 @@
 new
   RevVaultDispatcher,
   RevVault,
-  RevVaultLoc,
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   rl(`rho:registry:lookup`),
@@ -282,57 +281,8 @@ in {
           contract RevVault(@"extractState", ret) = {
             ret!(vaultMap)
           } |
-          // Dispatcher contract
-          // for use with 1-9 arguments
-          contract RevVaultDispatcher(@arg1) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4, arg5)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4, arg5, arg6)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-            }
-          } |
-          contract RevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-            for (realRV <<- RevVaultLoc) {
-              realRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-            }
-          } |
           // Insert location channel into the registry location map
-          rb!(`rho:rchain:revVault`, *RevVaultLoc) |
-          // Put the contract data on the location channel
-          RevVaultLoc!(bundle+{*RevVault}) |
+          rb!(`rho:rchain:revVault`, bundle+{*RevVault}, *RevVaultDispatcher) |
           // Insert the signed, write-only dispatcher contract into the registry uri map
           rs!(
             "040f035630a5d2199184890b4b6b83440c842da0b6becca539f788f7b35d6e873561f673cd6ebe2e32236398a86f29dad992e8fba32534734300fcc5104bcfea0e".hexToBytes(),

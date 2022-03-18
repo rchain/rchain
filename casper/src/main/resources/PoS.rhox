@@ -70,7 +70,6 @@ User transfer the bonding amount directly to posVault. `allBonds` would update w
 new
   PosDispatcher,
   PoS,
-  PosLoc,
   rb(`rho:registry:insertBlessed`),
   registryLookup(`rho:registry:lookup`),
   revAddressOps(`rho:rev:address`),
@@ -745,57 +744,9 @@ in {
         }
       } 
     } |
-    // Dispatcher contract
-    // for use with 1-9 arguments
-    contract PosDispatcher(@arg1) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4, arg5)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4, arg5, arg6)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-      }
-    } |
-    contract PosDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-      for (realPoS <<- PosLoc) {
-        realPoS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-      }
-    } |
     // Insert location channel into the registry location map
-    rb!(`rho:rchain:pos`, *PosLoc) |
+    rb!(`rho:rchain:pos`, bundle+{*PoS}, *PosDispatcher) |
     // Put the contract data on the location channel
-    PosLoc!(bundle+{*PoS}) |
     // Insert the signed, write-only dispatcher contract into the registry uri map
     rs!(
       "047b43d6548b72813b89ac1b9f9ca67624a8b372feedd71d4e2da036384a3e1236812227e524e6f237cde5f80dbb921cac12e6500791e9a9ed1254a745a816fe1f".hexToBytes(),

@@ -19,7 +19,6 @@ new
   NonNegativeNumberDispatcher,
   MergeableTag,
   NonNegativeNumber,
-  NonNegativeNumberLoc,
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   uriOut
@@ -73,57 +72,8 @@ in {
   contract NonNegativeNumber(@"extractState", ret) = {
     ret!([])
   } |
-  // Dispatcher contract
-  // for use with 1-9 arguments
-  contract NonNegativeNumberDispatcher(@arg1) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4, arg5)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-    }
-  } |
-  contract NonNegativeNumberDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-    for (realNNN <<- NonNegativeNumberLoc) {
-      realNNN!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-    }
-  } |
-  // Put NNN contract on the location channel
-  NonNegativeNumberLoc!(bundle+{*NonNegativeNumber}) |
   // Insert the contract location in the registry location map
-  rb!(`rho:lang:nonNegativeNumber`, *NonNegativeNumberLoc) |
+  rb!(`rho:lang:nonNegativeNumber`, bundle+{*NonNegativeNumber}, *NonNegativeNumberDispatcher) |
   // Inserts signed write-only dispatcher contract into the registry
   rs!(
     "04e1559d809924e564dce57e34646e155b144d2a504ce7ee519d7a5108fd42f1038d08d745e5ea21cb53d6aa7c7174a768fa373207a83bc947a20c6a02ece7a60e".hexToBytes(),

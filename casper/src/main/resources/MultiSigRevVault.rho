@@ -18,7 +18,6 @@
 new
   MultiSigRevVaultDispatcher,
   MultiSigRevVault,
-  MultiSigRevVaultLoc,
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`),
@@ -283,59 +282,10 @@ in {
     // Method required for updates.
     contract MultiSigRevVault(@"extractState", ret) = {
       ret!([])
-    } |
-    // Dispatcher contract
-    // for use with 1-9 arguments
-    contract MultiSigRevVaultDispatcher(@arg1) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4, arg5)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-      }
-    } |
-    contract MultiSigRevVaultDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-      for (realMSRV <<- MultiSigRevVaultLoc) {
-        realMSRV!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-      }
     }
   } |
   // Insert location channel into the registry location map
-  rb!(`rho:rchain:multiSigRevVault`, *MultiSigRevVaultLoc) |
-  // Put the contract data on the location channel
-  MultiSigRevVaultLoc!(bundle+{*MultiSigRevVault}) |
+  rb!(`rho:rchain:multiSigRevVault`, bundle+{*MultiSigRevVault}, *MultiSigRevVaultDispatcher) |
   // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
     "04fe2eb1e0e7462b1a8f64600389e1e76727f8b2d38804eaa4b48f7a7d6715130fc24d3c4dac2d8bdc19e0b49879dbaf07c30773cd9740a9d14a092ef76339207a".hexToBytes(),

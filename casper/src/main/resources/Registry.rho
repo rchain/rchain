@@ -521,36 +521,82 @@ in {
       bootstrapInsertBlessed!(*insertBlessedCh) |
       for (insertBlessed <- insertBlessedCh) {
         // A consume is included for each (updatable) blessed contract
-        for (@`rho:rchain:authKey`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:rchain:authKey`, loc))
+        new newInsert in {
+          contract newInsert(@lib, @uri, dispatcher) = {
+            new loc in {
+              loc!(lib) |
+              contract dispatcher(@arg1) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+                }
+              } |
+              contract dispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+                for (realAK <<- loc) {
+                  realAK!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
+                }
+              } |
+              for (@bcMap <- blessedContractLocMapCh) {
+                blessedContractLocMapCh!(bcMap.set(uri, *loc))
+              } 
+            } 
+          }|
+          for (@`rho:rchain:authKey`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:authKey`, dispatcher)
+          } |
+          for (@`rho:rchain:makeMint`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:makeMint`, dispatcher)
+          } |
+          for (@`rho:rchain:multiSigRevVault`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:multiSigRevVault`, dispatcher)
+          } |
+          for (@`rho:lang:nonNegativeNumber`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:lang:nonNegativeNumber`, dispatcher)
+          } |
+          for (@`rho:rchain:pos`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:pos`, dispatcher)
+          } |
+          for (@`rho:rchain:revVault`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:revVault`, dispatcher)
+          } |
+          for (@`rho:rchain:testLib`, @lib, @dispatcher <- insertBlessed) {
+            newInsert!(lib, `rho:rchain:revVault`, dispatcher)
           }
-        } |
-        for (@`rho:rchain:makeMint`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:rchain:makeMint`, loc))
-          }
-        } |
-        for (@`rho:rchain:multiSigRevVault`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:rchain:multiSigRevVault`, loc))
-          }
-        } |
-        for (@`rho:lang:nonNegativeNumber`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:lang:nonNegativeNumber`, loc))
-          }
-        } |
-        for (@`rho:rchain:pos`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:rchain:pos`, loc))
-          }
-        } |
-        for (@`rho:rchain:revVault`, @loc <- insertBlessed) {
-          for (@bcMap <- blessedContractLocMapCh) {
-            blessedContractLocMapCh!(bcMap.set(`rho:rchain:revVault`, loc))
-          }
-        }
+        } 
       } |
       // --------
       // MultiSig

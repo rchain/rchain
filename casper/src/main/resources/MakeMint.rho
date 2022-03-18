@@ -16,7 +16,6 @@
 new
   MakeMintDispatcher,
   MakeMint,
-  MakeMintLoc,
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`),
   rl(`rho:registry:lookup`),
@@ -156,59 +155,10 @@ in {
     // Method required for updates.
     contract MakeMint(@"extractState", ret) = {
       ret!([])
-    } |
-    // Dispatcher contract
-    // for use with 1-9 arguments
-    contract MakeMintDispatcher(@arg1) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4, arg5)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4, arg5, arg6)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-      }
-    } |
-    contract MakeMintDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-      for (realMM <<- MakeMintLoc) {
-        realMM!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-      }
-    }
+    } 
   } |
   // Insert location channel into the registry location map
-  rb!(`rho:rchain:makeMint`, *MakeMintLoc) |
-  // Put the contract data on the location channel
-  MakeMintLoc!(bundle+{*MakeMint}) |
+  rb!(`rho:rchain:makeMint`, bundle+{*MakeMint}, *MakeMintDispatcher) |
   // Insert the signed, write-only dispatcher contract into the registry uri map
   rs!(
     "0470256c078e105d2958b9cf66f2161d83368f483c0219790277fb726a459be7f56a9a48bbecf72bcaed6a3515bd0a144faf6a6a8de8f6c9b3b7dff297eb371f28".hexToBytes(),
