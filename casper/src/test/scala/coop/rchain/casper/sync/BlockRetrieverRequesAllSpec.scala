@@ -31,7 +31,7 @@ import monix.execution.Scheduler.Implicits.global
 
 import scala.concurrent.duration._
 
-class BlockRetrieverRequesAllSpec extends FunSpec with BeforeAndAfterEach with Matchers {
+class BlockRetrieverRequestAllSpec extends FunSpec with BeforeAndAfterEach with Matchers {
 
   object testReason extends BlockRetriever.AdmitHashReason
 
@@ -75,6 +75,7 @@ class BlockRetrieverRequesAllSpec extends FunSpec with BeforeAndAfterEach with M
     transportLayer.setResponses(alwaysSuccess)
     log.reset()
     time.reset()
+    currentRequests.set(Map.empty).runSyncUnsafe()
   }
 
   describe("Running") {
@@ -141,7 +142,7 @@ class BlockRetrieverRequesAllSpec extends FunSpec with BeforeAndAfterEach with M
           }
         }
         describe("if waiting list has one peer left") {
-          it("should broadcast HasBlockRequest") {
+          it("should ask that peer") {
             // given
             val waitingList = List(peerNode("lastPeer"))
             val requested = RequestState(
@@ -156,27 +157,12 @@ class BlockRetrieverRequesAllSpec extends FunSpec with BeforeAndAfterEach with M
             val (recipient, msg) = transportLayer.getRequest(0)
             toBlockRequest(msg).hash should be(hash)
             recipient shouldBe waitingList.head
-            val (_, msg1) = transportLayer.getRequest(1)
-            toHasBlockRequest(msg1).hash should be(hash)
-            transportLayer.requests.size shouldBe 2
+            transportLayer.requests.size shouldBe 1
           }
-          it("should NOT send requests to other peers") {
-            // given
-            val waitingList = List.empty[PeerNode]
-            val requested = RequestState(
-              timestamp = timedOut,
-              peers = Set(peerNode("peer")),
-              waitingList = waitingList
-            )
-            currentRequests.set(Map(hash -> requested)).runSyncUnsafe()
-            // when
-            blockRetriever.requestAll(timeout).runSyncUnsafe()
-            // then
-            transportLayer.requests.size should be(0)
-          }
-          it(
-            "should remove the entry from the requested block lists when block is in casper buffer and after timeout"
-          ) {
+        }
+
+        describe("if waiting list has no peers left") {
+          it("should broadcast requests to other peers") {
             // given
             val waitingList = List.empty[PeerNode]
             val requested = RequestState(
@@ -189,9 +175,28 @@ class BlockRetrieverRequesAllSpec extends FunSpec with BeforeAndAfterEach with M
             // when
             blockRetriever.requestAll(timeout).runSyncUnsafe()
             // then
-            val requestedBlocksMapAfter = currentRequests.get.runSyncUnsafe()
-            requestedBlocksMapAfter.size should be(0)
+            val (_, msg) = transportLayer.getRequest(0)
+            toHasBlockRequest(msg).hash should be(hash)
+            transportLayer.requests.size should be(1)
           }
+        }
+        it(
+          "should remove the entry from the requested block lists when block is in casper buffer and after timeout"
+        ) {
+          // given
+          val waitingList = List.empty[PeerNode]
+          val requested = RequestState(
+            timestamp = timedOut,
+            inCasperBuffer = true,
+            peers = Set(peerNode("peer")),
+            waitingList = waitingList
+          )
+          currentRequests.set(Map(hash -> requested)).runSyncUnsafe()
+          // when
+          blockRetriever.requestAll(timeout).runSyncUnsafe()
+          // then
+          val requestedBlocksMapAfter = currentRequests.get.runSyncUnsafe()
+          requestedBlocksMapAfter.size should be(0)
         }
       }
     }
