@@ -53,5 +53,5 @@ final case class RNodeDagManager[F[_]: Concurrent, M, MId, S, SId] private (
 
   override def loadMessage(mid: MId): F[M] = ???
 
-  override def loadSender(sid: SId): F[M] = ???
+  override def loadSender(sid: SId): F[S] = ???
 }

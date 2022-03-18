@@ -23,7 +23,7 @@ trait DagView[F[_], M, MId, S, SId] {
 
   def loadMessage(mid: MId): F[M]
 
-  def loadSender(sid: SId): F[M]
+  def loadSender(sid: SId): F[S]
 }
 
 object DagView {
