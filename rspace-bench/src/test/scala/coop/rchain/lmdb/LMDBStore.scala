@@ -1,13 +1,12 @@
 package coop.rchain.lmdb
 
-import java.nio.ByteBuffer
-
 import cats.effect.Sync
 import coop.rchain.shared.Resources.withResource
 import org.lmdbjava.{CursorIterable, Dbi, Env, Txn}
 import scodec.bits.BitVector
 
-import scala.collection.JavaConverters._
+import java.nio.ByteBuffer
+import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 
 final case class LMDBStore[F[_]: Sync](env: Env[ByteBuffer], dbi: Dbi[ByteBuffer]) {
