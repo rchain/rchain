@@ -74,14 +74,18 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
         )
 
       for {
-        registerDeploy <- ConstructDeploy.sourceDeployNowF(registerSource)
-        block0         <- node.addBlock(registerDeploy)
+        registerDeploy <- ConstructDeploy
+                           .sourceDeployNowF(registerSource, shardId = genesis.genesisBlock.shardId)
+        block0 <- node.addBlock(registerDeploy)
         registryId <- getDataAtPrivateChannel[Effect](
                        block0,
                        calculateUnforgeableName(registerDeploy.data.timestamp)
                      )
-        callDeploy <- ConstructDeploy.sourceDeployNowF(callSource(registryId.head))
-        block1     <- node.addBlock(callDeploy)
+        callDeploy <- ConstructDeploy.sourceDeployNowF(
+                       callSource(registryId.head),
+                       shardId = genesis.genesisBlock.shardId
+                     )
+        block1 <- node.addBlock(callDeploy)
         data <- getDataAtPrivateChannel[Effect](
                  block1,
                  calculateUnforgeableName(callDeploy.data.timestamp)

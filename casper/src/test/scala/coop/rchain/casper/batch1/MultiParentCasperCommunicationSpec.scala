@@ -22,13 +22,17 @@ class MultiParentCasperCommunicationSpec extends FlatSpec with Matchers with Ins
   "MultiParentCasper" should "ask peers for blocks it is missing" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       for {
-        deploy1 <- ConstructDeploy.sourceDeployNowF("for(_ <- @1){ Nil } | @1!(1)")
+        deploy1 <- ConstructDeploy.sourceDeployNowF(
+                    "for(_ <- @1){ Nil } | @1!(1)",
+                    shardId = genesis.genesisBlock.shardId
+                  )
 
         signedBlock1 <- nodes(0).addBlock(deploy1)
         _            <- nodes(1).handleReceive()
         _            <- nodes(2).shutoff() //nodes(2) misses this block
 
-        deploy2      <- ConstructDeploy.sourceDeployNowF("@2!(2)")
+        deploy2 <- ConstructDeploy
+                    .sourceDeployNowF("@2!(2)", shardId = genesis.genesisBlock.shardId)
         signedBlock2 <- nodes(0).addBlock(deploy2)
 
         _ <- nodes(2).addBlock(signedBlock2)

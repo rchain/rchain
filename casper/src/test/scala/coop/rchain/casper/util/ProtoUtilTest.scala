@@ -38,7 +38,10 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
     TestNode.standaloneEff(genesis).use { node =>
       import node.blockStore
       for {
-        signedBlock       <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
+        signedBlock <- ConstructDeploy.basicDeployData[Effect](
+                        0,
+                        shardId = genesis.genesisBlock.shardId
+                      ) >>= (node.addBlock(_))
         dag               <- node.casperEff.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, signedBlock)
         _                 = unseenBlockHashes should be(Set.empty[BlockHash])
@@ -50,10 +53,14 @@ class ProtoUtilTest extends FlatSpec with Matchers with GeneratorDrivenPropertyC
     TestNode.standaloneEff(genesis).use { node =>
       import node._
       implicit val timeEff = new LogicalTime[Effect]
+      val shardId          = this.genesis.genesisBlock.shardId
 
       for {
-        block0            <- ConstructDeploy.basicDeployData[Effect](0) >>= (node.addBlock(_))
-        block1            <- ConstructDeploy.basicDeployData[Effect](1) >>= (node.addBlock(_))
+        block0 <- ConstructDeploy
+                   .basicDeployData[Effect](0, shardId = shardId) >>= (node
+                   .addBlock(_))
+        block1 <- ConstructDeploy
+                   .basicDeployData[Effect](1, shardId = shardId) >>= (node.addBlock(_))
         dag               <- node.casperEff.blockDag
         unseenBlockHashes <- ProtoUtil.unseenBlockHashes[Effect](dag, block0)
         _                 = unseenBlockHashes should be(Set(block1.blockHash))

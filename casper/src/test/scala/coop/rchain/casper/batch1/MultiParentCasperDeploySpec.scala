@@ -43,7 +43,7 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
     TestNode.networkEff(genesis, networkSize = 2).use { nodes =>
       val List(node0, node1) = nodes.toList
       for {
-        deploy             <- ConstructDeploy.basicDeployData[Effect](0)
+        deploy             <- ConstructDeploy.basicDeployData[Effect](0, shardId = genesis.genesisBlock.shardId)
         _                  <- node0.propagateBlock(deploy)(node1)
         createBlockResult2 <- node1.createBlock(deploy)
       } yield (createBlockResult2 should be(NoNewDeploys))
@@ -85,7 +85,11 @@ class MultiParentCasperDeploySpec extends FlatSpec with Matchers with Inspectors
         val isNodeReadOnly = false
         for {
           deployData <- ConstructDeploy
-                         .sourceDeployNowF[Effect]("Nil", phloPrice = phloPrice)
+                         .sourceDeployNowF[Effect](
+                           "Nil",
+                           phloPrice = phloPrice,
+                           shardId = genesis.genesisBlock.shardId
+                         )
           err <- BlockAPI
                   .deploy[Effect](
                     deployData,
