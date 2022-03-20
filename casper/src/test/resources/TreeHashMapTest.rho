@@ -10,7 +10,8 @@ new
   test_contains_after_set,
   test_get_after_set_to_nil,
   test_contains_after_set_to_nil,
-  test_contention
+  test_contention,
+  test_set_and_get_on_same_key
 in {
   rl!(`rho:id:zphjgsfy13h1k85isc8rtwtgt3t9zzt5pjd5ihykfmyapfc4wt3x5h`, *RhoSpecCh) |
   for(@(_, RhoSpec) <- RhoSpecCh) {
@@ -25,7 +26,8 @@ in {
         ("Contains after set returns true", *test_contains_after_set),
         ("Get after set to Nil returns Nil", *test_get_after_set_to_nil),
         ("Contains after set to Nil returns true", *test_contains_after_set_to_nil),
-        ("Works under contention", *test_contention)
+        ("Works under contention", *test_contention),
+        ("Get and set on the same key at the same time", *test_set_and_get_on_same_key)
       ])
   } |
 
@@ -214,7 +216,40 @@ in {
           } |
           tryIt!(0, true)
         }
-      }
+      } |
+      // introduce this test because of https://github.com/rchain/rchain/pull/3629
+      // get and set and the same time would throw exception
+      contract test_set_and_get_on_same_key(rhoSpec, _, ackCh) = {
+          new out(`rho:io:stdlog`), mapCh in {
+            TreeHashMap!("init", 1, *mapCh) |
+            for (@map <- mapCh) {
+              new ret1, ret2, ret3, ret4, ret5, ret6, ret7, ret8, ret9, ret10, ret11, ret12 in {
+                TreeHashMap!("set", map, "XspL2n7hsd", "object", *ret1) |
+                out!("info", "get and set in the same key")|
+                for (_ <- ret1) {
+                  // create a lot of set and get operation to increase the possibility of reproducing the bug
+                  TreeHashMap!("set", map, "VbqWeRbRoT", "object", *ret3) |
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret4)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret5)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret6)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret7)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret8)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret9)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret10)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret11)|
+                  TreeHashMap!("get", map, "VbqWeRbRoT", *ret12)|
+                  for (_ <- ret3 & _ <- ret4 & _ <- ret5 & _ <- ret6 & _ <- ret7 & _ <- ret8 & 
+                       _ <- ret9 &  _ <- ret10 & _ <- ret11 & _ <- ret12 ){
+                    rhoSpec!("assertMany",
+                        [
+                          ((true, "==", true), "not happen")
+                        ], *ackCh)
+                  }
+                }
+              }
+            }
+          }
+        } 
     }
   }
 }
