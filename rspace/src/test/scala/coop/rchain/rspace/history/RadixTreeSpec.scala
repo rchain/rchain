@@ -3,15 +3,7 @@ package coop.rchain.rspace.history
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
-import coop.rchain.rspace.history.RadixTree.{
-  byteToInt,
-  emptyNode,
-  sequentialExport,
-  ExportDataSettings,
-  Leaf,
-  NodePtr,
-  RadixTreeImpl
-}
+import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
@@ -33,7 +25,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         item1 <- impl.update(
                   RadixTree.EmptyItem,
                   createBV("FFFFFFF1"),
-                  createBV32(0xA.toByte)
+                  createBV32("A")
                 )
 
         newRootNode    <- impl.constructNodeFromItem(item1.get)
@@ -58,7 +50,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
                      keys(0),
-                     createBV32(0x11.toByte)
+                     createBV32("11")
                    )
 
         rootNode1    <- impl.constructNodeFromItem(item1Opt.get)
@@ -72,7 +64,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         item2Opt <- impl.update(
                      item1Opt.get,
                      keys(1),
-                     createBV32(0x55.toByte)
+                     createBV32("55")
                    )
 
         rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
@@ -103,13 +95,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
                          keys(0),
-                         createBV32(0x11.toByte)
+                         createBV32("0x11")
                        )
 
         rootItem2Opt <- impl.update(
                          rootItem1Opt.get,
                          keys(1),
-                         createBV32(0x55.toByte)
+                         createBV32("55")
                        )
 
         rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
@@ -127,8 +119,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
-    val firstLeafData = createBV32(0xCB.toByte)
-    val newLeafData   = createBV32(0xFF.toByte)
+    val firstLeafData = createBV32("0xCB")
+    val newLeafData   = createBV32("0xFF")
     val leafKey       = createBV("00123456F1")
     for {
 
@@ -169,7 +161,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "RadixTreeImpl" should "not allow to enter keys with different lengths in the subtree" in withImplAndStore {
     (impl, _) =>
-      val leafData    = createBV32(0xCB.toByte)
+      val leafData    = createBV32("CB")
       val leafKey     = createBV("00123456F1")
       val testLeafKey = createBV("0112")
       for {
@@ -188,9 +180,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       for {
         err <- impl
                 .update(
-                  NodePtr(ByteVector(0x00, 0x11), createBV32(0x00.toByte)),
+                  NodePtr(ByteVector(0x00, 0x11), createBV32("00")),
                   createBV("00"),
-                  createBV32(0x33.toByte)
+                  createBV32("33")
                 )
                 .attempt
       } yield {
@@ -202,7 +194,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "deleting non - existent data" should "return none" in withImplAndStore { (impl, _) =>
-    val leafData = createBV32(0xCC.toByte)
+    val leafData = createBV32("CC")
     val leafKey  = createBV("00123456F1")
     for {
       //  Create tree with one node
@@ -218,7 +210,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting leaf from tree with only one leaf" should "destroy tree" in withImplAndStore {
     (impl, _) =>
-      val leafData = createBV32(0xCC.toByte)
+      val leafData = createBV32("CC")
       val leafKey  = createBV("00123456F1")
       for {
         //  Create tree with one node
@@ -244,8 +236,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         createBV("34564544")
       )
 
-      val rootItem1Hash = createBV32(0x11.toByte)
-      val rootItem2Hash = createBV32(0xAF.toByte)
+      val rootItem1Hash = createBV32("11")
+      val rootItem2Hash = createBV32("AF")
       for {
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
@@ -303,12 +295,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
                      keys(0),
-                     createBV32(0x11.toByte)
+                     createBV32("11")
                    )
         item2Opt <- impl.update(
                      item1Opt.get,
                      keys(1),
-                     createBV32(0x55.toByte)
+                     createBV32("55")
                    )
 
         rootNode1 <- impl.constructNodeFromItem(item2Opt.get)
@@ -343,7 +335,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "reading data from existing node" should "return data" in withImplAndStore { (impl, _) =>
-    val itemData = createBV32(0xCB.toByte)
+    val itemData = createBV32("CB")
     val key      = createBV("0123456F1")
     for {
       itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
@@ -356,7 +348,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "reading non - existent data" should "return none" in withImplAndStore { (impl, _) =>
-    val itemData = createBV32(0xCB.toByte)
+    val itemData = createBV32("CB")
     val key      = createBV("0123456F1")
     for {
       itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
@@ -400,7 +392,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       item1 <- impl.update(
                 RadixTree.EmptyItem,
                 createBV("FFF8AFF1"),
-                createBV32(0xAD.toByte)
+                createBV32("AD")
               )
 
       node <- impl.constructNodeFromItem(item1.get)
@@ -446,12 +438,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
       keysAndData = List(
-        ("111122334455", 0x01.toByte),
-        ("11112233AABB", 0x02.toByte),
-        ("1111AABBCC", 0x03.toByte),
-        ("33", 0x04.toByte),
-        ("FF0011", 0x05.toByte),
-        ("FF012222", 0x06.toByte)
+        ("111122334455", "01"),
+        ("11112233AABB", "02"),
+        ("1111AABBCC", "03"),
+        ("33", "04"),
+        ("FF0011", "05"),
+        ("FF012222", "06")
       )
 
       insertActions = createInsertActions(keysAndData)
@@ -478,7 +470,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "function makeActions" should "not create artefacts" in withImplAndStore { (impl, inMemoStore) =>
     val insertActions = createInsertActions(
-      List(("FF00FFF01", 0xAA.toByte), ("FF0012345", 0x11.toByte), ("FF00F5676", 0x16.toByte))
+      List(("FF00FFF01", "AA"), ("FF0012345", "11"), ("FF00F5676", "16"))
     )
     for {
       rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
@@ -498,17 +490,17 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     (impl, inMemoStore) =>
       val insertFirstNodesActions = createInsertActions(
         List(
-          ("111122334455", 0xAA.toByte),
-          ("11112233AABB", 0x11.toByte),
-          ("1111AABBCC", 0x16.toByte)
+          ("111122334455", "AA"),
+          ("11112233AABB", "11"),
+          ("1111AABBCC", "16")
         )
       )
 
       val insertLastNodesActions = createInsertActions(
         List(
-          ("33", 0x11.toByte),
-          ("FF0011", 0x22.toByte),
-          ("FF012222", 0x33.toByte)
+          ("33", "11"),
+          ("FF0011", "22"),
+          ("FF012222", "33")
         )
       )
       for {
@@ -539,12 +531,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
     val insertFirstNodesActions = createInsertActions(
       List(
-        ("111122334455", 0xAA.toByte),
-        ("11112233AABB", 0x11.toByte),
-        ("1111AABBCC", 0x16.toByte),
-        ("33", 0x11.toByte),
-        ("FF0011", 0x22.toByte),
-        ("FF012222", 0x33.toByte)
+        ("111122334455", "AA"),
+        ("11112233AABB", "11"),
+        ("1111AABBCC", "16"),
+        ("33", "11"),
+        ("FF0011", "22"),
+        ("FF012222", "33")
       )
     )
 
@@ -626,12 +618,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     res6 shouldBe (ByteVector.empty, ByteVector.empty, ByteVector.empty)
   }
 
-  def createBV32(lastByte: Byte): ByteVector =
-    (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toVector
+  def createBV32(s: String): ByteVector = {
+    val notEmptyPart = createBV(s)
+    val emptyPart    = List.fill(32 - notEmptyPart.size.toInt)(0).map(_.toByte)
+    ByteVector(emptyPart) ++ notEmptyPart
+  }
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
   def createInsertActions(
-      tuplesKeyAndHash: List[(String, Byte)]
+      tuplesKeyAndHash: List[(String, String)]
   ): List[InsertAction] =
     tuplesKeyAndHash.map {
       case (key, data) =>
