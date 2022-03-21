@@ -47,10 +47,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withImplAndStore {
     (impl, _) =>
-      val commonKeyPartForTwoLeafs = "001122"
       val keys = Vector[ByteVector](
-        createBV(commonKeyPartForTwoLeafs + "013"),
-        createBV(commonKeyPartForTwoLeafs + "225")
+        createBV("001122013"),
+        createBV("001122225")
       )
       for {
         item1Opt <- impl.update(
