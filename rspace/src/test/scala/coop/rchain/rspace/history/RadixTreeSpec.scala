@@ -369,20 +369,27 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "function saveNode" should "put node into store" in withImplAndStore { (impl, inMemoStore) =>
-    val itemData = createBV32(0xCB.toByte)
-    val key      = createBV("0123456F1")
     for {
-      itemOpt     <- impl.update(RadixTree.EmptyItem, key, itemData)
-      nodesCount1 = inMemoStore.numRecords()
-
-      node <- impl.constructNodeFromItem(itemOpt.get)
-      _    = impl.saveNode(node)
-      _    <- impl.commit
+      nodesCount1 <- Sync[Task].delay(inMemoStore.numRecords())
+      _           = impl.saveNode(emptyNode)
+      _           <- impl.commit
 
       //  After saving node numRecords must return 1
       nodesCount2 = inMemoStore.numRecords()
       _           = nodesCount1 shouldBe 0
       _           = nodesCount2 shouldBe 1
+    } yield ()
+  }
+
+  "function loadNode" should "load node from store" in withImplAndStore { (impl, _) =>
+    for {
+      hash <- Sync[Task].delay(impl.saveNode(emptyNode))
+      _    <- impl.commit
+
+      _        = impl.clearReadCache()
+      _        = impl.clearWriteCache()
+      loadNode <- impl.loadNode(hash)
+      _        = loadNode shouldBe emptyNode
     } yield ()
   }
 
