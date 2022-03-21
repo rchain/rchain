@@ -24,36 +24,6 @@ import scala.concurrent.duration._
 import scala.util.Random
 
 class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
-  "tree with makeActions" should "be built correctly" in withImplAndStore { (impl, _) =>
-    for {
-      rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
-
-      keysAndData = List(
-        ("FF00FFF01", 0xA.toByte),
-        ("FF0000201", 0xB.toByte),
-        ("FF002111", 0x1.toByte),
-        ("FF002112", 0x2.toByte)
-      )
-
-      insertActions = createInsertActions(keysAndData)
-
-      newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
-      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", noPrintFlag = true)
-
-      referenceTree = Vector(
-        "TREE1: root =>",
-        "   [0F]PTR: prefix = F0, ptr =>",
-        "      [00]LEAF: prefix = 0201, data = 0000...000B",
-        "      [0F]LEAF: prefix = FF01, data = 0000...000A",
-        "   [FF]PTR: prefix = 0021, ptr =>",
-        "      [11]LEAF: prefix = empty, data = 0000...0001",
-        "      [12]LEAF: prefix = empty, data = 0000...0002"
-      )
-
-      _ = treeInfo shouldBe referenceTree
-    } yield ()
-  }
-
   "appending leaf in empty tree" should "create tree with one node" in withImplAndStore {
     (impl, _) =>
       for {
@@ -423,6 +393,48 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
+  "function saveNode" should "put node into store" in withImplAndStore { (impl, inMemoStore) =>
+    val itemData = createBV32(0xCB.toByte)
+    val key      = TestData.hexKey("0123456F1").toVector
+    for {
+      itemOpt     <- impl.update(RadixTree.EmptyItem, key, itemData)
+      nodesCount1 = inMemoStore.numRecords()
+
+      node <- impl.constructNodeFromItem(itemOpt.get)
+      _    = impl.saveNode(node)
+      _    <- impl.commit
+
+      //  After saving node numRecords must return 1
+      nodesCount2 = inMemoStore.numRecords()
+      _           = nodesCount1 shouldBe 0
+      _           = nodesCount2 shouldBe 1
+    } yield ()
+  }
+
+  "encode and decode" should "give initial node" in withImplAndStore { (impl, _) =>
+    for {
+      item1 <- impl.update(
+                RadixTree.EmptyItem,
+                TestData.hexKey("FFF8AFF1").toVector,
+                createBV32(0xAD.toByte)
+              )
+
+      node <- impl.constructNodeFromItem(item1.get)
+      _    <- impl.printTree(node, "NODE BEFORE DECODING", noPrintFlag = true)
+
+      serializedNode = RadixTree.Codecs.encode(node)
+
+      deserializedNode = RadixTree.Codecs.decode(serializedNode)
+
+      _ <- impl.printTree(node, "NODE AFTER SERIALIZE", noPrintFlag = true)
+
+      referenceString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
+
+      _ = deserializedNode shouldBe node
+      _ = serializedNode.toString() shouldBe referenceString
+    } yield ()
+  }
+
   "collisions in KVDB" should "be detected" in withImplAndStore { (impl, inMemoStore) =>
     def copyBVToBuf(bv: ByteVector): ByteBuffer = {
       val arr    = bv.toArray
@@ -466,29 +478,34 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     }
   }
 
-  "encode and decode" should "give initial node" in withImplAndStore { (impl, _) =>
+  "tree with makeActions" should "be built correctly" in withImplAndStore { (impl, _) =>
     for {
-      item1 <- impl.update(
-                RadixTree.EmptyItem,
-                TestData.hexKey("FFF8AFF1").toVector,
-                createBV32(0xAD.toByte)
-              )
+      rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
-      node <- impl.constructNodeFromItem(item1.get)
-      _    <- impl.printTree(node, "NODE BEFORE DECODING", noPrintFlag = true)
+      keysAndData = List(
+        ("FF00FFF01", 0xA.toByte),
+        ("FF0000201", 0xB.toByte),
+        ("FF002111", 0x1.toByte),
+        ("FF002112", 0x2.toByte)
+      )
 
-      serializedNode = RadixTree.Codecs.encode(node)
+      insertActions = createInsertActions(keysAndData)
 
-      deserializedNode = RadixTree.Codecs.decode(serializedNode)
+      newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
+      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", noPrintFlag = true)
 
-      _ <- impl.printTree(node, "NODE AFTER SERIALIZE", noPrintFlag = true)
+      referenceTree = Vector(
+        "TREE1: root =>",
+        "   [0F]PTR: prefix = F0, ptr =>",
+        "      [00]LEAF: prefix = 0201, data = 0000...000B",
+        "      [0F]LEAF: prefix = FF01, data = 0000...000A",
+        "   [FF]PTR: prefix = 0021, ptr =>",
+        "      [11]LEAF: prefix = empty, data = 0000...0001",
+        "      [12]LEAF: prefix = empty, data = 0000...0002"
+      )
 
-      referenceString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
-
-      _ = deserializedNode shouldBe node
-      _ = serializedNode.toString() shouldBe referenceString
+      _ = treeInfo shouldBe referenceTree
     } yield ()
-
   }
 
   "function makeActions" should "not create artefacts" in withImplAndStore { (impl, inMemoStore) =>
@@ -554,24 +571,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         _ = nodesCount1 shouldBe 2
         _ = nodesCount2 shouldBe 3
       } yield ()
-  }
-
-  "function saveNode" should "put node into store" in withImplAndStore { (impl, inMemoStore) =>
-    val itemData = createBV32(0xCB.toByte)
-    val key      = TestData.hexKey("0123456F1").toVector
-    for {
-      itemOpt     <- impl.update(RadixTree.EmptyItem, key, itemData)
-      nodesCount1 = inMemoStore.numRecords()
-
-      node <- impl.constructNodeFromItem(itemOpt.get)
-      _    = impl.saveNode(node)
-      _    <- impl.commit
-
-      //  After saving node numRecords must return 1
-      nodesCount2 = inMemoStore.numRecords()
-      _           = nodesCount1 shouldBe 0
-      _           = nodesCount2 shouldBe 1
-    } yield ()
   }
 
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
