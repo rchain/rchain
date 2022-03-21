@@ -7,6 +7,7 @@ import coop.rchain.rspace.history.RadixTree.{
   byteToInt,
   sequentialExport,
   ExportDataSettings,
+  NodePtr,
   RadixTreeImpl
 }
 import coop.rchain.rspace.history.TestData._
@@ -179,33 +180,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       }
   }
 
-  "RadixTreeImpl" should "not allow to radix key is smaller than NodePtr key" in withImplAndStore {
+  "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
-      val commonKeyPartForTwoLeafs = "121122"
-      val keys = Vector[ByteVector](
-        createBV(commonKeyPartForTwoLeafs + "013"),
-        createBV(commonKeyPartForTwoLeafs + "225")
-      )
       for {
-        item1Opt <- impl.update(
-                     RadixTree.EmptyItem,
-                     keys(0),
-                     createBV32(0x11.toByte)
-                   )
-        item2Opt <- impl.update(
-                     item1Opt.get,
-                     keys(1),
-                     createBV32(0x55.toByte)
-                   )
-
-        newRootNode <- impl.constructNodeFromItem(item2Opt.get)
-        _           <- impl.printTree(newRootNode, "TREE WITH ONE NODE AND 2 LEAFS", noPrintFlag = true)
-
-        rootNodeItem = newRootNode(1)
         err <- impl
                 .update(
-                  rootNodeItem,
-                  createBV("0"),
+                  NodePtr(ByteVector(0x00, 0x11), createBV32(0x00.toByte)),
+                  TestData.hexKey("0"),
                   createBV32(0x33.toByte)
                 )
                 .attempt
