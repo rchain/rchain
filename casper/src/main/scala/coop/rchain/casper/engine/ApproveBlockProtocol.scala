@@ -128,7 +128,7 @@ object ApproveBlockProtocol {
     implicit private val metricsSource: Metrics.Source =
       Metrics.Source(CasperMetricsSource, "approve-block")
 
-    private val trustedValidators         = genesisBlock.body.state.bonds.map(_.validator).toSet
+    private val trustedValidators         = genesisBlock.bonds.map(_.validator).toSet
     private val candidate                 = ApprovedBlockCandidate(genesisBlock, requiredSigs)
     private val u                         = UnapprovedBlock(candidate, start, duration.toMillis)
     private val serializedUnapprovedBlock = ToPacket(u.toProto)

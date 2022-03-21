@@ -118,8 +118,8 @@ object ReportingCasper {
           res <- replayDeploys(
                   reportingRuntime,
                   preStateHash,
-                  block.body.deploys,
-                  block.body.systemDeploys,
+                  block.state.deploys,
+                  block.state.systemDeploys,
                   !isGenesis,
                   blockdata,
                   invalidBlocks

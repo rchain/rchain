@@ -177,7 +177,7 @@ object MergeBalanceMain {
       (rhoRuntime, _)            = runtimes
       blockOpt                   <- blockStore.get(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
-      postStateHash              = block.body.state.postStateHash
+      postStateHash              = block.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {
                            case (acc, (_, account)) =>
                              if (account.transactionBalance != account.stateBalance) for {

@@ -106,17 +106,17 @@ class BlockQueryResponseAPITest
             b.parentsHashList should be(
               secondBlock.header.parentsHashList.map(_.toHexString)
             )
-            b.blockNumber should be(secondBlock.body.state.blockNumber)
+            b.blockNumber should be(secondBlock.blockNumber)
             b.preStateHash should be(
-              secondBlock.body.state.preStateHash.toHexString
+              secondBlock.preStateHash.toHexString
             )
             b.postStateHash should be(
-              secondBlock.body.state.postStateHash.toHexString
+              secondBlock.postStateHash.toHexString
             )
-            b.bodyExtraBytes should be(secondBlock.body.extraBytes)
-            b.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+            b.bodyExtraBytes should be(secondBlock.state.extraBytes)
+            b.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
             b.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            b.deployCount should be(secondBlock.body.deploys.length)
+            b.deployCount should be(secondBlock.state.deploys.length)
             b.faultTolerance should be(faultTolerance)
             b.justifications should be(
               secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)
@@ -226,17 +226,17 @@ class BlockQueryResponseAPITest
             blockInfo.parentsHashList should be(
               secondBlock.header.parentsHashList.map(_.toHexString)
             )
-            blockInfo.blockNumber should be(secondBlock.body.state.blockNumber)
+            blockInfo.blockNumber should be(secondBlock.blockNumber)
             blockInfo.preStateHash should be(
-              secondBlock.body.state.preStateHash.toHexString
+              secondBlock.preStateHash.toHexString
             )
             blockInfo.postStateHash should be(
-              secondBlock.body.state.postStateHash.toHexString
+              secondBlock.postStateHash.toHexString
             )
-            blockInfo.bodyExtraBytes should be(secondBlock.body.extraBytes)
-            blockInfo.bonds should be(secondBlock.body.state.bonds.map(ProtoUtil.bondToBondInfo))
+            blockInfo.bodyExtraBytes should be(secondBlock.state.extraBytes)
+            blockInfo.bonds should be(secondBlock.bonds.map(ProtoUtil.bondToBondInfo))
             blockInfo.blockSize should be(secondBlock.toProto.serializedSize.toString)
-            blockInfo.deployCount should be(secondBlock.body.deploys.length)
+            blockInfo.deployCount should be(secondBlock.state.deploys.length)
             blockInfo.faultTolerance should be(faultTolerance)
             blockInfo.justifications should be(
               secondBlock.justifications.map(ProtoUtil.justificationsToJustificationInfos)

@@ -21,16 +21,16 @@ object PrettyPrinter {
   private def buildString(b: BlockMessage, short: Boolean): String =
     b.header.parentsHashList.headOption
       .fold(
-        s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
+        s"Block #${b.blockNumber} (${buildString(b.blockHash)}) with empty parents (supposedly genesis)"
       )(
         mainParent =>
           if (short) {
-            s"#${b.body.state.blockNumber} (${buildString(b.blockHash)})"
+            s"#${b.blockNumber} (${buildString(b.blockHash)})"
           } else {
-            s"Block #${b.body.state.blockNumber} (${buildString(b.blockHash)}) " +
+            s"Block #${b.blockNumber} (${buildString(b.blockHash)}) " +
               s"-- Sender ID ${buildString(b.sender)} " +
               s"-- M Parent Hash ${buildString(mainParent)} " +
-              s"-- Contents ${buildString(b.body.state)}" +
+              s"-- Contents ${buildString(b.postStateHash)}" +
               s"-- Shard ID ${limit(b.shardId, 10)}"
           }
       )
@@ -65,8 +65,8 @@ object PrettyPrinter {
   def buildString(d: DeployData): String =
     s"DeployData #${d.timestamp} -- ${d.term}"
 
-  def buildString(r: RChainState): String =
-    buildString(r.postStateHash)
+//  def buildString(r: RChainState): String =
+//    buildString(r.postStateHash)
 
   def buildString(b: Bond): String =
     s"${buildStringNoLimit(b.validator)}: ${b.stake.toString}"

@@ -15,7 +15,7 @@ class VaultBalanceGetterTest extends FlatSpec {
   "Get balance from VaultPar" should "return balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
-        Blake2b256Hash.fromByteString(genesis.genesisBlock.body.state.postStateHash)
+        Blake2b256Hash.fromByteString(genesis.genesisBlock.postStateHash)
       val genesisVaultAddr = RevAddress.fromPublicKey(genesis.genesisVaults.toList(0)._2).get
       val getVault =
         s"""new return, rl(`rho:registry:lookup`), RevVaultCh, vaultCh, balanceCh in {
@@ -31,7 +31,7 @@ class VaultBalanceGetterTest extends FlatSpec {
 
       for {
         vaultPar <- node.runtimeManager
-                     .playExploratoryDeploy(getVault, genesis.genesisBlock.body.state.postStateHash)
+                     .playExploratoryDeploy(getVault, genesis.genesisBlock.postStateHash)
         runtime <- node.runtimeManager.spawnRuntime
         _       <- runtime.reset(genesisPostStateHash)
         balance <- VaultBalanceGetter.getBalanceFromVaultPar(vaultPar(0), runtime)
@@ -45,7 +45,7 @@ class VaultBalanceGetterTest extends FlatSpec {
   "Get all vault" should "return all vault balance" in {
     val t = TestNode.standaloneEff(genesis).use { node =>
       val genesisPostStateHash =
-        Blake2b256Hash.fromByteString(genesis.genesisBlock.body.state.postStateHash)
+        Blake2b256Hash.fromByteString(genesis.genesisBlock.postStateHash)
       for {
         runtime               <- node.runtimeManager.spawnRuntime
         _                     <- runtime.reset(genesisPostStateHash)

@@ -94,27 +94,32 @@ object Genesis {
   ): BlockMessage = {
     import genesis._
 
-    val state = RChainState(
-      preStateHash = startHash,
-      postStateHash = stateHash,
-      blockNumber = genesis.blockNumber,
-      bonds = bondsProto(proofOfStake).toList
-    )
-
     //FIXME any failures here should terminate the genesis ceremony
     val blockDeploys = processedDeploys.filterNot(_.isFailed)
     val sortedDeploys =
       blockDeploys.map(d => d.copy(deployLog = d.deployLog.sortBy(_.toProto.toByteArray)))
-    val body = Body(
-      state = state,
+    val state = RholangTrace(
       deploys = sortedDeploys.toList,
       rejectedDeploys = List.empty,
       systemDeploys = List.empty
     )
-    val version = 1L //FIXME make this part of Genesis, and pass it from upstream
-    val header  = blockHeader(body, List.empty[StateHash], version, timestamp)
+    val version       = 1L //FIXME make this part of Genesis, and pass it from upstream
+    val header        = blockHeader(List.empty[StateHash], version, timestamp)
+    val bonds         = bondsProto(proofOfStake).toList
+    val preStateHash  = startHash
+    val postStateHash = stateHash
+    val blockNumber   = genesis.blockNumber
 
-    unsignedBlockProto(body, header, List.empty[Justification], shardId)
+    unsignedBlockProto(
+      state,
+      preStateHash,
+      postStateHash,
+      bonds,
+      header,
+      List.empty[Justification],
+      shardId,
+      blockNumber
+    )
   }
 
   private def bondsProto(proofOfStake: ProofOfStake): Seq[Bond] = {

@@ -62,8 +62,8 @@ object BlockMetadata {
   def fromBytes(bytes: Array[Byte]): BlockMetadata =
     typeMapper.toCustom(BlockMetadataInternal.parseFrom(bytes))
 
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
+  private def weightMap(bonds: Seq[Bond]): Map[ByteString, Long] =
+    bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
@@ -78,8 +78,8 @@ object BlockMetadata {
       b.header.parentsHashList,
       b.sender,
       b.justifications,
-      weightMap(b.body.state),
-      b.body.state.blockNumber,
+      weightMap(b.bonds),
+      b.blockNumber,
       b.seqNum,
       invalid,
       // this value is not used anywhere down the call pipeline, so its safe to set it to false

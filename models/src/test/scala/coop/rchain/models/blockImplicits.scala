@@ -167,13 +167,11 @@ object blockImplicits {
           timestamp = timestamp,
           version = version
         ),
-        body = Body(
-          state = RChainState(
-            preStateHash = preStatehash,
-            postStateHash = postStatehash,
-            bonds = bonds.toList,
-            blockNumber = setBlockNumber.get
-          ),
+        preStateHash = preStatehash,
+        postStateHash = postStatehash,
+        bonds = bonds.toList,
+        blockNumber = setBlockNumber.get,
+        state = RholangTrace(
           deploys = deploys.toList,
           systemDeploys = setSysDeploys.toList.flatten,
           rejectedDeploys = List.empty
@@ -196,7 +194,7 @@ object blockImplicits {
         case (gen, _) =>
           for {
             blocks       <- gen
-            b            <- blockElementGen(setBonds = Some(genesis.body.state.bonds))
+            b            <- blockElementGen(setBonds = Some(genesis.bonds))
             parents      <- Gen.someOf(blocks)
             parentHashes = parents.map(_.blockHash).toList
             newBlock     = b.copy(header = b.header.copy(parentsHashList = parentHashes))

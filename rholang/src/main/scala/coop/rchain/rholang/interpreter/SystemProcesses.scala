@@ -146,7 +146,7 @@ object SystemProcesses {
     def fromBlock(template: BlockMessage) =
       BlockData(
         template.header.timestamp,
-        template.body.state.blockNumber,
+        template.blockNumber,
         PublicKey(template.sender),
         template.seqNum
       )

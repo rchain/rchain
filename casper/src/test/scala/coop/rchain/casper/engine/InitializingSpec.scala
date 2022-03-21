@@ -89,7 +89,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
           (history, data) = items
         } yield (history.items, data.items, history.lastPath)
 
-      val postStateHashBs = approvedBlock.candidate.block.body.state.postStateHash
+      val postStateHashBs = approvedBlock.candidate.block.postStateHash
       val postStateHash   = Blake2b256Hash.fromByteString(postStateHashBs)
       val startPath1      = Seq((postStateHash, none))
 

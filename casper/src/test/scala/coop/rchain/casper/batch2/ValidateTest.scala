@@ -131,10 +131,8 @@ class ValidateTest
   }
 
   implicit class ChangeBlockNumber(b: BlockMessage) {
-    def withBlockNumber(n: Long): BlockMessage = {
-      val newState = b.body.state.copy(blockNumber = n)
-      b.copy(body = b.body.copy(state = newState))
-    }
+    def withBlockNumber(n: Long): BlockMessage =
+      b.copy(blockNumber = n)
   }
 
   "Block signature validation" should "return false on unknown algorithms" in withStorage {
@@ -769,11 +767,9 @@ class ValidateTest
         dag            <- blockDagStorage.getRepresentation
         _ <- InterpreterUtil
               .validateBlockCheckpoint[Task](genesis, mkCasperSnapshot(dag), runtimeManager)
-        _                 <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
-        modifiedBonds     = Seq.empty[Bond]
-        modifiedPostState = genesis.body.state.copy(bonds = modifiedBonds.toList)
-        modifiedBody      = genesis.body.copy(state = modifiedPostState)
-        modifiedGenesis   = genesis.copy(body = modifiedBody)
+        _               <- Validate.bondsCache[Task](genesis, runtimeManager) shouldBeF Right(Valid)
+        modifiedBonds   = Seq.empty[Bond]
+        modifiedGenesis = genesis.copy(bonds = modifiedBonds.toList)
         result <- Validate.bondsCache[Task](modifiedGenesis, runtimeManager) shouldBeF Left(
                    InvalidBondsCache
                  )
@@ -797,12 +793,7 @@ class ValidateTest
         _ <- Validate.formatOfFields[Task](genesis.copy(sig = ByteString.EMPTY)) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(sigAlgorithm = "")) shouldBeF false
         _ <- Validate.formatOfFields[Task](genesis.copy(shardId = "")) shouldBeF false
-        _ <- Validate.formatOfFields[Task](
-              genesis.copy(
-                body = genesis.body
-                  .copy(state = genesis.body.state.copy(postStateHash = ByteString.EMPTY))
-              )
-            ) shouldBeF false
+        _ <- Validate.formatOfFields[Task](genesis.copy(postStateHash = ByteString.EMPTY)) shouldBeF false
       } yield ()
   }
 

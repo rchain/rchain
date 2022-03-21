@@ -75,13 +75,13 @@ object InterpreterUtil {
                            .buildString(incomingPreStateHash)}"
                        )
                        .as(none[StateHash].asRight[BlockError])
-                   } else if (rejectedDeployIds != block.body.rejectedDeploys.map(_.sig).toSet) {
+                   } else if (rejectedDeployIds != block.state.rejectedDeploys.map(_.sig).toSet) {
                      Log[F]
                        .warn(
                          s"Computed rejected deploys " +
                            s"${rejectedDeployIds.map(PrettyPrinter.buildString).mkString(",")} does not equal " +
                            s"block's rejected deploy " +
-                           s"${block.body.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
+                           s"${block.state.rejectedDeploys.map(_.sig).map(PrettyPrinter.buildString).mkString(",")}"
                        )
                        .as(InvalidRejectedDeploy.asLeft)
                    } else {
@@ -129,7 +129,7 @@ object InterpreterUtil {
         )
         replayResult <- retryingOnFailures[Either[ReplayFailure, StateHash]](
                          RetryPolicies.limitRetries(3), {
-                           case Right(stateHash) => stateHash == block.body.state.postStateHash
+                           case Right(stateHash) => stateHash == block.postStateHash
                            case _                => false
                          },
                          (e, retryDetails) =>
@@ -137,7 +137,7 @@ object InterpreterUtil {
                              case Right(stateHash) =>
                                Log[F].error(
                                  s"Replay block ${PrettyPrinter.buildStringNoLimit(block.blockHash)} with " +
-                                   s"${PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash)} " +
+                                   s"${PrettyPrinter.buildStringNoLimit(block.postStateHash)} " +
                                    s"got tuple space mismatch error with error hash ${PrettyPrinter
                                      .buildStringNoLimit(stateHash)}, retries details: ${retryDetails}"
                                )
@@ -282,8 +282,8 @@ object InterpreterUtil {
             cached.getOrElse {
               for {
                 b         <- BlockStore[F].getUnsafe(v)
-                preState  = b.body.state.preStateHash
-                postState = b.body.state.postStateHash
+                preState  = b.preStateHash
+                postState = b.postStateHash
                 sender    = b.sender.toByteArray
                 seqNum    = b.seqNum
 
@@ -291,8 +291,8 @@ object InterpreterUtil {
 
                 blockIndex <- BlockIndex(
                                b.blockHash,
-                               b.body.deploys,
-                               b.body.systemDeploys,
+                               b.state.deploys,
+                               b.state.systemDeploys,
                                preState.toBlake2b256Hash,
                                postState.toBlake2b256Hash,
                                runtimeManager.getHistoryRepo,
@@ -304,7 +304,7 @@ object InterpreterUtil {
           for {
             lfbState <- BlockStore[F]
                          .getUnsafe(s.lastFinalizedBlock)
-                         .map(_.body.state.postStateHash)
+                         .map(_.postStateHash)
                          .map(Blake2b256Hash.fromByteString)
             r <- DagMerger.merge[F](
                   s.dag,

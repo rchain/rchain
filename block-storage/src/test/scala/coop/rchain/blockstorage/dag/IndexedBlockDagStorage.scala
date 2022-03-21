@@ -43,12 +43,10 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       nextCreatorSeqNum <- if (block.seqNum == 0)
                             dag.latestMessage(block.sender).map(_.fold(-1)(_.seqNum) + 1)
                           else block.seqNum.pure[F]
-      nextId           = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
-      newPostState     = block.body.state.copy(blockNumber = nextId)
-      newPostStateHash = Blake2b256.hash(newPostState.toProto.toByteArray)
+      nextId = if (block.seqNum == 0) currentId + 1L else block.seqNum.toLong
       modifiedBlock = block
         .copy(
-          body = block.body.copy(state = newPostState),
+          blockNumber = nextId,
           seqNum = nextCreatorSeqNum
         )
       _ <- underlying.insert(modifiedBlock, invalid)

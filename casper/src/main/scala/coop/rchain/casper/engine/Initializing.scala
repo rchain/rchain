@@ -228,7 +228,7 @@ class Initializing[F[_]
       _ <- Log[F].info(s"Adding blocks for approved state to DAG.")
 
       // Latest messages from slashed validators / invalid blocks
-      slashedValidators = startBlock.body.state.bonds.filter(_.stake == 0L).map(_.validator)
+      slashedValidators = startBlock.bonds.filter(_.stake == 0L).map(_.validator)
       invalidBlocks = startBlock.justifications
         .filter(v => slashedValidators.contains(v.validator))
         .map(_.latestBlockHash)
