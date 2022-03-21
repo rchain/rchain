@@ -47,7 +47,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       } yield ()
   }
 
-  "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withImplAndStore {
+  "appending leaf to leaf (leafs contain common prefixes)" should "create 2 leafs with node ptr" in withImplAndStore {
     (impl, _) =>
       val keys = Vector[ByteVector](
         createBV("0001122013"),
@@ -92,36 +92,37 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         _ = printedTree2 shouldBe referenceTree2
       } yield ()
   }
-  "appending leaf to leaf" should "create node with two leafs" in withImplAndStore { (impl, _) =>
-    val keys = Vector[ByteVector](
-      createBV("00000000"),
-      createBV("34564544")
-    )
-    for {
-      rootItem1Opt <- impl.update(
-                       RadixTree.EmptyItem,
-                       keys(0),
-                       createBV32(0x11.toByte)
-                     )
-
-      rootItem2Opt <- impl.update(
-                       rootItem1Opt.get,
-                       keys(1),
-                       createBV32(0x55.toByte)
-                     )
-
-      rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
-
-      printedTreeStr <- impl.printTree(rootNode, "TREE: TWO LEAFS", noPrintFlag = true)
-
-      referenceTree = Vector(
-        "TREE: TWO LEAFS: root =>",
-        "   [00]LEAF: prefix = 000000, data = 0000...0011",
-        "   [34]LEAF: prefix = 564544, data = 0000...0055"
+  "appending leaf with other prefix to leaf" should "create node with two leafs" in withImplAndStore {
+    (impl, _) =>
+      val keys = Vector[ByteVector](
+        createBV("00000000"),
+        createBV("34564544")
       )
+      for {
+        rootItem1Opt <- impl.update(
+                         RadixTree.EmptyItem,
+                         keys(0),
+                         createBV32(0x11.toByte)
+                       )
 
-      _ = printedTreeStr shouldBe referenceTree
-    } yield ()
+        rootItem2Opt <- impl.update(
+                         rootItem1Opt.get,
+                         keys(1),
+                         createBV32(0x55.toByte)
+                       )
+
+        rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
+
+        printedTreeStr <- impl.printTree(rootNode, "TREE: TWO LEAFS", noPrintFlag = true)
+
+        referenceTree = Vector(
+          "TREE: TWO LEAFS: root =>",
+          "   [00]LEAF: prefix = 000000, data = 0000...0011",
+          "   [34]LEAF: prefix = 564544, data = 0000...0055"
+        )
+
+        _ = printedTreeStr shouldBe referenceTree
+      } yield ()
   }
 
   "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
@@ -291,52 +292,53 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       } yield ()
   }
 
-  "deleting data from leaf" should "destroy this leaf" in withImplAndStore { (impl, _) =>
-    val keys = Vector[ByteVector](
-      createBV("FA01122013"),
-      createBV("FA01122225")
-    )
-    for {
-      item1Opt <- impl.update(
-                   RadixTree.EmptyItem,
-                   keys(0),
-                   createBV32(0x11.toByte)
-                 )
-      item2Opt <- impl.update(
-                   item1Opt.get,
-                   keys(1),
-                   createBV32(0x55.toByte)
-                 )
-
-      rootNode1 <- impl.constructNodeFromItem(item2Opt.get)
-      printedTree1 <- impl.printTree(
-                       rootNode1,
-                       "TREE WITH ONE NODE AND 2 LEAFS",
-                       noPrintFlag = true
-                     )
-
-      referenceTree1 = Vector(
-        "TREE WITH ONE NODE AND 2 LEAFS: root =>",
-        "   [FA]PTR: prefix = 0112, ptr =>",
-        "      [20]LEAF: prefix = 13, data = 0000...0011",
-        "      [22]LEAF: prefix = 25, data = 0000...0055"
+  "deleting one leaf from a child node containing two leafs" should "child node and reformat parent node" in withImplAndStore {
+    (impl, _) =>
+      val keys = Vector[ByteVector](
+        createBV("FA01122013"),
+        createBV("FA01122225")
       )
+      for {
+        item1Opt <- impl.update(
+                     RadixTree.EmptyItem,
+                     keys(0),
+                     createBV32(0x11.toByte)
+                   )
+        item2Opt <- impl.update(
+                     item1Opt.get,
+                     keys(1),
+                     createBV32(0x55.toByte)
+                   )
 
-      itemIdx     <- Sync[Task].delay(byteToInt(keys(0).head))
-      deletedItem <- impl.delete(rootNode1(0xFA), keys(0).tail)
-      rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
+        rootNode1 <- impl.constructNodeFromItem(item2Opt.get)
+        printedTree1 <- impl.printTree(
+                         rootNode1,
+                         "TREE WITH ONE NODE AND 2 LEAFS",
+                         noPrintFlag = true
+                       )
 
-      printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", noPrintFlag = true)
+        referenceTree1 = Vector(
+          "TREE WITH ONE NODE AND 2 LEAFS: root =>",
+          "   [FA]PTR: prefix = 0112, ptr =>",
+          "      [20]LEAF: prefix = 13, data = 0000...0011",
+          "      [22]LEAF: prefix = 25, data = 0000...0055"
+        )
 
-      referenceTree2 = Vector(
-        "TREE (AFTER DELETE): root =>",
-        "   [FA]LEAF: prefix = 01122225, data = 0000...0055"
-      )
+        itemIdx     <- Sync[Task].delay(byteToInt(keys(0).head))
+        deletedItem <- impl.delete(rootNode1(0xFA), keys(0).tail)
+        rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
 
-      _ = printedTree1 shouldBe referenceTree1
-      _ = printedTree2 shouldBe referenceTree2
+        printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", noPrintFlag = true)
 
-    } yield ()
+        referenceTree2 = Vector(
+          "TREE (AFTER DELETE): root =>",
+          "   [FA]LEAF: prefix = 01122225, data = 0000...0055"
+        )
+
+        _ = printedTree1 shouldBe referenceTree1
+        _ = printedTree2 shouldBe referenceTree2
+
+      } yield ()
   }
 
   "reading data from existing node" should "return data" in withImplAndStore { (impl, _) =>
