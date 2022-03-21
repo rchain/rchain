@@ -1,0 +1,4 @@
+new ack, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  stdoutAck!?("hello, world!");
+  stdout!("received")
+}

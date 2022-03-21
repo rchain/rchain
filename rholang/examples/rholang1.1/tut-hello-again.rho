@@ -1,0 +1,9 @@
+new helloAgain, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  contract helloAgain(_) = {
+    let @text <- "Hello again, world!" in {
+      stdoutAck!?(text); stdout!("\n")
+    }
+  } |
+  helloAgain!(Nil) |
+  helloAgain!(Nil)
+}

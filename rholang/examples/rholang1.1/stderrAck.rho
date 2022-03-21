@@ -1,0 +1,4 @@
+new ack, stderr(`rho:io:stderr`), stderrAck(`rho:io:stderrAck`) in {
+  stderrAck!?("hello, world!");
+  stderr!("received")
+}

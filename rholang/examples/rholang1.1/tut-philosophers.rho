@@ -1,0 +1,20 @@
+new stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  @"north"!("knife") |
+  @"south"!("spoon") |
+  for (@knf <- @"north"; @spn <- @"south") {
+    stdoutAck!?("Philosopher 1 Utensils: ");
+    stdoutAck!?(knf);stdoutAck!?(", ");
+    stdoutAck!?(spn);stdout!("\n") |
+    @"north"!(knf) |
+    @"south"!(spn)
+  } |
+  for (@spn <- @"south"; @knf <- @"north") {
+    stdoutAck!?("Philosopher 2 Utensils: ");
+    stdoutAck!?(knf);
+    stdoutAck!?(", ");
+    stdoutAck!?(spn);
+    stdout!("\n") |
+    @"north"!(knf) |
+    @"south"!(spn)
+  }
+}

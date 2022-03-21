@@ -1,0 +1,6 @@
+new helloWorld, stdout(`rho:io:stdout`), stdoutAck(`rho:io:stdoutAck`) in {
+  contract helloWorld(@name) = {
+      stdoutAck!?("Hello, ");stdoutAck!?(name);stdout!("\n")
+  } |
+  helloWorld!("Joe")
+}

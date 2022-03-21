@@ -1,0 +1,7 @@
+new stdout(`rho:io:stdout`), keccak256Hash(`rho:crypto:keccak256Hash`) in {
+  let @r <- { @"name"!("Joe") | @"age"!(40)} in  {
+    for (@h <- keccak256Hash!? (r.toByteArray())) {
+      stdout!(h)
+    } // hash the program from (1)
+  }
+}
