@@ -350,8 +350,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
       readDataOpt <- impl.read(rootNode, key)
 
-      _ = readDataOpt.map(_.toArray shouldBe itemData.toArray)
-
+      _ = readDataOpt.get shouldBe itemData
     } yield ()
   }
 
