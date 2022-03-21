@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree.{
   byteToInt,
+  emptyNode,
   sequentialExport,
   ExportDataSettings,
   NodePtr,
@@ -227,10 +228,10 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         rootNode2           = rootNode1.updated(leafKey.head.toInt, deletedItem.get)
         printedEmptyTreeStr <- impl.printTree(rootNode2, "EMPTY TREE", noPrintFlag = true)
 
-        emptyTreeStr = Vector("EMPTY TREE: root =>")
+        referenceEmptyTreeStr = Vector("EMPTY TREE: root =>")
 
         _ = deletedItem.map(item => item shouldBe RadixTree.EmptyItem)
-        _ = emptyTreeStr shouldBe printedEmptyTreeStr
+        _ = referenceEmptyTreeStr shouldBe printedEmptyTreeStr
       } yield ()
   }
 
@@ -359,10 +360,10 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      notExistingKey = createBV("000")
+      notExistingKey = createBV("0000")
       readDataOpt    <- impl.read(rootNode, notExistingKey)
 
-      _ = readDataOpt.map(_ shouldBe none)
+      _ = readDataOpt shouldBe none
 
     } yield ()
   }
@@ -413,27 +414,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       newBuf.put(arr).rewind()
     }
 
-    val insertRecord    = createInsertActions(List(("FF00FFF01", 0xAA.toByte)))
-    val deleteRecord    = createDeleteActions(List("FF00FFF01"))
-    val collisionKVPair = (copyBVToBuf(History.emptyRootHash.bytes), insertRecord.head.hash.bytes)
+    val collisionKVPair = (copyBVToBuf(History.emptyRootHash.bytes), ByteVector(0x00))
     for {
-      rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
-
-      //  process
-      newRootNodeOpt1 <- impl.makeActions(rootNode, insertRecord)
-
-      _ <- newRootNodeOpt1.traverse { newRootNode =>
-            val hash      = impl.saveNode(newRootNode)
-            val blakeHash = Blake2b256Hash.fromByteVector(hash)
-            impl.commit.as(blakeHash)
-          }
-      _ = impl.clearWriteCache()
-
-      _ <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
-
-      newRootNodeOpt2 <- impl.makeActions(newRootNodeOpt1.get, deleteRecord)
-      _               = newRootNodeOpt2.map(node => impl.saveNode(node))
-      err             <- impl.commit.attempt
+      _   <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
+      _   = impl.saveNode(emptyNode)
+      err <- impl.commit.attempt
 
     } yield {
       err.isLeft shouldBe true
