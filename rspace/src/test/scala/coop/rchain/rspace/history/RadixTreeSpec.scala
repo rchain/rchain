@@ -8,6 +8,7 @@ import coop.rchain.rspace.history.RadixTree.{
   emptyNode,
   sequentialExport,
   ExportDataSettings,
+  Leaf,
   NodePtr,
   RadixTreeImpl
 }
@@ -408,10 +409,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
       deserializedNode = RadixTree.Codecs.decode(serializedNode)
 
-      referenceString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
+      referenceSerialized = createBV(
+        "ff03f8aff100000000000000000000000000000000000000000000000000000000000000ad"
+      )
 
       _ = deserializedNode shouldBe node
-      _ = serializedNode.toString() shouldBe referenceString
+      _ = serializedNode shouldBe referenceSerialized
     } yield ()
   }
 
@@ -435,8 +438,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       ex.getMessage shouldBe
         s"1 collisions in KVDB (first collision with key = " +
           s"${History.emptyRootHash.bytes.toHex})."
-
-      println(ex.getMessage)
     }
   }
 
