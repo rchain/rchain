@@ -29,7 +29,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       for {
         item1 <- impl.update(
                   RadixTree.EmptyItem,
-                  TestData.hexKey("FFFFFFF1").toVector,
+                  createBV("FFFFFFF1"),
                   createBV32(0xA.toByte)
                 )
 
@@ -48,9 +48,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "appending leaf to tree with one leaf " should "create 2 leafs with node ptr" in withImplAndStore {
     (impl, _) =>
       val commonKeyPartForTwoLeafs = "001122"
-      val keys = Vector[Seq[Byte]](
-        TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-        TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+      val keys = Vector[ByteVector](
+        createBV(commonKeyPartForTwoLeafs + "013"),
+        createBV(commonKeyPartForTwoLeafs + "225")
       )
       for {
         item1Opt <- impl.update(
@@ -92,9 +92,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       } yield ()
   }
   "appending leaf to leaf" should "create node with two leafs" in withImplAndStore { (impl, _) =>
-    val keys = Vector[Seq[Byte]](
-      TestData.hexKey("00000000"),
-      TestData.hexKey("34564544")
+    val keys = Vector[ByteVector](
+      createBV("00000000"),
+      createBV("34564544")
     )
     for {
       rootItem1Opt <- impl.update(
@@ -126,7 +126,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
     val firstLeafData = createBV32(0xCB.toByte)
     val newLeafData   = createBV32(0xFF.toByte)
-    val leafKey       = TestData.hexKey("0123456F1").toVector
+    val leafKey       = createBV("0123456F1")
     for {
 
       //  Create tree with one leaf
@@ -167,8 +167,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "RadixTreeImpl" should "not allow to enter keys with different lengths in the subtree" in withImplAndStore {
     (impl, _) =>
       val leafData    = createBV32(0xCB.toByte)
-      val leafKey     = TestData.hexKey("0123456F1").toVector
-      val testLeafKey = TestData.hexKey("112").toVector
+      val leafKey     = createBV("0123456F1")
+      val testLeafKey = createBV("112")
       for {
         leafItemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         err         <- impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
@@ -183,9 +183,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "RadixTreeImpl" should "not allow to radix key is smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
       val commonKeyPartForTwoLeafs = "121122"
-      val keys = Vector[Seq[Byte]](
-        TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-        TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+      val keys = Vector[ByteVector](
+        createBV(commonKeyPartForTwoLeafs + "013"),
+        createBV(commonKeyPartForTwoLeafs + "225")
       )
       for {
         item1Opt <- impl.update(
@@ -206,7 +206,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         err <- impl
                 .update(
                   rootNodeItem,
-                  TestData.hexKey("0"),
+                  createBV("0"),
                   createBV32(0x33.toByte)
                 )
                 .attempt
@@ -220,7 +220,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting not existent data" should "return none" in withImplAndStore { (impl, _) =>
     val leafData = createBV32(0xCC.toByte)
-    val leafKey  = TestData.hexKey("0123456F1").toVector
+    val leafKey  = createBV("0123456F1")
     for {
       //  Create tree with one node
       itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
@@ -229,7 +229,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       _ <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", noPrintFlag = true)
 
       //  Trying to delete not existing leaf...
-      del <- impl.delete(itemOpt.get, TestData.hexKey("000").toVector.tail)
+      del <- impl.delete(itemOpt.get, createBV("000").tail)
 
       _ = del.map(item => item shouldBe None)
     } yield ()
@@ -238,7 +238,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "deleting leaf from tree with only one leaf" should "destroy tree" in withImplAndStore {
     (impl, _) =>
       val leafData = createBV32(0xCC.toByte)
-      val leafKey  = TestData.hexKey("0123456F1").toVector
+      val leafKey  = createBV("0123456F1")
       for {
         //  Create tree with one node
         itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
@@ -260,9 +260,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting leaf from node with two leafs" should "leave one leaf" in withImplAndStore {
     (impl, _) =>
-      val keys = Vector[Seq[Byte]](
-        TestData.hexKey("00000000"),
-        TestData.hexKey("34564544")
+      val keys = Vector[ByteVector](
+        createBV("00000000"),
+        createBV("34564544")
       )
 
       val rootItem1Hash = createBV32(0x11.toByte)
@@ -317,9 +317,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "deleting data from leaf" should "destroy this leaf" in withImplAndStore { (impl, _) =>
     val ptrPrefix                = "FA"
     val commonKeyPartForTwoLeafs = ptrPrefix + "01122"
-    val keys = Vector[Seq[Byte]](
-      TestData.hexKey(commonKeyPartForTwoLeafs + "013"),
-      TestData.hexKey(commonKeyPartForTwoLeafs + "225")
+    val keys = Vector[ByteVector](
+      createBV(commonKeyPartForTwoLeafs + "013"),
+      createBV(commonKeyPartForTwoLeafs + "225")
     )
     for {
       item1Opt <- impl.update(
@@ -366,7 +366,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "reading data from existing node" should "return data" in withImplAndStore { (impl, _) =>
     val itemData = createBV32(0xCB.toByte)
-    val key      = TestData.hexKey("0123456F1").toVector
+    val key      = createBV("0123456F1")
     for {
       itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
@@ -380,12 +380,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "reading non - existent data" should "return none" in withImplAndStore { (impl, _) =>
     val itemData = createBV32(0xCB.toByte)
-    val key      = TestData.hexKey("0123456F1").toVector
+    val key      = createBV("0123456F1")
     for {
       itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      notExistingKey = TestData.hexKey("000").toVector
+      notExistingKey = createBV("000")
       readDataOpt    <- impl.read(rootNode, notExistingKey)
 
       _ = readDataOpt.map(_ shouldBe none)
@@ -395,7 +395,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "function saveNode" should "put node into store" in withImplAndStore { (impl, inMemoStore) =>
     val itemData = createBV32(0xCB.toByte)
-    val key      = TestData.hexKey("0123456F1").toVector
+    val key      = createBV("0123456F1")
     for {
       itemOpt     <- impl.update(RadixTree.EmptyItem, key, itemData)
       nodesCount1 = inMemoStore.numRecords()
@@ -415,7 +415,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     for {
       item1 <- impl.update(
                 RadixTree.EmptyItem,
-                TestData.hexKey("FFF8AFF1").toVector,
+                createBV("FFF8AFF1"),
                 createBV32(0xAD.toByte)
               )
 
@@ -665,16 +665,18 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   def createBV32(lastByte: Byte): ByteVector =
     (List.fill(31)(0) ++ List.fill(1)(lastByte.toInt)).map(_.toByte).toVector
+
+  def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
   def createInsertActions(
       tuplesKeyAndHash: List[(String, Byte)]
   ): List[InsertAction] =
     tuplesKeyAndHash.map {
       case (key, data) =>
-        InsertAction(TestData.hexKey(key), Blake2b256Hash.fromByteVector(createBV32(data)))
+        InsertAction(createBV(key).toSeq, Blake2b256Hash.fromByteVector(createBV32(data)))
     }
 
   def createDeleteActions(keys: List[String]): List[DeleteAction] =
-    keys.map(key => DeleteAction(TestData.hexKey(key)))
+    keys.map(key => DeleteAction(createBV(key).toSeq))
 
   protected def withImplAndStore(
       f: (
