@@ -206,8 +206,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      _ <- impl.printTree(rootNode, "TREE (TEST DELETE NOT EXISTING LEAF)", noPrintFlag = true)
-
       //  Trying to delete not existing leaf...
       del <- impl.delete(itemOpt.get, createBV("000").tail)
 
@@ -223,8 +221,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         //  Create tree with one node
         itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         rootNode1 <- impl.constructNodeFromItem(itemOpt.get)
-
-        _ <- impl.printTree(rootNode1, "TREE (TEST DELETING ONE LEAF)", noPrintFlag = true)
 
         //  Trying to delete not existing leaf...
         deletedItem         <- impl.delete(itemOpt.get, leafKey)
@@ -400,13 +396,10 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
               )
 
       node <- impl.constructNodeFromItem(item1.get)
-      _    <- impl.printTree(node, "NODE BEFORE DECODING", noPrintFlag = true)
 
       serializedNode = RadixTree.Codecs.encode(node)
 
       deserializedNode = RadixTree.Codecs.decode(serializedNode)
-
-      _ <- impl.printTree(node, "NODE AFTER SERIALIZE", noPrintFlag = true)
 
       referenceString = "ByteVector(37 bytes, 0xff03f8aff100000000000000000000000000000000000000000000000000000000000000ad)"
 
@@ -431,14 +424,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       //  process
       newRootNodeOpt1 <- impl.makeActions(rootNode, insertRecord)
 
-      _ <- impl.printTree(newRootNodeOpt1.get, "TREE1", noPrintFlag = true)
       _ <- newRootNodeOpt1.traverse { newRootNode =>
             val hash      = impl.saveNode(newRootNode)
             val blakeHash = Blake2b256Hash.fromByteVector(hash)
             impl.commit.as(blakeHash)
           }
       _ = impl.clearWriteCache()
-      _ <- impl.printTree(newRootNodeOpt1.get, "TREE2", noPrintFlag = true)
 
       _ <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
 
@@ -501,8 +492,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       _ = rootNode2Opt.map(rootNode => impl.saveNode(rootNode))
       _ <- impl.commit
 
-      _ <- impl.printTree(rootNode2Opt.get, "TREE1111", noPrintFlag = true)
-
       _ = inMemoStore.numRecords() shouldBe 3
 
     } yield ()
@@ -537,8 +526,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           s"Nodes count after creating tree of 3 leafs (without root node) : ${nodesCount1.toString}"
         )
 
-        _ <- impl.printTree(rootNode2Opt.get, "TREE1", noPrintFlag = true)
-
         //  Append in existing tree 3 leafs...
         rootNode3Opt <- impl.makeActions(rootNode2Opt.get, insertLastNodesActions)
         _            <- impl.commit
@@ -546,7 +533,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         _ = println(
           s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs (without root node): ${nodesCount2.toString}"
         )
-        _ <- impl.printTree(rootNode3Opt.get, "TREE2", noPrintFlag = true)
 
         _ = nodesCount1 shouldBe 2
         _ = nodesCount2 shouldBe 3
