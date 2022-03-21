@@ -444,25 +444,30 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
 
       keysAndData = List(
-        ("FF00FFF01", 0xA.toByte),
-        ("FF0000201", 0xB.toByte),
-        ("FF002111", 0x1.toByte),
-        ("FF002112", 0x2.toByte)
+        ("111122334455", 0x01.toByte),
+        ("11112233AABB", 0x02.toByte),
+        ("1111AABBCC", 0x03.toByte),
+        ("33", 0x04.toByte),
+        ("FF0011", 0x05.toByte),
+        ("FF012222", 0x06.toByte)
       )
 
       insertActions = createInsertActions(keysAndData)
 
       newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
-      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", noPrintFlag = true)
+      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", noPrintFlag = false)
 
       referenceTree = Vector(
         "TREE1: root =>",
-        "   [0F]PTR: prefix = F0, ptr =>",
-        "      [00]LEAF: prefix = 0201, data = 0000...000B",
-        "      [0F]LEAF: prefix = FF01, data = 0000...000A",
-        "   [FF]PTR: prefix = 0021, ptr =>",
-        "      [11]LEAF: prefix = empty, data = 0000...0001",
-        "      [12]LEAF: prefix = empty, data = 0000...0002"
+        "   [11]PTR: prefix = 11, ptr =>",
+        "      [22]PTR: prefix = 33, ptr =>",
+        "         [44]LEAF: prefix = 55, data = 0000...0001",
+        "         [AA]LEAF: prefix = BB, data = 0000...0002",
+        "      [AA]LEAF: prefix = BBCC, data = 0000...0003",
+        "   [33]LEAF: prefix = empty, data = 0000...0004",
+        "   [FF]PTR: prefix = empty, ptr =>",
+        "      [00]LEAF: prefix = 11, data = 0000...0005",
+        "      [01]LEAF: prefix = 2222, data = 0000...0006"
       )
 
       _ = treeInfo shouldBe referenceTree
