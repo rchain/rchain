@@ -126,7 +126,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
     val firstLeafData = createBV32(0xCB.toByte)
     val newLeafData   = createBV32(0xFF.toByte)
-    val leafKey       = createBV("0123456F1")
+    val leafKey       = createBV("00123456F1")
     for {
 
       //  Create tree with one leaf
@@ -167,8 +167,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "RadixTreeImpl" should "not allow to enter keys with different lengths in the subtree" in withImplAndStore {
     (impl, _) =>
       val leafData    = createBV32(0xCB.toByte)
-      val leafKey     = createBV("0123456F1")
-      val testLeafKey = createBV("112")
+      val leafKey     = createBV("00123456F1")
+      val testLeafKey = createBV("0112")
       for {
         leafItemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         err         <- impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
@@ -186,7 +186,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         err <- impl
                 .update(
                   NodePtr(ByteVector(0x00, 0x11), createBV32(0x00.toByte)),
-                  TestData.hexKey("0"),
+                  createBV("00"),
                   createBV32(0x33.toByte)
                 )
                 .attempt
@@ -198,16 +198,16 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       }
   }
 
-  "deleting not existent data" should "return none" in withImplAndStore { (impl, _) =>
+  "deleting non - existent data" should "return none" in withImplAndStore { (impl, _) =>
     val leafData = createBV32(0xCC.toByte)
-    val leafKey  = createBV("0123456F1")
+    val leafKey  = createBV("00123456F1")
     for {
       //  Create tree with one node
-      itemOpt  <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
-      rootNode <- impl.constructNodeFromItem(itemOpt.get)
+      itemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
+      _       <- impl.constructNodeFromItem(itemOpt.get)
 
       //  Trying to delete not existing leaf...
-      del <- impl.delete(itemOpt.get, createBV("000").tail)
+      del <- impl.delete(itemOpt.get, createBV("0000").tail)
 
       _ = del.map(item => item shouldBe None)
     } yield ()
@@ -216,7 +216,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "deleting leaf from tree with only one leaf" should "destroy tree" in withImplAndStore {
     (impl, _) =>
       val leafData = createBV32(0xCC.toByte)
-      val leafKey  = createBV("0123456F1")
+      val leafKey  = createBV("00123456F1")
       for {
         //  Create tree with one node
         itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
@@ -291,11 +291,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "deleting data from leaf" should "destroy this leaf" in withImplAndStore { (impl, _) =>
-    val ptrPrefix                = "FA"
-    val commonKeyPartForTwoLeafs = ptrPrefix + "01122"
     val keys = Vector[ByteVector](
-      createBV(commonKeyPartForTwoLeafs + "013"),
-      createBV(commonKeyPartForTwoLeafs + "225")
+      createBV("FA01122013"),
+      createBV("FA01122225")
     )
     for {
       item1Opt <- impl.update(
@@ -527,9 +525,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         )
 
         //  Append in existing tree 3 leafs...
-        rootNode3Opt <- impl.makeActions(rootNode2Opt.get, insertLastNodesActions)
-        _            <- impl.commit
-        nodesCount2  = inMemoStore.numRecords()
+        _           <- impl.makeActions(rootNode2Opt.get, insertLastNodesActions)
+        _           <- impl.commit
+        nodesCount2 = inMemoStore.numRecords()
         _ = println(
           s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs (without root node): ${nodesCount2.toString}"
         )
