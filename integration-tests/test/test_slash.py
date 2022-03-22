@@ -45,7 +45,7 @@ def is_exist_slash_deploy(block: BlockMessage) -> bool:
     return exist_slash_deploy
 
 @contextmanager
-def three_nodes_network_with_node_client(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, validator_bonds_dict: Dict[PrivateKey, int] = None) -> Generator[Tuple[TestingContext, Node, Node, Node, NodeClient], None, None]:
+def three_nodes_network_with_node_client(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient, validator_bonds_dict: Dict[PrivateKey, int] = None, shard_id: str = '') -> Generator[Tuple[TestingContext, Node, Node, Node, NodeClient], None, None]:
     peers_keypairs = [BONDED_VALIDATOR_KEY_1, BONDED_VALIDATOR_KEY_2]
     wallet_map = {
         BOOTSTRAP_NODE_KEY: 10000,
@@ -54,9 +54,9 @@ def three_nodes_network_with_node_client(command_line_options: CommandLineOption
         BONDED_VALIDATOR_KEY_3: 10000
     }
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_dict, wallets_dict=wallet_map) as context, \
-        ready_bootstrap_with_network(context=context) as bootstrap_node, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1) as validator1, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2) as validator2, \
+        ready_bootstrap_with_network(context=context, shard_id=shard_id) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, shard_id=shard_id) as validator1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2, shard_id=shard_id) as validator2, \
         node_protocol_client(bootstrap_node.network, docker_client, context) as client:
         yield context, bootstrap_node, validator1, validator2, client
 
@@ -71,10 +71,11 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
     3. v2 records b2 as invalid block (InvalidBlockHash)
     4. v2 proposes a new block which slashes v1
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash)
@@ -93,7 +94,7 @@ def test_slash_invalid_block_hash(command_line_options: CommandLineOptions, rand
         record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
 
         slashed_block_hash = validator2.propose()
 
@@ -107,10 +108,11 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
     """
     Propose an block with invalid block number(a block number that isn't one more than the max of all the parents block's numbers).
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash)
@@ -130,7 +132,7 @@ def test_slash_invalid_block_number(command_line_options: CommandLineOptions, ra
         logging.info("Invalid block {}".format(invalid_block_hash.hex()))
         client.send_block(invalid_block_num_block, validator2)
         wait_for_node_sees_block(context, validator2, invalid_block_hash.hex())
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
 
         slashed_block_hash = validator2.propose()
 
@@ -149,10 +151,11 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
     3. v2 records b2 as invalid block (InvalidSequenceNumber)
     4. v2 proposes a new block which slashes v1
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash)
@@ -175,7 +178,7 @@ def test_slash_invalid_block_seq(command_line_options: CommandLineOptions, rando
         wait_for_log_match(context, validator2, record_invalid)
 
         wait_for_node_sees_block(context, validator2, invalid_block_hash.hex())
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
 
         slashed_block_hash = validator2.propose()
 
@@ -200,10 +203,11 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         BONDED_VALIDATOR_KEY_2: 100,
         BONDED_VALIDATOR_KEY_3: 100,
     }
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validators) as  (context, _ , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validators, shard_id=SHARD_ID) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash)
@@ -227,7 +231,7 @@ def test_slash_justification_not_correct(command_line_options: CommandLineOption
         record_invalid = re.compile("Recording invalid block {}... for InvalidFollows".format(invalid_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
         slashed_block_hash = validator2.propose()
 
         block_info = validator2.get_block(slashed_block_hash)
@@ -247,13 +251,14 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
     4.v3 records invalid block (InvalidTransaction) from v2
     5.v3 proposes block which slashes both v1 and v2
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, validator3 , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, validator3 , validator1, validator2, client):
 
         genesis_block = validator3.get_blocks(2)[0]
 
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator3, blockhash)
@@ -314,7 +319,7 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         wait_for_log_match(context, validator3, record_invalid)
 
 
-        validator3.deploy(contract, BOOTSTRAP_NODE_KEY)
+        validator3.deploy(contract, BOOTSTRAP_NODE_KEY, shard_id=SHARD_ID)
         slashed_blockhash = validator3.propose()
         slashed_block_info = validator3.get_block(slashed_blockhash)
         bonds_validators = {b.validator: b.stake for b in slashed_block_info.blockInfo.bonds}
@@ -335,23 +340,24 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
     5. v2 records invalid block B4 (InvalidParents)
     6. v2 proposes a new block B5 which slashes v1
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, bootstrap_node , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, bootstrap_node , validator1, validator2, client):
 
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        bootstrap_node.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        bootstrap_node.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash1 = bootstrap_node.propose()
 
         wait_for_node_sees_block(context, validator1, blockhash1)
         wait_for_node_sees_block(context, validator2, blockhash1)
 
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
         blockhash2 = validator2.propose()
 
         wait_for_node_sees_block(context, validator1, blockhash2)
         wait_for_node_sees_block(context, bootstrap_node, blockhash2)
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_3)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_3, shard_id=SHARD_ID)
         blockhash3 = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash3)
@@ -367,7 +373,7 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         invalid_block.body.state.blockNumber = 2  # pylint: disable=maybe-no-member
         invalid_block.header.parentsHashList.append(bytes.fromhex(block_info1.blockInfo.blockHash))  # pylint: disable=maybe-no-member
         invalid_block.header.timestamp = int(time.time()*1000)  # pylint: disable=maybe-no-member
-        deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000)
+        deploy_data = create_deploy_data(BONDED_VALIDATOR_KEY_2, Path("../rholang/examples/tut-hello.rho").read_text(), 1, 1000000, shard_id=SHARD_ID)
         invalid_block.body.deploys[0].deploy.CopyFrom(deploy_data)  # pylint: disable=maybe-no-member
         invalid_block_hash = gen_block_hash_from_block(invalid_block)
         invalid_block.sig = BONDED_VALIDATOR_KEY_1.sign_block_hash(invalid_block_hash)
@@ -377,7 +383,7 @@ def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_
         record_invalid = re.compile("Recording invalid block {}... for InvalidParents".format(invalid_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         slashed_blockhash = validator2.propose()
         slashed_block_info = validator2.get_block(slashed_blockhash)
         bonds_validators = {b.validator: b.stake for b in slashed_block_info.blockInfo.bonds}
@@ -396,10 +402,11 @@ def test_node_working_right_after_slashing(command_line_options: CommandLineOpti
     4. v2 proposes a new block which slashes v1
     5. v2 should propose normally
     """
-    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client) as  (context, _ , validator1, validator2, client):
+    SHARD_ID = 'test'
+    with three_nodes_network_with_node_client(command_line_options, random_generator, docker_client, shard_id=SHARD_ID) as  (context, _ , validator1, validator2, client):
         contract = '/opt/docker/examples/tut-hello.rho'
 
-        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1)
+        validator1.deploy(contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         blockhash = validator1.propose()
 
         wait_for_node_sees_block(context, validator2, blockhash)
@@ -418,7 +425,7 @@ def test_node_working_right_after_slashing(command_line_options: CommandLineOpti
         record_invalid = re.compile("Recording invalid block {}... for InvalidBlockHash".format(evil_block_hash.hex()[:10]))
         wait_for_log_match(context, validator2, record_invalid)
 
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
 
         slashed_block_hash = validator2.propose()
 
@@ -430,7 +437,7 @@ def test_node_working_right_after_slashing(command_line_options: CommandLineOpti
         assert is_exist_slash_deploy(slash_block), "systemDeploy does not contain slash system deploy"
 
         # this new block should not contain slash deploy
-        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2)
+        validator2.deploy(contract, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
         new_block_hash = validator2.propose()
         new_block_info = validator2.get_block(new_block_hash)
         normal_block = client.block_request(new_block_info.blockInfo.blockHash, validator2)
