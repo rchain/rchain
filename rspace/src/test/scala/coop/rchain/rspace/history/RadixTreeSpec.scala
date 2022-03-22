@@ -492,71 +492,74 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
-    val insertFirstNodesActions = createInsertActions(
-      List(
-        ("111122334455", "AA"),
-        ("11112233AABB", "11"),
-        ("1111AABBCC", "16"),
-        ("33", "11"),
-        ("FF0011", "22"),
-        ("FF012222", "33")
-      )
+    val leafKeysAndValues = List(
+      ("111122334455", "01"),
+      ("11112233AABB", "02"),
+      ("1111AABBCC", "03"),
+      ("33", "04"),
+      ("FF0011", "05"),
+      ("FF012222", "06")
     )
+    val insertActions = createInsertActions(leafKeysAndValues)
+    val referenceLeafPrefixes =
+      leafKeysAndValues.map { case (prefix, _) => createBV(prefix) }
+    val referenceLeafValues = leafKeysAndValues.map { case (_, value) => createBV32(value) }
 
     val exportSettings = ExportDataSettings(
-      flagNodePrefixes = false,
+      flagNodePrefixes = true,
       flagNodeKeys = true,
       flagNodeValues = true,
-      flagLeafPrefixes = false,
+      flagLeafPrefixes = true,
       flagLeafValues = true
     )
-
     for {
-      rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
-
-      //  Create tree with 3 leafs
-      rootNode2Opt <- impl.makeActions(rootNode1, insertFirstNodesActions)
+      //  Create tree with 6 leafs
+      rootNode2Opt <- impl.makeActions(emptyNode, insertActions)
       hash         = rootNode2Opt.map(node => impl.saveNode(node))
       _            <- impl.commit
 
-      store1          = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-      exported        <- sequentialExport(hash.get, None, 0, 100, store1.get1, exportSettings)
-      (exportData, _) = exported
+      //  First data export
+      typedStore       = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      exported1        <- sequentialExport(hash.get, None, 0, 100, typedStore.get1, exportSettings)
+      (exportData1, _) = exported1
 
-      (nodeKeys, nodeValues, leafValues) = (
-        exportData.nodeKeys.map(_.toString()),
-        exportData.nodeValues.map(_.toString()),
-        exportData.leafValues.map(_.toString())
-      )
+      //  Create new storage
+      (
+        ExportData(_, nodeKVDBKeys, nodeKVDBValues, _, _),
+        _
+      ) = exported1
 
-      referenceNodeKeys = Seq[String](
-        "ByteVector(32 bytes, 0x1f7deb90cf44a7576aae69f02b9c65224354d78502d3c4300b94b8e93078d6b0)",
-        "ByteVector(32 bytes, 0x8d00dee837d7af0e85cd675b0ed5b132717308a50b5d8a05b13e3e67004f7c0d)",
-        "ByteVector(32 bytes, 0xeff9110a5f977dec456f165c9d8ff334d59be461b469ca689914a14d35107d39)",
-        "ByteVector(32 bytes, 0x4bb180aee719cd3b55eee21071ed535c3769035ad5a124704713815bc097dac9)"
-      )
+      localStorage = nodeKVDBKeys zip nodeKVDBValues
+      newLocalStore = InMemoryKeyValueStore[Task]
+        .toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      _ <- newLocalStore.put(localStorage)
 
-      referenceNodeValues = Seq[String](
-        "ByteVector(103 bytes, 0x1181118d00dee837d7af0e85cd675b0ed5b132717308a50b5d8a05b13e3e67004f7c0d33000000000000000000000000000000000000000000000000000000000000000011ff804bb180aee719cd3b55eee21071ed535c3769035ad5a124704713815bc097dac9)",
-        "ByteVector(71 bytes, 0x228133eff9110a5f977dec456f165c9d8ff334d59be461b469ca689914a14d35107d39aa02bbcc0000000000000000000000000000000000000000000000000000000000000016)",
-        "ByteVector(70 bytes, 0x44015500000000000000000000000000000000000000000000000000000000000000aaaa01bb0000000000000000000000000000000000000000000000000000000000000011)",
-        "ByteVector(71 bytes, 0x0001110000000000000000000000000000000000000000000000000000000000000022010222220000000000000000000000000000000000000000000000000000000000000033)"
-      )
+      //  Export data from new storage
+      exported2 <- {
+        sequentialExport(
+          hash.get,
+          None,
+          0,
+          100,
+          newLocalStore.get1,
+          exportSettings
+        )
+      }
 
-      referenceLeafValues = Seq[String](
-        "ByteVector(32 bytes, 0x00000000000000000000000000000000000000000000000000000000000000aa)",
-        "ByteVector(32 bytes, 0x0000000000000000000000000000000000000000000000000000000000000011)",
-        "ByteVector(32 bytes, 0x0000000000000000000000000000000000000000000000000000000000000016)",
-        "ByteVector(32 bytes, 0x0000000000000000000000000000000000000000000000000000000000000011)",
-        "ByteVector(32 bytes, 0x0000000000000000000000000000000000000000000000000000000000000022)",
-        "ByteVector(32 bytes, 0x0000000000000000000000000000000000000000000000000000000000000033)"
-      )
+      //  Data exported from created storage must me equal to data from source store
+      _ = {
+        assert(exported2 == exported1, "Error of validation")
+        ()
+      }
 
-      _ = exportData.nodeKeys.size shouldBe 4
-      _ = nodeKeys shouldBe referenceNodeKeys
-      _ = nodeValues shouldBe referenceNodeValues
-      _ = leafValues shouldBe referenceLeafValues
+      (exportData2, _) = exported2
 
+      _ = exportData1.nodeKeys.size shouldBe 4
+      _ = exported1 shouldBe exported2
+      _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData1.leafValues shouldBe referenceLeafValues
+      _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData2.leafValues shouldBe referenceLeafValues
     } yield ()
   }
 
