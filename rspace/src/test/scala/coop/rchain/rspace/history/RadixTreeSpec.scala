@@ -433,11 +433,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     }
   }
 
-  "tree with makeActions" should "be built correctly" in withImplAndStore { (impl, _) =>
-    for {
-      rootNode <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
-
-      keysAndData = List(
+  "tree with makeActions" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
+    (impl, inMemoStore) =>
+      val keysAndData = List(
         ("111122334455", "01"),
         ("11112233AABB", "02"),
         ("1111AABBCC", "03"),
@@ -446,12 +444,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         ("FF012222", "06")
       )
 
-      insertActions = createInsertActions(keysAndData)
-
-      newRootNodeOpt <- impl.makeActions(rootNode, insertActions)
-      treeInfo       <- impl.printTree(newRootNodeOpt.get, "TREE1", noPrintFlag = false)
-
-      referenceTree = Vector(
+      val insertActions = createInsertActions(keysAndData)
+      val deleteActions = createDeleteActions(keysAndData.map {
+        case (key, _) => key
+      })
+      val referenceTree1 = Vector(
         "TREE1: root =>",
         "   [11]PTR: prefix = 11, ptr =>",
         "      [22]PTR: prefix = 33, ptr =>",
@@ -463,68 +460,34 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         "      [00]LEAF: prefix = 11, data = 0000...0005",
         "      [01]LEAF: prefix = 2222, data = 0000...0006"
       )
-
-      _ = treeInfo shouldBe referenceTree
-    } yield ()
-  }
-
-  "function makeActions" should "not create artefacts" in withImplAndStore { (impl, inMemoStore) =>
-    val insertActions = createInsertActions(
-      List(("FF00FFF01", "AA"), ("FF0012345", "11"), ("FF00F5676", "16"))
-    )
-    for {
-      rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
-
-      rootNode2Opt <- impl.makeActions(rootNode1, insertActions)
-
-      //  Root node is also saved in store
-      _ = rootNode2Opt.map(rootNode => impl.saveNode(rootNode))
-      _ <- impl.commit
-
-      _ = inMemoStore.numRecords() shouldBe 3
-
-    } yield ()
-  }
-
-  "function makeActions in work with non-empty tree" should "not create artefacts" in withImplAndStore {
-    (impl, inMemoStore) =>
-      val insertFirstNodesActions = createInsertActions(
-        List(
-          ("111122334455", "AA"),
-          ("11112233AABB", "11"),
-          ("1111AABBCC", "16")
-        )
-      )
-
-      val insertLastNodesActions = createInsertActions(
-        List(
-          ("33", "11"),
-          ("FF0011", "22"),
-          ("FF012222", "33")
-        )
-      )
+      val referenceTree2 = Vector("TREE2: root =>")
       for {
-        rootNode1 <- impl.loadNode(RadixHistory.emptyRootHash.bytes, noAssert = true)
+        //  1  Build a tree according to the example in specification
+        rootNode1Opt <- impl.makeActions(RadixTree.emptyNode, insertActions)
 
-        //  Create tree with 3 leafs
-        rootNode2Opt <- impl.makeActions(rootNode1, insertFirstNodesActions)
-        _            <- impl.commit
+        //    Get the tree for compare with reference
+        tree1 <- impl.printTree(rootNode1Opt.get, "TREE1", noPrintFlag = true)
 
+        _ = impl.saveNode(rootNode1Opt.get)
+        _ <- impl.commit
+
+        //  Number of nodes must be equal to 4 (with root)
         nodesCount1 = inMemoStore.numRecords()
-        _ = println(
-          s"Nodes count after creating tree of 3 leafs (without root node) : ${nodesCount1.toString}"
-        )
 
-        //  Append in existing tree 3 leafs...
-        _           <- impl.makeActions(rootNode2Opt.get, insertLastNodesActions)
-        _           <- impl.commit
+        //  2   Delete all data from tree...
+        rootNode2Opt <- impl.makeActions(rootNode1Opt.get, deleteActions)
+
+        tree2 <- impl.printTree(rootNode2Opt.get, "TREE2", noPrintFlag = true)
+        _     = impl.saveNode(rootNode2Opt.get)
+        _     <- impl.commit
+
+        //  Number of nodes after deleting data must be equal to 5 (with root)
         nodesCount2 = inMemoStore.numRecords()
-        _ = println(
-          s"Nodes count after appending ${insertLastNodesActions.size.toString} leafs (without root node): ${nodesCount2.toString}"
-        )
 
-        _ = nodesCount1 shouldBe 2
-        _ = nodesCount2 shouldBe 3
+        _ = tree1 shouldBe referenceTree1
+        _ = nodesCount1 shouldBe 4
+        _ = tree2 shouldBe referenceTree2
+        _ = nodesCount2 shouldBe 5
       } yield ()
   }
 
