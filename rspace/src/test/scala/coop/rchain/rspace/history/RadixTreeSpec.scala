@@ -390,11 +390,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   // Data for test are given from RadixTree specification
   "encode and decode" should "give initial node" in {
     val leaf        = Leaf(createBV("FFFF"), createBV32("01"))
-    val nodePtrData = List.fill(32)(createBV("FF").head).toVector
-    val nodePtr     = NodePtr(ByteVector.empty, ByteVector(nodePtrData))
-
-    val referenceNode: Node = Vector(EmptyItem) ++ Vector(leaf) ++ Vector(nodePtr) ++
-      (3 until numItems).map(_ => EmptyItem).toVector
+    val nodePtrData = ByteVector(List.fill(32)(0xFF.toByte))
+    val nodePtr     = NodePtr(ByteVector.empty, nodePtrData)
+    val referenceNode = emptyNode
+      .updated(1, leaf)
+      .updated(2, nodePtr)
 
     val serializedNode   = RadixTree.Codecs.encode(referenceNode)
     val deserializedNode = RadixTree.Codecs.decode(serializedNode)
