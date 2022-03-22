@@ -6,15 +6,17 @@ from .conftest import STANDALONE_KEY
 from .utils import get_node_ip_of_network
 from .http_client import HttpClient
 
+SHARD_ID = ''
+
 @pytest.fixture(scope="module")
 def node_with_blocks(started_standalone_bootstrap_node: Node, docker_client: DockerClient) -> Generator[Tuple[Node, List[str], List[str]], None, None]:
     deploy_hash = []
     block_hash = []
-    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1))
+    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1, shard_id=SHARD_ID))
     block_hash.append(started_standalone_bootstrap_node.propose())
-    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1))
+    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1, shard_id=SHARD_ID))
     block_hash.append(started_standalone_bootstrap_node.propose())
-    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1))
+    deploy_hash.append(started_standalone_bootstrap_node.deploy('/opt/docker/examples/tut-hello.rho', STANDALONE_KEY, 100000, 1, shard_id=SHARD_ID))
     block_hash.append(started_standalone_bootstrap_node.propose())
     with get_node_ip_of_network(docker_client, started_standalone_bootstrap_node.network):
         yield (started_standalone_bootstrap_node, deploy_hash, block_hash)
@@ -52,6 +54,6 @@ def test_web_api(node_with_blocks: Tuple[Node, List[str], List[str]]) -> None :
     assert "blockHash" in deploy_block
     assert "seqNum" in deploy_block
 
-    ret = client.deploy("@2!(1)", 100000, 1, 5, STANDALONE_KEY)
+    ret = client.deploy("@2!(1)", 100000, 1, 5, STANDALONE_KEY, shard_id=SHARD_ID)
     assert ret is not None
 
