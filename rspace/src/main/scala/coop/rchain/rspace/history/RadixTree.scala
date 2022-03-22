@@ -201,7 +201,13 @@ object RadixTree {
           decodeItem(pos0Next, nodeNext) // Try to decode next item.
         }
 
-      decodeItem(0, emptyNode)
+      try {
+        decodeItem(0, emptyNode)
+      } catch {
+        case _: Exception =>
+          assert(assertion = false, "Error during deserialization: invalid data format")
+          emptyNode
+      }
     }
   }
 
