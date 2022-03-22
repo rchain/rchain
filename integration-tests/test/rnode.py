@@ -335,7 +335,7 @@ class Node:
 
     def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str,
                                           private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-                                          phlo_price: int = DEFAULT_PHLO_PRICE) -> str:
+                                          phlo_price: int = DEFAULT_PHLO_PRICE, shard_id: str = '') -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -358,7 +358,7 @@ class Node:
             '-e', substitute_rules,
             container_contract_file_path,
         )
-        self.deploy(container_contract_file_path, private_key, phlo_limit, phlo_price)
+        self.deploy(container_contract_file_path, private_key, phlo_limit, phlo_price, shard_id=shard_id)
         block_hash = self.propose()
         return block_hash
 

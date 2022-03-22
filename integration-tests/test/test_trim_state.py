@@ -31,10 +31,11 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
         VALIDATOR_PEER_KEY: 10000000
     }
 
+    shard_id = 'test'
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_KEY,
                                   validator_bonds_dict=bonded_validator_map, wallets_dict=genesis_vault) as context, \
         ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0,
-                                     cli_options={"--fault-tolerance-threshold": -1}) as bootstrap_node:
+                                     cli_options={"--fault-tolerance-threshold": -1}, shard_id=shard_id) as bootstrap_node:
         # use fault-tolerance-threshold==-1 make sure that every block added to the bootstrap node is finalized
         relative_paths = bootstrap_node.shell_out('sh', '-c','ls /opt/docker/examples/*.rho').splitlines()
 
@@ -43,17 +44,17 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
             # choose random contract to create randomness
             relative_path = random_generator.choice(relative_paths)
             full_path = os.path.join('/opt/docker/examples', relative_path)
-            bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1)
+            bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1, shard_id=shard_id)
             latest_block_hash = bootstrap_node.propose()
 
         with bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='trim-node', private_key=VALIDATOR_PEER_KEY,
-                                      cli_options={"--fault-tolerance-threshold": "-1"}) as trim_state_node:
+                                      cli_options={"--fault-tolerance-threshold": "-1"}, shard_id=shard_id) as trim_state_node:
             # trim node should retrieve the latest approved block and replay
             wait_for_node_sees_block(context, trim_state_node, latest_block_hash)
             for _ in range(1, 5):
                 relative_path = random_generator.choice(relative_paths)
                 full_path = os.path.join('/opt/docker/examples', relative_path)
-                bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1)
+                bootstrap_node.deploy(full_path, BOOTSTRAP_KEY, 100000, 1, shard_id=shard_id)
                 block_hash = bootstrap_node.propose()
                 wait_for_node_sees_block(context, trim_state_node, block_hash)
 
@@ -61,6 +62,6 @@ def test_trim_state(command_line_options: CommandLineOptions, random_generator: 
             for _ in range(1, 5):
               relative_path = random_generator.choice(relative_paths)
               full_path = os.path.join('/opt/docker/examples', relative_path)
-              trim_state_node.deploy(full_path, VALIDATOR_PEER_KEY, 100000, 1)
+              trim_state_node.deploy(full_path, VALIDATOR_PEER_KEY, 100000, 1, shard_id=shard_id)
               block_hash = trim_state_node.propose()
               wait_for_node_sees_block(context, bootstrap_node, block_hash)
