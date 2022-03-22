@@ -387,27 +387,22 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "encode and decode" should "give initial node" in withImplAndStore { (impl, _) =>
-    for {
-      item1 <- impl.update(
-                RadixTree.EmptyItem,
-                createBV("FFF8AFF1"),
-                createBV32("AD")
-              )
+  // Data for test are given from RadixTree specification
+  "encode and decode" should "give initial node" in {
+    val leaf        = Leaf(createBV("FFFF"), createBV32("01"))
+    val nodePtrData = List.fill(32)(createBV("FF").head).toVector
+    val nodePtr     = NodePtr(ByteVector.empty, ByteVector(nodePtrData))
 
-      node <- impl.constructNodeFromItem(item1.get)
+    val referenceNode: Node = Vector(EmptyItem) ++ Vector(leaf) ++ Vector(nodePtr) ++
+      (3 until numItems).map(_ => EmptyItem).toVector
 
-      serializedNode = RadixTree.Codecs.encode(node)
-
-      deserializedNode = RadixTree.Codecs.decode(serializedNode)
-
-      referenceSerialized = createBV(
-        "ff03f8aff100000000000000000000000000000000000000000000000000000000000000ad"
-      )
-
-      _ = deserializedNode shouldBe node
-      _ = serializedNode shouldBe referenceSerialized
-    } yield ()
+    val serializedNode   = RadixTree.Codecs.encode(referenceNode)
+    val deserializedNode = RadixTree.Codecs.decode(serializedNode)
+    val referenceSerialized = createBV(
+      "0102FFFF00000000000000000000000000000000000000000000000000000000000000010280FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+    )
+    deserializedNode shouldBe referenceNode
+    serializedNode shouldBe referenceSerialized
   }
 
   "collisions in KVDB" should "be detected" in withImplAndStore { (impl, inMemoStore) =>
