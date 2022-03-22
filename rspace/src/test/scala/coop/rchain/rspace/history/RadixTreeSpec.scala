@@ -5,7 +5,6 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history.TestData._
-import coop.rchain.rspace.history.instances.RadixHistory
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValueTypedStore}
 import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, KeyValueStoreOps}
@@ -408,6 +407,20 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     )
     deserializedNode shouldBe referenceNode
     serializedNode shouldBe referenceSerialized
+  }
+
+  "decode wrong serialized data" should "be stopped with assertion error" in {
+    val wrongSerialized = createBV(
+      "0102FFFF00000000000000000000000000000010280FFFFFFFFFFFFFFFFFFFFFFFFFF"
+    )
+    try {
+      RadixTree.Codecs.decode(wrongSerialized)
+    } catch {
+      case ex: AssertionError =>
+        ex shouldBe a[AssertionError]
+        ex.getMessage shouldBe s"assertion failed: Error during deserialization: invalid data format"
+
+    }
   }
 
   "collisions in KVDB" should "be detected" in withImplAndStore { (impl, inMemoStore) =>
