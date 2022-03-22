@@ -251,11 +251,11 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0) -> str:
+               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0, shard_id: str = '') -> str:
         try:
             now_time = int(time.time()*1000)
             with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
-                return client.deploy(private_key, self.view_file(rho_file_path), phlo_price, phlo_limit, valid_after_block_no, now_time)
+                return client.deploy(private_key, self.view_file(rho_file_path), phlo_price, phlo_limit, valid_after_block_no, now_time, shard_id=shard_id)
         except RClientException as e:
             message = e.args[0]
             if "Parsing error" in message:
