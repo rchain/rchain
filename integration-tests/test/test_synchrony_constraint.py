@@ -56,54 +56,55 @@ def test_synchrony_constraint(command_line_options: CommandLineOptions, random_g
 
     sample_contract = '/opt/docker/examples/hello_world_again.rho'
 
+    SHARD_ID = 'test'
     with conftest.testing_context(command_line_options, random_generator, docker_client, validator_bonds_dict=bonded_validator_map, bootstrap_key=BOOTSTRAP_NODE_KEYS, wallets_dict=genesis_vault) as context, \
-        ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0) as bootstrap_node, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, synchrony_constraint_threshold=0.48) as bonded_validator_1, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2',private_key=BONDED_VALIDATOR_KEY_2, synchrony_constraint_threshold=0.4) as bonded_validator_2, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3, synchrony_constraint_threshold=0.99) as bonded_validator_3:
+        ready_bootstrap_with_network(context=context, synchrony_constraint_threshold=0, shard_id=SHARD_ID) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, synchrony_constraint_threshold=0.48, shard_id=SHARD_ID) as bonded_validator_1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2',private_key=BONDED_VALIDATOR_KEY_2, synchrony_constraint_threshold=0.4, shard_id=SHARD_ID) as bonded_validator_2, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-3', private_key=BONDED_VALIDATOR_KEY_3, synchrony_constraint_threshold=0.99, shard_id=SHARD_ID) as bonded_validator_3:
 
         #-- bootstrap can propose twice without limits
-        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         bootstrap_node.propose()
-        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         b1 = bootstrap_node.propose()
         #--
 
         #-- validator_1 can propose when validator_2 propose block
         wait_for_node_sees_block(context, bonded_validator_1, b1)
-        bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         b2 = bonded_validator_1.propose()
 
         wait_for_node_sees_block(context, bonded_validator_3, b2)
-        bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         block_hash_2 = bonded_validator_3.propose()
 
         wait_for_node_sees_block(context, bonded_validator_1, block_hash_2)
 
         with pytest.raises(RClientException):
-            bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+            bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
             bonded_validator_1.propose()
 
-        bonded_validator_2.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bonded_validator_2.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         block_hash_3 = bonded_validator_2.propose()
 
         wait_for_node_sees_block(context, bonded_validator_1, block_hash_3)
-        bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bonded_validator_1.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         block_hash_4 = bonded_validator_1.propose()
         #--
 
         #-- validator_2 can propose because validator_1 already propose
         wait_for_node_sees_block(context, bonded_validator_2, block_hash_4)
-        bonded_validator_2.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bonded_validator_2.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         block_hash_5 = bonded_validator_2.propose()
         #--
 
         #-- validator_3 can propose when all other validators already propose
         wait_for_node_sees_block(context, bonded_validator_3, block_hash_5)
         with pytest.raises(RClientException):
-            bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+            bonded_validator_3.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
             bonded_validator_3.propose()
-        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1)
+        bootstrap_node.deploy(sample_contract, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
         block_hash_6 = bootstrap_node.propose()
         wait_for_node_sees_block(context, bonded_validator_3, block_hash_6)
         bonded_validator_3.propose()
