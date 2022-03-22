@@ -163,19 +163,21 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       val leafData    = createBV32("CB")
       val leafKey     = createBV("00123456F1")
       val testLeafKey = createBV("0112")
+      val referenceErrorMessage =
+        s"assertion failed: The length of all prefixes in the subtree must be the same."
       for {
         leafItemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
         err         <- impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
-      } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
-        ex shouldBe a[AssertionError]
-        ex.getMessage shouldBe s"assertion failed: The length of all prefixes in the subtree must be the same."
-      }
+
+        ex = err.left.get
+        _  = ex shouldBe a[AssertionError]
+        _  = ex.getMessage shouldBe referenceErrorMessage
+      } yield ()
   }
 
   "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
+      val referenceErrorMessage = s"assertion failed: Radix key should be longer than NodePtr key."
       for {
         err <- impl
                 .update(
@@ -184,12 +186,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                   createBV32("33")
                 )
                 .attempt
-      } yield {
-        err.isLeft shouldBe true
-        val ex = err.left.get
-        ex shouldBe a[AssertionError]
-        ex.getMessage shouldBe s"assertion failed: Radix key should be longer than NodePtr key."
-      }
+
+        ex = err.left.get
+        _  = ex shouldBe a[AssertionError]
+        _  = ex.getMessage shouldBe referenceErrorMessage
+      } yield ()
   }
 
   "deleting non - existent data" should "return none" in withImplAndStore { (impl, _) =>
@@ -431,19 +432,17 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     }
 
     val collisionKVPair = (copyBVToBuf(History.emptyRootHash.bytes), ByteVector(0x00))
+    val referenceErrorMessage = s"1 collisions in KVDB (first collision with key = " +
+      s"${History.emptyRootHash.bytes.toHex})."
     for {
       _   <- inMemoStore.put[ByteVector](Seq(collisionKVPair), copyBVToBuf)
       _   = impl.saveNode(emptyNode)
       err <- impl.commit.attempt
 
-    } yield {
-      err.isLeft shouldBe true
-      val ex = err.left.get
-      ex shouldBe a[RuntimeException]
-      ex.getMessage shouldBe
-        s"1 collisions in KVDB (first collision with key = " +
-          s"${History.emptyRootHash.bytes.toHex})."
-    }
+      ex = err.left.get
+      _  = ex shouldBe a[RuntimeException]
+      _  = ex.getMessage shouldBe referenceErrorMessage
+    } yield ()
   }
 
   "tree with makeActions" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
