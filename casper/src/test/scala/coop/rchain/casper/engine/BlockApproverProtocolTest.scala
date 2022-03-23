@@ -95,7 +95,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
-                shardId = SHARD_ID
+                shardId = SHARD_ID,
+                posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
+                posMultiSigQuorum = approver.posMultiSigQuorum
               )
         } yield r shouldBe Right(())
     }
@@ -119,7 +121,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
-                shardId = SHARD_ID
+                shardId = SHARD_ID,
+                posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
+                posMultiSigQuorum = approver.posMultiSigQuorum
               )
         } yield r shouldBe (Left("Block bonds don't match expected."))
     }
@@ -145,7 +149,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
-                shardId = SHARD_ID
+                shardId = SHARD_ID,
+                posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
+                posMultiSigQuorum = approver.posMultiSigQuorum
               )
         } yield r shouldBe (Left(
           "Mismatch between number of candidate deploys and expected number of deploys."
@@ -174,7 +180,9 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength + 1,
                 quarantineLength = approver.quarantineLength + 1,
                 numberOfActiveValidators = approver.numberOfActiveValidators + 1,
-                shardId = SHARD_ID
+                shardId = SHARD_ID,
+                posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
+                posMultiSigQuorum = approver.posMultiSigQuorum
               )
         } yield r.isLeft shouldBe true
     }
@@ -209,7 +217,9 @@ object BlockApproverProtocolTest {
           genesisParams.proofOfStake.epochLength,
           genesisParams.proofOfStake.quarantineLength,
           genesisParams.proofOfStake.numberOfActiveValidators,
-          requiredSigs
+          requiredSigs,
+          genesisParams.proofOfStake.posMultiSigPublicKeys,
+          genesisParams.proofOfStake.posMultiSigQuorum
         )
         .map(_ -> node)
     }
