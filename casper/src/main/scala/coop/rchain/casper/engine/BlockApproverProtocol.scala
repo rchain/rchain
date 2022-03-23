@@ -35,7 +35,8 @@ final case class BlockApproverProtocol private (
     epochLength: Int,
     quarantineLength: Int,
     numberOfActiveValidators: Int,
-    requiredSigs: Int
+    requiredSigs: Int,
+    publicKeys: List[String]
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
@@ -57,7 +58,8 @@ final case class BlockApproverProtocol private (
           maximumBond,
           epochLength,
           quarantineLength,
-          numberOfActiveValidators
+          numberOfActiveValidators,
+          publicKeys
         )
         .flatMap {
           case Right(_) =>
@@ -90,7 +92,8 @@ object BlockApproverProtocol {
       epochLength: Int,
       quarantineLength: Int,
       numberOfActiveValidators: Int,
-      requiredSigs: Int
+      requiredSigs: Int,
+      publicKeys: List[String]
   )(implicit monadError: MonadError[F, Throwable]): F[BlockApproverProtocol] =
     if (bonds.size > requiredSigs)
       new BlockApproverProtocol(
@@ -103,7 +106,8 @@ object BlockApproverProtocol {
         epochLength,
         quarantineLength,
         numberOfActiveValidators,
-        requiredSigs
+        requiredSigs,
+        publicKeys
       ).pure[F]
     else
       monadError.raiseError(
@@ -135,7 +139,8 @@ object BlockApproverProtocol {
       maximumBond: Long,
       epochLength: Int,
       quarantineLength: Int,
-      numberOfActiveValidators: Int
+      numberOfActiveValidators: Int,
+      publicKeys: List[String]
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
@@ -163,7 +168,8 @@ object BlockApproverProtocol {
           validators,
           epochLength,
           quarantineLength,
-          numberOfActiveValidators
+          numberOfActiveValidators,
+          publicKeys
         )
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(

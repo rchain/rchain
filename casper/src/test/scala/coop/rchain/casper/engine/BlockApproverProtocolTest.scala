@@ -90,7 +90,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                publicKeys = approver.publicKeys
               )
         } yield r shouldBe Right(())
     }
@@ -113,7 +114,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                publicKeys = approver.publicKeys
               )
         } yield r shouldBe (Left("Block bonds don't match expected."))
     }
@@ -138,7 +140,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond,
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
-                numberOfActiveValidators = approver.numberOfActiveValidators
+                numberOfActiveValidators = approver.numberOfActiveValidators,
+                publicKeys = approver.publicKeys
               )
         } yield r shouldBe (Left(
           "Mismatch between number of candidate deploys and expected number of deploys."
@@ -166,7 +169,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 maximumBond = approver.maximumBond - 1,
                 epochLength = approver.epochLength + 1,
                 quarantineLength = approver.quarantineLength + 1,
-                numberOfActiveValidators = approver.numberOfActiveValidators + 1
+                numberOfActiveValidators = approver.numberOfActiveValidators + 1,
+                publicKeys = approver.publicKeys
               )
         } yield r.isLeft shouldBe true
     }
@@ -201,7 +205,8 @@ object BlockApproverProtocolTest {
           genesisParams.proofOfStake.epochLength,
           genesisParams.proofOfStake.quarantineLength,
           genesisParams.proofOfStake.numberOfActiveValidators,
-          requiredSigs
+          requiredSigs,
+          genesisParams.proofOfStake.publicKeys
         )
         .map(_ -> node)
     }

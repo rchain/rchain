@@ -11,7 +11,7 @@ import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
 import coop.rchain.casper.helper.BlockDagStorageFixture
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.util.rholang.{InterpreterUtil, Resources, RuntimeManager}
-import coop.rchain.casper.util.{BondsParser, ProtoUtil, VaultParser}
+import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultParser}
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
@@ -277,7 +277,8 @@ object GenesisTest {
                            epochLength = epochLength,
                            quarantineLength = quarantineLength,
                            numberOfActiveValidators = numberOfActiveValidators,
-                           validators = validators
+                           validators = validators,
+                           publicKeys = GenesisBuilder.defaultPublicKeys
                          ),
                          vaults = vaults,
                          supply = Long.MaxValue,
