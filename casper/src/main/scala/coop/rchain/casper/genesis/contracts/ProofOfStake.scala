@@ -15,7 +15,9 @@ final case class ProofOfStake(
     validators: Seq[Validator],
     epochLength: Int,
     quarantineLength: Int,
-    numberOfActiveValidators: Int
+    numberOfActiveValidators: Int,
+    posMultiSigPublicKeys: List[String],
+    posMultiSigQuorum: Int
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv.withDeployerId(
@@ -30,7 +32,9 @@ final case class ProofOfStake(
       "initialBonds"             -> ProofOfStake.initialBonds(validators),
       "epochLength"              -> epochLength,
       "quarantineLength"         -> quarantineLength,
-      "numberOfActiveValidators" -> numberOfActiveValidators
+      "numberOfActiveValidators" -> numberOfActiveValidators,
+      "posMultiSigPublicKeys"    -> ProofOfStake.publicKeys(posMultiSigPublicKeys),
+      "posMultiSigQuorum"        -> posMultiSigQuorum
     ) {
 
   require(minimumBond <= maximumBond)
@@ -53,5 +57,14 @@ object ProofOfStake {
       }
       .mkString(", ")
     s"{$mapEntries}"
+  }
+
+  def publicKeys(posMultiSigPublicKeys: List[String]): String = {
+    val indentBrackets = 12
+    val indentKeys     = indentBrackets + 2
+    val pubKeyItems = posMultiSigPublicKeys
+      .map(pk => s"""${" " * indentKeys}"$pk".hexToBytes()""")
+      .mkString(",\n")
+    s"""[\n$pubKeyItems\n${" " * indentBrackets}]"""
   }
 }
