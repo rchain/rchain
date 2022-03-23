@@ -184,7 +184,7 @@ object CasperLaunch {
                   conf.genesisBlockData.quarantineLength,
                   conf.genesisBlockData.numberOfActiveValidators,
                   conf.genesisCeremony.requiredSignatures,
-                  conf.genesisBlockData.publicKeys
+                  conf.genesisBlockData.posMultiSigPublicKeys
                 )(Sync[F])
           _ <- EngineCell[F].set(
                 new GenesisValidator(
@@ -217,7 +217,7 @@ object CasperLaunch {
                     conf.genesisCeremony.approveDuration,
                     conf.genesisCeremony.approveInterval,
                     conf.genesisBlockData.genesisBlockNumber,
-                    conf.genesisBlockData.publicKeys
+                    conf.genesisBlockData.posMultiSigPublicKeys
                   )
           // TODO track fiber
           _ <- Concurrent[F].start(
