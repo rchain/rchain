@@ -97,7 +97,7 @@ object Setup {
         genesisParams.proofOfStake.quarantineLength,
         genesisParams.proofOfStake.numberOfActiveValidators,
         requiredSigs,
-        genesisParams.proofOfStake.publicKeys
+        genesisParams.proofOfStake.posMultiSigPublicKeys
       )
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
 

@@ -54,7 +54,7 @@ object GenesisBuilder {
     )
   }
 
-  val defaultPublicKeys = List(
+  val defaultPosMultiSigPublicKeys = List(
     "04db91a53a2b72fcdcb201031772da86edad1e4979eb6742928d27731b1771e0bc40c9e9c9fa6554bdec041a87cee423d6f2e09e9dfb408b78e85a4aa611aad20c",
     "042a736b30fffcc7d5a58bb9416f7e46180818c82b15542d0a7819d1a437aa7f4b6940c50db73a67bfc5f5ec5b5fa555d24ef8339b03edaa09c096de4ded6eae14",
     "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754"
@@ -83,7 +83,7 @@ object GenesisBuilder {
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq,
-          publicKeys = defaultPublicKeys
+          posMultiSigPublicKeys = defaultPosMultiSigPublicKeys
         ),
         vaults = genesisVaults.toList.map(pair => predefinedVault(pair._2)) ++
           bonds.toList.map {

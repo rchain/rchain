@@ -145,7 +145,8 @@ class HoconConfigurationSpec extends FunSuite with Matchers {
           numberOfActiveValidators = 100,
           deployTimestamp = None,
           genesisBlockNumber = 0,
-          posMultiSigPublicKeys = GenesisBuilder.defaultPublicKeys
+          posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
+          posMultiSigQuorum = 3
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 0,

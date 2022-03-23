@@ -67,7 +67,7 @@ object ApproveBlockProtocol {
       duration: FiniteDuration,
       interval: FiniteDuration,
       blockNumber: Long,
-      publicKeys: List[String]
+      posMultiSigPublicKeys: List[String]
   ): F[ApproveBlockProtocol[F]] =
     for {
       now       <- Time[F].currentMillis
@@ -99,7 +99,7 @@ object ApproveBlockProtocol {
                              quarantineLength = quarantineLength,
                              numberOfActiveValidators = numberOfActiveValidators,
                              validators = validators,
-                             publicKeys = publicKeys
+                             posMultiSigPublicKeys = posMultiSigPublicKeys
                            ),
                            vaults = vaults,
                            supply = Long.MaxValue,

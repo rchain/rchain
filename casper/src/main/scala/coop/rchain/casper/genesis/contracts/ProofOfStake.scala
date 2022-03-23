@@ -14,7 +14,7 @@ final case class ProofOfStake(
     epochLength: Int,
     quarantineLength: Int,
     numberOfActiveValidators: Int,
-    publicKeys: List[String]
+    posMultiSigPublicKeys: List[String]
 ) extends CompiledRholangTemplate(
       "PoS.rhox",
       NormalizerEnv.Empty,
@@ -24,7 +24,7 @@ final case class ProofOfStake(
       "epochLength"              -> epochLength,
       "quarantineLength"         -> quarantineLength,
       "numberOfActiveValidators" -> numberOfActiveValidators,
-      "publicKeys"               -> publicKeys
+      "posMultiSigPublicKeys"    -> posMultiSigPublicKeys
     ) {
 
   require(minimumBond <= maximumBond)

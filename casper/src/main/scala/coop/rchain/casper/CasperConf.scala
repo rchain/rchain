@@ -37,7 +37,8 @@ final case class GenesisBlockData(
     genesisBlockNumber: Long,
     numberOfActiveValidators: Int,
     deployTimestamp: Option[Long],
-    posMultiSigPublicKeys: List[String]
+    posMultiSigPublicKeys: List[String],
+    posMultiSigQuorum: Int
 )
 
 final case class GenesisCeremonyConf(
