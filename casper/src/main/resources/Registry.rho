@@ -605,237 +605,234 @@ in {
       // pubKeys = set of public keys which have the privilege to propose and approve upgrades
       // quorumSize = number of pubKeys member approvals needed to upgrade a contract's data
       // -------------------------------------------------------------------------------------
-      match Set() { // TODO add correct set of public keys & quorum size
-        pubKeys => {
-          MultiSig!(pubKeys, 2, *msRet) |
-          for (@pubKeys, @quorumSize, msRet <- MultiSig) {
-            new
-              multisig,           // MultiSig contract's method entry point
-              agreementMapCh,     // channel on which the agreement map is stored
-              proposalMapCh,      // channel on which the propose map is stored
-              multisigLoc,        // MultiSig contract's location channel
-              multisigDispatcher  // MultiSig contract's dispatcher
-            in {
-              // Initialize propose map
-              // uri -> (contractData, methodData)
-              proposalMapCh!({}) |
-              // Initialize agreement map
-              // (uri, contractData, methodData) -> agreement set
-              agreementMapCh!({}) |
-              // -------
-              // Propose
-              // --------------------------------------------------------------------------------
-              // Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
-              // There is only one proposal per uri possible at a time.
-              // --------------------------------------------------------------------------------
-              contract multisig(@"propose", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
-                new verifyCh in {
-                  if (pubKeys.contains(pubKeyBytes)) {
-                    // `pubKey` has the privilege to propose updates
-                    for (@bcMap <<- blessedContractLocMapCh) {
-                      if (bcMap.contains(uri)) {
-                        // `uri` belongs to a blessed contract
-                        match (uri, con, meth) {
-                          key => {
-                            for (@proposalMap <- proposalMapCh) {
-                              if (not proposalMap.contains(uri)) {
-                                // the update proposal is unique
-                                // check the signature of (uri, con, meth) = key
-                                hashVerify!(key, sig, pubKeyBytes, *verifyCh) |
-                                for (@verified <- verifyCh) {
-                                  if (verified) {
-                                    // signature is valid
-                                    proposalMapCh!(proposalMap.set(uri, (con, meth))) |
-                                    for (@agreeMap <- agreementMapCh) {
-                                      // the proposer is the first to agree with a proposal
-                                      agreementMapCh!(agreeMap.set(key, Set(pubKeyBytes))) |
-                                      ret!((true, uri, con, meth))
-                                    }
-                                  } else {
-                                    // signature is invalid
-                                    proposalMapCh!(proposalMap) |
-                                    ret!((false, "invalid signature"))
+      {
+        let @quorumSize, @pubKeys <- 2, Set() in {
+          new
+            multisig,           // MultiSig contract's method entry point
+            agreementMapCh,     // channel on which the agreement map is stored
+            proposalMapCh,      // channel on which the propose map is stored
+            multisigLoc,        // MultiSig contract's location channel
+            multisigDispatcher  // MultiSig contract's dispatcher
+          in {
+            // Initialize propose map
+            // uri -> (contractData, methodData)
+            proposalMapCh!({}) |
+            // Initialize agreement map
+            // (uri, contractData, methodData) -> agreement set
+            agreementMapCh!({}) |
+            // -------
+            // Propose
+            // --------------------------------------------------------------------------------
+            // Privileged public keys, i.e. members of `pubKeys`, can propose contract updates.
+            // There is only one proposal per uri possible at a time.
+            // --------------------------------------------------------------------------------
+            contract multisig(@"propose", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
+              new verifyCh in {
+                if (pubKeys.contains(pubKeyBytes)) {
+                  // `pubKey` has the privilege to propose updates
+                  for (@bcMap <<- blessedContractLocMapCh) {
+                    if (bcMap.contains(uri)) {
+                      // `uri` belongs to a blessed contract
+                      match (uri, con, meth) {
+                        key => {
+                          for (@proposalMap <- proposalMapCh) {
+                            if (not proposalMap.contains(uri)) {
+                              // the update proposal is unique
+                              // check the signature of (uri, con, meth) = key
+                              hashVerify!(key, sig, pubKeyBytes, *verifyCh) |
+                              for (@verified <- verifyCh) {
+                                if (verified) {
+                                  // signature is valid
+                                  proposalMapCh!(proposalMap.set(uri, (con, meth))) |
+                                  for (@agreeMap <- agreementMapCh) {
+                                    // the proposer is the first to agree with a proposal
+                                    agreementMapCh!(agreeMap.set(key, Set(pubKeyBytes))) |
+                                    ret!((true, uri, con, meth))
                                   }
+                                } else {
+                                  // signature is invalid
+                                  proposalMapCh!(proposalMap) |
+                                  ret!((false, "invalid signature"))
                                 }
-                              } else {
-                                // an update has already been proposed for this uri
-                                proposalMapCh!(proposalMap) |
-                                ret!((false, "location already exists"))
                               }
+                            } else {
+                              // an update has already been proposed for this uri
+                              proposalMapCh!(proposalMap) |
+                              ret!((false, "location already exists"))
                             }
                           }
                         }
-                      } else {
-                        // `uri` does not belong to a blessed contract
-                        ret!((false, "uri does not exist"))
                       }
+                    } else {
+                      // `uri` does not belong to a blessed contract
+                      ret!((false, "uri does not exist"))
                     }
-                  } else {
-                    // `pubKeyBytes` does not have the privilege to propose updates
-                    ret!((false, "invalid public key"))
+                  }
+                } else {
+                  // `pubKeyBytes` does not have the privilege to propose updates
+                  ret!((false, "invalid public key"))
+                }
+              }
+            } |
+            // Agree
+            // --------------------------------------------------------------------------------------
+            // Privileged public keys can agree with update proposals.
+            // Manages the `agreementMap`: (uri, contractData, methodData) -> set of agreeing pubKeys
+            // --------------------------------------------------------------------------------------
+            contract multisig(@"agree", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
+              new verifyCh in {
+                match (uri, con, meth) {
+                  agreedTuple => {
+                    if (pubKeys.contains(pubKeyBytes)) {
+                      // `pubKey` is a member of `pubKeys`
+                      hashVerify!(agreedTuple, sig, pubKeyBytes, *verifyCh) |
+                      for (@verified <- verifyCh) {
+                        if (verified) {
+                          // valid signature
+                          for (@map <- agreementMapCh) {
+                            match map.getOrElse(agreedTuple, Set()).add(pubKeyBytes) {
+                              agreeing => {
+                                // add `pubKeyBytes` to the set of supporters
+                                agreementMapCh!(map.set(agreedTuple, agreeing)) |
+                                ret!((true, uri, con, meth, agreeing))
+                              }
+                            }
+                          }
+                        } else {
+                          // invalvid signature
+                          ret!((false, "invalid signature"))
+                        }
+                      }
+                    } else {
+                      // `pubKeyBytes` is not in `pubKeys`
+                      ret!((false, "invalid public key"))
+                    }
                   }
                 }
-              } |
-              // Agree
-              // --------------------------------------------------------------------------------------
-              // Privileged public keys can agree with update proposals.
-              // Manages the `agreementMap`: (uri, contractData, methodData) -> set of agreeing pubKeys
-              // --------------------------------------------------------------------------------------
-              contract multisig(@"agree", @pubKeyBytes, @uri, @con, @meth, @sig, ret) = {
-                new verifyCh in {
-                  match (uri, con, meth) {
-                    agreedTuple => {
-                      if (pubKeys.contains(pubKeyBytes)) {
-                        // `pubKey` is a member of `pubKeys`
-                        hashVerify!(agreedTuple, sig, pubKeyBytes, *verifyCh) |
-                        for (@verified <- verifyCh) {
-                          if (verified) {
-                            // valid signature
-                            for (@map <- agreementMapCh) {
-                              match map.getOrElse(agreedTuple, Set()).add(pubKeyBytes) {
-                                agreeing => {
-                                  // add `pubKeyBytes` to the set of supporters
-                                  agreementMapCh!(map.set(agreedTuple, agreeing)) |
-                                  ret!((true, uri, con, meth, agreeing))
+              }
+            } |
+            // ------
+            // Update
+            // ------------------------------------------------------------------------------------
+            // if there is a quorum of privileged public keys agreeing on the update for `uri`,
+            // then this method updates the contract data and manages the internal maps accordingly
+            // ------------------------------------------------------------------------------------
+            contract multisig(@"update", @uri, ret) = {
+              for (@proposalMap <- proposalMapCh) {
+                if (proposalMap.contains(uri)) {
+                  // there is an update proposal for `uri`
+                  for (@blessedContractLocMap <<- blessedContractLocMapCh) {
+                    match (blessedContractLocMap.get(uri), proposalMap.get(uri)) {
+                      (loc, (con, meth)) => {
+                        for (@agreementMap <- agreementMapCh) {
+                          if (agreementMap.getOrElse((uri, con, meth), Set()).size() >= quorumSize) {
+                            // sufficiently many keys agree to update
+                            // consume data on location channel in order to replace contract data
+                            for (oldData <- @loc) {
+                              new tmp, newRet in {
+                                oldData!("extractState", *tmp) |
+                                for (@oldState <- tmp) {
+                                  // launch new contract instance with initial state extracted from the old instance
+                                  @con!(oldState, *newRet) |
+                                  // manage agreement and proposal maps
+                                  agreementMapCh!(agreementMap.delete((uri, con, meth))) |
+                                  proposalMapCh!(proposalMap.delete(uri)) |
+                                  // write new method entry point to location channel
+                                  @loc!(meth) |
+                                  ret!((true, *newRet))
                                 }
                               }
                             }
                           } else {
-                            // invalvid signature
-                            ret!((false, "invalid signature"))
-                          }
-                        }
-                      } else {
-                        // `pubKeyBytes` is not in `pubKeys`
-                        ret!((false, "invalid public key"))
-                      }
-                    }
-                  }
-                }
-              } |
-              // ------
-              // Update
-              // ------------------------------------------------------------------------------------
-              // if there is a quorum of privileged public keys agreeing on the update for `uri`,
-              // then this method updates the contract data and manages the internal maps accordingly
-              // ------------------------------------------------------------------------------------
-              contract multisig(@"update", @uri, ret) = {
-                for (@proposalMap <- proposalMapCh) {
-                  if (proposalMap.contains(uri)) {
-                    // there is an update proposal for `uri`
-                    for (@blessedContractLocMap <<- blessedContractLocMapCh) {
-                      match (blessedContractLocMap.get(uri), proposalMap.get(uri)) {
-                        (loc, (con, meth)) => {
-                          for (@agreementMap <- agreementMapCh) {
-                            if (agreementMap.getOrElse((uri, con, meth), Set()).size() >= quorumSize) {
-                              // sufficiently many keys agree to update
-                              // consume data on location channel in order to replace contract data
-                              for (oldData <- @loc) {
-                                new tmp, newRet in {
-                                  oldData!("extractState", *tmp) |
-                                  for (@oldState <- tmp) {
-                                    // launch new contract instance with initial state extracted from the old instance
-                                    @con!(oldState, *newRet) |
-                                    // manage agreement and proposal maps
-                                    agreementMapCh!(agreementMap.delete((uri, con, meth))) |
-                                    proposalMapCh!(proposalMap.delete(uri)) |
-                                    // write new method entry point to location channel
-                                    @loc!(meth) |
-                                    ret!((true, *newRet))
-                                  }
-                                }
-                              }
-                            } else {
-                              // there isn't a quorum of support for the update
-                              agreementMapCh!(agreementMap) |
-                              proposalMapCh!(proposalMap) |
-                              ret!((false, "quorum does not exist"))
-                            }
+                            // there isn't a quorum of support for the update
+                            agreementMapCh!(agreementMap) |
+                            proposalMapCh!(proposalMap) |
+                            ret!((false, "quorum does not exist"))
                           }
                         }
                       }
                     }
-                  } else {
-                    // there isn't an update proposal for `uri`
-                    proposalMapCh!(proposalMap) |
-                    ret!((false, "invalid proposal uri"))
                   }
+                } else {
+                  // there isn't an update proposal for `uri`
+                  proposalMapCh!(proposalMap) |
+                  ret!((false, "invalid proposal uri"))
                 }
+              }
+            } |
+            // ExtractState
+            // --------------------------------------------
+            // Returns a map containing the current maps:
+            // "blessed"   - blessed contract location map
+            // "agreement" - agreement map
+            // "propose"   - proposals map
+            // --------------------------------------------
+            contract multisig(@"extractState", ret) = {
+              for (@agreementMap <<- agreementMapCh;
+                    @blessedMap   <<- blessedContractLocMapCh;
+                    @proposalMap  <<- proposalMapCh) {
+                ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
+              }
+            } |
+            msRet!(bundle+{*multisigDispatcher}, pubKeys, quorumSize) |
+            new ack in {
+              for (@map <<- _registryStore) {
+                // add multisig dispatcher to the uri map
+                TreeHashMap!("set", map, `rho:registry:multisig`, bundle+{*multisigDispatcher}, *ack)
               } |
-              // ExtractState
-              // --------------------------------------------
-              // Returns a map containing the current maps:
-              // "blessed"   - blessed contract location map
-              // "agreement" - agreement map
-              // "propose"   - proposals map
-              // --------------------------------------------
-              contract multisig(@"extractState", ret) = {
-                for (@agreementMap <<- agreementMapCh;
-                     @blessedMap   <<- blessedContractLocMapCh;
-                     @proposalMap  <<- proposalMapCh) {
-                  ret!({ "blessed" : blessedMap, "agreement" : agreementMap, "proposals" : proposalMap })
+              for (_ <- ack) {
+                // add multisig location to location map and the methods' entry point to the location channel
+                for (@blessedContractLocMap <- blessedContractLocMapCh) {
+                  blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:multisig`, *multisigLoc)) |
+                  multisigLoc!(bundle+{*multisig})
                 }
-              } |
-              msRet!(bundle+{*multisigDispatcher}, pubKeys, quorumSize) |
-              new ack in {
-                for (@map <<- _registryStore) {
-                  // add multisig dispatcher to the uri map
-                  TreeHashMap!("set", map, `rho:registry:multisig`, bundle+{*multisigDispatcher}, *ack)
-                } |
-                for (_ <- ack) {
-                  // add multisig location to location map and the methods' entry point to the location channel
-                  for (@blessedContractLocMap <- blessedContractLocMapCh) {
-                    blessedContractLocMapCh!(blessedContractLocMap.set(`rho:registry:multisig`, *multisigLoc)) |
-                    multisigLoc!(bundle+{*multisig})
-                  }
-                }
-              } |
-              // multisig dispatcher contract
-              // for use with 1-9 arguments
-              contract multisigDispatcher(@arg1) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4, arg5)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
-                }
-              } |
-              contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
-                for (realMS <<- multisigLoc) {
-                  realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
-                }
+              }
+            } |
+            // multisig dispatcher contract
+            // for use with 1-9 arguments
+            contract multisigDispatcher(@arg1) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4, arg5)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4, arg5, arg6)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)
+              }
+            } |
+            contract multisigDispatcher(@arg1, @arg2, @arg3, @arg4, @arg5, @arg6, @arg7, @arg8, @arg9) = {
+              for (realMS <<- multisigLoc) {
+                realMS!(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9)
               }
             }
           }
