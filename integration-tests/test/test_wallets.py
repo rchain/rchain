@@ -60,7 +60,7 @@ def transfer_funds(context: TestingContext, node: Node, from_rev_addr: str, to_r
     deploy_transfer(log_marker, node, from_rev_addr, to_rev_addr, amount, private_key, phlo_limit, phlo_price)
     wait_transfer_result(context, node, transfer_funds_result_pattern)
 
-def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, private_key: PrivateKey, phlo_limit: int, phlo_price: int, shard_id: str = '') -> Tuple[str, int]:
+def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, private_key: PrivateKey, phlo_limit: int, phlo_price: int) -> Tuple[str, int]:
     log_marker = random_string(context, 10)
     check_balance_pattern = re.compile('"{} Vault (?P<rev_addr>[a-zA-Z0-9]*) balance is (?P<balance>[0-9]*)"'.format(log_marker))
     blockHash = node.deploy_contract_with_substitution(
@@ -68,8 +68,7 @@ def get_vault_balance(context: TestingContext, node: Node, rev_addr: str, privat
         rho_file_path="resources/wallets/get_vault_balance.rho",
         private_key=private_key,
         phlo_limit=phlo_limit,
-        phlo_price=phlo_price,
-        shard_id=shard_id
+        phlo_price=phlo_price
     )
     check_balance_match = wait_for_log_match_result(context, node, check_balance_pattern)
     return (blockHash, int(check_balance_match.group("balance")))

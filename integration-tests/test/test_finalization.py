@@ -58,45 +58,44 @@ def test_finalizes_block(command_line_options: CommandLineOptions, random_genera
         BONDED_VALIDATOR_KEY_4: 10000
     }
     FAULT_TOLERANCE_THRESHOLD = '0.5'
-    SHARD_ID = 'test'
     with conftest.testing_context(command_line_options, random_generator, docker_client, bootstrap_key=BOOTSTRAP_NODE_KEY, peers_keys=peers_keypairs, validator_bonds_dict=validator_bonds_map, wallets_dict=wallets_map) as context, \
-        ready_bootstrap_with_network(context=context, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}, shard_id=SHARD_ID) as bootstrap_node, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}, shard_id=SHARD_ID) as validator1, \
-        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}, shard_id=SHARD_ID) as validator2:
+        ready_bootstrap_with_network(context=context, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as bootstrap_node, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-1', private_key=BONDED_VALIDATOR_KEY_1, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator1, \
+        bootstrap_connected_peer(context=context, bootstrap=bootstrap_node, name='bonded-validator-2', private_key=BONDED_VALIDATOR_KEY_2, cli_options={'--fault-tolerance-threshold': FAULT_TOLERANCE_THRESHOLD}) as validator2:
             wait_for_peers_count_at_least(context, validator1, 2)
             wait_for_peers_count_at_least(context, validator2, 2)
 
-            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEY, shard_id=SHARD_ID)
+            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEY)
             b1_hash = bootstrap_node.propose()
             wait_for_node_sees_block(context, validator1, b1_hash)
             wait_for_node_sees_block(context, validator2, b1_hash)
 
-            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
             b2_hash = validator1.propose()
             wait_for_node_sees_block(context, bootstrap_node, b2_hash)
             wait_for_node_sees_block(context, validator2, b2_hash)
 
-            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
+            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2)
             b3_hash = validator2.propose()
             wait_for_node_sees_block(context, bootstrap_node, b3_hash)
             wait_for_node_sees_block(context, validator1, b3_hash)
 
-            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEY, shard_id=SHARD_ID)
+            bootstrap_node.deploy(contract_path, BOOTSTRAP_NODE_KEY)
             b4_hash = bootstrap_node.propose()
             wait_for_node_sees_block(context, validator2, b4_hash)
             wait_for_node_sees_block(context, validator1, b4_hash)
 
-            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
             b5_hash = validator1.propose()
             wait_for_node_sees_block(context, bootstrap_node, b5_hash)
             wait_for_node_sees_block(context, validator2, b5_hash)
 
-            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2, shard_id=SHARD_ID)
+            validator2.deploy(contract_path, BONDED_VALIDATOR_KEY_2)
             b6_hash = validator2.propose()
             wait_for_node_sees_block(context, bootstrap_node, b6_hash)
             wait_for_node_sees_block(context, validator1, b6_hash)
 
-            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1, shard_id=SHARD_ID)
+            validator1.deploy(contract_path, BONDED_VALIDATOR_KEY_1)
             b7_hash = validator1.propose()
             wait_for_node_sees_block(context, bootstrap_node, b7_hash)
             wait_for_node_sees_block(context, validator2, b7_hash)
