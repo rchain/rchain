@@ -36,7 +36,8 @@ final case class BlockApproverProtocol private (
     quarantineLength: Int,
     numberOfActiveValidators: Int,
     requiredSigs: Int,
-    posMultiSigPublicKeys: List[String]
+    posMultiSigPublicKeys: List[String],
+    posMultiSigQuorum: Int
 ) {
   implicit private val logSource: LogSource = LogSource(this.getClass)
   private val _bonds                        = bonds.map(e => ByteString.copyFrom(e._1.bytes) -> e._2)
@@ -59,7 +60,8 @@ final case class BlockApproverProtocol private (
           epochLength,
           quarantineLength,
           numberOfActiveValidators,
-          posMultiSigPublicKeys
+          posMultiSigPublicKeys,
+          posMultiSigQuorum
         )
         .flatMap {
           case Right(_) =>
@@ -93,7 +95,8 @@ object BlockApproverProtocol {
       quarantineLength: Int,
       numberOfActiveValidators: Int,
       requiredSigs: Int,
-      posMultiSigPublicKeys: List[String]
+      posMultiSigPublicKeys: List[String],
+      posMultiSigQuorum: Int
   )(implicit monadError: MonadError[F, Throwable]): F[BlockApproverProtocol] =
     if (bonds.size > requiredSigs)
       new BlockApproverProtocol(
@@ -107,7 +110,8 @@ object BlockApproverProtocol {
         quarantineLength,
         numberOfActiveValidators,
         requiredSigs,
-        posMultiSigPublicKeys
+        posMultiSigPublicKeys,
+        posMultiSigQuorum
       ).pure[F]
     else
       monadError.raiseError(
@@ -140,7 +144,8 @@ object BlockApproverProtocol {
       epochLength: Int,
       quarantineLength: Int,
       numberOfActiveValidators: Int,
-      posMultiSigPublicKeys: List[String]
+      posMultiSigPublicKeys: List[String],
+      posMultiSigQuorum: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
 
     def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
@@ -169,7 +174,8 @@ object BlockApproverProtocol {
           epochLength,
           quarantineLength,
           numberOfActiveValidators,
-          posMultiSigPublicKeys
+          posMultiSigPublicKeys,
+          posMultiSigQuorum
         )
         genesisBlessedContracts = Genesis
           .defaultBlessedTerms(

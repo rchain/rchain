@@ -83,7 +83,8 @@ object GenesisBuilder {
           quarantineLength = 50000,
           numberOfActiveValidators = 100,
           validators = bonds.map(Validator.tupled).toSeq,
-          posMultiSigPublicKeys = defaultPosMultiSigPublicKeys
+          posMultiSigPublicKeys = defaultPosMultiSigPublicKeys,
+          posMultiSigQuorum = 3
         ),
         vaults = genesisVaults.toList.map(pair => predefinedVault(pair._2)) ++
           bonds.toList.map {

@@ -278,7 +278,8 @@ object GenesisTest {
                            quarantineLength = quarantineLength,
                            numberOfActiveValidators = numberOfActiveValidators,
                            validators = validators,
-                           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys
+                           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
+                           posMultiSigQuorum = 3
                          ),
                          vaults = vaults,
                          supply = Long.MaxValue,
