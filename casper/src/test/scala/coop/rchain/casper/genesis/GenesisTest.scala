@@ -279,7 +279,7 @@ object GenesisTest {
                            numberOfActiveValidators = numberOfActiveValidators,
                            validators = validators,
                            posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
-                           posMultiSigQuorum = 3
+                           posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
                          ),
                          vaults = vaults,
                          supply = Long.MaxValue,

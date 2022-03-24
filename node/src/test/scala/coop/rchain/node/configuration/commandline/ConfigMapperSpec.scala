@@ -242,7 +242,7 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           deployTimestamp = Some(111111),
           genesisBlockNumber = 222,
           posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
-          posMultiSigQuorum = 3
+          posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 111111,
