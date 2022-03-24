@@ -25,7 +25,7 @@ final case class ProofOfStake(
       "epochLength"              -> epochLength,
       "quarantineLength"         -> quarantineLength,
       "numberOfActiveValidators" -> numberOfActiveValidators,
-      "posMultiSigPublicKeys"    -> posMultiSigPublicKeys,
+      "posMultiSigPublicKeys"    -> ProofOfStake.publicKeys(posMultiSigPublicKeys),
       "posMultiSigQuorum"        -> posMultiSigQuorum
     ) {
 
@@ -49,5 +49,14 @@ object ProofOfStake {
       }
       .mkString(", ")
     s"{$mapEntries}"
+  }
+
+  def publicKeys(posMultiSigPublicKeys: List[String]): String = {
+    val indentBrackets = 12
+    val indentKeys     = indentBrackets + 2
+    val pubKeyItems = posMultiSigPublicKeys
+      .map(pk => s"""${" " * indentKeys}"$pk".hexToBytes()""")
+      .mkString(",\n")
+    s"""[\n$pubKeyItems\n${" " * indentBrackets}]"""
   }
 }

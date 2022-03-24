@@ -104,7 +104,13 @@ in {
           revAddressOps!("fromPublicKey", posPk, *posDeployerRevAddressCh) |
           // Creates Coop multisig vault for slashed funds.
           // Either (false, errorMsg) or (true, (multiSigVault, revAddress, revVault)) are returned on coopVaultCh.
-          @MultiSigRevVault!("create", [$$posMultiSigPublicKeys$$], [], $$posMultiSigQuorum$$, *coopVaultCh)
+          @MultiSigRevVault!(
+            "create",
+            $$posMultiSigPublicKeys$$,
+            [],
+            $$posMultiSigQuorum$$,
+            *coopVaultCh
+          )
         }
       } |
       // ret: the return channel of the create
