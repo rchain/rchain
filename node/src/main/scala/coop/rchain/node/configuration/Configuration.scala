@@ -93,6 +93,17 @@ object Configuration {
     }
     val nodeConf = nodeConfE.right.get
 
+    // Throw an error if pos-multi-sig-quorum greater then pos-multi-sig-public-keys length
+    val posMultiSigQuorum           = nodeConf.casper.genesisBlockData.posMultiSigQuorum
+    val posMultiSigPublicKeysLength = nodeConf.casper.genesisBlockData.posMultiSigPublicKeys.length
+    if (posMultiSigQuorum > posMultiSigPublicKeysLength) {
+      throw new RuntimeException(
+        s"defaults.conf: " +
+          s"The value 'pos-multi-sig-quorum' should be less or equal the length of 'pos-multi-sig-public-keys' " +
+          s"(the actual values are '$posMultiSigQuorum' and '$posMultiSigPublicKeysLength' respectively)"
+      )
+    }
+
     val kamonConfigFile = dataDir.resolve("kamon.conf").toFile
     val kamonDefaultConfig =
       if (kamonConfigFile.exists())
