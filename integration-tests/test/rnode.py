@@ -87,6 +87,8 @@ default_http_port = 40403
 default_internal_grpc_port = 40402
 default_external_grpc_port = 40401
 
+default_shard_id = 'test'
+
 @dataclass
 class PortMapping:
     http: int
@@ -251,7 +253,7 @@ class Node:
         return self.rnode_command('eval', rho_file_path)
 
     def deploy(self, rho_file_path: str, private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0, shard_id: str = '') -> str:
+               phlo_price: int = DEFAULT_PHLO_PRICE, valid_after_block_no:int=0, shard_id: str = default_shard_id) -> str:
         try:
             now_time = int(time.time()*1000)
             with RClient(self.get_self_host(), self.get_external_grpc_port()) as client:
@@ -335,7 +337,7 @@ class Node:
 
     def deploy_contract_with_substitution(self, substitute_dict: Dict[str, str], rho_file_path: str,
                                           private_key: PrivateKey, phlo_limit:int = DEFAULT_PHLO_LIMIT,
-                                          phlo_price: int = DEFAULT_PHLO_PRICE, shard_id: str = '') -> str:
+                                          phlo_price: int = DEFAULT_PHLO_PRICE, shard_id: str = default_shard_id) -> str:
         """
         Supposed that you have a contract with content like below.
 
@@ -513,7 +515,7 @@ def make_bootstrap_node(
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
     min_phlo_price: int = 1,
-    shard_id: str = ''
+    shard_id: str = default_shard_id
 ) -> Node:
 
     container_name = make_bootstrap_name(network)
@@ -604,7 +606,7 @@ def make_peer(
     number_of_active_validators: int = 10,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
-    shard_id: str = ''
+    shard_id: str = default_shard_id
 ) -> Node:
     assert isinstance(name, str)
     assert '_' not in name, 'Underscore is not allowed in host name'
@@ -670,7 +672,7 @@ def started_peer(
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
-    shard_id: str = ''
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     peer = make_peer(
         docker_client=context.docker,
@@ -707,7 +709,7 @@ def bootstrap_connected_peer(
     synchrony_constraint_threshold: float = 0.0,
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
-    shard_id: str = ''
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     with started_peer(
         context=context,
@@ -753,7 +755,7 @@ def started_bootstrap(
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
     min_phlo_price: int = 1,
-    shard_id: str = ''
+    shard_id: str = default_shard_id
 ) -> Generator[Node, None, None]:
     bootstrap_node = make_bootstrap_node(
         docker_client=context.docker,
@@ -787,7 +789,7 @@ def started_bootstrap_with_network(
     epoch_length: int = 10000,
     quarantine_length: int = 50000,
     min_phlo_price: int = 1,
-    shard_id: str = '',
+    shard_id: str = default_shard_id,
     extra_volumes: Optional[List[str]] = None,
     wait_for_approved_block: bool = False,
 ) -> Generator[Node, None, None]:
