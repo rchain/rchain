@@ -4,6 +4,9 @@
 // initialBonds - the initial bonds map
 // epochLength - the length of the validation epoch in blocks
 // quarantineLength - the length of the quarantine time in blocks
+// numberOfActiveValidators - max number of active validator in a shard
+// posMultiSigPublicKeys - public keys
+// posMultiSigQuorum - how many confirmations are necessary to use multi-sig vault
 /*
 
 Life cycle in POS
