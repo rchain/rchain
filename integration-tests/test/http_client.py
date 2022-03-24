@@ -92,7 +92,7 @@ class HttpClient():
             "validAfterBlockNumber": valid_after_block_number,
             "shardId": shard_id
         }
-        deploy_proto = DeployDataProto(term=term, timestamp=timestamp, phloLimit=phlo_limit, phloPrice=phlo_price, validAfterBlockNumber=valid_after_block_number)
+        deploy_proto = DeployDataProto(term=term, timestamp=timestamp, phloLimit=phlo_limit, phloPrice=phlo_price, validAfterBlockNumber=valid_after_block_number, shardId=shard_id)
         deploy_req = {
             "data": deploy_data,
             "deployer": deployer.get_public_key().to_hex(),
