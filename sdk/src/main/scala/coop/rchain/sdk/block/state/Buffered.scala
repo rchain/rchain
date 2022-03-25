@@ -20,7 +20,7 @@ final case class Buffered[BId](st: BufferedState[BId]) {
       st.copy(childMap = newChildMap)
     }
     val toRequest = deps.filterNot(bid => validated.contains(bid) || requested.contains(bid))
-    val effect    = BufferedEffect(toRequest)
+    val effect    = BufferedEffect(toRequest, deps.forall(validated.contains))
     (Buffered(newSt), effect)
   }
 
@@ -52,6 +52,6 @@ object Buffered {
   )
 
   // Effects
-  final case class BufferedEffect[BId](depsToRequest: Set[BId])
+  final case class BufferedEffect[BId](depsToRequest: Set[BId], readyForValidation: Boolean)
   final case class AckValidatedEffect[BId](unlocked: Set[BId])
 }
