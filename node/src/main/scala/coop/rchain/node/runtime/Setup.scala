@@ -152,18 +152,15 @@ object Setup {
       // Runtime for `rnode eval`
       evalRuntime <- {
         implicit val sp = span
-        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_, Par()))
+        rnodeStoreManager.evalStores.flatMap(RhoRuntime.createRuntime[F](_))
       }
 
       // Runtime manager (play and replay runtimes)
       runtimeManagerWithHistory <- {
         implicit val sp = span
-        for {
-          rStores    <- rnodeStoreManager.rSpaceStores
-          mergeStore <- RuntimeManager.mergeableStore(rnodeStoreManager)
-          rm <- RuntimeManager
-                 .createWithHistory[F](rStores, mergeStore, Genesis.NonNegativeMergeableTagName)
-        } yield rm
+        // Use channels map only in block-merging (multi parents)
+        val useChannelsMap = conf.casper.maxNumberOfParents > 1
+        rnodeStoreManager.rSpaceStores(useChannelsMap).flatMap(RuntimeManager.createWithHistory[F])
       }
       (runtimeManager, historyRepo) = runtimeManagerWithHistory
 

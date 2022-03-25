@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.ProcessedSystemDeploy.Failed
 import coop.rchain.casper.protocol.{DeployData, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.rholang.SystemDeployPlayResult.{PlayFailed, PlaySucceeded}
 import coop.rchain.casper.util.rholang.costacc._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.catscontrib.Catscontrib._
@@ -23,7 +24,6 @@ import coop.rchain.models.block.StateHash.StateHash
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.accounting.Cost
-import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.BugFoundError
 import coop.rchain.rholang.interpreter.{accounting, ParBuilderUtil, ReplayRhoRuntime}
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -135,23 +135,21 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       runtime <- runtimeManager.spawnRuntime
       _       <- runtime.setBlockData(BlockData(0, 0, genesisContext.validatorPks.head, 0))
       r <- runtime.playSystemDeploy(startState)(playSystemDeploy).attempt >>= {
-            case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, _, playResult)) =>
+            case Right(PlaySucceeded(finalPlayStateHash, processedSystemDeploy, playResult)) =>
               assert(resultAssertion(playResult))
               for {
                 runtimeReplay <- runtimeManager.spawnReplayRuntime
                 _ <- runtimeReplay.setBlockData(
                       BlockData(0, 0, genesisContext.validatorPks.head, 0)
                     )
-
-                // Replay System Deploy
-                r <- execReplaySystemDeploy(
-                      runtimeReplay,
-                      startState,
-                      replaySystemDeploy,
-                      processedSystemDeploy
-                    ).value
+                r <- runtimeReplay
+                      .replaySystemDeploy(startState)(
+                        replaySystemDeploy,
+                        processedSystemDeploy
+                      )
+                      .attempt
                       .map {
-                        case Right(systemDeployReplayResult) =>
+                        case Right(Right(systemDeployReplayResult)) =>
                           systemDeployReplayResult match {
                             case ReplaySucceeded(finalReplayStateHash, replayResult) =>
                               assert(finalPlayStateHash == finalReplayStateHash)
@@ -162,11 +160,12 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                 s"Unexpected user error during replay: ${systemDeployError.errorMessage}"
                               )
                           }
-                        case Left(replayFailure) =>
+                        case Right(Left(replayFailure)) =>
                           fail(s"Unexpected replay failure: $replayFailure")
-                      }
-                      .handleErrorWith { throwable =>
-                        fail(s"Unexpected system error during replay: ${throwable.getMessage}")
+                        case Left(throwable) =>
+                          fail(
+                            s"Unexpected system error during replay: ${throwable.getMessage}"
+                          )
                       }
               } yield r
 
@@ -176,38 +175,6 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
               fail(s"Unexpected system error during play: ${throwable.getMessage}")
           }
     } yield r
-
-  private def execReplaySystemDeploy[F[_]: Sync: Log: Span, S <: SystemDeploy](
-      runtime: ReplayRhoRuntime[F],
-      stateHash: StateHash,
-      systemDeploy: S,
-      processedSystemDeploy: ProcessedSystemDeploy
-  ): EitherT[F, ReplayFailure, SystemDeployReplayResult[S#Result]] = {
-    // Resets runtime to start state
-    val resetRuntime =
-      runtime.reset(Blake2b256Hash.fromByteString(stateHash)).liftEitherT[ReplayFailure]
-
-    // Replays system deploy
-    val expectedFailure = processedSystemDeploy.fold(_ => none, (_, errorMsg) => errorMsg.some)
-    val replaySysDeploy = runtime.replaySystemDeployInternal(systemDeploy, expectedFailure)
-
-    for {
-      replayed <- runtime
-                   .rigWithCheck(processedSystemDeploy, resetRuntime *> replaySysDeploy)
-                   .semiflatMap {
-                     case (Right(value), _) =>
-                       runtime.createCheckpoint
-                         .map { checkpoint =>
-                           SystemDeployReplayResult.replaySucceeded(
-                             checkpoint.root.toByteString,
-                             value
-                           )
-                         }
-                     case (Left(failure), _) =>
-                       SystemDeployReplayResult.replayFailed[S#Result](failure).pure[F]
-                   }
-    } yield replayed
-  }
 
   "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
@@ -412,7 +379,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             runtime       <- runtimeManager.spawnRuntime
             _             <- runtime.cost.set(initialPhlo)
-            term          <- Compiler[Task].sourceToADT(deploy.data.term)
+            term          <- ParBuilderUtil.buildNormalizedTerm[Task](deploy.data.term)
             _             <- runtime.inj(term)
             phlosLeft     <- runtime.cost.get
             reductionCost = initialPhlo - phlosLeft

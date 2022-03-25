@@ -214,7 +214,7 @@ object TransactionBalances {
       walletPath: Path,
       bondPath: Path,
       targetBlockHash: String
-  )(implicit scheduler: ExecutionContext): F[(GlobalVaultsInfo, List[TransactionBlockInfo])] = {
+  )(implicit scheduler: ExecutionContext): F[GlobalVaultsInfo] = {
     val oldRSpacePath                           = dataDir.resolve(s"$legacyRSpacePathPrefix/history/data.mdb")
     val legacyRSpaceDirSupport                  = Files.exists(oldRSpacePath)
     implicit val metrics: Metrics.MetricsNOP[F] = new Metrics.MetricsNOP[F]()
@@ -232,13 +232,7 @@ object TransactionBalances {
                  )
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes <- RhoRuntime
-                   .createRuntimes[F](
-                     rSpacePlay,
-                     rSpaceReplay,
-                     initRegistry = true,
-                     Seq.empty,
-                     Par()
-                   )
+                   .createRuntimes[F](rSpacePlay, rSpaceReplay, initRegistry = true, Seq.empty)
       (rhoRuntime, _)    = runtimes
       targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeHexToByteString)
       targetBlock        = targetBlockOpt.get
@@ -276,16 +270,11 @@ object TransactionBalances {
             blockMeta <- blockMetaOpt.liftTo(
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
-            isFinalized         <- dagRepresantation.isFinalized(blockHash)
-            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
-          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
+            isFinalized <- dagRepresantation.isFinalized(blockHash)
+          } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized)
         }
       }
-      allSortedTransactions = allWrappedTransactions.sortBy(_.blockNumber)
-      _ <- log.info(
-            s"Transaction history from ${allSortedTransactions.head} to ${allSortedTransactions.tail}"
-          )
-      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allSortedTransactions)
-    } yield (afterTransferMap, allSortedTransactions)
+      afterTransferMap = updateGenesisFromTransfer(genesisVaultMap, allWrappedTransactions)
+    } yield afterTransferMap
   }
 }

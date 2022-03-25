@@ -7,7 +7,6 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
-import coop.rchain.casper.util.rholang.RuntimeManager.{MergeableStore, StateHash}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
@@ -16,10 +15,6 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.RhoRuntime.{RhoHistoryRepository, RhoISpace, RhoReplayISpace}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.rholang.interpreter.merging.RholangMergingLogic.{
-  deployMergeableDataSeqCodec,
-  DeployMergeableData
-}
 import coop.rchain.rholang.interpreter.{ReplayRhoRuntime, RhoRuntime}
 import coop.rchain.rspace
 import coop.rchain.rspace.RSpace.RSpaceStore
@@ -70,15 +65,12 @@ trait RuntimeManager[F[_]] {
   // Executes deploy as user deploy with immediate rollback
   def playExploratoryDeploy(term: String, startHash: StateHash): F[Seq[Par]]
   def getHistoryRepo: RhoHistoryRepository[F]
-  def getMergeableStore: MergeableStore[F]
 }
 
 final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: ContextShift: Parallel](
     space: RhoISpace[F],
     replaySpace: RhoReplayISpace[F],
-    historyRepo: RhoHistoryRepository[F],
-    mergeableStore: MergeableStore[F],
-    mergeableTagName: Par
+    historyRepo: RhoHistoryRepository[F]
 ) extends RuntimeManager[F] {
 
   def spawnRuntime: F[RhoRuntime[F]] =
@@ -88,7 +80,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
                      RSpace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
                    ]
                    .spawn
-      runtime <- RhoRuntime.createRhoRuntime(newSpace, mergeableTagName)
+      runtime <- RhoRuntime.createRhoRuntime(newSpace)
     } yield runtime
 
   def spawnReplayRuntime: F[ReplayRhoRuntime[F]] =
@@ -102,7 +94,7 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
                            TaggedContinuation
                          ]]
                          .spawn
-      runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace, mergeableTagName)
+      runtime <- RhoRuntime.createReplayRhoRuntime(newReplaySpace)
     } yield runtime
 
   def computeState(startHash: StateHash)(
@@ -111,43 +103,14 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       blockData: BlockData,
       invalidBlocks: Map[BlockHash, Validator] = Map.empty[BlockHash, Validator]
   ): F[(StateHash, Seq[ProcessedDeploy], Seq[ProcessedSystemDeploy])] =
-    for {
-      runtime                                 <- spawnRuntime
-      computed                                <- runtime.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks)
-      (stateHash, usrDeployRes, sysDeployRes) = computed
-      (usrProcessed, usrMergeable)            = usrDeployRes.unzip
-      (sysProcessed, sysMergeable)            = sysDeployRes.unzip
-
-      // Concat user and system deploys mergeable channel maps
-      mergeableChs = usrMergeable ++ sysMergeable
-
-      // Block data used for mergeable key
-      BlockData(_, _, sender, seqNum) = blockData
-      // Convert from final to diff values and persist mergeable (number) channels for post-state hash
-      preStateHash  = startHash.toBlake2b256Hash
-      postSTateHash = stateHash.toBlake2b256Hash
-      _ <- this
-            .saveMergeableChannels(postSTateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
-    } yield (stateHash, usrProcessed, sysProcessed)
+    spawnRuntime.flatMap(_.computeState(startHash, terms, systemDeploys, blockData, invalidBlocks))
 
   def computeGenesis(
       terms: Seq[Signed[DeployData]],
       blockTime: Long,
       blockNumber: Long
   ): F[(StateHash, StateHash, Seq[ProcessedDeploy])] =
-    spawnRuntime
-      .flatMap(_.computeGenesis(terms, blockTime, blockNumber))
-      .flatMap {
-        case (preState, stateHash, processed) =>
-          val (processedDeploys, mergeableChs) = processed.unzip
-
-          // Convert from final to diff values and persist mergeable (number) channels for post-state hash
-          val preStateHash  = preState.toBlake2b256Hash
-          val postStateHash = stateHash.toBlake2b256Hash
-          this
-            .saveMergeableChannels(postStateHash, Array(), seqNum = 0, mergeableChs, preStateHash)
-            .as((preState, stateHash, processedDeploys))
-      }
+    spawnRuntime.flatMap(_.computeGenesis(terms, blockTime, blockNumber))
 
   def replayComputeState(startHash: StateHash)(
       terms: Seq[ProcessedDeploy],
@@ -157,18 +120,8 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
       isGenesis: Boolean //FIXME have a better way of knowing this. Pass the replayDeploy function maybe?
   ): F[Either[ReplayFailure, StateHash]] =
     spawnReplayRuntime.flatMap { replayRuntime =>
-      val replayOp = replayRuntime
+      replayRuntime
         .replayComputeState(startHash)(terms, systemDeploys, blockData, invalidBlocks, isGenesis)
-      EitherT(replayOp).semiflatMap {
-        case (stateHash, mergeableChs) =>
-          // Block data used for mergeable key
-          val BlockData(_, _, sender, seqNum) = blockData
-          // Convert from final to diff values and persist mergeable (number) channels for post-state hash
-          val preStateHash = startHash.toBlake2b256Hash
-          this
-            .saveMergeableChannels(stateHash, sender.bytes, seqNum, mergeableChs, preStateHash)
-            .as(stateHash.toByteString)
-      }.value
     }
 
   def captureResults(
@@ -221,49 +174,36 @@ final case class RuntimeManagerImpl[F[_]: Concurrent: Metrics: Span: Log: Contex
     }
 
   def getHistoryRepo: RhoHistoryRepository[F] = historyRepo
-
-  def getMergeableStore: MergeableStore[F] = mergeableStore
 }
 
 object RuntimeManager {
 
   type StateHash = ByteString
 
-  type MergeableStore[F[_]] = KeyValueTypedStore[F, ByteVector, Seq[DeployMergeableData]]
-
   /**
     * This is a hard-coded value for `emptyStateHash` which is calculated by
-    * [[coop.rchain.casper.rholang.RuntimeOps.emptyStateHash]].
+    * [[coop.rchain.casper.util.rholang.RhoRuntimeOps.emptyStateHash]].
     * Because of the value is actually the same all
     * the time. For some situations, we can just use the value directly for better performance.
     */
   val emptyStateHashFixed: StateHash =
-    "9619d9a34bdaf56d5de8cfb7c2304d63cd9e469a0bfc5600fd2f5b9808e290f1".unsafeHexToByteString
+    "6284b05545513fead17c469aeb6baa2a11ed5a86eeda57accaa3bb95d60d5250".unsafeHexToByteString
 
   def apply[F[_]](implicit F: RuntimeManager[F]): F.type = F
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
       rSpace: RhoISpace[F],
       replayRSpace: RhoReplayISpace[F],
-      historyRepo: RhoHistoryRepository[F],
-      mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
-  ): F[RuntimeManagerImpl[F]] =
-    Sync[F].delay(
-      RuntimeManagerImpl(rSpace, replayRSpace, historyRepo, mergeableStore, mergeableTagName)
-    )
+      historyRepo: RhoHistoryRepository[F]
+  ): F[RuntimeManagerImpl[F]] = Sync[F].delay(RuntimeManagerImpl(rSpace, replayRSpace, historyRepo))
 
   def apply[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
-      store: RSpaceStore[F],
-      mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
+      store: RSpaceStore[F]
   )(implicit ec: ExecutionContext): F[RuntimeManagerImpl[F]] =
-    createWithHistory(store, mergeableStore, mergeableTagName).map(_._1)
+    createWithHistory(store).map(_._1)
 
   def createWithHistory[F[_]: Concurrent: ContextShift: Parallel: Metrics: Span: Log](
-      store: RSpaceStore[F],
-      mergeableStore: MergeableStore[F],
-      mergeableTagName: Par
+      store: RSpaceStore[F]
   )(implicit ec: ExecutionContext): F[(RuntimeManagerImpl[F], RhoHistoryRepository[F])] = {
     import coop.rchain.rholang.interpreter.storage._
     implicit val m: rspace.Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
@@ -273,21 +213,7 @@ object RuntimeManager {
       .flatMap {
         case (rSpacePlay, rSpaceReplay) =>
           val historyRepo = rSpacePlay.historyRepo
-          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo, mergeableStore, mergeableTagName)
-            .map((_, historyRepo))
+          RuntimeManager[F](rSpacePlay, rSpaceReplay, historyRepo).map((_, historyRepo))
       }
   }
-
-  /**
-    * Creates connection to [[MergeableStore]] database.
-    *
-    * Mergeable (number) channels store is used in [[RuntimeManager]] implementation.
-    * This function provides default instantiation.
-    */
-  def mergeableStore[F[_]: Sync](kvm: KeyValueStoreManager[F]): F[MergeableStore[F]] =
-    kvm.database[ByteVector, Seq[DeployMergeableData]](
-      "mergeable-channel-cache",
-      scodec.codecs.bytes,
-      deployMergeableDataSeqCodec
-    )
 }
