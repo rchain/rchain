@@ -163,7 +163,7 @@ in {
                                 } else {
                                   // If a human is confirming, record which deployerAuthKey was used
                                   @(*multiSig, *nonceMapStore)!(
-                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(auth)))
+                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(pubKey)))
                                   )
                                 } |
                                 ret!((true, (true, nonce)))
@@ -199,7 +199,7 @@ in {
                                     @(*multiSig, *nonceMapStore)!(nonceMap) |
                                     ret!((false, "given data does not match stored data"))
                                   } else {
-                                    if (((not unsealed) and nonceConfirmers.contains(auth)) or
+                                    if (((not unsealed) and nonceConfirmers.contains(pubKey)) or
                                         (unsealed and nonceConfirmers.contains(unsealers.nth(info.nth(0))))) {
                                       @(*multiSig, *nonceMapStore)!(nonceMap) |
                                       ret!((false, "already confirmed"))
@@ -230,7 +230,7 @@ in {
                                           // If a human is confirming, record which deployerAuthKey was used
                                           @(*multiSig, *nonceMapStore)!(
                                             nonceMap.set(nonce,
-                                              (targetRevAddress, amount, nonceConfirmers.add(auth))
+                                              (targetRevAddress, amount, nonceConfirmers.add(pubKey))
                                             )
                                           )
                                         } |
