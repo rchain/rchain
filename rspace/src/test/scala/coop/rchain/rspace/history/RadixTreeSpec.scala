@@ -20,11 +20,12 @@ import scala.util.Random
 class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemoryHistoryTestBase {
   "appending leaf in empty tree" should "create tree with one node" in withImplAndStore {
     (impl, _) =>
+      val dataSet = radixKV("1122334455", "01")
       for {
         item1 <- impl.update(
                   RadixTree.EmptyItem,
-                  createBV("FFFFFFF1"),
-                  createBV32("A")
+                  dataSet.rKey,
+                  dataSet.rValue
                 )
 
         newRootNode    <- impl.constructNodeFromItem(item1.get)
@@ -32,7 +33,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree = Vector(
           "TREE WITH ONE LEAF: root =>",
-          "   [FF]LEAF: prefix = FFFFF1, data = 0000...000A"
+          "   [11]LEAF: prefix = 22334455, data = 0000...0001"
         )
 
         _ = printedTreeStr shouldBe referenceTree
@@ -41,15 +42,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "appending leaf to leaf (leafs contain common prefixes)" should "create 2 leafs with node ptr" in withImplAndStore {
     (impl, _) =>
-      val keys = Vector[ByteVector](
-        createBV("0001122013"),
-        createBV("0001122225")
-      )
+      val dataSet = List(radixKV("1122334455", "01"), radixKV("112233AABB", "02"))
       for {
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
-                     keys(0),
-                     createBV32("11")
+                     dataSet.head.rKey,
+                     dataSet.head.rValue
                    )
 
         rootNode1    <- impl.constructNodeFromItem(item1Opt.get)
@@ -57,27 +55,27 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree1 = Vector(
           "TREE WITH ONE LEAF: root =>",
-          "   [00]LEAF: prefix = 01122013, data = 0000...0011"
+          "   [11]LEAF: prefix = 22334455, data = 0000...0001"
         )
 
         item2Opt <- impl.update(
                      item1Opt.get,
-                     keys(1),
-                     createBV32("55")
+                     dataSet(1).rKey,
+                     dataSet(1).rValue
                    )
 
         rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
         printedTree2 <- impl.printTree(
                          rootNode2,
-                         "TREE WITH ONE NODE AND 2 LEAFS",
+                         "TREE WITH ONE NODE POINTER AND 2 LEAFS",
                          noPrintFlag = true
                        )
 
         referenceTree2 = Vector(
-          "TREE WITH ONE NODE AND 2 LEAFS: root =>",
-          "   [00]PTR: prefix = 0112, ptr =>",
-          "      [20]LEAF: prefix = 13, data = 0000...0011",
-          "      [22]LEAF: prefix = 25, data = 0000...0055"
+          "TREE WITH ONE NODE POINTER AND 2 LEAFS: root =>",
+          "   [11]PTR: prefix = 2233, ptr =>",
+          "      [44]LEAF: prefix = 55, data = 0000...0001",
+          "      [AA]LEAF: prefix = BB, data = 0000...0002"
         )
 
         _ = printedTree1 shouldBe referenceTree1
@@ -86,21 +84,18 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
   "appending leaf with other prefix to leaf" should "create node with two leafs" in withImplAndStore {
     (impl, _) =>
-      val keys = Vector[ByteVector](
-        createBV("00000000"),
-        createBV("34564544")
-      )
+      val dataSet = List(radixKV("1122334455", "01"), radixKV("AABBCCDDEE", "02"))
       for {
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
-                         keys(0),
-                         createBV32("0x11")
+                         dataSet.head.rKey,
+                         dataSet.head.rValue
                        )
 
         rootItem2Opt <- impl.update(
                          rootItem1Opt.get,
-                         keys(1),
-                         createBV32("55")
+                         dataSet(1).rKey,
+                         dataSet(1).rValue
                        )
 
         rootNode <- impl.constructNodeFromItem(rootItem2Opt.get)
@@ -109,8 +104,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree = Vector(
           "TREE: TWO LEAFS: root =>",
-          "   [00]LEAF: prefix = 000000, data = 0000...0011",
-          "   [34]LEAF: prefix = 564544, data = 0000...0055"
+          "   [11]LEAF: prefix = 22334455, data = 0000...0001",
+          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...0002"
         )
 
         _ = printedTreeStr shouldBe referenceTree
@@ -118,13 +113,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "updating leaf" should "update data in this leaf" in withImplAndStore { (impl, _) =>
-    val firstLeafData = createBV32("0xCB")
-    val newLeafData   = createBV32("0xFF")
-    val leafKey       = createBV("00123456F1")
+    val initialKVPair = radixKV("1122334455", "01")
+    val newKVPair     = radixKV("1122334455", "FF")
     for {
 
       //  Create tree with one leaf
-      item1Opt <- impl.update(RadixTree.EmptyItem, leafKey, firstLeafData)
+      item1Opt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
 
       rootNode1 <- impl.constructNodeFromItem(item1Opt.get)
       printedTree1 <- impl.printTree(
@@ -133,8 +127,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                        noPrintFlag = true
                      )
 
-      item2Opt  <- impl.update(item1Opt.get, leafKey, newLeafData)
-      _         <- Sync[Task].delay(byteToInt(leafKey.head))
+      item2Opt  <- impl.update(item1Opt.get, newKVPair.rKey, newKVPair.rValue)
       rootNode2 <- impl.constructNodeFromItem(item2Opt.get)
 
       printedTree2 <- impl.printTree(
@@ -145,12 +138,12 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
       referenceTree1 = Vector(
         "TREE WITH ONE LEAF: root =>",
-        "   [00]LEAF: prefix = 123456F1, data = 0000...00CB"
+        "   [11]LEAF: prefix = 22334455, data = 0000...0001"
       )
 
       referenceTree2 = Vector(
         "TREE WITH ONE LEAF (AFTER CHANGING DATA): root =>",
-        "   [00]LEAF: prefix = 123456F1, data = 0000...00FF"
+        "   [11]LEAF: prefix = 22334455, data = 0000...00FF"
       )
 
       _ = printedTree1 shouldBe referenceTree1
@@ -160,14 +153,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "RadixTreeImpl" should "not allow to enter keys with different lengths in the subtree" in withImplAndStore {
     (impl, _) =>
-      val leafData    = createBV32("CB")
-      val leafKey     = createBV("00123456F1")
-      val testLeafKey = createBV("0112")
+      val initialKVPair = radixKV("1122334455", "01")
+      val wrongKVPair   = radixKV("112233", "02")
       val referenceErrorMessage =
         s"assertion failed: The length of all prefixes in the subtree must be the same."
       for {
-        leafItemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
-        err         <- impl.update(leafItemOpt.get, testLeafKey, leafData).attempt
+        leafItemOpt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
+        err         <- impl.update(leafItemOpt.get, wrongKVPair.rKey, wrongKVPair.rValue).attempt
 
         ex = err.left.get
         _  = ex shouldBe a[AssertionError]
@@ -177,13 +169,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "RadixTreeImpl" should "not allow to radix key smaller than NodePtr key" in withImplAndStore {
     (impl, _) =>
+      val initialItem           = NodePtr(createBV("11223344"), createBV32("01"))
+      val wrongKVPair           = radixKV("11", "FF")
       val referenceErrorMessage = s"assertion failed: Radix key should be longer than NodePtr key."
       for {
         err <- impl
                 .update(
-                  NodePtr(ByteVector(0x00, 0x11), createBV32("00")),
-                  createBV("00"),
-                  createBV32("33")
+                  initialItem,
+                  wrongKVPair.rKey,
+                  wrongKVPair.rValue
                 )
                 .attempt
 
@@ -194,15 +188,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "deleting non - existent data" should "return none" in withImplAndStore { (impl, _) =>
-    val leafData = createBV32("CC")
-    val leafKey  = createBV("00123456F1")
+    val initialKVPair  = radixKV("1122334455", "01")
+    val nonExistentKey = createBV("FFFFFFFFFF")
     for {
       //  Create tree with one node
-      itemOpt <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
+      itemOpt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
       _       <- impl.constructNodeFromItem(itemOpt.get)
 
       //  Trying to delete not existing leaf...
-      del <- impl.delete(itemOpt.get, createBV("0000").tail)
+      del <- impl.delete(itemOpt.get, nonExistentKey)
 
       _ = del.map(item => item shouldBe None)
     } yield ()
@@ -210,16 +204,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting leaf from tree with only one leaf" should "destroy tree" in withImplAndStore {
     (impl, _) =>
-      val leafData = createBV32("CC")
-      val leafKey  = createBV("00123456F1")
+      val initialKVPair = radixKV("1122334455", "01")
       for {
         //  Create tree with one node
-        itemOpt   <- impl.update(RadixTree.EmptyItem, leafKey, leafData)
+        itemOpt   <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
         rootNode1 <- impl.constructNodeFromItem(itemOpt.get)
 
         //  Trying to delete not existing leaf...
-        deletedItem         <- impl.delete(itemOpt.get, leafKey)
-        rootNode2           = rootNode1.updated(leafKey.head.toInt, deletedItem.get)
+        deletedItem         <- impl.delete(itemOpt.get, initialKVPair.rKey)
+        rootNode2           = rootNode1.updated(initialKVPair.rKey.head.toInt, deletedItem.get)
         printedEmptyTreeStr <- impl.printTree(rootNode2, "EMPTY TREE", noPrintFlag = true)
 
         referenceEmptyTreeStr = Vector("EMPTY TREE: root =>")
@@ -231,23 +224,20 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting leaf from node with two leafs" should "leave one leaf" in withImplAndStore {
     (impl, _) =>
-      val keys = Vector[ByteVector](
-        createBV("00000000"),
-        createBV("34564544")
-      )
+      val dataSet = List(radixKV("1122334455", "01"), radixKV("AABBCCDDEE", "02"))
 
       val rootItem1Hash = createBV32("11")
       val rootItem2Hash = createBV32("AF")
       for {
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
-                         keys(0),
+                         dataSet.head.rKey,
                          rootItem1Hash
                        )
 
         rootItem2Opt <- impl.update(
                          rootItem1Opt.get,
-                         keys(1),
+                         dataSet(1).rKey,
                          rootItem2Hash
                        )
 
@@ -258,10 +248,10 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                          noPrintFlag = true
                        )
 
-        itemIdx <- Sync[Task].delay(byteToInt(keys(0).head))
+        itemIdx <- Sync[Task].delay(byteToInt(dataSet.head.rKey.head))
 
         itemToDelete = rootNode1(itemIdx)
-        deletedItem  <- impl.delete(itemToDelete, keys(0).tail)
+        deletedItem  <- impl.delete(itemToDelete, dataSet.head.rKey.tail)
         rootNode2    = rootNode1.updated(itemIdx, deletedItem.get)
 
         printedTree2 <- impl.printTree(
@@ -272,13 +262,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree1 = Vector(
           "TREE: TWO LEAFS (BEFORE DELETING): root =>",
-          "   [00]LEAF: prefix = 000000, data = 0000...0011",
-          "   [34]LEAF: prefix = 564544, data = 0000...00AF"
+          "   [11]LEAF: prefix = 22334455, data = 0000...0011",
+          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...00AF"
         )
 
         referenceTree2 = Vector(
           "TREE: TWO LEAFS (AFTER DELETING): root =>",
-          "   [34]LEAF: prefix = 564544, data = 0000...00AF"
+          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...00AF"
         )
         _ = printedTree1 shouldBe referenceTree1
         _ = printedTree2 shouldBe referenceTree2
@@ -287,20 +277,17 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "deleting one leaf from a child node containing two leafs" should "child node and reformat parent node" in withImplAndStore {
     (impl, _) =>
-      val keys = Vector[ByteVector](
-        createBV("FA01122013"),
-        createBV("FA01122225")
-      )
+      val dataSet = List(radixKV("1122334455", "01"), radixKV("11223344FF", "02"))
       for {
         item1Opt <- impl.update(
                      RadixTree.EmptyItem,
-                     keys(0),
-                     createBV32("11")
+                     dataSet.head.rKey,
+                     dataSet.head.rValue
                    )
         item2Opt <- impl.update(
                      item1Opt.get,
-                     keys(1),
-                     createBV32("55")
+                     dataSet(1).rKey,
+                     dataSet(1).rValue
                    )
 
         rootNode1 <- impl.constructNodeFromItem(item2Opt.get)
@@ -312,20 +299,20 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree1 = Vector(
           "TREE WITH ONE NODE AND 2 LEAFS: root =>",
-          "   [FA]PTR: prefix = 0112, ptr =>",
-          "      [20]LEAF: prefix = 13, data = 0000...0011",
-          "      [22]LEAF: prefix = 25, data = 0000...0055"
+          "   [11]PTR: prefix = 223344, ptr =>",
+          "      [55]LEAF: prefix = empty, data = 0000...0001",
+          "      [FF]LEAF: prefix = empty, data = 0000...0002"
         )
 
-        itemIdx     <- Sync[Task].delay(byteToInt(keys(0).head))
-        deletedItem <- impl.delete(rootNode1(0xFA), keys(0).tail)
+        itemIdx     <- Sync[Task].delay(byteToInt(dataSet.head.rKey.head))
+        deletedItem <- impl.delete(rootNode1(0x11), dataSet.head.rKey.tail)
         rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
 
         printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", noPrintFlag = true)
 
         referenceTree2 = Vector(
           "TREE (AFTER DELETE): root =>",
-          "   [FA]LEAF: prefix = 01122225, data = 0000...0055"
+          "   [11]LEAF: prefix = 223344FF, data = 0000...0002"
         )
 
         _ = printedTree1 shouldBe referenceTree1
@@ -335,23 +322,21 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "reading data from existing node" should "return data" in withImplAndStore { (impl, _) =>
-    val itemData = createBV32("CB")
-    val key      = createBV("0123456F1")
+    val initialKVPair = radixKV("1122334455", "01")
     for {
-      itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
+      itemOpt  <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
-      readDataOpt <- impl.read(rootNode, key)
+      readDataOpt <- impl.read(rootNode, initialKVPair.rKey)
 
-      _ = readDataOpt.get shouldBe itemData
+      _ = readDataOpt.get shouldBe initialKVPair.rValue
     } yield ()
   }
 
   "reading non - existent data" should "return none" in withImplAndStore { (impl, _) =>
-    val itemData = createBV32("CB")
-    val key      = createBV("0123456F1")
+    val initialKVPair = radixKV("1122334455", "01")
     for {
-      itemOpt  <- impl.update(RadixTree.EmptyItem, key, itemData)
+      itemOpt  <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
       rootNode <- impl.constructNodeFromItem(itemOpt.get)
 
       notExistingKey = createBV("0000")
@@ -447,19 +432,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   "tree with makeActions" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
     (impl, inMemoStore) =>
-      val keysAndData = List(
-        ("111122334455", "01"),
-        ("11112233AABB", "02"),
-        ("1111AABBCC", "03"),
-        ("33", "04"),
-        ("FF0011", "05"),
-        ("FF012222", "06")
-      )
+      def createDeleteActions(keys: List[ByteVector]): List[DeleteAction] =
+        keys.map(key => DeleteAction(key.toSeq))
 
-      val insertActions = createInsertActions(keysAndData)
-      val deleteActions = createDeleteActions(keysAndData.map {
-        case (key, _) => key
-      })
+      val deleteActions = createDeleteActions(treeDataSet.map(_.rKey))
+
       val referenceTree1 = Vector(
         "TREE1: root =>",
         "   [11]PTR: prefix = 11, ptr =>",
@@ -504,18 +481,9 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
-    val leafKeysAndValues = List(
-      ("111122334455", "01"),
-      ("11112233AABB", "02"),
-      ("1111AABBCC", "03"),
-      ("33", "04"),
-      ("FF0011", "05"),
-      ("FF012222", "06")
-    )
-    val insertActions = createInsertActions(leafKeysAndValues)
-    val referenceLeafPrefixes =
-      leafKeysAndValues.map { case (prefix, _) => createBV(prefix) }
-    val referenceLeafValues = leafKeysAndValues.map { case (_, value) => createBV32(value) }
+    val insertActions         = createInsertActions(treeDataSet)
+    val referenceLeafPrefixes = treeDataSet.map(_.rKey)
+    val referenceLeafValues   = treeDataSet.map(_.rValue)
 
     val exportSettings = ExportDataSettings(
       flagNodePrefixes = true,
@@ -603,16 +571,28 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
-  def createInsertActions(
-      tuplesKeyAndHash: List[(String, String)]
-  ): List[InsertAction] =
-    tuplesKeyAndHash.map {
-      case (key, data) =>
-        InsertAction(createBV(key).toSeq, Blake2b256Hash.fromByteVector(createBV32(data)))
+  def createInsertActions(dataSet: List[radixKV]): List[InsertAction] =
+    dataSet.map { ds =>
+      InsertAction(ds.rKey.toSeq, Blake2b256Hash.fromByteVector(ds.rValue))
     }
 
-  def createDeleteActions(keys: List[String]): List[DeleteAction] =
-    keys.map(key => DeleteAction(createBV(key).toSeq))
+  case class radixKV(rKey: ByteVector, rValue: ByteVector)
+
+  object radixKV {
+    def apply(strKey: String, strValue: String): radixKV =
+      new radixKV(createBV(strKey), createBV32(strValue))
+  }
+
+  private val treeDataSet = List(
+    radixKV("111122334455", "01"),
+    radixKV("11112233AABB", "02"),
+    radixKV("1111AABBCC", "03"),
+    radixKV("33", "04"),
+    radixKV("FF0011", "05"),
+    radixKV("FF012222", "06")
+  )
+
+  private val insertActions = createInsertActions(treeDataSet)
 
   protected def withImplAndStore(
       f: (
