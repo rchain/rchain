@@ -415,7 +415,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       newBuf.put(arr).rewind()
     }
 
-    val collisionKVPair = (copyBVToBuf(History.emptyRootHash.bytes), ByteVector(0x00))
+    val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
+    val collisionKVPair               = (copyBVToBuf(emptyRootHash.bytes), ByteVector(0x00))
     val referenceErrorMessage = s"1 collisions in KVDB (first collision with key = " +
       s"${History.emptyRootHash.bytes.toHex})."
     for {
