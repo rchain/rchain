@@ -561,7 +561,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   def createBV32(s: String): ByteVector = {
     val notEmptyPart = createBV(s)
-    val emptyPart    = List.fill(32 - notEmptyPart.size.toInt)(0).map(_.toByte)
+    val emptyPart    = List.fill(32 - notEmptyPart.size.toInt)(0x00.toByte)
     ByteVector(emptyPart) ++ notEmptyPart
   }
 
