@@ -495,33 +495,28 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     for {
       //  Create tree with 6 leafs
       rootNode2Opt <- impl.makeActions(emptyNode, insertActions)
-      hash         = rootNode2Opt.map(node => impl.saveNode(node))
+      hash         = impl.saveNode(rootNode2Opt.get)
       _            <- impl.commit
 
       //  First data export
       typedStore       = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-      exported1        <- sequentialExport(hash.get, None, 0, 100, typedStore.get1, exportSettings)
+      exported1        <- sequentialExport(hash, None, 0, 100, typedStore.get1, exportSettings)
       (exportData1, _) = exported1
 
       //  Create new storage
-      (
-        ExportData(_, nodeKVDBKeys, nodeKVDBValues, _, _),
-        _
-      ) = exported1
+      nodeKVDBKeys   = exported1._1.nodeKeys
+      nodeKVDBValues = exported1._1.nodeValues
 
-      localStorage = nodeKVDBKeys zip nodeKVDBValues
-      newLocalStore = InMemoryKeyValueStore[Task]
-        .toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-      _ <- newLocalStore.put(localStorage)
+      localStorage = (nodeKVDBKeys zip nodeKVDBValues).toMap
 
       //  Export data from new storage
       exported2 <- {
         sequentialExport(
-          hash.get,
+          hash,
           None,
           0,
           100,
-          newLocalStore.get1,
+          x => Sync[Task].delay(localStorage.get(x)),
           exportSettings
         )
       }
