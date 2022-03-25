@@ -225,20 +225,17 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "deleting leaf from node with two leafs" should "leave one leaf" in withImplAndStore {
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("AABBCCDDEE", "02"))
-
-      val rootItem1Hash = createBV32("11")
-      val rootItem2Hash = createBV32("AF")
       for {
         rootItem1Opt <- impl.update(
                          RadixTree.EmptyItem,
                          dataSet.head.rKey,
-                         rootItem1Hash
+                         dataSet.head.rValue
                        )
 
         rootItem2Opt <- impl.update(
                          rootItem1Opt.get,
                          dataSet(1).rKey,
-                         rootItem2Hash
+                         dataSet(1).rValue
                        )
 
         rootNode1 <- impl.constructNodeFromItem(rootItem2Opt.get)
@@ -262,13 +259,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
         referenceTree1 = Vector(
           "TREE: TWO LEAFS (BEFORE DELETING): root =>",
-          "   [11]LEAF: prefix = 22334455, data = 0000...0011",
-          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...00AF"
+          "   [11]LEAF: prefix = 22334455, data = 0000...0001",
+          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...0002"
         )
 
         referenceTree2 = Vector(
           "TREE: TWO LEAFS (AFTER DELETING): root =>",
-          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...00AF"
+          "   [AA]LEAF: prefix = BBCCDDEE, data = 0000...0002"
         )
         _ = printedTree1 shouldBe referenceTree1
         _ = printedTree2 shouldBe referenceTree2
