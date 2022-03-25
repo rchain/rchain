@@ -94,10 +94,10 @@ in {
                       @revVault!("balance", *ret)
                     } |
 
-                    contract verify(@auth, idxAuthPubKeysCh, unsealedCh) = {
+                    contract verify(@auth, pubKeysCh, unsealedCh) = {
                       new unsealerTest, loopFindAny in {
                         // Check whether auth is valid to any public key
-                        loopFindAny!(publicKeys, *idxAuthPubKeysCh) |
+                        loopFindAny!(publicKeys, *pubKeysCh) |
                         // Returns either
                         //   (true, pubKey)  if auth is valid (public key is found)
                         //   (false, Nil)    if auth is not valid
@@ -136,9 +136,9 @@ in {
                     //         (true, (false, "done")) when only one sig required
                     //         (false, errorMsg) on failure
                     contract multiSig(@"transfer", @targetRevAddress, @amount, @auth, ret) = {
-                      new idxAuthPubKeysCh, unsealedCh in {
-                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@(hasPubKey, pubKey) <- idxAuthPubKeysCh & @unsealed, @info <- unsealedCh) {
+                      new pubKeysCh, unsealedCh in {
+                        verify!(auth, *pubKeysCh, *unsealedCh) |
+                        for (@(hasPubKey, pubKey) <- pubKeysCh & @unsealed, @info <- unsealedCh) {
                           if (hasPubKey or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore) & @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
@@ -183,9 +183,9 @@ in {
                     //         (true, (false, "done")) when all required sigs have been provided
                     //         (false, errorMsg) on failure
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
-                      new idxAuthPubKeysCh, unsealedCh in {
-                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@(hasPubKey, pubKey) <- idxAuthPubKeysCh & @unsealed, @info <- unsealedCh) {
+                      new pubKeysCh, unsealedCh in {
+                        verify!(auth, *pubKeysCh, *unsealedCh) |
+                        for (@(hasPubKey, pubKey) <- pubKeysCh & @unsealed, @info <- unsealedCh) {
                           if (hasPubKey or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
