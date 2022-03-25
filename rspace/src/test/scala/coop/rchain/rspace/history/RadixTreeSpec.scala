@@ -207,17 +207,17 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       val initialKVPair = radixKV("1122334455", "01")
       for {
         //  Create tree with one node
-        itemOpt   <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
-        rootNode1 <- impl.constructNodeFromItem(itemOpt.get)
+        itemOpt <- impl.update(RadixTree.EmptyItem, initialKVPair.rKey, initialKVPair.rValue)
 
         //  Trying to delete not existing leaf...
-        deletedItem         <- impl.delete(itemOpt.get, initialKVPair.rKey)
-        rootNode2           = rootNode1.updated(initialKVPair.rKey.head.toInt, deletedItem.get)
+        item3Opt  <- impl.delete(itemOpt.get, initialKVPair.rKey)
+        rootNode2 <- impl.constructNodeFromItem(item3Opt.get)
+
         printedEmptyTreeStr <- impl.printTree(rootNode2, "EMPTY TREE", noPrintFlag = true)
 
         referenceEmptyTreeStr = Vector("EMPTY TREE: root =>")
 
-        _ = deletedItem.map(item => item shouldBe RadixTree.EmptyItem)
+        _ = item3Opt.map(item => item shouldBe RadixTree.EmptyItem)
         _ = referenceEmptyTreeStr shouldBe printedEmptyTreeStr
       } yield ()
   }
@@ -251,8 +251,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         itemIdx <- Sync[Task].delay(byteToInt(dataSet.head.rKey.head))
 
         itemToDelete = rootNode1(itemIdx)
-        deletedItem  <- impl.delete(itemToDelete, dataSet.head.rKey.tail)
-        rootNode2    = rootNode1.updated(itemIdx, deletedItem.get)
+        item3Opt     <- impl.delete(itemToDelete, dataSet.head.rKey.tail)
+        rootNode2    = rootNode1.updated(itemIdx, item3Opt.get)
 
         printedTree2 <- impl.printTree(
                          rootNode2,
@@ -304,15 +304,14 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           "      [FF]LEAF: prefix = empty, data = 0000...0002"
         )
 
-        itemIdx     <- Sync[Task].delay(byteToInt(dataSet.head.rKey.head))
-        deletedItem <- impl.delete(rootNode1(0x11), dataSet.head.rKey.tail)
-        rootNode2   = rootNode1.updated(itemIdx, deletedItem.get)
+        item3Opt  <- impl.delete(rootNode1(0x11), dataSet.head.rKey.tail)
+        rootNode2 <- impl.constructNodeFromItem(item3Opt.get)
 
         printedTree2 <- impl.printTree(rootNode2, "TREE (AFTER DELETE)", noPrintFlag = true)
 
         referenceTree2 = Vector(
           "TREE (AFTER DELETE): root =>",
-          "   [11]LEAF: prefix = 223344FF, data = 0000...0002"
+          "   [22]LEAF: prefix = 3344FF, data = 0000...0002"
         )
 
         _ = printedTree1 shouldBe referenceTree1
