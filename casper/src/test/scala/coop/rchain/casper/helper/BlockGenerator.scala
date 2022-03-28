@@ -200,10 +200,11 @@ trait BlockGenerator {
       validator: Validator,
       bonds: Seq[Bond],
       seqNum: Int = 0,
-      invalid: Boolean = false
+      invalid: Boolean = false,
+      shardId: String
   ): F[BlockMessage] =
     for {
-      deploy <- ConstructDeploy.basicProcessedDeploy[F](0)
+      deploy <- ConstructDeploy.basicProcessedDeploy[F](0, shardId)
       result <- createBlock[F](
                  parents.map(_.blockHash),
                  genesis,

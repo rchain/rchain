@@ -61,11 +61,20 @@ class ExploratoryDeployAPITest
         val engine     = new EngineWithCasper[Task](readOnly.casperEff)
         val storedData = "data"
         for {
-          produceDeploys <- (0 until 2).toList.traverse(i => basicDeployData[Task](i))
-          putDataDeploy  <- sourceDeployNowF[Task](s"""@"store"!("$storedData")""")
-          _              <- n1.propagateBlock(putDataDeploy)(nodes: _*)
-          b2             <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
-          _              <- n2.propagateBlock(produceDeploys(1))(nodes: _*)
+          produceDeploys <- (0 until 2).toList.traverse(
+                             i =>
+                               basicDeployData[Task](
+                                 i,
+                                 shardId = genesisContext.genesisBlock.shardId
+                               )
+                           )
+          putDataDeploy <- sourceDeployNowF[Task](
+                            s"""@"store"!("$storedData")""",
+                            shardId = genesisContext.genesisBlock.shardId
+                          )
+          _  <- n1.propagateBlock(putDataDeploy)(nodes: _*)
+          b2 <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
+          _  <- n2.propagateBlock(produceDeploys(1))(nodes: _*)
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           result <- exploratoryDeploy(
@@ -93,8 +102,14 @@ class ExploratoryDeployAPITest
         import n1.{blockStore, cliqueOracleEffect, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
-          produceDeploys <- (0 until 1).toList.traverse(i => basicDeployData[Task](i))
-          _              <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
+          produceDeploys <- (0 until 1).toList.traverse(
+                             i =>
+                               basicDeployData[Task](
+                                 i,
+                                 shardId = genesisContext.genesisBlock.shardId
+                               )
+                           )
+          _ <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           result <- exploratoryDeploy("new return in { return!(1) }")(

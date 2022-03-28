@@ -31,15 +31,21 @@ class DeployIdTest extends FlatSpec with Matchers {
   private def deploy(
       deployer: PrivateKey,
       rho: String,
-      timestamp: Long = System.currentTimeMillis()
+      timestamp: Long = System.currentTimeMillis(),
+      shardId: String
   ): Signed[DeployData] = ConstructDeploy.sourceDeploy(
     source = rho,
     timestamp = System.currentTimeMillis(),
-    sec = deployer
+    sec = deployer,
+    shardId = shardId
   )
 
   "Deploy id" should "be equal to deploy signature" in {
-    val d = deploy(sk, s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""")
+    val d = deploy(
+      sk,
+      s"""new return, deployId(`rho:rchain:deployId`) in { return!(*deployId) }""",
+      shardId = genesisContext.genesisBlock.shardId
+    )
     val result =
       runtimeManager
         .use(
@@ -60,11 +66,13 @@ class DeployIdTest extends FlatSpec with Matchers {
   it should "be resolved during normalization" in effectTest {
     val contract = deploy(
       sk,
-      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}"""
+      s"""contract @"check"(input, ret) = { new deployId(`rho:rchain:deployId`) in { ret!(*input == *deployId) }}""",
+      shardId = genesisContext.genesisBlock.shardId
     )
     val contractCall = deploy(
       sk,
-      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }"""
+      s"""new return, deployId(`rho:rchain:deployId`), ret in { @"check"!(*deployId, *return) }""",
+      shardId = genesisContext.genesisBlock.shardId
     )
 
     TestNode.standaloneEff(genesisContext).use { node =>

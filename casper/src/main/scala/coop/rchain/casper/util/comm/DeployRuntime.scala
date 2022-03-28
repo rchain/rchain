@@ -74,7 +74,8 @@ object DeployRuntime {
       phloPrice: Long,
       validAfterBlock: Long,
       privateKey: PrivateKey,
-      file: String
+      file: String,
+      shardId: String
   ): F[Unit] =
     gracefulExit(
       Sync[F].delay(Try(Source.fromFile(file).mkString).toEither).flatMap {
@@ -89,7 +90,8 @@ object DeployRuntime {
               timestamp = timestamp,
               phloPrice = phloPrice,
               phloLimit = phloLimit,
-              validAfterBlockNumber = validAfterBlock
+              validAfterBlockNumber = validAfterBlock,
+              shardId
             )
 
             response <- DeployService[F].deploy(Signed(d, Secp256k1, privateKey))

@@ -12,7 +12,8 @@ object StandardDeploys {
   private def toDeploy(
       compiledSource: CompiledRholangSource[_],
       privateKey: String,
-      timestamp: Long
+      timestamp: Long,
+      shardId: String
   ): Signed[DeployData] = {
     val sk = PrivateKey(privateKey.unsafeHexToByteString)
     val deployData =
@@ -21,7 +22,8 @@ object StandardDeploys {
         term = compiledSource.code,
         phloLimit = accounting.MAX_VALUE,
         phloPrice = 0,
-        validAfterBlockNumber = 0
+        validAfterBlockNumber = 0,
+        shardId = shardId
       )
 
     Signed(deployData, Secp256k1, sk)
@@ -39,91 +41,119 @@ object StandardDeploys {
   val poSGeneratorPk      = "a9585a0687761139ab3587a4938fb5ab9fcba675c79fefba889859674046d4a5"
   val revGeneratorPk      = "a06959868e39bb3a8502846686a23119716ecd001700baf9e2ecfa0dbf1a3247"
 
+  val (registryPubKey, registryTimestamp) = (toPublic(registryPk), 1559156071321L)
+  val (listOpsPubKey, listOpsTimestamp)   = (toPublic(listOpsPk), 1559156082324L)
+  val (eitherPubKey, eitherTimestamp)     = (toPublic(eitherPk), 1559156217509L)
+  val (nonNegativeNumberPubKey, nonNegativeNumberTimestamp) =
+    (toPublic(nonNegativeNumberPk), 1559156251792L)
+  val (makeMintPubKey, makeMintTimestamp) = (toPublic(makeMintPk), 1559156452968L)
+  val (authKeyPubKey, authKeyTimestamp)   = (toPublic(authKeyPk), 1559156356769L)
+  val (revVaultPubKey, revVaultTimestamp) = (toPublic(revVaultPk), 1559156183943L)
+  val (multiSigRevVaultPubKey, multiSigRevVaultTimestamp) =
+    (toPublic(multiSigRevVaultPk), 1571408470880L)
+  val (poSGeneratorPubKey, poSGeneratorTimestamp) = (toPublic(poSGeneratorPk), 1559156420651L)
+  val revGeneratorPubKey: PublicKey               = toPublic(revGeneratorPk)
+
   // Public keys used to sign blessed (standard) contracts
   val systemPublicKeys: Seq[PublicKey] = Seq(
-    registryPk,
-    listOpsPk,
-    eitherPk,
-    nonNegativeNumberPk,
-    makeMintPk,
-    authKeyPk,
-    revVaultPk,
-    multiSigRevVaultPk,
-    poSGeneratorPk,
-    revGeneratorPk
-  ).map(Base16.unsafeDecode).map(PrivateKey(_)).map(Secp256k1.toPublic)
+    registryPubKey,
+    listOpsPubKey,
+    eitherPubKey,
+    nonNegativeNumberPubKey,
+    makeMintPubKey,
+    authKeyPubKey,
+    revVaultPubKey,
+    multiSigRevVaultPubKey,
+    poSGeneratorPubKey,
+    revGeneratorPubKey
+  )
 
-  def registry: Signed[DeployData] = toDeploy(
+  def registry(shardId: String): Signed[DeployData] = toDeploy(
     CompiledRholangSource("Registry.rho"),
     registryPk,
-    1559156071321L
+    registryTimestamp,
+    shardId
   )
 
-  def listOps: Signed[DeployData] = toDeploy(
+  def listOps(shardId: String): Signed[DeployData] = toDeploy(
     CompiledRholangSource("ListOps.rho"),
     listOpsPk,
-    1559156082324L
+    listOpsTimestamp,
+    shardId
   )
 
-  def either: Signed[DeployData] =
+  def either(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("Either.rho"),
       eitherPk,
-      1559156217509L
+      eitherTimestamp,
+      shardId
     )
 
-  def nonNegativeNumber: Signed[DeployData] =
+  def nonNegativeNumber(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("NonNegativeNumber.rho"),
       nonNegativeNumberPk,
-      1559156251792L
+      nonNegativeNumberTimestamp,
+      shardId
     )
 
-  def makeMint: Signed[DeployData] =
+  def makeMint(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("MakeMint.rho"),
       makeMintPk,
-      1559156452968L
+      makeMintTimestamp,
+      shardId
     )
 
-  def authKey: Signed[DeployData] =
+  def authKey(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("AuthKey.rho"),
       authKeyPk,
-      1559156356769L
+      authKeyTimestamp,
+      shardId
     )
 
-  def revVault: Signed[DeployData] =
+  def revVault(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("RevVault.rho"),
       revVaultPk,
-      1559156183943L
+      revVaultTimestamp,
+      shardId
     )
 
-  def multiSigRevVault: Signed[DeployData] =
+  def multiSigRevVault(shardId: String): Signed[DeployData] =
     toDeploy(
       CompiledRholangSource("MultiSigRevVault.rho"),
       multiSigRevVaultPk,
-      1571408470880L
+      multiSigRevVaultTimestamp,
+      shardId
     )
 
-  def poSGenerator(poS: ProofOfStake): Signed[DeployData] =
+  def poSGenerator(poS: ProofOfStake, shardId: String): Signed[DeployData] =
     toDeploy(
       poS,
       poSGeneratorPk,
-      1559156420651L
+      poSGeneratorTimestamp,
+      shardId
     )
 
   def revGenerator(
       vaults: Seq[Vault],
       supply: Long,
       timestamp: Long,
-      isLastBatch: Boolean
+      isLastBatch: Boolean,
+      shardId: String
   ): Signed[DeployData] =
     toDeploy(
       RevGenerator(vaults, supply, isLastBatch),
       revGeneratorPk,
-      timestamp
+      timestamp,
+      shardId
     )
 
+  private def toPublic(privKey: String) = {
+    val privateKey = PrivateKey(Base16.unsafeDecode(privKey))
+    Secp256k1.toPublic(privateKey)
+  }
 }

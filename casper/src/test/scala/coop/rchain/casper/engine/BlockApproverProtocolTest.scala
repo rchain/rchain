@@ -20,6 +20,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
   import BlockApproverProtocolTest._
 
   implicit private val scheduler: Scheduler = Scheduler.fixedPool("block-approval-protocol-test", 4)
+  private val SHARD_ID                      = "root-shard"
 
   "BlockApproverProtocol" should "respond to valid ApprovedBlockCandidates" in {
     createProtocol.flatMap {
@@ -28,7 +29,8 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         import node._
 
         for {
-          _ <- approver.unapprovedBlockPacketHandler[Effect](node.local, unapproved)
+          _ <- approver
+                .unapprovedBlockPacketHandler[Effect](node.local, unapproved, shardId = SHARD_ID)
 
           _ = node.logEff.infos.exists(_.contains("Approval sent in response")) should be(true)
           _ = node.logEff.warns.isEmpty should be(true)
@@ -53,11 +55,13 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
         for {
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved1
+                differentUnapproved1,
+                shardId = SHARD_ID
               )
           _ <- approver.unapprovedBlockPacketHandler[Effect](
                 node.local,
-                differentUnapproved2
+                differentUnapproved2,
+                shardId = SHARD_ID
               )
 
           _ = node.logEff.warns
@@ -91,6 +95,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID,
                 posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
                 posMultiSigQuorum = approver.posMultiSigQuorum
               )
@@ -116,6 +121,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID,
                 posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
                 posMultiSigQuorum = approver.posMultiSigQuorum
               )
@@ -143,6 +149,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength,
                 quarantineLength = approver.quarantineLength,
                 numberOfActiveValidators = approver.numberOfActiveValidators,
+                shardId = SHARD_ID,
                 posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
                 posMultiSigQuorum = approver.posMultiSigQuorum
               )
@@ -173,6 +180,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 epochLength = approver.epochLength + 1,
                 quarantineLength = approver.quarantineLength + 1,
                 numberOfActiveValidators = approver.numberOfActiveValidators + 1,
+                shardId = SHARD_ID,
                 posMultiSigPublicKeys = approver.posMultiSigPublicKeys,
                 posMultiSigQuorum = approver.posMultiSigQuorum
               )
