@@ -639,8 +639,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
 
     val privateKey = opt[PrivateKey](
       descr = "The deployer's secp256k1 private key encoded as Base16.",
-      required = false,
-      hidden = true
+      required = false
     )(
       Base16Converter
         .flatMap(validateLength(Ed25519.keyLength))
@@ -652,8 +651,13 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
       required = false
     )
 
-    val location = trailArg[String](required = true)
+    val shardId = opt[String](
+      descr = "The name of the shard",
+      required = false,
+      default = Some("")
+    )
 
+    val location = trailArg[String](required = true)
   }
   addSubcommand(deploy)
 
