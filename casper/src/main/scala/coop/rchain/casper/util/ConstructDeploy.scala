@@ -47,12 +47,14 @@ object ConstructDeploy {
   def sourceDeployNow(
       source: String,
       sec: PrivateKey = defaultSec,
+      phloLimit: Long = 90000L,
       vabn: Long = 0,
       shardId: String = ""
   ): Signed[DeployData] =
     sourceDeploy(
       source = source,
       timestamp = System.currentTimeMillis(),
+      phloLimit = phloLimit,
       sec = sec,
       vabn = vabn,
       shardId = shardId
