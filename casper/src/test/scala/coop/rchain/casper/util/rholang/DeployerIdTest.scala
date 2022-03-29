@@ -77,7 +77,11 @@ class DeployerIdTest extends FlatSpec with Matchers {
 
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
-        contract        <- ConstructDeploy.sourceDeployNowF(checkDeployerDefinition, sec = deployer)
+        contract <- ConstructDeploy.sourceDeployNowF(
+                     checkDeployerDefinition,
+                     sec = deployer,
+                     shardId = genesisContext.genesisBlock.shardId
+                   )
         block           <- node.addBlock(contract)
         stateHash       = ProtoUtil.postStateHash(block)
         checkAuthDeploy <- ConstructDeploy.sourceDeployNowF(checkDeployerCall, sec = contractUser)

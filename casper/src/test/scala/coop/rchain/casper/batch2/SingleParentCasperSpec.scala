@@ -27,7 +27,9 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
         for {
           deployDatas <- (0 to 2).toList
                           .traverse[Effect, Signed[DeployData]](
-                            i => ConstructDeploy.basicDeployData[Effect](i)
+                            i =>
+                              ConstructDeploy
+                                .basicDeployData[Effect](i, shardId = genesis.genesisBlock.shardId)
                           )
           b1 <- n1.addBlock(deployDatas(0))
           b2 <- n2.addBlock(deployDatas(1))
@@ -46,7 +48,9 @@ class SingleParentCasperSpec extends FlatSpec with Matchers with Inspectors {
         for {
           deployDatas <- (0 to 2).toList
                           .traverse[Effect, Signed[DeployData]](
-                            i => ConstructDeploy.basicDeployData[Effect](i)
+                            i =>
+                              ConstructDeploy
+                                .basicDeployData[Effect](i, shardId = genesis.genesisBlock.shardId)
                           )
           b1 <- n1.addBlock(deployDatas(0))
           b2 <- n2.addBlock(deployDatas(1))

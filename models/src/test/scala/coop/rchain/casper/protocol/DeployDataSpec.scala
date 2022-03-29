@@ -13,12 +13,14 @@ class DeployDataSpec extends PropSpec with GeneratorDrivenPropertyChecks with Ma
       phloPrice             <- arbLong.arbitrary
       phloLimit             <- arbLong.arbitrary
       validAfterBlockNumber <- arbLong.arbitrary
+      shardId               <- arbString.arbitrary
     } yield DeployData(
       term,
       timestamp,
       phloPrice,
       phloLimit,
-      validAfterBlockNumber
+      validAfterBlockNumber,
+      shardId
     )
   )
 

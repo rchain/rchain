@@ -49,6 +49,7 @@ object blockImplicits {
       termLength <- Gen.choose(32, 1024)
       term       <- listOfN(termLength, Gen.alphaNumChar).map(_.mkString)
       timestamp  <- arbitrary[Long]
+      shardId    <- arbitrary[String]
       (sec, _)   = Secp256k1.newKeyPair
       deployData = Signed(
         DeployData(
@@ -56,7 +57,8 @@ object blockImplicits {
           timestamp = timestamp,
           phloLimit = 90000,
           phloPrice = 1L,
-          validAfterBlockNumber = 0
+          validAfterBlockNumber = 0,
+          shardId = shardId
         ),
         signatures.Secp256k1,
         sec

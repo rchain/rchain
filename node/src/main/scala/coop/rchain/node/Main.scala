@@ -140,7 +140,8 @@ object Main {
           validAfterBlock,
           maybePrivateKey,
           maybePrivateKeyPath,
-          location
+          location,
+          shardId
           ) =>
         val getPrivateKey =
           maybePrivateKey
@@ -155,7 +156,8 @@ object Main {
                   phloPrice,
                   validAfterBlock,
                   _,
-                  location
+                  location,
+                  shardId
                 )
               )
         } yield ()
@@ -198,7 +200,8 @@ object Main {
           validAfterBlockNumber.getOrElse(-1L),
           privateKey.toOption,
           privateKeyPath.toOption,
-          location()
+          location(),
+          shardId()
         )
       case Some(options.findDeploy) => FindDeploy(options.findDeploy.deployId())
       case Some(options.propose)    => Propose(options.propose.printUnmatchedSends())

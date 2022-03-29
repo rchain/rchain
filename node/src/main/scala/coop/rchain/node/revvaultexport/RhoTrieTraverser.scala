@@ -75,7 +75,7 @@ object RhoTrieTraverser {
 
   private val storeTokenUnforgeable = {
     val rand =
-      Tools.unforgeableNameRng(StandardDeploys.registry.pk, StandardDeploys.registry.data.timestamp)
+      Tools.unforgeableNameRng(StandardDeploys.registryPubKey, StandardDeploys.registryTimestamp)
     (0 to 5).foreach(_ => rand.next())
     val newRand = rand.splitShort(6)
     (0 to 6).foreach(_ => newRand.next())

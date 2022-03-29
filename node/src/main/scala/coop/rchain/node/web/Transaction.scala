@@ -249,8 +249,8 @@ object Transaction {
   // This is not needed when onChain transfer history is implemented and deployed to new network in the future.
   val transferUnforgeable = {
     val seedForRevVault = Tools.unforgeableNameRng(
-      StandardDeploys.revVault.pk,
-      StandardDeploys.revVault.data.timestamp
+      StandardDeploys.revVaultPubKey,
+      StandardDeploys.revVaultTimestamp
     )
     // the 11th unforgeable name
     val unfogeableBytes = Iterator.continually(seedForRevVault.next()).drop(10).next()

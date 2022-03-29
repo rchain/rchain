@@ -108,25 +108,26 @@ class InterpreterUtilTest
       )
 
   "computeBlockCheckpoint" should "compute the final post-state of a chain properly" in effectTest {
-    val time = 0L
+    val time    = 0L
+    val shardId = genesis.shardId
     val b0Deploys = Vector(
       "@1!(1)",
       "@2!(2)",
       "for(@a <- @1){ @123!(5 * a) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 1))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 1, shardId = shardId))
 
     val b1Deploys = Vector(
       "@1!(1)",
       "for(@a <- @2){ @456!(5 * a) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 2))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 2, shardId = shardId))
 
     val b2Deploys = Vector(
       "for(@a <- @123; @b <- @456){ @1!(a + b) }"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 3))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 3, shardId = shardId))
 
     val b3Deploys = Vector(
       "@7!(7)"
-    ).map(d => ConstructDeploy.sourceDeploy(d, time + 4))
+    ).map(d => ConstructDeploy.sourceDeploy(d, time + 4, shardId = shardId))
 
     /*
      * DAG Looks like this:
@@ -771,7 +772,12 @@ class InterpreterUtilTest
         |  }
         |""".stripMargin
     val deploy =
-      ConstructDeploy.sourceDeploy(sampleTerm, System.currentTimeMillis, phloLimit = 3000)
+      ConstructDeploy.sourceDeploy(
+        sampleTerm,
+        System.currentTimeMillis,
+        phloLimit = 3000,
+        shardId = genesis.shardId
+      )
 
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
@@ -805,7 +811,8 @@ class InterpreterUtilTest
         multiBranchSampleTermWithError,
         System.currentTimeMillis,
         // Not enough phlo
-        phloLimit = 20000
+        phloLimit = 20000,
+        shardId = genesis.shardId
       )
 
     TestNode.standaloneEff(genesisContext).use { node =>
@@ -823,7 +830,8 @@ class InterpreterUtilTest
         multiBranchSampleTermWithError,
         System.currentTimeMillis,
         // Enough phlo
-        phloLimit = 300000
+        phloLimit = 300000,
+        shardId = genesis.shardId
       )
 
     TestNode.standaloneEff(genesisContext).use { node =>

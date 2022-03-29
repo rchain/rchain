@@ -26,7 +26,8 @@ object Genesis {
       timestamp: Long,
       posParams: ProofOfStake,
       vaults: Seq[Vault],
-      supply: Long
+      supply: Long,
+      shardId: String
   ): Seq[Signed[DeployData]] = {
     // Splits initial vaults creation in multiple deploys (batches)
     val vaultBatches = vaults.grouped(100).toSeq
@@ -36,22 +37,23 @@ object Genesis {
           batchVaults,
           supply,
           timestamp = 1565818101792L + idx,
-          isLastBatch = 1 + idx == vaultBatches.size
+          isLastBatch = 1 + idx == vaultBatches.size,
+          shardId
         )
     }
 
     // Order of deploys is important for Registry to work correctly
     // - dependencies must be defined first in the list
-    StandardDeploys.registry +:
-      StandardDeploys.listOps +:
-      StandardDeploys.either +:
-      StandardDeploys.nonNegativeNumber +:
-      StandardDeploys.makeMint +:
-      StandardDeploys.authKey +:
-      StandardDeploys.revVault +:
-      StandardDeploys.multiSigRevVault +:
+    StandardDeploys.registry(shardId) +:
+      StandardDeploys.listOps(shardId) +:
+      StandardDeploys.either(shardId) +:
+      StandardDeploys.nonNegativeNumber(shardId) +:
+      StandardDeploys.makeMint(shardId) +:
+      StandardDeploys.authKey(shardId) +:
+      StandardDeploys.revVault(shardId) +:
+      StandardDeploys.multiSigRevVault(shardId) +:
       vaultDeploys :+
-      StandardDeploys.poSGenerator(posParams)
+      StandardDeploys.poSGenerator(posParams, shardId)
   }
 
   def createGenesisBlock[F[_]: Concurrent](
@@ -64,7 +66,8 @@ object Genesis {
       timestamp,
       proofOfStake,
       vaults,
-      supply = Long.MaxValue
+      supply = Long.MaxValue,
+      shardId = genesis.shardId
     )
 
     runtimeManager

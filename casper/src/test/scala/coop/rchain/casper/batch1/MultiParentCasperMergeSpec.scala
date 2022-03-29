@@ -21,10 +21,16 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
   "HashSetCasper" should "handle multi-parent blocks correctly" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val rm = nodes(1).runtimeManager
+      val shardId     = genesis.genesisBlock.shardId
       for {
-        deployData0 <- ConstructDeploy.basicDeployData[Effect](0, sec = ConstructDeploy.defaultSec2)
-        deployData1 <- ConstructDeploy.sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }")
-        deployData2 <- ConstructDeploy.basicDeployData[Effect](2)
+        deployData0 <- ConstructDeploy.basicDeployData[Effect](
+                        0,
+                        sec = ConstructDeploy.defaultSec2,
+                        shardId = shardId
+                      )
+        deployData1 <- ConstructDeploy
+                        .sourceDeployNowF("@1!(1) | for(@x <- @1){ @1!(x) }", shardId = shardId)
+        deployData2 <- ConstructDeploy.basicDeployData[Effect](2, shardId = shardId)
         deploys = Vector(
           deployData0,
           deployData1,
@@ -135,13 +141,14 @@ class MultiParentCasperMergeSpec extends FlatSpec with Matchers with Inspectors 
       """.stripMargin
 
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
-      val n1     = nodes(0)
-      val n2     = nodes(1)
-      val n3     = nodes(2)
-      val short  = ConstructDeploy.sourceDeploy("new x in { x!(0) }", 1L)
-      val time   = ConstructDeploy.sourceDeploy(timeRho, 3L)
-      val tuples = ConstructDeploy.sourceDeploy(tuplesRho, 2L)
-      val reg    = ConstructDeploy.sourceDeploy(registryRho, 4L)
+      val shardId = genesis.genesisBlock.shardId
+      val n1      = nodes(0)
+      val n2      = nodes(1)
+      val n3      = nodes(2)
+      val short   = ConstructDeploy.sourceDeploy("new x in { x!(0) }", 1L, shardId = shardId)
+      val time    = ConstructDeploy.sourceDeploy(timeRho, 3L, shardId = shardId)
+      val tuples  = ConstructDeploy.sourceDeploy(tuplesRho, 2L, shardId = shardId)
+      val reg     = ConstructDeploy.sourceDeploy(registryRho, 4L, shardId = shardId)
       for {
         b1n3 <- n3.addBlock(short)
         b1n2 <- n2.addBlock(time)

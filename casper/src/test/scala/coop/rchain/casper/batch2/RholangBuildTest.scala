@@ -42,7 +42,10 @@ class RholangBuildTest extends FlatSpec with Matchers {
           |}
           |""".stripMargin
         for {
-          deploy      <- ConstructDeploy.sourceDeployNowF(code)
+          deploy <- ConstructDeploy.sourceDeployNowF(
+                     code,
+                     shardId = this.genesis.genesisBlock.shardId
+                   )
           signedBlock <- node.addBlock(deploy)
           _           = logEff.warns should be(Nil)
           _ <- getDataAtPrivateChannel[Effect](

@@ -16,6 +16,7 @@ import coop.rchain.node.configuration.{
   Storage
 }
 import com.typesafe.config.ConfigFactory
+import coop.rchain.casper.util.GenesisBuilder
 import coop.rchain.casper.{CasperConf, GenesisBlockData, GenesisCeremonyConf, RoundRobinDispatcher}
 import coop.rchain.comm.transport.TlsConf
 import coop.rchain.comm.{CommError, PeerNode}
@@ -239,7 +240,9 @@ class ConfigMapperSpec extends FunSuite with Matchers {
           quarantineLength = 111111,
           numberOfActiveValidators = 111111,
           deployTimestamp = Some(111111),
-          genesisBlockNumber = 222
+          genesisBlockNumber = 222,
+          posMultiSigPublicKeys = GenesisBuilder.defaultPosMultiSigPublicKeys,
+          posMultiSigQuorum = GenesisBuilder.defaultPosMultiSigPublicKeys.length - 1
         ),
         genesisCeremony = GenesisCeremonyConf(
           requiredSignatures = 111111,
