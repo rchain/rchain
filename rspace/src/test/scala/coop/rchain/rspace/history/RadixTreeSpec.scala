@@ -530,24 +530,27 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "multipage export with lastPrefix" should "work correctly" in withImplAndStore { (impl, store) =>
+  "multipage export with last prefix" should "work correctly" in withImplAndStore { (impl, store) =>
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
       //  Create tree with 6 leafs
       rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
-      hash        = impl.saveNode(rootNodeOpt.get)
+      rootHash    = impl.saveNode(rootNodeOpt.get)
       _           <- impl.commit
 
-      result                     <- validateMultipageExport(hash, typedStore, withSkip = false)
-      (exportData1, exportData2) = (result.firstExport._1, result.reconstructExport._1)
-      (exp1, exp2)               = (result.firstExport, result.reconstructExport)
+      validateData <- validateMultipageExport(rootHash, typedStore, withSkip = false)
+      (firstExportData, reconstructExportData) = (
+        validateData.firstExport._1,
+        validateData.reconstructExport._1
+      )
+      (firstExport, reconstructExport) = (validateData.firstExport, validateData.reconstructExport)
 
-      _ = exportData1.nodeKeys.size shouldBe 4
-      _ = exp1 shouldBe exp2
-      _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
-      _ = exportData1.leafValues shouldBe referenceLeafValues
-      _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
-      _ = exportData2.leafValues shouldBe referenceLeafValues
+      _ = firstExportData.nodeKeys.size shouldBe 4
+      _ = firstExport shouldBe reconstructExport
+      _ = firstExportData.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = firstExportData.leafValues shouldBe referenceLeafValues
+      _ = reconstructExportData.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = reconstructExportData.leafValues shouldBe referenceLeafValues
     } yield ()
   }
 
@@ -559,16 +562,19 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       hash        = impl.saveNode(rootNodeOpt.get)
       _           <- impl.commit
 
-      result                     <- validateMultipageExport(hash, typedStore, withSkip = true)
-      (exportData1, exportData2) = (result.firstExport._1, result.reconstructExport._1)
-      (exp1, exp2)               = (result.firstExport, result.reconstructExport)
+      validateData <- validateMultipageExport(hash, typedStore, withSkip = true)
+      (firstExportData1, reconstructExportData2) = (
+        validateData.firstExport._1,
+        validateData.reconstructExport._1
+      )
+      (firstExport, reconstructExport) = (validateData.firstExport, validateData.reconstructExport)
 
-      _ = exportData1.nodeKeys.size shouldBe 4
-      _ = exp1 shouldBe exp2
-      _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
-      _ = exportData1.leafValues shouldBe referenceLeafValues
-      _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
-      _ = exportData2.leafValues shouldBe referenceLeafValues
+      _ = firstExportData1.nodeKeys.size shouldBe 4
+      _ = firstExport shouldBe reconstructExport
+      _ = firstExportData1.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = firstExportData1.leafValues shouldBe referenceLeafValues
+      _ = reconstructExportData2.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = reconstructExportData2.leafValues shouldBe referenceLeafValues
     } yield ()
   }
 
@@ -648,7 +654,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       takeSize: Int,     // take size
       skipSize: Int,     // skip size
       withSkip: Boolean, // start with skip is true
-      data: ExportData,
+      exportData: ExportData,
       lastPrefix: Option[ByteVector] // last prefix
   )
 
@@ -714,6 +720,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       }
     }
 
+    //  Initialize structure for export
     val initSeq        = Seq[ByteVector]()
     val initExportData = ExportData(initSeq, initSeq, initSeq, initSeq, initSeq)
     val initParameters = ExportParameters(
@@ -727,31 +734,29 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     )
     for {
       allExport        <- initParameters.tailRecM(multipageExport)
-      firstExportData  = (allExport.data, allExport.lastPrefix)
+      firstExportData  = (allExport.exportData, allExport.lastPrefix)
       (exportData1, _) = firstExportData
       nodeKVDBKeys     = exportData1.nodeKeys
       nodeKVDBValues   = exportData1.nodeValues
       localStorage     = (nodeKVDBKeys zip nodeKVDBValues).toMap
 
       //  Export data from new storage
-      reconstructExportData <- {
-        sequentialExport(
-          rootHash,
-          None,
-          skipSize = 0,
-          takeSize = 100,
-          x => Sync[Task].delay(localStorage.get(x)),
-          exportSettings
-        )
-      }
+      reconstructExportData <- sequentialExport(
+                                rootHash,
+                                None,
+                                skipSize = 0,
+                                takeSize = 100,
+                                x => Sync[Task].delay(localStorage.get(x)),
+                                exportSettings
+                              )
 
       //  Data exported from created storage must me equal to data from source store
       _ = {
-        assert(firstExportData == reconstructExportData, clue = "Error of validation")
+        assert(firstExportData == reconstructExportData, "Error of validation")
         ()
       }
       result = MultipageExportResults(firstExportData, reconstructExportData)
-    } yield (result)
+    } yield result
   }
 
   protected def withImplAndStore(
