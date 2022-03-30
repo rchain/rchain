@@ -406,7 +406,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       case ex: AssertionError =>
         ex shouldBe a[AssertionError]
         ex.getMessage shouldBe s"assertion failed: Error during deserialization: invalid data format"
-
     }
   }
 
@@ -545,6 +544,31 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
+  "invalid initial conditions in sequentialExport" should "raise exception" in withImplAndStore {
+    (impl, store) =>
+      val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      for {
+        //  Create tree with 6 leafs
+        rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
+        rootHash    = impl.saveNode(rootNodeOpt.get)
+        _           <- impl.commit
+
+        // Validate exception when skipSize = 0 and takeSize == 0
+        err <- sequentialExport(
+                rootHash,
+                None,
+                skipSize = 0,
+                takeSize = 0,
+                typedStore.get1,
+                exportSettings
+              ).attempt
+
+        ex = err.left.get
+        _  = ex shouldBe a[RuntimeException]
+        _  = ex.getMessage shouldBe "Export error: invalid initial conditions (skipSize, takeSize)==(0,0)."
+      } yield ()
+  }
+
   "multipage export with last prefix" should "work correctly" in withImplAndStore { (impl, store) =>
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
@@ -591,6 +615,24 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       _ = reconstructExportData2.leafPrefixes shouldBe referenceLeafPrefixes
       _ = reconstructExportData2.leafValues shouldBe referenceLeafValues
     } yield ()
+  }
+
+  "sequentialExport with non-existing tree" should "return empty data" in withImplAndStore {
+    (impl, store) =>
+      val typedStore    = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      val emptyRootHash = impl.saveNode(emptyNode)
+      for {
+        exported1 <- sequentialExport(
+                      emptyRootHash,
+                      None,
+                      skipSize = 0,
+                      takeSize = 100,
+                      typedStore.get1,
+                      exportSettings
+                    )
+        referenceEmptyData = (ExportData(Vector(), Vector(), Vector(), Vector(), Vector()), none)
+        _                  = exported1 shouldBe referenceEmptyData
+      } yield ()
   }
 
   "function commonPrefix" should "return correct prefixes" in {
