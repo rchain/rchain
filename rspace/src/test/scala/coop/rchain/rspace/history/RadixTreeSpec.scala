@@ -1,6 +1,5 @@
 package coop.rchain.rspace.history
 
-import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
