@@ -115,6 +115,14 @@ object implicits {
     new Expr(exprInstance = EOrBody(e))
   implicit def fromEOr(e: EOr): Expr = apply(e)
 
+  def apply(e: EShortAnd): Expr =
+    new Expr(exprInstance = EShortAndBody(e))
+  implicit def fromEShortAnd(e: EShortAnd): Expr = apply(e)
+
+  def apply(e: EShortOr): Expr =
+    new Expr(exprInstance = EShortOrBody(e))
+  implicit def fromEShortOr(e: EShortOr): Expr = apply(e)
+
   def apply(e: EMethod): Expr =
     new Expr(exprInstance = EMethodBody(e))
   implicit def fromEMethod(e: EMethod): Expr = apply(e)
@@ -403,6 +411,8 @@ object implicits {
         case ENeqBody(ENeq(p1, p2))                       => p1.connectiveUsed || p2.connectiveUsed
         case EAndBody(EAnd(p1, p2))                       => p1.connectiveUsed || p2.connectiveUsed
         case EOrBody(EOr(p1, p2))                         => p1.connectiveUsed || p2.connectiveUsed
+        case EShortAndBody(EShortAnd(p1, p2))             => p1.connectiveUsed || p2.connectiveUsed
+        case EShortOrBody(EShortOr(p1, p2))               => p1.connectiveUsed || p2.connectiveUsed
         case EMethodBody(e)                               => e.connectiveUsed
         case EMatchesBody(EMatches(target, pattern @ _))  => target.connectiveUsed
         case EPercentPercentBody(EPercentPercent(p1, p2)) => p1.connectiveUsed || p2.connectiveUsed
@@ -438,6 +448,8 @@ object implicits {
         case ENeqBody(ENeq(p1, p2))                       => p1.locallyFree | p2.locallyFree
         case EAndBody(EAnd(p1, p2))                       => p1.locallyFree | p2.locallyFree
         case EOrBody(EOr(p1, p2))                         => p1.locallyFree | p2.locallyFree
+        case EShortAndBody(EShortAnd(p1, p2))             => p1.locallyFree | p2.locallyFree
+        case EShortOrBody(EShortOr(p1, p2))               => p1.locallyFree | p2.locallyFree
         case EMethodBody(e)                               => e.locallyFree
         case EMatchesBody(EMatches(target, pattern))      => target.locallyFree | pattern.locallyFree
         case EPercentPercentBody(EPercentPercent(p1, p2)) => p1.locallyFree | p2.locallyFree
