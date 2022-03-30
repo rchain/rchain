@@ -438,6 +438,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       def createDeleteActions(keys: List[ByteVector]): List[DeleteAction] =
         keys.map(key => DeleteAction(key.toSeq))
 
+      /* treeDataSet:
+            key      |   value
+        111122334455 | 0000...0001
+        11112233AABB | 0000...0002
+        1111AABBCC   | 0000...0003
+        33           | 0000...0004
+        FF0011       | 0000...0005
+        FF012222     | 0000...0006
+       */
       val deleteActions = createDeleteActions(treeDataSet.map(_.rKey))
 
       val referenceTree1 = Vector(
@@ -455,7 +464,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       val referenceTree2 = Vector("TREE2: root =>")
       for {
         //  1  Build a tree according to the example in specification
-        rootNode1Opt <- impl.makeActions(RadixTree.emptyNode, insertActions)
+        rootNode1Opt <- impl.makeActions(RadixTree.emptyNode, referenceInsertActions)
 
         //    Get the tree for compare with reference
         tree1 <- impl.printTree(rootNode1Opt.get, "TREE1", noPrintFlag = true)
@@ -486,13 +495,20 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
       hash        = impl.saveNode(rootNodeOpt.get)
       _           <- impl.commit
 
       //  First data export
-      typedStore       = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
-      exported1        <- sequentialExport(hash, None, 0, 100, typedStore.get1, exportSettings)
+      typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+      exported1 <- sequentialExport(
+                    hash,
+                    None,
+                    skipSize = 0,
+                    takeSize = 100,
+                    typedStore.get1,
+                    exportSettings
+                  )
       (exportData1, _) = exported1
 
       //  Create new storage
@@ -506,8 +522,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         sequentialExport(
           hash,
           None,
-          0,
-          100,
+          skipSize = 0,
+          takeSize = 100,
           x => Sync[Task].delay(localStorage.get(x)),
           exportSettings
         )
@@ -534,7 +550,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
       rootHash    = impl.saveNode(rootNodeOpt.get)
       _           <- impl.commit
 
@@ -558,7 +574,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
       hash        = impl.saveNode(rootNodeOpt.get)
       _           <- impl.commit
 
@@ -639,7 +655,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   private val referenceLeafPrefixes = treeDataSet.map(_.rKey)
   private val referenceLeafValues   = treeDataSet.map(_.rValue)
 
-  private val insertActions = createInsertActions(treeDataSet)
+  private val referenceInsertActions = createInsertActions(treeDataSet)
 
   private val exportSettings = ExportDataSettings(
     flagNodePrefixes = true,
