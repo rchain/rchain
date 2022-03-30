@@ -723,7 +723,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
               rootHash,
               store,
               takeSize,
-              if (withSkip) skipSize + 2 else skipSize,
+              if (withSkip) skipSize + takeSize else skipSize,
               withSkip,
               collectExportData(exportData, pageExportData),
               exported._2
