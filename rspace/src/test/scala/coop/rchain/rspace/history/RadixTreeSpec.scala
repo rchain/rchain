@@ -1,5 +1,6 @@
 package coop.rchain.rspace.history
 
+import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
@@ -7,7 +8,12 @@ import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history.TestData._
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValueTypedStore}
-import coop.rchain.store.{InMemoryKeyValueStore, KeyValueStore, KeyValueStoreOps}
+import coop.rchain.store.{
+  InMemoryKeyValueStore,
+  KeyValueStore,
+  KeyValueStoreOps,
+  KeyValueTypedStore
+}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{Assertion, FlatSpec, Matchers, OptionValues}
@@ -478,22 +484,11 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
-    val insertActions         = createInsertActions(treeDataSet)
-    val referenceLeafPrefixes = treeDataSet.map(_.rKey)
-    val referenceLeafValues   = treeDataSet.map(_.rValue)
-
-    val exportSettings = ExportDataSettings(
-      flagNodePrefixes = true,
-      flagNodeKeys = true,
-      flagNodeValues = true,
-      flagLeafPrefixes = true,
-      flagLeafValues = true
-    )
     for {
       //  Create tree with 6 leafs
-      rootNode2Opt <- impl.makeActions(emptyNode, insertActions)
-      hash         = impl.saveNode(rootNode2Opt.get)
-      _            <- impl.commit
+      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      hash        = impl.saveNode(rootNodeOpt.get)
+      _           <- impl.commit
 
       //  First data export
       typedStore       = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
@@ -528,6 +523,48 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
       _ = exportData1.nodeKeys.size shouldBe 4
       _ = exported1 shouldBe exported2
+      _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData1.leafValues shouldBe referenceLeafValues
+      _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData2.leafValues shouldBe referenceLeafValues
+    } yield ()
+  }
+
+  "multipage export with lastPrefix" should "work correctly" in withImplAndStore { (impl, store) =>
+    val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    for {
+      //  Create tree with 6 leafs
+      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      hash        = impl.saveNode(rootNodeOpt.get)
+      _           <- impl.commit
+
+      result                     <- validateMultipageExport(hash, typedStore, withSkip = false)
+      (exportData1, exportData2) = (result.firstExport._1, result.reconstructExport._1)
+      (exp1, exp2)               = (result.firstExport, result.reconstructExport)
+
+      _ = exportData1.nodeKeys.size shouldBe 4
+      _ = exp1 shouldBe exp2
+      _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData1.leafValues shouldBe referenceLeafValues
+      _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
+      _ = exportData2.leafValues shouldBe referenceLeafValues
+    } yield ()
+  }
+
+  "multipage export with skip" should "work correctly" in withImplAndStore { (impl, store) =>
+    val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
+    for {
+      //  Create tree with 6 leafs
+      rootNodeOpt <- impl.makeActions(emptyNode, insertActions)
+      hash        = impl.saveNode(rootNodeOpt.get)
+      _           <- impl.commit
+
+      result                     <- validateMultipageExport(hash, typedStore, withSkip = true)
+      (exportData1, exportData2) = (result.firstExport._1, result.reconstructExport._1)
+      (exp1, exp2)               = (result.firstExport, result.reconstructExport)
+
+      _ = exportData1.nodeKeys.size shouldBe 4
+      _ = exp1 shouldBe exp2
       _ = exportData1.leafPrefixes shouldBe referenceLeafPrefixes
       _ = exportData1.leafValues shouldBe referenceLeafValues
       _ = exportData2.leafPrefixes shouldBe referenceLeafPrefixes
@@ -575,6 +612,15 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       new radixKV(createBV(strKey), createBV32(strValue))
   }
 
+  /*
+        key       |   value
+     111122334455 | 0000...0001
+     11112233AABB | 0000...0002
+     1111AABBCC   | 0000...0003
+     33           | 0000...0004
+     FF0011       | 0000...0005
+     FF012222     | 0000...0006
+   */
   private val treeDataSet = List(
     radixKV("111122334455", "01"),
     radixKV("11112233AABB", "02"),
@@ -584,7 +630,129 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     radixKV("FF012222", "06")
   )
 
+  private val referenceLeafPrefixes = treeDataSet.map(_.rKey)
+  private val referenceLeafValues   = treeDataSet.map(_.rValue)
+
   private val insertActions = createInsertActions(treeDataSet)
+
+  private val exportSettings = ExportDataSettings(
+    flagNodePrefixes = true,
+    flagNodeKeys = true,
+    flagNodeValues = true,
+    flagLeafPrefixes = true,
+    flagLeafValues = true
+  )
+  case class ExportParameters(
+      rootHash: ByteVector, // hash
+      typedStore: KeyValueTypedStore[Task, ByteVector, ByteVector],
+      takeSize: Int,     // take size
+      skipSize: Int,     // skip size
+      withSkip: Boolean, // start with skip is true
+      data: ExportData,
+      lastPrefix: Option[ByteVector] // last prefix
+  )
+
+  case class MultipageExportResults(
+      firstExport: (ExportData, Option[ByteVector]),
+      reconstructExport: (ExportData, Option[ByteVector])
+  )
+
+  def validateMultipageExport(
+      rootHash: ByteVector,
+      store: KeyValueTypedStore[Task, ByteVector, ByteVector],
+      withSkip: Boolean
+  ): Task[MultipageExportResults] = {
+
+    def multipageExport(
+        parameters: ExportParameters
+    ): Task[Either[ExportParameters, ExportParameters]] = {
+      def collectExportData(prevData: ExportData, pageData: ExportData): ExportData =
+        ExportData(
+          prevData.nodePrefixes ++ pageData.nodePrefixes,
+          prevData.nodeKeys ++ pageData.nodeKeys,
+          prevData.nodeValues ++ pageData.nodeValues,
+          prevData.leafPrefixes ++ pageData.leafPrefixes,
+          prevData.leafValues ++ pageData.leafValues
+        )
+      parameters match {
+        case ExportParameters(
+            rootHash,
+            store,
+            takeSize,
+            skipSize,
+            withSkip,
+            exportData,
+            lastPrefix
+            ) =>
+          for {
+            exported <- sequentialExport(
+                         rootHash,
+                         if (withSkip || lastPrefix.get.isEmpty) None else lastPrefix,
+                         if (withSkip) skipSize else 0,
+                         takeSize,
+                         store.get1,
+                         exportSettings
+                       )
+
+            pageExportData = exported._1
+            pageKVDBKeys   = pageExportData.nodeKeys
+            pageKVDBValues = pageExportData.nodeValues
+
+            result = ExportParameters(
+              rootHash,
+              store,
+              takeSize,
+              if (withSkip) skipSize + 2 else skipSize,
+              withSkip,
+              collectExportData(exportData, pageExportData),
+              exported._2
+            )
+
+          } yield
+            if (pageKVDBKeys.isEmpty && pageKVDBValues.isEmpty) result.asRight
+            else result.asLeft
+      }
+    }
+
+    val initSeq        = Seq[ByteVector]()
+    val initExportData = ExportData(initSeq, initSeq, initSeq, initSeq, initSeq)
+    val initParameters = ExportParameters(
+      rootHash,
+      store,
+      takeSize = 2,
+      skipSize = 0,
+      withSkip,
+      initExportData,
+      Option(ByteVector.empty)
+    )
+    for {
+      allExport        <- initParameters.tailRecM(multipageExport)
+      firstExportData  = (allExport.data, allExport.lastPrefix)
+      (exportData1, _) = firstExportData
+      nodeKVDBKeys     = exportData1.nodeKeys
+      nodeKVDBValues   = exportData1.nodeValues
+      localStorage     = (nodeKVDBKeys zip nodeKVDBValues).toMap
+
+      //  Export data from new storage
+      reconstructExportData <- {
+        sequentialExport(
+          rootHash,
+          None,
+          skipSize = 0,
+          takeSize = 100,
+          x => Sync[Task].delay(localStorage.get(x)),
+          exportSettings
+        )
+      }
+
+      //  Data exported from created storage must me equal to data from source store
+      _ = {
+        assert(firstExportData == reconstructExportData, clue = "Error of validation")
+        ()
+      }
+      result = MultipageExportResults(firstExportData, reconstructExportData)
+    } yield (result)
+  }
 
   protected def withImplAndStore(
       f: (
