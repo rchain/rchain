@@ -605,6 +605,24 @@ class DebruijnInterpreter[M[_]: Sync: Parallel: _cost](
             _  <- charge[M](BOOLEAN_OR_COST)
           } yield GBool(b1 || b2)
 
+        case EShortAndBody(EShortAnd(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1)
+            b2 <- if (b1) {
+                   evalToBool(p2)
+                 } else false.pure
+            _ <- charge[M](BOOLEAN_AND_COST)
+          } yield GBool(b1 && b2)
+
+        case EShortOrBody(EShortOr(p1, p2)) =>
+          for {
+            b1 <- evalToBool(p1)
+            b2 <- if (b1) {
+                   true.pure
+                 } else evalToBool(p2)
+            _ <- charge[M](BOOLEAN_OR_COST)
+          } yield GBool(b1 || b2)
+
         case EMatchesBody(EMatches(target, pattern)) =>
           for {
             evaledTarget <- evalExpr(target)
