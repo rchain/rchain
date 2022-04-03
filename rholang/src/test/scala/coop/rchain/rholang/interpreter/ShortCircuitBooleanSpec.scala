@@ -101,7 +101,7 @@ class ShortCircuitBooleanSpec extends WordSpec with Matchers {
   }
 
   "&&" should {
-    "work good with `and`" in {
+    "work with the same precedence with `and`" in {
       val term =
         s"""
            # @"${outcomeCh}"!(false && 1>0 and [1,2].nth(-1))
@@ -118,7 +118,7 @@ class ShortCircuitBooleanSpec extends WordSpec with Matchers {
 
     }
 
-    "work good with `or`" in {
+    "work with higher precedence with `or`" in {
       val term =
         s"""
            # @"${outcomeCh}"!(false && 1>0 or [1,2].nth(-1))
@@ -137,7 +137,7 @@ class ShortCircuitBooleanSpec extends WordSpec with Matchers {
   }
 
   "||" should {
-    "work good with `and`" in {
+    "work with lower precedence with `and`" in {
       val term =
         s"""
            # @"${outcomeCh}"!(false || 1>0 and [1,2].nth(-1))
@@ -153,7 +153,7 @@ class ShortCircuitBooleanSpec extends WordSpec with Matchers {
       execute(term2).runSyncUnsafe(maxDuration) should equal(Right(true))
     }
 
-    "work good with `or`" in {
+    "work with the same precedence with `or`" in {
       val term =
         s"""
            # @"${outcomeCh}"!(false || 1>0 or [1,2].nth(-1))
