@@ -503,26 +503,8 @@ object TestNode {
                  // Block processor
                  blockProcessor = BlockProcessor[F](shardConf)
 
-                 blockProcessingPipe = {
-                   in: fs2.Stream[F, BlockMessage] =>
-                     in.evalMap(b => {
-                       blockProcessor
-                         .checkIfOfInterest(b)
-                         .ifM(
-                           blockProcessor
-                             .checkIfWellFormedAndStore(b)
-                             .ifM(
-                               blockProcessor
-                                 .checkDependenciesWithEffects(b)
-                                 .ifM(
-                                   blockProcessor.validateWithEffects(b),
-                                   BlockStatus.missingBlocks.asLeft[ValidBlock].pure[F]
-                                 ),
-                               BlockStatus.invalidFormat.asLeft[ValidBlock].pure[F]
-                             ),
-                           BlockStatus.notOfInterest.asLeft[ValidBlock].pure[F]
-                         )
-                     })
+                 blockProcessingPipe = { in: fs2.Stream[F, BlockMessage] =>
+                   in.evalMap(b => blockProcessor.validateWithEffects(b))
                  }
                  blockProcessorQueue <- Queue.unbounded[F, BlockMessage]
                  blockProcessorState <- Ref.of[F, Set[BlockHash]](Set.empty)

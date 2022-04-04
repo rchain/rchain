@@ -49,7 +49,7 @@ final class CasperBufferKeyValueStorage[F[_]: Concurrent: Log] private (
     } yield ()
   }
 
-  override def remove(hash: BlockHash): F[Unit] =
+  override def remove(hash: BlockHash): F[Boolean] =
     lock.withPermit(
       for {
         curState                                  <- blockDependencyDag.get
@@ -59,8 +59,8 @@ final class CasperBufferKeyValueStorage[F[_]: Concurrent: Log] private (
         deletes                                   = hashesRemoved.toSeq
         _                                         <- parentsStore.put(changes)
         // If node crush here - KV store end up in inconsistent state. What's the good way to handle it?
-        _ <- parentsStore.delete(deletes)
-      } yield ()
+        deletedCount <- parentsStore.delete(deletes)
+      } yield deletedCount > 0
     )
 
   override def getParents(blockHash: BlockHash): F[Option[Set[BlockHash]]] =

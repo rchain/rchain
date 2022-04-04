@@ -3,6 +3,9 @@ package coop.rchain.node.instances
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.{PrettyPrinter, ProposeFunction, ValidBlockProcessing}
@@ -12,8 +15,9 @@ import fs2.Stream
 import fs2.concurrent.Queue
 
 object BlockProcessorInstance {
-  def create[F[_]: Concurrent: Log](
-      blocksQueue: Queue[F, BlockMessage],
+  def create[F[_]: Concurrent: BlockStore: Log](
+      inputProcessingBlocks: Stream[F, BlockHash],
+      finishedProcessing: Queue[F, BlockHash],
       blockProcessor: BlockProcessor[F],
       state: Ref[F, Set[BlockHash]],
       triggerProposeF: Option[ProposeFunction[F]],
@@ -23,17 +27,13 @@ object BlockProcessorInstance {
     // Node can handle `parallelism` blocks in parallel, or they will be queued
     val parallelism = 100
 
-    val in = blocksQueue.dequeue
-
-    val out = in
+    val out = inputProcessingBlocks
+      .evalMap(BlockStore[F].getUnsafe)
       .map { b =>
         {
           val blockStr                           = PrettyPrinter.buildString(b, short = true)
-          val logNotOfInterest                   = Log[F].info(s"Block $blockStr is not of interest. Dropped")
-          val logMalformed                       = Log[F].info(s"Block $blockStr is not of malformed. Dropped")
-          val logMissingDeps                     = Log[F].info(s"Block $blockStr missing dependencies.")
           val logStarted                         = Log[F].info(s"Block $blockStr processing started.")
-          def logResult(r: ValidBlockProcessing) = Log[F].info(s"Block $blockStr validated: ${r}")
+          def logResult(r: ValidBlockProcessing) = Log[F].info(s"Block $blockStr validated: $r")
           val logFinished                        = Log[F].info(s"Block $blockStr processing finished.")
 
           Stream
@@ -42,27 +42,9 @@ object BlockProcessorInstance {
             .filterNot(
               inProcessing => inProcessing
             )
-            .evalFilter(
-              _ =>
-                blockProcessor.checkIfOfInterest(b) >>= { r =>
-                  logNotOfInterest.unlessA(r).as(r)
-                }
-            )
-            .evalFilter(
-              _ =>
-                blockProcessor.checkIfWellFormedAndStore(b) >>= { r =>
-                  logMalformed.unlessA(r).as(r)
-                }
-            )
             .evalTap { _ =>
               logStarted
             }
-            .evalFilter(
-              _ =>
-                blockProcessor.checkDependenciesWithEffects(b) >>= { r =>
-                  logMissingDeps.unlessA(r).as(r)
-                }
-            )
             .evalMap(
               _ =>
                 blockProcessor.validateWithEffects(b) >>= { r =>
@@ -75,11 +57,11 @@ object BlockProcessorInstance {
                 inProcess      <- state.get
                 _ <- bufferPendants
                       .filterNot(b => inProcess.contains(b.blockHash))
-                      .traverse(b => blocksQueue.enqueue1(b))
+                      .traverse(b => finishedProcessing.enqueue1(b.blockHash))
                 _ <- logFinished
               } yield ()
             }
-            .evalTap { v =>
+            .evalTap { _ =>
               triggerProposeF.traverse(_(true)) whenA autoPropose
             }
             // ensure to remove hash from state
@@ -87,7 +69,6 @@ object BlockProcessorInstance {
         }
       }
       .parJoin(parallelism)
-
     out
   }
 }

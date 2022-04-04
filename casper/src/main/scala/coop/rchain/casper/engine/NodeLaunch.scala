@@ -39,7 +39,7 @@ object NodeLaunch {
     /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       packets: Stream[F, PeerMessage],
@@ -111,7 +111,7 @@ object NodeLaunch {
         // Ask peers for fork choice tips
         _ <- CommUtil[F].sendForkChoiceTipRequest
 
-        pendants <- CasperBufferStorage[F].getPendants
+        pendants <- Set.empty[BlockHash].pure // CasperBufferStorage[F].getPendants
         // pendantsReceived are either
         // 1. blocks that were received while catching up but not end up in casper buffer, e.g. node were restarted
         // or

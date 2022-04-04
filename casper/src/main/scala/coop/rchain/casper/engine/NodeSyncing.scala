@@ -43,7 +43,7 @@ object NodeSyncing {
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       finished: Deferred[F, Unit],
@@ -87,7 +87,7 @@ class NodeSyncing[F[_]
   /* State */       : RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     finished: Deferred[F, Unit],

@@ -7,11 +7,15 @@ import cats.mtl._
 import cats.syntax.all._
 import cats.{~>, Parallel}
 import com.typesafe.config.Config
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
-import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.engine.{BlockReceiver, BlockReceiverState, BlockRetriever, RecvStatus}
+import coop.rchain.casper.engine.BlockRetriever.RequestedBlocks
 import coop.rchain.casper.protocol.{BlockMessage, CommUtil}
+import coop.rchain.casper.rholang.RuntimeManager
 import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.catscontrib.ski._
@@ -20,7 +24,7 @@ import coop.rchain.comm.discovery._
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk, RPConfState}
 import coop.rchain.comm.rp._
 import coop.rchain.comm.transport._
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.monix.Monixable
 import coop.rchain.node.api._
@@ -146,6 +150,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val ti = time
         implicit val me = metrics
         implicit val nd = nodeDiscovery
+        implicit val rb = requestedBlocks
         Setup.setupNodeProgram[F](
           rpConnections,
           rpConfAsk,
@@ -169,8 +174,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         proposerStateRefOpt,
         blockProcessor,
         blockProcessorState,
-        blockProcessorQueue,
-        triggerProposeF
+        triggerProposeF,
+        blockStore,
+        blockDagStorage,
+        storeManager,
+        casperShardConf,
+        runtimeManager,
+        span
       ) = result
 
       // Build main program
@@ -185,6 +195,12 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         implicit val eb = eventBus
         implicit val mt = metrics
         implicit val ti = time
+        implicit val rm = runtimeManager
+        implicit val bs = blockStore
+        implicit val ds = blockDagStorage
+        implicit val cu = commUtil
+        implicit val sp = span
+        implicit val rb = requestedBlocks
         nodeProgram(
           apiServers,
           casperLoop,
@@ -198,8 +214,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           proposerStateRefOpt,
           blockProcessor,
           blockProcessorState,
-          blockProcessorQueue,
-          routingMessageQueue
+          routingMessageQueue,
+          storeManager,
+          casperShardConf
         )
       }
 
@@ -236,8 +253,9 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],
       blockProcessor: BlockProcessor[F],
       blockProcessingState: Ref[F, Set[BlockHash]],
-      incomingBlocksQueue: Queue[F, BlockMessage],
-      routingMessageQueue: Queue[F, RoutingMessage]
+      routingMessageQueue: Queue[F, RoutingMessage],
+      storeManager: KeyValueStoreManager[F],
+      casperShardConf: CasperShardConf
   )(
       implicit
       time: Time[F],
@@ -249,7 +267,13 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
       kademliaStore: KademliaStore[F],
       nodeDiscovery: NodeDiscovery[F],
       rpConnections: ConnectionsCell[F],
-      consumer: EventConsumer[F]
+      consumer: EventConsumer[F],
+      runtimeManager: RuntimeManager[F],
+      blockStore: BlockStore[F],
+      blockDagStorage: BlockDagStorage[F],
+      commUtil: CommUtil[F],
+      span: Span[F],
+      requestedBlocks: RequestedBlocks[F]
   ): F[Unit] = {
 
     val info: F[Unit] =
@@ -339,8 +363,25 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
         )
 
       casperLoopStream = fs2.Stream.eval(casperLoop).repeat
+
+      // Queues for fill BlockReceiver and for notify BlockReceiver about blocks added to the DAG
+      incomingBlocks      <- Queue.unbounded[F, BlockHash]
+      receiverOutputQueue <- Queue.unbounded[F, BlockHash]
+      finishedProcessing  <- Queue.unbounded[F, BlockHash]
+      blockReceiverState  <- Ref[F].of(BlockReceiverState(Map.empty[BlockHash, RecvStatus]))
+
+      blockReceiverStream = BlockReceiver.create(
+        storeManager,
+        incomingBlocks,
+        receiverOutputQueue,
+        finishedProcessing.dequeue,
+        casperShardConf,
+        blockReceiverState
+      )
+
       blockProcessorStream = BlockProcessorInstance.create(
-        incomingBlocksQueue,
+        receiverOutputQueue.dequeue,
+        finishedProcessing,
         blockProcessor,
         blockProcessingState,
         triggerProposeFOpt,
@@ -360,6 +401,7 @@ class NodeRuntime[F[_]: Monixable: ConcurrentEffect: Parallel: Timer: ContextShi
           servers.internalApiServer,
           servers.httpServer,
           servers.adminHttpServer,
+          blockReceiverStream,
           blockProcessorStream,
           proposerStream,
           casperLoopStream,

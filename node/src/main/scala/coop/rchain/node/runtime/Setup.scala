@@ -5,13 +5,15 @@ import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Timer}
 import cats.mtl.ApplicativeAsk
 import cats.syntax.all._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.{approvedStore, BlockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockApiImpl, BlockReportApi}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
 import coop.rchain.casper.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.engine.BlockRetriever.RequestedBlocks
 import coop.rchain.casper.engine.{BlockRetriever, NodeLaunch, NodeRunning, PeerMessage}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{toCasperMessageProto, BlockMessage, CasperMessage, CommUtil}
@@ -43,11 +45,12 @@ import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
 import coop.rchain.shared.syntax.sharedSyntaxFs2Stream
+import coop.rchain.store.KeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
 object Setup {
-  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
+  def setupNodeProgram[F[_]: Monixable: Concurrent: Parallel: ContextShift: RequestedBlocks: Time: Timer: TransportLayer: LocalEnvironment: Log: EventLog: Metrics: NodeDiscovery](
       rpConnections: ConnectionsCell[F],
       rpConfAsk: ApplicativeAsk[F, RPConf],
       commUtil: CommUtil[F],
@@ -69,8 +72,13 @@ object Setup {
         Option[Ref[F, ProposerState[F]]],
         BlockProcessor[F],
         Ref[F, Set[BlockHash]],
-        Queue[F, BlockMessage],
-        Option[ProposeFunction[F]]
+        Option[ProposeFunction[F]],
+        BlockStore[F],
+        BlockDagStorage[F],
+        KeyValueStoreManager[F],
+        CasperShardConf,
+        RuntimeManager[F],
+        Span[F]
     )
   ] =
     for {
@@ -100,9 +108,6 @@ object Setup {
 
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
-
-      // Casper requesting blocks cache
-      casperBufferStorage <- CasperBufferKeyValueStorage.create[F](rnodeStoreManager)
 
       synchronyConstraintChecker = {
         implicit val bs  = blockStore
@@ -178,9 +183,9 @@ object Setup {
       // block processing state - set of items currently in processing
       blockProcessorStateRef <- Ref.of(Set.empty[BlockHash])
       blockProcessor = {
-        implicit val (rm, sp)     = (runtimeManager, span)
-        implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val (br, cb, cu) = (blockRetriever, casperBufferStorage, commUtil)
+        implicit val (rm, sp) = (runtimeManager, span)
+        implicit val (bs, bd) = (blockStore, blockDagStorage)
+        implicit val (br, cu) = (blockRetriever, commUtil)
         BlockProcessor[F](casperShardConf)
       }
 
@@ -192,7 +197,6 @@ object Setup {
       // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd)     = (blockStore, blockDagStorage)
-        implicit val cbs          = casperBufferStorage
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
@@ -240,7 +244,7 @@ object Setup {
 
       nodeLaunch = {
         implicit val (bs, as, bd) = (blockStore, approvedStore, blockDagStorage)
-        implicit val (br, cb, ep) = (blockRetriever, casperBufferStorage, eventPublisher)
+        implicit val (br, ep)     = (blockRetriever, eventPublisher)
         implicit val (lb, ra, rc) = (lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (rm, cu)     = (runtimeManager, commUtil)
@@ -313,11 +317,10 @@ object Setup {
 
       // Infinite loop to trigger request missing dependencies
       casperLoop = {
-        implicit val br             = blockRetriever
-        implicit val (bs, bds, cbs) = (blockStore, blockDagStorage, casperBufferStorage)
+        implicit val br = blockRetriever
         for {
           // Fetch dependencies from CasperBuffer
-          _ <- MultiParentCasper.fetchDependencies
+          // _ <- MultiParentCasper.fetchDependencies
           // Maintain RequestedBlocks for Casper
           _ <- BlockRetriever[F].requestAll(conf.casper.requestedBlocksTimeout)
           _ <- Time[F].sleep(conf.casper.casperLoopInterval)
@@ -351,7 +354,12 @@ object Setup {
       proposerStateRefOpt,
       blockProcessor,
       blockProcessorStateRef,
-      blockProcessorQueue,
-      triggerProposeFOpt
+      triggerProposeFOpt,
+      blockStore,
+      blockDagStorage,
+      rnodeStoreManager,
+      casperShardConf,
+      runtimeManager,
+      span
     )
 }
