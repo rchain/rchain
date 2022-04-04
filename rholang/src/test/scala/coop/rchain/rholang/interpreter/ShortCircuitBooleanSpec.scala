@@ -5,13 +5,12 @@ import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.rholang.Resources.mkRuntime
 import coop.rchain.shared.Log
-import monix.eval.{Coeval, Task}
+import monix.eval.Task
 import org.scalatest.{Matchers, WordSpec}
 import coop.rchain.rholang.syntax._
 
 import scala.concurrent.duration._
 import coop.rchain.models.rholang.implicits._
-import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.{InterpreterError, ReduceError}
 import monix.execution.Scheduler.Implicits.global
 
