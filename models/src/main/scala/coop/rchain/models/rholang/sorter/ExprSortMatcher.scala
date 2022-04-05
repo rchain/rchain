@@ -137,6 +137,23 @@ private[sorter] object ExprSortMatcher extends Sortable[Expr] {
           Node(Score.EOR, sortedPar1.score, sortedPar2.score)
         )
 
+      case EShortAndBody(ea) =>
+        for {
+          sortedPar1 <- Sortable.sortMatch(ea.p1)
+          sortedPar2 <- Sortable.sortMatch(ea.p2)
+        } yield constructExpr(
+          EShortAndBody(EShortAnd(sortedPar1.term, sortedPar2.term)),
+          Node(Score.ESHORTAND, sortedPar1.score, sortedPar2.score)
+        )
+      case EShortOrBody(eo) =>
+        for {
+          sortedPar1 <- Sortable.sortMatch(eo.p1)
+          sortedPar2 <- Sortable.sortMatch(eo.p2)
+        } yield constructExpr(
+          EShortOrBody(EShortOr(sortedPar1.term, sortedPar2.term)),
+          Node(Score.ESHORTOR, sortedPar1.score, sortedPar2.score)
+        )
+
       case EMatchesBody(em) =>
         for {
           sortedTarget  <- Sortable.sortMatch(em.target)

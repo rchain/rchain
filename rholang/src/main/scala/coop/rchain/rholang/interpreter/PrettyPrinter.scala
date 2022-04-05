@@ -90,8 +90,12 @@ final case class PrettyPrinter(
       case EMinusMinusBody(EMinusMinus(p1, p2)) =>
         (buildStringM(p1) |+| pure(" -- ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EAndBody(EAnd(p1, p2)) =>
-        (buildStringM(p1) |+| pure(" && ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+        (buildStringM(p1) |+| pure(" and ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EOrBody(EOr(p1, p2)) =>
+        (buildStringM(p1) |+| pure(" or ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+      case EShortAndBody(EShortAnd(p1, p2)) =>
+        (buildStringM(p1) |+| pure(" && ") |+| buildStringM(p2)).map(_.wrapWithBraces)
+      case EShortOrBody(EShortOr(p1, p2)) =>
         (buildStringM(p1) |+| pure(" || ") |+| buildStringM(p2)).map(_.wrapWithBraces)
       case EEqBody(EEq(p1, p2)) =>
         (buildStringM(p1) |+| pure(" == ") |+| buildStringM(p2)).map(_.wrapWithBraces)
