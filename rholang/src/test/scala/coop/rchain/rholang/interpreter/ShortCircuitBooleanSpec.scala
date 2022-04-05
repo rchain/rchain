@@ -171,34 +171,29 @@ class ShortCircuitBooleanSpec extends WordSpec with Matchers {
 
   "&& and ||" should {
     "substitute right for bound var in embedded scope" in {
-      val term = s""" new ret1, ret2, stdout(`rho:io:stdout`) in {
+      // If substituting don't work in && (or ||) - x1 would be unbound
+      val term = s""" new ret1, ret2 in {
                     #    ret1!(false) |
                     #    for(@x1 <- ret1) {
-                    #        ret2!(x1)|
-                    #        for (@x2 <- ret2){
-                    #          // raise error here if substitute(commit 02f2410848b53afbb266d94c0beef06734be4fc4)
-                    #          // is not enabled
-                    #          // x1 would be unbound
-                    #          // https://discord.com/channels/391435113415573504/958777729791180800/959369185127968779
-                    #          @"${outcomeCh}"!(x2 and not x1 && true)
+                    #        ret2!(Nil)|
+                    #        for (_ <- ret2) {
+                    #            @"${outcomeCh}"!(true && x1)
                     #        }
                     #    }
-                    #
                     #}""".stripMargin('#')
 
       execute(term).runSyncUnsafe(maxDuration) should equal(Right(false))
 
-      val term2 = s""" new ret1, ret2, stdout(`rho:io:stdout`) in {
-                    #    ret1!(false) |
-                    #    for(@x1 <- ret1) {
-                    #        ret2!(x1)|
-                    #        for (@x2 <- ret2){
-                    #          // same like above
-                    #          @"${outcomeCh}"!(x2 and not x1 || true)
-                    #        }
-                    #    }
-                    #
-                    #}""".stripMargin('#')
+      val term2 = s""" new ret1, ret2 in {
+                     #    ret1!(true) |
+                     #    for(@x1 <- ret1) {
+                     #        ret2!(Nil)|
+                     #        for (_ <- ret2){
+                     #          @"${outcomeCh}"!(false || x1)
+                     #        }
+                     #    }
+                     #
+                     #}""".stripMargin('#')
 
       execute(term2).runSyncUnsafe(maxDuration) should equal(Right(true))
     }
