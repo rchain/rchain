@@ -200,7 +200,7 @@ in {
                                     ret!((false, "given data does not match stored data"))
                                   } else {
                                     if (((not unsealed) and nonceConfirmers.contains(pubKey)) or
-                                        (unsealed and nonceConfirmers.contains(unsealers.nth(info.nth(0))))) {
+                                        (unsealed && nonceConfirmers.contains(unsealers.nth(info.nth(0))))) {
                                       @(*multiSig, *nonceMapStore)!(nonceMap) |
                                       ret!((false, "already confirmed"))
                                     } else {
