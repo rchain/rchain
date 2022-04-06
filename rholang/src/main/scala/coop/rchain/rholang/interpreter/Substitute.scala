@@ -303,6 +303,10 @@ object Substitute {
             s2(par1, par2)(EAnd(_, _))
           case EOrBody(EOr(par1, par2)) =>
             s2(par1, par2)(EOr(_, _))
+          case EShortAndBody(EShortAnd(par1, par2)) =>
+            s2(par1, par2)(EShortAnd(_, _))
+          case EShortOrBody(EShortOr(par1, par2)) =>
+            s2(par1, par2)(EShortOr(_, _))
           case EMatchesBody(EMatches(target, pattern)) =>
             s2(target, pattern)(EMatches(_, _))
           case EListBody(EList(ps, locallyFree, connectiveUsed, rem)) =>
