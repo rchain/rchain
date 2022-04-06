@@ -23,9 +23,9 @@ match (
       getDeployerId(`rho:test:deployerId:make`),
       setup,
       testTransferIn,
-      testTransferOut1of1,
-      testTransferOut2of3,
-      testTransferOutRepeat,
+      testTransferBySealerOut1of1,
+      testTransferBySealerOut2of3,
+      testTransferBySealerOutRepeat,
       withVaultAndIdentityOf,
       transfer,
       assertBalances
@@ -36,9 +36,9 @@ match (
           [
             // Because the genesis vault is stateful, the order of these tests matters.
             ("transfer from genesis to Multisig", *testTransferIn),
-            ("transfer from Multisig to genesis 1 of 1", *testTransferOut1of1),
-            ("transfer from Multisig to genesis 2 of 3", *testTransferOut2of3),
-            ("fail when attempting to confirm twice with same sealer", *testTransferOutRepeat)
+            ("transfer from Multisig to genesis 1 of 1 sealers", *testTransferBySealerOut1of1),
+            ("transfer from Multisig to genesis 2 of 3 sealers", *testTransferBySealerOut2of3),
+            ("fail when attempting to confirm twice with same sealer", *testTransferBySealerOutRepeat)
           ])
       } |
 
@@ -76,7 +76,7 @@ match (
         }
       } |
 
-      contract testTransferOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, now in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
@@ -116,7 +116,7 @@ match (
         }
       } |
 
-      contract testTransferOut2of3(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOut2of3(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh,
             carolUnf, carolAuthCh,
             daveUnf, daveAuthCh,
@@ -192,7 +192,7 @@ match (
         }
       } |
 
-      contract testTransferOutRepeat(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOutRepeat(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh,
             carolUnf, carolAuthCh,
             daveUnf, daveAuthCh,
