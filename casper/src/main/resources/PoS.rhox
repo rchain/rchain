@@ -4,6 +4,9 @@
 // initialBonds - the initial bonds map
 // epochLength - the length of the validation epoch in blocks
 // quarantineLength - the length of the quarantine time in blocks
+// numberOfActiveValidators - max number of active validator in a shard
+// posMultiSigPublicKeys - public keys
+// posMultiSigQuorum - how many confirmations are necessary to use multi-sig vault
 /*
 
 Life cycle in POS
@@ -122,13 +125,9 @@ in {
           // Either (false, errorMsg) or (true, (multiSigVault, revAddress, revVault)) are returned on coopVaultCh.
           @MultiSigRevVault!(
             "create",
-            [
-              "04db91a53a2b72fcdcb201031772da86edad1e4979eb6742928d27731b1771e0bc40c9e9c9fa6554bdec041a87cee423d6f2e09e9dfb408b78e85a4aa611aad20c".hexToBytes(),
-              "042a736b30fffcc7d5a58bb9416f7e46180818c82b15542d0a7819d1a437aa7f4b6940c50db73a67bfc5f5ec5b5fa555d24ef8339b03edaa09c096de4ded6eae14".hexToBytes(),
-              "047f0f0f5bbe1d6d1a8dac4d88a3957851940f39a57cd89d55fe25b536ab67e6d76fd3f365c83e5bfe11fe7117e549b1ae3dd39bfc867d1c725a4177692c4e7754".hexToBytes()
-            ],
+            $$posMultiSigPublicKeys$$,
             [],
-            2,
+            $$posMultiSigQuorum$$,
             *coopVaultCh
           )
         }

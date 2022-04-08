@@ -202,8 +202,15 @@ in {
                         // Re-test value
                         if ((val/powers.nth(nybList.nth(n))) % 2 == 0) {
                           // Child node still missing
-                          // Create node, set node to 0
-                          MakeNode!(0, (map, nybList.slice(0, n + 1))) |
+                          // Create node
+                          // if child node is leaf node
+                          // set node to empty {} 
+                          // else set node to 0
+                          if (n + 1 == len){
+                            MakeNode!({}, (map, nybList.slice(0, n + 1)))
+                          }  else {
+                            MakeNode!(0, (map, nybList.slice(0, n + 1)))
+                          } |
                           // Update current node to val | (1 << nybList.nth(n))
                           match nybList.nth(n) {
                             bit => {

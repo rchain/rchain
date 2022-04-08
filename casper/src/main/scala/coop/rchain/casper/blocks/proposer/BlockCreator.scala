@@ -86,24 +86,27 @@ object BlockCreator {
               )
         } yield slashingDeploys
 
-      def prepareDummyDeploy(blockNumber: Long): Seq[Signed[DeployData]] = dummyDeployOpt match {
-        case Some((privateKey, term)) =>
-          Seq(
-            ConstructDeploy.sourceDeployNow(
-              source = term,
-              sec = privateKey,
-              vabn = blockNumber - 1
+      def prepareDummyDeploy(blockNumber: Long, shardId: String): Seq[Signed[DeployData]] =
+        dummyDeployOpt match {
+          case Some((privateKey, term)) =>
+            Seq(
+              ConstructDeploy.sourceDeployNow(
+                source = term,
+                sec = privateKey,
+                vabn = blockNumber - 1,
+                shardId = shardId
+              )
             )
-          )
-        case None => Seq.empty[Signed[DeployData]]
-      }
+          case None => Seq.empty[Signed[DeployData]]
+        }
 
       val createBlockProcess = for {
         _ <- Log[F].info(
               s"Creating block #${nextBlockNum} (seqNum ${nextSeqNum})"
             )
+        shardId         = s.onChainState.shardConf.shardName
         userDeploys     <- prepareUserDeploys(nextBlockNum)
-        dummyDeploys    = prepareDummyDeploy(nextBlockNum)
+        dummyDeploys    = prepareDummyDeploy(nextBlockNum, shardId)
         slashingDeploys <- prepareSlashingDeploys(nextSeqNum)
         // make sure closeBlock is the last system Deploy
         systemDeploys = slashingDeploys :+ CloseBlockDeploy(
@@ -134,7 +137,6 @@ object BlockCreator {
                 )             = checkpointData
                 newBonds      <- runtimeManager.computeBonds(postStateHash)
                 _             <- Span[F].mark("before-packing-block")
-                shardId       = s.onChainState.shardConf.shardName
                 casperVersion = s.onChainState.shardConf.casperVersion
                 // unsignedBlock got blockHash(hashed without signature)
                 unsignedBlock = packageBlock(

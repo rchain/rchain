@@ -21,7 +21,6 @@ new
   rb(`rho:registry:insertBlessed`),
   rs(`rho:registry:insertSigned:secp256k1`), uriOut,
   rl(`rho:registry:lookup`),
-  _fromPublicKey,
   _multiSigRevVault,
   RevVaultCh,
   AuthKeyCh,
@@ -63,26 +62,11 @@ in {
     } |
     // Returns a MultiSigRevVault auth key for `deployerId` on `ret`
     contract MultiSigRevVault(@"deployerAuthKey", deployerId, ret) = {
-      new
-        DeployerIdOps(`rho:rchain:deployerId:ops`),
-        revAddrCh,
-        deployerPubKeyBytesCh
-      in {
+      new DeployerIdOps(`rho:rchain:deployerId:ops`), deployerPubKeyBytesCh in {
         DeployerIdOps!("pubKeyBytes", *deployerId, *deployerPubKeyBytesCh) |
-        for (@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
-          _fromPublicKey!(deployerPubKeyBytes, *ret)
-        }
-      }
-    } |
-    // Returns a MultiSigRevVault auth key for `publickey` on `ret`
-    contract _fromPublicKey(@publicKey, ret) = {
-      new
-        revAddrCh,
-        RevAddress(`rho:rev:address`)
-      in {
-        RevAddress!("fromPublicKey", publicKey, *revAddrCh) |
-        for (@revAddress <- revAddrCh) {
-          @AuthKey!("make", (*_multiSigRevVault, revAddress), *ret)
+        // Create auth token with deployer public key
+        for(@deployerPubKeyBytes <- deployerPubKeyBytesCh) {
+          @AuthKey!("make", (*_multiSigRevVault, deployerPubKeyBytes), *ret)
         }
       }
     } |
@@ -92,27 +76,11 @@ in {
       if (quorumSize > publicKeys.length() + unsealers.length() or quorumSize <= 0) {
         ret!((false, "invalid quorum size"))
       } else {
-        new
-          unf,
-          authKeyCh,
-          authPubKeysCh,
-          RevAddress(`rho:rev:address`),
-          revAddrCh
-        in {
+        new unf, authKeyCh, RevAddress(`rho:rev:address`), revAddrCh in {
           RevAddress!("fromUnforgeable", *unf, *revAddrCh) |
           @RevVault!("unforgeableAuthKey", *unf, *authKeyCh) |
-          @ListOps!("map", publicKeys, *_fromPublicKey, *authPubKeysCh) |
-          for (@revAddr         <- revAddrCh&       // revAddr         = Rev address of the multisig vault
-               @revVaultAuthKey <- authKeyCh&       // revVaultAuthKey = auth key for the multisig Rev vault
-               @authPubKeys     <- authPubKeysCh) { // authPubKeys     = list of each public key's auth key
-            new
-              multiSig,
-              nonceStore,
-              nonceMapStore,
-              revVaultCh,
-              verify
-            in {
-              // create the multisig Rev vault
+          for (@revVaultAuthKey <- authKeyCh & @revAddr <- revAddrCh) {
+            new multiSig, nonceStore, nonceMapStore, revVaultCh, verify in {
               @RevVault!("findOrCreate", revAddr, *revVaultCh) |
               for (@maybeRevVault <- revVaultCh) {
                 match maybeRevVault {
@@ -131,10 +99,28 @@ in {
                       @revVault!("balance", *ret)
                     } |
 
-                    contract verify(@auth, idxAuthPubKeysCh, unsealedCh) = {
-                      new unsealerTest in {
-                        // Check whether auth is in the list of authPubKeys
-                        @ListOps!("indexOf", authPubKeys, auth, *idxAuthPubKeysCh) |
+                    contract verify(@auth, pubKeysCh, unsealedCh) = {
+                      new unsealerTest, loopFindAny in {
+                        // Check whether auth is valid to any public key
+                        loopFindAny!(publicKeys, *pubKeysCh) |
+                        // Returns either
+                        //   (true, pubKey)  if auth is valid (public key is found)
+                        //   (false, Nil)    if auth is not valid
+                        contract loopFindAny(@list, loopAnyRet) = {
+                          match list {
+                            [] => loopAnyRet!((false, Nil))
+                            [pubKey ... rest] => {
+                              new authCheckRet in {
+                                @AuthKey!("check", auth, (*_multiSigRevVault, pubKey), *authCheckRet) |
+                                for (@isValid <- authCheckRet) {
+                                  if (isValid) loopAnyRet!((true, pubKey))
+                                  else loopFindAny!(rest, *loopAnyRet)
+                                }
+                              }
+                            }
+                          }
+                        } |
+
                         // Check whether auth is a sealed tuple
                         @ListOps!("partialFold", unsealers, (-1, Nil), *unsealerTest, *unsealedCh) |
                         contract unsealerTest(head, @(prevPos, _), result) = {
@@ -154,11 +140,10 @@ in {
                     //         (true, (false, "done")) when only one sig required
                     //         (false, errorMsg) on failure
                     contract multiSig(@"transfer", @targetRevAddress, @amount, @auth, ret) = {
-                      new idxAuthPubKeysCh, unsealedCh in {
-                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh&
-                             @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
+                      new pubKeysCh, unsealedCh in {
+                        verify!(auth, *pubKeysCh, *unsealedCh) |
+                        for (@(hasPubKey, pubKey) <- pubKeysCh & @unsealed, @info <- unsealedCh) {
+                          if (hasPubKey or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, *ret))) {
                             for (@nonce <- @(*multiSig, *nonceStore) & @nonceMap <- @(*multiSig, *nonceMapStore)) {
                               @(*multiSig, *nonceStore)!(nonce + 1) |
                               if (quorumSize == 1) {
@@ -182,7 +167,7 @@ in {
                                 } else {
                                   // If a human is confirming, record which deployerAuthKey was used
                                   @(*multiSig, *nonceMapStore)!(
-                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(auth)))
+                                    nonceMap.set(nonce, (targetRevAddress, amount, Set(pubKey)))
                                   )
                                 } |
                                 ret!((true, (true, nonce)))
@@ -201,11 +186,10 @@ in {
                     //         (true, (false, "done")) when all required sigs have been provided
                     //         (false, errorMsg) on failure
                     contract multiSig(@"confirm", @targetRevAddress, @amount, @auth, @nonce, ret) = {
-                      new idxAuthPubKeysCh, unsealedCh in {
-                        verify!(auth, *idxAuthPubKeysCh, *unsealedCh) |
-                        for (@idxAuthPubKeys  <- idxAuthPubKeysCh&
-                             @unsealed, @info <- unsealedCh) {
-                          if (idxAuthPubKeys >= 0 or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
+                      new pubKeysCh, unsealedCh in {
+                        verify!(auth, *pubKeysCh, *unsealedCh) |
+                        for (@(hasPubKey, pubKey) <- pubKeysCh & @unsealed, @info <- unsealedCh) {
+                          if (hasPubKey or (unsealed and info.nth(1) == (bundle+{*multiSig}, targetRevAddress, amount, nonce, *ret))) {
                             for (@nonceMap <- @(*multiSig, *nonceMapStore)) {
                               match nonceMap.get(nonce) {
                                 Nil => {
@@ -218,7 +202,7 @@ in {
                                     @(*multiSig, *nonceMapStore)!(nonceMap) |
                                     ret!((false, "given data does not match stored data"))
                                   } else {
-                                    if (((not unsealed) and nonceConfirmers.contains(auth)) or
+                                    if (((not unsealed) and nonceConfirmers.contains(pubKey)) or
                                         (unsealed and nonceConfirmers.contains(unsealers.nth(info.nth(0))))) {
                                       @(*multiSig, *nonceMapStore)!(nonceMap) |
                                       ret!((false, "already confirmed"))
@@ -249,7 +233,7 @@ in {
                                           // If a human is confirming, record which deployerAuthKey was used
                                           @(*multiSig, *nonceMapStore)!(
                                             nonceMap.set(nonce,
-                                              (targetRevAddress, amount, nonceConfirmers.add(auth))
+                                              (targetRevAddress, amount, nonceConfirmers.add(pubKey))
                                             )
                                           )
                                         } |
