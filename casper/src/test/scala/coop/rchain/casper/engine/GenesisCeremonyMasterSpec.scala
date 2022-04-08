@@ -1,16 +1,13 @@
 package coop.rchain.casper.engine
 
-import cats._
-import cats.data._
-import cats.syntax.all._
-import cats.effect._
 import cats.effect.concurrent.Ref
+import cats.syntax.all._
 import coop.rchain.casper._
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
-import fs2.concurrent.Queue
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -57,7 +54,9 @@ class GenesisCeremonyMasterSpec extends WordSpec {
             fixture.blockProcessingState,
             fixture.casperShardConf,
             Some(validatorId),
-            disableStateExporter = true
+            disableStateExporter = true,
+            blockStore,
+            approvedStore
           )
           .startAndForget
           .runToFuture
@@ -70,7 +69,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
         //wait until casper is defined, with a timeout (indicating failure)
         possiblyCasper  <- Task.racePair(Task.sleep(3.minute), waitUtilCasperIsDefined)
         _               = assert(possiblyCasper.isRight)
-        blockO          <- blockStore.get(genesis.blockHash)
+        blockO          <- blockStore.get1(genesis.blockHash)
         _               = assert(blockO.isDefined)
         _               = assert(blockO.contains(genesis))
         handlerInternal <- EngineCell[Task].read

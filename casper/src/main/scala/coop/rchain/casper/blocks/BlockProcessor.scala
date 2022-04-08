@@ -2,7 +2,7 @@ package coop.rchain.casper.blocks
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper._
@@ -14,6 +14,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
+import coop.rchain.store.KeyValueTypedStoreSyntaxObj._
 
 /**
   * Logic for processing incoming blocks
@@ -115,15 +116,15 @@ object BlockProcessor {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent
-  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage 
+  /* Storage */     : BlockDagStorage: CasperBufferStorage 
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
-  (
+  (blockStore: BlockStore[F])(
       implicit casperBuffer: CasperBufferStorage[F]
   ): BlockProcessor[F] = {
 
-    val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
+    val storeBlock = (b: BlockMessage) => blockStore.put(b.blockHash, b)
 
     val getCasperStateSnapshot = (c: Casper[F]) => c.getSnapshot
 

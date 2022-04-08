@@ -5,8 +5,9 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.{
@@ -15,7 +16,7 @@ import coop.rchain.casper.protocol.{
   ProcessedSystemDeploy,
   SystemDeployData
 }
-import coop.rchain.casper.syntax._
+import coop.rchain.casper.syntax.casperSyntaxRholangRuntimeReplay
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.metrics.Metrics.Source
@@ -85,8 +86,9 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
-      rspaceStore: RSpaceStore[F]
+  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockDagStorage](
+      rspaceStore: RSpaceStore[F],
+      approvedStore: ApprovedStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
       override def trace(
@@ -97,7 +99,7 @@ object ReportingCasper {
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           // TODO approvedBlock is not equal to genesisBlock
-          genesis          <- BlockStore[F].getApprovedBlock
+          genesis          <- approvedStore.getApprovedBlock
           isGenesis        = genesis.exists(a => block.blockHash == a.candidate.block.blockHash)
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks = invalidBlocksSet

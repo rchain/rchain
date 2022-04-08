@@ -10,9 +10,9 @@ import coop.rchain.catscontrib.ski._
 import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
-import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Cell, EventPublisher}
 import fs2.concurrent.Queue
 import monix.eval.Task
@@ -52,7 +52,9 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
           blockResponseQueue,
           stateResponseQueue,
           trimState = true,
-          disableStateExporter = false
+          disableStateExporter = false,
+          blockStore,
+          approvedStore
         )
 
       val approvedBlockCandidate = ApprovedBlockCandidate(block = genesis, requiredSigs = 0)
@@ -135,7 +137,7 @@ class InitializingSpec extends WordSpec with BeforeAndAfterEach {
         engine          <- EngineCell[Task].read
         casperDefined   <- engine.withCasper(kp(true.pure[Task]), false.pure[Task])
         _               = assert(casperDefined)
-        blockO          <- blockStore.get(genesis.blockHash)
+        blockO          <- blockStore.get1(genesis.blockHash)
         _               = assert(blockO.isDefined)
         _               = assert(blockO.contains(genesis))
         handlerInternal <- EngineCell[Task].read

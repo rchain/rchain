@@ -5,11 +5,14 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
+import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer._
@@ -23,7 +26,6 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
-import coop.rchain.casper._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -74,6 +76,7 @@ case class TestNode[F[_]: Timer](
       ValidBlockProcessing
     ],
     blockStoreEffect: BlockStore[F],
+    approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
     deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
@@ -108,6 +111,7 @@ case class TestNode[F[_]: Timer](
   implicit val logEff: LogStub[F]                             = logEffect
   implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
+  implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
@@ -159,7 +163,8 @@ case class TestNode[F[_]: Timer](
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     shardConf,
-    genesis
+    genesis,
+    blockStore
   )
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
@@ -171,7 +176,8 @@ case class TestNode[F[_]: Timer](
       approvedBlock,
       validatorId,
       ().pure[F],
-      true
+      true,
+      blockStore
     )
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
@@ -234,7 +240,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, blockStore = blockStore)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -243,7 +249,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get)
+      createBlockResult <- BlockCreator.create(cs, vid.get, blockStore = blockStore)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -360,7 +366,8 @@ case class TestNode[F[_]: Timer](
                      ts,
                      lfb,
                      GraphConfig(showJustificationLines = true),
-                     ser
+                     ser,
+                     blockStore
                    ),
                  ref.get.map(_.toString)
                )
@@ -495,7 +502,8 @@ object TestNode {
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
       kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockStore          <- Resource.eval(BlockStore(kvm))
+      approvedStore       <- Resource.eval(ApprovedStore(kvm))
       blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
       deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
@@ -507,6 +515,7 @@ object TestNode {
 
       node <- Resource.eval({
                implicit val bs                         = blockStore
+               implicit val as                         = approvedStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage
                implicit val cbs                        = casperBufferStorage
@@ -538,7 +547,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi).some
+                   case Some(vi) => Proposer[F](vi, blockStore = blockStore).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous
@@ -552,7 +561,7 @@ object TestNode {
                        } yield r
                  )
                  // Block processor
-                 blockProcessor = BlockProcessor[F]
+                 blockProcessor = BlockProcessor[F](blockStore)
 
                  blockProcessingPipe = {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>
@@ -597,6 +606,7 @@ object TestNode {
                    blockProcessorState = blockProcessorState,
                    blockProcessingPipe = blockProcessingPipe,
                    blockStoreEffect = bs,
+                   approvedStoreEffect = as,
                    blockDagStorageEffect = bds,
                    deployStorageEffect = ds,
                    casperBufferStorageEffect = cbs,

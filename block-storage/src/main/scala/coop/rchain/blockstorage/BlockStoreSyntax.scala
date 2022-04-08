@@ -2,10 +2,11 @@ package coop.rchain.blockstorage
 
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
-import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.casper.protocol.{BlockMessage, ProcessedDeploy}
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.shared.syntax._
 
 trait BlockStoreSyntax {
   implicit final def syntaxBlockStore[F[_]: Sync](
@@ -43,7 +44,7 @@ final class BlockStoreOps[F[_]: Sync](
   ): F[BlockMessage] = {
     def source = s"${file.value}:${line.value} ${enclosing.value}"
     def errMsg = s"BlockStore is missing hash ${PrettyPrinter.buildString(hash)}\n  $source"
-    blockStore.get(hash) >>= (_.liftTo(BlockStoreInconsistencyError(errMsg)))
+    blockStore.get1(hash) >>= (_.liftTo(BlockStoreInconsistencyError(errMsg)))
   }
 
   def getUnsafe(

@@ -2,12 +2,13 @@ package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{
   BlockDagKeyValueStorage,
   BlockDagStorage,
   IndexedBlockDagStorage
 }
-import coop.rchain.blockstorage.{KeyValueBlockStore, _}
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.util.GenesisBuilder.GenesisContext
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
@@ -35,7 +36,7 @@ trait BlockDagStorageFixture extends BeforeAndAfter { self: Suite =>
     def create(dir: Path) =
       for {
         kvm        <- Resources.mkTestRNodeStoreManager[Task](dir)
-        blocks     <- KeyValueBlockStore[Task](kvm)
+        blocks     <- BlockStore[Task](kvm)
         dag        <- BlockDagKeyValueStorage.create[Task](kvm)
         indexedDag <- IndexedBlockDagStorage.create[Task](dag)
         runtime    <- Resources.mkRuntimeManagerAt[Task](kvm)
@@ -66,7 +67,7 @@ object BlockDagStorageTestFixture {
   ): F[BlockStore[F]] =
     for {
       storeManager <- RNodeKeyValueStoreManager[F](blockStorageDir)
-      blockStore   <- KeyValueBlockStore[F](storeManager)
+      blockStore   <- BlockStore[F](storeManager)
     } yield blockStore
 
   def createBlockDagStorage[F[_]: Concurrent](blockDagStorageDir: Path)(
@@ -84,7 +85,7 @@ object BlockDagStorageTestFixture {
     def create(dir: Path) =
       for {
         kvm        <- Resources.mkTestRNodeStoreManager[F](dir)
-        blocks     <- KeyValueBlockStore[F](kvm)
+        blocks     <- BlockStore[F](kvm)
         dag        <- BlockDagKeyValueStorage.create[F](kvm)
         indexedDag <- IndexedBlockDagStorage.create[F](dag)
       } yield (blocks, indexedDag)

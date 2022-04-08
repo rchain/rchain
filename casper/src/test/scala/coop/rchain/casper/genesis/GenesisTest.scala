@@ -4,7 +4,6 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.genesis.Genesis.createGenesisBlock
 import coop.rchain.casper.genesis.contracts.{ProofOfStake, Validator}
@@ -15,11 +14,12 @@ import coop.rchain.casper.util.{BondsParser, GenesisBuilder, ProtoUtil, VaultPar
 import coop.rchain.casper.{CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.metrics
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
-import coop.rchain.models.syntax._
 import coop.rchain.shared.PathOps.RichPath
-import coop.rchain.shared.{Base16, Time}
+import coop.rchain.shared.Time
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
@@ -193,13 +193,14 @@ class GenesisTest extends FlatSpec with Matchers with EitherValues with BlockDag
           for {
             genesis <- fromInputFiles()(runtimeManager, genesisPath, log, time)
             _       <- blockDagStorage.insert(genesis, false, approved = true)
-            _       <- BlockStore[Task].put(genesis.blockHash, genesis)
+            _       <- blockStore.put(genesis.blockHash, genesis)
             dag     <- blockDagStorage.getRepresentation
             maybePostGenesisStateHash <- InterpreterUtil
                                           .validateBlockCheckpoint[Task](
                                             genesis,
                                             mkCasperSnapshot(dag),
-                                            runtimeManager
+                                            runtimeManager,
+                                            blockStore
                                           )
           } yield maybePostGenesisStateHash should matchPattern { case Right(Some(_)) => }
       }

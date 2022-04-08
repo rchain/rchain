@@ -1,10 +1,9 @@
 package coop.rchain.casper.api
 
-import cats.{Monad, _}
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import cats.{Monad, _}
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.syntax._
 import coop.rchain.catscontrib.Catscontrib._
@@ -33,14 +32,15 @@ object GraphzGenerator {
     def empty: DagInfo = DagInfo(validators = Map.empty, timeseries = List.empty)
   }
 
-  def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log: BlockStore](
+  def dagAsCluster[F[_]: Monad: Sync: Concurrent: Log](
       topoSort: Vector[Vector[BlockHash]],
       lastFinalizedBlockHash: String,
       config: GraphConfig,
-      ser: GraphSerializer[F]
+      ser: GraphSerializer[F],
+      blockStore: BlockStore[F]
   ): F[Graphz[F]] =
     for {
-      acc            <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _))
+      acc            <- topoSort.foldM(DagInfo.empty)(accumulateDagInfo[F](_, _, blockStore))
       timeseries     = acc.timeseries.reverse
       firstTs        = timeseries.head
       validators     = acc.validators
@@ -85,12 +85,13 @@ object GraphzGenerator {
       _ <- g.close
     } yield g
 
-  private def accumulateDagInfo[F[_]: Monad: Sync: Log: BlockStore](
+  private def accumulateDagInfo[F[_]: Monad: Sync: Log](
       acc: DagInfo,
-      blockHashes: Vector[BlockHash]
+      blockHashes: Vector[BlockHash],
+      blockStore: BlockStore[F]
   ): F[DagInfo] =
     for {
-      blocks    <- blockHashes.traverse(BlockStore[F].getUnsafe)
+      blocks    <- blockHashes.traverse(blockStore.getUnsafe)
       timeEntry = blocks.head.body.state.blockNumber
       validators = blocks.toList.map { b =>
         val blockHash       = PrettyPrinter.buildString(b.blockHash)

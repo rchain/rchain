@@ -1,7 +1,8 @@
 package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.blockstorage.BlockStore.{blockMessageToBytes, bytesToBlockMessage}
+import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
@@ -20,9 +21,24 @@ object codecs {
 
   val codecBlockHash = xmapToByteString(bytes(BlockHash.Length))
 
+  val codecApprovedBlockHash = xmapToByteString(bytes(1)) // Length of approvedBlockKey is just 1 byte
+
   val codecBlockMetadata = variableSizeBytes(uint16, bytes).xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
     blockMetadata => ByteVector(blockMetadata.toByteString.toByteArray)
+  )
+
+  val codecBlockMessage = variableSizeBytesLong(uint32, bytes).xmap[BlockMessage](
+    byteVector => bytesToBlockMessage(byteVector.toArray),
+    blockMessage => ByteVector(blockMessageToBytes(blockMessage))
+  )
+
+  val codecApprovedBlock = variableSizeBytesLong(uint32, bytes).xmap[ApprovedBlock](
+    byteVector =>
+      ApprovedBlock
+        .from(ApprovedBlockProto.parseFrom(byteVector.toArray))
+        .getOrElse(ApprovedBlock.empty),
+    approvedBlock => ByteVector(approvedBlock.toProto.toByteString.toByteArray)
   )
 
   val codecValidator = xmapToByteString(bytes(Validator.Length))

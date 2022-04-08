@@ -4,7 +4,8 @@ import cats.Parallel
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
@@ -22,6 +23,7 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared._
+import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 
 trait CasperLaunch[F[_]] {
@@ -37,7 +39,7 @@ object CasperLaunch {
     /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -45,7 +47,9 @@ object CasperLaunch {
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      blockStore: BlockStore[F],
+      approvedStore: ApprovedStore[F]
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
       val casperShardConf = CasperShardConf(
@@ -67,7 +71,7 @@ object CasperLaunch {
         conf.minPhloPrice
       )
       def launch(): F[Unit] =
-        BlockStore[F].getApprovedBlock map {
+        approvedStore.getApprovedBlock map {
           case Some(approvedBlock) =>
             val msg = "Approved block found, reconnecting to existing network"
             val action =
@@ -107,7 +111,7 @@ object CasperLaunch {
             // or
             // 2. blocks which dependencies are in DAG, so they can be added to DAG
             // In both scenarios the way to proceed is to send them to Casper
-            pendantsStored <- pendants.toList.filterA(BlockStore[F].contains)
+            pendantsStored <- pendants.toList.filterA(blockStore.contains(_))
             _ <- Log[F].info(
                   s"Checking pendant hashes: ${pendantsStored.size} items in CasperBuffer."
                 )
@@ -117,7 +121,7 @@ object CasperLaunch {
                   .traverse_(
                     hash =>
                       for {
-                        block <- BlockStore[F].get(hash).map(_.get)
+                        block <- blockStore.get1(hash).map(_.get)
                         _ <- Log[F].info(
                               s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
                                 s"is available in BlockStore, sending to Casper."
@@ -142,7 +146,8 @@ object CasperLaunch {
                      .hashSetCasper[F](
                        validatorId,
                        casperShardConf,
-                       ab
+                       ab,
+                       blockStore
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
@@ -158,7 +163,8 @@ object CasperLaunch {
                   approvedBlock,
                   validatorId,
                   init,
-                  disableStateExporter
+                  disableStateExporter,
+                  blockStore
                 )
         } yield ()
       }
@@ -193,7 +199,9 @@ object CasperLaunch {
                   blocksInProcessing,
                   casperShardConf,
                   validatorId.get,
-                  bap
+                  bap,
+                  blockStore,
+                  approvedStore
                 )
               )
         } yield ()
@@ -229,7 +237,9 @@ object CasperLaunch {
                     blocksInProcessing,
                     casperShardConf,
                     validatorId,
-                    disableStateExporter
+                    disableStateExporter,
+                    blockStore,
+                    approvedStore
                   )
               )
           _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
@@ -250,7 +260,9 @@ object CasperLaunch {
                 // from genesis to the most recent one (default)
                 CommUtil[F].requestApprovedBlock(trimState),
                 trimState,
-                disableStateExporter
+                disableStateExporter,
+                blockStore,
+                approvedStore
               )
         } yield ()
 

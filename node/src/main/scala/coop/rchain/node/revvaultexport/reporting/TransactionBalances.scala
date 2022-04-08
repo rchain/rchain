@@ -4,8 +4,9 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
-import coop.rchain.blockstorage.{BlockStore, KeyValueBlockStore}
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
@@ -15,22 +16,15 @@ import coop.rchain.casper.util.{BondsParser, VaultParser}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.node.revvaultexport.RhoTrieTraverser
-import coop.rchain.node.web.{
-  CloseBlock,
-  PreCharge,
-  Refund,
-  SlashingDeploy,
-  Transaction,
-  TransactionInfo,
-  UserDeploy
-}
+import coop.rchain.node.web._
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.models.syntax._
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Base16, Log}
 
 import java.nio.file.{Files, Path}
@@ -211,7 +205,7 @@ object TransactionBalances {
     for {
       blocks    <- dag.topoSort(blockNumber.toLong, Some(blockNumber.toLong))
       blockHash = blocks.flatten.head
-      block     <- blockStore.get(blockHash)
+      block     <- blockStore.get1(blockHash)
       blockMes  = block.get
     } yield blockMes
 
@@ -230,7 +224,7 @@ object TransactionBalances {
     implicit val m: Match[F, BindPattern, ListParWithRandom] = matchListPar[F]
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
-      blockStore        <- KeyValueBlockStore(rnodeStoreManager)
+      blockStore        <- BlockStore(rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[F, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -246,7 +240,7 @@ object TransactionBalances {
                      Par()
                    )
       (rhoRuntime, _)    = runtimes
-      targetBlockOpt     <- blockStore.get(targetBlockHash.unsafeHexToByteString)
+      targetBlockOpt     <- blockStore.get1(targetBlockHash.unsafeHexToByteString)
       targetBlock        = targetBlockOpt.get
       _                  <- log.info(s"Getting balance from $targetBlock")
       genesisVaultMap    <- getGenesisVaultMap(walletPath, bondPath, rhoRuntime, targetBlock)

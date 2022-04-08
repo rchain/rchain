@@ -5,7 +5,7 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
@@ -18,16 +18,18 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.Base16
+import coop.rchain.shared.syntax._
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable
 import scala.collection.immutable.Map
 
 object ProtoUtil {
-  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
+  def getMainChainUntilDepth[F[_]: Sync](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
-      depth: Int
+      depth: Int,
+      blockStore: BlockStore[F]
   ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
@@ -35,7 +37,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- BlockStore[F].getUnsafe(mainParentHash)
+                        updatedEstimate <- blockStore.getUnsafe(mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta.toInt
                         mainChain <- if (newDepth <= 0) {
@@ -44,7 +46,8 @@ object ProtoUtil {
                                       getMainChainUntilDepth(
                                         updatedEstimate,
                                         acc :+ estimate,
-                                        newDepth
+                                        newDepth,
+                                        blockStore
                                       )
                                     }
                       } yield mainChain
@@ -106,9 +109,12 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
+  def mainParent[F[_]: Monad](
+      blockMessage: BlockMessage,
+      blockStore: BlockStore[F]
+  ): F[Option[BlockMessage]] = {
     import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
+    blockMessage.header.parentsHashList.headOption.flatTraverse(blockStore.get1)
   }
 
   def weightFromValidatorByDag[F[_]: Monad](
@@ -131,26 +137,27 @@ object ProtoUtil {
     } yield result
   }
 
-  def weightFromValidator[F[_]: Monad: BlockStore](
+  def weightFromValidator[F[_]: Monad](
       b: BlockMessage,
-      validator: ByteString
+      validator: ByteString,
+      blockStore: BlockStore[F]
   ): F[Long] =
     for {
-      maybeMainParent <- mainParent(b)
+      maybeMainParent <- mainParent(b, blockStore)
       weightFromValidator = maybeMainParent
         .map(weightMap(_).getOrElse(validator, 0L))
         .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
-    weightFromValidator(b, b.sender)
+  def weightFromSender[F[_]: Monad](b: BlockMessage, blockStore: BlockStore[F]): F[Long] =
+    weightFromValidator(b, b.sender, blockStore)
 
   def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
-  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
+  def getParents[F[_]: Sync](b: BlockMessage, blockStore: BlockStore[F]): F[List[BlockMessage]] = {
     import cats.instances.list._
-    parentHashes(b).traverse(BlockStore[F].getUnsafe)
+    parentHashes(b).traverse(blockStore.getUnsafe)
   }
 
   def getParentsMetadata[F[_]: Sync](
@@ -215,7 +222,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Sync: BlockStore](
+  def toLatestMessage[F[_]: Sync](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] = {
@@ -317,7 +324,7 @@ object ProtoUtil {
   }
 
   // Return hashes of all blocks that are yet to be seen by the passed in block
-  def unseenBlockHashes[F[_]: Sync: BlockStore](
+  def unseenBlockHashes[F[_]: Sync](
       dag: BlockDagRepresentation[F],
       block: BlockMessage
   ): F[Set[BlockHash]] = {

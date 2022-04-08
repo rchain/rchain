@@ -1,14 +1,12 @@
 package coop.rchain.casper.util
 
-import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.protocol.BlockMessage
-import coop.rchain.models.BlockMetadata
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
+import coop.rchain.shared.scalatestcontrib.AnyShouldF
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
-import coop.rchain.blockstorage.syntax._
-import coop.rchain.shared.scalatestcontrib.AnyShouldF
 
 class CasperUtilTest
     extends FlatSpec
@@ -19,9 +17,9 @@ class CasperUtilTest
   "isInMainChain" should "classify appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createGenesis[Task]()
-        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
-        b3      <- createBlock[Task](Seq(b2.blockHash), genesis)
+        genesis <- createGenesis[Task](blockStore = blockStore)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, blockStore = blockStore)
+        b3      <- createBlock[Task](Seq(b2.blockHash), genesis, blockStore = blockStore)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -35,10 +33,10 @@ class CasperUtilTest
   "isInMainChain" should "classify diamond DAGs appropriately" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        genesis <- createGenesis[Task]()
-        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
-        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis)
-        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), genesis)
+        genesis <- createGenesis[Task](blockStore = blockStore)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, blockStore = blockStore)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, blockStore = blockStore)
+        b4      <- createBlock[Task](Seq(b2.blockHash, b3.blockHash), genesis, blockStore = blockStore)
 
         dag <- blockDagStorage.getRepresentation
 
@@ -57,14 +55,14 @@ class CasperUtilTest
       val v2 = generateValidator("Validator Two")
 
       for {
-        genesis <- createGenesis[Task]()
-        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, v2)
-        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, v1)
-        b4      <- createBlock[Task](Seq(b2.blockHash), genesis, v2)
-        b5      <- createBlock[Task](Seq(b2.blockHash), genesis, v1)
-        b6      <- createBlock[Task](Seq(b4.blockHash), genesis, v2)
-        b7      <- createBlock[Task](Seq(b4.blockHash), genesis, v1)
-        b8      <- createBlock[Task](Seq(b7.blockHash), genesis, v1)
+        genesis <- createGenesis[Task](blockStore = blockStore)
+        b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, v2, blockStore = blockStore)
+        b3      <- createBlock[Task](Seq(genesis.blockHash), genesis, v1, blockStore = blockStore)
+        b4      <- createBlock[Task](Seq(b2.blockHash), genesis, v2, blockStore = blockStore)
+        b5      <- createBlock[Task](Seq(b2.blockHash), genesis, v1, blockStore = blockStore)
+        b6      <- createBlock[Task](Seq(b4.blockHash), genesis, v2, blockStore = blockStore)
+        b7      <- createBlock[Task](Seq(b4.blockHash), genesis, v1, blockStore = blockStore)
+        b8      <- createBlock[Task](Seq(b7.blockHash), genesis, v1, blockStore = blockStore)
 
         dag <- blockDagStorage.getRepresentation
 

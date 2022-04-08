@@ -2,14 +2,15 @@ package coop.rchain.casper.engine
 
 import cats.Applicative
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper._
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.comm.CommUtil
@@ -30,14 +31,16 @@ class GenesisValidator[F[_]
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
     blocksInProcessing: Ref[F, Set[BlockHash]],
     casperShardConf: CasperShardConf,
     validatorId: ValidatorIdentity,
-    blockApprover: BlockApproverProtocol
+    blockApprover: BlockApproverProtocol,
+    blockStore: BlockStore[F],
+    approvedStore: ApprovedStore[F]
 ) extends Engine[F] {
   import Engine._
   private val F    = Applicative[F]
@@ -65,7 +68,9 @@ class GenesisValidator[F[_]
                 blocksInProcessing,
                 casperShardConf,
                 Some(validatorId),
-                init = noop
+                init = noop,
+                blockStore = blockStore,
+                approvedStore = approvedStore
               )
           }
         )

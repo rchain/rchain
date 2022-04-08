@@ -1,12 +1,12 @@
 package coop.rchain.casper.util
 
 import cats.syntax.all._
-import coop.rchain.blockstorage.KeyValueBlockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.ConstructDeploy.{defaultPub, defaultPub2, _}
+import coop.rchain.casper.util.ConstructDeploy._
 import coop.rchain.casper.util.rholang.Resources.mkTestRNodeStoreManager
 import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.catscontrib.TaskContrib.TaskOps
@@ -17,6 +17,7 @@ import coop.rchain.metrics.{Metrics, NoopSpan}
 import coop.rchain.rholang.interpreter.util.RevAddress
 import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.shared.Log
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 
 import java.nio.file.{Files, Path}
@@ -154,7 +155,7 @@ object GenesisBuilder {
       mStore          <- RuntimeManager.mergeableStore(kvsManager)
       runtimeManager  <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
       genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      blockStore      <- KeyValueBlockStore[Task](kvsManager)
+      blockStore      <- BlockStore[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
       _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)

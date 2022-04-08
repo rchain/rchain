@@ -3,17 +3,18 @@ package coop.rchain.node.revvaultexport.mainnet1.reporting
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.KeyValueBlockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.casper.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.rogach.scallop.ScallopConf
@@ -166,7 +167,7 @@ object MergeBalanceMain {
     val task: Task[Vector[Account]] = for {
       accountMap        <- getVaultMap(stateBalanceFile, transactionBalanceFile).pure[Task]
       rnodeStoreManager <- RNodeKeyValueStoreManager[Task](dataDir, legacyRSpaceDirSupport)
-      blockStore        <- KeyValueBlockStore[Task](rnodeStoreManager)
+      blockStore        <- BlockStore[Task](rnodeStoreManager)
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace
                  .createWithReplay[Task, Par, BindPattern, ListParWithRandom, TaggedContinuation](
@@ -175,7 +176,7 @@ object MergeBalanceMain {
       (rSpacePlay, rSpaceReplay) = spaces
       runtimes                   <- RhoRuntime.createRuntimes[Task](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
-      blockOpt                   <- blockStore.get(blockHash.unsafeHexToByteString)
+      blockOpt                   <- blockStore.get1(blockHash.unsafeHexToByteString)
       block                      = blockOpt.get
       postStateHash              = block.body.state.postStateHash
       adjustedAccounts <- accountMap.toList.foldLeftM(Vector.empty[Account]) {

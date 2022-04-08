@@ -4,19 +4,20 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Deferred
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.{Casper, _}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
 
@@ -158,18 +159,19 @@ object Proposer {
   def apply[F[_]
     /* Execution */   : Concurrent: Time
     /* Casper */      : Estimator: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage
+    /* Storage */     : BlockDagStorage: DeployStorage
     /* Diagnostics */ : Log: Span: Metrics: EventPublisher
     /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
   (
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None
+      dummyDeployOpt: Option[(PrivateKey, String)] = None,
+      blockStore: BlockStore[F]
   )(implicit runtimeManager: RuntimeManager[F]): Proposer[F] = {
     val getCasperSnapshotSnapshot = (c: Casper[F]) => c.getSnapshot
 
     val createBlock = (s: CasperSnapshot[F], validatorIdentity: ValidatorIdentity) =>
-      BlockCreator.create(s, validatorIdentity, dummyDeployOpt)
+      BlockCreator.create(s, validatorIdentity, dummyDeployOpt, blockStore)
 
     val validateBlock = (casper: Casper[F], s: CasperSnapshot[F], b: BlockMessage) =>
       casper.validate(b, s)
@@ -185,7 +187,8 @@ object Proposer {
         s,
         runtimeManager,
         genesis,
-        validatorIdentity
+        validatorIdentity,
+        blockStore
       )
 
     val checkLastFinalizedHeightConstraint = (genesis: BlockMessage, s: CasperSnapshot[F]) =>
@@ -197,7 +200,7 @@ object Proposer {
 
     val proposeEffect = (c: Casper[F], b: BlockMessage) =>
       // store block
-      BlockStore[F].put(b) >>
+      blockStore.put(b.blockHash, b) >>
         // save changes to Casper
         c.handleValidBlock(b) >>
         // inform block retriever about block

@@ -4,17 +4,18 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.KeyValueBlockStore
+import coop.rchain.blockstorage.BlockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.metrics.{Metrics, NoopSpan}
+import coop.rchain.models.syntax._
 import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.syntax._
 import coop.rchain.rspace.{Match, RSpace}
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
+import coop.rchain.shared.syntax._
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.ExecutionContext
@@ -36,8 +37,8 @@ object StateBalances {
     val legacyRSpaceDirSupport                               = Files.exists(oldRSpacePath)
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
-      blockStore        <- KeyValueBlockStore(rnodeStoreManager)
-      blockOpt          <- blockStore.get(blockHash.unsafeHexToByteString)
+      blockStore        <- BlockStore(rnodeStoreManager)
+      blockOpt          <- blockStore.get1(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores
       spaces <- RSpace

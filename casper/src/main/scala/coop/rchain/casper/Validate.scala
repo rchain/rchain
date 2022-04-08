@@ -5,21 +5,19 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
-import coop.rchain.blockstorage.dag.BlockDagRepresentation
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.ProtoUtil.bonds
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.dag.DagOps
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.BlockMetadata
-import coop.rchain.models.Validator.Validator
-import coop.rchain.shared.{Base16, _}
+import coop.rchain.shared._
 
 import scala.util.{Success, Try}
 
@@ -91,15 +89,16 @@ object Validate {
       } yield false
     }
 
-  def blockSenderHasWeight[F[_]: Monad: Log: BlockStore](
+  def blockSenderHasWeight[F[_]: Monad: Log](
       b: BlockMessage,
-      genesis: BlockMessage
+      genesis: BlockMessage,
+      blockStore: BlockStore[F]
   ): F[Boolean] =
     if (b == genesis) {
       true.pure //genesis block has a valid sender
     } else {
       for {
-        weight <- ProtoUtil.weightFromSender(b)
+        weight <- ProtoUtil.weightFromSender(b, blockStore)
         result <- if (weight > 0) true.pure
                  else
                    for {
@@ -157,24 +156,25 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span: Estimator](
+  def blockSummary[F[_]: Sync: Log: Time: Metrics: Span: Estimator](
       block: BlockMessage,
       genesis: BlockMessage,
       s: CasperSnapshot[F],
       shardId: String,
-      expirationThreshold: Int
+      expirationThreshold: Int,
+      blockStore: BlockStore[F]
   ): F[ValidBlockProcessing] =
     (for {
       _ <- EitherT.liftF(Span[F].mark("before-block-hash-validation"))
       _ <- EitherT(Validate.blockHash(block))
       _ <- EitherT.liftF(Span[F].mark("before-timestamp-validation"))
-      _ <- EitherT(Validate.timestamp(block))
+      _ <- EitherT(Validate.timestamp(block, blockStore))
       _ <- EitherT.liftF(Span[F].mark("before-shard-identifier-validation"))
       _ <- EitherT(Validate.shardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-deploys-shard-identifier-validation"))
       _ <- EitherT(Validate.deploysShardIdentifier(block, shardId))
       _ <- EitherT.liftF(Span[F].mark("before-repeat-deploy-validation"))
-      _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold))
+      _ <- EitherT(Validate.repeatDeploy(block, s, expirationThreshold, blockStore))
       _ <- EitherT.liftF(Span[F].mark("before-block-number-validation"))
       _ <- EitherT(Validate.blockNumber(block, s))
       _ <- EitherT.liftF(Span[F].mark("before-future-transaction-validation"))
@@ -182,7 +182,7 @@ object Validate {
       _ <- EitherT.liftF(Span[F].mark("before-transaction-expired-validation"))
       _ <- EitherT(Validate.transactionExpiration(block, expirationThreshold))
       _ <- EitherT.liftF(Span[F].mark("before-justification-follows-validation"))
-      _ <- EitherT(Validate.justificationFollows(block))
+      _ <- EitherT(Validate.justificationFollows(block, blockStore))
       _ <- EitherT.liftF(Span[F].mark("before-parents-validation"))
       _ <- EitherT(Validate.parents(block, genesis, s))
       _ <- EitherT.liftF(Span[F].mark("before-sequence-number-validation"))
@@ -196,10 +196,11 @@ object Validate {
     *
     * Agnostic of non-parent justifications
     */
-  def repeatDeploy[F[_]: Sync: Log: BlockStore: Span](
+  def repeatDeploy[F[_]: Sync: Log: Span](
       block: BlockMessage,
       s: CasperSnapshot[F],
-      expirationThreshold: Int
+      expirationThreshold: Int,
+      blockStore: BlockStore[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
@@ -224,7 +225,7 @@ object Validate {
                                        )
                                        .findF { blockMetadata =>
                                          for {
-                                           block <- BlockStore[F].getUnsafe(
+                                           block <- blockStore.getUnsafe(
                                                      blockMetadata.blockHash
                                                    )
                                            blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
@@ -237,7 +238,7 @@ object Validate {
                      .traverse(
                        duplicatedBlockMetadata => {
                          for {
-                           duplicatedBlock <- BlockStore[F].getUnsafe(
+                           duplicatedBlock <- blockStore.getUnsafe(
                                                duplicatedBlockMetadata.blockHash
                                              )
                            currentBlockHashString = PrettyPrinter.buildString(block.blockHash)
@@ -261,8 +262,9 @@ object Validate {
   }
 
   // This is not a slashable offence
-  def timestamp[F[_]: Sync: Log: Time: BlockStore](
-      b: BlockMessage
+  def timestamp[F[_]: Sync: Log: Time](
+      b: BlockMessage,
+      blockStore: BlockStore[F]
   ): F[ValidBlockProcessing] = {
     import cats.instances.list._
 
@@ -272,7 +274,7 @@ object Validate {
       beforeFuture = currentTime + DRIFT >= timestamp
       latestParentTimestamp <- ProtoUtil.parentHashes(b).foldM(0L) {
                                 case (latestTimestamp, parentHash) =>
-                                  BlockStore[F]
+                                  blockStore
                                     .getUnsafe(parentHash)
                                     .map(parent => {
                                       val timestamp = parent.header.timestamp
@@ -421,7 +423,7 @@ object Validate {
   }
 
   // Agnostic of justifications
-  def shardIdentifier[F[_]: Monad: Log: BlockStore](
+  def shardIdentifier[F[_]: Monad: Log](
       b: BlockMessage,
       shardId: String
   ): F[ValidBlockProcessing] =
@@ -470,7 +472,7 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span: Estimator](
+  def parents[F[_]: Sync: Log: Metrics: Span: Estimator](
       b: BlockMessage,
       genesis: BlockMessage,
       s: CasperSnapshot[F]
@@ -507,13 +509,14 @@ object Validate {
   /*
    * This check must come before Validate.parents
    */
-  def justificationFollows[F[_]: Sync: Log: BlockStore](
-      b: BlockMessage
+  def justificationFollows[F[_]: Sync: Log](
+      b: BlockMessage,
+      blockStore: BlockStore[F]
   ): F[ValidBlockProcessing] = {
     val justifiedValidators = b.justifications.map(_.validator).toSet
     val mainParentHash      = ProtoUtil.parentHashes(b).head
     for {
-      mainParent       <- BlockStore[F].getUnsafe(mainParentHash)
+      mainParent       <- blockStore.getUnsafe(mainParentHash)
       bondedValidators = ProtoUtil.bonds(mainParent).map(_.validator).toSet
       status <- if (bondedValidators == justifiedValidators) {
                  BlockStatus.valid.asRight[BlockError].pure

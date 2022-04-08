@@ -2,13 +2,13 @@ package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.casper._
+import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper._
-import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.metrics.{Metrics, Span}
@@ -61,7 +61,8 @@ object APIServers {
         networkId,
         shardId,
         minPhloPrice,
-        isNodeReadOnly
+        isNodeReadOnly,
+        blockStore
       )
     val propose = ProposeGrpcServiceV1(triggerProposeFOpt, proposerStateRefOpt)
     APIServers(repl, propose, deploy)

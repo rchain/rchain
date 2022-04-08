@@ -1,9 +1,10 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
@@ -22,11 +23,10 @@ import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
 import coop.rchain.shared
 import coop.rchain.shared._
+import coop.rchain.store.KeyValueTypedStoreSyntaxObj._
 import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
@@ -42,7 +42,7 @@ class Initializing[F[_]
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -53,7 +53,9 @@ class Initializing[F[_]
     blockMessageQueue: Queue[F, BlockMessage],
     tupleSpaceQueue: Queue[F, StoreItemsMessage],
     trimState: Boolean = true,
-    disableStateExporter: Boolean
+    disableStateExporter: Boolean,
+    blockStore: BlockStore[F],
+    approvedStore: ApprovedStore[F]
 ) extends Engine[F] {
 
   import Engine._
@@ -104,11 +106,11 @@ class Initializing[F[_]
         _ <- BlockDagStorage[F].insert(block, invalid = false, approved = true)
 
         // Download approved state and all related blocks
-        _ <- requestApprovedState(approvedBlock)
+        _ <- requestApprovedState(approvedBlock, blockStore)
 
         // Approved block is saved after the whole state is received,
         //  to restart requesting if interrupted with incomplete state.
-        _ <- BlockStore[F].putApprovedBlock(approvedBlock)
+        _ <- approvedStore.putApprovedBlock(approvedBlock)
         _ <- LastApprovedBlock[F].set(approvedBlock)
 
         _ <- EventLog[F].publish(
@@ -152,7 +154,7 @@ class Initializing[F[_]
     } yield ()
   }
 
-  def requestApprovedState(approvedBlock: ApprovedBlock): F[Unit] = {
+  def requestApprovedState(approvedBlock: ApprovedBlock, blockStore: BlockStore[F]): F[Unit] = {
     // Starting minimum block height. When latest blocks are downloaded new minimum will be calculated.
     val block            = approvedBlock.candidate.block
     val startBlockNumber = ProtoUtil.blockNumber(block)
@@ -167,9 +169,9 @@ class Initializing[F[_]
                              minBlockNumberForDeployLifespan,
                              hash => CommUtil[F].broadcastRequestForBlock(hash, 1.some),
                              requestTimeout = 30.seconds,
-                             BlockStore[F].contains,
-                             BlockStore[F].getUnsafe,
-                             BlockStore[F].put,
+                             blockStore.contains(_),
+                             blockStore.getUnsafe,
+                             blockStore.put(_, _),
                              validateBlock
                            )
 
@@ -192,14 +194,14 @@ class Initializing[F[_]
 
       // Receive the blocks and after populate the DAG
       blockRequestAddDagStream = blockRequestStream.last.unNoneTerminate.evalMap { st =>
-        populateDag(approvedBlock.candidate.block, st.lowerBound, st.heightMap)
+        populateDag(approvedBlock.candidate.block, st.lowerBound, st.heightMap, blockStore)
       }
 
       // Run both streams in parallel until tuple space and all needed blocks are received
       _ <- fs2.Stream(blockRequestAddDagStream, tupleSpaceLogStream).parJoinUnbounded.compile.drain
 
       // Transition to Running state
-      _ <- createCasperAndTransitionToRunning(approvedBlock)
+      _ <- createCasperAndTransitionToRunning(approvedBlock, blockStore)
     } yield ()
   }
 
@@ -215,7 +217,8 @@ class Initializing[F[_]
   private def populateDag(
       startBlock: BlockMessage,
       minHeight: Long,
-      heightMap: SortedMap[Long, Set[BlockHash]]
+      heightMap: SortedMap[Long, Set[BlockHash]],
+      blockStore: BlockStore[F]
   ): F[Unit] = {
     import cats.instances.list._
 
@@ -237,7 +240,7 @@ class Initializing[F[_]
       // Add sorted DAG in order from approved block to oldest
       _ <- heightMap.flatMap(_._2).toList.reverse.traverse_ { hash =>
             for {
-              block <- BlockStore[F].getUnsafe(hash)
+              block <- blockStore.getUnsafe(hash)
               // If sender has stake 0 in approved block, this means that sender has been slashed and block is invalid
               isInvalid = invalidBlocks(block.blockHash)
               // Filter older not necessary blocks
@@ -252,14 +255,18 @@ class Initializing[F[_]
     } yield ()
   }
 
-  private def createCasperAndTransitionToRunning(approvedBlock: ApprovedBlock): F[Unit] = {
+  private def createCasperAndTransitionToRunning(
+      approvedBlock: ApprovedBlock,
+      blockStore: BlockStore[F]
+  ): F[Unit] = {
     val ab = approvedBlock.candidate.block
     for {
       casper <- MultiParentCasper
                  .hashSetCasper[F](
                    validatorId,
                    casperShardConf,
-                   ab
+                   ab,
+                   blockStore
                  )
       _ <- Log[F].info("MultiParentCasper instance created.")
       _ <- transitionToRunning[F](
@@ -269,7 +276,8 @@ class Initializing[F[_]
             approvedBlock,
             validatorId,
             ().pure,
-            disableStateExporter
+            disableStateExporter,
+            blockStore
           )
       _ <- CommUtil[F].sendForkChoiceTipRequest
     } yield ()

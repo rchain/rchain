@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch2
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.helper.BlockGenerator._
@@ -42,7 +42,8 @@ class CliqueOracleTest
       genesis,
       creator = creator,
       bonds = bonds,
-      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) }
+      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) },
+      blockStore = store
     )
 
   // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
@@ -68,7 +69,7 @@ class CliqueOracleTest
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createGenesis[Task](bonds = bonds)
+        genesis              <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
         creator1             = createBlock(bonds)(genesis)(v1) _
         creator2             = createBlock(bonds)(genesis)(v2) _
         genesisJustification = HashMap(v1 -> genesis, v2 -> genesis)
@@ -105,7 +106,7 @@ class CliqueOracleTest
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createGenesis[Task](bonds = bonds)
+        genesis              <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
         creator1             = createBlock(bonds)(genesis)(v1) _
         creator2             = createBlock(bonds)(genesis)(v2) _
         creator3             = createBlock(bonds)(genesis)(v3) _
@@ -152,7 +153,7 @@ class CliqueOracleTest
        */
 
       for {
-        ge       <- createGenesis[Task](bonds = bonds)
+        ge       <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
         creator0 = createBlock(bonds)(ge)(v0) _
         creator1 = createBlock(bonds)(ge)(v1) _
         creator2 = createBlock(bonds)(ge)(v2) _

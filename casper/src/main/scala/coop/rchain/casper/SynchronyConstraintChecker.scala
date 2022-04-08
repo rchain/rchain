@@ -3,19 +3,18 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.implicits._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.BlockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.blocks.proposer.{CheckProposeConstraintsResult, NotEnoughNewBlocks}
 import coop.rchain.casper.protocol.{BlockMessage, Justification}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.metrics.Span
 import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared.Log
 
-final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
+final class SynchronyConstraintChecker[F[_]: Sync: Log] {
   private def calculateSeenSendersSince(
       lastProposed: BlockMetadata,
       dag: BlockDagRepresentation[F]
@@ -39,7 +38,8 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
       runtimeManager: RuntimeManager[F],
       // TODO having genesis here is a weird way to check, remove
       approvedBlock: BlockMessage,
-      validatorIdentity: ValidatorIdentity
+      validatorIdentity: ValidatorIdentity,
+      blockStore: BlockStore[F]
   ): F[CheckProposeConstraintsResult] = {
     val synchronyConstraintThreshold = s.onChainState.shardConf.synchronyConstraintThreshold
     val validator                    = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -54,7 +54,7 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
             mainParentMeta <- s.dag.lookupUnsafe(mainParent.blockHash)
 
             // Loading the whole block is only needed to get post-state hash
-            mainParentBlock     <- BlockStore[F].getUnsafe(mainParentMeta.blockHash)
+            mainParentBlock     <- blockStore.getUnsafe(mainParentMeta.blockHash)
             mainParentStateHash = ProtoUtil.postStateHash(mainParentBlock)
 
             // Get bonds map from PoS
@@ -104,6 +104,6 @@ final class SynchronyConstraintChecker[F[_]: Sync: BlockStore: Log] {
 }
 
 object SynchronyConstraintChecker {
-  def apply[F[_]: Sync: BlockStore: Log]: SynchronyConstraintChecker[F] =
+  def apply[F[_]: Sync: Log]: SynchronyConstraintChecker[F] =
     new SynchronyConstraintChecker[F]
 }

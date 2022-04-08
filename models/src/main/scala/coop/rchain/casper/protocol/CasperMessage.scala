@@ -3,10 +3,10 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.PCost
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.crypto.PublicKey
+import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.PCost
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize
@@ -77,6 +77,8 @@ object ApprovedBlockCandidate {
     for {
       block <- BlockMessage.from(abc.block)
     } yield ApprovedBlockCandidate(block, abc.requiredSigs)
+
+  def empty = ApprovedBlockCandidate(BlockMessage.empty, 0)
 }
 
 final case class UnapprovedBlock(
@@ -126,6 +128,8 @@ object ApprovedBlock {
     for {
       candidate <- ApprovedBlockCandidate.from(ba.candidate)
     } yield ApprovedBlock(candidate, ba.sigs.toList)
+
+  def empty = ApprovedBlock(ApprovedBlockCandidate.empty, List.empty)
 }
 
 final case class NoApprovedBlockAvailable(identifier: String, nodeIdentifer: String)
@@ -208,6 +212,19 @@ object BlockMessage {
       .withShardId(bm.shardId)
       .withExtraBytes(bm.extraBytes)
 
+  def empty =
+    BlockMessage(
+      ByteString.EMPTY,
+      Header.empty,
+      Body.empty,
+      List.empty,
+      ByteString.EMPTY,
+      0,
+      ByteString.EMPTY,
+      "",
+      ""
+    )
+
 }
 
 final case class Header(
@@ -233,6 +250,8 @@ object Header {
       .withTimestamp(h.timestamp)
       .withVersion(h.version)
       .withExtraBytes(h.extraBytes)
+
+  def empty: Header = Header(List.empty, 0, 0)
 }
 
 final case class RejectedDeploy(
@@ -272,6 +291,14 @@ object Body {
       .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
       .withExtraBytes(b.extraBytes)
+
+  def empty: Body =
+    Body(
+      RChainState(ByteString.EMPTY, ByteString.EMPTY, List.empty, 0),
+      List.empty,
+      List.empty,
+      List.empty
+    )
 
 }
 
