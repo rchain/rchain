@@ -861,9 +861,9 @@ object RadixTree {
           case DeleteAction(key)       => DeleteAction(key.tail)
         }
 
-      def processNonEmptyActions(actions: List[HistoryAction], itemIdx: Int) =
+      def processNonEmptyActions(actions: List[HistoryAction], item: Item, itemIdx: Int) =
         for {
-          createdNode <- constructNodeFromItem(curNode(itemIdx))
+          createdNode <- constructNodeFromItem(item)
           newActions  = trimKeys(actions)
           newNodeOpt  <- makeActions(createdNode, newActions)
           newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
@@ -874,7 +874,7 @@ object RadixTree {
         for {
           clearedActions <- Sync[F].delay(clearingDeleteActions(actions, item))
           r <- if (clearedActions.isEmpty) (itemIdx, none[Item]).pure
-              else processNonEmptyActions(clearedActions, itemIdx)
+              else processNonEmptyActions(clearedActions, item, itemIdx)
         } yield r
 
       // Process actions within each group.
@@ -914,6 +914,22 @@ object RadixTree {
       } // If current node changing return new node, otherwise return none.
       yield if (newCurNode != curNode) newCurNode.some else none
     }
+
+    /**
+      * Changing the tree according to [[HistoryAction]]s.
+      *
+      * New data load to [[store]], after that clearing [[cacheW]].
+      * @return new (rootNode, rootHash). if no action was taken - return [[None]].
+      */
+    def changingTree(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
+      for {
+        newRootNodeOpt <- makeActions(rootNode, actions)
+        r <- newRootNodeOpt.traverse { newRootNode =>
+              val newRootHash = saveNode(newRootNode)
+              commit.as(newRootNode, newRootHash)
+            }
+        _ = clearWriteCache()
+      } yield r
 
     /**
       * Pretty printer for Radix tree
