@@ -19,24 +19,27 @@ object RadixTree {
   sealed trait Item
 
   /**
-    * Empty item
+    * EmptyItem is item which not storing data
     */
   final case object EmptyItem extends Item
 
   /**
-    * Item which contain data.
+    * Leaf is item for storing radixValue. Contains 2 fields:
+    * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
+    * @param value stores radixValue. Always contains 32 bytes.
     */
   final case class Leaf(prefix: ByteVector, value: ByteVector) extends Item
 
   /**
-    * Item which contain pointer for child [[Node]].
+    * NodePtr is pointer to the next child [[Node]]. Contains 2 fields.
+    * @param prefix stores a part of the radixKey. Contain from 0 to 127 bytes.
+    * @param ptr stores hash of the child node (see section Storing of tree). Always contains 32 bytes.
     */
   final case class NodePtr(prefix: ByteVector, ptr: ByteVector) extends Item
 
   /**
     * Base type for nodes in Radix History.
-    *
-    * Must contain 256 [[Item]]s.
+    * Node is a sequence of 256 [[Item]]s with index from 0 to 255 : Sequence(item0, item1, ..., item255).
     */
   type Node = Vector[Item]
 
@@ -54,6 +57,13 @@ object RadixTree {
 
   /**
     * Binary codecs for serializing/deserializing Node in Radix tree
+    *
+    * Physically, a tree may be implemented using KV-database (for example LMDB).
+    * Each Node is one KV-database entry.
+    * The elements are stored as an associative array of KV-pairs (hashNode, serNode), where
+    * serNode = serialization(Node) is serialized node data (see section Serialization of node).
+    * hashNode = hash(serNode) is a BLAKE-256 hash of serNode.
+    *            The result of this hashing is a 32 byte number. Must be unique within the KV-database.
     *
     * {{{
     * Coding structure for items:
@@ -551,6 +561,27 @@ object RadixTree {
 
   /**
     * Radix Tree implementation
+    * Is a data structure that stores and links together a set
+    * of N KV-pairs (radixKey, radixValue): (key0, value0), (key1, value1), ..., (keyN-1, valueN-1).
+    * Where: N - number of data in the set,
+    *        radixKey - unique identifier of a pair within a set,
+    *        radixValue - data of the KV-pair.
+    *
+    * The entire set is uniquely identified using the rootHash value,
+    * which is calculated when building the Tree. After that rootHash is used to access the elements in the set.
+    *
+    * As a data structure, the version of Radix tree modified for RSpace is used.
+    * Radix tree represents a space-optimized Prefix tree in which each node
+    * that is the only child is merged with its parent.
+    *
+    * - radixKey stored implicitly. radixKey is determined by the path to the leaf in the tree.
+    * The radixKey is formed by connecting the symbol assigned to the edges of the graph.
+    * These edges run from the root to the given leaf.
+    *
+    * - radixValue is stored explicitly as a leaf.
+    *
+    * 1 byte is used as symbol in the path. Such symbol can take 256 values from 0x00 to 0xFF.
+    * In this case, the maximum number of children for each node is 256.
     */
   class RadixTreeImpl[F[_]: Sync: Parallel](store: KeyValueTypedStore[F, ByteVector, ByteVector]) {
 
