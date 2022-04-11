@@ -5,6 +5,7 @@ import cats.syntax.all._
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.history.RadixTree._
 import coop.rchain.rspace.history.TestData._
+import coop.rchain.rspace.serializers.ScodecRadix
 import coop.rchain.shared.Base16
 import coop.rchain.shared.syntax.{sharedSyntaxKeyValueStore, sharedSyntaxKeyValueTypedStore}
 import coop.rchain.store.{
@@ -376,18 +377,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
 
   // Data for test are given from RadixTree specification
   "encoding and then decoding a node" should "give this node" in {
-    val leaf = Leaf(
-      createBV("FFFF"),
-      createBV32("0000000000000000000000000000000000000000000000000000000000000001")
-    )
-    val nodePtr = NodePtr(
-      createBV(""),
-      createBV("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-    )
-    val referenceNode = emptyNode
-      .updated(1, leaf)
-      .updated(2, nodePtr)
-
     val serializedNode   = RadixTree.Codecs.encode(referenceNode)
     val deserializedNode = RadixTree.Codecs.decode(serializedNode)
     val referenceSerialized = createBV(
@@ -395,6 +384,19 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     )
     deserializedNode shouldBe referenceNode
     serializedNode shouldBe referenceSerialized
+  }
+
+  "encoding and decoding a node with scodec-codec" should "give the same result as the existing codec" in {
+    val serializedExisting   = RadixTree.Codecs.encode(referenceNode)
+    val deserializedExisting = RadixTree.Codecs.decode(serializedExisting)
+
+    val serializedScodec   = ScodecRadix.encode(referenceNode)
+    val deserializedScodec = ScodecRadix.decode(serializedScodec)
+
+    serializedExisting shouldBe referenceSerialized
+    serializedExisting shouldBe serializedScodec
+    deserializedExisting shouldBe deserializedScodec
+    deserializedExisting shouldBe referenceNode
   }
 
   "decode wrong serialized data" should "be stopped with assertion error" in {
@@ -651,6 +653,23 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   def createBV(s: String): ByteVector = ByteVector(Base16.unsafeDecode(s))
+
+  private val referenceNode = {
+    val leaf = Leaf(
+      createBV("FFFF"),
+      createBV32("0000000000000000000000000000000000000000000000000000000000000001")
+    )
+    val nodePtr = NodePtr(
+      createBV(""),
+      createBV("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+    )
+    emptyNode.updated(1, leaf).updated(2, nodePtr)
+  }
+
+  private val referenceSerialized = createBV(
+    "0102FFFF00000000000000000000000000000000000000000000000000000000000000010280FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+  )
+
   def createInsertActions(dataSet: List[radixKV]): List[InsertAction] =
     dataSet.map { ds =>
       InsertAction(ds.rKey.toSeq, Blake2b256Hash.fromByteVector(ds.rValue))
