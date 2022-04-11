@@ -955,7 +955,7 @@ object RadixTree {
       * New data load to [[store]], after that clearing [[cacheW]].
       * @return new (rootNode, rootHash). if no action was taken - return [[None]].
       */
-    def changingTree(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
+    def saveAndCommit(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
       for {
         newRootNodeOpt <- makeActions(rootNode, actions)
         r <- newRootNodeOpt.traverse { newRootNode =>
