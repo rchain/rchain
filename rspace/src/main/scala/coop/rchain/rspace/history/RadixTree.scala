@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueTypedStore
 import scodec.bits.ByteVector
@@ -51,6 +52,8 @@ object RadixTree {
     * Empty node consists only of [[EmptyItem]]s.
     */
   val emptyNode: Node = (0 until numItems).map(_ => EmptyItem).toVector
+
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
 
   /**
     * Binary codecs for serializing/deserializing Node in Radix tree

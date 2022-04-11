@@ -277,7 +277,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       } yield ()
   }
 
-  "deleting one leaf from a child node containing two leafs" should "child node and reformat parent node" in withImplAndStore {
+  "deleting one leaf from a child node containing two leafs" should "delete child node and reformat parent node" in withImplAndStore {
     (impl, _) =>
       val dataSet = List(radixKV("1122334455", "01"), radixKV("11223344FF", "02"))
       for {
@@ -348,17 +348,18 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "function saveNode" should "put node into store" in withImplAndStore { (impl, inMemoStore) =>
-    for {
-      nodesCount1 <- Sync[Task].delay(inMemoStore.numRecords())
-      _           = impl.saveNode(emptyNode)
-      _           <- impl.commit
+  "Call of functions saveNode() and then commit()" should "put node into store" in withImplAndStore {
+    (impl, inMemoStore) =>
+      for {
+        nodesCount1 <- Sync[Task].delay(inMemoStore.numRecords())
+        _           = impl.saveNode(emptyNode)
+        _           <- impl.commit
 
-      //  After saving node numRecords must return 1
-      nodesCount2 = inMemoStore.numRecords()
-      _           = nodesCount1 shouldBe 0
-      _           = nodesCount2 shouldBe 1
-    } yield ()
+        //  After saving node numRecords must return 1
+        nodesCount2 = inMemoStore.numRecords()
+        _           = nodesCount1 shouldBe 0
+        _           = nodesCount2 shouldBe 1
+      } yield ()
   }
 
   "function loadNode" should "load node from store" in withImplAndStore { (impl, _) =>
@@ -374,7 +375,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   }
 
   // Data for test are given from RadixTree specification
-  "encode and decode" should "give initial node" in {
+  "encoding and then decoding a node" should "give this node" in {
     val leaf = Leaf(
       createBV("FFFF"),
       createBV32("0000000000000000000000000000000000000000000000000000000000000001")
@@ -416,8 +417,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       newBuf.put(arr).rewind()
     }
 
-    val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
-    val collisionKVPair               = (copyBVToBuf(emptyRootHash.bytes), ByteVector(0x00))
+    val collisionKVPair = (copyBVToBuf(RadixTree.emptyRootHash.bytes), ByteVector(0x00))
     val referenceErrorMessage = s"1 collisions in KVDB (first collision with key = " +
       s"${History.emptyRootHash.bytes.toHex})."
     for {
@@ -483,6 +483,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
         //  Number of nodes after deleting data must be equal to 5 (with root)
         nodesCount2 = inMemoStore.numRecords()
 
+        _ = rootNode2Opt shouldBe Some(RadixTree.emptyNode)
         _ = tree1 shouldBe referenceTree1
         _ = nodesCount1 shouldBe 4
         _ = tree2 shouldBe referenceTree2
@@ -525,12 +526,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           x => Sync[Task].delay(localStorage.get(x)),
           exportSettings
         )
-      }
-
-      //  Data exported from created storage must me equal to data from source store
-      _ = {
-        assert(exported2 == exported1, "Error of validation")
-        ()
       }
 
       (exportData2, _) = exported2
