@@ -431,7 +431,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     } yield ()
   }
 
-  "tree with makeActions" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
+  "tree with saveAndCommit" should "be built correctly and not create artefacts in KV - store" in withImplAndStore {
     (impl, inMemoStore) =>
       def createDeleteActions(keys: List[ByteVector]): List[DeleteAction] =
         keys.map(key => DeleteAction(key.toSeq))
@@ -462,28 +462,25 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       val referenceTree2 = Vector("TREE2: root =>")
       for {
         //  1  Build a tree according to the example in specification
-        rootNode1Opt <- impl.makeActions(RadixTree.emptyNode, referenceInsertActions)
+        rootNodeAndHash1Opt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
+        (rootNode, _)       = rootNodeAndHash1Opt.get
 
         //    Get the tree for compare with reference
-        tree1 <- impl.printTree(rootNode1Opt.get, "TREE1", noPrintFlag = true)
-
-        _ = impl.saveNode(rootNode1Opt.get)
-        _ <- impl.commit
+        tree1 <- impl.printTree(rootNode, treeName = "TREE1", noPrintFlag = true)
 
         //  Number of nodes must be equal to 4 (with root)
         nodesCount1 = inMemoStore.numRecords()
 
         //  2   Delete all data from tree...
-        rootNode2Opt <- impl.makeActions(rootNode1Opt.get, deleteActions)
+        rootNodeAndHash2Opt <- impl.saveAndCommit(rootNodeAndHash1Opt.get._1, deleteActions)
 
-        tree2 <- impl.printTree(rootNode2Opt.get, "TREE2", noPrintFlag = true)
-        _     = impl.saveNode(rootNode2Opt.get)
-        _     <- impl.commit
+        node2 = rootNodeAndHash2Opt.get._1
+        tree2 <- impl.printTree(node2, treeName = "TREE2", noPrintFlag = true)
 
         //  Number of nodes after deleting data must be equal to 5 (with root)
         nodesCount2 = inMemoStore.numRecords()
 
-        _ = rootNode2Opt shouldBe Some(RadixTree.emptyNode)
+        _ = node2 shouldBe RadixTree.emptyNode
         _ = tree1 shouldBe referenceTree1
         _ = nodesCount1 shouldBe 4
         _ = tree2 shouldBe referenceTree2
@@ -494,14 +491,13 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
   "sequentialExport" should "export all data from tree" in withImplAndStore { (impl, store) =>
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
-      hash        = impl.saveNode(rootNodeOpt.get)
-      _           <- impl.commit
+      rootNodeAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
+      (_, rootHash)      = rootNodeAndHashOpt.get
 
       //  First data export
       typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
       exported1 <- sequentialExport(
-                    hash,
+                    rootHash,
                     None,
                     skipSize = 0,
                     takeSize = 100,
@@ -519,7 +515,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       //  Export data from new storage
       exported2 <- {
         sequentialExport(
-          hash,
+          rootHash,
           None,
           skipSize = 0,
           takeSize = 100,
@@ -544,9 +540,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
       for {
         //  Create tree with 6 leafs
-        rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
-        rootHash    = impl.saveNode(rootNodeOpt.get)
-        _           <- impl.commit
+        rootAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
+        (_, rootHash)  = rootAndHashOpt.get
 
         // Validate exception when skipSize = 0 and takeSize == 0
         err <- sequentialExport(
@@ -568,9 +563,8 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
-      rootHash    = impl.saveNode(rootNodeOpt.get)
-      _           <- impl.commit
+      rootNodeAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
+      (_, rootHash)      = rootNodeAndHashOpt.get
 
       validateData <- validateMultipageExport(rootHash, typedStore, withSkip = false)
       (firstExportData, reconstructExportData) = (
@@ -592,11 +586,10 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
     val typedStore = store.toTypedStore(scodec.codecs.bytes, scodec.codecs.bytes)
     for {
       //  Create tree with 6 leafs
-      rootNodeOpt <- impl.makeActions(emptyNode, referenceInsertActions)
-      hash        = impl.saveNode(rootNodeOpt.get)
-      _           <- impl.commit
+      rootNodeAndHashOpt <- impl.saveAndCommit(RadixTree.emptyNode, referenceInsertActions)
+      (_, rootHash)      = rootNodeAndHashOpt.get
 
-      validateData <- validateMultipageExport(hash, typedStore, withSkip = true)
+      validateData <- validateMultipageExport(rootHash, typedStore, withSkip = true)
       (firstExportData1, reconstructExportData2) = (
         validateData.firstExport._1,
         validateData.reconstructExport._1
