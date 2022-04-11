@@ -721,9 +721,7 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
       withSkip: Boolean
   ): Task[MultipageExportResults] = {
 
-    def multipageExport(
-        parameters: ExportParameters
-    ): Task[Either[ExportParameters, ExportParameters]] = {
+    def multipageExport(p: ExportParameters): Task[Either[ExportParameters, ExportParameters]] = {
       def collectExportData(prevData: ExportData, pageData: ExportData): ExportData =
         ExportData(
           prevData.nodePrefixes ++ pageData.nodePrefixes,
@@ -732,44 +730,30 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
           prevData.leafPrefixes ++ pageData.leafPrefixes,
           prevData.leafValues ++ pageData.leafValues
         )
-      parameters match {
-        case ExportParameters(
-            rootHash,
-            store,
-            takeSize,
-            skipSize,
-            withSkip,
-            exportData,
-            lastPrefix
-            ) =>
-          for {
-            exported <- sequentialExport(
-                         rootHash,
-                         if (withSkip || lastPrefix.get.isEmpty) None else lastPrefix,
-                         if (withSkip) skipSize else 0,
-                         takeSize,
-                         store.get1,
-                         exportSettings
-                       )
-
-            pageExportData = exported._1
-            pageKVDBKeys   = pageExportData.nodeKeys
-            pageKVDBValues = pageExportData.nodeValues
-
-            result = ExportParameters(
-              rootHash,
-              store,
-              takeSize,
-              if (withSkip) skipSize + takeSize else skipSize,
-              withSkip,
-              collectExportData(exportData, pageExportData),
-              exported._2
-            )
-
-          } yield
-            if (pageKVDBKeys.isEmpty && pageKVDBValues.isEmpty) result.asRight
-            else result.asLeft
-      }
+      for {
+        exported <- sequentialExport(
+                     rootHash,
+                     if (withSkip || p.lastPrefix.get.isEmpty) None else p.lastPrefix,
+                     if (withSkip) p.skipSize else 0,
+                     p.takeSize,
+                     store.get1,
+                     exportSettings
+                   )
+        pageExportData = exported._1
+        pageKVDBKeys   = pageExportData.nodeKeys
+        pageKVDBValues = pageExportData.nodeValues
+        result = ExportParameters(
+          rootHash,
+          store,
+          p.takeSize,
+          if (withSkip) p.skipSize + p.takeSize else p.skipSize,
+          withSkip,
+          collectExportData(p.exportData, pageExportData),
+          exported._2
+        )
+      } yield
+        if (pageKVDBKeys.isEmpty && pageKVDBValues.isEmpty) result.asRight
+        else result.asLeft
     }
 
     //  Initialize structure for export
