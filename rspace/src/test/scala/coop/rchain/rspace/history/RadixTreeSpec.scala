@@ -786,11 +786,6 @@ class RadixTreeSpec extends FlatSpec with Matchers with OptionValues with InMemo
                                 exportSettings
                               )
 
-      //  Data exported from created storage must me equal to data from source store
-      _ = {
-        assert(firstExportData == reconstructExportData, "Error of validation")
-        ()
-      }
       result = MultipageExportResults(firstExportData, reconstructExportData)
     } yield result
   }
