@@ -21,8 +21,6 @@ object codecs {
 
   val codecBlockHash = xmapToByteString(bytes(BlockHash.Length))
 
-  val codecApprovedBlockHash = xmapToByteString(bytes(1)) // Length of approvedBlockKey is just 1 byte
-
   val codecBlockMetadata = variableSizeBytes(uint16, bytes).xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
     blockMetadata => ByteVector(blockMetadata.toByteString.toByteArray)
