@@ -1,7 +1,7 @@
 package coop.rchain.blockstorage
 
 import cats.effect.Sync
-import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.casper.protocol.ApprovedBlock
 import coop.rchain.shared.syntax._
 

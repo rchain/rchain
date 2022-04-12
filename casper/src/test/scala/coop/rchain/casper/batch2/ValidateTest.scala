@@ -3,7 +3,7 @@ package coop.rchain.casper.batch2
 import cats.Monad
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper._

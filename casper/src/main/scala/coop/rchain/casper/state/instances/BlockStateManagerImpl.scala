@@ -2,7 +2,7 @@ package coop.rchain.casper.state.instances
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.state.BlockStateManager
 

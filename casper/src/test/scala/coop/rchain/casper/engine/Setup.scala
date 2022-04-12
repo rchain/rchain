@@ -116,10 +116,14 @@ object Setup {
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     val kvm = InMemoryStoreManager[Task]()
     implicit val blockStore = {
-      BlockStore[Task](kvm).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+      coop.rchain.blockstorage.blockStore
+        .create[Task](kvm)
+        .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     }
     implicit val approvedStore = {
-      ApprovedStore[Task](kvm).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+      coop.rchain.blockstorage.approvedStore
+        .create[Task](kvm)
+        .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     }
     implicit val blockDagStorage = BlockDagKeyValueStorage
       .create(kvm)

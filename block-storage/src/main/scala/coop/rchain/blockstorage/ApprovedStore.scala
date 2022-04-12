@@ -8,10 +8,10 @@ import coop.rchain.shared.syntax._
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}
 import scodec.codecs._
 
-object ApprovedStore {
+object approvedStore {
   type ApprovedStore[F[_]] = KeyValueTypedStore[F, Byte, ApprovedBlock]
 
-  def apply[F[_]: Sync](
+  def create[F[_]: Sync](
       kvm: KeyValueStoreManager[F]
   ): F[KeyValueTypedStore[F, Byte, ApprovedBlock]] =
     kvm

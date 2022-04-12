@@ -3,7 +3,7 @@ package coop.rchain.casper.api
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}

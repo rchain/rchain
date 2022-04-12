@@ -1,7 +1,7 @@
 package coop.rchain.casper.util
 
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts._
@@ -155,7 +155,7 @@ object GenesisBuilder {
       mStore          <- RuntimeManager.mergeableStore(kvsManager)
       runtimeManager  <- RuntimeManager(rStore, mStore, Genesis.NonNegativeMergeableTagName)
       genesis         <- Genesis.createGenesisBlock(runtimeManager, genesisParameters)
-      blockStore      <- BlockStore[Task](kvsManager)
+      blockStore      <- blockStore.create[Task](kvsManager)
       _               <- blockStore.put(genesis.blockHash, genesis)
       blockDagStorage <- BlockDagKeyValueStorage.create[Task](kvsManager)
       _               <- blockDagStorage.insert(genesis, invalid = false, approved = true)

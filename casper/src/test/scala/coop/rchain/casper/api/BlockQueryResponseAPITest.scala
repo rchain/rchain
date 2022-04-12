@@ -3,7 +3,7 @@ package coop.rchain.casper.api
 import cats.effect.{Concurrent, Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
 import coop.rchain.casper.batch2.EngineWithCasper

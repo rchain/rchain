@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager.legacyRSpacePathPrefix
 import coop.rchain.metrics.{Metrics, NoopSpan}
@@ -37,7 +37,7 @@ object StateBalances {
     val legacyRSpaceDirSupport                               = Files.exists(oldRSpacePath)
     for {
       rnodeStoreManager <- RNodeKeyValueStoreManager[F](dataDir, legacyRSpaceDirSupport)
-      blockStore        <- BlockStore(rnodeStoreManager)
+      blockStore        <- blockStore.create(rnodeStoreManager)
       blockOpt          <- blockStore.get1(blockHash.unsafeHexToByteString)
       block             = blockOpt.get
       store             <- rnodeStoreManager.rSpaceStores

@@ -2,7 +2,7 @@ package coop.rchain.casper.api
 
 import cats.effect.Sync
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.{PrettyPrinter, SafetyOracle}
 import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.casper.engine.Engine

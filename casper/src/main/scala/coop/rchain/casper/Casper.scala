@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import cats.{Applicative, Show}
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}

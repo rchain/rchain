@@ -2,7 +2,7 @@ package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.engine.EngineCell.EngineCell

@@ -1,7 +1,7 @@
 package coop.rchain.blockstorage.dag
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.{blockMessageToBytes, bytesToBlockMessage}
+import coop.rchain.blockstorage.blockStore.{blockMessageToBytes, bytesToBlockMessage}
 import coop.rchain.casper.protocol._
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash

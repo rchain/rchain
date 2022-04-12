@@ -4,8 +4,8 @@ import cats.Applicative
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.ApprovedStore.ApprovedStore
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage

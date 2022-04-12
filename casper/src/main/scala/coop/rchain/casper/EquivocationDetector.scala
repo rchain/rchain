@@ -4,7 +4,7 @@ import cats.effect.Sync
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
 import coop.rchain.blockstorage.syntax.syntaxBlockStore
 import coop.rchain.blockstorage.util.DoublyLinkedDag
