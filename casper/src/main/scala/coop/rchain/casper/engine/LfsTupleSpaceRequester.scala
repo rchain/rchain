@@ -35,9 +35,10 @@ object LfsTupleSpaceRequester {
     */
   type StatePartPath = Seq[(Blake2b256Hash, Option[Byte])]
 
-  // TODO: extract this as a parameter
-  // 20,000 records uses about 2G of direct buffer memory on importing side
-  val pageSize = 20000
+  /**
+    * Number of nodes in LFS sync data transfer
+    */
+  val pageSize = 750
 
   /**
     * State to control processing of requests
