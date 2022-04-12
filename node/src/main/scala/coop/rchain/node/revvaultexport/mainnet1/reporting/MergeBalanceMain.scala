@@ -192,10 +192,6 @@ object MergeBalanceMain {
                                adjustAccount = account.copy(
                                  adjustedStateBalance = balance
                                )
-                               _ <- Log[Task]
-                                     .info(
-                                       s"Should Before adjusted after ${adjustAccount}"
-                                     )
                              } yield acc :+ adjustAccount
                              else {
                                val adjustAccount =
