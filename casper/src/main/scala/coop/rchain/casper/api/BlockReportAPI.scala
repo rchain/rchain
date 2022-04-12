@@ -3,9 +3,17 @@ package coop.rchain.casper.api
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.syntax.all._
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
-import coop.rchain.casper._
+import coop.rchain.casper.{
+  CasperMetricsSource,
+  DeployReportResult,
+  MultiParentCasper,
+  ReportingCasper,
+  SafetyOracle,
+  SystemDeployReportResult
+}
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
 import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
@@ -23,15 +31,14 @@ import coop.rchain.casper.protocol.{
 }
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.Log
+import coop.rchain.shared.{Base16, Log}
 import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle](
+class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
     reportingCasper: ReportingCasper[F],
-    reportStore: ReportStore[F],
-    blockStore: BlockStore[F]
+    reportStore: ReportStore[F]
 ) {
   implicit val source                                       = Metrics.Source(CasperMetricsSource, "report-replay")
   val blockLockMap: TrieMap[BlockHash, MetricsSemaphore[F]] = TrieMap.empty
@@ -62,14 +69,11 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle](
                )
     } yield result
 
-  def blockReport(
-      hash: BlockHash,
-      forceReplay: Boolean
-  ): F[ApiErr[BlockEventInfo]] = {
+  def blockReport(hash: BlockHash, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
     def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
       implicit val c = casper
       for {
-        maybeBlock <- blockStore.get1(hash)
+        maybeBlock <- BlockStore[F].get1(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
     }
@@ -127,9 +131,8 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle](
 }
 
 object BlockReportAPI {
-  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle](
+  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
       reportingCasper: ReportingCasper[F],
-      reportStore: ReportStore[F],
-      blockStore: BlockStore[F]
-  ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore, blockStore)
+      reportStore: ReportStore[F]
+  ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore)
 }

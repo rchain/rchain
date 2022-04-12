@@ -25,11 +25,10 @@ import scala.collection.immutable
 import scala.collection.immutable.Map
 
 object ProtoUtil {
-  def getMainChainUntilDepth[F[_]: Sync](
+  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
       estimate: BlockMessage,
       acc: IndexedSeq[BlockMessage],
-      depth: Int,
-      blockStore: BlockStore[F]
+      depth: Int
   ): F[IndexedSeq[BlockMessage]] = {
     val parentsHashes       = parentHashes(estimate)
     val maybeMainParentHash = parentsHashes.headOption
@@ -37,7 +36,7 @@ object ProtoUtil {
       mainChain <- maybeMainParentHash match {
                     case Some(mainParentHash) =>
                       for {
-                        updatedEstimate <- blockStore.getUnsafe(mainParentHash)
+                        updatedEstimate <- BlockStore[F].getUnsafe(mainParentHash)
                         depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
                         newDepth        = depth + depthDelta.toInt
                         mainChain <- if (newDepth <= 0) {
@@ -46,8 +45,7 @@ object ProtoUtil {
                                       getMainChainUntilDepth(
                                         updatedEstimate,
                                         acc :+ estimate,
-                                        newDepth,
-                                        blockStore
+                                        newDepth
                                       )
                                     }
                       } yield mainChain
@@ -109,12 +107,9 @@ object ProtoUtil {
       sortedWeights.take(maxCliqueMinSize).sum
     }
 
-  def mainParent[F[_]: Monad](
-      blockMessage: BlockMessage,
-      blockStore: BlockStore[F]
-  ): F[Option[BlockMessage]] = {
+  def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
     import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(blockStore.get1)
+    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get1)
   }
 
   def weightFromValidatorByDag[F[_]: Monad](
@@ -137,27 +132,26 @@ object ProtoUtil {
     } yield result
   }
 
-  def weightFromValidator[F[_]: Monad](
+  def weightFromValidator[F[_]: Monad: BlockStore](
       b: BlockMessage,
-      validator: ByteString,
-      blockStore: BlockStore[F]
+      validator: ByteString
   ): F[Long] =
     for {
-      maybeMainParent <- mainParent(b, blockStore)
+      maybeMainParent <- mainParent(b)
       weightFromValidator = maybeMainParent
         .map(weightMap(_).getOrElse(validator, 0L))
         .getOrElse(weightMap(b).getOrElse(validator, 0L)) //no parents means genesis -- use itself
     } yield weightFromValidator
 
-  def weightFromSender[F[_]: Monad](b: BlockMessage, blockStore: BlockStore[F]): F[Long] =
-    weightFromValidator(b, b.sender, blockStore)
+  def weightFromSender[F[_]: Monad: BlockStore](b: BlockMessage): F[Long] =
+    weightFromValidator(b, b.sender)
 
   def parentHashes(b: BlockMessage): List[ByteString] =
     b.header.parentsHashList
 
-  def getParents[F[_]: Sync](b: BlockMessage, blockStore: BlockStore[F]): F[List[BlockMessage]] = {
+  def getParents[F[_]: Sync: BlockStore](b: BlockMessage): F[List[BlockMessage]] = {
     import cats.instances.list._
-    parentHashes(b).traverse(blockStore.getUnsafe)
+    parentHashes(b).traverse(BlockStore[F].getUnsafe)
   }
 
   def getParentsMetadata[F[_]: Sync](
@@ -222,7 +216,7 @@ object ProtoUtil {
         acc.updated(validator, block)
     }
 
-  def toLatestMessage[F[_]: Sync](
+  def toLatestMessage[F[_]: Sync: BlockStore](
       justifications: Seq[Justification],
       dag: BlockDagRepresentation[F]
   ): F[immutable.Map[Validator, BlockMetadata]] = {
@@ -324,7 +318,7 @@ object ProtoUtil {
   }
 
   // Return hashes of all blocks that are yet to be seen by the passed in block
-  def unseenBlockHashes[F[_]: Sync](
+  def unseenBlockHashes[F[_]: Sync: BlockStore](
       dag: BlockDagRepresentation[F],
       block: BlockMessage
   ): F[Set[BlockHash]] = {

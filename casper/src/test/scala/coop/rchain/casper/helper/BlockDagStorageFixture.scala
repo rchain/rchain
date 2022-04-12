@@ -2,8 +2,8 @@ package coop.rchain.casper.helper
 
 import cats.effect.Concurrent
 import cats.syntax.all._
+import coop.rchain.blockstorage.blockStore
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.{
   BlockDagKeyValueStorage,
   BlockDagStorage,

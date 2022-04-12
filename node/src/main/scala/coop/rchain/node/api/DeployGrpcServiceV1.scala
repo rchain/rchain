@@ -28,7 +28,7 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
+  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
@@ -36,8 +36,7 @@ object DeployGrpcServiceV1 {
       networkId: String,
       shardId: String,
       minPhloPrice: Long,
-      isNodeReadOnly: Boolean,
-      blockStore: BlockStore[F]
+      isNodeReadOnly: Boolean
   )(
       implicit worker: Scheduler
   ): DeployServiceV1GrpcMonix.DeployService =
@@ -101,7 +100,7 @@ object DeployGrpcServiceV1 {
           )
 
       def getBlock(request: BlockQuery): Task[BlockResponse] =
-        defer(BlockAPI.getBlock[F](request.hash, blockStore)) { r =>
+        defer(BlockAPI.getBlock[F](request.hash)) { r =>
           import BlockResponse.Message
           import BlockResponse.Message._
           BlockResponse(r.fold[Message](Error, BlockInfo))
@@ -123,8 +122,7 @@ object DeployGrpcServiceV1 {
                           depth,
                           apiMaxBlocksLimit,
                           startBlockNumber,
-                          (ts, lfb) =>
-                            GraphzGenerator.dagAsCluster[F](ts, lfb, config, ser, blockStore),
+                          (ts, lfb) => GraphzGenerator.dagAsCluster[F](ts, lfb, config, ser),
                           ref.get
                         )
                         .map(x => x.getOrElse(Vector.empty[String]))
@@ -139,21 +137,19 @@ object DeployGrpcServiceV1 {
       }
 
       def machineVerifiableDag(request: MachineVerifyQuery): Task[MachineVerifyResponse] =
-        defer(BlockAPI.machineVerifiableDag[F](apiMaxBlocksLimit, apiMaxBlocksLimit, blockStore)) {
-          r =>
-            import MachineVerifyResponse.Message
-            import MachineVerifyResponse.Message._
-            MachineVerifyResponse(r.fold[Message](Error, Content))
+        defer(BlockAPI.machineVerifiableDag[F](apiMaxBlocksLimit, apiMaxBlocksLimit)) { r =>
+          import MachineVerifyResponse.Message
+          import MachineVerifyResponse.Message._
+          MachineVerifyResponse(r.fold[Message](Error, Content))
         }
 
       def showMainChain(request: BlocksQuery): Observable[BlockInfoResponse] =
         Observable
           .fromTask(
-            deferCollection(BlockAPI.showMainChain[F](request.depth, apiMaxBlocksLimit, blockStore)) {
-              r =>
-                import BlockInfoResponse.Message
-                import BlockInfoResponse.Message._
-                BlockInfoResponse(r.fold[Message](Error, BlockInfo))
+            deferCollection(BlockAPI.showMainChain[F](request.depth, apiMaxBlocksLimit)) { r =>
+              import BlockInfoResponse.Message
+              import BlockInfoResponse.Message._
+              BlockInfoResponse(r.fold[Message](Error, BlockInfo))
             }
           )
           .flatMap(Observable.fromIterable)
@@ -163,7 +159,7 @@ object DeployGrpcServiceV1 {
           .fromTask(
             deferCollection(
               BlockAPI
-                .getBlocks[F](request.depth, apiMaxBlocksLimit, blockStore)
+                .getBlocks[F](request.depth, apiMaxBlocksLimit)
                 .map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>
               import BlockInfoResponse.Message
@@ -175,12 +171,7 @@ object DeployGrpcServiceV1 {
 
       def listenForDataAtName(request: DataAtNameQuery): Task[ListeningNameDataResponse] =
         defer(
-          BlockAPI.getListeningNameDataResponse[F](
-            request.depth,
-            request.name,
-            apiMaxBlocksLimit,
-            blockStore
-          )
+          BlockAPI.getListeningNameDataResponse[F](request.depth, request.name, apiMaxBlocksLimit)
         ) { r =>
           import ListeningNameDataResponse.Message
           import ListeningNameDataResponse.Message._
@@ -192,17 +183,15 @@ object DeployGrpcServiceV1 {
         }
 
       def getDataAtName(request: DataAtNameByBlockQuery): Task[RhoDataResponse] =
-        defer(
-          BlockAPI
-            .getDataAtPar[F](request.par, request.blockHash, request.usePreStateHash, blockStore)
-        ) { r =>
-          import RhoDataResponse.Message
-          import RhoDataResponse.Message._
-          RhoDataResponse(
-            r.fold[Message](
-              Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
+        defer(BlockAPI.getDataAtPar[F](request.par, request.blockHash, request.usePreStateHash)) {
+          r =>
+            import RhoDataResponse.Message
+            import RhoDataResponse.Message._
+            RhoDataResponse(
+              r.fold[Message](
+                Error, { case (par, block) => Payload(RhoDataPayload(par, block)) }
+              )
             )
-          )
         }
 
       def listenForContinuationAtName(
@@ -213,8 +202,7 @@ object DeployGrpcServiceV1 {
             .getListeningNameContinuationResponse[F](
               request.depth,
               request.names,
-              apiMaxBlocksLimit,
-              blockStore
+              apiMaxBlocksLimit
             )
         ) { r =>
           import ContinuationAtNameResponse.Message
@@ -227,7 +215,7 @@ object DeployGrpcServiceV1 {
         }
 
       def findDeploy(request: FindDeployQuery): Task[FindDeployResponse] =
-        defer(BlockAPI.findDeploy[F](request.deployId, blockStore)) { r =>
+        defer(BlockAPI.findDeploy[F](request.deployId)) { r =>
           import FindDeployResponse.Message
           import FindDeployResponse.Message._
           FindDeployResponse(r.fold[Message](Error, BlockInfo))
@@ -276,8 +264,7 @@ object DeployGrpcServiceV1 {
               request.term,
               if (request.blockHash.isEmpty) none[String] else Some(request.blockHash),
               request.usePreStateHash,
-              devMode,
-              blockStore
+              devMode
             )
         ) { r =>
           import ExploratoryDeployResponse.Message
@@ -314,8 +301,7 @@ object DeployGrpcServiceV1 {
                 .getBlocksByHeights[F](
                   request.startBlockNumber,
                   request.endBlockNumber,
-                  apiMaxBlocksLimit,
-                  blockStore
+                  apiMaxBlocksLimit
                 )
                 .map(_.getOrElse(List.empty[LightBlockInfo]))
             ) { r =>

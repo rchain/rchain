@@ -1,14 +1,17 @@
 package coop.rchain.casper.batch1
 
-import coop.rchain.casper.ReportingCasper
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode.Effect
 import coop.rchain.casper.protocol.CommEvent
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.rholang.Resources
+import coop.rchain.casper.{ReportStore, ReportingCasper}
+import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.rspace.syntax._
+import coop.rchain.rspace.ReportingRspace.ReportingComm
 import coop.rchain.shared.scalatestcontrib.effectTest
+import coop.rchain.store.InMemoryStoreManager
+import coop.rchain.rspace.syntax._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -25,11 +28,12 @@ class MultiParentCasperReportingSpec extends FlatSpec with Matchers with Inspect
       """ for(@a <- @"1"){ Nil } | @"1"!("x") """
     TestNode.standaloneEff(genesis).use { node =>
       import node._
+      import coop.rchain.rholang.interpreter.storage._
 
       for {
         kvm             <- Resources.mkTestRNodeStoreManager[Effect](node.dataDir)
         rspaceStore     <- kvm.rSpaceStores
-        reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore, node.approvedStore)
+        reportingCasper = ReportingCasper.rhoReporter[Effect](rspaceStore)
         deploy = ConstructDeploy
           .sourceDeployNow(correctRholang, shardId = this.genesis.genesisBlock.shardId)
         signedBlock <- node.addBlock(deploy)

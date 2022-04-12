@@ -1,27 +1,27 @@
 package coop.rchain.casper.api
 
+import scala.collection.immutable.HashMap
 import cats.effect.{Concurrent, Resource, Sync}
+import coop.rchain.casper._
+import coop.rchain.casper.engine._
+import EngineCell._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
-import coop.rchain.casper._
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.engine._
+import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.metrics.Metrics
+import coop.rchain.casper.batch2.EngineWithCasper
+import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.shared.Cell
+import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.syntax._
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Matchers}
-
-import scala.collection.immutable.HashMap
+import monix.execution.Scheduler.Implicits.global
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -47,7 +47,7 @@ class BlocksResponseAPITest
       dagstore: IndexedBlockDagStorage[Task]
   ) =
     for {
-      genesis <- createGenesis[Task](bonds = bonds, blockStore = blockstore)
+      genesis <- createGenesis[Task](bonds = bonds)
       _       <- dagstore.insert(genesis, invalid = false, approved = true)
       _       <- blockstore.put(genesis.blockHash, genesis)
       b2 <- createBlock[Task](
@@ -55,56 +55,49 @@ class BlocksResponseAPITest
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
       b3 <- createBlock[Task](
              Seq(genesis.blockHash),
              genesis,
              v1,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> genesis.blockHash, v2 -> genesis.blockHash, v3 -> genesis.blockHash)
            )
       b4 <- createBlock[Task](
              Seq(b2.blockHash),
              genesis,
              v3,
              bonds,
-             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> genesis.blockHash, v2 -> b2.blockHash, v3 -> b2.blockHash)
            )
       b5 <- createBlock[Task](
              Seq(b3.blockHash),
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> genesis.blockHash)
            )
       b6 <- createBlock[Task](
              Seq(b4.blockHash),
              genesis,
              v1,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> b3.blockHash, v2 -> b2.blockHash, v3 -> b4.blockHash)
            )
       b7 <- createBlock[Task](
              Seq(b5.blockHash),
              genesis,
              v3,
              bonds,
-             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> b3.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
       b8 <- createBlock[Task](
              Seq(b6.blockHash),
              genesis,
              v2,
              bonds,
-             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash),
-             blockStore = blockstore
+             HashMap(v1 -> b6.blockHash, v2 -> b5.blockHash, v3 -> b4.blockHash)
            )
     } yield genesis
 
@@ -117,19 +110,19 @@ class BlocksResponseAPITest
           tips    <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips,
-                           blockStore
+                           tips.tips
                          )
           logEff     = new LogStub[Task]
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.showMainChain[Task](10, maxBlockLimit, blockStore)(
+          blocksResponse <- BlockAPI.showMainChain[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
-                             cliqueOracleEffect
+                             cliqueOracleEffect,
+                             blockStore
                            )
         } yield blocksResponse.length should be(5)
       }
@@ -145,19 +138,19 @@ class BlocksResponseAPITest
           tips       <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips,
-                           blockStore
+                           tips.tips
                          )
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           logEff     = new LogStub[Task]
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit, blockStore)(
+          blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
-                             cliqueOracleEffect
+                             cliqueOracleEffect,
+                             blockStore
                            )
         } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
       }
@@ -172,19 +165,19 @@ class BlocksResponseAPITest
         tips       <- Estimator[Task].tips(dag, genesis)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
-                         tips.tips,
-                         blockStore
+                         tips.tips
                        )
         logEff     = new LogStub[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
         cliqueOracleEffect = SafetyOracle
           .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
-        blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit, blockStore)(
+        blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
                            engineCell,
                            logEff,
-                           cliqueOracleEffect
+                           cliqueOracleEffect,
+                           blockStore
                          )
       } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
     }
@@ -200,19 +193,19 @@ class BlocksResponseAPITest
           tips       <- Estimator[Task].tips(dag, genesis)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips,
-                           blockStore
+                           tips.tips
                          )
           logEff     = new LogStub[Task]
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           cliqueOracleEffect = SafetyOracle
             .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit, blockStore)(
+          blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
-                             cliqueOracleEffect
+                             cliqueOracleEffect,
+                             blockStore
                            )
           blocks = blocksResponse.right.get
           _      = blocks.length should be(4)

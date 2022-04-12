@@ -5,9 +5,10 @@ import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.dag.DagOps
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.BlockMetadata
 import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.models.BlockMetadata
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.Validator.Validator
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 
@@ -27,15 +28,14 @@ class DagOperationsTest
   "lowest common universal ancestor" should "be computed properly" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       def createBlockWithMeta(genesis: BlockMessage, bh: BlockHash*): Task[BlockMetadata] =
-        createBlock[Task](bh.toSeq, genesis, blockStore = blockStore)
-          .map(b => BlockMetadata.fromBlock(b, false))
+        createBlock[Task](bh.toSeq, genesis).map(b => BlockMetadata.fromBlock(b, false))
 
       def createBlockWithMetaAndSeq(
           genesis: BlockMessage,
           seqNum: Int,
           bh: BlockHash*
       ): Task[BlockMetadata] =
-        createBlock[Task](bh.toSeq, genesis, seqNum = seqNum, blockStore = blockStore)
+        createBlock[Task](bh.toSeq, genesis, seqNum = seqNum)
           .map(b => BlockMetadata.fromBlock(b, false))
 
       implicit def blockMetadataToBlockHash(bm: BlockMetadata): BlockHash = bm.blockHash
@@ -58,7 +58,7 @@ class DagOperationsTest
        *         genesis
        */
       for {
-        genesis <- createGenesis[Task](blockStore = blockStore)
+        genesis <- createGenesis[Task]()
         b1      <- createBlockWithMeta(genesis, genesis.blockHash)
         b2      <- createBlockWithMetaAndSeq(genesis, seqNum = 2, b1)
         b3      <- createBlockWithMetaAndSeq(genesis, seqNum = 2, b1)
@@ -106,14 +106,14 @@ class DagOperationsTest
          */
         implicit def toMetadata(b: BlockMessage) = BlockMetadata.fromBlock(b, false)
         for {
-          genesis <- createGenesis[Task](blockStore = blockStore)
-          b1      <- createBlock[Task](Seq(genesis.blockHash), genesis, blockStore = blockStore)
-          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis, blockStore = blockStore)
-          b3      <- createBlock[Task](Seq(b1.blockHash), genesis, blockStore = blockStore)
-          b4      <- createBlock[Task](Seq(b3.blockHash), genesis, blockStore = blockStore)
-          b5      <- createBlock[Task](Seq(b3.blockHash), genesis, blockStore = blockStore)
-          b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), genesis, blockStore = blockStore)
-          b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash), genesis, blockStore = blockStore)
+          genesis <- createGenesis[Task]()
+          b1      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+          b2      <- createBlock[Task](Seq(genesis.blockHash), genesis)
+          b3      <- createBlock[Task](Seq(b1.blockHash), genesis)
+          b4      <- createBlock[Task](Seq(b3.blockHash), genesis)
+          b5      <- createBlock[Task](Seq(b3.blockHash), genesis)
+          b6      <- createBlock[Task](Seq(b4.blockHash, b5.blockHash), genesis)
+          b7      <- createBlock[Task](Seq(b2.blockHash, b5.blockHash), genesis)
 
           dag <- blockDagStorage.getRepresentation
 

@@ -1,13 +1,17 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
+import cats._
+import cats.data._
 import cats.syntax.all._
+import cats.effect._
+import cats.effect.concurrent.Ref
 import coop.rchain.casper._
-import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib._
-import coop.rchain.shared.syntax._
+import coop.rchain.casper.helper.RSpaceStateManagerTestImpl
 import coop.rchain.shared.{Cell, EventPublisher}
+import coop.rchain.shared.syntax._
+import fs2.concurrent.Queue
 import monix.eval.Task
 import org.scalatest.WordSpec
 
@@ -54,9 +58,7 @@ class GenesisCeremonyMasterSpec extends WordSpec {
             fixture.blockProcessingState,
             fixture.casperShardConf,
             Some(validatorId),
-            disableStateExporter = true,
-            blockStore,
-            approvedStore
+            disableStateExporter = true
           )
           .startAndForget
           .runToFuture

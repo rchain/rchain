@@ -39,7 +39,7 @@ object CasperLaunch {
     /* State */       : EnvVars: EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -47,9 +47,7 @@ object CasperLaunch {
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
-      disableStateExporter: Boolean,
-      blockStore: BlockStore[F],
-      approvedStore: ApprovedStore[F]
+      disableStateExporter: Boolean
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
       val casperShardConf = CasperShardConf(
@@ -71,7 +69,7 @@ object CasperLaunch {
         conf.minPhloPrice
       )
       def launch(): F[Unit] =
-        approvedStore.getApprovedBlock map {
+        ApprovedStore[F].getApprovedBlock map {
           case Some(approvedBlock) =>
             val msg = "Approved block found, reconnecting to existing network"
             val action =
@@ -111,7 +109,7 @@ object CasperLaunch {
             // or
             // 2. blocks which dependencies are in DAG, so they can be added to DAG
             // In both scenarios the way to proceed is to send them to Casper
-            pendantsStored <- pendants.toList.filterA(blockStore.contains(_))
+            pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
             _ <- Log[F].info(
                   s"Checking pendant hashes: ${pendantsStored.size} items in CasperBuffer."
                 )
@@ -121,7 +119,7 @@ object CasperLaunch {
                   .traverse_(
                     hash =>
                       for {
-                        block <- blockStore.get1(hash).map(_.get)
+                        block <- BlockStore[F].get1(hash).map(_.get)
                         _ <- Log[F].info(
                               s"Pendant ${PrettyPrinter.buildString(block, short = true)} " +
                                 s"is available in BlockStore, sending to Casper."
@@ -146,8 +144,7 @@ object CasperLaunch {
                      .hashSetCasper[F](
                        validatorId,
                        casperShardConf,
-                       ab,
-                       blockStore
+                       ab
                      )
           init = for {
             _ <- askPeersForForkChoiceTips
@@ -163,8 +160,7 @@ object CasperLaunch {
                   approvedBlock,
                   validatorId,
                   init,
-                  disableStateExporter,
-                  blockStore
+                  disableStateExporter
                 )
         } yield ()
       }
@@ -199,9 +195,7 @@ object CasperLaunch {
                   blocksInProcessing,
                   casperShardConf,
                   validatorId.get,
-                  bap,
-                  blockStore,
-                  approvedStore
+                  bap
                 )
               )
         } yield ()
@@ -237,9 +231,7 @@ object CasperLaunch {
                     blocksInProcessing,
                     casperShardConf,
                     validatorId,
-                    disableStateExporter,
-                    blockStore,
-                    approvedStore
+                    disableStateExporter
                   )
               )
           _ <- EngineCell[F].set(new GenesisCeremonyMaster[F](abp))
@@ -260,9 +252,7 @@ object CasperLaunch {
                 // from genesis to the most recent one (default)
                 CommUtil[F].requestApprovedBlock(trimState),
                 trimState,
-                disableStateExporter,
-                blockStore,
-                approvedStore
+                disableStateExporter
               )
         } yield ()
 

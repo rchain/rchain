@@ -1,25 +1,31 @@
 package coop.rchain.node.api
 
+import cats.effect.concurrent.Deferred
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.casper.{Casper, ProposeFunction, SafetyOracle}
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
+import coop.rchain.casper.blocks.proposer.ProposerResult
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.{BlockInfo, DataWithBlockInfo, DeployData, LightBlockInfo}
-import coop.rchain.casper.{ProposeFunction, SafetyOracle}
-import coop.rchain.comm.discovery.NodeDiscovery
-import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
 import coop.rchain.metrics.Span
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.GUnforgeable.UnfInstance.{GDeployIdBody, GDeployerIdBody, GPrivateBody}
 import coop.rchain.models._
-import coop.rchain.models.syntax._
 import coop.rchain.node.api.WebApi._
 import coop.rchain.node.web.{CacheTransactionAPI, TransactionResponse}
+import coop.rchain.comm.discovery.NodeDiscovery
+import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
+import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
+import coop.rchain.state.StateManager
+import fs2.concurrent.Queue
 
 trait WebApi[F[_]] {
   def status: F[ApiStatus]
@@ -60,7 +66,7 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle](
+  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],
@@ -68,8 +74,7 @@ object WebApi {
       networkId: String,
       shardId: String,
       minPhloPrice: Long,
-      isNodeReadOnly: Boolean,
-      blockStore: BlockStore[F]
+      isNodeReadOnly: Boolean
   ) extends WebApi[F] {
     import WebApiSyntax._
 
@@ -97,13 +102,13 @@ object WebApi {
 
     def listenForDataAtName(req: DataAtNameRequest): F[DataAtNameResponse] =
       BlockAPI
-        .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit, blockStore)
+        .getListeningNameDataResponse(req.depth, toPar(req), apiMaxBlocksLimit)
         .flatMap(_.liftToBlockApiErr)
         .map(toDataAtNameResponse)
 
     def getDataAtPar(req: DataAtNameByBlockHashRequest): F[RhoDataResponse] =
       BlockAPI
-        .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash, blockStore)
+        .getDataAtPar(toPar(req), req.blockHash, req.usePreStateHash)
         .flatMap(_.liftToBlockApiErr)
         .map(toRhoDataResponse)
 
@@ -111,14 +116,14 @@ object WebApi {
       BlockAPI.lastFinalizedBlock[F].flatMap(_.liftToBlockApiErr)
 
     def getBlock(hash: String): F[BlockInfo] =
-      BlockAPI.getBlock[F](hash, blockStore).flatMap(_.liftToBlockApiErr)
+      BlockAPI.getBlock[F](hash).flatMap(_.liftToBlockApiErr)
 
     def getBlocks(depth: Int): F[List[LightBlockInfo]] =
-      BlockAPI.getBlocks[F](depth, apiMaxBlocksLimit, blockStore).flatMap(_.liftToBlockApiErr)
+      BlockAPI.getBlocks[F](depth, apiMaxBlocksLimit).flatMap(_.liftToBlockApiErr)
 
     def findDeploy(deployId: String): F[LightBlockInfo] =
       BlockAPI
-        .findDeploy[F](deployId.unsafeHexToByteString, blockStore)
+        .findDeploy[F](deployId.unsafeHexToByteString)
         .flatMap(_.liftToBlockApiErr)
 
     def exploratoryDeploy(
@@ -127,7 +132,7 @@ object WebApi {
         usePreStateHash: Boolean
     ): F[RhoDataResponse] =
       BlockAPI
-        .exploratoryDeploy(term, blockHash, usePreStateHash, devMode, blockStore)
+        .exploratoryDeploy(term, blockHash, usePreStateHash, devMode)
         .flatMap(_.liftToBlockApiErr)
         .map(toRhoDataResponse)
 
@@ -148,7 +153,7 @@ object WebApi {
 
     def getBlocksByHeights(startBlockNumber: Long, endBlockNumber: Long): F[List[LightBlockInfo]] =
       BlockAPI
-        .getBlocksByHeights(startBlockNumber, endBlockNumber, apiMaxBlocksLimit, blockStore)
+        .getBlocksByHeights(startBlockNumber, endBlockNumber, apiMaxBlocksLimit)
         .flatMap(_.liftToBlockApiErr)
 
     def isFinalized(hash: String): F[Boolean] =

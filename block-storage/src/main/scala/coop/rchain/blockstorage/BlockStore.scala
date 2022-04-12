@@ -12,6 +12,7 @@ import net.jpountz.lz4.{LZ4CompressorWithLength, LZ4DecompressorWithLength}
 
 object blockStore {
   type BlockStore[F[_]] = KeyValueTypedStore[F, BlockHash, BlockMessage]
+  def BlockStore[F[_]](implicit instance: BlockStore[F]): instance.type = instance
 
   def create[F[_]: Sync](
       kvm: KeyValueStoreManager[F]

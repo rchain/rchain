@@ -42,8 +42,7 @@ class CliqueOracleTest
       genesis,
       creator = creator,
       bonds = bonds,
-      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) },
-      blockStore = store
+      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) }
     )
 
   // See [[/docs/casper/images/cbc-casper_ping_pong_diagram.png]]
@@ -69,7 +68,7 @@ class CliqueOracleTest
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
+        genesis              <- createGenesis[Task](bonds = bonds)
         creator1             = createBlock(bonds)(genesis)(v1) _
         creator2             = createBlock(bonds)(genesis)(v2) _
         genesisJustification = HashMap(v1 -> genesis, v2 -> genesis)
@@ -106,7 +105,7 @@ class CliqueOracleTest
 
       implicit val cliqueOracleEffect = SafetyOracle.cliqueOracle[Task]
       for {
-        genesis              <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
+        genesis              <- createGenesis[Task](bonds = bonds)
         creator1             = createBlock(bonds)(genesis)(v1) _
         creator2             = createBlock(bonds)(genesis)(v2) _
         creator3             = createBlock(bonds)(genesis)(v3) _
@@ -153,7 +152,7 @@ class CliqueOracleTest
        */
 
       for {
-        ge       <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
+        ge       <- createGenesis[Task](bonds = bonds)
         creator0 = createBlock(bonds)(ge)(v0) _
         creator1 = createBlock(bonds)(ge)(v1) _
         creator2 = createBlock(bonds)(ge)(v2) _

@@ -2,8 +2,8 @@ package coop.rchain.casper.engine
 
 import cats.Applicative
 import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
+import cats.effect.{Concurrent, Sync, Timer}
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
@@ -27,7 +27,7 @@ import fs2.concurrent.Queue
 
 import scala.concurrent.duration._
 
-class GenesisCeremonyMaster[F[_]: Sync: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
+class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
@@ -53,16 +53,14 @@ object GenesisCeremonyMaster {
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
       blocksInProcessing: Ref[F, Set[BlockHash]],
       casperShardConf: CasperShardConf,
       validatorId: Option[ValidatorIdentity],
-      disableStateExporter: Boolean,
-      blockStore: BlockStore[F],
-      approvedStore: ApprovedStore[F]
+      disableStateExporter: Boolean
   ): F[Unit] =
     for {
       // This loop sleep can be short as it does not do anything except checking if there is last approved block available
@@ -75,20 +73,17 @@ object GenesisCeremonyMaster {
                    blocksInProcessing: Ref[F, Set[BlockHash]],
                    casperShardConf,
                    validatorId,
-                   disableStateExporter,
-                   blockStore,
-                   approvedStore
+                   disableStateExporter
                  )
                case Some(approvedBlock) =>
                  val ab = approvedBlock.candidate.block
                  for {
-                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock, blockStore, approvedStore)
+                   _ <- insertIntoBlockAndDagStore[F](ab, approvedBlock)
                    casper <- MultiParentCasper
                               .hashSetCasper[F](
                                 validatorId,
                                 casperShardConf: CasperShardConf,
-                                ab,
-                                blockStore
+                                ab
                               )
                    _ <- Engine
                          .transitionToRunning[F](
@@ -98,8 +93,7 @@ object GenesisCeremonyMaster {
                            approvedBlock,
                            validatorId,
                            ().pure[F],
-                           disableStateExporter,
-                           blockStore
+                           disableStateExporter
                          )
                    _ <- CommUtil[F].sendForkChoiceTipRequest
                  } yield ()

@@ -1,5 +1,6 @@
 package coop.rchain.casper
 
+import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import cats.{Applicative, Show}
@@ -8,14 +9,19 @@ import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
-import coop.rchain.casper.engine.BlockRetriever
+import coop.rchain.casper.engine.{BlockRetriever, Running}
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.catscontrib.ski.kp2
+import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.{Metrics, MetricsSemaphore, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.shared._
 
@@ -129,11 +135,10 @@ sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: Timer: SafetyOracle: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
       casperShardConf: CasperShardConf,
-      approvedBlock: BlockMessage,
-      blockStore: BlockStore[F]
+      approvedBlock: BlockMessage
   )(implicit runtimeManager: RuntimeManager[F]): F[MultiParentCasper[F]] =
     for {
       _ <- ().pure
@@ -141,8 +146,7 @@ sealed abstract class MultiParentCasperInstances {
       new MultiParentCasperImpl(
         validatorId,
         casperShardConf,
-        approvedBlock,
-        blockStore
+        approvedBlock
       )
     }
 }

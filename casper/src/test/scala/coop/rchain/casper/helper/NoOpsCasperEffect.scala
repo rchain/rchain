@@ -7,9 +7,9 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
-import coop.rchain.casper._
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
 import coop.rchain.casper.util.rholang.RuntimeManager
+import coop.rchain.casper.{BlockStatus, DeployError, MultiParentCasper, _}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
@@ -18,10 +18,9 @@ import coop.rchain.shared.syntax._
 
 import scala.collection.mutable.{Map => MutableMap}
 
-class NoOpsCasperEffect[F[_]: Sync: BlockDagStorage] private (
+class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
     private val store: MutableMap[BlockHash, BlockMessage],
-    estimatorFunc: IndexedSeq[BlockHash],
-    blockStore: BlockStore[F]
+    estimatorFunc: IndexedSeq[BlockHash]
 )(implicit runtimeManager: RuntimeManager[F])
     extends MultiParentCasper[F] {
 
@@ -48,7 +47,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockDagStorage] private (
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
   def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =
     for {
-      b <- blockStore.get1(bh)
+      b <- BlockStore[F].get1(bh)
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
@@ -67,23 +66,19 @@ class NoOpsCasperEffect[F[_]: Sync: BlockDagStorage] private (
 }
 
 object NoOpsCasperEffect {
-  def apply[F[_]: Sync: BlockDagStorage: RuntimeManager](
+  def apply[F[_]: Sync: BlockStore: BlockDagStorage: RuntimeManager](
       blocks: Map[BlockHash, BlockMessage] = Map.empty,
-      estimatorFunc: IndexedSeq[BlockHash] = Vector(ByteString.EMPTY),
-      blockStore: BlockStore[F]
+      estimatorFunc: IndexedSeq[BlockHash] = Vector(ByteString.EMPTY)
   ): F[NoOpsCasperEffect[F]] =
     for {
       _ <- blocks.toList.traverse_ {
-            case (blockHash, block) => blockStore.put(blockHash, block)
+            case (blockHash, block) => BlockStore[F].put(blockHash, block)
           }
-    } yield new NoOpsCasperEffect[F](MutableMap(blocks.toSeq: _*), estimatorFunc, blockStore)
-  def apply[F[_]: Sync: BlockDagStorage: RuntimeManager](
-      blockStore: BlockStore[F]
+    } yield new NoOpsCasperEffect[F](MutableMap(blocks.toSeq: _*), estimatorFunc)
+  def apply[F[_]: Sync: BlockStore: BlockDagStorage: RuntimeManager](): F[NoOpsCasperEffect[F]] =
+    apply(Map(ByteString.EMPTY -> getRandomBlock()), Vector(ByteString.EMPTY))
+  def apply[F[_]: Sync: BlockStore: BlockDagStorage: RuntimeManager](
+      blocks: Map[BlockHash, BlockMessage]
   ): F[NoOpsCasperEffect[F]] =
-    apply(Map(ByteString.EMPTY -> getRandomBlock()), Vector(ByteString.EMPTY), blockStore)
-  def apply[F[_]: Sync: BlockDagStorage: RuntimeManager](
-      blocks: Map[BlockHash, BlockMessage],
-      blockStore: BlockStore[F]
-  ): F[NoOpsCasperEffect[F]] =
-    apply(blocks, Vector(ByteString.EMPTY), blockStore)
+    apply(blocks, Vector(ByteString.EMPTY))
 }

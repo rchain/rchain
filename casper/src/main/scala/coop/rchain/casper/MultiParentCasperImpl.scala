@@ -26,6 +26,9 @@ import coop.rchain.models.BlockHash._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash => _, _}
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.internal
 import coop.rchain.shared._
 import coop.rchain.shared.syntax._
 
@@ -35,14 +38,13 @@ class MultiParentCasperImpl[F[_]
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
   /* Casper */      : Estimator: SafetyOracle
-  /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage
+  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
     validatorId: Option[ValidatorIdentity],
     // todo this should be read from chain, for now read from startup options
     casperShardConf: CasperShardConf,
-    approvedBlock: BlockMessage,
-    blockStore: BlockStore[F]
+    approvedBlock: BlockMessage
 ) extends MultiParentCasper[F] {
   import MultiParentCasperImpl._
 
@@ -70,10 +72,10 @@ class MultiParentCasperImpl[F[_]
     import cats.instances.list._
     for {
       pendants       <- CasperBufferStorage[F].getPendants
-      pendantsStored <- pendants.toList.filterA(blockStore.contains(_))
+      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
       depFreePendants <- pendantsStored.filterA { pendant =>
                           for {
-                            pendantBlock   <- blockStore.get1(pendant)
+                            pendantBlock   <- BlockStore[F].get1(pendant)
                             justifications = pendantBlock.get.justifications
                             // If even one of justifications is not in DAG - block is not dependency free
                             missingDep <- justifications
@@ -81,7 +83,7 @@ class MultiParentCasperImpl[F[_]
                                            .existsM(dagContains(_).not)
                           } yield !missingDep
                         }
-      r <- depFreePendants.traverse(blockStore.getUnsafe)
+      r <- depFreePendants.traverse(BlockStore[F].getUnsafe)
     } yield r
   }
 
@@ -116,7 +118,7 @@ class MultiParentCasperImpl[F[_]
     def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
       finalizedSet.toList.traverse { h =>
         for {
-          block   <- blockStore.getUnsafe(h)
+          block   <- BlockStore[F].getUnsafe(h)
           deploys = block.body.deploys.map(_.deploy)
 
           // Remove block deploys from persistent store
@@ -152,7 +154,7 @@ class MultiParentCasperImpl[F[_]
           newLfbFoundEffect
         )
       newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
-      blockMessage        <- blockStore.getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
+      blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
     } yield blockMessage
   }
 
@@ -176,7 +178,7 @@ class MultiParentCasperImpl[F[_]
     import cats.instances.list._
     for {
       pendants       <- CasperBufferStorage[F].getPendants
-      pendantsUnseen <- pendants.toList.filterA(blockStore.contains(_).not)
+      pendantsUnseen <- pendants.toList.filterA(BlockStore[F].contains(_).not)
       _ <- Log[F].debug(s"Requesting CasperBuffer pendant hashes, ${pendantsUnseen.size} items.") >>
             pendantsUnseen.toList.traverse_(
               dependency =>
@@ -216,7 +218,7 @@ class MultiParentCasperImpl[F[_]
       parents <- for {
                   // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
                   // bond maps that has biggest cumulative stake.
-                  blocks  <- tips.toList.traverse(blockStore.getUnsafe)
+                  blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
                   parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
                 } yield parents
       onChainState <- getOnChainState(parents.head)
@@ -256,7 +258,7 @@ class MultiParentCasperImpl[F[_]
                      )
                      .foldLeftF(Set.empty[Signed[DeployData]]) { (deploys, blockMetadata) =>
                        for {
-                         block        <- blockStore.getUnsafe(blockMetadata.blockHash)
+                         block        <- BlockStore[F].getUnsafe(blockMetadata.blockHash)
                          blockDeploys = ProtoUtil.deploys(block).map(_.deploy)
                        } yield deploys ++ blockDeploys
                      }
@@ -287,19 +289,12 @@ class MultiParentCasperImpl[F[_]
       for {
         _ <- EitherT(
               Validate
-                .blockSummary(
-                  b,
-                  approvedBlock,
-                  s,
-                  casperShardConf.shardName,
-                  deployLifespan,
-                  blockStore
-                )
+                .blockSummary(b, approvedBlock, s, casperShardConf.shardName, deployLifespan)
             )
         _ <- EitherT.liftF(Span[F].mark("post-validation-block-summary"))
         _ <- EitherT(
               InterpreterUtil
-                .validateBlockCheckpoint(b, s, RuntimeManager[F], blockStore)
+                .validateBlockCheckpoint(b, s, RuntimeManager[F])
                 .map {
                   case Left(ex)       => Left(ex)
                   case Right(Some(_)) => Right(BlockStatus.valid)
@@ -312,8 +307,7 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
         _ <- EitherT(
-              EquivocationDetector
-                .checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock, blockStore)
+              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
             )
         _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
 

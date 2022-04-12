@@ -1,24 +1,24 @@
 package coop.rchain.casper.blocks.proposer
 
-import cats.effect.Concurrent
-import cats.instances.list._
+import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import cats.instances.list._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{Header, _}
+import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.util.rholang.RuntimeManager.StateHash
 import coop.rchain.casper.util.rholang._
 import coop.rchain.casper.util.rholang.costacc.{CloseBlockDeploy, SlashDeploy}
-import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.casper.{CasperSnapshot, PrettyPrinter, ValidatorIdentity}
 import coop.rchain.crypto.PrivateKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
-import coop.rchain.shared.{Log, Stopwatch, Time}
+import coop.rchain.shared.{Base16, Log, Stopwatch, Time}
 
 object BlockCreator {
   private[this] val ProcessDeploysAndCreateBlockMetricsSource =
@@ -35,11 +35,10 @@ object BlockCreator {
    *  3. Extract all valid deploys that aren't already in all ancestors of S (the parents).
    *  4. Create a new block that contains the deploys from the previous step.
    */
-  def create[F[_]: Concurrent: Log: Time: DeployStorage: Metrics: RuntimeManager: Span](
+  def create[F[_]: Concurrent: Log: Time: BlockStore: DeployStorage: Metrics: RuntimeManager: Span](
       s: CasperSnapshot[F],
       validatorIdentity: ValidatorIdentity,
-      dummyDeployOpt: Option[(PrivateKey, String)] = None,
-      blockStore: BlockStore[F]
+      dummyDeployOpt: Option[(PrivateKey, String)] = None
   )(implicit runtimeManager: RuntimeManager[F]): F[BlockCreatorResult] =
     Span[F].trace(ProcessDeploysAndCreateBlockMetricsSource) {
       val selfId         = ByteString.copyFrom(validatorIdentity.publicKey.bytes)
@@ -127,8 +126,7 @@ object BlockCreator {
                                    s,
                                    runtimeManager,
                                    blockData,
-                                   invalidBlocks,
-                                   blockStore
+                                   invalidBlocks
                                  )
                 (
                   preStateHash,

@@ -3,10 +3,10 @@ package coop.rchain.casper.protocol
 import cats.implicits._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.PrettyPrinter
-import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.{SignaturesAlg, Signed}
-import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.PCost
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.crypto.PublicKey
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceExporter
 import coop.rchain.shared.Serialize

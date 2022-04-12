@@ -3,21 +3,22 @@ package coop.rchain.casper.api
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.casper.{PrettyPrinter, SafetyOracle}
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.casper.engine.Engine
-import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
-import coop.rchain.casper.util.ConstructDeploy.{basicDeployData, sourceDeployNowF}
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
-import coop.rchain.metrics.Metrics
-import coop.rchain.models.Expr.ExprInstance.GString
-import coop.rchain.models._
 import coop.rchain.shared.scalatestcontrib.effectTest
+import coop.rchain.casper.engine.Engine
+import coop.rchain.casper.SafetyOracle
+import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.util.ConstructDeploy.{basicDeployData, sourceDeployNowF}
+import coop.rchain.metrics.Metrics
 import coop.rchain.shared.{Cell, Log}
+import coop.rchain.models._
+import coop.rchain.models.Expr.ExprInstance.GString
+import coop.rchain.casper.PrettyPrinter
+import coop.rchain.casper.batch2.EngineWithCasper
 import monix.eval.Task
-import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
+import monix.execution.Scheduler.Implicits.global
 
 class ExploratoryDeployAPITest
     extends FlatSpec
@@ -35,11 +36,12 @@ class ExploratoryDeployAPITest
       log: Log[Task]
   ) =
     BlockAPI
-      .exploratoryDeploy(term, blockStore = blockStore)(
+      .exploratoryDeploy(term)(
         Sync[Task],
         engineCell,
         log,
-        safetyOracle
+        safetyOracle,
+        blockStore
       )
 
   /*

@@ -16,14 +16,15 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockHash.{BlockHash, _}
 import coop.rchain.models.blockImplicits.getRandomBlock
-import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
+import coop.rchain.models.syntax._
+import coop.rchain.models.syntax._
 
 import scala.collection.immutable.HashMap
 
@@ -77,11 +78,12 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         hash                                     = secondBlock.blockHash.toHexString
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash, blockStore)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
                                cliqueOracleEffect,
+                               blockStore,
                                spanEff
                              )
         _ = inside(blockQueryResponse) {
@@ -130,11 +132,12 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         hash                                     = badTestHashQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash, blockStore)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
                                cliqueOracleEffect,
+                               blockStore,
                                spanEff
                              )
         _ = inside(blockQueryResponse) {
@@ -153,11 +156,12 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         hash                                     = invalidHexQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash, blockStore)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
                                cliqueOracleEffect,
+                               blockStore,
                                spanEff
                              )
         _ = inside(blockQueryResponse) {
@@ -176,11 +180,12 @@ class BlockQueryResponseAPITest
         spanEff                                  = NoopSpan[Task]()
         (logEff, engineCell, cliqueOracleEffect) = effects
         hash                                     = tooShortQuery
-        blockQueryResponse <- BlockAPI.getBlock[Task](hash, blockStore)(
+        blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
                                cliqueOracleEffect,
+                               blockStore,
                                spanEff
                              )
         _ = inside(blockQueryResponse) {
@@ -198,11 +203,12 @@ class BlockQueryResponseAPITest
         effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         deployId                                = randomDeploys.head.deploy.sig
-        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId, blockStore)(
+        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect
+                               cliqueOracleEffect,
+                               blockStore
                              )
         _ = inside(blockQueryResponse) {
           case Right(blockInfo) =>
@@ -245,11 +251,12 @@ class BlockQueryResponseAPITest
         effects                                 <- emptyEffects(blockStore, blockDagStorage)
         (logEff, casperRef, cliqueOracleEffect) = effects
         deployId                                = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
-        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId, blockStore)(
+        blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect
+                               cliqueOracleEffect,
+                               blockStore
                              )
         _ = inside(blockQueryResponse) {
           case Left(msg) =>
@@ -272,9 +279,8 @@ class BlockQueryResponseAPITest
                          HashMap[BlockHash, BlockMessage](
                            (genesisBlock.blockHash, genesisBlock),
                            (secondBlock.blockHash, secondBlock)
-                         ),
-                         blockStore
-                       )(Sync[Task], blockDagStorage, runtimeManager)
+                         )
+                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         logEff     = new LogStub[Task]()
         metricsEff = new Metrics.MetricsNOP[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
@@ -294,9 +300,8 @@ class BlockQueryResponseAPITest
                          HashMap[BlockHash, BlockMessage](
                            (genesisBlock.blockHash, genesisBlock),
                            (secondBlock.blockHash, secondBlock)
-                         ),
-                         blockStore
-                       )(Sync[Task], blockDagStorage, runtimeManager)
+                         )
+                       )(Sync[Task], blockStore, blockDagStorage, runtimeManager)
         _          <- blockDagStorage.insert(genesisBlock, invalid = false, approved = true)
         logEff     = new LogStub[Task]()
         metricsEff = new Metrics.MetricsNOP[Task]

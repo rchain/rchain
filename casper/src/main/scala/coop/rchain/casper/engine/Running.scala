@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
+import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
@@ -12,19 +12,21 @@ import coop.rchain.casper._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
+import coop.rchain.shared.syntax._
+import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
-import coop.rchain.metrics.Metrics
+import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.{RSpaceExporter, RSpaceStateManager}
-import coop.rchain.shared.syntax._
+import fs2.concurrent.Queue
 import coop.rchain.shared.{Log, Time}
 import fs2.Stream
-import fs2.concurrent.Queue
 
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.duration._
 
 object Running {
@@ -49,9 +51,8 @@ object Running {
     * To mitigate this issue we can update fork choice tips if current fork-choice tip has old timestamp,
     * which means node does not propose new blocks and no new blocks were received recently.
     */
-  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: EngineCell](
-      delayThreshold: FiniteDuration,
-      blockStore: BlockStore[F]
+  def updateForkChoiceTipsIfStuck[F[_]: Sync: CommUtil: Log: Time: BlockStore: EngineCell](
+      delayThreshold: FiniteDuration
   ): F[Unit] =
     for {
       engine <- EngineCell[F].read
@@ -64,7 +65,7 @@ object Running {
                 now <- Time[F].currentMillis
                 hasRecentLatestMessage = Stream
                   .fromIterator(latestMessages.iterator)
-                  .evalMap(blockStore.getUnsafe)
+                  .evalMap(BlockStore[F].getUnsafe)
                   // filter only blocks that are recent
                   .filter { b =>
                     val blockTimestamp = b.header.timestamp
@@ -142,12 +143,11 @@ object Running {
   /**
     * Peer asks for particular block
     */
-  def handleBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: Log](
+  def handleBlockRequest[F[_]: Monad: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode,
-      br: BlockRequest,
-      blockStore: BlockStore[F]
+      br: BlockRequest
   ): F[Unit] = {
-    val getBlock = blockStore.get1(br.hash).flatMap(_.get.pure[F])
+    val getBlock = BlockStore[F].get1(br.hash).flatMap(_.get.pure[F])
     val logSuccess = Log[F].info(
       s"Received request for block ${PrettyPrinter.buildString(br.hash)} " +
         s"from $peer. Response sent."
@@ -158,7 +158,7 @@ object Running {
     )
     def sendResponse(block: BlockMessage) =
       TransportLayer[F].streamToPeer(peer, block.toProto)
-    val hasBlock = blockStore.contains(br.hash)
+    val hasBlock = BlockStore[F].contains(br.hash)
 
     hasBlock.ifM(
       logSuccess >> getBlock >>= sendResponse,
@@ -183,7 +183,7 @@ object Running {
     * Peer asks for fork-choice tip
     */
   // TODO name for this message is misleading, as its a request for all tips, not just fork choice.
-  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: Log](
+  def handleForkChoiceTipRequest[F[_]: Sync: TransportLayer: RPConfAsk: BlockStore: Log](
       peer: PeerNode
   )(casper: MultiParentCasper[F]): F[Unit] = {
     val logRequest = Log[F].info(s"Received ForkChoiceTipRequest from ${peer.endpoint.host}")
@@ -251,7 +251,7 @@ class Running[F[_]
   /* Execution */   : Concurrent: Time
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever
   /* State */       : RPConfAsk: ConnectionsCell
-  /* Storage */     : BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: Metrics] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -260,8 +260,7 @@ class Running[F[_]
     approvedBlock: ApprovedBlock,
     validatorId: Option[ValidatorIdentity],
     theInit: F[Unit],
-    disableStateExporter: Boolean,
-    blockStore: BlockStore[F]
+    disableStateExporter: Boolean
 ) extends Engine[F] {
 
   import Engine._
@@ -307,7 +306,7 @@ class Running[F[_]
             )
       } yield ()
 
-    case br: BlockRequest => handleBlockRequest(peer, br, blockStore)
+    case br: BlockRequest => handleBlockRequest(peer, br)
     // TODO should node say it has block only after it is in DAG, or CasperBuffer is enough? Or even just BlockStore?
     // https://github.com/rchain/rchain/pull/2943#discussion_r449887701
     case hbr: HasBlockRequest => handleHasBlockRequest(peer, hbr)(casper.dagContains)
@@ -320,7 +319,7 @@ class Running[F[_]
 
         // Create approved block from last finalized block
         lastFinalizedBlock = for {
-          lfBlock <- blockStore.getUnsafe(lfBlockHash)
+          lfBlock <- BlockStore[F].getUnsafe(lfBlockHash)
 
           // Each approved block should be justified by validators signatures
           // ATM we have signatures only for genesis approved block - we also have to have a procedure

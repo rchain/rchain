@@ -12,7 +12,6 @@ import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, Caspe
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
-import coop.rchain.casper._
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer._
@@ -26,6 +25,7 @@ import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
+import coop.rchain.casper._
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -163,8 +163,7 @@ case class TestNode[F[_]: Timer](
   implicit val casperEff = new MultiParentCasperImpl[F](
     validatorId,
     shardConf,
-    genesis,
-    blockStore
+    genesis
   )
 
   implicit val rspaceMan = RSpaceStateManagerTestImpl()
@@ -176,8 +175,7 @@ case class TestNode[F[_]: Timer](
       approvedBlock,
       validatorId,
       ().pure[F],
-      true,
-      blockStore
+      true
     )
   implicit val engineCell: EngineCell[F] = Cell.unsafe[F, Engine[F]](engine)
   implicit val packetHandlerEff          = CasperPacketHandler[F]
@@ -240,7 +238,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get, blockStore = blockStore)
+      createBlockResult <- BlockCreator.create(cs, vid.get)
     } yield createBlockResult
 
   // This method assumes that block will be created sucessfully
@@ -249,7 +247,7 @@ case class TestNode[F[_]: Timer](
       _                 <- deployDatums.toList.traverse(casperEff.deploy)
       cs                <- casperEff.getSnapshot
       vid               <- casperEff.getValidator
-      createBlockResult <- BlockCreator.create(cs, vid.get, blockStore = blockStore)
+      createBlockResult <- BlockCreator.create(cs, vid.get)
       block <- createBlockResult match {
                 case Created(b) => b.pure[F]
                 case _ =>
@@ -366,8 +364,7 @@ case class TestNode[F[_]: Timer](
                      ts,
                      lfb,
                      GraphConfig(showJustificationLines = true),
-                     ser,
-                     blockStore
+                     ser
                    ),
                  ref.get.map(_.toString)
                )
@@ -547,7 +544,7 @@ object TestNode {
                    Some(ValidatorIdentity(Secp256k1.toPublic(sk), sk, "secp256k1"))
 
                  proposer = validatorId match {
-                   case Some(vi) => Proposer[F](vi, blockStore = blockStore).some
+                   case Some(vi) => Proposer[F](vi).some
                    case None     => None
                  }
                  // propose function in casper tests is always synchronous
@@ -561,7 +558,7 @@ object TestNode {
                        } yield r
                  )
                  // Block processor
-                 blockProcessor = BlockProcessor[F](blockStore)
+                 blockProcessor = BlockProcessor[F]
 
                  blockProcessingPipe = {
                    in: fs2.Stream[F, (Casper[F], BlockMessage)] =>

@@ -22,6 +22,7 @@ import coop.rchain.models.{NormalizerEnv, Par}
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
 import coop.rchain.rholang.interpreter.compiler.Compiler
 import coop.rchain.rholang.interpreter.errors.InterpreterError
+import coop.rchain.rholang.interpreter.merging.RholangMergingLogic
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.{Log, LogSource}
 import monix.eval.Coeval
@@ -49,18 +50,17 @@ object InterpreterUtil {
 
   //Returns (None, checkpoints) if the block's tuplespace hash
   //does not match the computed hash based on the deploys
-  def validateBlockCheckpoint[F[_]: Concurrent: Log: Span: Metrics: Timer](
+  def validateBlockCheckpoint[F[_]: Concurrent: Log: BlockStore: Span: Metrics: Timer](
       block: BlockMessage,
       s: CasperSnapshot[F],
-      runtimeManager: RuntimeManager[F],
-      blockStore: BlockStore[F]
+      runtimeManager: RuntimeManager[F]
   ): F[BlockProcessing[Option[StateHash]]] = {
     val incomingPreStateHash = ProtoUtil.preStateHash(block)
     for {
       _                   <- Span[F].mark("before-unsafe-get-parents")
-      parents             <- ProtoUtil.getParents(block, blockStore)
+      parents             <- ProtoUtil.getParents(block)
       _                   <- Span[F].mark("before-compute-parents-post-state")
-      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager, blockStore).attempt
+      computedParentsInfo <- computeParentsPostState(parents, s, runtimeManager).attempt
       _                   <- Log[F].info(s"Computed parents post state for ${PrettyPrinter.buildString(block)}.")
       result <- computedParentsInfo match {
                  case Left(ex) =>
@@ -99,7 +99,7 @@ object InterpreterUtil {
     } yield result
   }
 
-  private def replayBlock[F[_]: Sync: Log: Timer](
+  private def replayBlock[F[_]: Sync: Log: BlockStore: Timer](
       initialStateHash: StateHash,
       block: BlockMessage,
       dag: BlockDagRepresentation[F],
@@ -221,15 +221,14 @@ object InterpreterUtil {
     Log[F].info(s"Deploy ($deployInfo) errors: ${errors.mkString(", ")}")
   }
 
-  def computeDeploysCheckpoint[F[_]: Concurrent: Log: Metrics](
+  def computeDeploysCheckpoint[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       deploys: Seq[Signed[DeployData]],
       systemDeploys: Seq[SystemDeploy],
       s: CasperSnapshot[F],
       runtimeManager: RuntimeManager[F],
       blockData: BlockData,
-      invalidBlocks: Map[BlockHash, Validator],
-      blockStore: BlockStore[F]
+      invalidBlocks: Map[BlockHash, Validator]
   )(
       implicit spanF: Span[F]
   ): F[
@@ -241,12 +240,7 @@ object InterpreterUtil {
                             .ensure(new IllegalArgumentException("Parents must not be empty"))(
                               _.nonEmpty
                             )
-        computedParentsInfo <- computeParentsPostState(
-                                nonEmptyParents,
-                                s,
-                                runtimeManager,
-                                blockStore
-                              )
+        computedParentsInfo             <- computeParentsPostState(nonEmptyParents, s, runtimeManager)
         (preStateHash, rejectedDeploys) = computedParentsInfo
         result <- runtimeManager.computeState(preStateHash)(
                    deploys,
@@ -264,11 +258,10 @@ object InterpreterUtil {
       )
     }
 
-  private def computeParentsPostState[F[_]: Concurrent: Log: Metrics](
+  private def computeParentsPostState[F[_]: Concurrent: BlockStore: Log: Metrics](
       parents: Seq[BlockMessage],
       s: CasperSnapshot[F],
-      runtimeManager: RuntimeManager[F],
-      blockStore: BlockStore[F]
+      runtimeManager: RuntimeManager[F]
   )(implicit spanF: Span[F]): F[(StateHash, Seq[ByteString])] =
     spanF.trace(ComputeParentPostStateMetricsSource) {
       parents match {
@@ -288,7 +281,7 @@ object InterpreterUtil {
             val cached = BlockIndex.cache.get(v).map(_.pure)
             cached.getOrElse {
               for {
-                b         <- blockStore.getUnsafe(v)
+                b         <- BlockStore[F].getUnsafe(v)
                 preState  = b.body.state.preStateHash
                 postState = b.body.state.postStateHash
                 sender    = b.sender.toByteArray
@@ -309,7 +302,7 @@ object InterpreterUtil {
             }
           }
           for {
-            lfbState <- blockStore
+            lfbState <- BlockStore[F]
                          .getUnsafe(s.lastFinalizedBlock)
                          .map(_.body.state.postStateHash)
                          .map(Blake2b256Hash.fromByteString)

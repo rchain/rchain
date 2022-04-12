@@ -4,12 +4,12 @@ import cats.syntax.all._
 import coop.rchain.casper.helper.TestNode
 import coop.rchain.casper.helper.TestNode._
 import coop.rchain.casper.protocol._
+import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.casper.util.{ConstructDeploy, GenesisBuilder}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.Expr.ExprInstance.GInt
 import coop.rchain.models._
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
-import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
@@ -35,8 +35,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                    .getListeningNameDataResponse[Effect](
                                      Int.MaxValue,
                                      listeningName,
-                                     Int.MaxValue,
-                                     blockStore
+                                     Int.MaxValue
                                    )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -73,8 +72,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse1 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
                                    listeningName,
-                                   Int.MaxValue,
-                                   nodeZeroBlockStoreEffect
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -91,8 +89,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
                                    listeningName,
-                                   Int.MaxValue,
-                                   nodeZeroBlockStoreEffect
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>
@@ -116,8 +113,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse3 <- BlockAPI.getListeningNameDataResponse[Effect](
                                    Int.MaxValue,
                                    listeningName,
-                                   Int.MaxValue,
-                                   nodeZeroBlockStoreEffect
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse3) {
           case Right((blockResults, l)) =>
@@ -149,8 +145,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
                                              .getListeningNameDataResponse[Effect](
                                                1,
                                                listeningName,
-                                               Int.MaxValue,
-                                               nodeZeroBlockStoreEffect
+                                               Int.MaxValue
                                              )
         _ = inside(listeningNameResponse3UntilDepth) {
           case Right((_, l)) => l should be(1)
@@ -158,8 +153,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse3UntilDepth2 <- BlockAPI.getListeningNameDataResponse[Effect](
                                               2,
                                               listeningName,
-                                              Int.MaxValue,
-                                              nodeZeroBlockStoreEffect
+                                              Int.MaxValue
                                             )
         _ = inside(listeningNameResponse3UntilDepth2) {
           case Right((_, l)) => l should be(2)
@@ -192,8 +186,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse1 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,
                                    listeningNamesShuffled1,
-                                   Int.MaxValue,
-                                   blockStore
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse1) {
           case Right((blockResults, l)) =>
@@ -210,8 +203,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
         listeningNameResponse2 <- BlockAPI.getListeningNameContinuationResponse[Effect](
                                    Int.MaxValue,
                                    listeningNamesShuffled2,
-                                   Int.MaxValue,
-                                   blockStore
+                                   Int.MaxValue
                                  )
         _ = inside(listeningNameResponse2) {
           case Right((blockResults, l)) =>

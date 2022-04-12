@@ -85,8 +85,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
           .use { runtimeManager =>
             implicit val rm = runtimeManager
             val casper =
-              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage], blockStore)
-                .runSyncUnsafe()
+              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
               checkActiveValidator = alwaysNotActiveF,
               // other params are permissive
@@ -115,8 +114,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
           .use { runtimeManager =>
             implicit val rm = runtimeManager
             val casper =
-              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage], blockStore)
-                .runSyncUnsafe()
+              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
 
             val p = new Proposer[Task](
               checkEnoughBaseStake = alwaysNotEnoughBlocksF, // synchrony constraint is not met
@@ -146,8 +144,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
           .use { runtimeManager =>
             implicit val rm = runtimeManager
             val casper =
-              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage], blockStore)
-                .runSyncUnsafe()
+              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
               checkFinalizedHeight = alwaysTooFarAheadF,
               // other params are permissive
@@ -175,8 +172,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
             .use { runtimeManager =>
               implicit val rm = runtimeManager
               val casper =
-                NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage], blockStore)
-                  .runSyncUnsafe()
+                NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
               val p = new Proposer[Task](
                 validateBlock = alwaysUnsuccesfullValidation,
                 // other params are permissive
@@ -206,8 +202,7 @@ class ProposerSpec extends FlatSpec with Matchers with BlockDagStorageFixture {
           .use { runtimeManager =>
             implicit val rm = runtimeManager
             val casper =
-              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage], blockStore)
-                .runSyncUnsafe()
+              NoOpsCasperEffect[Task](HashMap.empty[BlockHash, BlockMessage]).runSyncUnsafe()
             val p = new Proposer[Task](
               validateBlock = alwaysSuccesfullValidation,
               checkFinalizedHeight = okProposeConstraint,

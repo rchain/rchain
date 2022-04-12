@@ -3,6 +3,7 @@ package coop.rchain.casper
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.blocks.proposer.{
   CheckProposeConstraintsResult,
   TooFarAheadOfLastFinalized
@@ -45,6 +46,6 @@ final class LastFinalizedHeightConstraintChecker[F[_]: Sync: Log] {
 }
 
 object LastFinalizedHeightConstraintChecker {
-  def apply[F[_]: Sync: Log]: LastFinalizedHeightConstraintChecker[F] =
+  def apply[F[_]: Sync: BlockStore: Log]: LastFinalizedHeightConstraintChecker[F] =
     new LastFinalizedHeightConstraintChecker[F]
 }

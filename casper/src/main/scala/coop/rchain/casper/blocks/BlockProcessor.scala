@@ -116,15 +116,15 @@ object BlockProcessor {
   // format: off
   def apply[F[_]
   /* Execution */   : Concurrent
-  /* Storage */     : BlockDagStorage: CasperBufferStorage 
+  /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage 
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
-  (blockStore: BlockStore[F])(
+  (
       implicit casperBuffer: CasperBufferStorage[F]
   ): BlockProcessor[F] = {
 
-    val storeBlock = (b: BlockMessage) => blockStore.put(b.blockHash, b)
+    val storeBlock = (b: BlockMessage) => BlockStore[F].put(b.blockHash, b)
 
     val getCasperStateSnapshot = (c: Casper[F]) => c.getSnapshot
 

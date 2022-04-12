@@ -6,14 +6,15 @@ import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.casper.syntax._
 import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
-import coop.rchain.casper.syntax._
 import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.syntax._
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import monix.eval.Task
@@ -37,8 +38,7 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       genesis,
       creator = creator,
       bonds = bonds,
-      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) },
-      blockStore = store
+      justifications = justifications.map { case (v, bm) => (v, bm.blockHash) }
     )
 
   /**
@@ -59,7 +59,7 @@ class FinalizerTest extends FlatSpec with Matchers with BlockGenerator with Bloc
       var lfbEffectInvoked = false
 
       for {
-        genesis  <- createGenesis[Task](bonds = bonds, blockStore = blockStore)
+        genesis  <- createGenesis[Task](bonds = bonds)
         creator1 = createBlock(bonds)(genesis)(v1) _
         creator2 = createBlock(bonds)(genesis)(v2) _
         creator3 = createBlock(bonds)(genesis)(v3) _

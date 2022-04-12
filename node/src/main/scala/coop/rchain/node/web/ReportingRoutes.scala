@@ -5,9 +5,9 @@ import cats.syntax.all._
 import coop.rchain.casper.api.BlockAPI.ApiErr
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.protocol.BlockEventInfo
-import coop.rchain.rspace.hashing.Blake2b256Hash
-import org.http4s.circe.jsonEncoderOf
 import org.http4s.{HttpRoutes, ParseFailure, QueryParamDecoder}
+import org.http4s.circe.jsonEncoderOf
+import coop.rchain.rspace.hashing.Blake2b256Hash
 
 object ReportingRoutes {
 

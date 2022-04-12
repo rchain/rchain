@@ -1,30 +1,33 @@
 package coop.rchain.casper.engine
 
-import cats.effect.concurrent.Ref
-import cats.effect.{Concurrent, Sync, Timer}
-import cats.syntax.all._
 import cats.{Applicative, Monad}
+import cats.syntax.all._
+import cats.effect.{Concurrent, Sync, Timer}
+import EngineCell._
+import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
-import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
-import coop.rchain.blockstorage.dag.BlockDagStorage
-import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper._
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
-import coop.rchain.casper._
-import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol._
-import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.comm.PeerNode
+import coop.rchain.comm.{transport, PeerNode}
 import coop.rchain.comm.protocol.routing.Packet
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.{Blob, TransportLayer}
 import coop.rchain.metrics.{Metrics, Span}
-import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared
 import coop.rchain.shared._
+import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.blockstorage.deploy.DeployStorage
+import coop.rchain.casper.state.RNodeStateManager
+import coop.rchain.casper.util.comm.CommUtil
+import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.rspace.hashing.Blake2b256Hash
+import coop.rchain.rspace.state.RSpaceStateManager
 import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 
@@ -60,16 +63,14 @@ object Engine {
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.
    */
-  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: Log: BlockDagStorage](
+  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: Log: BlockStore: ApprovedStore: BlockDagStorage](
       genesis: BlockMessage,
-      approvedBlock: ApprovedBlock,
-      blockStore: BlockStore[F],
-      approvedStore: ApprovedStore[F]
+      approvedBlock: ApprovedBlock
   ): F[Unit] =
     for {
-      _ <- blockStore.put(genesis.blockHash, genesis)
+      _ <- BlockStore[F].put(genesis.blockHash, genesis)
       _ <- BlockDagStorage[F].insert(genesis, invalid = false, approved = true)
-      _ <- approvedStore.putApprovedBlock(approvedBlock)
+      _ <- ApprovedStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
   private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet =
@@ -91,7 +92,7 @@ object Engine {
     /* Execution */   : Concurrent: Time
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell
-    /* Storage */     : BlockDagStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: BlockDagStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -100,8 +101,7 @@ object Engine {
       approvedBlock: ApprovedBlock,
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
-      disableStateExporter: Boolean,
-      blockStore: BlockStore[F]
+      disableStateExporter: Boolean
   ): F[Unit] = {
     val approvedBlockInfo = PrettyPrinter.buildString(approvedBlock.candidate.block, short = true)
     for {
@@ -118,8 +118,7 @@ object Engine {
         approvedBlock,
         validatorId,
         init,
-        disableStateExporter,
-        blockStore
+        disableStateExporter
       )
       _ <- EngineCell[F].set(running)
 
@@ -133,7 +132,7 @@ object Engine {
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],
@@ -142,9 +141,7 @@ object Engine {
       validatorId: Option[ValidatorIdentity],
       init: F[Unit],
       trimState: Boolean = true,
-      disableStateExporter: Boolean = false,
-      blockStore: BlockStore[F],
-      approvedStore: ApprovedStore[F]
+      disableStateExporter: Boolean = false
   ): F[Unit] =
     for {
       blockResponseQueue <- Queue.bounded[F, BlockMessage](50)
@@ -159,9 +156,7 @@ object Engine {
               blockResponseQueue,
               stateResponseQueue,
               trimState,
-              disableStateExporter,
-              blockStore,
-              approvedStore
+              disableStateExporter
             )
           )
     } yield ()

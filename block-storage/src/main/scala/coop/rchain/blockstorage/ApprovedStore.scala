@@ -10,6 +10,7 @@ import scodec.codecs._
 
 object approvedStore {
   type ApprovedStore[F[_]] = KeyValueTypedStore[F, Byte, ApprovedBlock]
+  def ApprovedStore[F[_]](implicit instance: ApprovedStore[F]): instance.type = instance
 
   def create[F[_]: Sync](
       kvm: KeyValueStoreManager[F]
