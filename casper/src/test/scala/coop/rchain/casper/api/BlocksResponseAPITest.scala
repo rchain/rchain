@@ -7,6 +7,7 @@ import coop.rchain.casper.engine._
 import EngineCell._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -18,7 +19,6 @@ import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
 import coop.rchain.shared.{Cell, Log}
-import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalatest.{FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
@@ -49,7 +49,7 @@ class BlocksResponseAPITest
     for {
       genesis <- createGenesis[Task](bonds = bonds)
       _       <- dagstore.insert(genesis, invalid = false, approved = true)
-      _       <- blockstore.put(genesis.blockHash, genesis)
+      _       <- blockstore.put(genesis)
       b2 <- createBlock[Task](
              Seq(genesis.blockHash),
              genesis,

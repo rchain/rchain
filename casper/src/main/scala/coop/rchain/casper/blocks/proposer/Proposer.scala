@@ -198,7 +198,7 @@ object Proposer {
 
     val proposeEffect = (c: Casper[F], b: BlockMessage) =>
       // store block
-      BlockStore[F].put(b.blockHash, b) >>
+      BlockStore[F].put(b) >>
         // save changes to Casper
         c.handleValidBlock(b) >>
         // inform block retriever about block

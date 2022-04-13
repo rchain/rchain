@@ -55,4 +55,7 @@ final class BlockStoreOps[F[_]: Sync](
       .emits(streams)
       .parJoinUnbounded
   }
+
+  def put(blockMessage: BlockMessage): F[Unit] =
+    blockStore.put(blockMessage.blockHash, blockMessage)
 }

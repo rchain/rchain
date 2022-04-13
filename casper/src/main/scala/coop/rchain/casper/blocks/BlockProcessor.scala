@@ -122,7 +122,7 @@ object BlockProcessor {
   ] // format: on
       : BlockProcessor[F] = {
 
-    val storeBlock = (b: BlockMessage) => BlockStore[F].put(b.blockHash, b)
+    val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
 
     val getCasperStateSnapshot = (c: Casper[F]) => c.getSnapshot
 
