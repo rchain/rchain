@@ -2,10 +2,12 @@
 match (
     "04f700a417754b775d95421973bdbdadb2d23c8a5af46f1829b1431f5c136e549e8a0d61aa0c793f1a614f8e437711c7758473c6ceb0859ac7e9e07911ca66b5c4".hexToBytes(),
     "11112VYAt8rUGNRRZX3eJdgagaAhtWTK8Js7F7X5iqddMVqyDTtYau",
-    "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111".hexToBytes(),
-    "1111pdZDG4MZ3eBfaipaD22VXmbFY6PW9ZdGDWdEcXZz4gGxTxgn9",
-    "2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222222".hexToBytes(),
-    "11112CXAkc8pV2AMHUSgHGbFkqovgyY9SRja4ZLSpRC9q7qYZx5SVc"
+    "0444f16eee91c879a70a2d53e90b329670580395c8639ffef3f39ef74bdd9364279f877cd3d7cca806c815bd6fc568bf2fc0695a9c2cd6ac3d36fc1f4864243efb".hexToBytes(),
+    "11112Etvhrt5fTnZJXGQ1Qp3JYEU1JXhk7XgS6tehXP99nVJYMwVME",
+    "043405f36c6cc2327fbbdf1af442a99e9a04f650ccb415bc23d4379e63a5cb5d53f7c7861d5937db32700b001ab2024f1c078b0ba90f47af46c8c4dea33f972d7c".hexToBytes(),
+    "11112qRZ6VeASHWmkRcbcZsESeCoNDh1MzgerrACkbfNL8vPf7gZse",
+    "0412eea943c13ed3e99d2de048a57dbaf4c977df83a50bf7ec79ae58255cf8d891a1cbe3cd51aeafec34241a1a9c9a54e861aa5b373667793c617c0310eab26653".hexToBytes(),
+    "111126JMP6sKmk1Q69agntmoEqKCcp1cjrv8bY2tBN4d8XhmcnQvUr"
 ) {
   (
     genesisPubKey,
@@ -13,7 +15,9 @@ match (
     alicePubKey,
     aliceRevAddress, // the rev address of a vault constructed post-genesis
     bobPubKey,
-    bobRevAddress // the rev address of a vault constructed post-genesis
+    bobRevAddress, // the rev address of a vault constructed post-genesis
+    davidPubKey,
+    davidRevAddress
   ) => {
 
     new
@@ -23,9 +27,12 @@ match (
       getDeployerId(`rho:test:deployerId:make`),
       setup,
       testTransferIn,
-      testTransferOut1of1,
-      testTransferOut2of3,
-      testTransferOutRepeat,
+      testTransferBySealerOut1of1,
+      testTransferBySealerOut2of3,
+      testTransferBySealerOutRepeat,
+      testTransferByPubkeyOut1of1,
+      testTransferByPubkeyOut2of3,
+      testTransferByPubkeyOutRepeat,
       withVaultAndIdentityOf,
       transfer,
       assertBalances
@@ -36,9 +43,12 @@ match (
           [
             // Because the genesis vault is stateful, the order of these tests matters.
             ("transfer from genesis to Multisig", *testTransferIn),
-            ("transfer from Multisig to genesis 1 of 1", *testTransferOut1of1),
-            ("transfer from Multisig to genesis 2 of 3", *testTransferOut2of3),
-            ("fail when attempting to confirm twice with same sealer", *testTransferOutRepeat)
+            ("transfer from Multisig to genesis 1 of 1 sealers", *testTransferBySealerOut1of1),
+            ("transfer from Multisig to genesis 2 of 3 sealers", *testTransferBySealerOut2of3),
+            ("fail when attempting to confirm twice with same sealer", *testTransferBySealerOutRepeat),
+            ("transfer from Multisig to genesis 1 of 1 pubkey", *testTransferByPubkeyOut1of1),
+            ("transfer from Multisig to genesis 2 of 3 pubkeys", *testTransferByPubkeyOut2of3),
+            ("fail when attempting to confirm twice with same pubkey", *testTransferByPubkeyOutRepeat)
           ])
       } |
 
@@ -76,7 +86,7 @@ match (
         }
       } |
 
-      contract testTransferOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, now in {
           withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
           @MultiSigRevVault!("makeSealerUnsealer", *carolAuthCh) |
@@ -116,7 +126,7 @@ match (
         }
       } |
 
-      contract testTransferOut2of3(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOut2of3(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh,
             carolUnf, carolAuthCh,
             daveUnf, daveAuthCh,
@@ -192,7 +202,7 @@ match (
         }
       } |
 
-      contract testTransferOutRepeat(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+      contract testTransferBySealerOutRepeat(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
         new genesisVaultCh,
             carolUnf, carolAuthCh,
             daveUnf, daveAuthCh,
@@ -256,6 +266,191 @@ match (
                                 }
                               }
                             }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+
+      contract testTransferByPubkeyOut1of1(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+        new genesisVaultCh, carolUnf, carolAuthCh, carolVaultCh, ret1, ret2, now in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+            // Single sig as a special case of multisig.
+          @MultiSigRevVault!("create", [alicePubKey], [], 1, *carolVaultCh) |
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh ; @maybeVault <- carolVaultCh) {
+            match maybeVault {
+              (false, msg) => {
+                rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+              }
+              (true, (carolMultiSigVault, carolRevAddr, carolRevVault)) => {
+                // 8997000 - 1000 = 8996000
+                genesisVault!("transfer", carolRevAddr, 1000, genesisVaultKey, *ret1) |
+                for (@result <- ret1) {
+                  match result {
+                    (false, msg) => {
+                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                    }
+                    (true, Nil) => {
+                      new deployerIdCh, deployerAuthCh, getDeployerId(`rho:test:deployerId:make`) in {
+                        getDeployerId!("deployerId", alicePubKey, *deployerIdCh) |
+                        for (deployerId <- deployerIdCh) {
+                          @MultiSigRevVault!("deployerAuthKey", *deployerId, *deployerAuthCh) | 
+                          for (@authKey <- deployerAuthCh) {
+                            // 8996000 + 500 = 8996500
+                            @carolMultiSigVault!("transfer", genesisRevAddress, 500, authKey, *ret2) |
+                            rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret2), "transfer successful", *now) |
+                            assertBalances!(*now, [(*genesisVault, 8996500), (carolMultiSigVault, 500)], *rhoSpec, *ackCh)
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+
+      contract testTransferByPubkeyOut2of3(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+        new genesisVaultCh,
+            carolUnf, carolAuthCh,
+            daveUnf, daveAuthCh,
+            eveUnf, eveAuthCh,
+            msVaultCh,
+            ret1, ret2, ret3, now in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+          @MultiSigRevVault!("create", [alicePubKey, bobPubKey, davidPubKey], [], 2, *msVaultCh) |
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh ; @maybeVault <- msVaultCh) {
+            match maybeVault {
+              (false, msg) => {
+                rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+              }
+              (true, (msVault, msRevAddr, msUnderlyingRevVault)) => {
+                // 8996500 - 1000 = 8995500
+                genesisVault!("transfer", msRevAddr, 1000, genesisVaultKey, *ret1) |
+                for (@result <- ret1) {
+                  match result {
+                    (false, msg) => {
+                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                    }
+                    (true, Nil) => {
+                      new deployerIdCh, deployerAuthCh, getDeployerId(`rho:test:deployerId:make`) in {
+                        getDeployerId!("deployerId", alicePubKey, *deployerIdCh) |
+                        for (aliceDeployerId <- deployerIdCh) {
+                          @MultiSigRevVault!("deployerAuthKey", *aliceDeployerId, *deployerAuthCh) | 
+                          for (@authKey <- deployerAuthCh) {
+                            // 8995500 + 500 = 8996000
+                            @msVault!("transfer", genesisRevAddress, 500, authKey, *ret2) |
+                            for (@result2 <- ret2){
+                              match result2 {
+                                (false, msg) => {
+                                  rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                                }
+                                (true, result3) => {
+                                  match result3 {
+                                    (true, nonce) => {
+                                      getDeployerId!("deployerId", bobPubKey, *deployerIdCh) |
+                                      for (bobDeployerId <- deployerIdCh){
+                                        @MultiSigRevVault!("deployerAuthKey", *bobDeployerId, *deployerAuthCh) | 
+                                        for (@bobAuthKey <- deployerAuthCh){
+                                          @msVault!("confirm", genesisRevAddress, 500, bobAuthKey, nonce, *ret3) |
+                                          rhoSpec!("assert", ((true, (false, "done")), "== <-", *ret3), "transfer successful", *now) |
+                                          assertBalances!(*now, [(*genesisVault, 8996000), (msVault, 500)], *rhoSpec, *ackCh)
+                                        }
+                                      }
+                                    }
+                                    (false, msg) => {
+                                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                                    }
+                                    x => {
+                                      rhoSpec!("assert", (false, "==", true), x, *ackCh)
+                                    }
+                                  }
+                                }
+                                _ => {
+                                  rhoSpec!("assert", (false, "==", true), "transfer returned something else", *ackCh)
+                                }
+                              }
+                            } 
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } |
+
+      contract testTransferByPubkeyOutRepeat(rhoSpec, @(RevVault, MultiSigRevVault), ackCh) = {
+        new genesisVaultCh,
+            carolUnf, carolAuthCh,
+            daveUnf, daveAuthCh,
+            eveUnf, eveAuthCh,
+            msVaultCh,
+            ret1, ret2, ret3, now in {
+          withVaultAndIdentityOf!(genesisPubKey, *genesisVaultCh) |
+          @MultiSigRevVault!("create", [alicePubKey, bobPubKey, davidPubKey], [], 2, *msVaultCh) |
+          for (genesisVault, @genesisVaultKey <- genesisVaultCh ; @maybeVault <- msVaultCh) {
+            match maybeVault {
+              (false, msg) => {
+                rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+              }
+              (true, (msVault, msRevAddr, msUnderlyingRevVault)) => {
+                // 8996000 - 1000 = 8995000
+                genesisVault!("transfer", msRevAddr, 1000, genesisVaultKey, *ret1) |
+                for (@result <- ret1) {
+                  match result {
+                    (false, msg) => {
+                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                    }
+                    (true, Nil) => {
+                      new deployerIdCh, deployerAuthCh, getDeployerId(`rho:test:deployerId:make`) in {
+                        getDeployerId!("deployerId", alicePubKey, *deployerIdCh) |
+                        for (aliceDeployerId <- deployerIdCh) {
+                          @MultiSigRevVault!("deployerAuthKey", *aliceDeployerId, *deployerAuthCh) | 
+                          for (@authKey <- deployerAuthCh) {
+                            @msVault!("transfer", genesisRevAddress, 500, authKey, *ret2) |
+                            for (@result2 <- ret2){
+                              match result2 {
+                                (false, msg) => {
+                                  rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                                }
+                                (true, result3) => {
+                                  match result3 {
+                                    (true, nonce) => {
+                                      getDeployerId!("deployerId", alicePubKey, *deployerIdCh) |
+                                      for (aliceDeployerId <- deployerIdCh){
+                                        @MultiSigRevVault!("deployerAuthKey", *aliceDeployerId, *deployerAuthCh) | 
+                                        for (@aliceAuthKey <- deployerAuthCh){
+                                          @msVault!("confirm", genesisRevAddress, 500, aliceAuthKey, nonce, *ret3) |
+                                          rhoSpec!("assert", ((false, "already confirmed"), "== <-", *ret3), "transfer failed", *now) |
+                                          assertBalances!(*now, [(*genesisVault, 8995000), (msVault, 1000)], *rhoSpec, *ackCh)
+                                        }
+                                      }
+                                    }
+                                    (false, msg) => {
+                                      rhoSpec!("assert", (false, "==", true), msg, *ackCh)
+                                    }
+                                    x => {
+                                      rhoSpec!("assert", (false, "==", true), x, *ackCh)
+                                    }
+                                  }
+                                }
+                                _ => {
+                                  rhoSpec!("assert", (false, "==", true), "transfer returned something else", *ackCh)
+                                }
+                              }
+                            } 
                           }
                         }
                       }
