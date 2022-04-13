@@ -21,10 +21,9 @@ object blockStore {
       .store("blocks")
       .map(_.toTypedStore[BlockHash, BlockMessage](codecBlockHash, codecBlockMessage))
 
-  def bytesToBlockMessage(bytes: Array[Byte]): BlockMessage =
+  def bytesToBlockMessage(bytes: Array[Byte]): Either[String, BlockMessage] =
     BlockMessage
       .from(BlockMessageProto.parseFrom(decompressBytes(bytes)))
-      .getOrElse(BlockMessage.empty)
 
   def blockMessageToBytes(blockMessage: BlockMessage): Array[Byte] =
     compressBytes(blockMessage.toProto.toByteArray)
