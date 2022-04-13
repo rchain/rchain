@@ -113,50 +113,13 @@ class MultiParentCasperImpl[F[_]
   def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
     Estimator[F].tips(dag, approvedBlock).map(_.tips)
 
-  def lastFinalizedBlock: F[BlockMessage] = {
-
-    def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
-      finalizedSet.toList.traverse { h =>
-        for {
-          block   <- BlockStore[F].getUnsafe(h)
-          deploys = block.body.deploys.map(_.deploy)
-
-          // Remove block deploys from persistent store
-          deploysRemoved   <- DeployStorage[F].remove(deploys)
-          finalizedSetStr  = PrettyPrinter.buildString(finalizedSet)
-          removedDeployMsg = s"Removed $deploysRemoved deploys from deploy history as we finalized block $finalizedSetStr."
-          _                <- Log[F].info(removedDeployMsg)
-
-          // Remove block index from cache
-          _ <- BlockIndex.cache.remove(h).pure
-
-          // Remove block post-state mergeable channels from persistent store
-          stateHash = block.body.state.postStateHash.toBlake2b256Hash.bytes
-          _         <- RuntimeManager[F].getMergeableStore.delete(stateHash)
-        } yield ()
-      }.void
-
-    def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
-      BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
-        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
-
-    implicit val ms = CasperMetricsSource
-
+  def lastFinalizedBlock: F[BlockMessage] =
     for {
-      dag                      <- blockDag
-      lastFinalizedBlockHash   = dag.lastFinalizedBlock
-      lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
-      work = Finalizer
-        .run[F](
-          dag,
-          casperShardConf.faultToleranceThreshold,
-          lastFinalizedBlockHeight,
-          newLfbFoundEffect
-        )
-      newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
-      blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
+      dag <- blockDag
+      // TODO this is just a plug
+      lastFinalizedBlockHash <- dag.latestMessageHashes.map(_.head._2)
+      blockMessage           <- BlockStore[F].getUnsafe(lastFinalizedBlockHash)
     } yield blockMessage
-  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
