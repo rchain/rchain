@@ -65,7 +65,7 @@ class BlockQueryResponseAPITest
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = SafetyOracle.MIN_FAULT_TOLERANCE
+  val faultTolerance = Float.MinValue
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
@@ -74,15 +74,14 @@ class BlockQueryResponseAPITest
   "getBlock" should "return successful block info response" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                  <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        spanEff                                  = NoopSpan[Task]()
-        (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = secondBlock.blockHash.toHexString
+        effects              <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        spanEff              = NoopSpan[Task]()
+        (logEff, engineCell) = effects
+        hash                 = secondBlock.blockHash.toHexString
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore,
                                spanEff
                              )
@@ -128,15 +127,14 @@ class BlockQueryResponseAPITest
   it should "return error when no block exists" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                  <- emptyEffects(blockStore, blockDagStorage)
-        spanEff                                  = NoopSpan[Task]()
-        (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = badTestHashQuery
+        effects              <- emptyEffects(blockStore, blockDagStorage)
+        spanEff              = NoopSpan[Task]()
+        (logEff, engineCell) = effects
+        hash                 = badTestHashQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore,
                                spanEff
                              )
@@ -152,15 +150,14 @@ class BlockQueryResponseAPITest
   it should "return error when hash is invalid hex string" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                  <- emptyEffects(blockStore, blockDagStorage)
-        spanEff                                  = NoopSpan[Task]()
-        (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = invalidHexQuery
+        effects              <- emptyEffects(blockStore, blockDagStorage)
+        spanEff              = NoopSpan[Task]()
+        (logEff, engineCell) = effects
+        hash                 = invalidHexQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore,
                                spanEff
                              )
@@ -176,15 +173,14 @@ class BlockQueryResponseAPITest
   it should "return error when hash is to short" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                  <- emptyEffects(blockStore, blockDagStorage)
-        spanEff                                  = NoopSpan[Task]()
-        (logEff, engineCell, cliqueOracleEffect) = effects
-        hash                                     = tooShortQuery
+        effects              <- emptyEffects(blockStore, blockDagStorage)
+        spanEff              = NoopSpan[Task]()
+        (logEff, engineCell) = effects
+        hash                 = tooShortQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
                                engineCell,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore,
                                spanEff
                              )
@@ -200,14 +196,13 @@ class BlockQueryResponseAPITest
   "findDeploy" should "return successful block info response when a block contains the deploy with given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        deployId                                = randomDeploys.head.deploy.sig
+        effects             <- effectsForSimpleCasperSetup(blockStore, blockDagStorage)
+        (logEff, casperRef) = effects
+        deployId            = randomDeploys.head.deploy.sig
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore
                              )
         _ = inside(blockQueryResponse) {
@@ -248,14 +243,13 @@ class BlockQueryResponseAPITest
   it should "return an error when no block contains the deploy with the given signature" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       for {
-        effects                                 <- emptyEffects(blockStore, blockDagStorage)
-        (logEff, casperRef, cliqueOracleEffect) = effects
-        deployId                                = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
+        effects             <- emptyEffects(blockStore, blockDagStorage)
+        (logEff, casperRef) = effects
+        deployId            = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
                                casperRef,
                                logEff,
-                               cliqueOracleEffect,
                                blockStore
                              )
         _ = inside(blockQueryResponse) {
@@ -270,7 +264,7 @@ class BlockQueryResponseAPITest
   private def effectsForSimpleCasperSetup(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], EngineCell[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], EngineCell[Task])] =
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         _ <- blockDagStorage.insert(genesisBlock, false, approved = true)
@@ -285,15 +279,13 @@ class BlockQueryResponseAPITest
         metricsEff = new Metrics.MetricsNOP[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-        cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
-      } yield (logEff, engineCell, cliqueOracleEffect)
+      } yield (logEff, engineCell)
     }
 
   private def emptyEffects(
       blockStore: BlockStore[Task],
       blockDagStorage: BlockDagStorage[Task]
-  ): Task[(LogStub[Task], EngineCell[Task], SafetyOracle[Task])] =
+  ): Task[(LogStub[Task], EngineCell[Task])] =
     runtimeManagerResource.use { implicit runtimeManager =>
       for {
         casperEffect <- NoOpsCasperEffect(
@@ -307,8 +299,6 @@ class BlockQueryResponseAPITest
         metricsEff = new Metrics.MetricsNOP[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-        cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Concurrent[Task], logEff, metricsEff, spanEff)
-      } yield (logEff, engineCell, cliqueOracleEffect)
+      } yield (logEff, engineCell)
     }
 }

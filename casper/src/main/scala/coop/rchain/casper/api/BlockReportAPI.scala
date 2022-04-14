@@ -11,7 +11,6 @@ import coop.rchain.casper.{
   DeployReportResult,
   MultiParentCasper,
   ReportingCasper,
-  SafetyOracle,
   SystemDeployReportResult
 }
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
@@ -36,7 +35,7 @@ import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
+class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
     reportingCasper: ReportingCasper[F],
     reportStore: ReportStore[F]
 ) {
@@ -131,7 +130,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
 }
 
 object BlockReportAPI {
-  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
+  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
       reportingCasper: ReportingCasper[F],
       reportStore: ReportStore[F]
   ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore)

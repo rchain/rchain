@@ -8,11 +8,7 @@ import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStor
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
-import coop.rchain.casper.helper.{
-  BlockDagStorageFixture,
-  BlockGenerator,
-  UnlimitedParentsEstimatorFixture
-}
+import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator}
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.GenesisBuilder.buildGenesis
 import coop.rchain.casper.util._
@@ -22,6 +18,7 @@ import coop.rchain.casper._
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.crypto.signatures.{Secp256k1, Signed}
 import coop.rchain.crypto.{PrivateKey, PublicKey}
+import coop.rchain.metrics.{Metrics, NoopSpan, Span}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
@@ -43,13 +40,14 @@ class ValidateTest
     with Matchers
     with BeforeAndAfterEach
     with BlockGenerator
-    with BlockDagStorageFixture
-    with UnlimitedParentsEstimatorFixture {
+    with BlockDagStorageFixture {
   import InvalidBlock._
   import ValidBlock._
 
-  implicit override val log: LogStub[Task] = new LogStub[Task]
-  private val SHARD_ID                     = "root-shard"
+  implicit val log: LogStub[Task]     = new LogStub[Task]
+  private val SHARD_ID                = "root-shard"
+  implicit val span: Span[Task]       = NoopSpan[Task]()
+  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP[Task]()
 
   def mkCasperSnapshot[F[_]](dag: BlockDagRepresentation[F]) =
     CasperSnapshot(

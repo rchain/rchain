@@ -74,19 +74,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 //    }
 //  }
 
-  it should "accept signed blocks" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        deploy      <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
-        signedBlock <- node.addBlock(deploy)
-        dag         <- node.casperEff.blockDag
-        estimate    <- node.casperEff.estimator(dag)
-      } yield (estimate shouldBe IndexedSeq(signedBlock.blockHash))
-    }
-  }
-
   it should "be able to create a chain of blocks from different deploys" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val rm = node.runtimeManager
@@ -102,8 +89,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     shardId = SHARD_ID
                   )
         signedBlock2 <- node.addBlock(deploy2)
-        dag          <- node.casperEff.blockDag
-        estimate     <- node.casperEff.estimator(dag)
+        _            <- node.casperEff.blockDag
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
                  Base16.encode(
@@ -114,8 +100,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                  )
                )
       } yield {
-        ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-        estimate shouldBe IndexedSeq(signedBlock2.blockHash)
         data shouldBe Seq("12")
       }
     }
@@ -431,69 +415,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
           .count(_ startsWith "Recording invalid block") should be(1) // TODO: is this the only way that we can test it?
       } yield result
     }
-  }
-
-  it should "estimate parent properly" in effectTest {
-
-    val validatorKeyPairs = (1 to 5).map(_ => Secp256k1.newKeyPair)
-    val (_, validatorPks) = validatorKeyPairs.unzip
-
-    def deployment(ts: Long) =
-      ConstructDeploy.sourceDeploy(s"new x in { x!(0) }", timestamp = ts, shardId = SHARD_ID)
-
-    def deploy(
-        node: TestNode[Effect],
-        dd: Signed[DeployData]
-    ) = node.casperEff.deploy(dd)
-
-    def create(
-        node: TestNode[Effect]
-    ): Effect[BlockMessage] =
-      for {
-        createBlockResult1 <- node.createBlockUnsafe()
-      } yield createBlockResult1
-
-    def add(node: TestNode[Effect], signed: BlockMessage) =
-      Sync[Effect].attempt(
-        node.processBlock(signed)
-      )
-
-    TestNode
-      .networkEff(
-        buildGenesis(
-          buildGenesisParameters(
-            validatorKeyPairs,
-            Map(
-              validatorPks(0) -> 3L,
-              validatorPks(1) -> 1L,
-              validatorPks(2) -> 5L,
-              validatorPks(3) -> 2L,
-              validatorPks(4) -> 4L
-            )
-          )
-        ),
-        networkSize = 3
-      )
-      .map(_.toList)
-      .use { nodes =>
-        val v1 = nodes(0)
-        val v2 = nodes(1)
-        val v3 = nodes(2)
-        for {
-          _    <- deploy(v1, deployment(1)) >> create(v1) >>= (v1c1 => add(v1, v1c1)) //V1#1
-          v2c1 <- deploy(v2, deployment(2)) >> create(v2) //V2#1
-          _    <- v2.handleReceive()
-          _    <- v3.handleReceive()
-          _    <- deploy(v1, deployment(4)) >> create(v1) >>= (v1c2 => add(v1, v1c2)) //V1#2
-          v3c2 <- deploy(v3, deployment(5)) >> create(v3) //V3#2
-          _    <- v3.handleReceive()
-          _    <- add(v3, v3c2) //V3#2
-          _    <- add(v2, v2c1) //V2#1
-          _    <- v3.handleReceive()
-          r    <- deploy(v3, deployment(6)) >> create(v3) >>= (b => add(v3, b))
-          _    = r shouldBe Right(Right(Valid))
-        } yield ()
-      }
   }
 
   it should "succeed at slashing" in effectTest {
