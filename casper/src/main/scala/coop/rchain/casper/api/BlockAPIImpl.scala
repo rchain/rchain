@@ -40,7 +40,7 @@ import coop.rchain.shared.Log
 
 import scala.collection.immutable
 
-class BlockAPIImpl[F[_]: Concurrent: Log: Span: SafetyOracle: BlockStore: DeployStorage: MultiParentCasper](
+class BlockAPIImpl[F[_]: Concurrent: Log: Span: BlockStore: DeployStorage: MultiParentCasper](
     runtimeManager: RuntimeManager[F],
     dagStorage: BlockDagStorage[F],
     validatorPrivateKey: Option[String]
@@ -445,8 +445,7 @@ class BlockAPIImpl[F[_]: Concurrent: Log: Span: SafetyOracle: BlockStore: Deploy
                                    dag
                                      .isFinalized(block.blockHash)
                                      .map(isFinalized => if (isFinalized) 1f else -1f),
-                                   SafetyOracle[F]
-                                     .normalizedFaultTolerance(dag, block.blockHash)
+                                   Float.MinValue.pure[F]
                                  )
       initialFault   <- normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
