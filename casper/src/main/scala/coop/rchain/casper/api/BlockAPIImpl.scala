@@ -18,8 +18,6 @@ import coop.rchain.casper.api.BlockAPI.{
 }
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
-import coop.rchain.casper.engine.EngineCell._
-import coop.rchain.casper.engine._
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.state.instances.ProposerState
@@ -42,7 +40,7 @@ import coop.rchain.shared.Log
 
 import scala.collection.immutable
 
-class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockStore: DeployStorage: MultiParentCasper](
+class BlockAPIImpl[F[_]: Concurrent: Log: Span: SafetyOracle: BlockStore: DeployStorage: MultiParentCasper](
     runtimeManager: RuntimeManager[F],
     dagStorage: BlockDagStorage[F],
     validatorPrivateKey: Option[String]
@@ -96,18 +94,7 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
     ).raiseError[F, ApiErr[String]]
     val minPhloPriceCheck = minPriceError.whenA(d.data.phloPrice < minPhloPrice)
 
-    // Error message in case Casper is not ready
-    val errorMessage = "Could not deploy, casper instance was not available yet."
-    val logErrorMessage = Log[F]
-      .warn(errorMessage)
-      .as(s"Error: $errorMessage".asLeft[String])
-
-    readOnlyCheck >> shardIdCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> EngineCell[F].read >>= (_.withCasper[
-      ApiErr[String]
-    ](
-      _ => casperDeploy,
-      logErrorMessage
-    ))
+    readOnlyCheck >> shardIdCheck >> forbiddenKeyCheck >> minPhloPriceCheck >> casperDeploy
   }
 
   private def makeDeploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]] = {
@@ -133,31 +120,24 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
   ): F[ApiErr[String]] = {
     def logDebug(err: String)  = Log[F].debug(err) >> err.asLeft[String].pure[F]
     def logSucess(msg: String) = Log[F].info(msg) >> msg.asRight[Error].pure[F]
-    def logWarn(msg: String)   = Log[F].warn(msg) >> msg.asLeft[String].pure[F]
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[String]](
-        casper =>
-          for {
-            // Trigger propose
-            proposerResult <- triggerProposeF(casper, isAsync)
-            r <- proposerResult match {
-                  case ProposerEmpty =>
-                    logDebug(s"Failure: another propose is in progress")
-                  case ProposerFailure(status, seqNumber) =>
-                    logDebug(s"Failure: $status (seqNum $seqNumber)")
-                  case ProposerStarted(seqNumber) =>
-                    logSucess(s"Propose started (seqNum $seqNumber)")
-                  case ProposerSuccess(_, block) =>
-                    // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
-                    //  Fix to use structured result with transport errors/codes.
-                    // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
-                    val blockHashHex = block.blockHash.toHexString
-                    logSucess(s"Success! Block $blockHashHex created and added.")
-                }
-          } yield r,
-        default = logWarn("Failure: casper instance is not available.")
-      )
-    )
+    for {
+      // Trigger propose
+      proposerResult <- triggerProposeF(MultiParentCasper[F], isAsync)
+      r <- proposerResult match {
+            case ProposerEmpty =>
+              logDebug(s"Failure: another propose is in progress")
+            case ProposerFailure(status, seqNumber) =>
+              logDebug(s"Failure: $status (seqNum $seqNumber)")
+            case ProposerStarted(seqNumber) =>
+              logSucess(s"Propose started (seqNum $seqNumber)")
+            case ProposerSuccess(_, block) =>
+              // TODO: [WARNING] Format of this message is hardcoded in pyrchain when checking response result
+              //  Fix to use structured result with transport errors/codes.
+              // https://github.com/rchain/pyrchain/blob/a2959c75bf/rchain/client.py#L42
+              val blockHashHex = block.blockHash.toHexString
+              logSucess(s"Success! Block $blockHashHex created and added.")
+          }
+    } yield r
   }
 
   override def getProposeResult(proposerState: Ref[F, ProposerState[F]]): F[ApiErr[String]] =
@@ -197,11 +177,12 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
       depth: Int,
       listeningName: Par,
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
-
-    val errorMessage = "Could not get listening name data, casper instance was not available yet."
-
-    def casperResponse: F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
+  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningName depth $depth exceed the max limit $maxBlocksLimit"
+        .asLeft[(Seq[DataWithBlockInfo], Int)]
+        .pure[F]
+    else
       for {
         mainChain           <- getMainChainFromTip(depth)
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
@@ -211,27 +192,16 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningName depth $depth exceed the max limit $maxBlocksLimit"
-        .asLeft[(Seq[DataWithBlockInfo], Int)]
-        .pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[DataWithBlockInfo], Int)]](
-        _ => casperResponse,
-        Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
-      ))
-  }
-
   override def getListeningNameContinuationResponse(
       depth: Int,
       listeningNames: Seq[Par],
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
-    val errorMessage =
-      "Could not get listening names continuation, casper instance was not available yet."
-    def casperResponse: F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
+  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningNameContinuation depth $depth exceed the max limit $maxBlocksLimit"
+        .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
+        .pure[F]
+    else
       for {
         mainChain <- getMainChainFromTip(depth)
         sortedListeningNames <- listeningNames.toList
@@ -244,19 +214,6 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
                                     }
         blocksWithActiveName = maybeBlocksWithActiveName.flatten
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
-
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningNameContinuation depth $depth exceed the max limit $maxBlocksLimit"
-        .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
-        .pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]](
-        _ => casperResponse,
-        Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
-      ))
-  }
 
   private def getMainChainFromTip(depth: Int): F[IndexedSeq[BlockMessage]] =
     for {
@@ -332,12 +289,10 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
 
   private def toposortDag[A](depth: Int, maxDepthLimit: Int)(
       doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]
-  ): F[ApiErr[A]] = {
-
-    val errorMessage =
-      "Could not visualize graph, casper instance was not available yet."
-
-    def casperResponse: F[ApiErr[A]] =
+  ): F[ApiErr[A]] =
+    if (depth > maxDepthLimit)
+      s"Your request depth $depth exceed the max limit $maxDepthLimit".asLeft[A].pure[F]
+    else
       for {
         dag               <- dagStorage.getRepresentation
         latestBlockNumber <- dag.latestBlockNumber
@@ -345,23 +300,16 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
         result            <- doIt(topoSort)
       } yield result
 
-    if (depth > maxDepthLimit)
-      s"Your request depth $depth exceed the max limit $maxDepthLimit".asLeft[A].pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[A]](
-        _ => casperResponse,
-        Log[F].warn(errorMessage).as(errorMessage.asLeft)
-      ))
-  }
-
   override def getBlocksByHeights(
       startBlockNumber: Long,
       endBlockNumber: Long,
       maxBlocksLimit: Int
-  ): F[ApiErr[List[LightBlockInfo]]] = {
-    val errorMessage = s"Could not retrieve blocks from $startBlockNumber to $endBlockNumber"
-
-    def casperResponse: F[ApiErr[List[LightBlockInfo]]] =
+  ): F[ApiErr[List[LightBlockInfo]]] =
+    if (endBlockNumber - startBlockNumber > maxBlocksLimit)
+      s"Your request startBlockNumber $startBlockNumber and endBlockNumber $endBlockNumber exceed the max limit $maxBlocksLimit"
+        .asLeft[List[LightBlockInfo]]
+        .pure[F]
+    else
       for {
         dag         <- dagStorage.getRepresentation
         topoSortDag <- dag.topoSort(startBlockNumber, Some(endBlockNumber))
@@ -376,49 +324,26 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
                    .map(_.asRight[Error])
       } yield result
 
-    if (endBlockNumber - startBlockNumber > maxBlocksLimit)
-      s"Your request startBlockNumber $startBlockNumber and endBlockNumber $endBlockNumber exceed the max limit $maxBlocksLimit"
-        .asLeft[List[LightBlockInfo]]
-        .pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[List[LightBlockInfo]]](
-        _ => casperResponse,
-        Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
-      ))
-  }
-
   override def visualizeDag[R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
       visualizer: (Vector[Vector[BlockHash]], String) => F[Graphz[F]],
       serialize: F[R]
-  ): F[ApiErr[R]] = {
-    val errorMessage = "visual dag failed"
-    def casperResponse: F[ApiErr[R]] =
-      for {
-        dag <- dagStorage.getRepresentation
-        // the default startBlockNumber is 0
-        // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
-        startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
-                        else Sync[F].delay(startBlockNumber.toLong)
-        topoSortDag <- dag.topoSort(
-                        startBlockNum - depth,
-                        Some(startBlockNum)
-                      )
-        _      <- visualizer(topoSortDag, PrettyPrinter.buildString(dag.lastFinalizedBlock))
-        result <- serialize
-      } yield result.asRight[Error]
-
-    EngineCell[F].read >>= (_.withCasper[ApiErr[R]](
-      _ => casperResponse,
-      Log[F]
-        .warn(errorMessage)
-        .as(s"Error: $errorMessage".asLeft)
-    ))
-  }
+  ): F[ApiErr[R]] =
+    for {
+      dag <- dagStorage.getRepresentation
+      // the default startBlockNumber is 0
+      // if the startBlockNumber is 0 , it would use the latestBlockNumber for backward compatible
+      startBlockNum <- if (startBlockNumber == 0) dag.latestBlockNumber
+                      else Sync[F].delay(startBlockNumber.toLong)
+      topoSortDag <- dag.topoSort(
+                      startBlockNum - depth,
+                      Some(startBlockNum)
+                    )
+      _      <- visualizer(topoSortDag, PrettyPrinter.buildString(dag.lastFinalizedBlock))
+      result <- serialize
+    } yield result.asRight[Error]
 
   override def machineVerifiableDag(depth: Int, maxDepthLimit: Int): F[ApiErr[String]] =
     toposortDag[String](depth, maxDepthLimit) { topoSort =>
@@ -446,12 +371,10 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
         .map(_.reverse.asRight[Error])
     }
 
-  override def showMainChain(depth: Int, maxDepthLimit: Int): F[List[LightBlockInfo]] = {
-
-    val errorMessage =
-      "Could not show main chain, casper instance was not available yet."
-
-    def casperResponse: F[List[LightBlockInfo]] =
+  override def showMainChain(depth: Int, maxDepthLimit: Int): F[List[LightBlockInfo]] =
+    if (depth > maxDepthLimit)
+      List.empty[LightBlockInfo].pure[F]
+    else
       for {
         tipHashes  <- estimator
         tipHash    = tipHashes.head
@@ -460,87 +383,56 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
         blockInfos <- mainChain.toList.traverse(getLightBlockInfo)
       } yield blockInfos
 
-    if (depth > maxDepthLimit)
-      List.empty[LightBlockInfo].pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
-        _ => casperResponse,
-        Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
-      ))
-  }
-
-  override def findDeploy(id: DeployId): F[ApiErr[LightBlockInfo]] = EngineCell[F].read >>= (
-    _.withCasper[ApiErr[LightBlockInfo]](
-      _ =>
-        for {
-          dag            <- dagStorage.getRepresentation
-          maybeBlockHash <- dag.lookupByDeployId(id)
-          maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
-          response       <- maybeBlock.traverse(getLightBlockInfo)
-        } yield response.fold(
-          s"Couldn't find block containing deploy with id: ${PrettyPrinter
-            .buildStringNoLimit(id)}".asLeft[LightBlockInfo]
-        )(
-          _.asRight
-        ),
-      Log[F]
-        .warn("Could not find block with deploy, casper instance was not available yet.")
-        .as(s"Error: errorMessage".asLeft)
+  override def findDeploy(id: DeployId): F[ApiErr[LightBlockInfo]] =
+    for {
+      dag            <- dagStorage.getRepresentation
+      maybeBlockHash <- dag.lookupByDeployId(id)
+      maybeBlock     <- maybeBlockHash.traverse(BlockStore[F].getUnsafe)
+      response       <- maybeBlock.traverse(getLightBlockInfo)
+    } yield response.fold(
+      s"Couldn't find block containing deploy with id: ${PrettyPrinter
+        .buildStringNoLimit(id)}".asLeft[LightBlockInfo]
+    )(
+      _.asRight
     )
-  )
 
-  override def getBlock(hash: String): F[ApiErr[BlockInfo]] = {
-
-    val errorMessage =
-      "Could not get block, casper instance was not available yet."
-
-    def casperResponse: F[ApiErr[BlockInfo]] =
-      for {
-        // Add constraint on the length of searched hash to prevent to many block results
-        // which can cause severe CPU load.
-        _ <- BlockRetrievalError(s"Input hash value must be at least 6 characters: $hash")
-              .raiseError[F, ApiErr[BlockInfo]]
-              .whenA(hash.length < 6)
-        // Check if hash string is in Base16 encoding and convert to ByteString
-        hashByteString <- hash.hexToByteString
-                           .liftTo[F](
-                             BlockRetrievalError(
-                               s"Input hash value is not valid hex string: $hash"
-                             )
+  override def getBlock(hash: String): F[ApiErr[BlockInfo]] =
+    (for {
+      // Add constraint on the length of searched hash to prevent to many block results
+      // which can cause severe CPU load.
+      _ <- BlockRetrievalError(s"Input hash value must be at least 6 characters: $hash")
+            .raiseError[F, ApiErr[BlockInfo]]
+            .whenA(hash.length < 6)
+      // Check if hash string is in Base16 encoding and convert to ByteString
+      hashByteString <- hash.hexToByteString
+                         .liftTo[F](
+                           BlockRetrievalError(
+                             s"Input hash value is not valid hex string: $hash"
                            )
-        // Check if hash is complete and not just the prefix in which case
-        // we can use `get` directly and not iterate over the whole block hash index.
-        getBlock  = BlockStore[F].get(hashByteString)
-        findBlock = findBlockFromStore(hash)
-        blockF    = if (hash.length == 64) getBlock else findBlock
-        // Get block form the block store
-        block <- blockF >>= (_.liftTo[F](
-                  BlockRetrievalError(s"Error: Failure to find block with hash: $hash")
-                ))
-        // Check if the block is added to the dag and convert it to block info
-        dag <- dagStorage.getRepresentation
-        blockInfo <- dag
-                      .contains(block.blockHash)
-                      .ifM(
-                        getFullBlockInfo(block),
-                        BlockRetrievalError(
-                          s"Error: Block with hash $hash received but not added yet"
-                        ).raiseError[F, BlockInfo]
-                      )
-      } yield blockInfo.asRight
-
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[BlockInfo]](
-        _ =>
-          casperResponse
-            .handleError {
-              // Convert error message from BlockRetrievalError
-              case BlockRetrievalError(errorMessage) => errorMessage.asLeft[BlockInfo]
-            },
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+                         )
+      // Check if hash is complete and not just the prefix in which case
+      // we can use `get` directly and not iterate over the whole block hash index.
+      getBlock  = BlockStore[F].get(hashByteString)
+      findBlock = findBlockFromStore(hash)
+      blockF    = if (hash.length == 64) getBlock else findBlock
+      // Get block form the block store
+      block <- blockF >>= (_.liftTo[F](
+                BlockRetrievalError(s"Error: Failure to find block with hash: $hash")
+              ))
+      // Check if the block is added to the dag and convert it to block info
+      dag <- dagStorage.getRepresentation
+      blockInfo <- dag
+                    .contains(block.blockHash)
+                    .ifM(
+                      getFullBlockInfo(block),
+                      BlockRetrievalError(
+                        s"Error: Block with hash $hash received but not added yet"
+                      ).raiseError[F, BlockInfo]
+                    )
+    } yield blockInfo.asRight).map(_.asInstanceOf[ApiErr[BlockInfo]]).handleError {
+      // Convert error message from BlockRetrievalError
+      case BlockRetrievalError(errorMessage) => errorMessage.asLeft[BlockInfo]
+    }
 
   private def getBlockInfo[A](block: BlockMessage, constructor: (BlockMessage, Float) => A): F[A] =
     for {
@@ -621,17 +513,11 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
   // Be careful to use this method , because it would iterate the whole indexes to find the matched one which would cause performance problem
   // Trying to use BlockStore.get as much as possible would more be preferred
   private def findBlockFromStore(hash: String): F[Option[BlockMessage]] =
-    EngineCell[F].read >>= (
-      _.withCasper[Option[BlockMessage]](
-        _ =>
-          for {
-            dag          <- dagStorage.getRepresentation
-            blockHashOpt <- dag.find(hash)
-            message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
-          } yield message,
-        none[BlockMessage].pure[F]
-      )
-    )
+    for {
+      dag          <- dagStorage.getRepresentation
+      blockHashOpt <- dag.find(hash)
+      message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
+    } yield message
 
   override def previewPrivateNames(
       deployer: ByteString,
@@ -644,54 +530,28 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
     ids.asRight[String].pure[F]
   }
 
-  override def lastFinalizedBlock: F[ApiErr[BlockInfo]] = {
-    val errorMessage = "Could not get last finalized block, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[BlockInfo]](
-        _ =>
-          for {
-            dag                <- dagStorage.getRepresentation
-            lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
-            blockInfo          <- getFullBlockInfo(lastFinalizedBlock)
-          } yield blockInfo.asRight,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  override def lastFinalizedBlock: F[ApiErr[BlockInfo]] =
+    for {
+      dag                <- dagStorage.getRepresentation
+      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      blockInfo          <- getFullBlockInfo(lastFinalizedBlock)
+    } yield blockInfo.asRight
 
-  override def isFinalized(hash: String): F[ApiErr[Boolean]] = {
-    val errorMessage =
-      "Could not check if block is finalized, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[Boolean]](
-        _ =>
-          for {
-            dag            <- dagStorage.getRepresentation
-            givenBlockHash = hash.unsafeHexToByteString
-            result         <- dag.isFinalized(givenBlockHash)
-          } yield result.asRight[Error],
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  override def isFinalized(hash: String): F[ApiErr[Boolean]] =
+    for {
+      dag            <- dagStorage.getRepresentation
+      givenBlockHash = hash.unsafeHexToByteString
+      result         <- dag.isFinalized(givenBlockHash)
+    } yield result.asRight[Error]
 
-  override def bondStatus(publicKey: ByteString): F[ApiErr[Boolean]] = {
-    val errorMessage =
-      "Could not check if validator is bonded, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[Boolean]](
-        _ =>
-          for {
-            dag                <- dagStorage.getRepresentation
-            lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
-            postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
-            bonds              <- runtimeManager.computeBonds(postStateHash)
-            validatorBondOpt   = bonds.find(_.validator == publicKey)
-          } yield validatorBondOpt.isDefined.asRight[Error],
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  override def bondStatus(publicKey: ByteString): F[ApiErr[Boolean]] =
+    for {
+      dag                <- dagStorage.getRepresentation
+      lastFinalizedBlock <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
+      postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
+      bonds              <- runtimeManager.computeBonds(postStateHash)
+      validatorBondOpt   = bonds.find(_.validator == publicKey)
+    } yield validatorBondOpt.isDefined.asRight[Error]
 
   /**
     * Explore the data or continuation in the tuple space for specific blockHash
@@ -706,71 +566,53 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
       blockHash: Option[String] = none,
       usePreStateHash: Boolean = false,
       devMode: Boolean = false
-  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
-    val errorMessage =
-      "Could not execute exploratory deploy, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper(
-        _ =>
-          for {
-            isReadOnly <- getValidator.map(_.isEmpty)
-            result <- if (isReadOnly || devMode) {
-                       for {
-                         dag <- dagStorage.getRepresentation
-                         targetBlock <- if (blockHash.isEmpty)
-                                         BlockStore[F].get(dag.lastFinalizedBlock)
-                                       else
-                                         for {
-                                           hashByteString <- blockHash
-                                                              .getOrElse("")
-                                                              .hexToByteString
-                                                              .liftTo[F](
-                                                                BlockRetrievalError(
-                                                                  s"Input hash value is not valid hex string: $blockHash"
-                                                                )
-                                                              )
-                                           block <- BlockStore[F].get(hashByteString)
-                                         } yield block
-                         res <- targetBlock.traverse(b => {
-                                 val postStateHash =
-                                   if (usePreStateHash) ProtoUtil.preStateHash(b)
-                                   else ProtoUtil.postStateHash(b)
-                                 for {
-                                   res            <- runtimeManager.playExploratoryDeploy(term, postStateHash)
-                                   lightBlockInfo <- getLightBlockInfo(b)
-                                 } yield (res, lightBlockInfo)
-                               })
-                       } yield res.fold(
-                         s"Can not find block $blockHash".asLeft[(Seq[Par], LightBlockInfo)]
-                       )(_.asRight[Error])
-                     } else {
-                       "Exploratory deploy can only be executed on read-only RNode."
-                         .asLeft[(Seq[Par], LightBlockInfo)]
-                         .pure[F]
-                     }
-          } yield result,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+    for {
+      isReadOnly <- getValidator.map(_.isEmpty)
+      result <- if (isReadOnly || devMode) {
+                 for {
+                   dag <- dagStorage.getRepresentation
+                   targetBlock <- if (blockHash.isEmpty)
+                                   BlockStore[F].get(dag.lastFinalizedBlock)
+                                 else
+                                   for {
+                                     hashByteString <- blockHash
+                                                        .getOrElse("")
+                                                        .hexToByteString
+                                                        .liftTo[F](
+                                                          BlockRetrievalError(
+                                                            s"Input hash value is not valid hex string: $blockHash"
+                                                          )
+                                                        )
+                                     block <- BlockStore[F].get(hashByteString)
+                                   } yield block
+                   res <- targetBlock.traverse(b => {
+                           val postStateHash =
+                             if (usePreStateHash) ProtoUtil.preStateHash(b)
+                             else ProtoUtil.postStateHash(b)
+                           for {
+                             res            <- runtimeManager.playExploratoryDeploy(term, postStateHash)
+                             lightBlockInfo <- getLightBlockInfo(b)
+                           } yield (res, lightBlockInfo)
+                         })
+                 } yield res.fold(
+                   s"Can not find block $blockHash".asLeft[(Seq[Par], LightBlockInfo)]
+                 )(_.asRight[Error])
+               } else {
+                 "Exploratory deploy can only be executed on read-only RNode."
+                   .asLeft[(Seq[Par], LightBlockInfo)]
+                   .pure[F]
+               }
+    } yield result
 
-  override def getLatestMessage: F[ApiErr[BlockMetadata]] = {
-    val errorMessage =
-      "Could not execute exploratory deploy, casper instance was not available yet."
-    EngineCell[F].read >>= (
-      _.withCasper(
-        _ =>
-          for {
-            validatorOpt     <- getValidator
-            validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
-            dag              <- dagStorage.getRepresentation
-            latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
-            latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
-          } yield latestMessage.asRight[Error],
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  override def getLatestMessage: F[ApiErr[BlockMetadata]] =
+    for {
+      validatorOpt     <- getValidator
+      validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
+      dag              <- dagStorage.getRepresentation
+      latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
+      latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
+    } yield latestMessage.asRight[Error]
 
   private def getValidator: F[Option[ValidatorIdentity]] =
     ValidatorIdentity.fromPrivateKeyWithLogging[F](validatorPrivateKey)
@@ -779,23 +621,10 @@ class BlockAPIImpl[F[_]: Concurrent: EngineCell: Log: Span: SafetyOracle: BlockS
       par: Par,
       blockHash: String,
       usePreStateHash: Boolean
-  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
-
-    def casperResponse: F[ApiErr[(Seq[Par], LightBlockInfo)]] =
-      for {
-        block     <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-        sortedPar <- parSortable.sortMatch[F](par).map(_.term)
-        data      <- getDataWithBlockInfo(sortedPar, block).map(_.get)
-      } yield (data.postBlockData, data.block).asRight[Error]
-
-    val errorMessage =
-      "Could not get data at par, casper instance was not available yet."
-
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
-        _ => casperResponse,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+    for {
+      block     <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
+      data      <- getDataWithBlockInfo(sortedPar, block).map(_.get)
+    } yield (data.postBlockData, data.block).asRight[Error]
 }
