@@ -3,6 +3,7 @@ package coop.rchain.casper.api
 import cats.effect.Sync
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
+import com.google.protobuf.ByteString
 import coop.rchain.casper.helper.{BlockDagStorageFixture, BlockGenerator, TestNode}
 import coop.rchain.casper.util.GenesisBuilder.{buildGenesis, buildGenesisParameters}
 import coop.rchain.shared.scalatestcontrib.effectTest
@@ -15,9 +16,11 @@ import coop.rchain.models._
 import coop.rchain.models.Expr.ExprInstance.GString
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.batch2.EngineWithCasper
+import coop.rchain.models.BlockHash.BlockHash
 import monix.eval.Task
 import org.scalatest.{EitherValues, FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
+import coop.rchain.models.syntax._
 
 class ExploratoryDeployAPITest
     extends FlatSpec
@@ -29,12 +32,12 @@ class ExploratoryDeployAPITest
   val genesisParameters   = buildGenesisParameters(bondsFunction = _.zip(List(10L, 10L, 10L)).toMap)
   val genesisContext      = buildGenesis(genesisParameters)
 
-  def exploratoryDeploy(term: String)(engineCell: Cell[Task, Engine[Task]])(
+  def exploratoryDeploy(term: String, block: BlockHash)(engineCell: Cell[Task, Engine[Task]])(
       implicit blockStore: BlockStore[Task],
       log: Log[Task]
   ) =
     BlockAPI
-      .exploratoryDeploy(term)(
+      .exploratoryDeploy(term, blockHash = block.toHexString.some)(
         Sync[Task],
         engineCell,
         log,
@@ -45,7 +48,7 @@ class ExploratoryDeployAPITest
    * DAG Looks like this:
    *           b3
    *           |
-   *           b2 <- last finalized block
+   *           b2
    *           |
    *           b1
    *           |
@@ -75,12 +78,13 @@ class ExploratoryDeployAPITest
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           result <- exploratoryDeploy(
-                     "new return in { for (@data <- @\"store\") {return!(data)}}"
+                     "new return in { for (@data <- @\"store\") {return!(data)}}",
+                     b2.blockHash
                    )(
                      engineCell
                    ).map(_.right.value)
-          (par, lastFinalizedBlock) = result
-          _                         = lastFinalizedBlock.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
+          (par, b) = result
+          _        = b.blockHash shouldBe PrettyPrinter.buildStringNoLimit(b2.blockHash)
           _ = par match {
             case Seq(Par(_, _, _, Seq(expr), _, _, _, _, _, _)) =>
               expr match {
@@ -109,7 +113,7 @@ class ExploratoryDeployAPITest
           _ <- n1.propagateBlock(produceDeploys(0))(nodes: _*)
 
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-          result <- exploratoryDeploy("new return in { return!(1) }")(
+          result <- exploratoryDeploy("new return in { return!(1) }", ByteString.EMPTY)(
                      engineCell
                    )
           _ = result.left.value shouldBe "Exploratory deploy can only be executed on read-only RNode."
