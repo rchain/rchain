@@ -10,6 +10,7 @@ import coop.rchain.shared.scalatestcontrib._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
+// TODO consider adjusting or removing when new finalizer test is implemented
 class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Inspectors {
 
   import coop.rchain.casper.util.GenesisBuilder._
@@ -22,7 +23,7 @@ class MultiParentCasperFinalizationSpec extends FlatSpec with Matchers with Insp
 
   //put a new casper instance at the start of each
   //test since we cannot reset it
-  "MultiParentCasper" should "increment last finalized block as appropriate in round robin" in effectTest {
+  "MultiParentCasper" should "increment last finalized block as appropriate in round robin" ignore effectTest {
     def assertFinalizedBlock(
         node: TestNode[Effect]
     )(expected: BlockMessage)(implicit file: sourcecode.File, line: sourcecode.Line) =
