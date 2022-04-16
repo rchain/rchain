@@ -13,13 +13,15 @@ import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
 
+// TODO All tests depend on main parent chain which is not present in new multiparent Casper.
+//  Adjust after implementation of new finalizer or remove if LFDAN is replaced wit Explore deploy.
 class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   import GenesisBuilder._
 
   val genesis = buildGenesis()
 
-  "getListeningNameDataResponse" should "work with unsorted channels" in effectTest {
+  "getListeningNameDataResponse" should "work with unsorted channels" ignore effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       import node._
 
@@ -49,7 +51,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     }
   }
 
-  it should "work across a chain" in effectTest {
+  it should "work across a chain" ignore effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
       implicit val nodeEngineCell           = nodes(0).engineCell
       implicit val nodeZeroLogEffect        = nodes(0).logEff
@@ -161,7 +163,7 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
     }
   }
 
-  "getListeningNameContinuationResponse" should "work with unsorted channels" in {
+  "getListeningNameContinuationResponse" should "work with unsorted channels" ignore {
     TestNode.standaloneEff(genesis).use { node =>
       import node._
 
