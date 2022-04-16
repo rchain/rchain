@@ -666,7 +666,8 @@ object BlockAPI {
   }
 
   def bondStatus[F[_]: Monad: EngineCell: Log](
-      publicKey: ByteString
+      publicKey: ByteString,
+      targetBlock: Option[BlockMessage] = none[BlockMessage]
   ): F[ApiErr[Boolean]] = {
     val errorMessage =
       "Could not check if validator is bonded, casper instance was not available yet."
@@ -676,7 +677,7 @@ object BlockAPI {
           for {
             lastFinalizedBlock <- casper.lastFinalizedBlock
             runtimeManager     <- casper.getRuntimeManager
-            postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
+            postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
             bonds              <- runtimeManager.computeBonds(postStateHash)
             validatorBondOpt   = bonds.find(_.validator == publicKey)
           } yield validatorBondOpt.isDefined.asRight[Error],
