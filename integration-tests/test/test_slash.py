@@ -323,7 +323,9 @@ def test_slash_invalid_validator_approve_evil_block(command_line_options: Comman
         assert bonds_validators[BONDED_VALIDATOR_KEY_2.get_public_key().to_hex()] == 0
 
 
-@pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+# @pytest.mark.skipif(sys.platform in ('win32', 'cygwin', 'darwin'), reason="Only Linux docker support connection between host and container which node client needs")
+# This tests GHOST rule provided by Estimator, which is not present in new version of Casper. Consider removing
+@pytest.mark.skip
 def test_slash_GHOST_disobeyed(command_line_options: CommandLineOptions, random_generator: Random, docker_client: DockerClient) -> None:
     """
     Slash a validator who doesn't follow GHOST.
