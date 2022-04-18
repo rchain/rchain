@@ -52,7 +52,7 @@ object GenesisCeremonyMaster {
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      :  LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
