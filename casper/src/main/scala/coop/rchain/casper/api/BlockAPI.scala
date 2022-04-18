@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
+import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.EngineCell._
@@ -18,25 +19,22 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
-import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BindPattern, BlockMetadata, Par}
-import coop.rchain.rspace.ReportingRspace.ReportingEvent
+import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
+import fs2.Stream
 import coop.rchain.shared.syntax._
 
-import scala.collection.immutable
-import scala.util.Random
+import scala.collection.immutable.SortedMap
 
 object BlockAPI {
   type Error     = String
@@ -182,6 +180,25 @@ object BlockAPI {
           }
     } yield r
 
+  /**
+    * Performs transformation on a stream of blocks (from highest height, same heights loaded as batch)
+    *
+    * @param heightMap height map to iterate block hashes
+    * @param transform function to run for each block
+    * @return stream of transform results
+    */
+  private def getFromBlocks[F[_]: Sync: BlockStore, A](
+      heightMap: SortedMap[Long, Set[BlockHash]]
+  )(transform: BlockMessage => F[A]): Stream[F, List[A]] = {
+    // TODO: check if conversion of SortedMap#toIndexedSeq is performant enough
+    val reverseHeightMap = heightMap.toIndexedSeq.reverse
+    val iterBlockHashes  = reverseHeightMap.iterator.map(_._2.toList)
+    Stream
+      .fromIterator(iterBlockHashes)
+      .evalMap(_.traverse(BlockStore[F].getUnsafe))
+      .evalMap(_.traverse(transform))
+  }
+
   def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: BlockStore](
       depth: Int,
       listeningName: Par,
@@ -194,18 +211,21 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
       for {
-        // TODO adjust LFDAN for multiparent or replace with ExploreDeploy
-        mainChain           <- IndexedSeq.empty[BlockMessage].pure
+        heightMap           <- casper.blockDag.flatMap(_.getHeightMap)
+        depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
         runtimeManager      <- casper.getRuntimeManager
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
-        maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      getDataWithBlockInfo[F](
-                                        runtimeManager,
-                                        sortedListeningName,
-                                        block
-                                      )
-                                    }
-        blocksWithActiveName = maybeBlocksWithActiveName.flatten
+        blockDataStream = getFromBlocks(heightMap) { block =>
+          getDataWithBlockInfo[F](runtimeManager, sortedListeningName, block)
+        }
+        // For compatibility with v0.12.x depth must include all blocks with the same height
+        //  e.g. depth=1 should always return latest block created by the node
+        blocksWithActiveName <- blockDataStream
+                                 .map(_.flatten)
+                                 .take(depthWithLimit)
+                                 .compile
+                                 .toList
+                                 .map(_.flatten)
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
     if (depth > maxBlocksLimit)
@@ -232,19 +252,22 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
       for {
-        // TODO adjust LFDAN for multiparent or replace with ExploreDeploy
-        mainChain      <- IndexedSeq.empty[BlockMessage].pure
+        heightMap      <- casper.blockDag.flatMap(_.getHeightMap)
+        depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
         runtimeManager <- casper.getRuntimeManager
         sortedListeningNames <- listeningNames.toList
                                  .traverse(parSortable.sortMatch[F](_).map(_.term))
-        maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      getContinuationsWithBlockInfo[F](
-                                        runtimeManager,
-                                        sortedListeningNames,
-                                        block
-                                      )
-                                    }
-        blocksWithActiveName = maybeBlocksWithActiveName.flatten
+        blockDataStream = getFromBlocks(heightMap) { block =>
+          getContinuationsWithBlockInfo[F](runtimeManager, sortedListeningNames, block)
+        }
+        // For compatibility with v0.12.x depth must include all blocks with the same height
+        //  e.g. depth=1 should always return latest block created by the node
+        blocksWithActiveName <- blockDataStream
+                                 .map(_.flatten)
+                                 .take(depthWithLimit)
+                                 .compile
+                                 .toList
+                                 .map(_.flatten)
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
     if (depth > maxBlocksLimit)
@@ -266,7 +289,7 @@ object BlockAPI {
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
     // TODO: For Produce it doesn't make sense to have multiple names
-    if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
+    if (isListeningNameReduced(block, Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
@@ -278,7 +301,7 @@ object BlockAPI {
 
   private def getContinuationsWithBlockInfo[F[_]: Log: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
-      sortedListeningNames: immutable.Seq[Par],
+      sortedListeningNames: Seq[Par],
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
@@ -298,7 +321,7 @@ object BlockAPI {
 
   private def isListeningNameReduced(
       block: BlockMessage,
-      sortedListeningName: immutable.Seq[Par]
+      sortedListeningName: Seq[Par]
   ): Boolean = {
     val serializedLog = for {
       pd    <- block.body.deploys
