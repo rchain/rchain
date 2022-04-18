@@ -599,9 +599,6 @@ in {
           } |
           for (@`rho:rchain:revVault`, @lib, @dispatcher <- insertBlessed) {
             newInsert!(lib, `rho:rchain:revVault`, dispatcher)
-          } |
-          for (@`rho:rchain:testLib`, @lib, @dispatcher <- insertBlessed) {
-            newInsert!(lib, `rho:rchain:revVault`, dispatcher)
           }
         } 
       } |
