@@ -73,18 +73,5 @@ final case class BlockMetadataScodec(
     directlyFinalized: Boolean,
     finalized: Boolean
 ) {
-
   def toByteString = MetadataScodec.encode(block = this)
-
-  def validateWithOtherBlock(block: BlockMetadataScodec): Boolean =
-    blockHash.corresponds(block.blockHash)(_ == _) &&
-      parents == block.parents &&
-      sender.corresponds(block.sender)(_ == _) &&
-      justifications == block.justifications &&
-      weightMap == block.weightMap &&
-      blockNum == block.blockNum &&
-      seqNum == block.seqNum &&
-      invalid == block.invalid &&
-      directlyFinalized == block.directlyFinalized &&
-      finalized == block.finalized
 }
