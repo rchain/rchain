@@ -20,27 +20,9 @@ final class ApprovedStoreOps[F[_]: Sync](
 ) {
   val approvedBlockKey: Byte = 42.toByte
 
-  def getApprovedBlock: F[Option[ApprovedBlock]] = {
-    import cats.instances.option._
-    for {
-      // Optional block message from the store
-      byteVector <- approvedStore.get1(approvedBlockKey)
-      // Decode protobuf message / throw if fail
-      block <- byteVector.traverse { approvedBlockAsByteVector =>
-                ApprovedBlock
-                  .from(ApprovedBlockProto.parseFrom(approvedBlockAsByteVector.toArray))
-                  .leftMap(errorApprovedBlock)
-                  .liftTo[F]
-              }
-    } yield block
-  }
+  def getApprovedBlock: F[Option[ApprovedBlock]] = approvedStore.get1(approvedBlockKey)
 
-  def putApprovedBlock(block: ApprovedBlock): F[Unit] =
-    approvedStore.put(approvedBlockKey, ByteVector(block.toProto.toByteArray))
-
-  private def errorApprovedBlock(cause: String): ApprovedStoreFatalError = ApprovedStoreFatalError(
-    s"Approved block decoding error. Cause: $cause"
-  )
+  def putApprovedBlock(block: ApprovedBlock): F[Unit] = approvedStore.put(approvedBlockKey, block)
 
   /**
     * This is fatal error from which Approved Store can not be recovered.

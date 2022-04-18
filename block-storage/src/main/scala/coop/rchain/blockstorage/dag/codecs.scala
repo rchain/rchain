@@ -2,8 +2,9 @@ package coop.rchain.blockstorage.dag
 
 import cats.implicits._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.approvedStore.{approvedBlockToBytes, bytesToApprovedBlock}
 import coop.rchain.blockstorage.blockStore.{blockMessageToBytes, bytesToBlockMessage}
-import coop.rchain.casper.protocol._
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, DeployData, DeployDataProto}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
@@ -30,6 +31,11 @@ object codecs {
   val codecBlockMessage = bytes.exmap[BlockMessage](
     byteVector => Attempt.fromEither(bytesToBlockMessage(byteVector.toArray).leftMap(Err(_))),
     blockMessage => Attempt.successful(ByteVector(blockMessageToBytes(blockMessage)))
+  )
+
+  val codecApprovedBlock = bytes.exmap[ApprovedBlock](
+    byteVector => Attempt.fromEither(bytesToApprovedBlock(byteVector.toArray).leftMap(Err(_))),
+    approvedBlock => Attempt.successful(ByteVector(approvedBlockToBytes(approvedBlock)))
   )
 
   val codecValidator = xmapToByteString(bytes(Validator.Length))
