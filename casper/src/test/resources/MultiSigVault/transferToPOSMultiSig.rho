@@ -1,0 +1,19 @@
+new RevVaultCh, POSCh, multiSigCh, 
+    deployerAuthCh, rl(`rho:registry:lookup`), vaultCh, 
+    deployerId(`rho:rchain:deployerId`), stdout(`rho:io:stdout`),
+    transferRet in {
+  rl!(`rho:rchain:revVault`, *RevVaultCh) |
+  rl!(`rho:rchain:pos`, *POSCh) |
+  for (@(_, RevVault) <- RevVaultCh ; @(_, POS) <- POSCh) {
+    @POS!("getCoopVault", *multiSigCh)|
+    stdout!(("transfer to coop get lib right"))|
+    @RevVault!("findOrCreate", "$$from$$", *vaultCh) |
+    @RevVault!("deployerAuthKey", *deployerId, *deployerAuthCh) |
+    for (@(multiSigVault, addr, vault) <- multiSigCh ; authKey <- deployerAuthCh ; @(true, fromVault) <- vaultCh){
+      @fromVault!("transfer", addr, $$amount$$, *authKey, *transferRet) |
+      for (@res <- transferRet) { 
+        stdout!(("transfer to coop res", res))
+      }
+    }
+  }
+}
