@@ -23,9 +23,4 @@ final class ApprovedStoreOps[F[_]: Sync](
   def getApprovedBlock: F[Option[ApprovedBlock]] = approvedStore.get1(approvedBlockKey)
 
   def putApprovedBlock(block: ApprovedBlock): F[Unit] = approvedStore.put(approvedBlockKey, block)
-
-  /**
-    * This is fatal error from which Approved Store can not be recovered.
-    */
-  case class ApprovedStoreFatalError(message: String) extends Exception(message)
 }
