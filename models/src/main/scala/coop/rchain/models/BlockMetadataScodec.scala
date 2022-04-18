@@ -7,7 +7,6 @@ final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array
 
 object MetadataScodec {
   import scodec.Codec
-  import scodec.bits.ByteVector
   import scodec.codecs._
 
   private val codecByteArray = {
@@ -15,7 +14,7 @@ object MetadataScodec {
   }
 
   //  Codecs of Lists and Map should be created through the flatZip method
-  //  (these codecs must know exact count of elements in List/Map container)
+  //  (these codecs must know exact count of elements in List/Map containers)
   private val codecParentsBase = uint16 flatZip { count =>
     listOfN(provide(count), codecByteArray)
   }
