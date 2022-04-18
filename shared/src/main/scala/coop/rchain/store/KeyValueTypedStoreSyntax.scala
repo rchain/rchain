@@ -46,5 +46,3 @@ final class KeyValueTypedStoreOps[F[_], K, V](
   def getOrElse(key: K, elseValue: V)(implicit f: Functor[F]): F[V] =
     get1(key).map(_.getOrElse(elseValue))
 }
-
-object KeyValueTypedStoreSyntaxObj extends KeyValueTypedStoreSyntax

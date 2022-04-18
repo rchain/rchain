@@ -1,7 +1,7 @@
 package coop.rchain.casper.engine
 
-import cats.effect.{Concurrent, Timer}
 import cats.effect.concurrent.Ref
+import cats.effect.{Concurrent, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
@@ -17,18 +17,14 @@ import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil
 import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.comm.PeerNode
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.comm.transport.TransportLayer
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.{BindPattern, ListParWithRandom, Par, TaggedContinuation}
-import coop.rchain.rholang.interpreter.storage
 import coop.rchain.rspace.state.{RSpaceImporter, RSpaceStateManager}
-import coop.rchain.shared
-import coop.rchain.shared._
-import coop.rchain.store.KeyValueTypedStoreSyntaxObj._
+import coop.rchain.shared.syntax._
+import coop.rchain.shared.{Event => NodeEvent, _}
 import fs2.concurrent.Queue
 
 import scala.collection.immutable.SortedMap
@@ -114,7 +110,7 @@ class Initializing[F[_]
         _ <- LastApprovedBlock[F].set(approvedBlock)
 
         _ <- EventLog[F].publish(
-              shared.Event.ApprovedBlockReceived(
+              NodeEvent.ApprovedBlockReceived(
                 PrettyPrinter
                   .buildStringNoLimit(block.blockHash)
               )

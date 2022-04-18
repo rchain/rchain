@@ -14,7 +14,6 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.catscontrib.Catscontrib._
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
-import coop.rchain.store.KeyValueTypedStoreSyntaxObj._
 
 /**
   * Logic for processing incoming blocks
