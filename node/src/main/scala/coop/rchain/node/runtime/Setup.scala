@@ -228,7 +228,8 @@ object Setup {
           if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter
+          conf.protocolServer.disableStateExporter,
+          validatorIdentityOpt
         )
       }
       packetHandler = {

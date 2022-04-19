@@ -47,7 +47,8 @@ object CasperLaunch {
       proposeFOpt: Option[ProposeFunction[F]],
       conf: CasperConf,
       trimState: Boolean,
-      disableStateExporter: Boolean
+      disableStateExporter: Boolean,
+      validatorIdentityOpt: Option[ValidatorIdentity]
   ): CasperLaunch[F] =
     new CasperLaunch[F] {
       val casperShardConf = CasperShardConf(
@@ -137,12 +138,11 @@ object CasperLaunch {
                   )
           } yield ()
 
+        val ab = approvedBlock.candidate.block
         for {
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          ab          = approvedBlock.candidate.block
           casper <- MultiParentCasper
                      .hashSetCasper[F](
-                       validatorId,
+                       validatorIdentityOpt,
                        casperShardConf,
                        ab
                      )
@@ -158,7 +158,7 @@ object CasperLaunch {
                   blocksInProcessing,
                   casper,
                   approvedBlock,
-                  validatorId,
+                  validatorIdentityOpt,
                   init,
                   disableStateExporter
                 )
@@ -173,10 +173,12 @@ object CasperLaunch {
                     conf.genesisCeremony.autogenShardSize
                   )
 
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
-          vaults      <- VaultParser.parse(conf.genesisBlockData.walletsFile)
+          vaults <- VaultParser.parse(conf.genesisBlockData.walletsFile)
+          validatorId <- validatorIdentityOpt.liftTo(
+                          new Exception(s"Validator private key is missing.")
+                        )
           bap <- BlockApproverProtocol.of(
-                  validatorId.get,
+                  validatorId,
                   timestamp,
                   vaults,
                   bonds,
@@ -189,12 +191,13 @@ object CasperLaunch {
                   conf.genesisBlockData.posMultiSigPublicKeys,
                   conf.genesisBlockData.posMultiSigQuorum
                 )(Sync[F])
+
           _ <- EngineCell[F].set(
                 new GenesisValidator(
                   blockProcessingQueue,
                   blocksInProcessing,
                   casperShardConf,
-                  validatorId.get,
+                  validatorId,
                   bap
                 )
               )
@@ -202,7 +205,6 @@ object CasperLaunch {
 
       private def initBootstrap(disableStateExporter: Boolean): F[Unit] =
         for {
-          validatorId <- ValidatorIdentity.fromPrivateKeyWithLogging[F](conf.validatorPrivateKey)
           abp <- ApproveBlockProtocol
                   .of[F](
                     conf.genesisBlockData.bondsFile,
@@ -230,7 +232,7 @@ object CasperLaunch {
                     blockProcessingQueue,
                     blocksInProcessing,
                     casperShardConf,
-                    validatorId,
+                    validatorIdentityOpt,
                     disableStateExporter
                   )
               )
