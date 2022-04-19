@@ -8,6 +8,7 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
+import coop.rchain.casper._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
 import coop.rchain.casper.blocks.proposer._
 import coop.rchain.casper.engine.EngineCell._
@@ -18,24 +19,22 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util._
 import coop.rchain.casper.util.rholang.{RuntimeManager, Tools}
-import coop.rchain.casper.{ReportingCasper, ReportingProtoTransformer, _}
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.graphz._
 import coop.rchain.metrics.{Metrics, Span}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.syntax._
 import coop.rchain.models.rholang.sorter.Sortable._
 import coop.rchain.models.serialization.implicits.mkProtobufInstance
-import coop.rchain.models.{BindPattern, BlockMetadata, Par}
-import coop.rchain.rspace.ReportingRspace.ReportingEvent
+import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockMetadata, Par}
 import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
-import coop.rchain.models.syntax._
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
+import fs2.Stream
 import coop.rchain.shared.syntax._
 
-import scala.collection.immutable
+import scala.collection.immutable.SortedMap
 
 object BlockAPI {
   type Error     = String
@@ -181,7 +180,26 @@ object BlockAPI {
           }
     } yield r
 
-  def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+  /**
+    * Performs transformation on a stream of blocks (from highest height, same heights loaded as batch)
+    *
+    * @param heightMap height map to iterate block hashes
+    * @param transform function to run for each block
+    * @return stream of transform results
+    */
+  private def getFromBlocks[F[_]: Sync: BlockStore, A](
+      heightMap: SortedMap[Long, Set[BlockHash]]
+  )(transform: BlockMessage => F[A]): Stream[F, List[A]] = {
+    // TODO: check if conversion of SortedMap#toIndexedSeq is performant enough
+    val reverseHeightMap = heightMap.toIndexedSeq.reverse
+    val iterBlockHashes  = reverseHeightMap.iterator.map(_._2.toList)
+    Stream
+      .fromIterator(iterBlockHashes)
+      .evalMap(_.traverse(BlockStore[F].getUnsafe))
+      .evalMap(_.traverse(transform))
+  }
+
+  def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: BlockStore](
       depth: Int,
       listeningName: Par,
       maxBlocksLimit: Int
@@ -193,17 +211,21 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
       for {
-        mainChain           <- getMainChainFromTip[F](depth)
+        heightMap           <- casper.blockDag.flatMap(_.getHeightMap)
+        depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
         runtimeManager      <- casper.getRuntimeManager
         sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
-        maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      getDataWithBlockInfo[F](
-                                        runtimeManager,
-                                        sortedListeningName,
-                                        block
-                                      )
-                                    }
-        blocksWithActiveName = maybeBlocksWithActiveName.flatten
+        blockDataStream = getFromBlocks(heightMap) { block =>
+          getDataWithBlockInfo[F](runtimeManager, sortedListeningName, block)
+        }
+        // For compatibility with v0.12.x depth must include all blocks with the same height
+        //  e.g. depth=1 should always return latest block created by the node
+        blocksWithActiveName <- blockDataStream
+                                 .map(_.flatten)
+                                 .take(depthWithLimit)
+                                 .compile
+                                 .toList
+                                 .map(_.flatten)
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
     if (depth > maxBlocksLimit)
@@ -219,7 +241,7 @@ object BlockAPI {
       ))
   }
 
-  def getListeningNameContinuationResponse[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: EngineCell: Log: BlockStore](
       depth: Int,
       listeningNames: Seq[Par],
       maxBlocksLimit: Int
@@ -230,18 +252,22 @@ object BlockAPI {
         implicit casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
       for {
-        mainChain      <- getMainChainFromTip[F](depth)
+        heightMap      <- casper.blockDag.flatMap(_.getHeightMap)
+        depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
         runtimeManager <- casper.getRuntimeManager
         sortedListeningNames <- listeningNames.toList
                                  .traverse(parSortable.sortMatch[F](_).map(_.term))
-        maybeBlocksWithActiveName <- mainChain.toList.traverse { block =>
-                                      getContinuationsWithBlockInfo[F](
-                                        runtimeManager,
-                                        sortedListeningNames,
-                                        block
-                                      )
-                                    }
-        blocksWithActiveName = maybeBlocksWithActiveName.flatten
+        blockDataStream = getFromBlocks(heightMap) { block =>
+          getContinuationsWithBlockInfo[F](runtimeManager, sortedListeningNames, block)
+        }
+        // For compatibility with v0.12.x depth must include all blocks with the same height
+        //  e.g. depth=1 should always return latest block created by the node
+        blocksWithActiveName <- blockDataStream
+                                 .map(_.flatten)
+                                 .take(depthWithLimit)
+                                 .compile
+                                 .toList
+                                 .map(_.flatten)
       } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
     if (depth > maxBlocksLimit)
@@ -257,24 +283,13 @@ object BlockAPI {
       ))
   }
 
-  private def getMainChainFromTip[F[_]: Sync: Log: SafetyOracle: BlockStore](depth: Int)(
-      implicit casper: MultiParentCasper[F]
-  ): F[IndexedSeq[BlockMessage]] =
-    for {
-      dag       <- casper.blockDag
-      tipHashes <- casper.estimator(dag)
-      tipHash   = tipHashes.head
-      tip       <- BlockStore[F].getUnsafe(tipHash)
-      mainChain <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
-    } yield mainChain
-
-  private def getDataWithBlockInfo[F[_]: Log: SafetyOracle: BlockStore: Concurrent](
+  private def getDataWithBlockInfo[F[_]: Log: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
     // TODO: For Produce it doesn't make sense to have multiple names
-    if (isListeningNameReduced(block, immutable.Seq(sortedListeningName))) {
+    if (isListeningNameReduced(block, Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
         data      <- runtimeManager.getData(stateHash)(sortedListeningName)
@@ -284,9 +299,9 @@ object BlockAPI {
       none[DataWithBlockInfo].pure[F]
     }
 
-  private def getContinuationsWithBlockInfo[F[_]: Log: SafetyOracle: BlockStore: Concurrent](
+  private def getContinuationsWithBlockInfo[F[_]: Log: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
-      sortedListeningNames: immutable.Seq[Par],
+      sortedListeningNames: Seq[Par],
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
@@ -306,7 +321,7 @@ object BlockAPI {
 
   private def isListeningNameReduced(
       block: BlockMessage,
-      sortedListeningName: immutable.Seq[Par]
+      sortedListeningName: Seq[Par]
   ): Boolean = {
     val serializedLog = for {
       pd    <- block.body.deploys
@@ -333,7 +348,7 @@ object BlockAPI {
   }
 
   private def toposortDag[
-      F[_]: Monad: EngineCell: Log: SafetyOracle: BlockStore,
+      F[_]: Monad: EngineCell: Log: BlockStore,
       A
   ](depth: Int, maxDepthLimit: Int)(
       doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
@@ -359,7 +374,7 @@ object BlockAPI {
       ))
   }
 
-  def getBlocksByHeights[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+  def getBlocksByHeights[F[_]: Sync: EngineCell: Log: BlockStore](
       startBlockNumber: Long,
       endBlockNumber: Long,
       maxBlocksLimit: Int
@@ -396,7 +411,7 @@ object BlockAPI {
       ))
   }
 
-  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore, R](
+  def visualizeDag[F[_]: Monad: Sync: EngineCell: Log: BlockStore, R](
       depth: Int,
       maxDepthLimit: Int,
       startBlockNumber: Int,
@@ -429,7 +444,7 @@ object BlockAPI {
   }
 
   def machineVerifiableDag[
-      F[_]: Monad: Sync: EngineCell: Log: SafetyOracle: BlockStore
+      F[_]: Monad: Sync: EngineCell: Log: BlockStore
   ](depth: Int, maxDepthLimit: Int): F[ApiErr[String]] =
     toposortDag[F, String](depth, maxDepthLimit) {
       case (_, topoSort) =>
@@ -442,7 +457,7 @@ object BlockAPI {
           .map(_.asRight[Error])
     }
 
-  def getBlocks[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+  def getBlocks[F[_]: Sync: EngineCell: Log: BlockStore](
       depth: Int,
       maxDepthLimit: Int
   ): F[ApiErr[List[LightBlockInfo]]] =
@@ -462,34 +477,7 @@ object BlockAPI {
           .map(_.reverse.asRight[Error])
     }
 
-  def showMainChain[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
-      depth: Int,
-      maxDepthLimit: Int
-  ): F[List[LightBlockInfo]] = {
-
-    val errorMessage =
-      "Could not show main chain, casper instance was not available yet."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]) =
-      for {
-        dag        <- MultiParentCasper[F].blockDag
-        tipHashes  <- MultiParentCasper[F].estimator(dag)
-        tipHash    = tipHashes.head
-        tip        <- BlockStore[F].getUnsafe(tipHash)
-        mainChain  <- ProtoUtil.getMainChainUntilDepth[F](tip, IndexedSeq.empty[BlockMessage], depth)
-        blockInfos <- mainChain.toList.traverse(getLightBlockInfo[F])
-      } yield blockInfos
-
-    if (depth > maxDepthLimit)
-      List.empty[LightBlockInfo].pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[List[LightBlockInfo]](
-        casperResponse(_),
-        Log[F].warn(errorMessage).as(List.empty[LightBlockInfo])
-      ))
-  }
-
-  def findDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+  def findDeploy[F[_]: Sync: EngineCell: Log: BlockStore](
       id: DeployId
   ): F[ApiErr[LightBlockInfo]] =
     EngineCell[F].read >>= (
@@ -512,7 +500,7 @@ object BlockAPI {
       )
     )
 
-  def getBlock[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore: Span](
+  def getBlock[F[_]: Sync: EngineCell: Log: BlockStore: Span](
       hash: String
   ): F[ApiErr[BlockInfo]] = Span[F].trace(GetBlockSource) {
 
@@ -568,7 +556,7 @@ object BlockAPI {
     )
   }
 
-  private def getBlockInfo[A, F[_]: Monad: SafetyOracle: BlockStore](
+  private def getBlockInfo[A, F[_]: Monad: BlockStore](
       block: BlockMessage,
       constructor: (
           BlockMessage,
@@ -584,8 +572,7 @@ object BlockAPI {
                                    dag
                                      .isFinalized(block.blockHash)
                                      .map(isFinalized => if (isFinalized) 1f else -1f),
-                                   SafetyOracle[F]
-                                     .normalizedFaultTolerance(dag, block.blockHash)
+                                   Float.MinValue.pure[F]
                                  )
       initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
       faultTolerance = normalizedFaultTolerance - initialFault
@@ -593,11 +580,11 @@ object BlockAPI {
       blockInfo = constructor(block, faultTolerance)
     } yield blockInfo
 
-  private def getFullBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  private def getFullBlockInfo[F[_]: Monad: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
     getBlockInfo[BlockInfo, F](block, constructBlockInfo)
-  def getLightBlockInfo[F[_]: Monad: SafetyOracle: BlockStore](
+  def getLightBlockInfo[F[_]: Monad: BlockStore](
       block: BlockMessage
   )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
     getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
@@ -669,8 +656,7 @@ object BlockAPI {
     ids.asRight[String].pure[F]
   }
 
-  def lastFinalizedBlock[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log]
-      : F[ApiErr[BlockInfo]] = {
+  def lastFinalizedBlock[F[_]: Monad: EngineCell: BlockStore: Log]: F[ApiErr[BlockInfo]] = {
     val errorMessage = "Could not get last finalized block, casper instance was not available yet."
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[BlockInfo]](
@@ -684,7 +670,7 @@ object BlockAPI {
     )
   }
 
-  def isFinalized[F[_]: Monad: EngineCell: SafetyOracle: BlockStore: Log](
+  def isFinalized[F[_]: Monad: EngineCell: BlockStore: Log](
       hash: String
   ): F[ApiErr[Boolean]] = {
     val errorMessage =
@@ -703,7 +689,8 @@ object BlockAPI {
   }
 
   def bondStatus[F[_]: Monad: EngineCell: Log](
-      publicKey: ByteString
+      publicKey: ByteString,
+      targetBlock: Option[BlockMessage] = none[BlockMessage]
   ): F[ApiErr[Boolean]] = {
     val errorMessage =
       "Could not check if validator is bonded, casper instance was not available yet."
@@ -713,7 +700,7 @@ object BlockAPI {
           for {
             lastFinalizedBlock <- casper.lastFinalizedBlock
             runtimeManager     <- casper.getRuntimeManager
-            postStateHash      = ProtoUtil.postStateHash(lastFinalizedBlock)
+            postStateHash      = ProtoUtil.postStateHash(targetBlock.getOrElse(lastFinalizedBlock))
             bonds              <- runtimeManager.computeBonds(postStateHash)
             validatorBondOpt   = bonds.find(_.validator == publicKey)
           } yield validatorBondOpt.isDefined.asRight[Error],
@@ -730,7 +717,7 @@ object BlockAPI {
     * @param usePreStateHash: Each block has preStateHash and postStateHash. If usePreStateHash is true, the explore
     *                       would try to execute on preState.
     * */
-  def exploratoryDeploy[F[_]: Sync: EngineCell: Log: SafetyOracle: BlockStore](
+  def exploratoryDeploy[F[_]: Sync: EngineCell: Log: BlockStore](
       term: String,
       blockHash: Option[String] = none,
       usePreStateHash: Boolean = false,
@@ -806,7 +793,7 @@ object BlockAPI {
     )
   }
 
-  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: SafetyOracle: BlockStore](
+  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: BlockStore](
       par: Par,
       blockHash: String,
       usePreStateHash: Boolean

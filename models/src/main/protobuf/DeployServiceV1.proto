@@ -39,8 +39,6 @@ service DeployService {
   // Get dag
   rpc visualizeDag(VisualizeDagQuery) returns (stream VisualizeBlocksResponse) {}
   rpc machineVerifiableDag(MachineVerifyQuery) returns (MachineVerifyResponse) {}
-  // Returns on success LightBlockInfo
-  rpc showMainChain(BlocksQuery) returns (stream BlockInfoResponse) {}
   // Get a summary of blocks on the blockchain.
   rpc getBlocks(BlocksQuery) returns (stream BlockInfoResponse) {}
   // Find data sent to a name.
@@ -117,7 +115,7 @@ message MachineVerifyResponse {
   }
 }
 
-// showMainChain & getBlocks
+// getBlocks
 message BlockInfoResponse {
   oneof message {
     ServiceError error        = 1;

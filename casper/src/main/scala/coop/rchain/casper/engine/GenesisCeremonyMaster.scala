@@ -27,7 +27,7 @@ import fs2.concurrent.Queue
 
 import scala.concurrent.duration._
 
-class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: SafetyOracle: LastApprovedBlock](
+class GenesisCeremonyMaster[F[_]: Sync: BlockStore: CommUtil: TransportLayer: RPConfAsk: Log: Time: LastApprovedBlock](
     approveProtocol: ApproveBlockProtocol[F]
 ) extends Engine[F] {
   import Engine._
@@ -52,7 +52,7 @@ object GenesisCeremonyMaster {
     /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
-    /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+    /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
     /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (

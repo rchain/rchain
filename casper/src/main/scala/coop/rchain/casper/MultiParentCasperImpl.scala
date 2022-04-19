@@ -4,12 +4,12 @@ import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
+import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
-import coop.rchain.casper.finality.Finalizer
 import coop.rchain.casper.merging.BlockIndex
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.syntax._
@@ -37,7 +37,6 @@ class MultiParentCasperImpl[F[_]
   /* Execution */   : Concurrent: Time: Timer
   /* Transport */   : CommUtil: BlockRetriever: EventPublisher
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle
   /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage
   /* Diagnostics */ : Log: Metrics: Span] // format: on
 (
@@ -110,53 +109,11 @@ class MultiParentCasperImpl[F[_]
       _ <- Log[F].info(s"Received ${PrettyPrinter.buildString(deploy)}")
     } yield deploy.sig
 
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]] =
-    Estimator[F].tips(dag, approvedBlock).map(_.tips)
-
-  def lastFinalizedBlock: F[BlockMessage] = {
-
-    def processFinalised(finalizedSet: Set[BlockHash]): F[Unit] =
-      finalizedSet.toList.traverse { h =>
-        for {
-          block   <- BlockStore[F].getUnsafe(h)
-          deploys = block.body.deploys.map(_.deploy)
-
-          // Remove block deploys from persistent store
-          deploysRemoved   <- DeployStorage[F].remove(deploys)
-          finalizedSetStr  = PrettyPrinter.buildString(finalizedSet)
-          removedDeployMsg = s"Removed $deploysRemoved deploys from deploy history as we finalized block $finalizedSetStr."
-          _                <- Log[F].info(removedDeployMsg)
-
-          // Remove block index from cache
-          _ <- BlockIndex.cache.remove(h).pure
-
-          // Remove block post-state mergeable channels from persistent store
-          stateHash = block.body.state.postStateHash.toBlake2b256Hash.bytes
-          _         <- RuntimeManager[F].getMergeableStore.delete(stateHash)
-        } yield ()
-      }.void
-
-    def newLfbFoundEffect(newLfb: BlockHash): F[Unit] =
-      BlockDagStorage[F].recordDirectlyFinalized(newLfb, processFinalised) >>
-        EventPublisher[F].publish(RChainEvent.blockFinalised(newLfb.toHexString))
-
-    implicit val ms = CasperMetricsSource
-
+  def lastFinalizedBlock: F[BlockMessage] =
     for {
-      dag                      <- blockDag
-      lastFinalizedBlockHash   = dag.lastFinalizedBlock
-      lastFinalizedBlockHeight <- dag.lookupUnsafe(lastFinalizedBlockHash).map(_.blockNum)
-      work = Finalizer
-        .run[F](
-          dag,
-          casperShardConf.faultToleranceThreshold,
-          lastFinalizedBlockHeight,
-          newLfbFoundEffect
-        )
-      newFinalisedHashOpt <- Span[F].traceI("finalizer-run")(work)
-      blockMessage        <- BlockStore[F].getUnsafe(newFinalisedHashOpt.getOrElse(lastFinalizedBlockHash))
+      dag          <- blockDag
+      blockMessage <- BlockStore[F].getUnsafe(dag.lastFinalizedBlock)
     } yield blockMessage
-  }
 
   def blockDag: F[BlockDagRepresentation[F]] =
     BlockDagStorage[F].getRepresentation
@@ -206,21 +163,25 @@ class MultiParentCasperImpl[F[_]
       } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
 
     for {
-      dag         <- BlockDagStorage[F].getRepresentation
-      r           <- Estimator[F].tips(dag, approvedBlock)
-      (lca, tips) = (r.lca, r.tips)
-
-      /**
-        * Before block merge, `EstimatorHelper.chooseNonConflicting` were used to filter parents, as we could not
-        * have conflicting parents. With introducing block merge, all parents that share the same bonds map
-        * should be parents. Parents that have different bond maps are only one that cannot be merged in any way.
-        */
+      dag <- BlockDagStorage[F].getRepresentation
+      // TODO LCA and TIPs does not make sense with multiparent finalizer
+      t <- dag.latestMessages.map(
+            _.valuesIterator.toIndexedSeq.sortBy(_.blockNum).reverse
+          )
+      (lca, tips)   = (ByteString.EMPTY, t.map(_.blockHash))
+      invalidBlocks <- dag.invalidBlocksMap
       parents <- for {
                   // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
                   // bond maps that has biggest cumulative stake.
-                  blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
-                  parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
-                } yield parents
+                  blocks <- tips.toList
+                             .traverse(BlockStore[F].getUnsafe)
+                             .map(_.filterNot(b => invalidBlocks.keySet.contains(b.blockHash)))
+                  parents = blocks
+                    .filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
+                    .filterNot { b =>
+                      blocks.flatMap(_.justifications.map(_.latestBlockHash)).contains(b.blockHash)
+                    }
+                } yield parents.distinct
       onChainState <- getOnChainState(parents.head)
 
       /**
@@ -264,8 +225,7 @@ class MultiParentCasperImpl[F[_]
                      }
         } yield result
       }
-      invalidBlocks <- dag.invalidBlocksMap
-      lfb           = dag.lastFinalizedBlock
+      lfb = dag.lastFinalizedBlock
     } yield CasperSnapshot(
       dag,
       lfb,

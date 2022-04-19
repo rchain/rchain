@@ -282,7 +282,7 @@ jobs:
         tests:
           - test_backward_compatible
           - test_dag_correctness
-          - test_finalization
+#          - test_finalization
           - test_genesis_ceremony
           - test_propose
           - test_slash_invalid_block_hash
@@ -293,7 +293,7 @@ jobs:
           - test_storage
           - test_synchrony_constraint
           - test_wallets
-          - REMAINDER # Do not modify/remove!
+#          - REMAINDER # Do not modify/remove!
     env:
       TESTS: ${{ matrix.tests }}
       # We don't use $CACHE_ROOT in host because it may not be (it is not)

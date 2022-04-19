@@ -116,11 +116,6 @@ object Setup {
       // Deploy storage
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
 
-      oracle = {
-        implicit val sp = span
-        SafetyOracle.cliqueOracle[F]
-      }
-
       estimator = {
         implicit val sp = span
         Estimator[F](conf.casper.maxNumberOfParents, conf.casper.maxParentDepth)
@@ -191,12 +186,12 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val (bs, bd, ds)     = (blockStore, blockDagStorage, deployStorage)
-        implicit val (br, ep)         = (blockRetriever, eventPublisher)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
-        val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
+        implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, ep)     = (blockRetriever, eventPublisher)
+        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
+        val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
+        val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
@@ -223,7 +218,7 @@ object Setup {
         implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
         implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, or, cu)     = (runtimeManager, estimator, oracle, commUtil)
+        implicit val (rm, cu)             = (runtimeManager, commUtil)
         implicit val (rsm, sp)            = (rspaceStateManager, span)
         CasperLaunch.of[F](
           blockProcessorQueue,
@@ -251,14 +246,14 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val (ec, bs, or) = (engineCell, blockStore, oracle)
+        implicit val (ec, bs) = (engineCell, blockStore)
         BlockReportAPI[F](reportingRuntime, reportingStore)
       }
       apiServers = {
-        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)         = (rpConfAsk, rpConnections)
-        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
+        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)     = (rpConfAsk, rpConnections)
+        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
 
         APIServers.build[F](
           evalRuntime,
@@ -308,9 +303,9 @@ object Setup {
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
-        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
+        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
+        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,

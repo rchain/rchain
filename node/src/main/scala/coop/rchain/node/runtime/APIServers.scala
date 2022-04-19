@@ -41,7 +41,6 @@ object APIServers {
   )(
       implicit
       blockStore: BlockStore[F],
-      oracle: SafetyOracle[F],
       concurrent: Concurrent[F],
       metrics: Metrics[F],
       span: Span[F],

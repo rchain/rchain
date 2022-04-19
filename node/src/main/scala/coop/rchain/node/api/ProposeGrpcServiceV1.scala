@@ -21,7 +21,6 @@ import coop.rchain.casper.state.instances.ProposerState
 import coop.rchain.casper.{
   LastFinalizedHeightConstraintChecker,
   ProposeFunction,
-  SafetyOracle,
   SynchronyConstraintChecker
 }
 import coop.rchain.catscontrib.TaskContrib._
@@ -36,7 +35,7 @@ import monix.execution.Scheduler
 
 object ProposeGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: BlockStore: SafetyOracle: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Metrics: Span](
+  def apply[F[_]: Monixable: Concurrent: BlockStore: EngineCell: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Log: Metrics: Span](
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]]
   )(

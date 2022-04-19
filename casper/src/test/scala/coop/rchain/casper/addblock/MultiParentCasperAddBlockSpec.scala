@@ -74,19 +74,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 //    }
 //  }
 
-  it should "accept signed blocks" in effectTest {
-    TestNode.standaloneEff(genesis).use { node =>
-      implicit val timeEff = new LogicalTime[Effect]
-
-      for {
-        deploy      <- ConstructDeploy.basicDeployData[Effect](0, shardId = SHARD_ID)
-        signedBlock <- node.addBlock(deploy)
-        dag         <- node.casperEff.blockDag
-        estimate    <- node.casperEff.estimator(dag)
-      } yield (estimate shouldBe IndexedSeq(signedBlock.blockHash))
-    }
-  }
-
   it should "be able to create a chain of blocks from different deploys" in effectTest {
     TestNode.standaloneEff(genesis).use { node =>
       implicit val rm = node.runtimeManager
@@ -102,8 +89,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                     shardId = SHARD_ID
                   )
         signedBlock2 <- node.addBlock(deploy2)
-        dag          <- node.casperEff.blockDag
-        estimate     <- node.casperEff.estimator(dag)
+        _            <- node.casperEff.blockDag
         data <- getDataAtPrivateChannel[Effect](
                  signedBlock2,
                  Base16.encode(
@@ -114,8 +100,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
                  )
                )
       } yield {
-        ProtoUtil.parentHashes(signedBlock2) should be(Seq(signedBlock1.blockHash))
-        estimate shouldBe IndexedSeq(signedBlock2.blockHash)
         data shouldBe Seq("12")
       }
     }

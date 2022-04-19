@@ -1,7 +1,7 @@
 package coop.rchain.casper.api
 
 import cats.syntax.flatMap._
-import cats.syntax.traverse._
+import cats.syntax.all._
 import cats.instances.list._
 import com.google.protobuf.ByteString
 import coop.rchain.casper.engine.Engine
@@ -12,9 +12,11 @@ import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.ConstructDeploy
 import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.batch2.EngineWithCasper
+import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.crypto.PublicKey
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.scalatestcontrib._
 import coop.rchain.shared.Cell
 import monix.eval.Task
@@ -35,12 +37,14 @@ class BondedStatusAPITest
 
   implicit val metricsEff = new Metrics.MetricsNOP[Task]
 
-  def bondedStatus(publicKey: PublicKey)(node: TestNode[Effect]): Task[Boolean] = {
+  def bondedStatus(publicKey: PublicKey, block: BlockMessage)(
+      node: TestNode[Effect]
+  ): Task[Boolean] = {
     import node.logEff
     val engine = new EngineWithCasper[Task](node.casperEff)
     Cell.mvarCell[Task, Engine[Task]](engine).flatMap { implicit engineCell =>
       BlockAPI
-        .bondStatus[Task](ByteString.copyFrom(publicKey.bytes))
+        .bondStatus[Task](ByteString.copyFrom(publicKey.bytes), block.some)
         .map(_.right.value)
     }
   }
@@ -48,16 +52,18 @@ class BondedStatusAPITest
   "bondStatus" should "return true for bonded validator" in effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case n1 +: n2 +: n3 +: _ =>
-        (bondedStatus(n1.validatorId.get.publicKey)(n1) shouldBeF true) >>
-          (bondedStatus(n2.validatorId.get.publicKey)(n1) shouldBeF true) >>
-          (bondedStatus(n3.validatorId.get.publicKey)(n1) shouldBeF true)
+        val gB = genesisContext.genesisBlock
+        (bondedStatus(n1.validatorId.get.publicKey, gB)(n1) shouldBeF true) >>
+          (bondedStatus(n2.validatorId.get.publicKey, gB)(n1) shouldBeF true) >>
+          (bondedStatus(n3.validatorId.get.publicKey, gB)(n1) shouldBeF true)
     }
   }
 
   "bondStatus" should "return false for not bonded validators" in effectTest {
     TestNode.standaloneEff(genesisContext).use { node =>
+      val gB             = genesisContext.genesisBlock
       val (_, publicKey) = Secp256k1.newKeyPair
-      bondedStatus(publicKey)(node) shouldBeF false
+      bondedStatus(publicKey, gB)(node) shouldBeF false
     }
   }
 
@@ -78,18 +84,19 @@ class BondedStatusAPITest
                          shardId = genesisContext.genesisBlock.shardId
                        )
 
-          _  <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
+          _  <- bondedStatus(n4.validatorId.get.publicKey, genesisContext.genesisBlock)(n1) shouldBeF false
           b1 <- n1.propagateBlock(bondDeploy)(nodes: _*)
           b2 <- n2.propagateBlock(produceDeploys(0))(nodes: _*)
 
           // n4 is still not bonded since b1 is not finalized yet
-          _ <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF false
+          // TODO relying on finalization here is not a good thing, consider adjusting test to just test bonding
+          _ <- bondedStatus(n4.validatorId.get.publicKey, genesisContext.genesisBlock)(n1) shouldBeF false
 
           b3 <- n3.propagateBlock(produceDeploys(1))(nodes: _*)
           b4 <- n1.propagateBlock(produceDeploys(2))(nodes: _*)
 
           // b1 is now finalized, hence n4 is now bonded
-          _ <- bondedStatus(n4.validatorId.get.publicKey)(n1) shouldBeF true
+          _ <- bondedStatus(n4.validatorId.get.publicKey, b1)(n1) shouldBeF true
         } yield ()
     }
   }

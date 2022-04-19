@@ -130,12 +130,6 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val safetyOracle = new SafetyOracle[Task] {
-      override def normalizedFaultTolerance(
-          blockDag: BlockDagRepresentation[Task],
-          estimateBlockHash: BlockHash
-      ): Task[Float] = Task.pure(1.0f)
-    }
     implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
