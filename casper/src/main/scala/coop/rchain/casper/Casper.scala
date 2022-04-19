@@ -70,10 +70,6 @@ trait Casper[F[_]] {
 trait MultiParentCasper[F[_]] extends Casper[F] {
   def blockDag: F[BlockDagRepresentation[F]]
   def fetchDependencies: F[Unit]
-  // This is the weight of faults that have been accumulated so far.
-  // We want the clique oracle to give us a fault tolerance that is greater than
-  // this initial fault weight combined with our fault tolerance threshold t.
-  def normalizedInitialFault(weights: Map[Validator, Long]): F[Float]
   def lastFinalizedBlock: F[BlockMessage]
   def getRuntimeManager: F[RuntimeManager[F]]
 }
