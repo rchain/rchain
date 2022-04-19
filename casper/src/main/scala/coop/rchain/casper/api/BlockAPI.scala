@@ -348,12 +348,10 @@ object BlockAPI {
     }
   }
 
-  private def toposortDag[
-      F[_]: Monad: BlockDagStorage: Log: BlockStore,
-      A
-  ](depth: Int, maxDepthLimit: Int)(
-      doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]
-  ): F[ApiErr[A]] = {
+  private def toposortDag[F[_]: Monad: BlockDagStorage: Log: BlockStore, A](
+      depth: Int,
+      maxDepthLimit: Int
+  )(doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]): F[ApiErr[A]] = {
     def response: F[ApiErr[A]] =
       for {
         dag               <- BlockDagStorage[F].getRepresentation
