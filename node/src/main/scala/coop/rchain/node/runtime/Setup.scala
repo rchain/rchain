@@ -181,10 +181,12 @@ object Setup {
         BlockProcessor[F]
       }
 
-      // Proposer instance
+      // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
+
+      // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
@@ -247,7 +249,7 @@ object Setup {
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
         implicit val (ec, bs) = (engineCell, blockStore)
-        BlockReportAPI[F](reportingRuntime, reportingStore)
+        BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
       apiServers = {
         implicit val (ec, bs, sp) = (engineCell, blockStore, span)
