@@ -390,7 +390,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock <- nodes(0).createBlockUnsafe(deploys(0))
         signedInvalidBlock = BlockUtil.resignBlock(
           signedBlock.copy(seqNum = -2),
-          nodes(0).validatorId.get.privateKey
+          nodes(0).validatorIdOpt.get.privateKey
         ) // Invalid seq num
 
         blockWithInvalidJustification <- buildBlockWithInvalidJustification(

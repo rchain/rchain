@@ -105,7 +105,6 @@ case class TestNode[F[_]: Timer](
   val apiMaxBlocksLimit              = 50
 
   implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
-  implicit val validatorId: Option[ValidatorIdentity]         = validatorIdOpt
   implicit val logEff: LogStub[F]                             = logEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
   implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
@@ -157,7 +156,7 @@ case class TestNode[F[_]: Timer](
   )
 
   implicit val casperEff = new MultiParentCasperImpl[F](
-    validatorId,
+    validatorIdOpt,
     shardConf,
     genesis
   )
@@ -169,7 +168,7 @@ case class TestNode[F[_]: Timer](
       blockProcessorState,
       casperEff,
       approvedBlock,
-      validatorId,
+      validatorIdOpt,
       ().pure[F],
       true
     )

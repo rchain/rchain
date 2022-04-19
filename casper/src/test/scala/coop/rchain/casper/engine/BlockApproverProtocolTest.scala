@@ -208,7 +208,7 @@ object BlockApproverProtocolTest {
       val node = nodes.head
       BlockApproverProtocol
         .of[Effect](
-          node.validatorId.get,
+          node.validatorIdOpt.get,
           genesisParams.timestamp,
           genesisParams.vaults,
           bonds,
