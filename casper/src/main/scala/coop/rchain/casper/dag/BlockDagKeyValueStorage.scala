@@ -7,14 +7,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
-import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
-import coop.rchain.blockstorage.dag.{
-  BlockDagRepresentation,
-  BlockDagStorage,
-  BlockMetadataStore,
-  EquivocationTrackerStore
-}
+import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, BlockMetadataStore}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
@@ -22,7 +16,6 @@ import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.syntax._
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
@@ -37,8 +30,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
     latestMessagesIndex: KeyValueTypedStore[F, Validator, BlockHash],
     blockMetadataIndex: BlockMetadataStore[F],
     deployIndex: KeyValueTypedStore[F, DeployId, BlockHash],
-    invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-    equivocationTrackerIndex: EquivocationTrackerStore[F]
+    invalidBlocksIndex: KeyValueTypedStore[F, BlockHash, BlockMetadata]
 ) extends BlockDagStorage[F] {
   implicit private val logSource: LogSource = LogSource(BlockDagKeyValueStorage.getClass)
 
@@ -276,8 +268,6 @@ object BlockDagKeyValueStorage {
   private final case class DagStores[F[_]](
       metadata: BlockMetadataStore[F],
       metadataDb: KeyValueTypedStore[F, BlockHash, BlockMetadata],
-      equivocations: EquivocationTrackerStore[F],
-      equivocationsDb: KeyValueTypedStore[F, (Validator, SequenceNumber), Set[BlockHash]],
       latestMessages: KeyValueTypedStore[F, Validator, BlockHash],
       invalidBlocks: KeyValueTypedStore[F, BlockHash, BlockMetadata],
       deploys: KeyValueTypedStore[F, DeployId, BlockHash]
@@ -293,14 +283,6 @@ object BlockDagKeyValueStorage {
                           codecBlockMetadata
                         )
       blockMetadataStore <- BlockMetadataStore[F](blockMetadataDb)
-      // Equivocation tracker map
-      equivocationTrackerDb <- KeyValueStoreManager[F]
-                                .database[(Validator, SequenceNumber), Set[BlockHash]](
-                                  "equivocation-tracker",
-                                  codecValidator ~ codecSeqNum,
-                                  codecBlockHashSet
-                                )
-      equivocationTrackerIndex <- EquivocationTrackerStore[F](equivocationTrackerDb)
       // Latest messages map
       latestMessagesDb <- KeyValueStoreManager[F].database[Validator, BlockHash](
                            "latest-messages",
@@ -323,8 +305,6 @@ object BlockDagKeyValueStorage {
     } yield DagStores(
       blockMetadataStore,
       blockMetadataDb,
-      equivocationTrackerIndex,
-      equivocationTrackerDb,
       latestMessagesDb,
       invalidBlocksDb,
       deployIndexDb
@@ -340,7 +320,6 @@ object BlockDagKeyValueStorage {
       stores.latestMessages,
       stores.metadata,
       stores.deploys,
-      stores.invalidBlocks,
-      stores.equivocations
+      stores.invalidBlocks
     )
 }
