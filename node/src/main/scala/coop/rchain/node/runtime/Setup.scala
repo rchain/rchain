@@ -247,7 +247,7 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val (ec, bs) = (engineCell, blockStore)
+        implicit val bs = blockStore
         BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
       apiServers = {

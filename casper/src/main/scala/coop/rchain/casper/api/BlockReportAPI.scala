@@ -7,7 +7,6 @@ import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
-import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
@@ -16,7 +15,7 @@ import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
+class BlockReportAPI[F[_]: Concurrent: BlockStore: Metrics: Log](
     reportingCasper: ReportingCasper[F],
     reportStore: ReportStore[F],
     validatorIdentityOpt: Option[ValidatorIdentity]
@@ -98,7 +97,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
 }
 
 object BlockReportAPI {
-  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
+  def apply[F[_]: Concurrent: BlockStore: Metrics: Log](
       reportingCasper: ReportingCasper[F],
       reportStore: ReportStore[F],
       validatorIdentityOpt: Option[ValidatorIdentity]
