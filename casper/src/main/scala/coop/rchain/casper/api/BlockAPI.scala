@@ -694,31 +694,14 @@ object BlockAPI {
     )
   }
 
-  def getDataAtPar[F[_]: Concurrent: EngineCell: Log: BlockStore](
+  def getDataAtPar[F[_]: Concurrent: RuntimeManager: BlockDagStorage: Log: BlockStore](
       par: Par,
       blockHash: String,
       usePreStateHash: Boolean
-  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
-
-    def casperResponse(
-        casper: MultiParentCasper[F]
-    ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
-      for {
-        block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
-        sortedPar      <- parSortable.sortMatch[F](par).map(_.term)
-        runtimeManager <- casper.getRuntimeManager
-        data           <- getDataWithBlockInfo(runtimeManager, sortedPar, block).map(_.get)
-      } yield (data.postBlockData, data.block).asRight[Error]
-
-    val errorMessage =
-      "Could not get data at par, casper instance was not available yet."
-
-    EngineCell[F].read >>= (
-      _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
-        casperResponse,
-        Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
-      )
-    )
-  }
-
+  ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
+    for {
+      block     <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
+      sortedPar <- parSortable.sortMatch[F](par).map(_.term)
+      data      <- getDataWithBlockInfo(RuntimeManager[F], sortedPar, block).map(_.get)
+    } yield (data.postBlockData, data.block).asRight[Error]
 }

@@ -67,7 +67,7 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: BlockDagStorage: Log: Span: BlockStore](
+  class WebApiImpl[F[_]: Concurrent: RuntimeManager: EngineCell: BlockDagStorage: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log: Span](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],

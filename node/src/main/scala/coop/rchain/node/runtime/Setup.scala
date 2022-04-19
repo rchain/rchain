@@ -307,6 +307,7 @@ object Setup {
       webApi = {
         implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
         implicit val (ra, rc)          = (rpConfAsk, rpConnections)
+        implicit val rm                = runtimeManager
         val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
