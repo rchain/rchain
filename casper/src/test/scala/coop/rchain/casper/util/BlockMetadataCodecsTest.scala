@@ -37,12 +37,10 @@ class BlockMetadataCodecsTest extends FlatSpec {
       finalized = false
     )
 
-    val serialized = testBlockMetadataScodec.toByteString
-    println(s"serialized: $serialized")
+    val serialized         = testBlockMetadataScodec.toByteString
     val reconstructedBlock = MetadataScodec.decode(serialized)
-    println(s"deserialized: $reconstructedBlock")
 
-    reconstructedBlock shouldBe testBlockMetadataScodec
+    reconstructedBlock.toBlockMetadataBV() shouldBe testBlockMetadataScodec.toBlockMetadataBV()
   }
 }
 
