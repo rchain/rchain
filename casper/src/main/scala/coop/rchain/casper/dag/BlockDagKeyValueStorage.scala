@@ -298,7 +298,7 @@ object BlockDagKeyValueStorage {
       // Deploy map
       deployIndexDb <- KeyValueStoreManager[F].database[DeployId, BlockHash](
                         "deploy-index",
-                        codecDeployId,
+                        codecByteString,
                         codecBlockHash
                       )
 

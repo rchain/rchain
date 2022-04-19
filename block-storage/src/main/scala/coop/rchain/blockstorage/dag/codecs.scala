@@ -19,11 +19,11 @@ object codecs {
       byteString => ByteVector(byteString.toByteArray)
     )
 
-  val codecDeployId = xmapToByteString(variableSizeBytes(uint8, bytes))
+  val codecByteString = xmapToByteString(bytes)
 
   val codecBlockHash = xmapToByteString(bytes(BlockHash.Length))
 
-  val codecBlockMetadata = variableSizeBytes(uint16, bytes).xmap[BlockMetadata](
+  val codecBlockMetadata = bytes.xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
     blockMetadata => ByteVector(blockMetadata.toByteString.toByteArray)
   )
@@ -44,12 +44,8 @@ object codecs {
 
   val codecBlockHashSet = listOfN(int32, codecBlockHash).xmap[Set[BlockHash]](_.toSet, _.toList)
 
-  val codecSignedDeployData = variableSizeBytes(int32, bytes).xmap[Signed[DeployData]](
+  val codecSignedDeployData = bytes.xmap[Signed[DeployData]](
     byteVector => DeployData.from(DeployDataProto.parseFrom(byteVector.toArray)).right.get,
     signedDeployData => ByteVector(DeployData.toProto(signedDeployData).toByteArray)
   )
-
-  val codecByteString = xmapToByteString(variableSizeBytes(uint8, bytes))
-
-  val codecDeploySignature = xmapToByteString(bytes)
 }
