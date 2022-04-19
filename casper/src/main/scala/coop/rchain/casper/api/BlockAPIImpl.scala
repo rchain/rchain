@@ -43,7 +43,7 @@ import scala.collection.immutable
 class BlockAPIImpl[F[_]: Concurrent: Log: Span: BlockStore: DeployStorage: MultiParentCasper](
     runtimeManager: RuntimeManager[F],
     dagStorage: BlockDagStorage[F],
-    validatorPrivateKey: Option[String]
+    validatorOpt: Option[ValidatorIdentity]
 ) extends BlockAPI_v2[F] {
 
   val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
@@ -567,7 +567,7 @@ class BlockAPIImpl[F[_]: Concurrent: Log: Span: BlockStore: DeployStorage: Multi
       devMode: Boolean = false
   ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
     for {
-      isReadOnly <- getValidator.map(_.isEmpty)
+      isReadOnly <- Sync[F].delay(validatorOpt.isEmpty)
       result <- if (isReadOnly || devMode) {
                  for {
                    dag <- dagStorage.getRepresentation
@@ -606,15 +606,11 @@ class BlockAPIImpl[F[_]: Concurrent: Log: Span: BlockStore: DeployStorage: Multi
 
   override def getLatestMessage: F[ApiErr[BlockMetadata]] =
     for {
-      validatorOpt     <- getValidator
       validator        <- validatorOpt.liftTo[F](ValidatorReadOnlyError)
       dag              <- dagStorage.getRepresentation
       latestMessageOpt <- dag.latestMessage(ByteString.copyFrom(validator.publicKey.bytes))
       latestMessage    <- latestMessageOpt.liftTo[F](NoBlockMessageError)
     } yield latestMessage.asRight[Error]
-
-  private def getValidator: F[Option[ValidatorIdentity]] =
-    ValidatorIdentity.fromPrivateKeyWithLogging[F](validatorPrivateKey)
 
   override def getDataAtPar(
       par: Par,
