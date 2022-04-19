@@ -247,7 +247,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
           _   <- blockElements.traverse_(storage.insert(_, true))
           dag <- storage.getRepresentation
           (deploys, blockHashes) = blockElements
-            .flatMap(b => b.body.deploys.map(_ -> b.blockHash))
+            .flatMap(b => b.state.deploys.map(_ -> b.blockHash))
             .unzip
           deployLookups <- deploys.traverse(d => dag.lookupByDeployId(d.deploy.sig))
         } yield deployLookups shouldBe blockHashes.map(_.some)
@@ -258,9 +258,7 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
   it should "handle blocks with invalid numbers" in {
     forAll(blockElementGen(), blockElementGen()) { (genesis, block) =>
       withDagStorage { storage =>
-        val invalidBlock = block.copy(
-          body = block.body.copy(state = block.body.state.copy(blockNumber = 1000))
-        )
+        val invalidBlock = block.copy(blockNumber = 1000)
         storage.insert(genesis, false) >>
           storage.insert(invalidBlock, true)
       }

@@ -87,7 +87,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 requiredSigs = approver.requiredSigs,
                 timestamp = approver.deployTimestamp,
                 vaults = approver.vaults,
-                bonds = unapproved.candidate.block.body.state.bonds.map {
+                bonds = unapproved.candidate.block.bonds.map {
                   case Bond(validator, stake) => validator -> stake
                 }.toMap,
                 minimumBond = approver.minimumBond,
@@ -141,7 +141,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 requiredSigs = approver.requiredSigs,
                 timestamp = approver.deployTimestamp,
                 vaults = Seq.empty[Vault],
-                bonds = unapproved.candidate.block.body.state.bonds.map {
+                bonds = unapproved.candidate.block.bonds.map {
                   case Bond(validator, stake) => validator -> stake
                 }.toMap,
                 minimumBond = approver.minimumBond,
@@ -171,7 +171,7 @@ class BlockApproverProtocolTest extends FlatSpec with Matchers {
                 requiredSigs = approver.requiredSigs,
                 timestamp = approver.deployTimestamp,
                 vaults = approver.vaults,
-                bonds = unapproved.candidate.block.body.state.bonds.map {
+                bonds = unapproved.candidate.block.bonds.map {
                   case Bond(validator, stake) => validator -> stake
                 }.toMap,
                 // genesis params are incorrect

@@ -162,8 +162,12 @@ object BlockHashMessage {
 
 final case class BlockMessage(
     blockHash: ByteString,
+    blockNumber: Long,
+    bonds: List[Bond],
     header: Header,
-    body: Body,
+    preStateHash: ByteString,
+    postStateHash: ByteString,
+    state: RholangTrace,
     justifications: List[Justification],
     sender: ByteString,
     seqNum: Int,
@@ -181,11 +185,15 @@ object BlockMessage {
 
   def from(bm: BlockMessageProto): Either[String, BlockMessage] =
     for {
-      body <- Body.from(bm.body)
+      state <- RholangTrace.from(bm.state)
     } yield BlockMessage(
       bm.blockHash,
+      bm.blockNumber,
+      bm.bonds.map(Bond.from).toList,
       Header.from(bm.header),
-      body,
+      bm.preStateHash,
+      bm.postStateHash,
+      state,
       bm.justifications.toList.map(Justification.from),
       bm.sender,
       bm.seqNum,
@@ -198,8 +206,12 @@ object BlockMessage {
   def toProto(bm: BlockMessage): BlockMessageProto =
     BlockMessageProto()
       .withBlockHash(bm.blockHash)
+      .withBlockNumber(bm.blockNumber)
+      .withBonds(bm.bonds.map(Bond.toProto))
+      .withPreStateHash(bm.preStateHash)
+      .withPostStateHash(bm.postStateHash)
       .withHeader(Header.toProto(bm.header))
-      .withBody(Body.toProto(bm.body))
+      .withState(RholangTrace.toProto(bm.state))
       .withJustifications(bm.justifications.map(Justification.toProto))
       .withSender(bm.sender)
       .withSeqNum(bm.seqNum)
@@ -247,27 +259,25 @@ object RejectedDeploy {
     RejectedDeployProto().withSig(r.sig)
 }
 
-final case class Body(
-    state: RChainState,
+final case class RholangTrace(
     deploys: List[ProcessedDeploy],
     rejectedDeploys: List[RejectedDeploy],
     systemDeploys: List[ProcessedSystemDeploy],
     extraBytes: ByteString = ByteString.EMPTY
 ) {
-  def toProto: BodyProto = Body.toProto(this)
+  def toProto: RholangTraceProto = RholangTrace.toProto(this)
 }
 
-object Body {
-  def from(b: BodyProto): Either[String, Body] =
+object RholangTrace {
+  def from(b: RholangTraceProto): Either[String, RholangTrace] =
     for {
       deploys         <- b.deploys.toList.traverse(ProcessedDeploy.from)
       systemDeploys   <- b.systemDeploys.toList.traverse(ProcessedSystemDeploy.from)
       rejectedDeploys = b.rejectedDeploys.toList.map(RejectedDeploy.from)
-    } yield Body(RChainState.from(b.state), deploys, rejectedDeploys, systemDeploys, b.extraBytes)
+    } yield RholangTrace(deploys, rejectedDeploys, systemDeploys, b.extraBytes)
 
-  def toProto(b: Body): BodyProto =
-    BodyProto()
-      .withState(RChainState.toProto(b.state))
+  def toProto(b: RholangTrace): RholangTraceProto =
+    RholangTraceProto()
       .withDeploys(b.deploys.map(ProcessedDeploy.toProto))
       .withRejectedDeploys(b.rejectedDeploys.map(RejectedDeploy.toProto))
       .withSystemDeploys(b.systemDeploys.map(ProcessedSystemDeploy.toProto))
@@ -292,31 +302,31 @@ object Justification {
     JustificationProto(j.validator, j.latestBlockHash)
 }
 
-final case class RChainState(
-    preStateHash: ByteString,
-    postStateHash: ByteString,
-    bonds: List[Bond],
-    blockNumber: Long
-) {
-  def toProto: RChainStateProto = RChainState.toProto(this)
-}
-
-object RChainState {
-  def from(rchs: RChainStateProto): RChainState =
-    RChainState(
-      rchs.preStateHash,
-      rchs.postStateHash,
-      rchs.bonds.toList.map(Bond.from),
-      rchs.blockNumber
-    )
-
-  def toProto(rchsp: RChainState): RChainStateProto =
-    RChainStateProto()
-      .withPreStateHash(rchsp.preStateHash)
-      .withPostStateHash(rchsp.postStateHash)
-      .withBonds(rchsp.bonds.map(Bond.toProto))
-      .withBlockNumber(rchsp.blockNumber)
-}
+//final case class RChainState(
+//    preStateHash: ByteString,
+//    postStateHash: ByteString,
+//    bonds: List[Bond],
+//    blockNumber: Long
+//) {
+//  def toProto: RChainStateProto = RChainState.toProto(this)
+//}
+//
+//object RChainState {
+//  def from(rchs: RChainStateProto): RChainState =
+//    RChainState(
+//      rchs.preStateHash,
+//      rchs.postStateHash,
+//      rchs.bonds.toList.map(Bond.from),
+//      rchs.blockNumber
+//    )
+//
+//  def toProto(rchsp: RChainState): RChainStateProto =
+//    RChainStateProto()
+//      .withPreStateHash(rchsp.preStateHash)
+//      .withPostStateHash(rchsp.postStateHash)
+//      .withBonds(rchsp.bonds.map(Bond.toProto))
+//      .withBlockNumber(rchsp.blockNumber)
+//}
 
 final case class ProcessedDeploy(
     deploy: Signed[DeployData],

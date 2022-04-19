@@ -30,7 +30,7 @@ class MultiParentCasperRholangSpec extends FlatSpec with Matchers with Inspector
       for {
         deploy  <- ConstructDeploy.basicDeployData[Effect](0)
         block   <- node.createBlockUnsafe(deploy)
-        deploys = block.body.deploys.map(_.deploy)
+        deploys = block.state.deploys.map(_.deploy)
         parents = ProtoUtil.parentHashes(block)
 
         _      = parents.size should be(1)

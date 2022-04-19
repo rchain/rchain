@@ -130,7 +130,7 @@ object Validate {
       for {
         _ <- Log[F].warn(ignore(b, s"block shard identifier is empty."))
       } yield false
-    } else if (b.body.state.postStateHash.isEmpty) {
+    } else if (b.postStateHash.isEmpty) {
       for {
         _ <- Log[F].warn(ignore(b, s"block post state hash is empty."))
       } yield false
@@ -203,7 +203,7 @@ object Validate {
   ): F[ValidBlockProcessing] = {
     import cats.instances.option._
 
-    val deployKeySet = block.body.deploys.map(_.deploy.sig).toSet
+    val deployKeySet = block.state.deploys.map(_.deploy.sig).toSet
 
     for {
       _                   <- Span[F].mark("before-repeat-deploy-get-parents")
@@ -662,7 +662,7 @@ object Validate {
       b: BlockMessage,
       minPhloPrice: Long
   ): F[ValidBlockProcessing] =
-    if (b.body.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
+    if (b.state.deploys.forall(_.deploy.data.phloPrice >= minPhloPrice)) {
       BlockStatus.valid.asRight[BlockError].pure
     } else {
       BlockStatus.lowDeployCost.asLeft[ValidBlock].pure

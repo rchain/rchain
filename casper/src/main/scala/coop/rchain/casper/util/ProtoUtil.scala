@@ -87,10 +87,10 @@ object ProtoUtil {
     } yield creatorJustificationAsList).fold(List.empty[BlockHash])(identity)
 
   def weightMap(blockMessage: BlockMessage): Map[ByteString, Long] =
-    weightMap(blockMessage.body.state)
+    weightMap(blockMessage.bonds)
 
-  private def weightMap(state: RChainState): Map[ByteString, Long] =
-    state.bonds.map {
+  private def weightMap(bonds: Seq[Bond]): Map[ByteString, Long] =
+    bonds.map {
       case Bond(validator, stake) => validator -> stake
     }.toMap
 
@@ -171,22 +171,22 @@ object ProtoUtil {
       .map(parents => parents.filter(p => p.blockNum >= blockNumber))
 
   def deploys(b: BlockMessage): Seq[ProcessedDeploy] =
-    b.body.deploys
+    b.state.deploys
 
   def systemDeploys(b: BlockMessage): Seq[ProcessedSystemDeploy] =
-    b.body.systemDeploys
+    b.state.systemDeploys
 
   def postStateHash(b: BlockMessage): ByteString =
-    b.body.state.postStateHash
+    b.postStateHash
 
   def preStateHash(b: BlockMessage): ByteString =
-    b.body.state.preStateHash
+    b.preStateHash
 
   def bonds(b: BlockMessage): Seq[Bond] =
-    b.body.state.bonds
+    b.bonds
 
   def blockNumber(b: BlockMessage): Long =
-    b.body.state.blockNumber
+    b.blockNumber
 
   def bondToBondInfo(bond: Bond): BondInfo =
     BondInfo(validator = PrettyPrinter.buildStringNoLimit(bond.validator), stake = bond.stake)
@@ -247,7 +247,6 @@ object ProtoUtil {
 
   // TODO inline this
   def blockHeader(
-      body: Body,
       parentHashes: Seq[ByteString],
       version: Long,
       timestamp: Long
@@ -259,17 +258,25 @@ object ProtoUtil {
     )
 
   def unsignedBlockProto(
-      body: Body,
+      state: RholangTrace,
+      preStateHash: ByteString,
+      postStateHash: ByteString,
+      bonds: List[Bond],
       header: Header,
       justifications: Seq[Justification],
       shardId: String,
+      blockNumber: Long,
       seqNum: Int = 0
   ): BlockMessage = {
     // TODO FIX-ME fields that can be empty SHOULD be optional
     val block = BlockMessage(
       blockHash = ByteString.EMPTY,
+      blockNumber,
+      bonds,
       header,
-      body,
+      preStateHash,
+      postStateHash,
+      state,
       justifications.toList,
       sender = ByteString.EMPTY,
       seqNum = seqNum,
@@ -287,7 +294,7 @@ object ProtoUtil {
   def hashBlock(blockMessage: BlockMessage): BlockHash =
     ProtoUtil.hashByteArrays(
       blockMessage.header.toProto.toByteArray,
-      blockMessage.body.toProto.toByteArray,
+      blockMessage.state.toProto.toByteArray,
       blockMessage.sender.toByteArray,
       StringValue.of(blockMessage.sigAlgorithm).toByteArray,
       Int32Value.of(blockMessage.seqNum).toByteArray,

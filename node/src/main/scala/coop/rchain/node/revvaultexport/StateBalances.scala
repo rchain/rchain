@@ -49,7 +49,7 @@ object StateBalances {
       runtimes                   <- RhoRuntime.createRuntimes[F](rSpacePlay, rSpaceReplay, true, Seq.empty, Par())
       (rhoRuntime, _)            = runtimes
       _ <- rhoRuntime.reset(
-            Blake2b256Hash.fromByteString(block.body.state.postStateHash)
+            Blake2b256Hash.fromByteString(block.postStateHash)
           )
       balances <- VaultBalanceGetter.getAllVaultBalance(
                    vaultTreeHashMapDepth,

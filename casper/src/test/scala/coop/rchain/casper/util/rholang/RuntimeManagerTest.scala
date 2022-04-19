@@ -101,7 +101,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "computeState" should "charge for deploys" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
-      val genPostState = genesis.body.state.postStateHash
+      val genPostState = genesis.postStateHash
       val source       = """
                             # new rl(`rho:registry:lookup`), listOpsCh in {
                             #   rl!(`rho:lang:listOps`, *listOpsCh) |
@@ -212,7 +212,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "PreChargeDeploy" should "reduce user account balance by the correct amount" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val userPk = ConstructDeploy.defaultPub
-      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
         new PreChargeDeploy(
           chargeAmount = 9000000,
           pk = userPk,
@@ -244,7 +244,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   "closeBlock" should "make epoch change and reward validator" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
-      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
         new CloseBlockDeploy(
           initialRand = Blake2b512Random(Array(0.toByte))
         ),
@@ -258,7 +258,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "closeBlock replay" should "fail with different random seed" in {
     an[Exception] should be thrownBy effectTest({
       runtimeManagerResource.use { runtimeManager =>
-        compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+        compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
           new CloseBlockDeploy(
             initialRand = Blake2b512Random(Array(0.toByte))
           ),
@@ -273,7 +273,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
   "BalanceDeploy" should "compute REV balances" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
       val userPk = ConstructDeploy.defaultPub
-      compareSuccessfulSystemDeploys(runtimeManager)(genesis.body.state.postStateHash)(
+      compareSuccessfulSystemDeploys(runtimeManager)(genesis.postStateHash)(
         new CheckBalance(pk = userPk, rand = Blake2b512Random(Array.empty[Byte])),
         new CheckBalance(pk = userPk, rand = Blake2b512Random(Array.empty[Byte]))
       )(_ == 9000000)
@@ -285,7 +285,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManagerResource.use(
-                 computeState(_, deploy, genesis.body.state.postStateHash)
+                 computeState(_, deploy, genesis.postStateHash)
                )
       _ = result._2.isFailed should be(true)
     } yield ()
@@ -295,7 +295,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
     import cats.instances.vector._
 
-    val gps = genesis.body.state.postStateHash
+    val gps = genesis.postStateHash
 
     val s0 = "@1!(1)"
     val s1 = "@2!(2)"
@@ -392,7 +392,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(badRholang)
       result <- runtimeManagerResource.use(
-                 computeState(_, deploy, genesis.body.state.postStateHash)
+                 computeState(_, deploy, genesis.postStateHash)
                )
       _ = result._2.isFailed should be(true)
       _ = result._2.cost.cost shouldEqual accounting.parsingCost(badRholang).value
@@ -419,7 +419,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
             parsingCost = accounting.parsingCost(correctRholang)
 
-            result <- computeState(runtimeManager, deploy, genesis.body.state.postStateHash)
+            result <- computeState(runtimeManager, deploy, genesis.postStateHash)
 
             _ = result._2.cost.cost shouldEqual (reductionCost + parsingCost).value
           } yield ()
@@ -441,7 +441,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                       |  }
                       |}""".stripMargin
                   )
-        result0 <- computeState(mgr, deploy0, genesis.body.state.postStateHash)
+        result0 <- computeState(mgr, deploy0, genesis.postStateHash)
         hash    = result0._1
         deploy1 <- ConstructDeploy.sourceDeployNowF(
                     s"""new return in { for(nn <- @"nn"){ nn!("value", *return) } } """
@@ -516,7 +516,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         .use { m =>
           for {
             hash <- RuntimeManager.emptyStateHashFixed.pure[Task]
-            afterHash <- computeState(m, term, genesis.body.state.postStateHash)
+            afterHash <- computeState(m, term, genesis.postStateHash)
                           .map(_ => hash)
           } yield afterHash
         }
@@ -552,7 +552,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                                                             #""".stripMargin('#')
                  )
         time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
+        genPostState  = genesis.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
         invalidBlocks = Map.empty[BlockHash, Validator]
         computeStateResult <- runtimeManager.computeState(genPostState)(
@@ -595,7 +595,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
                     """ for(@x <- @"x" & @y <- @"y"){ @"xy"!(x + y) | @"x"!(1) | @"y"!(10) } """
                   )
         time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
+        genPostState  = genesis.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
         invalidBlocks = Map.empty[BlockHash, Validator]
         firstDeploy <- mgr
@@ -656,7 +656,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
 
   it should "just work" in effectTest {
     runtimeManagerResource.use { runtimeManager =>
-      val genPostState = genesis.body.state.postStateHash
+      val genPostState = genesis.postStateHash
       val source =
         """
           #new d1,d2,d3,d4,d5,d6,d7,d8,d9 in {
@@ -744,7 +744,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
       for {
         deploy        <- ConstructDeploy.sourceDeployNowF(source, phloLimit = 10000)
         time          <- timeF.currentMillis
-        genPostState  = genesis.body.state.postStateHash
+        genPostState  = genesis.postStateHash
         blockData     = BlockData(time, 0L, genesisContext.validatorPks.head, 0)
         invalidBlocks = Map.empty[BlockHash, Validator]
         newState <- runtimeManager
@@ -805,7 +805,7 @@ class RuntimeManagerTest extends FlatSpec with Matchers {
         |}
         |""".stripMargin
 
-    val genPostState = genesis.body.state.postStateHash
+    val genPostState = genesis.postStateHash
     for {
       deploy <- ConstructDeploy.sourceDeployNowF(term)
       result <- runtimeManagerResource.use { rm =>

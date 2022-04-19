@@ -526,28 +526,25 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
       deploys: immutable.IndexedSeq[ProcessedDeploy],
       signedInvalidBlock: BlockMessage
   ): Effect[BlockMessage] = {
-    val postState: RChainState =
-      RChainState(
-        preStateHash = ByteString.EMPTY,
-        postStateHash = ByteString.EMPTY,
-        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
-        blockNumber = 1
-      )
     val header = Header(
       parentsHashList = signedInvalidBlock.header.parentsHashList,
       timestamp = 0L,
       version = 0L
     )
     val blockHash = Blake2b256.hash(header.toProto.toByteArray)
-    val body      = Body(postState, deploys.toList, List.empty, List.empty)
+    val state     = RholangTrace(deploys.toList, List.empty, List.empty)
     val serializedJustifications =
       List(Justification(signedInvalidBlock.sender, signedInvalidBlock.blockHash))
     val serializedBlockHash = ByteString.copyFrom(blockHash)
     val blockThatPointsToInvalidBlock =
       BlockMessage(
         serializedBlockHash,
+        blockNumber = 1,
+        bonds = ProtoUtil.bonds(genesis.genesisBlock).toList,
         header,
-        body,
+        preStateHash = ByteString.EMPTY,
+        postStateHash = ByteString.EMPTY,
+        state,
         serializedJustifications,
         sender = ByteString.EMPTY,
         seqNum = 0,

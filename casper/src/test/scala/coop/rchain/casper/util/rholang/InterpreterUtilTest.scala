@@ -782,8 +782,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 3000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 3000
       } yield ()
     }
   }
@@ -818,8 +818,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 20000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 20000
       } yield ()
     }
   }
@@ -837,8 +837,8 @@ class InterpreterUtilTest
     TestNode.standaloneEff(genesisContext).use { node =>
       for {
         b <- node.addBlock(deploy)
-        _ = b.body.deploys.size shouldBe 1
-        _ = b.body.deploys.get(0).get.cost.cost shouldBe 300000
+        _ = b.state.deploys.size shouldBe 1
+        _ = b.state.deploys.get(0).get.cost.cost shouldBe 300000
       } yield ()
     }
   }

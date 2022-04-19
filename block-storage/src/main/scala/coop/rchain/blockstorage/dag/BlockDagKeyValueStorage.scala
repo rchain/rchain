@@ -10,7 +10,6 @@ import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.metrics.Metrics.Source
@@ -194,7 +193,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .map(lmSeqNumOpt => lmSeqNumOpt.isEmpty || lmSeqNumOpt.exists(block.seqNum >= _))
 
     def newLatestMessages: F[Map[Validator, BlockHash]] = {
-      val newlyBondedSet = bonds(block)
+      val newlyBondedSet = block.bonds
         .map(_.validator)
         .toSet
         .diff(block.justifications.map(_.validator).toSet)
@@ -224,7 +223,7 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         _ <- blockMetadataIndex.add(blockMetadata)
 
         // Add deploys to deploy index storage
-        deployHashes = deployData(block).map(_.sig).toList
+        deployHashes = block.state.deploys.map(_.deploy).map(_.sig).toList
         _            <- deployIndex.put(deployHashes.map(_ -> block.blockHash))
 
         // Update invalid index

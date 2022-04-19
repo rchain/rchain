@@ -169,7 +169,7 @@ object BlockCreator {
         _ <- blockStatus match {
               case Created(block) =>
                 val blockInfo   = PrettyPrinter.buildString(block, short = true)
-                val deployCount = block.body.deploys.size
+                val deployCount = block.state.deploys.size
                 Log[F].info(s"Block created: $blockInfo (${deployCount}d) [$elapsed]")
               case _ => ().pure[F]
             }
@@ -189,16 +189,24 @@ object BlockCreator {
       shardId: String,
       version: Long
   ): BlockMessage = {
-    val state = RChainState(preStateHash, postStateHash, bondsMap.toList, blockData.blockNumber)
-    val body =
-      Body(
-        state,
+    val state =
+      RholangTrace(
         deploys.toList,
         rejectedDeploys.map(r => RejectedDeploy(r)).toList,
         systemDeploys.toList
       )
     val header = Header(parents.toList, blockData.timeStamp, version)
-    ProtoUtil.unsignedBlockProto(body, header, justifications, shardId, blockData.seqNum)
+    ProtoUtil.unsignedBlockProto(
+      state,
+      preStateHash,
+      postStateHash,
+      bondsMap.toList,
+      header,
+      justifications,
+      shardId,
+      blockData.blockNumber,
+      blockData.seqNum
+    )
   }
 
   private def notExpiredDeploy(earliestBlockNumber: Long, d: DeployData): Boolean =

@@ -150,17 +150,17 @@ object BlockApproverProtocol {
       posMultiSigPublicKeys: List[String],
       posMultiSigQuorum: Int
   )(implicit runtimeManager: RuntimeManager[F]): F[Either[String, Unit]] = {
+    val block = candidate.block
 
-    def validate: Either[String, (Seq[ProcessedDeploy], RChainState)] =
+    def validate: Either[String, (Seq[ProcessedDeploy], RholangTrace)] =
       for {
         _ <- (candidate.requiredSigs == requiredSigs)
               .either(())
               .or("Candidate didn't have required signatures number.")
-        block = candidate.block
-        _ <- (block.body.systemDeploys.isEmpty)
+        _ <- block.state.systemDeploys.isEmpty
               .either(())
               .or("Candidate must not contain system deploys.")
-        blockBonds = block.body.state.bonds.map {
+        blockBonds = block.bonds.map {
           case Bond(validator, stake) => validator -> stake
         }.toMap
         _ <- (blockBonds == bonds)
@@ -188,7 +188,7 @@ object BlockApproverProtocol {
             Long.MaxValue,
             shardId
           )
-        blockDeploys = block.body.deploys
+        blockDeploys = block.state.deploys
         _ <- (blockDeploys.size == genesisBlessedContracts.size)
               .either(())
               .or("Mismatch between number of candidate deploys and expected number of deploys.")
@@ -212,7 +212,7 @@ object BlockApproverProtocol {
                 s"Genesis candidate deploys do not match expected blessed contracts.\nBad contracts (5 first):\n${wrongDeploys
                   .mkString("\n")}"
               )
-      } yield (blockDeploys, block.body.state)
+      } yield (blockDeploys, block.state)
 
     (for {
       result                    <- EitherT(validate.pure[F])
@@ -232,14 +232,14 @@ object BlockApproverProtocol {
                     s"Failed status during replay: $status."
                   }
       _ <- EitherT(
-            (stateHash == postState.postStateHash)
+            (stateHash == block.postStateHash)
               .either(())
               .or("Tuplespace hash mismatch.")
               .pure[F]
           )
       tuplespaceBonds <- EitherT(
                           Concurrent[F]
-                            .attempt(runtimeManager.computeBonds(postState.postStateHash))
+                            .attempt(runtimeManager.computeBonds(block.postStateHash))
                         ).leftMap(_.getMessage)
       tuplespaceBondsMap = tuplespaceBonds.map {
         case Bond(validator, stake) => validator -> stake

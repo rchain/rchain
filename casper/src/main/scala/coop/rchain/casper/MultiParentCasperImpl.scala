@@ -61,7 +61,7 @@ class MultiParentCasperImpl[F[_]
 
   private def updateLastFinalizedBlock(newBlock: BlockMessage): F[Unit] =
     lastFinalizedBlock.whenA(
-      newBlock.body.state.blockNumber % casperShardConf.finalizationRate == 0
+      newBlock.blockNumber % casperShardConf.finalizationRate == 0
     )
 
   /**
@@ -119,7 +119,7 @@ class MultiParentCasperImpl[F[_]
       finalizedSet.toList.traverse { h =>
         for {
           block   <- BlockStore[F].getUnsafe(h)
-          deploys = block.body.deploys.map(_.deploy)
+          deploys = block.state.deploys.map(_.deploy)
 
           // Remove block deploys from persistent store
           deploysRemoved   <- DeployStorage[F].remove(deploys)
@@ -131,7 +131,7 @@ class MultiParentCasperImpl[F[_]
           _ <- BlockIndex.cache.remove(h).pure
 
           // Remove block post-state mergeable channels from persistent store
-          stateHash = block.body.state.postStateHash.toBlake2b256Hash.bytes
+          stateHash = block.postStateHash.toBlake2b256Hash.bytes
           _         <- RuntimeManager[F].getMergeableStore.delete(stateHash)
         } yield ()
       }.void
@@ -199,9 +199,9 @@ class MultiParentCasperImpl[F[_]
 
     def getOnChainState(b: BlockMessage): F[OnChainCasperState] =
       for {
-        av <- RuntimeManager[F].getActiveValidators(b.body.state.postStateHash)
+        av <- RuntimeManager[F].getActiveValidators(b.postStateHash)
         // bonds are available in block message, but please remember this is just a cache, source of truth is RSpace.
-        bm          = b.body.state.bonds
+        bm          = b.bonds
         shardConfig = casperShardConf
       } yield OnChainCasperState(shardConfig, bm.map(v => v.validator -> v.stake).toMap, av)
 
@@ -219,7 +219,7 @@ class MultiParentCasperImpl[F[_]
                   // For now main parent bonds map taken as a reference, but might be we want to pick a subset with equal
                   // bond maps that has biggest cumulative stake.
                   blocks  <- tips.toList.traverse(BlockStore[F].getUnsafe)
-                  parents = blocks.filter(b => b.body.state.bonds == blocks.head.body.state.bonds)
+                  parents = blocks.filter(b => b.bonds == blocks.head.bonds)
                 } yield parents
       onChainState <- getOnChainState(parents.head)
 
@@ -329,16 +329,16 @@ class MultiParentCasperImpl[F[_]
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
-    val blockPreState  = b.body.state.preStateHash
-    val blockPostState = b.body.state.postStateHash
+    val blockPreState  = b.preStateHash
+    val blockPostState = b.postStateHash
     val blockSender    = b.sender.toByteArray
     val indexBlock = for {
       mergeableChs <- RuntimeManager[F].loadMergeableChannels(blockPostState, blockSender, b.seqNum)
 
       index <- BlockIndex(
                 b.blockHash,
-                b.body.deploys,
-                b.body.systemDeploys,
+                b.state.deploys,
+                b.state.systemDeploys,
                 blockPreState.toBlake2b256Hash,
                 blockPostState.toBlake2b256Hash,
                 RuntimeManager[F].getHistoryRepo,
@@ -354,7 +354,7 @@ class MultiParentCasperImpl[F[_]
       _ <- valResult
             .map { status =>
               val blockInfo   = PrettyPrinter.buildString(b, short = true)
-              val deployCount = b.body.deploys.size
+              val deployCount = b.state.deploys.size
               Log[F].info(s"Block replayed: $blockInfo (${deployCount}d) ($status) [$elapsed]") <*
                 indexBlock.whenA(casperShardConf.maxNumberOfParents > 1)
             }
@@ -483,7 +483,7 @@ object MultiParentCasperImpl {
       block.justifications.toList
         .map(j => (j.validator.toHexString, j.latestBlockHash.toHexString))
     val deployIds: List[String] =
-      block.body.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
+      block.state.deploys.map(pd => PrettyPrinter.buildStringNoLimit(pd.deploy.sig))
     val creator = block.sender.toHexString
     val seqNum  = block.seqNum
     (blockHash, parentHashes, justificationHashes, deployIds, creator, seqNum)

@@ -108,7 +108,7 @@ object TransactionBalances {
     for {
       perValidatorVaults <- runtime.playExploratoryDeploy(
                              contract,
-                             block.body.state.postStateHash
+                             block.postStateHash
                            )
       perValidatorVaultAddr = perValidatorVaults.head.exprs.head.getEListBody.ps
         .map(p => p.exprs.head.getETupleBody.ps(1).exprs.head.getGString)
@@ -285,7 +285,7 @@ object TransactionBalances {
                           new Exception(s"Block ${blockHash.toHexString} not found in dag")
                         )
             isFinalized         <- dagRepresantation.isFinalized(blockHash)
-            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.body.state.blockNumber
+            isBeforeTargetBlock = blockMeta.blockNum <= targetBlock.blockNumber
           } yield TransactionBlockInfo(t, blockMeta.blockNum, isFinalized && isBeforeTargetBlock)
         }
       }

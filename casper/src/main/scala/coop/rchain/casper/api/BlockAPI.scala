@@ -309,7 +309,7 @@ object BlockAPI {
       sortedListeningName: immutable.Seq[Par]
   ): Boolean = {
     val serializedLog = for {
-      pd    <- block.body.deploys
+      pd    <- block.state.deploys
       event <- pd.deployLog
     } yield event
     val log =
@@ -578,7 +578,7 @@ object BlockAPI {
     for {
       dag <- casper.blockDag
       // TODO this is temporary solution to not calculate fault tolerance all the blocks
-      oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
+      oldBlock = dag.latestBlockNumber.map(_ - block.blockNumber).map(_ > 100)
       // Old block fault tolerance / invalid block has -1.0 fault tolerance
       normalizedFaultTolerance <- oldBlock.ifM(
                                    dag
@@ -607,7 +607,7 @@ object BlockAPI {
       faultTolerance: Float
   ): BlockInfo = {
     val lightBlockInfo = constructLightBlockInfo(block, faultTolerance)
-    val deploys        = block.body.deploys.map(_.toDeployInfo)
+    val deploys        = block.state.deploys.map(_.toDeployInfo)
     BlockInfo(blockInfo = lightBlockInfo, deploys = deploys)
   }
 
@@ -627,16 +627,17 @@ object BlockAPI {
       timestamp = block.header.timestamp,
       headerExtraBytes = block.header.extraBytes,
       parentsHashList = block.header.parentsHashList.map(PrettyPrinter.buildStringNoLimit),
-      blockNumber = block.body.state.blockNumber,
-      preStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.preStateHash),
-      postStateHash = PrettyPrinter.buildStringNoLimit(block.body.state.postStateHash),
-      bodyExtraBytes = block.body.extraBytes,
-      bonds = block.body.state.bonds.map(ProtoUtil.bondToBondInfo),
+      blockNumber = block.blockNumber,
+      preStateHash = PrettyPrinter.buildStringNoLimit(block.preStateHash),
+      postStateHash = PrettyPrinter.buildStringNoLimit(block.postStateHash),
+      // TODO: Why extra bytes in light info?
+      bodyExtraBytes = block.state.extraBytes,
+      bonds = block.bonds.map(ProtoUtil.bondToBondInfo),
       blockSize = block.toProto.serializedSize.toString,
-      deployCount = block.body.deploys.length,
+      deployCount = block.state.deploys.length,
       faultTolerance = faultTolerance,
       justifications = block.justifications.map(ProtoUtil.justificationsToJustificationInfos),
-      rejectedDeploys = block.body.rejectedDeploys.map(
+      rejectedDeploys = block.state.rejectedDeploys.map(
         r => RejectedDeployInfo(PrettyPrinter.buildStringNoLimit(r.sig))
       )
     )
