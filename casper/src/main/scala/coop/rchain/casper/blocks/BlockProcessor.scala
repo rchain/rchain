@@ -130,11 +130,12 @@ object BlockProcessor {
       val allDeps = ProtoUtil.dependenciesHashesOf(b)
       for {
         // in addition, equivocation tracker has to be checked, as admissible equivocations are not stored in DAG
-        equivocationHashes <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-                               tracker.equivocationRecords.map { equivocations =>
-                                 equivocations.flatMap(_.equivocationDetectedBlockHashes)
-                               }
-                             }
+//        equivocationHashes <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+//                               tracker.equivocationRecords.map { equivocations =>
+//                                 equivocations.flatMap(_.equivocationDetectedBlockHashes)
+//                               }
+//                             }
+        equivocationHashes <- Set[BlockHash]().pure[F] // TEMP
         depsInBuffer <- allDeps.filterA(
                          d =>
                            CasperBufferStorage[F].contains(d) ||^ CasperBufferStorage[F]

@@ -118,25 +118,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       deployIndex.get1(deployId)
   }
 
-  private object KeyValueStoreEquivocationsTracker extends EquivocationsTracker[F] {
-    override def equivocationRecords: F[Set[EquivocationRecord]] =
-      equivocationTrackerIndex.data
-
-    override def insertEquivocationRecord(record: EquivocationRecord): F[Unit] =
-      equivocationTrackerIndex.add(record)
-
-    override def updateEquivocationRecord(
-        record: EquivocationRecord,
-        blockHash: BlockHash
-    ): F[Unit] = {
-      val updatedEquivocationDetectedBlockHashes =
-        record.equivocationDetectedBlockHashes + blockHash
-      val newRecord =
-        record.copy(equivocationDetectedBlockHashes = updatedEquivocationDetectedBlockHashes)
-      equivocationTrackerIndex.add(newRecord)
-    }
-  }
-
   private def representation: F[BlockDagRepresentation[F]] =
     for {
       // Take current DAG state / view of the DAG
@@ -259,9 +240,6 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
         .ifM(logAlreadyStored, doInsert) >> representation
     )
   }
-
-  override def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
-    lock.withPermit(f(KeyValueStoreEquivocationsTracker))
 
   /** Record that some hash is directly finalized (detected by finalizer and becomes LFB). */
   def recordDirectlyFinalized(

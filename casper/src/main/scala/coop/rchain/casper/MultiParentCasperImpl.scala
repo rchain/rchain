@@ -266,9 +266,9 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT.liftF(Span[F].mark("bonds-cache-validated"))
         _ <- EitherT(Validate.neglectedInvalidBlock(b, s))
         _ <- EitherT.liftF(Span[F].mark("neglected-invalid-block-validated"))
-        _ <- EitherT(
-              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
-            )
+        //        _ <- EitherT(
+        //              EquivocationDetector.checkNeglectedEquivocationsWithUpdate(b, s.dag, approvedBlock)
+        //            )
         _ <- EitherT.liftF(Span[F].mark("neglected-equivocation-validated"))
 
         // This validation is only to punish validator which accepted lower price deploys.
@@ -285,7 +285,8 @@ class MultiParentCasperImpl[F[_]
         _ <- EitherT.liftF(Span[F].mark("phlogiston-price-validated"))
 
         depDag <- EitherT.liftF(CasperBufferStorage[F].toDoublyLinkedDag)
-        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
+        //        status <- EitherT(EquivocationDetector.checkEquivocations(depDag, b, s.dag))
+        status = ValidBlock.Valid // TEMP
         _      <- EitherT.liftF(Span[F].mark("equivocation-validated"))
       } yield status
 
@@ -352,26 +353,26 @@ class MultiParentCasperImpl[F[_]
 
     status match {
       case InvalidBlock.AdmissibleEquivocation =>
-        val baseEquivocationBlockSeqNum = block.seqNum - 1
+//        val baseEquivocationBlockSeqNum = block.seqNum - 1
         for {
-          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
-                for {
-                  equivocations <- tracker.equivocationRecords
-                  _ <- Sync[F].unlessA(equivocations.exists {
-                        case EquivocationRecord(validator, seqNum, _) =>
-                          block.sender == validator && baseEquivocationBlockSeqNum == seqNum
-                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
-                      }) {
-                        val newEquivocationRecord =
-                          EquivocationRecord(
-                            block.sender,
-                            baseEquivocationBlockSeqNum,
-                            Set.empty[BlockHash]
-                          )
-                        tracker.insertEquivocationRecord(newEquivocationRecord)
-                      }
-                } yield ()
-              }
+//          _ <- BlockDagStorage[F].accessEquivocationsTracker { tracker =>
+//                for {
+//                  equivocations <- tracker.equivocationRecords
+//                  _ <- Sync[F].unlessA(equivocations.exists {
+//                        case EquivocationRecord(validator, seqNum, _) =>
+//                          block.sender == validator && baseEquivocationBlockSeqNum == seqNum
+//                        // More than 2 equivocating children from base equivocation block and base block has already been recorded
+//                      }) {
+//                        val newEquivocationRecord =
+//                          EquivocationRecord(
+//                            block.sender,
+//                            baseEquivocationBlockSeqNum,
+//                            Set.empty[BlockHash]
+//                          )
+//                        tracker.insertEquivocationRecord(newEquivocationRecord)
+//                      }
+//                } yield ()
+//              }
           // We can only treat admissible equivocations as invalid blocks if
           // casper is single threaded.
           updatedDag <- handleInvalidBlockEffect(InvalidBlock.AdmissibleEquivocation, block)

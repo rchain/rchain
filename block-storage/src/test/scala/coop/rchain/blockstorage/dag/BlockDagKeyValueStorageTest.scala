@@ -184,50 +184,6 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
     }
   }
 
-  it should "be able to restore equivocations tracker on startup" in {
-    forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      forAll(validatorGen) { equivocator =>
-        forAll(blockHashGen) { blockHash =>
-          withDagStorage { storage =>
-            for {
-              _ <- blockElements.traverse_(storage.insert(_, false))
-              record = EquivocationRecord(
-                equivocator,
-                0,
-                Set(blockHash)
-              )
-              _ <- storage.accessEquivocationsTracker { tracker =>
-                    tracker.insertEquivocationRecord(record)
-                  }
-              records <- storage.accessEquivocationsTracker(_.equivocationRecords)
-              _       = records shouldBe Set(record)
-              result  <- lookupElements(blockElements, storage)
-            } yield testLookupElementsResult(result, blockElements)
-          }
-        }
-      }
-    }
-  }
-
-  it should "be able to modify equivocation records" in {
-    forAll(validatorGen, blockHashGen, blockHashGen) { (equivocator, blockHash1, blockHash2) =>
-      withDagStorage { storage =>
-        val record = EquivocationRecord(equivocator, 0, Set(blockHash1))
-        for {
-          _ <- storage.accessEquivocationsTracker { tracker =>
-                tracker.insertEquivocationRecord(record)
-              }
-          _ <- storage.accessEquivocationsTracker { tracker =>
-                tracker.updateEquivocationRecord(record, blockHash2)
-              }
-          updatedRecord = EquivocationRecord(equivocator, 0, Set(blockHash1, blockHash2))
-          records       <- storage.accessEquivocationsTracker(_.equivocationRecords)
-          _             = records shouldBe Set(updatedRecord)
-        } yield ()
-      }
-    }
-  }
-
   it should "be able to restore invalid blocks on startup" in {
     forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
       withDagStorage { storage =>
