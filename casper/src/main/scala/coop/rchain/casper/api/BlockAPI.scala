@@ -200,89 +200,52 @@ object BlockAPI {
       .evalMap(_.traverse(transform))
   }
 
-  def getListeningNameDataResponse[F[_]: Concurrent: EngineCell: Log: BlockStore](
+  def getListeningNameDataResponse[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log](
       depth: Int,
       listeningName: Par,
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
+  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
+    for {
+      dag                 <- BlockDagStorage[F].getRepresentation
+      heightMap           <- dag.getHeightMap
+      depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
+      sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
+      blockDataStream = getFromBlocks(heightMap) { block =>
+        getDataWithBlockInfo[F](RuntimeManager[F], sortedListeningName, block)
+      }
+      // For compatibility with v0.12.x depth must include all blocks with the same height
+      //  e.g. depth=1 should always return latest block created by the node
+      blocksWithActiveName <- blockDataStream
+                               .map(_.flatten)
+                               .take(depthWithLimit)
+                               .compile
+                               .toList
+                               .map(_.flatten)
+    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
-    val errorMessage = "Could not get listening name data, casper instance was not available yet."
-
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
-      for {
-        heightMap           <- casper.blockDag.flatMap(_.getHeightMap)
-        depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
-        runtimeManager      <- casper.getRuntimeManager
-        sortedListeningName <- parSortable.sortMatch[F](listeningName).map(_.term)
-        blockDataStream = getFromBlocks(heightMap) { block =>
-          getDataWithBlockInfo[F](runtimeManager, sortedListeningName, block)
-        }
-        // For compatibility with v0.12.x depth must include all blocks with the same height
-        //  e.g. depth=1 should always return latest block created by the node
-        blocksWithActiveName <- blockDataStream
-                                 .map(_.flatten)
-                                 .take(depthWithLimit)
-                                 .compile
-                                 .toList
-                                 .map(_.flatten)
-      } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
-
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningName depth ${depth} exceed the max limit ${maxBlocksLimit}"
-        .asLeft[(Seq[DataWithBlockInfo], Int)]
-        .pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[DataWithBlockInfo], Int)]](
-        casperResponse(_),
-        Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
-      ))
-  }
-
-  def getListeningNameContinuationResponse[F[_]: Concurrent: EngineCell: Log: BlockStore](
+  def getListeningNameContinuationResponse[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log](
       depth: Int,
       listeningNames: Seq[Par],
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
-    val errorMessage =
-      "Could not get listening names continuation, casper instance was not available yet."
-    def casperResponse(
-        implicit casper: MultiParentCasper[F]
-    ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
-      for {
-        heightMap      <- casper.blockDag.flatMap(_.getHeightMap)
-        depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
-        runtimeManager <- casper.getRuntimeManager
-        sortedListeningNames <- listeningNames.toList
-                                 .traverse(parSortable.sortMatch[F](_).map(_.term))
-        blockDataStream = getFromBlocks(heightMap) { block =>
-          getContinuationsWithBlockInfo[F](runtimeManager, sortedListeningNames, block)
-        }
-        // For compatibility with v0.12.x depth must include all blocks with the same height
-        //  e.g. depth=1 should always return latest block created by the node
-        blocksWithActiveName <- blockDataStream
-                                 .map(_.flatten)
-                                 .take(depthWithLimit)
-                                 .compile
-                                 .toList
-                                 .map(_.flatten)
-      } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
-
-    if (depth > maxBlocksLimit)
-      s"Your request on getListeningNameContinuation depth ${depth} exceed the max limit ${maxBlocksLimit}"
-        .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
-        .pure[F]
-    else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]](
-        casperResponse(_),
-        Log[F]
-          .warn(errorMessage)
-          .as(s"Error: $errorMessage".asLeft)
-      ))
-  }
+  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
+    for {
+      dag            <- BlockDagStorage[F].getRepresentation
+      heightMap      <- dag.getHeightMap
+      depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
+      sortedListeningNames <- listeningNames.toList
+                               .traverse(parSortable.sortMatch[F](_).map(_.term))
+      blockDataStream = getFromBlocks(heightMap) { block =>
+        getContinuationsWithBlockInfo[F](RuntimeManager[F], sortedListeningNames, block)
+      }
+      // For compatibility with v0.12.x depth must include all blocks with the same height
+      //  e.g. depth=1 should always return latest block created by the node
+      blocksWithActiveName <- blockDataStream
+                               .map(_.flatten)
+                               .take(depthWithLimit)
+                               .compile
+                               .toList
+                               .map(_.flatten)
+    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
 
   private def getDataWithBlockInfo[F[_]: Log: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
