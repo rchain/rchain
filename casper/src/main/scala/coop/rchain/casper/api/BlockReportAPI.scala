@@ -5,11 +5,10 @@ import cats.effect.Concurrent
 import cats.syntax.all._
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
+import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
-import coop.rchain.casper.engine.EngineCell
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
-import coop.rchain.casper._
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.shared.Log
@@ -56,21 +55,13 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
 
-    // Error for validator node
-    def validateReadOnlyNode: Either[Error, Unit] =
-      if (validatorIdentityOpt.isEmpty) ().asRight[Error]
-      else "Block report can only be executed on read-only RNode.".asLeft
+    // Error if not read-only node (has validator private key)
+    val readOnlyNode = validatorIdentityOpt
+      .as("Block report can only be executed on read-only RNode.".asLeft)
+      .getOrElse(().asRight)
 
     // Process report if read-only node and block is found
-    def processReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] =
-      (validateReadOnlyNode.toEitherT[F] >>= (_ => EitherT(createReport))).value
-
-    def casperNotInitialized: F[Either[Error, BlockEventInfo]] =
-      Log[F]
-        .warn("Could not get event data.")
-        .as("Error: Could not get event data.".asLeft[BlockEventInfo])
-
-    EngineCell[F].read.flatMap(_.withCasper(processReport, casperNotInitialized))
+    (readOnlyNode.toEitherT[F] >> EitherT(createReport)).value
   }
 
   private def createSystemDeployReport(
