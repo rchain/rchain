@@ -1,4 +1,4 @@
-package coop.rchain.blockstorage.dag
+package coop.rchain.casper.dag
 
 import cats.effect.concurrent.Semaphore
 import cats.effect.{Concurrent, Sync}
@@ -9,6 +9,12 @@ import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.BlockMetadataStore.BlockMetadataStore
 import coop.rchain.blockstorage.dag.EquivocationTrackerStore.EquivocationTrackerStore
 import coop.rchain.blockstorage.dag.codecs._
+import coop.rchain.blockstorage.dag.{
+  BlockDagRepresentation,
+  BlockDagStorage,
+  BlockMetadataStore,
+  EquivocationTrackerStore
+}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.blockstorage.util.BlockMessageUtil._
 import coop.rchain.casper.PrettyPrinter
@@ -18,8 +24,8 @@ import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.EquivocationRecord.SequenceNumber
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockHash, BlockMetadata, EquivocationRecord, Validator}
 import coop.rchain.models.syntax._
+import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
 import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource}
 import coop.rchain.store.{KeyValueStoreManager, KeyValueTypedStore}

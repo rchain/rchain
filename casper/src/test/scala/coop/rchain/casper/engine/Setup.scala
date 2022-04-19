@@ -4,9 +4,10 @@ import cats._
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.casper._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.genesis.contracts.Validator

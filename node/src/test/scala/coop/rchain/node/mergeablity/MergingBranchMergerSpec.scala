@@ -3,7 +3,8 @@ package coop.rchain.node.mergeablity
 import cats.effect.{Concurrent, Resource}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.merging.{BlockIndex, DagMerger}
 import coop.rchain.casper.protocol.{BlockMessage, Bond, ProcessedDeploy, ProcessedSystemDeploy}
 import coop.rchain.casper.syntax.casperSyntaxRuntimeManager

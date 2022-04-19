@@ -1,17 +1,17 @@
-package coop.rchain.blockstorage.dag
+package coop.rchain.casper.dag
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockDagStorageTest}
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
