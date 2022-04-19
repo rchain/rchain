@@ -1,6 +1,6 @@
 package coop.rchain.blockstorage.dag
 
-import cats.implicits._
+import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.approvedStore.{approvedBlockToBytes, bytesToApprovedBlock}
 import coop.rchain.blockstorage.blockStore.{blockMessageToBytes, bytesToBlockMessage}

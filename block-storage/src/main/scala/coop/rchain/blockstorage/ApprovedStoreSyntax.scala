@@ -1,11 +1,9 @@
 package coop.rchain.blockstorage
 
 import cats.effect.Sync
-import cats.implicits._
 import coop.rchain.blockstorage.approvedStore.ApprovedStore
-import coop.rchain.casper.protocol.{ApprovedBlock, ApprovedBlockProto}
+import coop.rchain.casper.protocol.ApprovedBlock
 import coop.rchain.shared.syntax._
-import scodec.bits.ByteVector
 
 trait ApprovedStoreSyntax {
   implicit final def syntaxApprovedStore[F[_]: Sync](
