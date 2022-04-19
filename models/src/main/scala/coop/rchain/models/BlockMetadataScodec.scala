@@ -4,6 +4,7 @@ import scodec.TransformSyntax
 import scodec.bits.ByteVector
 
 final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array[Byte])
+final case class JustificationBV(validator: ByteVector, latestBlockHash: ByteVector)
 
 object MetadataScodec {
   import scodec.Codec
@@ -59,7 +60,18 @@ object MetadataScodec {
   def decode(serializedBlock: ByteVector): BlockMetadataScodec =
     codecMetadata.decode(serializedBlock.toBitVector).require.value
 }
-
+final case class BlockMetadataBV(
+    blockHash: ByteVector,
+    parents: List[ByteVector],
+    sender: ByteVector,
+    justifications: List[JustificationBV],
+    weightMap: Map[ByteVector, Long],
+    blockNum: Long,
+    seqNum: Int,
+    invalid: Boolean,
+    directlyFinalized: Boolean,
+    finalized: Boolean
+)
 final case class BlockMetadataScodec(
     blockHash: Array[Byte],
     parents: List[Array[Byte]],
@@ -72,5 +84,20 @@ final case class BlockMetadataScodec(
     directlyFinalized: Boolean,
     finalized: Boolean
 ) {
-  def toByteString = MetadataScodec.encode(block = this)
+  def toByteString: ByteVector = MetadataScodec.encode(block = this)
+  def toBlockMetadataBV(): BlockMetadataBV =
+    BlockMetadataBV(
+      ByteVector(blockHash),
+      parents.map(ByteVector(_)),
+      ByteVector(sender),
+      justifications.map(
+        just => JustificationBV(ByteVector(just.validator), ByteVector(just.latestBlockHash))
+      ),
+      weightMap.map { case (bv, num) => (ByteVector(bv), num) },
+      blockNum,
+      seqNum,
+      invalid,
+      directlyFinalized,
+      finalized
+    )
 }
