@@ -97,7 +97,7 @@ in {
        TreeHashMap            <- treeHashMapCh &
        @(_, MultiSigRevVault) <- multiSigRevVaultCh) {
     new posDeployerRevAddressCh, posDeployerAuthKeyCh, posDeployerVaultCh, posVaultCh, 
-        initialActiveCh, pendingRewardsMapCh, createUnfVault, moveInitialBondCh, posAuthKeyCh
+        initialActiveCh, pendingRewardsMapCh, createUnfVault, moveInitialBondCh
     in {
       // Creates the auth key and Rev vault associated with the PoS contract.
       new posPkCh in {
@@ -148,10 +148,8 @@ in {
       }|
       createUnfVault!(*posVaultCh, "$$posPubKey$$") |
       for (@(posVaultUnf, posVaultAddr, posVault, humanControlHandle) <- posVaultCh){
-      @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
       for (@posDeployerRevAddress <- posDeployerRevAddressCh;
-           @posDeployerAuthKey    <- posDeployerAuthKeyCh;
-           @posAuthKey <- posAuthKeyCh)  {
+           @posDeployerAuthKey    <- posDeployerAuthKeyCh)  {
         for (@(true, (coopMultiVault, coopMultiVaultAddr, coopVaultHd)) <<- coopVaultCh) {
           // Creates PoS Rev vault with sum of initial bonds.
           new bondSumCh in {
@@ -395,7 +393,7 @@ in {
                 // Funds are transferred from the block sender's vault to the deployer.
                 // Return expects (Boolean, Either[Nil, String])
                 contract PoS(@"refundDeploy", @refundAmount, @sysAuthToken, return) = {
-                  new isValidTokenCh in {
+                  new isValidTokenCh, posAuthKeyCh in {
                     sysAuthTokenOps!("check", sysAuthToken, *isValidTokenCh) |
                     for (@isValid <- isValidTokenCh) {
                       if (isValid) {
@@ -403,7 +401,8 @@ in {
                           if (refundAmount > 0) {
                             new revAddressCh, transferCh in {
                               revAddressOps!("fromDeployerId", deployerId, *revAddressCh) |
-                              for (@deployerRevAddress <- revAddressCh) {
+                              @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                              for (@deployerRevAddress <- revAddressCh ; @posAuthKey <- posAuthKeyCh) {
                                 // Transfer (from sender to deployer) called in refundDeploy.
                                 @posVault!("transfer", deployerRevAddress, refundAmount, posAuthKey, *transferCh) |
                                 for (@transferResult <- transferCh) {
@@ -446,7 +445,7 @@ in {
                           for (@invalidBlocks        <- invalidBlocksCh &
                                @userPk               <- userCh &
                                @state, stateUpdateCh <- stateProcessCh) {
-                                new toBeSlashed, valBondCh, valRewardCh in {
+                                new toBeSlashed, valBondCh, valRewardCh, posAuthKeyCh in {
                                   // Flow of logic:
                                   // 0. check if blockHash is the hash of an invalid block
                                   // 1. transfer stake of slashed validator from PoS to Coop vault
@@ -456,7 +455,8 @@ in {
                                   for (@validator <- toBeSlashed) {
                                     // Takes the stake of slashed validator
                                     valBondCh!(state.get("allBonds").get(validator)) |
-                                    for (@valBond <- valBondCh) {
+                                    @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                                    for (@valBond <- valBondCh ; @posAuthKey <- posAuthKeyCh) {
                                       // Transfers slashed funds from PoS vault to Coop vault, then updates state.
                                       new transferDoneCh in {
                                         @posVault!(
@@ -542,9 +542,10 @@ in {
                                 } | 
                                 // Transfers withdrawing validator's bond + accumulated rewards from PoS vault to their vault.
                                 contract payWithdrawer(@(pk, amount), returnCh) = {
-                                  new vaultCh, revAddressCh, createCh in {
+                                  new vaultCh, revAddressCh, createCh, posAuthKeyCh in {
                                     revAddressOps!("fromPublicKey", pk, *revAddressCh) |
-                                    for (@toRevAddress <- revAddressCh) {
+                                    @RevVault!("unforgeableAuthKey", posVaultUnf, *posAuthKeyCh) |
+                                    for (@toRevAddress <- revAddressCh; @posAuthKey <- posAuthKeyCh) {
                                       @RevVault!("findOrCreate", toRevAddress, *createCh) |
                                       for (@_ <- createCh){
                                         @posVault!("transfer", toRevAddress, amount, posAuthKey, *returnCh)
