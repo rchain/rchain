@@ -113,12 +113,11 @@ class BlocksResponseAPITest
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
                          )
-          engine     = new EngineWithCasper[Task](casperEffect)
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-          logEff     = new LogStub[Task]
+          engine = new EngineWithCasper[Task](casperEffect)
+          logEff = new LogStub[Task]
           blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
-                             engineCell,
+                             blockDagStorage,
                              logEff,
                              blockStore
                            )
@@ -137,12 +136,11 @@ class BlocksResponseAPITest
                          HashMap.empty[BlockHash, BlockMessage],
                          tips
                        )
-        logEff     = new LogStub[Task]
-        engine     = new EngineWithCasper[Task](casperEffect)
-        engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
+        logEff = new LogStub[Task]
+        engine = new EngineWithCasper[Task](casperEffect)
         blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
-                           engineCell,
+                           blockDagStorage,
                            logEff,
                            blockStore
                          )

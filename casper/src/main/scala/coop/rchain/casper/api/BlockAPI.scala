@@ -1,11 +1,12 @@
 package coop.rchain.casper.api
 
-import cats.Monad
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
+import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper._
@@ -287,7 +288,7 @@ object BlockAPI {
       runtimeManager: RuntimeManager[F],
       sortedListeningName: Par,
       block: BlockMessage
-  )(implicit casper: MultiParentCasper[F]): F[Option[DataWithBlockInfo]] =
+  ): F[Option[DataWithBlockInfo]] =
     // TODO: For Produce it doesn't make sense to have multiple names
     if (isListeningNameReduced(block, Seq(sortedListeningName))) {
       val stateHash = ProtoUtil.postStateHash(block)
@@ -303,7 +304,7 @@ object BlockAPI {
       runtimeManager: RuntimeManager[F],
       sortedListeningNames: Seq[Par],
       block: BlockMessage
-  )(implicit casper: MultiParentCasper[F]): F[Option[ContinuationsWithBlockInfo]] =
+  ): F[Option[ContinuationsWithBlockInfo]] =
     if (isListeningNameReduced(block, sortedListeningNames)) {
       val stateHash = ProtoUtil.postStateHash(block)
       for {
@@ -348,30 +349,23 @@ object BlockAPI {
   }
 
   private def toposortDag[
-      F[_]: Monad: EngineCell: Log: BlockStore,
+      F[_]: Monad: BlockDagStorage: Log: BlockStore,
       A
   ](depth: Int, maxDepthLimit: Int)(
-      doIt: (MultiParentCasper[F], Vector[Vector[BlockHash]]) => F[ApiErr[A]]
+      doIt: Vector[Vector[BlockHash]] => F[ApiErr[A]]
   ): F[ApiErr[A]] = {
-
-    val errorMessage =
-      "Could not visualize graph, casper instance was not available yet."
-
-    def casperResponse(implicit casper: MultiParentCasper[F]): F[ApiErr[A]] =
+    def response: F[ApiErr[A]] =
       for {
-        dag               <- MultiParentCasper[F].blockDag
+        dag               <- BlockDagStorage[F].getRepresentation
         latestBlockNumber <- dag.latestBlockNumber
-        topoSort          <- dag.topoSort((latestBlockNumber - depth).toLong, none)
-        result            <- doIt(casper, topoSort)
+        topoSort          <- dag.topoSort((latestBlockNumber - depth), none)
+        result            <- doIt(topoSort)
       } yield result
 
     if (depth > maxDepthLimit)
       s"Your request depth ${depth} exceed the max limit ${maxDepthLimit}".asLeft[A].pure[F]
     else
-      EngineCell[F].read >>= (_.withCasper[ApiErr[A]](
-        casperResponse(_),
-        Log[F].warn(errorMessage).as(errorMessage.asLeft)
-      ))
+      response
   }
 
   def getBlocksByHeights[F[_]: Sync: EngineCell: Log: BlockStore](
@@ -444,37 +438,34 @@ object BlockAPI {
   }
 
   def machineVerifiableDag[
-      F[_]: Monad: Sync: EngineCell: Log: BlockStore
+      F[_]: Monad: Sync: BlockDagStorage: Log: BlockStore
   ](depth: Int, maxDepthLimit: Int): F[ApiErr[String]] =
-    toposortDag[F, String](depth, maxDepthLimit) {
-      case (_, topoSort) =>
-        val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
-          BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
-        }
+    toposortDag[F, String](depth, maxDepthLimit) { topoSort =>
+      val fetchParents: BlockHash => F[List[BlockHash]] = { blockHash =>
+        BlockStore[F].getUnsafe(blockHash) map (_.header.parentsHashList)
+      }
 
-        MachineVerifiableDag[F](topoSort, fetchParents)
-          .map(_.map(edges => edges.show).mkString("\n"))
-          .map(_.asRight[Error])
+      MachineVerifiableDag[F](topoSort, fetchParents)
+        .map(_.map(edges => edges.show).mkString("\n"))
+        .map(_.asRight[Error])
     }
 
-  def getBlocks[F[_]: Sync: EngineCell: Log: BlockStore](
+  def getBlocks[F[_]: Sync: BlockDagStorage: Log: BlockStore](
       depth: Int,
       maxDepthLimit: Int
   ): F[ApiErr[List[LightBlockInfo]]] =
-    toposortDag[F, List[LightBlockInfo]](depth, maxDepthLimit) {
-      case (casper, topoSort) =>
-        implicit val ev: MultiParentCasper[F] = casper
-        topoSort
-          .foldM(List.empty[LightBlockInfo]) {
-            case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
-              for {
-                blocksAtHeight <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
-                blockInfosAtHeight <- blocksAtHeight.traverse(
-                                       getLightBlockInfo[F]
-                                     )
-              } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
-          }
-          .map(_.reverse.asRight[Error])
+    toposortDag[F, List[LightBlockInfo]](depth, maxDepthLimit) { topoSort =>
+      topoSort
+        .foldM(List.empty[LightBlockInfo]) {
+          case (blockInfosAtHeightAcc, blockHashesAtHeight) =>
+            for {
+              blocksAtHeight <- blockHashesAtHeight.traverse(BlockStore[F].getUnsafe)
+              blockInfosAtHeight <- blocksAtHeight.traverse(
+                                     getLightBlockInfo[F]
+                                   )
+            } yield blockInfosAtHeightAcc ++ blockInfosAtHeight
+        }
+        .map(_.reverse.asRight[Error])
     }
 
   def findDeploy[F[_]: Sync: EngineCell: Log: BlockStore](
@@ -556,37 +547,19 @@ object BlockAPI {
     )
   }
 
-  private def getBlockInfo[A, F[_]: Monad: BlockStore](
+  private def getBlockInfo[A, F[_]: Applicative: BlockStore](
       block: BlockMessage,
-      constructor: (
-          BlockMessage,
-          Float
-      ) => A
-  )(implicit casper: MultiParentCasper[F]): F[A] =
-    for {
-      dag <- casper.blockDag
-      // TODO this is temporary solution to not calculate fault tolerance all the blocks
-      oldBlock = dag.latestBlockNumber.map(_ - block.body.state.blockNumber).map(_ > 100)
-      // Old block fault tolerance / invalid block has -1.0 fault tolerance
-      normalizedFaultTolerance <- oldBlock.ifM(
-                                   dag
-                                     .isFinalized(block.blockHash)
-                                     .map(isFinalized => if (isFinalized) 1f else -1f),
-                                   Float.MinValue.pure[F]
-                                 )
-      initialFault   <- casper.normalizedInitialFault(ProtoUtil.weightMap(block))
-      faultTolerance = normalizedFaultTolerance - initialFault
-
-      blockInfo = constructor(block, faultTolerance)
-    } yield blockInfo
+      constructor: (BlockMessage, Float) => A
+  ): F[A] = constructor(block, -1f).pure[F]
 
   private def getFullBlockInfo[F[_]: Monad: BlockStore](
       block: BlockMessage
-  )(implicit casper: MultiParentCasper[F]): F[BlockInfo] =
+  ): F[BlockInfo] =
     getBlockInfo[BlockInfo, F](block, constructBlockInfo)
+
   def getLightBlockInfo[F[_]: Monad: BlockStore](
       block: BlockMessage
-  )(implicit casper: MultiParentCasper[F]): F[LightBlockInfo] =
+  ): F[LightBlockInfo] =
     getBlockInfo[LightBlockInfo, F](block, constructLightBlockInfo)
 
   private def constructBlockInfo(
@@ -800,7 +773,7 @@ object BlockAPI {
   ): F[ApiErr[(Seq[Par], LightBlockInfo)]] = {
 
     def casperResponse(
-        implicit casper: MultiParentCasper[F]
+        casper: MultiParentCasper[F]
     ): F[ApiErr[(Seq[Par], LightBlockInfo)]] =
       for {
         block          <- BlockStore[F].getUnsafe(blockHash.unsafeHexToByteString)
@@ -814,7 +787,7 @@ object BlockAPI {
 
     EngineCell[F].read >>= (
       _.withCasper[ApiErr[(Seq[Par], LightBlockInfo)]](
-        casperResponse(_),
+        casperResponse,
         Log[F].warn(errorMessage).as(s"Error: $errorMessage".asLeft)
       )
     )

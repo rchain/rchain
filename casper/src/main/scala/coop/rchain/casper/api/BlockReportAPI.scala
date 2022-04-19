@@ -25,7 +25,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
   implicit val source                                       = Metrics.Source(CasperMetricsSource, "report-replay")
   val blockLockMap: TrieMap[BlockHash, MetricsSemaphore[F]] = TrieMap.empty
 
-  private def replayBlock(b: BlockMessage)(implicit casper: MultiParentCasper[F]) =
+  private def replayBlock(b: BlockMessage) =
     for {
       reportResult <- reportingCasper.trace(b)
       lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
@@ -34,9 +34,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
       blockEvent   = BlockEventInfo(lightBlock, deploys, sysDeploys, reportResult.postStateHash)
     } yield blockEvent
 
-  private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage)(
-      implicit casper: MultiParentCasper[F]
-  ) =
+  private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage) =
     for {
       semaphore <- MetricsSemaphore.single
       lock      = blockLockMap.getOrElseUpdate(b.blockHash, semaphore)
@@ -52,13 +50,11 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
     } yield result
 
   def blockReport(hash: BlockHash, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
-    def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
-      implicit val c = casper
+    def createReport: F[Either[Error, BlockEventInfo]] =
       for {
         maybeBlock <- BlockStore[F].get1(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
-    }
 
     // Error for validator node
     def validateReadOnlyNode: Either[Error, Unit] =
@@ -67,7 +63,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
 
     // Process report if read-only node and block is found
     def processReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] =
-      (validateReadOnlyNode.toEitherT[F] >>= (_ => EitherT(createReport(casper)))).value
+      (validateReadOnlyNode.toEitherT[F] >>= (_ => EitherT(createReport))).value
 
     def casperNotInitialized: F[Either[Error, BlockEventInfo]] =
       Log[F]
