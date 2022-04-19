@@ -20,6 +20,7 @@ import coop.rchain.models.PCost
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.shared.Base16
 import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.shared.syntax._
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest.{FlatSpec, Inspectors, Matchers}
 
@@ -257,7 +258,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         deployData            <- ConstructDeploy.basicDeployData[Effect](1, shardId = SHARD_ID)
         signedBlock1Prime     <- nodes(0).publishBlock(deployData)(nodes: _*)
         _                     <- nodes(1).syncWith(nodes(0)) // should receive BlockMessage here
-        maybeHash             <- nodes(1).blockStore.get(signedBlock1Prime.blockHash)
+        maybeHash             <- nodes(1).blockStore.get1(signedBlock1Prime.blockHash)
         noMoreRequestedBlocks <- nodes(1).requestedBlocks.get.map(!_.exists(_._2.received == false))
       } yield {
         maybeHash shouldBe Some(signedBlock1Prime)
@@ -315,8 +316,8 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).contains(signedBlock1.blockHash) shouldBeF true
         _ <- nodes(1).contains(signedBlock1Prime.blockHash) shouldBeF false // we still add the equivocation pair
-        _ <- nodes(1).blockStore.get(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
-        _ <- nodes(1).blockStore.get(signedBlock1Prime.blockHash) shouldBeF None
+        _ <- nodes(1).blockStore.get1(signedBlock1.blockHash) shouldBeF Some(signedBlock1)
+        _ <- nodes(1).blockStore.get1(signedBlock1Prime.blockHash) shouldBeF None
       } yield ()
     }
   }
@@ -376,10 +377,10 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
               .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
         _ <- nodes(0).casperEff.contains(signedBlock1.blockHash) shouldBeF false
         _ <- nodes(0).casperEff.contains(signedBlock1Prime.blockHash) shouldBeF true
-        _ <- nodes(1).blockStore.get(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
-        _ <- nodes(1).blockStore.get(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
-        _ <- nodes(2).blockStore.get(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
-        _ <- nodes(2).blockStore.get(signedBlock1Prime.blockHash) shouldBeF Some(
+        _ <- nodes(1).blockStore.get1(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
+        _ <- nodes(1).blockStore.get1(signedBlock4.blockHash) shouldBeF Some(signedBlock4)
+        _ <- nodes(2).blockStore.get1(signedBlock3.blockHash) shouldBeF Some(signedBlock3)
+        _ <- nodes(2).blockStore.get1(signedBlock1Prime.blockHash) shouldBeF Some(
               signedBlock1Prime
             )
       } yield ()

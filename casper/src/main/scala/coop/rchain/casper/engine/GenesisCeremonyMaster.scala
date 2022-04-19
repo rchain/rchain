@@ -4,7 +4,8 @@ import cats.Applicative
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.effect.{Concurrent, Sync, Timer}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
@@ -52,7 +53,7 @@ object GenesisCeremonyMaster {
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],

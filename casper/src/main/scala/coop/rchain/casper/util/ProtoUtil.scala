@@ -5,7 +5,7 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
@@ -18,6 +18,7 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.Base16
+import coop.rchain.shared.syntax._
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable
@@ -108,7 +109,7 @@ object ProtoUtil {
 
   def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
     import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
+    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get1)
   }
 
   def weightFromValidatorByDag[F[_]: Monad](

@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.finality.Finalizer

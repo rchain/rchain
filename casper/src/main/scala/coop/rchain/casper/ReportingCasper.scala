@@ -5,7 +5,8 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.ReportingCasper.RhoReportingRspace
 import coop.rchain.casper.genesis.Genesis
@@ -85,7 +86,7 @@ object ReportingCasper {
   type RhoReportingRspace[F[_]] =
     ReportingRspace[F, Par, BindPattern, ListParWithRandom, TaggedContinuation]
 
-  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: BlockDagStorage](
+  def rhoReporter[F[_]: ContextShift: Concurrent: Log: Metrics: Span: Parallel: BlockStore: ApprovedStore: BlockDagStorage](
       rspaceStore: RSpaceStore[F]
   )(implicit scheduler: ExecutionContext): ReportingCasper[F] =
     new ReportingCasper[F] {
@@ -97,7 +98,7 @@ object ReportingCasper {
           reportingRuntime <- ReportingRuntime.createReportingRuntime(reportingRspace)
           dag              <- BlockDagStorage[F].getRepresentation
           // TODO approvedBlock is not equal to genesisBlock
-          genesis          <- BlockStore[F].getApprovedBlock
+          genesis          <- ApprovedStore[F].getApprovedBlock
           isGenesis        = genesis.exists(a => block.blockHash == a.candidate.block.blockHash)
           invalidBlocksSet <- dag.invalidBlocks
           invalidBlocks = invalidBlocksSet

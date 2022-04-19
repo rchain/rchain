@@ -2,7 +2,7 @@ package coop.rchain.node.runtime
 
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix

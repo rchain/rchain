@@ -3,7 +3,7 @@ package coop.rchain.casper.util.rholang
 import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.casper.InvalidBlock.InvalidRejectedDeploy
 import coop.rchain.casper._

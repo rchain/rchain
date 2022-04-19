@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.DeployError._
 import coop.rchain.casper.blocks.proposer.ProposeResult._
@@ -33,6 +33,7 @@ import coop.rchain.rspace.hashing.StableHashProvider
 import coop.rchain.rspace.trace._
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.syntax._
 
 import scala.collection.immutable
 
@@ -536,7 +537,7 @@ object BlockAPI {
                            )
         // Check if hash is complete and not just the prefix in which case
         // we can use `get` directly and not iterate over the whole block hash index.
-        getBlock  = BlockStore[F].get(hashByteString)
+        getBlock  = BlockStore[F].get1(hashByteString)
         findBlock = findBlockFromStore[F](hash)
         blockF    = if (hash.length == 64) getBlock else findBlock
         // Get block form the block store
@@ -651,7 +652,7 @@ object BlockAPI {
           for {
             dag          <- casper.blockDag
             blockHashOpt <- dag.find(hash)
-            message      <- blockHashOpt.flatTraverse(BlockStore[F].get)
+            message      <- blockHashOpt.flatTraverse(BlockStore[F].get1)
           } yield message,
         none[BlockMessage].pure[F]
       )
@@ -756,7 +757,7 @@ object BlockAPI {
                                                                   s"Input hash value is not valid hex string: $blockHash"
                                                                 )
                                                               )
-                                           block <- BlockStore[F].get(hashByteString)
+                                           block <- BlockStore[F].get1(hashByteString)
                                          } yield block
                          res <- targetBlock.traverse(b => {
                                  val postStateHash =

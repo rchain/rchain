@@ -5,8 +5,9 @@ import cats.effect.{Concurrent, Resource, Sync}
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
 import EngineCell._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator

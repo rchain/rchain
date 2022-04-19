@@ -4,7 +4,7 @@ import cats._
 import cats.effect._
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag._
 import coop.rchain.casper.{CasperMetricsSource, CasperShardConf, CasperSnapshot, OnChainCasperState}
 import coop.rchain.casper.protocol._
@@ -19,6 +19,7 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.p2p.EffectsTestInstances.LogicalTime
 import coop.rchain.rholang.interpreter.SystemProcesses.BlockData
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{Log, LogSource, Time}
 import monix.eval.Task
 

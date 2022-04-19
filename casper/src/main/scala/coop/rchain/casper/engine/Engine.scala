@@ -5,8 +5,10 @@ import cats.syntax.all._
 import cats.effect.{Concurrent, Sync, Timer}
 import EngineCell._
 import cats.effect.concurrent.Ref
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper._
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.RuntimeManager
@@ -26,6 +28,7 @@ import coop.rchain.casper.util.comm.CommUtil
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.rspace.state.RSpaceStateManager
+import coop.rchain.shared.syntax._
 import fs2.concurrent.Queue
 
 trait Engine[F[_]] {
@@ -60,14 +63,14 @@ object Engine {
    * Note the ordering of the insertions is important.
    * We always want the block dag store to be a subset of the block store.
    */
-  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: Log: BlockStore: BlockDagStorage](
+  def insertIntoBlockAndDagStore[F[_]: Sync: Concurrent: Log: BlockStore: ApprovedStore: BlockDagStorage](
       genesis: BlockMessage,
       approvedBlock: ApprovedBlock
   ): F[Unit] =
     for {
       _ <- BlockStore[F].put(genesis.blockHash, genesis)
       _ <- BlockDagStorage[F].insert(genesis, invalid = false, approved = true)
-      _ <- BlockStore[F].putApprovedBlock(approvedBlock)
+      _ <- ApprovedStore[F].putApprovedBlock(approvedBlock)
     } yield ()
 
   private def noApprovedBlockAvailable(peer: PeerNode, identifier: String): Packet =
@@ -129,7 +132,7 @@ object Engine {
     /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
     /* Rholang */     : RuntimeManager
     /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-    /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+    /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
     /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
   (
       blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],

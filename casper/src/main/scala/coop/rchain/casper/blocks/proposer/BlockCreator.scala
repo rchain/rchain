@@ -4,7 +4,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.instances.list._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{Header, _}

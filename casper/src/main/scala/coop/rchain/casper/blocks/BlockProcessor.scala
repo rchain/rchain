@@ -2,7 +2,7 @@ package coop.rchain.casper.blocks
 
 import cats.effect.Concurrent
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper._
@@ -119,9 +119,7 @@ object BlockProcessor {
   /* Diagnostics */ : Log
   /* Comm */        : CommUtil: BlockRetriever
   ] // format: on
-  (
-      implicit casperBuffer: CasperBufferStorage[F]
-  ): BlockProcessor[F] = {
+      : BlockProcessor[F] = {
 
     val storeBlock = (b: BlockMessage) => BlockStore[F].put(b)
 
@@ -137,7 +135,11 @@ object BlockProcessor {
                                  equivocations.flatMap(_.equivocationDetectedBlockHashes)
                                }
                              }
-        depsInBuffer    <- allDeps.filterA(d => casperBuffer.contains(d) ||^ casperBuffer.isPendant(d))
+        depsInBuffer <- allDeps.filterA(
+                         d =>
+                           CasperBufferStorage[F].contains(d) ||^ CasperBufferStorage[F]
+                             .isPendant(d)
+                       )
         depsInDag       <- allDeps.filterA(c.dagContains)
         depsInEqTracker = allDeps.filter(equivocationHashes.contains)
         depsValidated   = depsInDag ++ depsInEqTracker
@@ -157,12 +159,12 @@ object BlockProcessor {
     val commitToBuffer = (b: BlockMessage, deps: Option[Set[BlockHash]]) => {
       import cats.instances.list._
       deps match {
-        case None    => casperBuffer.putPendant(b.blockHash)
-        case Some(d) => d.toList.traverse_(h => casperBuffer.addRelation(h, b.blockHash))
+        case None    => CasperBufferStorage[F].putPendant(b.blockHash)
+        case Some(d) => d.toList.traverse_(h => CasperBufferStorage[F].addRelation(h, b.blockHash))
       }
     }
 
-    val removeFromBuffer = (b: BlockMessage) => casperBuffer.remove(b.blockHash)
+    val removeFromBuffer = (b: BlockMessage) => CasperBufferStorage[F].remove(b.blockHash)
 
     val requestMissingDependencies = (deps: Set[BlockHash]) => {
       import cats.instances.list._

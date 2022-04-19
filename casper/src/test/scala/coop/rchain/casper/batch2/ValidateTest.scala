@@ -3,7 +3,7 @@ package coop.rchain.casper.batch2
 import cats.Monad
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, IndexedBlockDagStorage}
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper.BlockGenerator._
@@ -30,6 +30,7 @@ import coop.rchain.rspace.syntax.rspaceSyntaxKeyValueStoreManager
 import coop.rchain.models.syntax._
 import coop.rchain.shared.{Base16, Time}
 import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._

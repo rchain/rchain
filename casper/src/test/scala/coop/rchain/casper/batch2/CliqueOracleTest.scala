@@ -1,7 +1,7 @@
 package coop.rchain.casper.batch2
 
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.casper.SafetyOracle
 import coop.rchain.casper.helper.BlockGenerator._

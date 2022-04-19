@@ -3,7 +3,7 @@ package coop.rchain.node.api
 import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.engine.EngineCell._
 import coop.rchain.casper.protocol.propose.v1.{

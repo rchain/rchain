@@ -4,7 +4,7 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Deferred
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.engine.BlockRetriever
@@ -17,6 +17,7 @@ import coop.rchain.crypto.PrivateKey
 import coop.rchain.metrics.Metrics.Source
 import coop.rchain.metrics.implicits._
 import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.shared.syntax._
 import coop.rchain.shared.{EventPublisher, Log, Stopwatch, Time}
 import fs2.Stream
 

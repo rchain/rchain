@@ -3,7 +3,7 @@ package coop.rchain.casper
 import cats.data.EitherT
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage._
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -72,10 +72,10 @@ class MultiParentCasperImpl[F[_]
     import cats.instances.list._
     for {
       pendants       <- CasperBufferStorage[F].getPendants
-      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains)
+      pendantsStored <- pendants.toList.filterA(BlockStore[F].contains(_))
       depFreePendants <- pendantsStored.filterA { pendant =>
                           for {
-                            pendantBlock   <- BlockStore[F].get(pendant)
+                            pendantBlock   <- BlockStore[F].get1(pendant)
                             justifications = pendantBlock.get.justifications
                             // If even one of justifications is not in DAG - block is not dependency free
                             missingDep <- justifications

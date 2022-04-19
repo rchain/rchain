@@ -5,6 +5,8 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
@@ -74,6 +76,7 @@ case class TestNode[F[_]: Timer](
       ValidBlockProcessing
     ],
     blockStoreEffect: BlockStore[F],
+    approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
     deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
@@ -108,6 +111,7 @@ case class TestNode[F[_]: Timer](
   implicit val logEff: LogStub[F]                             = logEffect
   implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
+  implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
@@ -495,7 +499,8 @@ object TestNode {
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
       kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockStore          <- Resource.eval(blockStore.create(kvm))
+      approvedStore       <- Resource.eval(approvedStore.create(kvm))
       blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
       deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
@@ -507,6 +512,7 @@ object TestNode {
 
       node <- Resource.eval({
                implicit val bs                         = blockStore
+               implicit val as                         = approvedStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage
                implicit val cbs                        = casperBufferStorage
@@ -597,6 +603,7 @@ object TestNode {
                    blockProcessorState = blockProcessorState,
                    blockProcessingPipe = blockProcessingPipe,
                    blockStoreEffect = bs,
+                   approvedStoreEffect = as,
                    blockDagStorageEffect = bds,
                    deployStorageEffect = ds,
                    casperBufferStorageEffect = cbs,
