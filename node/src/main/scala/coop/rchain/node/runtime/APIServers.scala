@@ -4,12 +4,13 @@ import cats.effect.Concurrent
 import cats.effect.concurrent.Ref
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper._
+import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol.deploy.v1.DeployServiceV1GrpcMonix
 import coop.rchain.casper.protocol.propose.v1.ProposeServiceV1GrpcMonix
 import coop.rchain.casper.state.instances.ProposerState
-import coop.rchain.casper._
-import coop.rchain.casper.api.BlockReportAPI
+import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
 import coop.rchain.metrics.{Metrics, Span}
@@ -27,7 +28,7 @@ final case class APIServers(
 )
 
 object APIServers {
-  def build[F[_]: Monixable: RPConfAsk: ConnectionsCell: NodeDiscovery](
+  def build[F[_]: Monixable: RuntimeManager: RPConfAsk: ConnectionsCell: NodeDiscovery](
       runtime: RhoRuntime[F],
       triggerProposeFOpt: Option[ProposeFunction[F]],
       proposerStateRefOpt: Option[Ref[F, ProposerState[F]]],

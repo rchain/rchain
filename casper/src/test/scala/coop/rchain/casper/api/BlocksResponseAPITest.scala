@@ -1,27 +1,25 @@
 package coop.rchain.casper.api
 
-import scala.collection.immutable.HashMap
-import cats.effect.{Concurrent, Resource, Sync}
-import coop.rchain.casper._
-import coop.rchain.casper.engine._
-import EngineCell._
+import cats.effect.{Resource, Sync}
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.helper._
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
+import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.util.rholang.Resources.mkRuntimeManager
 import coop.rchain.casper.util.rholang.RuntimeManager
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.metrics.{Metrics, Span}
+import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.p2p.EffectsTestInstances.LogStub
-import coop.rchain.shared.{Cell, Log}
+import coop.rchain.shared.Log
 import monix.eval.Task
-import org.scalatest.{FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
+import org.scalatest.{FlatSpec, Matchers}
+
+import scala.collection.immutable.HashMap
 
 // See [[/docs/casper/images/no_finalizable_block_mistake_with_no_disagreement_check.png]]
 class BlocksResponseAPITest
@@ -113,7 +111,6 @@ class BlocksResponseAPITest
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
                          )
-          engine = new EngineWithCasper[Task](casperEffect)
           logEff = new LogStub[Task]
           blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
@@ -137,7 +134,6 @@ class BlocksResponseAPITest
                          tips
                        )
         logEff = new LogStub[Task]
-        engine = new EngineWithCasper[Task](casperEffect)
         blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
                            blockDagStorage,
@@ -160,12 +156,11 @@ class BlocksResponseAPITest
                            HashMap.empty[BlockHash, BlockMessage],
                            tips
                          )
-          logEff     = new LogStub[Task]
-          engine     = new EngineWithCasper[Task](casperEffect)
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
+          logEff = new LogStub[Task]
+          engine = new EngineWithCasper[Task](casperEffect)
           blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
                              Sync[Task],
-                             engineCell,
+                             blockDagStorage,
                              logEff,
                              blockStore
                            )

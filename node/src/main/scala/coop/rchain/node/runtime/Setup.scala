@@ -4,7 +4,6 @@ import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
-import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
@@ -45,7 +44,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -256,6 +254,7 @@ object Setup {
         implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
         implicit val (sc, lh)          = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
         implicit val (ra, rp)          = (rpConfAsk, rpConnections)
+        implicit val rm                = runtimeManager
         val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         APIServers.build[F](
