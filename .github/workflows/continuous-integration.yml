@@ -293,7 +293,7 @@ jobs:
           - test_storage
           - test_synchrony_constraint
           - test_wallets
-          - REMAINDER # Do not modify/remove!
+#          - REMAINDER # Do not modify/remove!
     env:
       TESTS: ${{ matrix.tests }}
       # We don't use $CACHE_ROOT in host because it may not be (it is not)
