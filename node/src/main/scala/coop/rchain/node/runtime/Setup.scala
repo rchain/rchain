@@ -253,10 +253,10 @@ object Setup {
         BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
       apiServers = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
+        implicit val (sc, lh)          = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)          = (rpConfAsk, rpConnections)
+        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         APIServers.build[F](
           evalRuntime,
@@ -306,9 +306,9 @@ object Setup {
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
+        implicit val (ra, rc)          = (rpConfAsk, rpConnections)
+        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,

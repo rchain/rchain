@@ -6,6 +6,7 @@ import cats.syntax.all._
 import cats.{Applicative, Foldable}
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
@@ -28,7 +29,7 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
+  def apply[F[_]: Monixable: Concurrent: Log: BlockStore: Span: EngineCell: BlockDagStorage: RPConfAsk: ConnectionsCell: NodeDiscovery](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
