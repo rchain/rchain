@@ -12,6 +12,7 @@ import coop.rchain.graphz.Graphz
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockMetadata, Par}
 
+// TODO: trait and file should be renamed to `BlockAPI` after removing original `object BlockAPI`
 trait BlockAPI_v2[F[_]] {
   type Error     = String
   type ApiErr[A] = Either[Error, A]
@@ -58,8 +59,6 @@ trait BlockAPI_v2[F[_]] {
 
   def getBlocks(depth: Int, maxDepthLimit: Int): F[ApiErr[List[LightBlockInfo]]]
 
-  def showMainChain(depth: Int, maxDepthLimit: Int): F[List[LightBlockInfo]]
-
   def findDeploy(id: DeployId): F[ApiErr[LightBlockInfo]]
 
   def getBlock(hash: String): F[ApiErr[BlockInfo]]
@@ -76,7 +75,10 @@ trait BlockAPI_v2[F[_]] {
 
   def isFinalized(hash: String): F[ApiErr[Boolean]]
 
-  def bondStatus(publicKey: ByteString): F[ApiErr[Boolean]]
+  def bondStatus(
+      publicKey: ByteString,
+      targetBlock: Option[BlockMessage] = none[BlockMessage]
+  ): F[ApiErr[Boolean]]
 
   def exploratoryDeploy(
       term: String,
