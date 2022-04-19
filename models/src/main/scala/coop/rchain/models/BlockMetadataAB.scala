@@ -3,10 +3,13 @@ package coop.rchain.models
 import scodec.TransformSyntax
 import scodec.bits.ByteVector
 
-final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array[Byte])
-final case class JustificationBV(validator: ByteVector, latestBlockHash: ByteVector)
+final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array[Byte]) {
+  def ==(justification: JustificationArr): Boolean =
+    validator.sameElements(justification.validator) &&
+      latestBlockHash.sameElements(justification.latestBlockHash)
+}
 
-object MetadataScodec {
+object BlockMetadataScodec {
   import scodec.Codec
   import scodec.codecs._
 
@@ -36,12 +39,10 @@ object MetadataScodec {
   })
 
   private val tupleCodec: Codec[(Array[Byte], Long)] = codecByteArray.pairedWith(int64)
-
   private val codecWeightMapBase = uint16 flatZip { count =>
     val tuplesList = listOfN(provide(count), tupleCodec)
     tuplesList.xmap[Map[Array[Byte], Long]](_.toMap, _.toList)
   }
-
   private val codecWeightMap = codecWeightMapBase.xmap[Map[Array[Byte], Long]](
     { case (_, sourceMap) => sourceMap }, { sourceMap =>
       (sourceMap.size, sourceMap)
@@ -52,27 +53,19 @@ object MetadataScodec {
     (("hash" | codecByteArray) :: ("parents" | codecParents) ::
       ("sender" | codecByteArray) :: ("justifications" | codecJustifications) ::
       ("weightMap" | codecWeightMap) :: ("blockNum" | int64) :: ("seqNum" | int32) :: ("invalid" | bool) ::
-      ("df" | bool) :: ("finalized" | bool)).as[BlockMetadataScodec]
+      ("df" | bool) :: ("finalized" | bool)).as[BlockMetadataAB]
 
-  def encode(block: BlockMetadataScodec): ByteVector =
+  def encode(block: BlockMetadataAB): ByteVector =
     codecMetadata.encode(block).require.toByteVector
 
-  def decode(serializedBlock: ByteVector): BlockMetadataScodec =
+  def encodeToArray(block: BlockMetadataAB): Array[Byte] = encode(block).toArray
+
+  def decodeFromArray(bytes: Array[Byte]): BlockMetadataAB = decode(ByteVector(bytes))
+  def decode(serializedBlock: ByteVector): BlockMetadataAB =
     codecMetadata.decode(serializedBlock.toBitVector).require.value
 }
-final case class BlockMetadataBV(
-    blockHash: ByteVector,
-    parents: List[ByteVector],
-    sender: ByteVector,
-    justifications: List[JustificationBV],
-    weightMap: Map[ByteVector, Long],
-    blockNum: Long,
-    seqNum: Int,
-    invalid: Boolean,
-    directlyFinalized: Boolean,
-    finalized: Boolean
-)
-final case class BlockMetadataScodec(
+
+final case class BlockMetadataAB(
     blockHash: Array[Byte],
     parents: List[Array[Byte]],
     sender: Array[Byte],
@@ -84,20 +77,40 @@ final case class BlockMetadataScodec(
     directlyFinalized: Boolean,
     finalized: Boolean
 ) {
-  def toByteString: ByteVector = MetadataScodec.encode(block = this)
-  def toBlockMetadataBV(): BlockMetadataBV =
-    BlockMetadataBV(
-      ByteVector(blockHash),
-      parents.map(ByteVector(_)),
-      ByteVector(sender),
-      justifications.map(
-        just => JustificationBV(ByteVector(just.validator), ByteVector(just.latestBlockHash))
-      ),
-      weightMap.map { case (bv, num) => (ByteVector(bv), num) },
-      blockNum,
-      seqNum,
-      invalid,
-      directlyFinalized,
-      finalized
-    )
+  def toByteVector: ByteVector = BlockMetadataScodec.encode(block = this)
+  def toBytes: Array[Byte]     = this.toByteVector.toArray
+
+  //  We should use this method to compare 2 blocks
+  //  (operator `==` is incorrect here for Array[Byte])
+  def isEqualTo(block: BlockMetadataAB): Boolean = {
+    def compareWeightMaps(): Boolean = {
+      val reformatMap    = weightMap.map { case (k, v)       => ByteVector(k) -> v }
+      val reformatRefMap = block.weightMap.map { case (k, v) => ByteVector(k) -> v }
+      reformatMap == reformatRefMap
+    }
+
+    val hashesEqual = blockHash.sameElements(block.blockHash)
+    val parentsEqual = (parents zip block.parents).forall {
+      case (a, b) => a.sameElements(b)
+    }
+    val senderEqual = sender.sameElements(block.sender)
+    val justificationsEqual = (justifications zip block.justifications).forall {
+      case (a, b) => a == b
+    }
+
+    val weightMapEqual = compareWeightMaps()
+
+    hashesEqual && parentsEqual && senderEqual && justificationsEqual && weightMapEqual &&
+    blockNum == block.blockNum && seqNum == block.seqNum && invalid == block.invalid &&
+    directlyFinalized == block.directlyFinalized && finalized == block.finalized
+  }
+}
+
+object BlockMetadataAB {
+  def toByteVector(block: BlockMetadataAB): ByteVector =
+    block.toByteVector
+  def fromBytes(bytes: Array[Byte]): BlockMetadataAB =
+    BlockMetadataScodec.decodeFromArray(bytes)
+  def fromByteVector(byteVector: ByteVector): BlockMetadataAB =
+    BlockMetadataScodec.decode(byteVector)
 }
