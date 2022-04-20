@@ -70,7 +70,7 @@ in {
   } |
   // No internal state to return.
   // Method required for updates.
-  contract AuthKey(@"extractState", ret) = {
+  contract @(*AuthKey, "extractState")(ret) = {
     ret!([])
   } |
   // Insert location channel into the registry location map

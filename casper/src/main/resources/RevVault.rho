@@ -278,7 +278,7 @@ in {
           } |
           // Method to extract the current state of the RevVault contract.
           // Returns the current `vaultMap`.
-          contract RevVault(@"extractState", ret) = {
+          contract @(*RevVault, "extractState")(ret) = {
             ret!(vaultMap)
           } |
           // Insert location channel into the registry location map
