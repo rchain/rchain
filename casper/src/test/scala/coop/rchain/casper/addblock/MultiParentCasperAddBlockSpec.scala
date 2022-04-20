@@ -357,8 +357,6 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
 
         _ <- nodes(1).contains(signedBlock4.blockHash) shouldBeF true // However, marked as invalid
 
-        _ <- nodes(1).casperEff
-              .normalizedInitialFault(ProtoUtil.weightMap(genesis.genesisBlock)) shouldBeF 1f / (1f + 3f + 5f + 7f)
         _ <- nodes(0).casperEff.contains(signedBlock1.blockHash) shouldBeF false
         _ <- nodes(0).casperEff.contains(signedBlock1Prime.blockHash) shouldBeF true
         _ <- nodes(1).blockStore.get1(signedBlock2.blockHash) shouldBeF Some(signedBlock2)
@@ -390,7 +388,7 @@ class MultiParentCasperAddBlockSpec extends FlatSpec with Matchers with Inspecto
         signedBlock <- nodes(0).createBlockUnsafe(deploys(0))
         signedInvalidBlock = BlockUtil.resignBlock(
           signedBlock.copy(seqNum = -2),
-          nodes(0).validatorId.get.privateKey
+          nodes(0).validatorIdOpt.get.privateKey
         ) // Invalid seq num
 
         blockWithInvalidJustification <- buildBlockWithInvalidJustification(

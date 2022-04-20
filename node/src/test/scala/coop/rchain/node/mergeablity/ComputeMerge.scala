@@ -4,7 +4,7 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.helper.TestRhoRuntime.rhoRuntimeEff
 import coop.rchain.casper.merging.{BlockIndex, DagMerger, DeployChainIndex}
 import coop.rchain.casper.protocol.DeployData

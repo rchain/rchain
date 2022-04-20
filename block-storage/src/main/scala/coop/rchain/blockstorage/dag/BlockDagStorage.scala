@@ -4,8 +4,8 @@ import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 
 import scala.collection.immutable.SortedMap
 
@@ -16,7 +16,6 @@ trait BlockDagStorage[F[_]] {
       invalid: Boolean,
       approved: Boolean = false
   ): F[BlockDagRepresentation[F]]
-  def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A]
   def recordDirectlyFinalized(
       direct: BlockHash,
       finalizationEffect: Set[BlockHash] => F[Unit]
@@ -48,10 +47,4 @@ trait BlockDagRepresentation[F[_]] {
   def lastFinalizedBlock: BlockHash
   def isFinalized(blockHash: BlockHash): F[Boolean]
   def find(truncatedHash: String): F[Option[BlockHash]]
-}
-
-trait EquivocationsTracker[F[_]] {
-  def equivocationRecords: F[Set[EquivocationRecord]]
-  def insertEquivocationRecord(record: EquivocationRecord): F[Unit]
-  def updateEquivocationRecord(record: EquivocationRecord, blockHash: BlockHash): F[Unit]
 }

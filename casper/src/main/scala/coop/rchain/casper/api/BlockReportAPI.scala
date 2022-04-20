@@ -3,46 +3,27 @@ package coop.rchain.casper.api
 import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
-import coop.rchain.casper.{
-  CasperMetricsSource,
-  DeployReportResult,
-  MultiParentCasper,
-  ReportingCasper,
-  SystemDeployReportResult
-}
+import coop.rchain.casper._
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
-import coop.rchain.casper.engine.EngineCell
-import coop.rchain.casper.engine.EngineCell.EngineCell
-import coop.rchain.casper.protocol.{
-  BlockEventInfo,
-  BlockMessage,
-  DeployInfoWithEventData,
-  ReportCommProto,
-  ReportConsumeProto,
-  ReportProduceProto,
-  ReportProto,
-  SingleReport,
-  SystemDeployData,
-  SystemDeployInfoWithEventData
-}
+import coop.rchain.casper.protocol._
 import coop.rchain.metrics.{Metrics, MetricsSemaphore}
 import coop.rchain.models.BlockHash.BlockHash
-import coop.rchain.shared.{Base16, Log}
+import coop.rchain.shared.Log
 import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
+class BlockReportAPI[F[_]: Concurrent: BlockStore: Metrics: Log](
     reportingCasper: ReportingCasper[F],
-    reportStore: ReportStore[F]
+    reportStore: ReportStore[F],
+    validatorIdentityOpt: Option[ValidatorIdentity]
 ) {
   implicit val source                                       = Metrics.Source(CasperMetricsSource, "report-replay")
   val blockLockMap: TrieMap[BlockHash, MetricsSemaphore[F]] = TrieMap.empty
 
-  private def replayBlock(b: BlockMessage)(implicit casper: MultiParentCasper[F]) =
+  private def replayBlock(b: BlockMessage) =
     for {
       reportResult <- reportingCasper.trace(b)
       lightBlock   <- BlockAPI.getLightBlockInfo[F](b)
@@ -51,9 +32,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
       blockEvent   = BlockEventInfo(lightBlock, deploys, sysDeploys, reportResult.postStateHash)
     } yield blockEvent
 
-  private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage)(
-      implicit casper: MultiParentCasper[F]
-  ) =
+  private def blockReportWithinLock(forceReplay: Boolean, b: BlockMessage) =
     for {
       semaphore <- MetricsSemaphore.single
       lock      = blockLockMap.getOrElseUpdate(b.blockHash, semaphore)
@@ -69,31 +48,19 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
     } yield result
 
   def blockReport(hash: BlockHash, forceReplay: Boolean): F[ApiErr[BlockEventInfo]] = {
-    def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
-      implicit val c = casper
+    def createReport: F[Either[Error, BlockEventInfo]] =
       for {
         maybeBlock <- BlockStore[F].get1(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
-    }
 
-    def validateReadOnlyNode(casper: MultiParentCasper[F]): F[Either[Error, MultiParentCasper[F]]] =
-      casper.getValidator.map { pkOpt =>
-        // Error for validator node
-        if (pkOpt.isEmpty) casper.asRight[Error]
-        else "Block report can only be executed on read-only RNode.".asLeft[MultiParentCasper[F]]
-      }
+    // Error if not read-only node (has validator private key)
+    val readOnlyNode = validatorIdentityOpt
+      .as("Block report can only be executed on read-only RNode.".asLeft)
+      .getOrElse(().asRight)
 
     // Process report if read-only node and block is found
-    def processReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] =
-      EitherT(validateReadOnlyNode(casper)).flatMapF(createReport).value
-
-    def casperNotInitialized: F[Either[Error, BlockEventInfo]] =
-      Log[F]
-        .warn("Could not get event data.")
-        .as("Error: Could not get event data.".asLeft[BlockEventInfo])
-
-    EngineCell[F].read.flatMap(_.withCasper(processReport, casperNotInitialized))
+    (readOnlyNode.toEitherT[F] >> EitherT(createReport)).value
   }
 
   private def createSystemDeployReport(
@@ -130,8 +97,9 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
 }
 
 object BlockReportAPI {
-  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
+  def apply[F[_]: Concurrent: BlockStore: Metrics: Log](
       reportingCasper: ReportingCasper[F],
-      reportStore: ReportStore[F]
-  ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore)
+      reportStore: ReportStore[F],
+      validatorIdentityOpt: Option[ValidatorIdentity]
+  ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore, validatorIdentityOpt)
 }

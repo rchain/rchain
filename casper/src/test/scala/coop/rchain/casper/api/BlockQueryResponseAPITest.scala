@@ -1,6 +1,6 @@
 package coop.rchain.casper.api
 
-import cats.effect.{Concurrent, Resource, Sync}
+import cats.effect.{Resource, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
@@ -16,15 +16,14 @@ import coop.rchain.casper.util.rholang.RuntimeManager
 import coop.rchain.casper.util.{ConstructDeploy, ProtoUtil}
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.metrics.{Metrics, NoopSpan}
-import coop.rchain.models.BlockHash.{BlockHash, _}
+import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.models.syntax._
 import coop.rchain.p2p.EffectsTestInstances.{LogStub, LogicalTime}
 import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
 import monix.execution.Scheduler.Implicits.global
 import org.scalatest._
-import coop.rchain.models.syntax._
-import coop.rchain.models.syntax._
 
 import scala.collection.immutable.HashMap
 
@@ -65,7 +64,7 @@ class BlockQueryResponseAPITest
       setBonds = List(bondsValidator).some
     )
 
-  val faultTolerance = Float.MinValue
+  val faultTolerance = -1f
 
   val deployCostList: List[String] = randomDeploys.map(PrettyPrinter.buildString)
 
@@ -80,7 +79,7 @@ class BlockQueryResponseAPITest
         hash                 = secondBlock.blockHash.toHexString
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
-                               engineCell,
+                               blockDagStorage,
                                logEff,
                                blockStore,
                                spanEff
@@ -133,7 +132,7 @@ class BlockQueryResponseAPITest
         hash                 = badTestHashQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
-                               engineCell,
+                               blockDagStorage,
                                logEff,
                                blockStore,
                                spanEff
@@ -156,7 +155,7 @@ class BlockQueryResponseAPITest
         hash                 = invalidHexQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
-                               engineCell,
+                               blockDagStorage,
                                logEff,
                                blockStore,
                                spanEff
@@ -179,7 +178,7 @@ class BlockQueryResponseAPITest
         hash                 = tooShortQuery
         blockQueryResponse <- BlockAPI.getBlock[Task](hash)(
                                Sync[Task],
-                               engineCell,
+                               blockDagStorage,
                                logEff,
                                blockStore,
                                spanEff
@@ -201,7 +200,7 @@ class BlockQueryResponseAPITest
         deployId            = randomDeploys.head.deploy.sig
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
-                               casperRef,
+                               blockDagStorage,
                                logEff,
                                blockStore
                              )
@@ -248,7 +247,7 @@ class BlockQueryResponseAPITest
         deployId            = ByteString.copyFromUtf8("asdfQwertyUiopxyzcbv")
         blockQueryResponse <- BlockAPI.findDeploy[Task](deployId)(
                                Sync[Task],
-                               casperRef,
+                               blockDagStorage,
                                logEff,
                                blockStore
                              )

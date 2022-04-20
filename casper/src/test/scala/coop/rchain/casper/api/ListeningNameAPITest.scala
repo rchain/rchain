@@ -51,9 +51,10 @@ class ListeningNameAPITest extends FlatSpec with Matchers with Inside {
 
   it should "work across a chain" in effectTest {
     TestNode.networkEff(genesis, networkSize = 3).use { nodes =>
-      implicit val nodeEngineCell           = nodes(0).engineCell
       implicit val nodeZeroLogEffect        = nodes(0).logEff
       implicit val nodeZeroBlockStoreEffect = nodes(0).blockStore
+      implicit val nodeZeroBlockDagStorage  = nodes(0).blockDagStorage
+      implicit val nodeZeroRuntimeMngr      = nodes(0).runtimeManager
 
       implicit val timeEff = new LogicalTime[Effect]
       for {

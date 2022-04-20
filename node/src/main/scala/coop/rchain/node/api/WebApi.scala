@@ -5,6 +5,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper.ProposeFunction
 import coop.rchain.casper.api.BlockAPI
 import coop.rchain.casper.api.BlockAPI.LatestBlockMessageError
@@ -66,7 +67,7 @@ trait WebApi[F[_]] {
 
 object WebApi {
 
-  class WebApiImpl[F[_]: Sync: RPConfAsk: ConnectionsCell: NodeDiscovery: Concurrent: EngineCell: Log: Span: BlockStore](
+  class WebApiImpl[F[_]: Concurrent: RuntimeManager: EngineCell: BlockDagStorage: BlockStore: RPConfAsk: ConnectionsCell: NodeDiscovery: Log: Span](
       apiMaxBlocksLimit: Int,
       devMode: Boolean = false,
       cacheTransactionAPI: CacheTransactionAPI[F],

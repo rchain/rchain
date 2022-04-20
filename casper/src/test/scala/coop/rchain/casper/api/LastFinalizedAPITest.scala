@@ -2,25 +2,22 @@ package coop.rchain.casper.api
 
 import cats.effect.Sync
 import cats.syntax.all._
-import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.blockstorage.dag.BlockDagStorage
+import coop.rchain.casper.batch2.EngineWithCasper
 import coop.rchain.casper.engine.Engine
-import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
+import coop.rchain.casper.helper._
 import coop.rchain.casper.protocol._
+import coop.rchain.casper.util.ConstructDeploy.basicDeployData
 import coop.rchain.casper.util.GenesisBuilder._
 import coop.rchain.casper.util.ProtoUtil
-import coop.rchain.casper.util.ConstructDeploy.basicDeployData
-import coop.rchain.casper.batch2.EngineWithCasper
-import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.metrics.Metrics
-import coop.rchain.shared.{Cell, Log}
 import coop.rchain.shared.scalatestcontrib._
+import coop.rchain.shared.{Cell, Log}
 import monix.eval.Task
-import org.scalatest.{EitherValues, FlatSpec, Matchers}
 import monix.execution.Scheduler.Implicits.global
-
-import scala.collection.immutable.Map
+import org.scalatest.{EitherValues, FlatSpec, Matchers}
 
 // TODO finalizer test for multiparent
 class LastFinalizedAPITest
@@ -36,12 +33,13 @@ class LastFinalizedAPITest
 
   def isFinalized(block: BlockMessage)(engineCell: Cell[Task, Engine[Task]])(
       implicit blockStore: BlockStore[Task],
+      blockDagStorage: BlockDagStorage[Task],
       log: Log[Task]
   ): Task[Boolean] =
     BlockAPI
       .isFinalized[Task](ProtoUtil.hashString(block))(
         Sync[Task],
-        engineCell,
+        blockDagStorage,
         blockStore,
         log
       )
@@ -69,7 +67,7 @@ class LastFinalizedAPITest
   "isFinalized" should "return true for ancestors of last finalized block" ignore effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockStore, logEff}
+        import n1.{blockDagStorage, blockStore, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
           produceDeploys <- (0 until 7).toList.traverse(i => basicDeployData[Task](i))
@@ -115,7 +113,7 @@ class LastFinalizedAPITest
   it should "return false for children, uncles and cousins of last finalized block" ignore effectTest {
     TestNode.networkEff(genesisContext, networkSize = 3).use {
       case nodes @ n1 +: n2 +: n3 +: Seq() =>
-        import n1.{blockStore, logEff}
+        import n1.{blockDagStorage, blockStore, logEff}
         val engine = new EngineWithCasper[Task](n1.casperEff)
         for {
           produceDeploys <- (0 until 7).toList.traverse(

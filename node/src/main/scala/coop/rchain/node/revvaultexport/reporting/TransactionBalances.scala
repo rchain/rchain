@@ -4,9 +4,10 @@ import cats.Parallel
 import cats.effect.{Concurrent, ContextShift, Sync}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
+import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.blockStore
 import coop.rchain.blockstorage.blockStore.BlockStore
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.genesis.contracts.StandardDeploys
 import coop.rchain.casper.protocol.BlockMessage
 import coop.rchain.casper.storage.RNodeKeyValueStoreManager

@@ -4,16 +4,15 @@ import cats.Parallel
 import cats.effect.concurrent.{Deferred, Ref}
 import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
-import coop.rchain.models.syntax._
 import cats.syntax.all._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
-import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
 import coop.rchain.blockstorage.{approvedStore, blockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
 import coop.rchain.casper.blocks.proposer.{Proposer, ProposerResult}
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.casper.engine.{BlockRetriever, CasperLaunch, EngineCell, Running}
 import coop.rchain.casper.genesis.Genesis
 import coop.rchain.casper.protocol.BlockMessage
@@ -45,7 +44,6 @@ import coop.rchain.rholang.interpreter.RhoRuntime
 import coop.rchain.rspace.state.instances.RSpaceStateManagerImpl
 import coop.rchain.rspace.syntax._
 import coop.rchain.shared._
-import coop.rchain.shared.syntax.sharedSyntaxKeyValueStoreManager
 import fs2.concurrent.Queue
 import monix.execution.Scheduler
 
@@ -181,10 +179,12 @@ object Setup {
         BlockProcessor[F]
       }
 
-      // Proposer instance
+      // Load validator private key if specified
       validatorIdentityOpt <- ValidatorIdentity.fromPrivateKeyWithLogging[F](
                                conf.casper.validatorPrivateKey
                              )
+
+      // Proposer instance
       proposer = validatorIdentityOpt.map { validatorIdentity =>
         implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
         implicit val (br, ep)     = (blockRetriever, eventPublisher)
@@ -226,7 +226,8 @@ object Setup {
           if (conf.autopropose) triggerProposeFOpt else none[ProposeFunction[F]],
           conf.casper,
           !conf.protocolClient.disableLfs,
-          conf.protocolServer.disableStateExporter
+          conf.protocolServer.disableStateExporter,
+          validatorIdentityOpt
         )
       }
       packetHandler = {
@@ -246,14 +247,15 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val (ec, bs) = (engineCell, blockStore)
-        BlockReportAPI[F](reportingRuntime, reportingStore)
+        implicit val bs = blockStore
+        BlockReportAPI[F](reportingRuntime, reportingStore, validatorIdentityOpt)
       }
       apiServers = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
+        implicit val (sc, lh)          = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)          = (rpConfAsk, rpConnections)
+        implicit val rm                = runtimeManager
+        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         APIServers.build[F](
           evalRuntime,
@@ -303,9 +305,10 @@ object Setup {
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
-        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
-        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bds, bs, sp) = (engineCell, blockDagStorage, blockStore, span)
+        implicit val (ra, rc)          = (rpConfAsk, rpConnections)
+        implicit val rm                = runtimeManager
+        val isNodeReadOnly             = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,

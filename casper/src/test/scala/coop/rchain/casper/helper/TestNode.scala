@@ -9,7 +9,7 @@ import coop.rchain.blockstorage.approvedStore.ApprovedStore
 import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
-import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
+import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.{DeployStorage, KeyValueDeployStorage}
 import coop.rchain.casper
 import coop.rchain.casper.api.{BlockAPI, GraphConfig, GraphzGenerator}
@@ -26,6 +26,7 @@ import coop.rchain.casper.util.comm.TestNetwork.TestNetwork
 import coop.rchain.casper.util.comm._
 import coop.rchain.casper.util.rholang.{Resources, RuntimeManager}
 import coop.rchain.casper._
+import coop.rchain.casper.dag.BlockDagKeyValueStorage
 import coop.rchain.catscontrib.ski._
 import coop.rchain.comm._
 import coop.rchain.comm.protocol.routing.Protocol
@@ -105,7 +106,6 @@ case class TestNode[F[_]: Timer](
   val apiMaxBlocksLimit              = 50
 
   implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
-  implicit val validatorId: Option[ValidatorIdentity]         = validatorIdOpt
   implicit val logEff: LogStub[F]                             = logEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
   implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
@@ -157,7 +157,7 @@ case class TestNode[F[_]: Timer](
   )
 
   implicit val casperEff = new MultiParentCasperImpl[F](
-    validatorId,
+    validatorIdOpt,
     shardConf,
     genesis
   )
@@ -169,7 +169,7 @@ case class TestNode[F[_]: Timer](
       blockProcessorState,
       casperEff,
       approvedBlock,
-      validatorId,
+      validatorIdOpt,
       ().pure[F],
       true
     )

@@ -64,11 +64,6 @@ final class IndexedBlockDagStorage[F[_]: Sync](
       )
       .void
 
-  def accessEquivocationsTracker[A](f: EquivocationsTracker[F] => F[A]): F[A] =
-    lock.withPermit(
-      underlying.accessEquivocationsTracker(f)
-    )
-
   def recordDirectlyFinalized(
       blockHash: BlockHash,
       finalizationEffect: Set[BlockHash] => F[Unit]

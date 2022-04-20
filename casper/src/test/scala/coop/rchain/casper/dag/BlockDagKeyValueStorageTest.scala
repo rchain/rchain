@@ -1,17 +1,17 @@
-package coop.rchain.blockstorage.dag
+package coop.rchain.casper.dag
 
 import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.dag.{BlockDagStorage, BlockDagStorageTest}
 import coop.rchain.blockstorage.syntax._
-import coop.rchain.casper.PrettyPrinter
 import coop.rchain.casper.protocol._
 import coop.rchain.catscontrib.TaskContrib.TaskOps
 import coop.rchain.metrics.Metrics
 import coop.rchain.models.BlockHash.BlockHash
+import coop.rchain.models.BlockMetadata
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits._
-import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 import coop.rchain.shared
 import coop.rchain.store.InMemoryStoreManager
 import monix.eval.Task
@@ -180,50 +180,6 @@ class BlockDagKeyValueStorageTest extends BlockDagStorageTest {
               blockElements ++ secondBlockElements ++ thirdBlockElements
             )
           }
-      }
-    }
-  }
-
-  it should "be able to restore equivocations tracker on startup" in {
-    forAll(blockElementsWithParentsGen(genesis), minSize(0), sizeRange(10)) { blockElements =>
-      forAll(validatorGen) { equivocator =>
-        forAll(blockHashGen) { blockHash =>
-          withDagStorage { storage =>
-            for {
-              _ <- blockElements.traverse_(storage.insert(_, false))
-              record = EquivocationRecord(
-                equivocator,
-                0,
-                Set(blockHash)
-              )
-              _ <- storage.accessEquivocationsTracker { tracker =>
-                    tracker.insertEquivocationRecord(record)
-                  }
-              records <- storage.accessEquivocationsTracker(_.equivocationRecords)
-              _       = records shouldBe Set(record)
-              result  <- lookupElements(blockElements, storage)
-            } yield testLookupElementsResult(result, blockElements)
-          }
-        }
-      }
-    }
-  }
-
-  it should "be able to modify equivocation records" in {
-    forAll(validatorGen, blockHashGen, blockHashGen) { (equivocator, blockHash1, blockHash2) =>
-      withDagStorage { storage =>
-        val record = EquivocationRecord(equivocator, 0, Set(blockHash1))
-        for {
-          _ <- storage.accessEquivocationsTracker { tracker =>
-                tracker.insertEquivocationRecord(record)
-              }
-          _ <- storage.accessEquivocationsTracker { tracker =>
-                tracker.updateEquivocationRecord(record, blockHash2)
-              }
-          updatedRecord = EquivocationRecord(equivocator, 0, Set(blockHash1, blockHash2))
-          records       <- storage.accessEquivocationsTracker(_.equivocationRecords)
-          _             = records shouldBe Set(updatedRecord)
-        } yield ()
       }
     }
   }
