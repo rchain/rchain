@@ -5,7 +5,7 @@ import cats.data.OptionT
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.{ByteString, Int32Value, StringValue}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.PrettyPrinter
@@ -18,40 +18,12 @@ import coop.rchain.models.Validator.Validator
 import coop.rchain.models._
 import coop.rchain.rholang.interpreter.DeployParameters
 import coop.rchain.shared.Base16
+import coop.rchain.shared.syntax._
 
 import java.nio.charset.StandardCharsets
 import scala.collection.immutable
-import scala.collection.immutable.Map
 
 object ProtoUtil {
-  def getMainChainUntilDepth[F[_]: Sync: BlockStore](
-      estimate: BlockMessage,
-      acc: IndexedSeq[BlockMessage],
-      depth: Int
-  ): F[IndexedSeq[BlockMessage]] = {
-    val parentsHashes       = parentHashes(estimate)
-    val maybeMainParentHash = parentsHashes.headOption
-    for {
-      mainChain <- maybeMainParentHash match {
-                    case Some(mainParentHash) =>
-                      for {
-                        updatedEstimate <- BlockStore[F].getUnsafe(mainParentHash)
-                        depthDelta      = blockNumber(updatedEstimate) - blockNumber(estimate)
-                        newDepth        = depth + depthDelta.toInt
-                        mainChain <- if (newDepth <= 0) {
-                                      (acc :+ estimate).pure
-                                    } else {
-                                      getMainChainUntilDepth(
-                                        updatedEstimate,
-                                        acc :+ estimate,
-                                        newDepth
-                                      )
-                                    }
-                      } yield mainChain
-                    case None => (acc :+ estimate).pure
-                  }
-    } yield mainChain
-  }
 
   def creatorJustification(block: BlockMessage): Option[Justification] =
     block.justifications.find(_.validator == block.sender)
@@ -108,7 +80,7 @@ object ProtoUtil {
 
   def mainParent[F[_]: Monad: BlockStore](blockMessage: BlockMessage): F[Option[BlockMessage]] = {
     import cats.instances.option._
-    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get)
+    blockMessage.header.parentsHashList.headOption.flatTraverse(BlockStore[F].get1)
   }
 
   def weightFromValidatorByDag[F[_]: Monad](

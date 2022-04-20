@@ -4,7 +4,8 @@ import cats.Applicative
 import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.blockstorage.deploy.DeployStorage
 import coop.rchain.casper.LastApprovedBlock.LastApprovedBlock
@@ -29,8 +30,8 @@ class GenesisValidator[F[_]
   /* Transport */   : TransportLayer: CommUtil: BlockRetriever: EventPublisher
   /* State */       : EngineCell: RPConfAsk: ConnectionsCell: LastApprovedBlock
   /* Rholang */     : RuntimeManager
-  /* Casper */      : Estimator: SafetyOracle: LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
-  /* Storage */     : BlockStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
+  /* Casper */      : LastFinalizedHeightConstraintChecker: SynchronyConstraintChecker
+  /* Storage */     : BlockStore: ApprovedStore: BlockDagStorage: DeployStorage: CasperBufferStorage: RSpaceStateManager
   /* Diagnostics */ : Log: EventLog: Metrics: Span] // format: on
 (
     blockProcessingQueue: Queue[F, (Casper[F], BlockMessage)],

@@ -91,6 +91,8 @@ final class BlockDagKeyValueStorage[F[_]: Concurrent: Log] private (
       }
     }
 
+    override def getHeightMap: F[SortedMap[Long, Set[BlockHash]]] = heightMap.pure[F]
+
     def topoSort(
         startBlockNumber: Long,
         maybeEndBlockNumber: Option[Long]

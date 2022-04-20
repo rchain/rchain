@@ -5,12 +5,12 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Foldable}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.api._
 import coop.rchain.casper.engine.EngineCell.EngineCell
 import coop.rchain.casper.protocol._
 import coop.rchain.casper.protocol.deploy.v1._
-import coop.rchain.casper.{ProposeFunction, SafetyOracle}
+import coop.rchain.casper.ProposeFunction
 import coop.rchain.catscontrib.TaskContrib._
 import coop.rchain.comm.discovery.NodeDiscovery
 import coop.rchain.comm.rp.Connect.{ConnectionsCell, RPConfAsk}
@@ -28,7 +28,7 @@ import monix.reactive.Observable
 
 object DeployGrpcServiceV1 {
 
-  def apply[F[_]: Monixable: Concurrent: Log: SafetyOracle: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
+  def apply[F[_]: Monixable: Concurrent: Log: BlockStore: Span: EngineCell: RPConfAsk: ConnectionsCell: NodeDiscovery](
       apiMaxBlocksLimit: Int,
       blockReportAPI: BlockReportAPI[F],
       triggerProposeF: Option[ProposeFunction[F]],
@@ -142,17 +142,6 @@ object DeployGrpcServiceV1 {
           import MachineVerifyResponse.Message._
           MachineVerifyResponse(r.fold[Message](Error, Content))
         }
-
-      def showMainChain(request: BlocksQuery): Observable[BlockInfoResponse] =
-        Observable
-          .fromTask(
-            deferCollection(BlockAPI.showMainChain[F](request.depth, apiMaxBlocksLimit)) { r =>
-              import BlockInfoResponse.Message
-              import BlockInfoResponse.Message._
-              BlockInfoResponse(r.fold[Message](Error, BlockInfo))
-            }
-          )
-          .flatMap(Observable.fromIterable)
 
       def getBlocks(request: BlocksQuery): Observable[BlockInfoResponse] =
         Observable

@@ -1,13 +1,16 @@
 package coop.rchain.blockstorage.dag
 
+import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.casper.protocol.{DeployData, DeployDataProto}
+import coop.rchain.blockstorage.approvedStore.{approvedBlockToBytes, bytesToApprovedBlock}
+import coop.rchain.blockstorage.blockStore.{blockMessageToBytes, bytesToBlockMessage}
+import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, DeployData, DeployDataProto}
 import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.{BlockHash, BlockMetadata, Validator}
-import scodec.Codec
 import scodec.bits.ByteVector
 import scodec.codecs._
+import scodec.{Attempt, Codec, Err}
 
 object codecs {
   private def xmapToByteString(codec: Codec[ByteVector]): Codec[ByteString] =
@@ -23,6 +26,16 @@ object codecs {
   val codecBlockMetadata = variableSizeBytes(uint16, bytes).xmap[BlockMetadata](
     byteVector => BlockMetadata.fromBytes(byteVector.toArray),
     blockMetadata => ByteVector(blockMetadata.toByteString.toByteArray)
+  )
+
+  val codecBlockMessage = bytes.exmap[BlockMessage](
+    byteVector => Attempt.fromEither(bytesToBlockMessage(byteVector.toArray).leftMap(Err(_))),
+    blockMessage => Attempt.successful(ByteVector(blockMessageToBytes(blockMessage)))
+  )
+
+  val codecApprovedBlock = bytes.exmap[ApprovedBlock](
+    byteVector => Attempt.fromEither(bytesToApprovedBlock(byteVector.toArray).leftMap(Err(_))),
+    approvedBlock => Attempt.successful(ByteVector(approvedBlockToBytes(approvedBlock)))
   )
 
   val codecValidator = xmapToByteString(bytes(Validator.Length))

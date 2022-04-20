@@ -6,11 +6,10 @@ import cats.effect.{Concurrent, ContextShift, Sync, Timer}
 import cats.mtl.ApplicativeAsk
 import coop.rchain.models.syntax._
 import cats.syntax.all._
-import coop.rchain.blockstorage.KeyValueBlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.BlockDagKeyValueStorage
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedKeyValueStorage
+import coop.rchain.blockstorage.{approvedStore, blockStore}
 import coop.rchain.casper._
 import coop.rchain.casper.api.BlockReportAPI
 import coop.rchain.casper.blocks.BlockProcessor
@@ -105,22 +104,8 @@ object Setup {
       _                   <- new Exception(oldBlockStoreMsg).raiseError.whenA(oldBlockStoreExists)
 
       // Block storage
-      blockStore <- KeyValueBlockStore(rnodeStoreManager)
-
-      // Last finalized Block storage
-      lastFinalizedStorage <- {
-        for {
-          lastFinalizedBlockDb <- rnodeStoreManager.store("last-finalized-block")
-          lastFinalizedStore   = LastFinalizedKeyValueStorage(lastFinalizedBlockDb)
-        } yield lastFinalizedStore
-      }
-
-      // Migrate LastFinalizedStorage to BlockDagStorage
-      lfbMigration = Log[F].info("Migrating LastFinalizedStorage to BlockDagStorage.") *>
-        lastFinalizedStorage.migrateLfb(rnodeStoreManager, blockStore)
-      // Check if LFB is already migrated
-      lfbRequireMigration <- lastFinalizedStorage.requireMigration
-      _                   <- lfbMigration.whenA(lfbRequireMigration)
+      blockStore    <- blockStore.create(rnodeStoreManager)
+      approvedStore <- approvedStore.create(rnodeStoreManager)
 
       // Block DAG storage
       blockDagStorage <- BlockDagKeyValueStorage.create[F](rnodeStoreManager)
@@ -130,11 +115,6 @@ object Setup {
 
       // Deploy storage
       deployStorage <- KeyValueDeployStorage[F](rnodeStoreManager)
-
-      oracle = {
-        implicit val sp = span
-        SafetyOracle.cliqueOracle[F]
-      }
 
       estimator = {
         implicit val sp = span
@@ -169,7 +149,7 @@ object Setup {
 
       // Reporting runtime
       reportingRuntime <- {
-        implicit val (bs, bd, sp) = (blockStore, blockDagStorage, span)
+        implicit val (bs, as, bd, sp) = (blockStore, approvedStore, blockDagStorage, span)
         if (conf.apiServer.enableReporting) {
           // In reporting replay channels map is not needed
           rnodeStoreManager.rSpaceStores.map(ReportingCasper.rhoReporter(_))
@@ -206,12 +186,12 @@ object Setup {
                                conf.casper.validatorPrivateKey
                              )
       proposer = validatorIdentityOpt.map { validatorIdentity =>
-        implicit val (bs, bd, ds)     = (blockStore, blockDagStorage, deployStorage)
-        implicit val (br, ep)         = (blockRetriever, eventPublisher)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, cu, sp) = (runtimeManager, estimator, commUtil, span)
-        val dummyDeployerKeyOpt       = conf.dev.deployerPrivateKey
-        val dummyDeployerKey          = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
+        implicit val (bs, bd, ds) = (blockStore, blockDagStorage, deployStorage)
+        implicit val (br, ep)     = (blockRetriever, eventPublisher)
+        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (rm, cu, sp) = (runtimeManager, commUtil, span)
+        val dummyDeployerKeyOpt   = conf.dev.deployerPrivateKey
+        val dummyDeployerKey      = dummyDeployerKeyOpt.flatMap(Base16.decode(_)).map(PrivateKey(_))
 
         // TODO make term for dummy deploy configurable
         Proposer[F](validatorIdentity, dummyDeployerKey.map((_, "Nil")))
@@ -234,11 +214,11 @@ object Setup {
       proposerStateRefOpt <- triggerProposeFOpt.traverse(_ => Ref.of(ProposerState[F]()))
 
       casperLaunch = {
-        implicit val (bs, bd, ds)         = (blockStore, blockDagStorage, deployStorage)
+        implicit val (bs, as, bd, ds)     = (blockStore, approvedStore, blockDagStorage, deployStorage)
         implicit val (br, cb, ep)         = (blockRetriever, casperBufferStorage, eventPublisher)
         implicit val (ec, ev, lb, ra, rc) = (engineCell, envVars, lab, rpConfAsk, rpConnections)
         implicit val (sc, lh)             = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (rm, es, or, cu)     = (runtimeManager, estimator, oracle, commUtil)
+        implicit val (rm, cu)             = (runtimeManager, commUtil)
         implicit val (rsm, sp)            = (rspaceStateManager, span)
         CasperLaunch.of[F](
           blockProcessorQueue,
@@ -266,14 +246,14 @@ object Setup {
       }*/
       reportingStore <- ReportStore.store[F](rnodeStoreManager)
       blockReportAPI = {
-        implicit val (ec, bs, or) = (engineCell, blockStore, oracle)
+        implicit val (ec, bs) = (engineCell, blockStore)
         BlockReportAPI[F](reportingRuntime, reportingStore)
       }
       apiServers = {
-        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (sc, lh)         = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
-        implicit val (ra, rp)         = (rpConfAsk, rpConnections)
-        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
+        implicit val (sc, lh)     = (synchronyConstraintChecker, lastFinalizedHeightConstraintChecker)
+        implicit val (ra, rp)     = (rpConfAsk, rpConnections)
+        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
 
         APIServers.build[F](
           evalRuntime,
@@ -323,9 +303,9 @@ object Setup {
       )
       cacheTransactionAPI <- Transaction.cacheTransactionAPI(transactionAPI, rnodeStoreManager)
       webApi = {
-        implicit val (ec, bs, or, sp) = (engineCell, blockStore, oracle, span)
-        implicit val (ra, rc)         = (rpConfAsk, rpConnections)
-        val isNodeReadOnly            = conf.casper.validatorPrivateKey.isEmpty
+        implicit val (ec, bs, sp) = (engineCell, blockStore, span)
+        implicit val (ra, rc)     = (rpConfAsk, rpConnections)
+        val isNodeReadOnly        = conf.casper.validatorPrivateKey.isEmpty
 
         new WebApiImpl[F](
           conf.apiServer.maxBlocksLimit,

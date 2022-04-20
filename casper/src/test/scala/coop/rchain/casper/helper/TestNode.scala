@@ -5,6 +5,8 @@ import cats.effect.{Concurrent, ContextShift, Resource, Sync, Timer}
 import cats.syntax.all._
 import cats.{Monad, Parallel}
 import com.google.protobuf.ByteString
+import coop.rchain.blockstorage.approvedStore.ApprovedStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.{CasperBufferKeyValueStorage, CasperBufferStorage}
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagStorage}
@@ -74,6 +76,7 @@ case class TestNode[F[_]: Timer](
       ValidBlockProcessing
     ],
     blockStoreEffect: BlockStore[F],
+    approvedStoreEffect: ApprovedStore[F],
     blockDagStorageEffect: BlockDagStorage[F],
     deployStorageEffect: DeployStorage[F],
     commUtilEffect: CommUtil[F],
@@ -87,8 +90,6 @@ case class TestNode[F[_]: Timer](
     requestedBlocksEffect: RequestedBlocks[F],
     syncConstraintCheckerEffect: SynchronyConstraintChecker[F],
     lastFinalizedHeightCheckerEffect: LastFinalizedHeightConstraintChecker[F],
-    estimatorEffect: Estimator[F],
-    safetyOracleEffect: SafetyOracle[F],
     timeEffect: Time[F],
     transportLayerEffect: TransportLayerTestImpl[F],
     connectionsCellEffect: Cell[F, Connections],
@@ -106,8 +107,8 @@ case class TestNode[F[_]: Timer](
   implicit val requestedBlocks: RequestedBlocks[F]            = requestedBlocksEffect
   implicit val validatorId: Option[ValidatorIdentity]         = validatorIdOpt
   implicit val logEff: LogStub[F]                             = logEffect
-  implicit val cliqueOracleEffect: SafetyOracle[F]            = safetyOracleEffect
   implicit val blockStore: BlockStore[F]                      = blockStoreEffect
+  implicit val approvedStore: ApprovedStore[F]                = approvedStoreEffect
   implicit val blockDagStorage: BlockDagStorage[F]            = blockDagStorageEffect
   implicit val ds: DeployStorage[F]                           = deployStorageEffect
   implicit val cu: CommUtil[F]                                = commUtilEffect
@@ -119,7 +120,6 @@ case class TestNode[F[_]: Timer](
   implicit val rhoHistoryRepository: RhoHistoryRepository[F]  = rhoHistoryRepositoryEffect
   implicit val scch: SynchronyConstraintChecker[F]            = syncConstraintCheckerEffect
   implicit val lfhch: LastFinalizedHeightConstraintChecker[F] = lastFinalizedHeightCheckerEffect
-  implicit val e: Estimator[F]                                = estimatorEffect
   implicit val t: Time[F]                                     = timeEffect
   implicit val transportLayerEff: TransportLayerTestImpl[F]   = transportLayerEffect
   implicit val connectionsCell: Cell[F, Connections]          = connectionsCellEffect
@@ -248,7 +248,7 @@ case class TestNode[F[_]: Timer](
                 case Created(b) => b.pure[F]
                 case _ =>
                   concurrentF.raiseError[BlockMessage](
-                    new Throwable(s"failed creating block: ${e}")
+                    new Throwable(s"failed creating block")
                   )
               }
     } yield block
@@ -495,7 +495,8 @@ object TestNode {
     for {
       newStorageDir       <- Resources.copyStorage[F](storageDir)
       kvm                 <- Resource.eval(Resources.mkTestRNodeStoreManager(newStorageDir))
-      blockStore          <- Resource.eval(KeyValueBlockStore(kvm))
+      blockStore          <- Resource.eval(blockStore.create(kvm))
+      approvedStore       <- Resource.eval(approvedStore.create(kvm))
       blockDagStorage     <- Resource.eval(BlockDagKeyValueStorage.create(kvm))
       deployStorage       <- Resource.eval(KeyValueDeployStorage[F](kvm))
       casperBufferStorage <- Resource.eval(CasperBufferKeyValueStorage.create[F](kvm))
@@ -507,6 +508,7 @@ object TestNode {
 
       node <- Resource.eval({
                implicit val bs                         = blockStore
+               implicit val as                         = approvedStore
                implicit val bds                        = blockDagStorage
                implicit val ds                         = deployStorage
                implicit val cbs                        = casperBufferStorage
@@ -516,11 +518,9 @@ object TestNode {
                implicit val timeEff                    = logicalTime
                implicit val connectionsCell            = Cell.unsafe[F, Connections](Connect.Connections.empty)
                implicit val transportLayerEff          = tle
-               implicit val cliqueOracleEffect         = SafetyOracle.cliqueOracle[F]
                implicit val synchronyConstraintChecker = SynchronyConstraintChecker[F]
                implicit val lastFinalizedHeightConstraintChecker =
                  LastFinalizedHeightConstraintChecker[F]
-               implicit val estimator             = Estimator[F](maxNumberOfParents, maxParentDepth)
                implicit val rpConfAsk             = createRPConfAsk[F](currentPeerNode)
                implicit val eventBus              = EventPublisher.noop[F]
                implicit val commUtil: CommUtil[F] = CommUtil.of[F]
@@ -597,6 +597,7 @@ object TestNode {
                    blockProcessorState = blockProcessorState,
                    blockProcessingPipe = blockProcessingPipe,
                    blockStoreEffect = bs,
+                   approvedStoreEffect = as,
                    blockDagStorageEffect = bds,
                    deployStorageEffect = ds,
                    casperBufferStorageEffect = cbs,
@@ -607,10 +608,8 @@ object TestNode {
                    timeEffect = timeEff,
                    connectionsCellEffect = connectionsCell,
                    transportLayerEffect = transportLayerEff,
-                   safetyOracleEffect = cliqueOracleEffect,
                    syncConstraintCheckerEffect = synchronyConstraintChecker,
                    lastFinalizedHeightCheckerEffect = lastFinalizedHeightConstraintChecker,
-                   estimatorEffect = estimator,
                    rpConfAskEffect = rpConfAsk,
                    eventPublisherEffect = eventBus,
                    commUtilEffect = commUtil,

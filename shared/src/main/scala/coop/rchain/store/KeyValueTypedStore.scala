@@ -18,3 +18,9 @@ trait KeyValueTypedStore[F[_], K, V] {
 
   def toMap: F[Map[K, V]]
 }
+
+object KeyValueTypedStore {
+  def apply[F[_], K, V](
+      implicit instance: KeyValueTypedStore[F, K, V]
+  ): KeyValueTypedStore[F, K, V] = instance
+}

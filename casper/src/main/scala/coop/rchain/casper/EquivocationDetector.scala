@@ -5,7 +5,7 @@ import cats.{Applicative, Monad}
 import cats.syntax.all._
 import com.google.protobuf.ByteString
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage, EquivocationsTracker}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.protocol.{BlockMessage, Bond}
 import coop.rchain.casper.syntax._
 import coop.rchain.casper.util.ProtoUtil

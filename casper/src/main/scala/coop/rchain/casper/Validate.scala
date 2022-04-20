@@ -5,7 +5,7 @@ import cats.effect.{Concurrent, Sync}
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagRepresentation
 import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.protocol.{ApprovedBlock, BlockMessage, Justification}
@@ -157,7 +157,7 @@ object Validate {
   /*
    * TODO: Double check ordering of validity checks
    */
-  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span: Estimator](
+  def blockSummary[F[_]: Sync: Log: Time: BlockStore: Metrics: Span](
       block: BlockMessage,
       genesis: BlockMessage,
       s: CasperSnapshot[F],
@@ -470,40 +470,13 @@ object Validate {
   /**
     * Works only with fully explicit justifications.
     */
-  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span: Estimator](
+  def parents[F[_]: Sync: Log: BlockStore: Metrics: Span](
       b: BlockMessage,
       genesis: BlockMessage,
       s: CasperSnapshot[F]
-  ): F[ValidBlockProcessing] = {
-    val maybeParentHashes = ProtoUtil.parentHashes(b)
-    val parentHashes = maybeParentHashes match {
-      case hashes if hashes.isEmpty => Seq(genesis.blockHash)
-      case hashes                   => hashes
-    }
-    for {
-      latestMessagesHashes <- ProtoUtil.toLatestMessageHashes(b.justifications).pure
-      tipHashes            <- Estimator[F].tips(s.dag, genesis, latestMessagesHashes)
-      computedParentHashes = tipHashes.tips
-      status <- if (parentHashes == computedParentHashes) {
-                 BlockStatus.valid.asRight[BlockError].pure
-               } else {
-                 val parentsString =
-                   parentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val estimateString =
-                   computedParentHashes.map(hash => PrettyPrinter.buildString(hash)).mkString(",")
-                 val justificationString = latestMessagesHashes.values
-                   .map(hash => PrettyPrinter.buildString(hash))
-                   .mkString(",")
-                 val message =
-                   s"block parents ${parentsString} did not match estimate ${estimateString} based on justification ${justificationString}."
-                 for {
-                   _ <- Log[F].warn(
-                         ignore(b, message)
-                       )
-                 } yield BlockStatus.invalidParents.asLeft[ValidBlock]
-               }
-    } yield status
-  }
+  ): F[ValidBlockProcessing] =
+    // TODO reimplement this under multiparent or remove completely?
+    BlockStatus.valid.asRight[BlockError].pure
   /*
    * This check must come before Validate.parents
    */

@@ -5,7 +5,7 @@ import cats.effect.concurrent.Ref
 import cats.syntax.all._
 import cats.{Applicative, Monad}
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage
 import coop.rchain.casper._
@@ -147,7 +147,7 @@ object Running {
       peer: PeerNode,
       br: BlockRequest
   ): F[Unit] = {
-    val getBlock = BlockStore[F].get(br.hash).flatMap(_.get.pure[F])
+    val getBlock = BlockStore[F].get1(br.hash).flatMap(_.get.pure[F])
     val logSuccess = Log[F].info(
       s"Received request for block ${PrettyPrinter.buildString(br.hash)} " +
         s"from $peer. Response sent."

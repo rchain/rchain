@@ -4,14 +4,13 @@ import cats.data.EitherT
 import cats.effect.Concurrent
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.casper.ReportStore.ReportStore
 import coop.rchain.casper.{
   CasperMetricsSource,
   DeployReportResult,
   MultiParentCasper,
   ReportingCasper,
-  SafetyOracle,
   SystemDeployReportResult
 }
 import coop.rchain.casper.api.BlockAPI.{reportTransformer, ApiErr, Error}
@@ -36,7 +35,7 @@ import coop.rchain.shared.syntax._
 
 import scala.collection.concurrent.TrieMap
 
-class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
+class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
     reportingCasper: ReportingCasper[F],
     reportStore: ReportStore[F]
 ) {
@@ -73,7 +72,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
     def createReport(casper: MultiParentCasper[F]): F[Either[Error, BlockEventInfo]] = {
       implicit val c = casper
       for {
-        maybeBlock <- BlockStore[F].get(hash)
+        maybeBlock <- BlockStore[F].get1(hash)
         report     <- maybeBlock.traverse(blockReportWithinLock(forceReplay, _))
       } yield report.toRight(s"Block $hash not found")
     }
@@ -131,7 +130,7 @@ class BlockReportAPI[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: B
 }
 
 object BlockReportAPI {
-  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: SafetyOracle: BlockStore](
+  def apply[F[_]: Concurrent: Metrics: EngineCell: Log: BlockStore](
       reportingCasper: ReportingCasper[F],
       reportStore: ReportStore[F]
   ): BlockReportAPI[F] = new BlockReportAPI[F](reportingCasper, reportStore)

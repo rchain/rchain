@@ -6,7 +6,6 @@ import coop.rchain.blockstorage._
 import coop.rchain.blockstorage.casperbuffer.CasperBufferKeyValueStorage
 import coop.rchain.blockstorage.dag.{BlockDagKeyValueStorage, BlockDagRepresentation}
 import coop.rchain.blockstorage.deploy.KeyValueDeployStorage
-import coop.rchain.blockstorage.finality.LastFinalizedMemoryStorage
 import coop.rchain.casper._
 import coop.rchain.casper.engine.BlockRetriever.RequestState
 import coop.rchain.casper.genesis.Genesis
@@ -116,22 +115,21 @@ object Setup {
     implicit val lab =
       LastApprovedBlock.of[Task].unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     val kvm = InMemoryStoreManager[Task]()
-    implicit val blockStore =
-      KeyValueBlockStore[Task](kvm).unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    implicit val blockStore = {
+      coop.rchain.blockstorage.blockStore
+        .create[Task](kvm)
+        .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    }
+    implicit val approvedStore = {
+      coop.rchain.blockstorage.approvedStore
+        .create[Task](kvm)
+        .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
+    }
     implicit val blockDagStorage = BlockDagKeyValueStorage
       .create(kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val lastFinalizedStorage = LastFinalizedMemoryStorage
-      .make[Task]
-      .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val safetyOracle = new SafetyOracle[Task] {
-      override def normalizedFaultTolerance(
-          blockDag: BlockDagRepresentation[Task],
-          estimateBlockHash: BlockHash
-      ): Task[Float] = Task.pure(1.0f)
-    }
     implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]

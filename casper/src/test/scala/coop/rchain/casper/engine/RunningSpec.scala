@@ -10,6 +10,7 @@ import coop.rchain.comm.rp.ProtocolHelper._
 import coop.rchain.crypto.hash.Blake2b256
 import coop.rchain.crypto.signatures.Secp256k1
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.shared.syntax._
 import monix.eval.Task
 import org.scalatest.{BeforeAndAfterEach, Matchers, WordSpec}
 

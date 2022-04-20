@@ -4,7 +4,7 @@ import cats.effect.concurrent.Ref
 import cats.effect.{Concurrent, Sync, Timer}
 import cats.syntax.all._
 import cats.{Applicative, Show}
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.casperbuffer.CasperBufferStorage
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
@@ -53,7 +53,6 @@ trait Casper[F[_]] {
   def dagContains(hash: BlockHash): F[Boolean]
   def bufferContains(hash: BlockHash): F[Boolean]
   def deploy(d: Signed[DeployData]): F[Either[DeployError, DeployId]]
-  def estimator(dag: BlockDagRepresentation[F]): F[IndexedSeq[BlockHash]]
   def getApprovedBlock: F[BlockMessage]
   def getValidator: F[Option[ValidatorIdentity]]
   def getVersion: F[Long]
@@ -135,7 +134,7 @@ sealed abstract class MultiParentCasperInstances {
   implicit val MetricsSource: Metrics.Source =
     Metrics.Source(CasperMetricsSource, "casper")
 
-  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: Timer: SafetyOracle: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: Estimator: DeployStorage: CasperBufferStorage: BlockRetriever](
+  def hashSetCasper[F[_]: Sync: Metrics: Concurrent: CommUtil: Log: Time: Timer: BlockStore: BlockDagStorage: Span: EventPublisher: SynchronyConstraintChecker: LastFinalizedHeightConstraintChecker: DeployStorage: CasperBufferStorage: BlockRetriever](
       validatorId: Option[ValidatorIdentity],
       casperShardConf: CasperShardConf,
       approvedBlock: BlockMessage

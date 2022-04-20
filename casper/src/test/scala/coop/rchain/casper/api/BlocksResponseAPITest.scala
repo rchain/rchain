@@ -5,8 +5,9 @@ import cats.effect.{Concurrent, Resource, Sync}
 import coop.rchain.casper._
 import coop.rchain.casper.engine._
 import EngineCell._
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.IndexedBlockDagStorage
+import coop.rchain.blockstorage.syntax._
 import coop.rchain.casper.helper._
 import coop.rchain.casper.helper.BlockGenerator._
 import coop.rchain.casper.helper.BlockUtil.generateValidator
@@ -27,8 +28,8 @@ class BlocksResponseAPITest
     extends FlatSpec
     with Matchers
     with BlockGenerator
-    with BlockDagStorageFixture
-    with UnlimitedParentsEstimatorFixture {
+    with BlockDagStorageFixture {
+  implicit val log: Log[Task] = new Log.NOPLog[Task]()
 
   val v1     = generateValidator("Validator One")
   val v2     = generateValidator("Validator Two")
@@ -100,33 +101,6 @@ class BlocksResponseAPITest
            )
     } yield genesis
 
-  "showMainChain" should "return only blocks in the main chain" in withStorage {
-    implicit blockStore => implicit blockDagStorage =>
-      runtimeManagerResource.use { implicit runtimeManager =>
-        for {
-          genesis <- createDagWith8Blocks(blockStore, blockDagStorage)
-          dag     <- blockDagStorage.getRepresentation
-          tips    <- Estimator[Task].tips(dag, genesis)
-          casperEffect <- NoOpsCasperEffect[Task](
-                           HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips
-                         )
-          logEff     = new LogStub[Task]
-          engine     = new EngineWithCasper[Task](casperEffect)
-          engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-          cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
-          blocksResponse <- BlockAPI.showMainChain[Task](10, maxBlockLimit)(
-                             Sync[Task],
-                             engineCell,
-                             logEff,
-                             cliqueOracleEffect,
-                             blockStore
-                           )
-        } yield blocksResponse.length should be(5)
-      }
-  }
-
   "getBlocks" should "return all blocks" in withStorage {
     implicit blockStore => implicit blockDagStorage =>
       runtimeManagerResource.use { implicit runtimeManager =>
@@ -134,21 +108,18 @@ class BlocksResponseAPITest
           genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
           dag        <- blockDagStorage.getRepresentation
           metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator[Task].tips(dag, genesis)
+          tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips
+                           tips
                          )
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
           logEff     = new LogStub[Task]
-          cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.getBlocks[Task](10, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
-                             cliqueOracleEffect,
                              blockStore
                            )
         } yield blocksResponse.right.get.length should be(8) // TODO: Switch to 4 when we implement block height correctly
@@ -161,21 +132,18 @@ class BlocksResponseAPITest
         genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
         dag        <- blockDagStorage.getRepresentation
         metricsEff = new Metrics.MetricsNOP[Task]
-        tips       <- Estimator[Task].tips(dag, genesis)
+        tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
         casperEffect <- NoOpsCasperEffect[Task](
                          HashMap.empty[BlockHash, BlockMessage],
-                         tips.tips
+                         tips
                        )
         logEff     = new LogStub[Task]
         engine     = new EngineWithCasper[Task](casperEffect)
         engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-        cliqueOracleEffect = SafetyOracle
-          .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
         blocksResponse <- BlockAPI.getBlocks[Task](2, maxBlockLimit)(
                            Sync[Task],
                            engineCell,
                            logEff,
-                           cliqueOracleEffect,
                            blockStore
                          )
       } yield blocksResponse.right.get.length should be(2) // TODO: Switch to 3 when we implement block height correctly
@@ -189,21 +157,18 @@ class BlocksResponseAPITest
           genesis    <- createDagWith8Blocks(blockStore, blockDagStorage)
           dag        <- blockDagStorage.getRepresentation
           metricsEff = new Metrics.MetricsNOP[Task]
-          tips       <- Estimator[Task].tips(dag, genesis)
+          tips       <- dag.latestMessageHashes.map(_.valuesIterator.toIndexedSeq)
           casperEffect <- NoOpsCasperEffect[Task](
                            HashMap.empty[BlockHash, BlockMessage],
-                           tips.tips
+                           tips
                          )
           logEff     = new LogStub[Task]
           engine     = new EngineWithCasper[Task](casperEffect)
           engineCell <- Cell.mvarCell[Task, Engine[Task]](engine)
-          cliqueOracleEffect = SafetyOracle
-            .cliqueOracle[Task](Concurrent[Task], logEff, metrics, span)
           blocksResponse <- BlockAPI.getBlocksByHeights[Task](2, 5, maxBlockLimit)(
                              Sync[Task],
                              engineCell,
                              logEff,
-                             cliqueOracleEffect,
                              blockStore
                            )
           blocks = blocksResponse.right.get

@@ -7,6 +7,8 @@ import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.{BlockMetadata, EquivocationRecord}
 
+import scala.collection.immutable.SortedMap
+
 trait BlockDagStorage[F[_]] {
   def getRepresentation: F[BlockDagRepresentation[F]]
   def insert(
@@ -37,6 +39,7 @@ trait BlockDagRepresentation[F[_]] {
   // For BlockAPI
   def latestBlockNumber: F[Long]
   def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]]
+  def getHeightMap: F[SortedMap[Long, Set[BlockHash]]]
   def topoSort(
       startBlockNumber: Long,
       maybeEndBlockNumber: Option[Long]

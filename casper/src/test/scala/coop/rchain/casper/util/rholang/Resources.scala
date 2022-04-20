@@ -24,6 +24,7 @@ import monix.execution.Scheduler
 
 import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.nio.file.{Files, Path}
+import scala.collection.immutable.SortedMap
 
 object Resources {
 
@@ -119,6 +120,8 @@ object Resources {
       override def lookupByDeployId(deployId: DeployId): F[Option[BlockHash]] = ???
 
       override def find(truncatedHash: String): F[Option[BlockHash]] = ???
+
+      override def getHeightMap: F[SortedMap[Long, Set[BlockHash]]] = ???
 
       override def topoSort(
           startBlockNumber: Long,

@@ -1,8 +1,8 @@
 package coop.rchain.store
 
-import cats.{Functor, Show}
 import cats.effect.Sync
 import cats.syntax.all._
+import cats.{Functor, Show}
 
 trait KeyValueTypedStoreSyntax {
   implicit final def sharedSyntaxKeyValueTypedStore[F[_], K, V](

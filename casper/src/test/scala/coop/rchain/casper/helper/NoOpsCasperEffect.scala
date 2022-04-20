@@ -4,7 +4,7 @@ import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all._
 import com.google.protobuf.ByteString
-import coop.rchain.blockstorage.BlockStore
+import coop.rchain.blockstorage.blockStore.BlockStore
 import coop.rchain.blockstorage.dag.BlockDagStorage.DeployId
 import coop.rchain.blockstorage.dag.{BlockDagRepresentation, BlockDagStorage}
 import coop.rchain.casper.protocol.{BlockMessage, DeployData}
@@ -14,6 +14,7 @@ import coop.rchain.crypto.signatures.Signed
 import coop.rchain.models.BlockHash.BlockHash
 import coop.rchain.models.Validator.Validator
 import coop.rchain.models.blockImplicits.getRandomBlock
+import coop.rchain.shared.syntax._
 
 import scala.collection.mutable.{Map => MutableMap}
 
@@ -46,7 +47,7 @@ class NoOpsCasperEffect[F[_]: Sync: BlockStore: BlockDagStorage] private (
   def approvedBlockStateComplete: F[Boolean]                          = true.pure[F]
   def addBlockFromStore(bh: BlockHash, allowFromStore: Boolean): F[ValidBlockProcessing] =
     for {
-      b <- BlockStore[F].get(bh)
+      b <- BlockStore[F].get1(bh)
       _ <- Sync[F].delay(store.update(b.get.blockHash, b.get))
     } yield BlockStatus.valid.asRight
 
