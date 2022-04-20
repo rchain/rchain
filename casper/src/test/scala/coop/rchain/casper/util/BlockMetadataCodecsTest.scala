@@ -106,7 +106,7 @@ class BlockMetadataCodecsTest extends FlatSpec {
     areEqual shouldBe true
   }
 
-  "encode BlockMetadataScodec object with some empty fields" should "give initial object without errors" in {
+  "encode BlockMetadataScodec object with some empty fields and decode binary data" should "give initial object without errors" in {
     val referenceBlocks = List(
       randomBlockMetadataScodec(parentsCount = 0, justCount = 10, weightCount = 10),
       randomBlockMetadataScodec(parentsCount = 10, justCount = 0, weightCount = 10),
