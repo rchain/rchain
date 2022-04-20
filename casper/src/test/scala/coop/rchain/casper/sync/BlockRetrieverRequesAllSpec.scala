@@ -141,26 +141,6 @@ class BlockRetrieverRequestAllSpec extends FunSpec with BeforeAndAfterEach with 
             requestedAfter.timestamp shouldBe time.clock
           }
         }
-        describe("if waiting list has one peer left") {
-          it("should ask that peer") {
-            // given
-            val waitingList = List(peerNode("lastPeer"))
-            val requested = RequestState(
-              timestamp = timedOut,
-              peers = Set(peerNode("peer")),
-              waitingList = waitingList
-            )
-            currentRequests.set(Map(hash -> requested)).runSyncUnsafe()
-            // when
-            blockRetriever.requestAll(timeout).runSyncUnsafe()
-            // then
-            val (recipient, msg) = transportLayer.getRequest(0)
-            toBlockRequest(msg).hash should be(hash)
-            recipient shouldBe waitingList.head
-            transportLayer.requests.size shouldBe 1
-          }
-        }
-
         describe("if waiting list has no peers left") {
           it("should broadcast requests to other peers") {
             // given
