@@ -204,8 +204,8 @@ object BlockAPI {
       depth: Int,
       listeningName: Par,
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] =
-    for {
+  ): F[ApiErr[(Seq[DataWithBlockInfo], Int)]] = {
+    val response: F[Either[Error, (Seq[DataWithBlockInfo], Int)]] = for {
       dag                 <- BlockDagStorage[F].getRepresentation
       heightMap           <- dag.getHeightMap
       depthWithLimit      = Math.min(depth, maxBlocksLimit).toLong
@@ -221,14 +221,21 @@ object BlockAPI {
                                .compile
                                .toList
                                .map(_.flatten)
-    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
+    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight[String]
+    // Check depth limit
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningName depth ${depth} exceed the max limit ${maxBlocksLimit}"
+        .asLeft[(Seq[DataWithBlockInfo], Int)]
+        .pure[F]
+    else response
+  }
 
   def getListeningNameContinuationResponse[F[_]: Concurrent: RuntimeManager: BlockDagStorage: BlockStore: Log](
       depth: Int,
       listeningNames: Seq[Par],
       maxBlocksLimit: Int
-  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] =
-    for {
+  ): F[ApiErr[(Seq[ContinuationsWithBlockInfo], Int)]] = {
+    val response: F[Either[Error, (Seq[ContinuationsWithBlockInfo], Int)]] = for {
       dag            <- BlockDagStorage[F].getRepresentation
       heightMap      <- dag.getHeightMap
       depthWithLimit = Math.min(depth, maxBlocksLimit).toLong
@@ -245,7 +252,14 @@ object BlockAPI {
                                .compile
                                .toList
                                .map(_.flatten)
-    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight
+    } yield (blocksWithActiveName, blocksWithActiveName.length).asRight[String]
+    // Check depth limit
+    if (depth > maxBlocksLimit)
+      s"Your request on getListeningNameContinuation depth ${depth} exceed the max limit ${maxBlocksLimit}"
+        .asLeft[(Seq[ContinuationsWithBlockInfo], Int)]
+        .pure[F]
+    else response
+  }
 
   private def getDataWithBlockInfo[F[_]: Log: BlockStore: Concurrent](
       runtimeManager: RuntimeManager[F],
