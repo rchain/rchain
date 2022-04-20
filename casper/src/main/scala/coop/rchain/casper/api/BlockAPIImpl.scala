@@ -47,9 +47,9 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: MultiParen
     validatorOpt: Option[ValidatorIdentity]
 ) extends BlockAPI_v2[F] {
 
-  val BlockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
-  val DeploySource: Metrics.Source          = Metrics.Source(BlockAPIMetricsSource, "deploy")
-  val GetBlockSource: Metrics.Source        = Metrics.Source(BlockAPIMetricsSource, "get-block")
+  val blockAPIMetricsSource: Metrics.Source = Metrics.Source(Metrics.BaseSource, "block-api")
+  val deploySource: Metrics.Source          = Metrics.Source(blockAPIMetricsSource, "deploy")
+  val getBlockSource: Metrics.Source        = Metrics.Source(blockAPIMetricsSource, "get-block")
 
   override def deploy(
       d: Signed[DeployData],
@@ -57,7 +57,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: MultiParen
       minPhloPrice: Long,
       isNodeReadOnly: Boolean,
       shardId: String
-  ): F[ApiErr[String]] = Span[F].trace(DeploySource) {
+  ): F[ApiErr[String]] = Span[F].trace(deploySource) {
 
     def casperDeploy: F[ApiErr[String]] =
       for {
@@ -421,7 +421,7 @@ class BlockAPIImpl[F[_]: Concurrent: Span: DeployStorage: BlockStore: MultiParen
         .buildStringNoLimit(id)}".asLeft[LightBlockInfo]
     )(_.asRight)
 
-  override def getBlock(hash: String): F[ApiErr[BlockInfo]] = Span[F].trace(GetBlockSource) {
+  override def getBlock(hash: String): F[ApiErr[BlockInfo]] = Span[F].trace(getBlockSource) {
     val response = for {
       // Add constraint on the length of searched hash to prevent to many block results
       // which can cause severe CPU load.
