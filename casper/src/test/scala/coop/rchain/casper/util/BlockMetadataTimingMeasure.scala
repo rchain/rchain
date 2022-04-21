@@ -1,6 +1,6 @@
 import coop.rchain.blockstorage.dag.codecs
 import coop.rchain.casper.util.GeneratorBlockMetadata
-import coop.rchain.models.{BlockMetadata, BlockMetadataAB}
+import coop.rchain.models.{BlockMetadata, BlockMetadataAB, BlockMetadataBV, BlockMetadataScodecBV}
 import org.scalatest.FlatSpec
 import scodec.bits.ByteVector
 
@@ -14,7 +14,7 @@ class BlockMetadataTimingMeasure extends FlatSpec {
 
   import GeneratorBlockMetadata._
 
-  class BlockMetadataProtobufCodec extends UniversalCodec[BlockMetadata] {
+  class BlockMetadataProtobufSerializer extends UniversalCodec[BlockMetadata] {
     override def encode(block: BlockMetadata): ByteVector =
       codecs.codecBlockMetadata.encode(block).require.toByteVector
     def decode(serialized: ByteVector): BlockMetadata =
@@ -28,22 +28,39 @@ class BlockMetadataTimingMeasure extends FlatSpec {
       BlockMetadataAB.fromByteVector(serialized)
   }
 
+  class BlockMetadataScodecBVSerializer extends UniversalCodec[BlockMetadataBV] {
+    override def encode(block: BlockMetadataBV): ByteVector =
+      block.toByteVector
+    def decode(serialized: ByteVector): BlockMetadataBV =
+      BlockMetadataBV.fromByteVector(serialized)
+  }
+
   it should "Time - measurement of protobuf codec" in {
     def compareBlocks(a: BlockMetadata, b: BlockMetadata): Boolean = a == b
     timingExperiment(
       codecName = "BlockMetadata with protobuf codec",
-      new BlockMetadataProtobufCodec,
+      new BlockMetadataProtobufSerializer,
       randomBlockMetadata,
       compareBlocks
     )
   }
 
-  it should "Time - measurement of scodec - codec" in {
+  it should "Time - measurement of scodec - codec (using Array[Byte])" in {
     def compareBlocks(a: BlockMetadataAB, b: BlockMetadataAB): Boolean = a.isEqualTo(b)
     timingExperiment(
-      codecName = "New scodec - codec",
+      codecName = "New BlockMetadata scodec(Array[Byte])",
       new BlockMetadataScodecSerializer,
       randomBlockMetadataScodec,
+      compareBlocks
+    )
+  }
+
+  it should "Time - measurement of scodec - codec (using ByteVector)" in {
+    def compareBlocks(a: BlockMetadataBV, b: BlockMetadataBV): Boolean = a == b
+    timingExperiment(
+      codecName = "New BlockMetadata scodec (ByteVector)",
+      new BlockMetadataScodecBVSerializer,
+      randomBlockMetadataBV,
       compareBlocks
     )
   }
@@ -55,7 +72,7 @@ class BlockMetadataTimingMeasure extends FlatSpec {
       compareBlocks: (T, T) => Boolean,
       averageStatistic: Boolean = false
   ): Unit = {
-    def experiment(num: Int): Unit = {
+    def experiment(num: Int, elementsCount: Int): Unit = {
       val averageNum    = 50
       val averageWarmUp = 1
 
@@ -64,7 +81,7 @@ class BlockMetadataTimingMeasure extends FlatSpec {
           .foldLeft((0L, 0L)) {
             case ((timeEncode, timeDecode), i) =>
               val blocks = (0 until num).map { _ =>
-                generateBlock(100, 100, 100)
+                generateBlock(elementsCount, elementsCount, elementsCount)
               }
 
               def statistic(timeEncode: Long, timeDecode: Long): Unit = {
@@ -109,16 +126,18 @@ class BlockMetadataTimingMeasure extends FlatSpec {
 
       def mS(v: Long) = "%7.3f".format(v.toDouble / (1000.toDouble * averageNum.toDouble))
 
-      val str = numStr(num) + " | " + mS(result._1) + " | " + mS(result._2)
+      val str = numStr(num) + " | " + numStr(elementsCount) + " | " + mS(result._1) +
+        " | " + mS(result._2)
       println(str)
     }
 
     def fS(v: String): String = "%7s".format(v)
 
     println(s"$codecName")
-    val strTitle = fS("num") + " | " + fS("timeEnc(sec)") + " | " + fS("timeDec(sec)")
+    val strTitle = fS("num") + " | " + fS("elementsCount") + " | " + fS("timeEnc(sec)") +
+      " | " + fS("timeDec(sec)")
     println(strTitle)
 
-    experiment(num = 500)
+    experiment(num = 500, 100)
   }
 }

@@ -2,6 +2,7 @@ package coop.rchain.models
 
 import scodec.TransformSyntax
 import scodec.bits.ByteVector
+import scodec.codecs.bytes
 
 final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array[Byte]) {
   def ==(justification: JustificationArr): Boolean =
@@ -90,4 +91,61 @@ object BlockMetadataAB {
     BlockMetadataScodec.decodeFromArray(bytes)
   def fromByteVector(byteVector: ByteVector): BlockMetadataAB =
     BlockMetadataScodec.decode(byteVector)
+}
+
+final case class JustificationBV(validator: ByteVector, latestBlockHash: ByteVector)
+
+object BlockMetadataScodecBV {
+  import scodec.Codec
+  import scodec.codecs._
+
+  private val codecByteArray = variableSizeBytes(uint8, bytes)
+  private val codecParents   = listOfN(int32, codecByteArray)
+
+  private val codecJustification  = (codecByteArray :: codecByteArray).as[JustificationBV]
+  private val codecJustifications = listOfN(int32, codecJustification)
+
+  private val tupleCodec: Codec[(ByteVector, Long)] = codecByteArray.pairedWith(int64)
+  private val codecWeightMap =
+    listOfN(int32, tupleCodec).xmap[Map[ByteVector, Long]](_.toMap, _.toList)
+
+  private val codecMetadata =
+    (("hash" | codecByteArray) :: ("parents" | codecParents) ::
+      ("sender" | codecByteArray) :: ("justifications" | codecJustifications) ::
+      ("weightMap" | codecWeightMap) :: ("blockNum" | int64) :: ("seqNum" | int32) :: ("invalid" | bool) ::
+      ("df" | bool) :: ("finalized" | bool)).as[BlockMetadataBV]
+
+  def encode(block: BlockMetadataBV): ByteVector =
+    codecMetadata.encode(block).require.toByteVector
+
+  def encodeToArray(block: BlockMetadataBV): Array[Byte] = encode(block).toArray
+
+  def decodeFromArray(bytes: Array[Byte]): BlockMetadataBV = decode(ByteVector(bytes))
+  def decode(serializedBlock: ByteVector): BlockMetadataBV =
+    codecMetadata.decode(serializedBlock.toBitVector).require.value
+}
+
+final case class BlockMetadataBV(
+    blockHash: ByteVector,
+    parents: List[ByteVector],
+    sender: ByteVector,
+    justifications: List[JustificationBV],
+    weightMap: Map[ByteVector, Long],
+    blockNum: Long,
+    seqNum: Int,
+    invalid: Boolean,
+    directlyFinalized: Boolean,
+    finalized: Boolean
+) {
+  def toByteVector: ByteVector = BlockMetadataScodecBV.encode(block = this)
+  def toBytes: Array[Byte]     = this.toByteVector.toArray
+}
+
+object BlockMetadataBV {
+  def toByteVector(block: BlockMetadataBV): ByteVector =
+    block.toByteVector
+  def fromBytes(bytes: Array[Byte]): BlockMetadataBV =
+    BlockMetadataScodecBV.decodeFromArray(bytes)
+  def fromByteVector(byteVector: ByteVector): BlockMetadataBV =
+    BlockMetadataScodecBV.decode(byteVector)
 }
