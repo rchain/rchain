@@ -3,7 +3,15 @@ package coop.rchain.casper.util
 import cats.effect.Sync
 import com.google.protobuf.ByteString
 import coop.rchain.casper.protocol.Justification
-import coop.rchain.models.{BlockMetadata, BlockMetadataAB, JustificationArr}
+import coop.rchain.models.{
+  BlockMetadata,
+  BlockMetadataAB,
+  BlockMetadataBS,
+  BlockMetadataBV,
+  JustificationArr,
+  JustificationBS,
+  JustificationBV
+}
 import coop.rchain.shared.Base16
 import monix.eval.Task
 import org.scalatest.FlatSpec
@@ -81,6 +89,52 @@ object GeneratorBlockMetadata {
       block.directlyFinalized,
       block.finalized
     )
+
+  def toBlockMetadataBV(block: BlockMetadata): BlockMetadataBV =
+    BlockMetadataBV(
+      ByteVector(block.blockHash.toByteArray),
+      block.parents.map(parent => ByteVector(parent.toByteArray)),
+      ByteVector(block.sender.toByteArray),
+      block.justifications.map(
+        just =>
+          JustificationBV(
+            ByteVector(just.validator.toByteArray),
+            ByteVector(just.latestBlockHash.toByteArray)
+          )
+      ),
+      block.weightMap.map { case (k, v) => (ByteVector(k.toByteArray) -> v) },
+      block.blockNum,
+      block.seqNum,
+      block.invalid,
+      block.directlyFinalized,
+      block.finalized
+    )
+
+  def randomBlockMetadataBV(parentsCount: Int, justCount: Int, weightCount: Int): BlockMetadataBV =
+    toBlockMetadataBV(randomBlockMetadata(parentsCount, justCount, weightCount))
+
+  def toBlockMetadataBS(block: BlockMetadata): BlockMetadataBS =
+    BlockMetadataBS(
+      ByteString.copyFrom(block.blockHash.toByteArray),
+      block.parents.map(parent => ByteString.copyFrom(parent.toByteArray)),
+      ByteString.copyFrom(block.sender.toByteArray),
+      block.justifications.map(
+        just =>
+          JustificationBS(
+            ByteString.copyFrom(just.validator.toByteArray),
+            ByteString.copyFrom(just.latestBlockHash.toByteArray)
+          )
+      ),
+      block.weightMap.map { case (k, v) => (ByteString.copyFrom(k.toByteArray) -> v) },
+      block.blockNum,
+      block.seqNum,
+      block.invalid,
+      block.directlyFinalized,
+      block.finalized
+    )
+
+  def randomBlockMetadataBS(parentsCount: Int, justCount: Int, weightCount: Int): BlockMetadataBS =
+    toBlockMetadataBS(randomBlockMetadata(parentsCount, justCount, weightCount))
 }
 
 class BlockMetadataCodecsTest extends FlatSpec {
