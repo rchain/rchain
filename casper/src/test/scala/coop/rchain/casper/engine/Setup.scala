@@ -131,7 +131,6 @@ object Setup {
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
     implicit val deployStorage = KeyValueDeployStorage[Task](kvm)
       .unsafeRunSync(monix.execution.Scheduler.Implicits.global)
-    implicit val estimator                      = Estimator[Task](Estimator.UnlimitedParents, None)
     implicit val synchronyConstraintChecker     = SynchronyConstraintChecker[Task]
     implicit val lastFinalizedConstraintChecker = LastFinalizedHeightConstraintChecker[Task]
     implicit val blockRetriever                 = BlockRetriever.of[Task]
