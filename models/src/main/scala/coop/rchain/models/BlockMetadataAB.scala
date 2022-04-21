@@ -2,15 +2,14 @@ package coop.rchain.models
 
 import scodec.TransformSyntax
 import scodec.bits.ByteVector
-import scodec.codecs.bytes
 
-final case class JustificationArr(validator: Array[Byte], latestBlockHash: Array[Byte]) {
-  def ==(justification: JustificationArr): Boolean =
+final case class JustificationBA(validator: Array[Byte], latestBlockHash: Array[Byte]) {
+  def ==(justification: JustificationBA): Boolean =
     validator.sameElements(justification.validator) &&
       latestBlockHash.sameElements(justification.latestBlockHash)
 }
 
-object BlockMetadataScodec {
+object BlockMetadataScodecAB {
   import scodec.Codec
   import scodec.codecs._
 
@@ -19,7 +18,7 @@ object BlockMetadataScodec {
 
   private val codecParents = listOfN(int32, codecByteArray)
 
-  private val codecJustification  = (codecByteArray :: codecByteArray).as[JustificationArr]
+  private val codecJustification  = (codecByteArray :: codecByteArray).as[JustificationBA]
   private val codecJustifications = listOfN(int32, codecJustification)
 
   private val tupleCodec: Codec[(Array[Byte], Long)] = codecByteArray.pairedWith(int64)
@@ -46,7 +45,7 @@ final case class BlockMetadataAB(
     blockHash: Array[Byte],
     parents: List[Array[Byte]],
     sender: Array[Byte],
-    justifications: List[JustificationArr],
+    justifications: List[JustificationBA],
     weightMap: Map[Array[Byte], Long],
     blockNum: Long,
     seqNum: Int,
@@ -54,7 +53,7 @@ final case class BlockMetadataAB(
     directlyFinalized: Boolean,
     finalized: Boolean
 ) {
-  def toByteVector: ByteVector = BlockMetadataScodec.encode(block = this)
+  def toByteVector: ByteVector = BlockMetadataScodecAB.encode(block = this)
   def toBytes: Array[Byte]     = this.toByteVector.toArray
 
   //  We should use this method to compare 2 blocks
@@ -87,9 +86,9 @@ object BlockMetadataAB {
   def toByteVector(block: BlockMetadataAB): ByteVector =
     block.toByteVector
   def fromBytes(bytes: Array[Byte]): BlockMetadataAB =
-    BlockMetadataScodec.decodeFromArray(bytes)
+    BlockMetadataScodecAB.decodeFromArray(bytes)
   def fromByteVector(byteVector: ByteVector): BlockMetadataAB =
-    BlockMetadataScodec.decode(byteVector)
+    BlockMetadataScodecAB.decode(byteVector)
 }
 
 final case class JustificationBV(validator: ByteVector, latestBlockHash: ByteVector)
@@ -98,19 +97,19 @@ object BlockMetadataScodecBV {
   import scodec.Codec
   import scodec.codecs._
 
-  private val codecByteArray = variableSizeBytes(uint8, bytes)
-  private val codecParents   = listOfN(int32, codecByteArray)
+  private val codecByteVector = variableSizeBytesLong(uint32, bytes)
+  private val codecParents    = listOfN(int32, codecByteVector)
 
-  private val codecJustification  = (codecByteArray :: codecByteArray).as[JustificationBV]
+  private val codecJustification  = (codecByteVector :: codecByteVector).as[JustificationBV]
   private val codecJustifications = listOfN(int32, codecJustification)
 
-  private val tupleCodec: Codec[(ByteVector, Long)] = codecByteArray.pairedWith(int64)
+  private val tupleCodec: Codec[(ByteVector, Long)] = codecByteVector.pairedWith(int64)
   private val codecWeightMap =
     listOfN(int32, tupleCodec).xmap[Map[ByteVector, Long]](_.toMap, _.toList)
 
   private val codecMetadata =
-    (("hash" | codecByteArray) :: ("parents" | codecParents) ::
-      ("sender" | codecByteArray) :: ("justifications" | codecJustifications) ::
+    (("hash" | codecByteVector) :: ("parents" | codecParents) ::
+      ("sender" | codecByteVector) :: ("justifications" | codecJustifications) ::
       ("weightMap" | codecWeightMap) :: ("blockNum" | int64) :: ("seqNum" | int32) :: ("invalid" | bool) ::
       ("df" | bool) :: ("finalized" | bool)).as[BlockMetadataBV]
 

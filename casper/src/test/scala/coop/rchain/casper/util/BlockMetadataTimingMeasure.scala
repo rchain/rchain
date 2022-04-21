@@ -63,7 +63,7 @@ class BlockMetadataTimingMeasure extends FlatSpec {
     timingExperiment(
       codecName = "New BlockMetadata scodec(Array[Byte])",
       new BlockMetadataScodecSerializer,
-      randomBlockMetadataScodec,
+      randomBlockMetadataAB,
       compareBlocks
     )
   }

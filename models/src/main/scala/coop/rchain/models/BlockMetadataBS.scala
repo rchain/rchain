@@ -10,22 +10,22 @@ object BlockMetadataScodecBS {
   import scodec.Codec
   import scodec.codecs._
 
-  private val codecByteArray =
+  private val codecByteString =
     variableSizeBytesLong(uint32, bytes)
       .xmap[ByteString](bv => ByteString.copyFrom(bv.toArray), bs => ByteVector(bs.toByteArray))
 
-  private val codecParents = listOfN(int32, codecByteArray)
+  private val codecParents = listOfN(int32, codecByteString)
 
-  private val codecJustification  = (codecByteArray :: codecByteArray).as[JustificationBS]
+  private val codecJustification  = (codecByteString :: codecByteString).as[JustificationBS]
   private val codecJustifications = listOfN(int32, codecJustification)
 
-  private val tupleCodec: Codec[(ByteString, Long)] = codecByteArray.pairedWith(int64)
+  private val tupleCodec: Codec[(ByteString, Long)] = codecByteString.pairedWith(int64)
   private val codecWeightMap =
     listOfN(int32, tupleCodec).xmap[Map[ByteString, Long]](_.toMap, _.toList)
 
   private val codecMetadata =
-    (("hash" | codecByteArray) :: ("parents" | codecParents) ::
-      ("sender" | codecByteArray) :: ("justifications" | codecJustifications) ::
+    (("hash" | codecByteString) :: ("parents" | codecParents) ::
+      ("sender" | codecByteString) :: ("justifications" | codecJustifications) ::
       ("weightMap" | codecWeightMap) :: ("blockNum" | int64) :: ("seqNum" | int32) :: ("invalid" | bool) ::
       ("df" | bool) :: ("finalized" | bool)).as[BlockMetadataBS]
 
