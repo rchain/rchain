@@ -3,6 +3,7 @@ package coop.rchain.rspace.history
 import cats.Parallel
 import cats.effect.Sync
 import cats.syntax.all._
+import coop.rchain.rspace.hashing.Blake2b256Hash
 import coop.rchain.shared.syntax._
 import coop.rchain.store.KeyValueTypedStore
 import scodec.bits.ByteVector
@@ -48,6 +49,8 @@ object RadixTree {
     * Empty node consists only of [[EmptyItem]]s.
     */
   val emptyNode: Node = (0 until numItems).map(_ => EmptyItem).toVector
+
+  val emptyRootHash: Blake2b256Hash = Blake2b256Hash.fromByteVector(hashNode(emptyNode)._1)
 
   /**
     * Binary codecs for serializing/deserializing Node in Radix tree
@@ -157,6 +160,7 @@ object RadixTree {
 
     /** Deserialization [[ByteVector]] to [[Node]]
       */
+    @SuppressWarnings(Array("org.wartremover.warts.Throw"))
     def decode(bv: ByteVector): Node = {
       val arr     = bv.toArray
       val maxSize = arr.length
@@ -201,7 +205,12 @@ object RadixTree {
           decodeItem(pos0Next, nodeNext) // Try to decode next item.
         }
 
-      decodeItem(0, emptyNode)
+      try {
+        decodeItem(0, emptyNode)
+      } catch {
+        case cause: Exception =>
+          throw new Exception("Error during deserialization: invalid data format", cause)
+      }
     }
   }
 
@@ -754,7 +763,10 @@ object RadixTree {
             (Leaf(insPrefix, insValue): Item).some.pure // Update EmptyItem to Leaf.
 
           case Leaf(leafPrefix, leafValue) =>
-            assert(leafPrefix.size == insPrefix.size, "All Radix keys should be same length.")
+            assert(
+              leafPrefix.size == insPrefix.size,
+              "The length of all prefixes in the subtree must be the same."
+            )
             if (leafPrefix == insPrefix) {
               if (insValue == leafValue) none[Item].pure
               else (Leaf(insPrefix, insValue): Item).some.pure
@@ -852,9 +864,9 @@ object RadixTree {
           case DeleteAction(key)       => DeleteAction(key.tail)
         }
 
-      def processNonEmptyActions(actions: List[HistoryAction], itemIdx: Int) =
+      def processNonEmptyActions(actions: List[HistoryAction], item: Item, itemIdx: Int) =
         for {
-          createdNode <- constructNodeFromItem(curNode(itemIdx))
+          createdNode <- constructNodeFromItem(item)
           newActions  = trimKeys(actions)
           newNodeOpt  <- makeActions(createdNode, newActions)
           newItem     = newNodeOpt.map(saveNodeAndCreateItem(_, ByteVector.empty))
@@ -865,7 +877,7 @@ object RadixTree {
         for {
           clearedActions <- Sync[F].delay(clearingDeleteActions(actions, item))
           r <- if (clearedActions.isEmpty) (itemIdx, none[Item]).pure
-              else processNonEmptyActions(clearedActions, itemIdx)
+              else processNonEmptyActions(clearedActions, item, itemIdx)
         } yield r
 
       // Process actions within each group.
@@ -905,6 +917,22 @@ object RadixTree {
       } // If current node changing return new node, otherwise return none.
       yield if (newCurNode != curNode) newCurNode.some else none
     }
+
+    /**
+      * Changing the tree according to [[HistoryAction]]s.
+      *
+      * New data load to [[store]], after that clearing [[cacheW]].
+      * @return new (rootNode, rootHash). if no action was taken - return [[None]].
+      */
+    def saveAndCommit(rootNode: Node, actions: List[HistoryAction]): F[Option[(Node, ByteVector)]] =
+      for {
+        newRootNodeOpt <- makeActions(rootNode, actions)
+        r <- newRootNodeOpt.traverse { newRootNode =>
+              val newRootHash = saveNode(newRootNode)
+              commit.as(newRootNode, newRootHash)
+            }
+        _ = clearWriteCache()
+      } yield r
 
     /**
       * Pretty printer for Radix tree
