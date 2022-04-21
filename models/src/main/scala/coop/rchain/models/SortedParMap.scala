@@ -1,59 +1,120 @@
 package coop.rchain.models
 
-import coop.rchain.models.rholang.sorter.Sortable
-import coop.rchain.models.rholang.sorter.ordering._
+import coop.rchain.models.Expr.ExprInstance._
+import coop.rchain.models.SortedParMap._
+import coop.rchain.models.rholang.sorter._
+import coop.rchain.models.rholang.sorter.ordering.MapSortOpsFast
 import monix.eval.Coeval
 
-import scala.collection.GenTraversableOnce
-import scala.collection.immutable.HashMap
+final class SortedParMap private (ps: Map[Par, (Tree[ScoreAtom], Par)], isComplexMap: Boolean)
+    extends Iterable[(Par, Par)] {
 
-final class SortedParMap private (ps: Map[Par, Par]) extends Iterable[(Par, Par)] {
+  private lazy val psList: List[(Par, (Tree[ScoreAtom], Par))] = ps.toList
 
-  // TODO: Merge `sortedList` and `sortedMap` into one VectorMap once available
-  lazy val sortedList: List[(Par, Par)]         = ps.sort
-  private lazy val sortedMap: HashMap[Par, Par] = HashMap(sortedList: _*)
+  lazy val unsortedList: List[(Par, Par)] = psList.map(x => (x._1, x._2._2))
 
-  def +(kv: (Par, Par)): SortedParMap = SortedParMap(sortedMap + kv)
+  private lazy val sortedSTList: List[ScoredTerm[(Par, Par)]] = psList.sort
 
-  def ++(kvs: GenTraversableOnce[(Par, Par)]): SortedParMap = SortedParMap(sortedMap ++ kvs)
+  lazy val sortedScoreList: List[Tree[ScoreAtom]] = sortedSTList.map(_.score)
 
-  def -(key: Par): SortedParMap = SortedParMap(sortedMap - sort(key))
+  lazy val sortedList: List[(Par, Par)] = sortedSTList.map {
+    case ScoredTerm((keyTerm, valueTerm), _) => (keyTerm, valueTerm)
+  }
 
-  def --(keys: GenTraversableOnce[Par]): SortedParMap =
-    SortedParMap(keys.foldLeft(sortedMap) { (map, kv) =>
-      map - sort(kv)
-    })
+  def +(kv: (Par, Par)): SortedParMap =
+    new SortedParMap(ps + sortKV(kv), isComplexMap || isComplexKV(kv))
 
-  def apply(par: Par): Par = sortedMap(sort(par))
+  def ++(kvs: Seq[(Par, Par)]): SortedParMap =
+    new SortedParMap(ps ++ kvs.map(sortKV), isComplexMap || kvs.exists(isComplexKV))
 
-  def contains(par: Par): Boolean = sortedMap.contains(sort(par))
+  def ++(sortedMap: SortedParMap): SortedParMap =
+    new SortedParMap(ps ++ sortedMap.getPs, isComplexMap || sortedMap.isComplex)
 
-  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  def -(key: Par): SortedParMap = new SortedParMap(ps - sortPar(key), isComplexMap)
+  // TODO: If isComplexMap == true it's possible true explore again
 
-  def get(key: Par): Option[Par] = sortedMap.get(sort(key))
+  def --(keys: Seq[Par]): SortedParMap = new SortedParMap(ps -- keys.map(sortPar), isComplexMap)
+  // TODO: If isComplexMap == true it's possible true explore again
 
-  def getOrElse(key: Par, default: Par): Par = sortedMap.getOrElse(sort(key), default)
+  def --(sortedMap: SortedParMap): SortedParMap =
+    new SortedParMap(ps -- sortedMap.unsortedKeys, isComplexMap)
+  // TODO: If isComplexMap == true it's possible true explore again
+
+  def apply(par: Par): Par = ps(sortPar(par))._2
+
+  def contains(par: Par): Boolean = ps.contains(sortPar(par))
+
+  def empty: SortedParMap = SortedParMap.empty
+
+  def get(key: Par): Option[Par] = ps.get(sortPar(key)).map(_._2)
+
+  def getOrElse(key: Par, default: Par): Par = get(key).getOrElse(default)
+
+  def unsortedKeys: Iterable[Par] = psList.map(_._1)
+
+  def unsortedValues: Iterable[Par] = psList.map(_._2._2)
+
+  def sortedKeys: Iterable[Par] = sortedSTList.map {
+    case ScoredTerm((keyTerm, _), _) => keyTerm
+  }
+
+  def sortedValues: Iterable[Par] = sortedSTList.map {
+    case ScoredTerm((_, valueTerm), _) => valueTerm
+  }
 
   def iterator: Iterator[(Par, Par)] = sortedList.toIterator
 
-  def keys: Iterable[Par] = sortedList.map(_._1)
-
-  def values: Iterable[Par] = sortedList.map(_._2)
-
   override def equals(that: Any): Boolean = that match {
-    case spm: SortedParMap => spm.sortedList == this.sortedList
+    case spm: SortedParMap => spm.getPs == ps
     case _                 => false
   }
 
   override def hashCode(): Int = sortedList.hashCode()
 
-  private def sort(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
+  def getPs: Map[Par, (Tree[ScoreAtom], Par)] = ps
+
+  def isComplex: Boolean = isComplexMap
 }
 
 object SortedParMap {
-  def apply(map: Map[Par, Par]): SortedParMap = new SortedParMap(map)
 
-  def apply(seq: Seq[(Par, Par)]): SortedParMap = SortedParMap(seq.toMap)
+  def apply(seq: Seq[(Par, Par)]): SortedParMap =
+    new SortedParMap(seq.map(sortKV).toMap, seq.exists(isComplexKV))
 
-  def empty: SortedParMap = SortedParMap(Map.empty[Par, Par])
+  def apply(map: Map[Par, Par]): SortedParMap = apply(map.toSeq)
+
+  def empty: SortedParMap = new SortedParMap(Map.empty[Par, (Tree[ScoreAtom], Par)], false)
+
+  private def sort(par: Par): (Par, Tree[ScoreAtom]) =
+    Sortable[Par].sortMatch[Coeval](par).map(x => (x.term, x.score)).value()
+
+  private def sortPar(par: Par): Par = Sortable[Par].sortMatch[Coeval](par).map(_.term).value()
+
+  private def sortKV(kv: (Par, Par)): (Par, (Tree[ScoreAtom], Par)) = {
+    val (sortedKeyTerm, sortedKeyScore) = sort(kv._1)
+    val sortedValueTerm                 = sortPar(kv._2)
+    (sortedKeyTerm, (sortedKeyScore, sortedValueTerm))
+  }
+
+  private def isComplexKV(kv: (Par, Par)): Boolean = isComplexPar(kv._1) || isComplexPar(kv._2)
+
+  private def isComplexPar(par: Par): Boolean =
+    par match {
+      case Par(Seq(), Seq(), Seq(), Seq(), Seq(), Seq(), Seq(), Seq(), _, _) => false
+      case Par(Seq(), Seq(), Seq(), exprs, Seq(), Seq(), Seq(), Seq(), _, _) =>
+        exprs.exists(isComplexExpr)
+      case _ => true
+    }
+
+  private def isComplexExpr(expr: Expr): Boolean =
+    expr.exprInstance match {
+      case _: GBool      => false
+      case _: GInt       => false
+      case _: GString    => false
+      case _: GUri       => false
+      case _: GByteArray => false
+      // TODO: Need explore EListBody, ETupleBody, ESetBody, EMapBody
+      case _ => true
+    }
+
 }

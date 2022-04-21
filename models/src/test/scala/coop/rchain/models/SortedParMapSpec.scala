@@ -115,7 +115,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
       Par()
     )
     val sortedParMap = SortedParMap(sortedParMapKeys.zip(Seq.fill(sortedParMapKeys.size)(Par())))
-    val keys         = sortedParMap.keys
+    val keys         = sortedParMap.sortedKeys
     assert(keys.toList == keys.toList.sort)
   }
 
@@ -136,7 +136,7 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
             checkSortedInput(map.getOrElse(_: Par, Par()), unsorted, sorted)
           }
         )
-      checkSortedInput(map.--, keys, keys.toList.sort)
+      checkSortedInput(map.--(_: Seq[Par]), keys, keys.toList.sort)
     }
   }
 
@@ -156,8 +156,8 @@ class SortedParMapSpec extends FlatSpec with PropertyChecks with Matchers {
   }
 
   private def checkSorted(sortedParMap: SortedParMap): Unit = {
-    checkSorted(sortedParMap.keys)
-    sortedParMap.values.foreach(p => assert(isSorted(p)))
+    checkSorted(sortedParMap.sortedKeys)
+    sortedParMap.sortedValues.foreach(p => assert(isSorted(p)))
     sortedParMap.foreach(kv => {
       assert(isSorted(kv._1))
       assert(isSorted(kv._2))
