@@ -14,9 +14,8 @@ object BlockMetadataScodec {
   import scodec.Codec
   import scodec.codecs._
 
-  private val codecByteArray = {
+  private val codecByteArray =
     variableSizeBytesLong(uint32, bytes).xmap[Array[Byte]](_.toArray, ByteVector(_))
-  }
 
   private val codecParents = listOfN(int32, codecByteArray)
 
